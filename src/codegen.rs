@@ -1,0 +1,601 @@
+use std::collections::{HashMap, HashSet};
+
+use crate::ast::*;
+
+pub struct CodeGenerator {
+    next_label: usize,
+    indent: usize,
+    output: String,
+    functions: Vec<FunctionInfo>,
+}
+
+#[derive(Debug, Clone)]
+struct FunctionInfo {
+    source_name: BasicIdent,
+    label: String,
+    result: BasicIdent,
+    params: Vec<(BasicIdent, BasicIdent)>,
+}
+
+impl CodeGenerator {
+    pub fn new() -> Self {
+        Self {
+            next_label: 1,
+            indent: 0,
+            output: String::new(),
+            functions: Vec::new(),
+        }
+    }
+
+    pub fn generate(mut self, program: &Program) -> String {
+        self.functions = program
+            .functions
+            .iter()
+            .map(FunctionInfo::from_def)
+            .collect();
+
+        self.line("' BASCAL generated BASIC");
+        self.line("' Functions are lowered to global variables, labels, and GOSUB");
+        if !program.declarations.is_empty() {
+            self.line("' TODO: resolve BASCAL dependency selectors during link");
+            for declaration in &program.declarations {
+                match declaration {
+                    DependencyDecl::Include(path) => {
+                        self.line(&format!("' include \"{}\"", escape_string(path)))
+                    }
+                    DependencyDecl::Require(symbol) => {
+                        self.line(&format!("' require {}", symbol.raw))
+                    }
+                    DependencyDecl::Import(symbol) => {
+                        self.line(&format!("' import {} (alias for require)", symbol.raw))
+                    }
+                }
+            }
+        }
+
+        if !program.statements.is_empty() {
+            self.blank();
+            self.statements(&program.statements, None);
+        }
+
+        if !program.functions.is_empty() {
+            self.blank();
+            if !ends_with_end(&program.statements) {
+                self.line("END");
+                self.blank();
+            }
+            for function in &program.functions {
+                self.function(function);
+                self.blank();
+            }
+        }
+
+        number_basic_lines(&self.output)
+    }
+
+    fn function(&mut self, function: &FunctionDef) {
+        let info = self
+            .function_info(&function.name)
+            .expect("function table should contain every function")
+            .clone();
+        self.line(&format!("' ===== BEGIN FUNCTION {} =====", function.name));
+        self.line(&format!("{}:", info.label));
+        self.indent += 1;
+        self.statements(&function.body, Some(&info));
+        if !ends_with_return(&function.body) {
+            self.line("RETURN");
+        }
+        self.indent -= 1;
+        self.line(&format!("' ===== END FUNCTION {} =====", function.name));
+    }
+
+    fn statements(&mut self, statements: &[Statement], current_function: Option<&FunctionInfo>) {
+        for statement in statements {
+            self.statement(statement, current_function);
+        }
+    }
+
+    fn statement(&mut self, statement: &Statement, current_function: Option<&FunctionInfo>) {
+        match statement {
+            Statement::Dim { name, size } => match size {
+                Some(size) => {
+                    let (prelude, size) = self.expr(size, current_function);
+                    self.lines(prelude);
+                    self.line(&format!(
+                        "DIM {}({})",
+                        self.ident(name, current_function),
+                        size
+                    ));
+                }
+                None => self.line(&format!("DIM {}", self.ident(name, current_function))),
+            },
+            Statement::Assignment { target, value } => {
+                let (target_prelude, target) = self.expr(target, current_function);
+                let (value_prelude, value) = self.expr(value, current_function);
+                self.lines(target_prelude);
+                self.lines(value_prelude);
+                self.line(&format!("{target} = {value}"));
+            }
+            Statement::Print { exprs } => {
+                let mut rendered = Vec::new();
+                for item in exprs {
+                    let (prelude, item) = self.expr(item, current_function);
+                    self.lines(prelude);
+                    rendered.push(item);
+                }
+                if rendered.is_empty() {
+                    self.line("PRINT");
+                } else {
+                    self.line(&format!("PRINT {}", rendered.join(", ")));
+                }
+            }
+            Statement::Return { value } => {
+                let Some(info) = current_function else {
+                    let (prelude, value) = self.expr(value, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("RETURN {}", value));
+                    return;
+                };
+                let (prelude, value) = self.expr(value, current_function);
+                self.lines(prelude);
+                self.line(&format!("{} = {}", info.result.as_basic(), value));
+                self.line("RETURN");
+            }
+            Statement::If {
+                condition,
+                then_body,
+                else_body,
+            } => self.if_statement(condition, then_body, else_body, current_function),
+            Statement::For {
+                var,
+                start,
+                end,
+                step,
+                body,
+            } => {
+                let (start_prelude, start) = self.expr(start, current_function);
+                let (end_prelude, end) = self.expr(end, current_function);
+                let step = step.as_ref().map(|step| self.expr(step, current_function));
+                self.lines(start_prelude);
+                self.lines(end_prelude);
+                let step = if let Some((step_prelude, step)) = step {
+                    self.lines(step_prelude);
+                    format!(" STEP {step}")
+                } else {
+                    String::new()
+                };
+                self.line(&format!(
+                    "FOR {} = {start} TO {end}{step}",
+                    self.ident(var, current_function)
+                ));
+                self.indent += 1;
+                self.statements(body, current_function);
+                self.indent -= 1;
+                self.line(&format!("NEXT {}", self.ident(var, current_function)));
+            }
+            Statement::While { condition, body } => {
+                let (prelude, condition) = self.expr(condition, current_function);
+                self.lines(prelude);
+                self.line(&format!("WHILE {condition}"));
+                self.indent += 1;
+                self.statements(body, current_function);
+                self.indent -= 1;
+                self.line("WEND");
+            }
+            Statement::ExprStmt(expr_stmt) => self.expr_statement(expr_stmt, current_function),
+            Statement::End => self.line("END"),
+            Statement::Raw(raw) => self.line(raw),
+        }
+    }
+
+    fn expr_statement(&mut self, expr_stmt: &Expr, current_function: Option<&FunctionInfo>) {
+        if let Some((name, args)) = callable_expr(expr_stmt) {
+            if let Some(info) = self.function_info(name).cloned() {
+                self.emit_call_statement(&info, args, current_function);
+                return;
+            }
+        }
+
+        let (prelude, expr_stmt) = self.expr(expr_stmt, current_function);
+        self.lines(prelude);
+        self.line(&expr_stmt);
+    }
+
+    fn if_statement(
+        &mut self,
+        condition: &Expr,
+        then_body: &[Statement],
+        else_body: &[Statement],
+        current_function: Option<&FunctionInfo>,
+    ) {
+        let (prelude, condition) = self.expr(condition, current_function);
+        self.lines(prelude);
+
+        let id = self.next_label;
+        self.next_label += 1;
+        let else_label = format!("IF_{id:04}_ELSE");
+        let end_label = format!("IF_{id:04}_END");
+
+        if else_body.is_empty() {
+            self.line(&format!("IF NOT ({condition}) THEN GOTO {end_label}"));
+            self.statements(then_body, current_function);
+            self.line(&format!("{end_label}:"));
+            self.line("REM END IF");
+        } else {
+            self.line(&format!("IF NOT ({condition}) THEN GOTO {else_label}"));
+            self.statements(then_body, current_function);
+            self.line(&format!("GOTO {end_label}"));
+            self.line(&format!("{else_label}:"));
+            self.statements(else_body, current_function);
+            self.line(&format!("{end_label}:"));
+            self.line("REM END IF");
+        }
+    }
+
+    fn expr(
+        &mut self,
+        node: &Expr,
+        current_function: Option<&FunctionInfo>,
+    ) -> (Vec<String>, String) {
+        match node {
+            Expr::Integer(value) => (Vec::new(), value.to_string()),
+            Expr::String(value) => (Vec::new(), format!("\"{}\"", escape_string(value))),
+            Expr::Ident(ident) => (Vec::new(), self.ident(ident, current_function)),
+            Expr::ArrayRef { name, indices } => {
+                if let Some(info) = self.function_info(name).cloned() {
+                    let call = self.call_lines(&info, indices, current_function);
+                    return (call, info.result.as_basic());
+                }
+
+                let mut prelude = Vec::new();
+                let mut rendered_indices = Vec::new();
+                for index in indices {
+                    let (index_prelude, index) = self.expr(index, current_function);
+                    prelude.extend(index_prelude);
+                    rendered_indices.push(index);
+                }
+                (
+                    prelude,
+                    format!(
+                        "{}({})",
+                        self.ident(name, current_function),
+                        rendered_indices.join(", ")
+                    ),
+                )
+            }
+            Expr::Call { name, args } => {
+                if let Some(info) = self.function_info(name).cloned() {
+                    (
+                        self.call_lines(&info, args, current_function),
+                        info.result.as_basic(),
+                    )
+                } else {
+                    let mut prelude = Vec::new();
+                    let mut rendered_args = Vec::new();
+                    for arg in args {
+                        let (arg_prelude, arg) = self.expr(arg, current_function);
+                        prelude.extend(arg_prelude);
+                        rendered_args.push(arg);
+                    }
+                    (prelude, format!("{}({})", name, rendered_args.join(", ")))
+                }
+            }
+            Expr::Unary { op, expr } => {
+                let (prelude, inner) = self.expr(expr, current_function);
+                let rendered = match op {
+                    UnaryOp::Neg => format!("-{inner}"),
+                    UnaryOp::Not => format!("NOT ({inner})"),
+                };
+                (prelude, rendered)
+            }
+            Expr::Binary { left, op, right } => {
+                let (mut prelude, left) = self.expr(left, current_function);
+                let (right_prelude, right) = self.expr(right, current_function);
+                prelude.extend(right_prelude);
+                (prelude, format!("{left} {} {right}", binary_op(*op)))
+            }
+        }
+    }
+
+    fn call_lines(
+        &mut self,
+        info: &FunctionInfo,
+        args: &[Expr],
+        current_function: Option<&FunctionInfo>,
+    ) -> Vec<String> {
+        let mut lines = Vec::new();
+        let mut rendered_args = Vec::new();
+        for arg in args {
+            let (arg_prelude, rendered_arg) = self.expr(arg, current_function);
+            lines.extend(arg_prelude);
+            rendered_args.push(rendered_arg);
+        }
+
+        for (index, rendered_arg) in rendered_args.iter().enumerate() {
+            if let Some((_, lowered)) = info.params.get(index) {
+                if !is_empty_array_arg(args.get(index)) {
+                    lines.push(format!("{} = {rendered_arg}", lowered.as_basic()));
+                }
+            } else {
+                lines.push(format!(
+                    "' warning: extra argument {} for {} ignored by current lowering",
+                    index + 1,
+                    info.source_name
+                ));
+            }
+        }
+
+        for (index, arg) in args.iter().enumerate() {
+            if let Some((_, lowered)) = info.params.get(index) {
+                if let Some(actual_array) = empty_array_name(arg, current_function, self) {
+                    let bound = copy_bound(info, &rendered_args, index);
+                    lines.push(format!("DIM {}({bound})", lowered.as_basic()));
+                    lines.extend(array_copy_lines(
+                        &lowered.as_basic(),
+                        &actual_array,
+                        &bound,
+                        "copy array argument into lowered function storage",
+                    ));
+                }
+            }
+        }
+
+        lines.push(format!("GOSUB {}", info.label));
+
+        for (index, arg) in args.iter().enumerate() {
+            if let Some((_, lowered)) = info.params.get(index) {
+                if let Some(actual_array) = empty_array_name(arg, current_function, self) {
+                    let bound = copy_bound(info, &rendered_args, index);
+                    lines.extend(array_copy_lines(
+                        &actual_array,
+                        &lowered.as_basic(),
+                        &bound,
+                        "copy mutated array argument back to caller storage",
+                    ));
+                }
+            }
+        }
+
+        lines
+    }
+
+    fn emit_call_statement(
+        &mut self,
+        info: &FunctionInfo,
+        args: &[Expr],
+        current_function: Option<&FunctionInfo>,
+    ) {
+        let lines = self.call_lines(info, args, current_function);
+        self.lines(lines);
+    }
+
+    fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
+        if let Some(info) = current_function {
+            if let Some((_, lowered)) = info
+                .params
+                .iter()
+                .find(|(source, _)| same_ident(source, ident))
+            {
+                return lowered.as_basic();
+            }
+        }
+        ident.as_basic()
+    }
+
+    fn function_info(&self, name: &BasicIdent) -> Option<&FunctionInfo> {
+        self.functions
+            .iter()
+            .find(|function| same_ident(&function.source_name, name))
+    }
+
+    fn lines(&mut self, lines: Vec<String>) {
+        for line in lines {
+            self.line(&line);
+        }
+    }
+
+    fn line(&mut self, line: &str) {
+        for _ in 0..self.indent {
+            self.output.push_str("    ");
+        }
+        self.output.push_str(line);
+        self.output.push('\n');
+    }
+
+    fn blank(&mut self) {
+        self.output.push('\n');
+    }
+}
+
+impl FunctionInfo {
+    fn from_def(function: &FunctionDef) -> Self {
+        let stem = sanitize_symbol(&function.name.name);
+        let params = function
+            .params
+            .iter()
+            .map(|param| {
+                (
+                    param.clone(),
+                    BasicIdent {
+                        name: format!("{}_{}", stem, sanitize_symbol(&param.name)),
+                        suffix: param.suffix,
+                    },
+                )
+            })
+            .collect();
+        Self {
+            source_name: function.name.clone(),
+            label: format!("FN_{stem}"),
+            result: BasicIdent {
+                name: format!("{stem}_result"),
+                suffix: function.name.suffix,
+            },
+            params,
+        }
+    }
+}
+
+fn same_ident(left: &BasicIdent, right: &BasicIdent) -> bool {
+    left.suffix == right.suffix && left.name.eq_ignore_ascii_case(&right.name)
+}
+
+fn callable_expr(expr: &Expr) -> Option<(&BasicIdent, &[Expr])> {
+    match expr {
+        Expr::Call { name, args } => Some((name, args)),
+        Expr::ArrayRef { name, indices } => Some((name, indices)),
+        _ => None,
+    }
+}
+
+fn is_empty_array_arg(expr: Option<&Expr>) -> bool {
+    matches!(expr, Some(Expr::ArrayRef { indices, .. }) if indices.is_empty())
+}
+
+fn empty_array_name(
+    expr: &Expr,
+    current_function: Option<&FunctionInfo>,
+    generator: &CodeGenerator,
+) -> Option<String> {
+    match expr {
+        Expr::ArrayRef { name, indices } if indices.is_empty() => {
+            Some(generator.ident(name, current_function))
+        }
+        _ => None,
+    }
+}
+
+fn copy_bound(info: &FunctionInfo, rendered_args: &[String], array_arg_index: usize) -> String {
+    rendered_args
+        .get(array_arg_index + 1)
+        .cloned()
+        .or_else(|| {
+            info.params
+                .get(array_arg_index + 1)
+                .map(|(_, lowered)| lowered.as_basic())
+        })
+        .unwrap_or_else(|| "10".to_string())
+}
+
+fn array_copy_lines(destination: &str, source: &str, bound: &str, comment: &str) -> Vec<String> {
+    vec![
+        format!("' {comment}: {source}() -> {destination}()"),
+        format!("FOR BCC_COPY% = 1 TO {bound}"),
+        format!("    {destination}(BCC_COPY%) = {source}(BCC_COPY%)"),
+        "NEXT BCC_COPY%".to_string(),
+    ]
+}
+
+fn sanitize_symbol(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn binary_op(op: BinaryOp) -> &'static str {
+    match op {
+        BinaryOp::Add => "+",
+        BinaryOp::Sub => "-",
+        BinaryOp::Mul => "*",
+        BinaryOp::Div => "/",
+        BinaryOp::Eq => "=",
+        BinaryOp::Ne => "<>",
+        BinaryOp::Lt => "<",
+        BinaryOp::Le => "<=",
+        BinaryOp::Gt => ">",
+        BinaryOp::Ge => ">=",
+        BinaryOp::And => "AND",
+        BinaryOp::Or => "OR",
+    }
+}
+
+fn escape_string(value: &str) -> String {
+    value.replace('"', "\"\"")
+}
+
+fn ends_with_end(statements: &[Statement]) -> bool {
+    matches!(statements.last(), Some(Statement::End))
+}
+
+fn ends_with_return(statements: &[Statement]) -> bool {
+    matches!(statements.last(), Some(Statement::Return { .. }))
+}
+
+fn number_basic_lines(source: &str) -> String {
+    let lines = source.lines().collect::<Vec<_>>();
+    let mut label_targets = HashMap::new();
+    let mut target_indices = HashSet::new();
+
+    for (index, line) in lines.iter().enumerate() {
+        if let Some(label) = is_label_line(line) {
+            if let Some(target_index) = next_emitted_line_index(&lines, index + 1) {
+                label_targets.insert(label.to_string(), target_index);
+                target_indices.insert(target_index);
+            }
+        }
+    }
+
+    let mut target_numbers = HashMap::new();
+    let mut current_number = 10;
+    for index in 0..lines.len() {
+        if target_indices.contains(&index) {
+            target_numbers.insert(index, current_number);
+            current_number += 10;
+        }
+    }
+
+    let label_numbers = label_targets
+        .into_iter()
+        .filter_map(|(label, target_index)| {
+            target_numbers
+                .get(&target_index)
+                .copied()
+                .map(|number| (label, number))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut output = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        if line.trim().is_empty() || is_label_line(line).is_some() {
+            continue;
+        }
+
+        let mut numbered_line = line.to_string();
+        for (label, number) in &label_numbers {
+            numbered_line = numbered_line.replace(label, &number.to_string());
+        }
+        if let Some(number) = target_numbers.get(&index) {
+            output.push_str(&format!("{number} {numbered_line}\n"));
+        } else {
+            output.push_str(&numbered_line);
+            output.push('\n');
+        }
+    }
+    output
+}
+
+fn next_emitted_line_index(lines: &[&str], start: usize) -> Option<usize> {
+    for (index, line) in lines.iter().enumerate().skip(start) {
+        if is_label_line(line).is_some() || line.trim().is_empty() {
+            continue;
+        }
+        return Some(index);
+    }
+    None
+}
+
+fn is_label_line(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    let label = trimmed.strip_suffix(':')?;
+    if label.starts_with("IF_") || label.starts_with("FN_") {
+        Some(label)
+    } else {
+        None
+    }
+}

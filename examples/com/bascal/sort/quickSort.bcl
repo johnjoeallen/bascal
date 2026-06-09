@@ -1,0 +1,23 @@
+' Selection-sort implementation behind the quickSort% selector.
+' The name is kept to exercise dependency selection while avoiding recursion.
+function quickSort%(data%, count%)
+    ' Pick the smallest remaining value and move it into position i%.
+    FOR i% = 1 TO count% - 1
+        min% = i%
+
+        FOR j% = i% + 1 TO count%
+            if data%(j%) < data%(min%) then
+                min% = j%
+            end if
+        NEXT j%
+
+        if min% <> i% then
+            ' Swap the selected minimum into the sorted prefix.
+            temp% = data%(i%)
+            data%(i%) = data%(min%)
+            data%(min%) = temp%
+        end if
+    NEXT i%
+
+    return 0
+end function

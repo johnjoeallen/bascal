@@ -1,0 +1,16 @@
+' In-place bubble sort.
+' data% is an array parameter; bcc lowers calls with copy-in/copy-out.
+function bubbleSort%(data%, count%)
+    ' After each outer pass, the largest remaining value has bubbled right.
+    FOR i% = 1 TO count% - 1
+        FOR j% = 1 TO count% - i%
+            if data%(j%) > data%(j% + 1) then
+                ' Swap adjacent out-of-order elements.
+                temp% = data%(j%)
+                data%(j%) = data%(j% + 1)
+                data%(j% + 1) = temp%
+            end if
+        NEXT j%
+    NEXT i%
+    return 0
+end function

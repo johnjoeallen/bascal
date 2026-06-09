@@ -1,0 +1,38 @@
+' In-place cocktail shaker sort.
+' This is a bidirectional bubble sort over the active range.
+function shakerSort%(data%, count%)
+    left% = 1
+    right% = count% - 1
+    swapped% = 1
+
+    ' Continue until a full bidirectional pass performs no swaps.
+    while swapped%
+        swapped% = 0
+
+        ' Forward pass moves large values toward the right edge.
+        FOR i% = left% TO right%
+            if data%(i%) > data%(i% + 1) then
+                temp% = data%(i%)
+                data%(i%) = data%(i% + 1)
+                data%(i% + 1) = temp%
+                swapped% = 1
+            end if
+        NEXT i%
+
+        right% = right% - 1
+
+        ' Backward pass moves small values toward the left edge.
+        FOR i% = right% TO left% STEP -1
+            if data%(i%) > data%(i% + 1) then
+                temp% = data%(i%)
+                data%(i%) = data%(i% + 1)
+                data%(i% + 1) = temp%
+                swapped% = 1
+            end if
+        NEXT i%
+
+        left% = left% + 1
+    wend
+
+    return 0
+end function

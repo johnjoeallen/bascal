@@ -1,0 +1,32 @@
+' Shell sort demonstrates a nested dependency. The helper is intentionally
+' trivial; the point is to exercise recursive require resolution.
+require com.bascal.sort.helpers.touch%
+
+function shellSort%(data%, count%)
+    ' Normalize the count through a required helper so this file has its own
+    ' dependency chain.
+    count% = touch%(count%)
+    gap% = count% / 2
+
+    ' Repeatedly insertion-sort elements that are gap positions apart.
+    while gap% > 0
+        i% = gap% + 1
+
+        while i% <= count%
+            temp% = data%(i%)
+            j% = i%
+
+            while j% > gap% and data%(j% - gap%) > temp%
+                data%(j%) = data%(j% - gap%)
+                j% = j% - gap%
+            wend
+
+            data%(j%) = temp%
+            i% = i% + 1
+        wend
+
+        gap% = gap% / 2
+    wend
+
+    return 0
+end function
