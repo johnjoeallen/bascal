@@ -1,23 +1,57 @@
-' Selection-sort implementation behind the quickSort% selector.
-' The name is kept to exercise dependency selection while avoiding recursion.
+' Iterative quicksort using an explicit stack for partition bounds.
+' Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input.
 function quickSort%(data%, count%)
-    ' Pick the smallest remaining value and move it into position i%.
-    FOR i% = 1 TO count% - 1
-        min% = i%
+    DIM sLow%(64)
+    DIM sHigh%(64)
 
-        FOR j% = i% + 1 TO count%
-            if data%(j%) < data%(min%) then
-                min% = j%
+    sTop% = 1
+    sLow%(1) = 1
+    sHigh%(1) = count%
+
+    while sTop% > 0
+        qHigh% = sHigh%(sTop%)
+        qLow% = sLow%(sTop%)
+        sTop% = sTop% - 1
+
+        if qHigh% > qLow% then
+            ' Swap middle element to high as pivot.
+            mid% = qLow% + (qHigh% - qLow%) / 2
+            temp% = data%(mid%)
+            data%(mid%) = data%(qHigh%)
+            data%(qHigh%) = temp%
+
+            ' Partition: move elements <= pivot left of wall.
+            pivot% = data%(qHigh%)
+            wall% = qLow% - 1
+
+            FOR j% = qLow% TO qHigh% - 1
+                if data%(j%) <= pivot% then
+                    wall% = wall% + 1
+                    temp% = data%(wall%)
+                    data%(wall%) = data%(j%)
+                    data%(j%) = temp%
+                end if
+            NEXT j%
+
+            ' Place pivot at wall.
+            wall% = wall% + 1
+            temp% = data%(wall%)
+            data%(wall%) = data%(qHigh%)
+            data%(qHigh%) = temp%
+
+            if wall% - 1 > qLow% then
+                sTop% = sTop% + 1
+                sLow%(sTop%) = qLow%
+                sHigh%(sTop%) = wall% - 1
             end if
-        NEXT j%
 
-        if min% <> i% then
-            ' Swap the selected minimum into the sorted prefix.
-            temp% = data%(i%)
-            data%(i%) = data%(min%)
-            data%(min%) = temp%
+            if wall% + 1 < qHigh% then
+                sTop% = sTop% + 1
+                sLow%(sTop%) = wall% + 1
+                sHigh%(sTop%) = qHigh%
+            end if
         end if
-    NEXT i%
+    wend
 
     return 0
 end function

@@ -1,65 +1,90 @@
 ' Sort driver for the BASCAL example sort library.
-' The require paths select source files; they do not create runtime namespaces.
+' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
 require com.bascal.sort.bubbleSort%
 require com.bascal.sort.shakerSort%
 require com.bascal.sort.shellSort%
 require com.bascal.sort.quickSort%
 
-DIM source%(10)
-DIM bubbleData%(10)
-DIM shakerData%(10)
-DIM shellData%(10)
-DIM quickData%(10)
+DIM source%(5000)
+DIM bubbleData%(5000)
+DIM shakerData%(5000)
+DIM shellData%(5000)
+DIM quickData%(5000)
 
-' Populate one source array and copy it into one array per algorithm.
-source%(1) = 42
-source%(2) = 7
-source%(3) = 19
-source%(4) = 3
-source%(5) = 88
-source%(6) = 12
-source%(7) = 55
-source%(8) = 1
-source%(9) = 34
-source%(10) = 21
+' Fill with descending values: worst case for O(n^2) sorts.
+FOR i% = 1 TO 5000
+    source%(i%) = 1001 - i%
+NEXT i%
 
-FOR i% = 1 TO 10
+FOR i% = 1 TO 5000
     bubbleData%(i%) = source%(i%)
     shakerData%(i%) = source%(i%)
     shellData%(i%) = source%(i%)
     quickData%(i%) = source%(i%)
 NEXT i%
 
-PRINT "Original data:"
-FOR i% = 1 TO 10
-    PRINT source%(i%)
+tStart# = TIMER
+bubbleSort%(bubbleData%(), 5000)
+tElapsed# = TIMER - tStart#
+PRINT "Bubble sort time (ms):", tElapsed# * 5000
+ok% = 1
+FOR i% = 1 TO 4999
+    if bubbleData%(i%) > bubbleData%(i% + 1) then
+        ok% = 0
+    end if
 NEXT i%
+if ok% = 1 then
+    PRINT "Bubble: OK"
+else
+    PRINT "Bubble: FAILED"
+end if
 
-' Each sort mutates its array argument. The compiler lowers this to copy-in,
-' GOSUB, and copy-out code in generated BASIC.
-bubbleSort%(bubbleData%(), 10)
-shakerSort%(shakerData%(), 10)
-shellSort%(shellData%(), 10)
-quickSort%(quickData%(), 10)
-
-PRINT "Bubble sort result:"
-FOR i% = 1 TO 10
-    PRINT bubbleData%(i%)
+tStart# = TIMER
+shakerSort%(shakerData%(), 5000)
+tElapsed# = TIMER - tStart#
+PRINT "Shaker sort time (ms):", tElapsed# * 5000
+ok% = 1
+FOR i% = 1 TO 4999
+    if shakerData%(i%) > shakerData%(i% + 1) then
+        ok% = 0
+    end if
 NEXT i%
+if ok% = 1 then
+    PRINT "Shaker: OK"
+else
+    PRINT "Shaker: FAILED"
+end if
 
-PRINT "Shaker sort result:"
-FOR i% = 1 TO 10
-    PRINT shakerData%(i%)
+tStart# = TIMER
+shellSort%(shellData%(), 5000)
+tElapsed# = TIMER - tStart#
+PRINT "Shell sort time (ms):", tElapsed# * 5000
+ok% = 1
+FOR i% = 1 TO 4999
+    if shellData%(i%) > shellData%(i% + 1) then
+        ok% = 0
+    end if
 NEXT i%
+if ok% = 1 then
+    PRINT "Shell: OK"
+else
+    PRINT "Shell: FAILED"
+end if
 
-PRINT "Shell sort result:"
-FOR i% = 1 TO 10
-    PRINT shellData%(i%)
+tStart# = TIMER
+quickSort%(quickData%(), 5000)
+tElapsed# = TIMER - tStart#
+PRINT "Quick sort time (ms):", tElapsed# * 5000
+ok% = 1
+FOR i% = 1 TO 4999
+    if quickData%(i%) > quickData%(i% + 1) then
+        ok% = 0
+    end if
 NEXT i%
-
-PRINT "Quick sort result:"
-FOR i% = 1 TO 10
-    PRINT quickData%(i%)
-NEXT i%
+if ok% = 1 then
+    PRINT "Quick: OK"
+else
+    PRINT "Quick: FAILED"
+end if
 
 END

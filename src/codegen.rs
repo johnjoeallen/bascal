@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::ast::*;
 
@@ -7,6 +7,7 @@ pub struct CodeGenerator {
     indent: usize,
     output: String,
     functions: Vec<FunctionInfo>,
+    line_numbers: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -24,7 +25,13 @@ impl CodeGenerator {
             indent: 0,
             output: String::new(),
             functions: Vec::new(),
+            line_numbers: false,
         }
+    }
+
+    pub fn with_line_numbers(mut self, value: bool) -> Self {
+        self.line_numbers = value;
+        self
     }
 
     pub fn generate(mut self, program: &Program) -> String {
@@ -59,18 +66,15 @@ impl CodeGenerator {
         }
 
         if !program.functions.is_empty() {
-            self.blank();
             if !ends_with_end(&program.statements) {
                 self.line("END");
-                self.blank();
             }
             for function in &program.functions {
                 self.function(function);
-                self.blank();
             }
         }
 
-        number_basic_lines(&self.output)
+        number_basic_lines(&self.output, self.line_numbers)
     }
 
     fn function(&mut self, function: &FunctionDef) {
@@ -78,7 +82,14 @@ impl CodeGenerator {
             .function_info(&function.name)
             .expect("function table should contain every function")
             .clone();
-        self.line(&format!("' ===== BEGIN FUNCTION {} =====", function.name));
+        let params = function
+            .params
+            .iter()
+            .map(|p| p.as_basic())
+            .collect::<Vec<_>>()
+            .join(", ");
+        self.blank();
+        self.line(&format!("' function {}({})", function.name, params));
         self.line(&format!("{}:", info.label));
         self.indent += 1;
         self.statements(&function.body, Some(&info));
@@ -86,7 +97,7 @@ impl CodeGenerator {
             self.line("RETURN");
         }
         self.indent -= 1;
-        self.line(&format!("' ===== END FUNCTION {} =====", function.name));
+        self.line(&format!("' end function {}", function.name));
     }
 
     fn statements(&mut self, statements: &[Statement], current_function: Option<&FunctionInfo>) {
@@ -174,17 +185,25 @@ impl CodeGenerator {
                 self.line(&format!("NEXT {}", self.ident(var, current_function)));
             }
             Statement::While { condition, body } => {
+                let id = self.next_label;
+                self.next_label += 1;
+                let top_label = format!("WHILE_{id:04}_TOP");
+                let end_label = format!("WHILE_{id:04}_END");
+                self.line(&format!("{top_label}:"));
                 let (prelude, condition) = self.expr(condition, current_function);
                 self.lines(prelude);
-                self.line(&format!("WHILE {condition}"));
+                self.line(&format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
                 self.indent += 1;
                 self.statements(body, current_function);
+                self.line(&format!("GOTO {top_label}"));
                 self.indent -= 1;
-                self.line("WEND");
+                self.line(&format!("{end_label}:"));
+                self.line("REM END WHILE");
             }
             Statement::ExprStmt(expr_stmt) => self.expr_statement(expr_stmt, current_function),
             Statement::End => self.line("END"),
             Statement::Raw(raw) => self.line(raw),
+            Statement::BlankLine => self.blank(),
         }
     }
 
@@ -217,16 +236,22 @@ impl CodeGenerator {
         let end_label = format!("IF_{id:04}_END");
 
         if else_body.is_empty() {
-            self.line(&format!("IF NOT ({condition}) THEN GOTO {end_label}"));
+            self.line(&format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+            self.indent += 1;
             self.statements(then_body, current_function);
+            self.indent -= 1;
             self.line(&format!("{end_label}:"));
             self.line("REM END IF");
         } else {
-            self.line(&format!("IF NOT ({condition}) THEN GOTO {else_label}"));
+            self.line(&format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+            self.indent += 1;
             self.statements(then_body, current_function);
             self.line(&format!("GOTO {end_label}"));
+            self.indent -= 1;
             self.line(&format!("{else_label}:"));
+            self.indent += 1;
             self.statements(else_body, current_function);
+            self.indent -= 1;
             self.line(&format!("{end_label}:"));
             self.line("REM END IF");
         }
@@ -289,10 +314,20 @@ impl CodeGenerator {
                 (prelude, rendered)
             }
             Expr::Binary { left, op, right } => {
-                let (mut prelude, left) = self.expr(left, current_function);
-                let (right_prelude, right) = self.expr(right, current_function);
+                let (mut prelude, left_str) = self.expr(left, current_function);
+                let (right_prelude, right_str) = self.expr(right, current_function);
                 prelude.extend(right_prelude);
-                (prelude, format!("{left} {} {right}", binary_op(*op)))
+                let left_r = if matches!(left.as_ref(), Expr::Binary { .. }) {
+                    format!("({left_str})")
+                } else {
+                    left_str
+                };
+                let right_r = if matches!(right.as_ref(), Expr::Binary { .. }) {
+                    format!("({right_str})")
+                } else {
+                    right_str
+                };
+                (prelude, format!("{left_r} {} {right_r}", binary_op(*op)))
             }
         }
     }
@@ -329,12 +364,14 @@ impl CodeGenerator {
             if let Some((_, lowered)) = info.params.get(index) {
                 if let Some(actual_array) = empty_array_name(arg, current_function, self) {
                     let bound = copy_bound(info, &rendered_args, index);
+                    let loop_var = self.next_temp_var();
                     lines.push(format!("DIM {}({bound})", lowered.as_basic()));
                     lines.extend(array_copy_lines(
                         &lowered.as_basic(),
                         &actual_array,
                         &bound,
                         "copy array argument into lowered function storage",
+                        &loop_var,
                     ));
                 }
             }
@@ -346,11 +383,13 @@ impl CodeGenerator {
             if let Some((_, lowered)) = info.params.get(index) {
                 if let Some(actual_array) = empty_array_name(arg, current_function, self) {
                     let bound = copy_bound(info, &rendered_args, index);
+                    let loop_var = self.next_temp_var();
                     lines.extend(array_copy_lines(
                         &actual_array,
                         &lowered.as_basic(),
                         &bound,
                         "copy mutated array argument back to caller storage",
+                        &loop_var,
                     ));
                 }
             }
@@ -367,6 +406,12 @@ impl CodeGenerator {
     ) {
         let lines = self.call_lines(info, args, current_function);
         self.lines(lines);
+    }
+
+    fn next_temp_var(&mut self) -> String {
+        let id = self.next_label;
+        self.next_label += 1;
+        format!("BCC_T{id}%")
     }
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
@@ -476,12 +521,20 @@ fn copy_bound(info: &FunctionInfo, rendered_args: &[String], array_arg_index: us
         .unwrap_or_else(|| "10".to_string())
 }
 
-fn array_copy_lines(destination: &str, source: &str, bound: &str, comment: &str) -> Vec<String> {
+fn array_copy_lines(
+    destination: &str,
+    source: &str,
+    bound: &str,
+    comment: &str,
+    loop_var: &str,
+) -> Vec<String> {
     vec![
+        String::new(),
         format!("' {comment}: {source}() -> {destination}()"),
-        format!("FOR BCC_COPY% = 1 TO {bound}"),
-        format!("    {destination}(BCC_COPY%) = {source}(BCC_COPY%)"),
-        "NEXT BCC_COPY%".to_string(),
+        format!("FOR {loop_var} = 1 TO {bound}"),
+        format!("    {destination}({loop_var}) = {source}({loop_var})"),
+        format!("NEXT {loop_var}"),
+        String::new(),
     ]
 }
 
@@ -520,61 +573,101 @@ fn escape_string(value: &str) -> String {
 }
 
 fn ends_with_end(statements: &[Statement]) -> bool {
-    matches!(statements.last(), Some(Statement::End))
+    statements
+        .iter()
+        .rev()
+        .find(|s| !matches!(s, Statement::BlankLine))
+        .is_some_and(|s| matches!(s, Statement::End))
 }
 
 fn ends_with_return(statements: &[Statement]) -> bool {
-    matches!(statements.last(), Some(Statement::Return { .. }))
+    statements
+        .iter()
+        .rev()
+        .find(|s| !matches!(s, Statement::BlankLine))
+        .is_some_and(|s| matches!(s, Statement::Return { .. }))
 }
 
-fn number_basic_lines(source: &str) -> String {
+fn number_basic_lines(source: &str, full: bool) -> String {
     let lines = source.lines().collect::<Vec<_>>();
-    let mut label_targets = HashMap::new();
-    let mut target_indices = HashSet::new();
 
-    for (index, line) in lines.iter().enumerate() {
-        if let Some(label) = is_label_line(line) {
-            if let Some(target_index) = next_emitted_line_index(&lines, index + 1) {
-                label_targets.insert(label.to_string(), target_index);
-                target_indices.insert(target_index);
-            }
-        }
-    }
+    // Lines that survive into the output (non-blank, non-label-only)
+    let emitted: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty() && is_label_line(line).is_none())
+        .map(|(i, _)| i)
+        .collect();
 
-    let mut target_numbers = HashMap::new();
-    let mut current_number = 10;
-    for index in 0..lines.len() {
+    // In full mode every emitted line is a target; in sparse mode only lines
+    // that are actually jumped to receive a number.
+    let target_indices: std::collections::HashSet<usize> = if full {
+        emitted.iter().copied().collect()
+    } else {
+        lines
+            .iter()
+            .enumerate()
+            .filter_map(|(index, line)| {
+                is_label_line(line)?;
+                next_emitted_line_index(&lines, index + 1)
+            })
+            .collect()
+    };
+
+    // Assign sequential line numbers (step 10) to target lines in source order
+    let mut index_to_number: HashMap<usize, usize> = HashMap::new();
+    let mut current_number = 10usize;
+    for &index in &emitted {
         if target_indices.contains(&index) {
-            target_numbers.insert(index, current_number);
+            index_to_number.insert(index, current_number);
             current_number += 10;
         }
     }
 
-    let label_numbers = label_targets
-        .into_iter()
-        .filter_map(|(label, target_index)| {
-            target_numbers
-                .get(&target_index)
-                .copied()
-                .map(|number| (label, number))
+    // Map each label name to the line number of the first emitted line after it
+    let label_numbers: HashMap<String, usize> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let label = is_label_line(line)?;
+            let target = next_emitted_line_index(&lines, index + 1)?;
+            let number = *index_to_number.get(&target)?;
+            Some((label.to_string(), number))
         })
-        .collect::<HashMap<_, _>>();
+        .collect();
 
+    // Walk every intermediate line in order so blank lines pass through.
+    // Label-only lines are dropped; everything else is emitted.
+    // Consecutive blank lines are folded into a single blank.
     let mut output = String::new();
-    for (index, line) in lines.iter().enumerate() {
-        if line.trim().is_empty() || is_label_line(line).is_some() {
+    let mut last_was_blank = false;
+    for (index, &raw) in lines.iter().enumerate() {
+        if is_label_line(raw).is_some() {
             continue;
         }
-
-        let mut numbered_line = line.to_string();
-        for (label, number) in &label_numbers {
-            numbered_line = numbered_line.replace(label, &number.to_string());
+        if raw.trim().is_empty() {
+            if !last_was_blank {
+                output.push('\n');
+                last_was_blank = true;
+            }
+            continue;
         }
-        if let Some(number) = target_numbers.get(&index) {
-            output.push_str(&format!("{number} {numbered_line}\n"));
+        last_was_blank = false;
+        // Sparse-mode target lines are GOTO entry points: trim to column-0 after the
+        // number.  Every other line keeps the structural indentation that codegen built
+        // up via self.indent, so IF/WHILE/FOR bodies stay visually nested.
+        let mut text = if index_to_number.contains_key(&index) && !full {
+            raw.trim().to_string()
         } else {
-            output.push_str(&numbered_line);
-            output.push('\n');
+            raw.to_string()
+        };
+        for (label, number) in &label_numbers {
+            text = text.replace(label.as_str(), &number.to_string());
+        }
+        if let Some(&number) = index_to_number.get(&index) {
+            output.push_str(&format!("{number} {text}\n"));
+        } else {
+            output.push_str(&format!("{text}\n"));
         }
     }
     output
@@ -593,7 +686,7 @@ fn next_emitted_line_index(lines: &[&str], start: usize) -> Option<usize> {
 fn is_label_line(line: &str) -> Option<&str> {
     let trimmed = line.trim();
     let label = trimmed.strip_suffix(':')?;
-    if label.starts_with("IF_") || label.starts_with("FN_") {
+    if label.starts_with("IF_") || label.starts_with("FN_") || label.starts_with("WHILE_") {
         Some(label)
     } else {
         None

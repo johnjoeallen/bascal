@@ -68,7 +68,7 @@ fn compile_example(path: &PathBuf, output_dir: &Path) {
 
 fn assert_branch_targets_are_numeric(output: &str, path: &Path) {
     for line in output.lines() {
-        if line.trim_start().starts_with('\'') {
+        if line_payload_is_comment(line) {
             continue;
         }
         for keyword in ["GOTO", "GOSUB"] {
@@ -85,6 +85,14 @@ fn assert_branch_targets_are_numeric(output: &str, path: &Path) {
             }
         }
     }
+}
+
+fn line_payload_is_comment(line: &str) -> bool {
+    let payload = line
+        .trim_start()
+        .trim_start_matches(|ch: char| ch.is_ascii_digit())
+        .trim_start();
+    payload.starts_with('\'')
 }
 
 #[test]
@@ -133,11 +141,7 @@ fn freebasic_runs_sort_driver_when_available() {
     );
 
     let stdout = String::from_utf8_lossy(&run.stdout);
-    assert!(stdout.contains("Bubble sort result:"));
-    assert_eq!(
-        stdout
-            .matches(" 1 \n 3 \n 7 \n 12 \n 19 \n 21 \n 34 \n 42 \n 55 \n 88 ")
-            .count(),
-        4
-    );
+    for label in ["Bubble: OK", "Shaker: OK", "Shell: OK", "Quick: OK"] {
+        assert_eq!(stdout.matches(label).count(), 1, "missing {label}");
+    }
 }

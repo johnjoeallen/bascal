@@ -128,6 +128,7 @@ pub enum Statement {
     ExprStmt(Expr),
     End,
     Raw(String),
+    BlankLine,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 
 use bcc::{compile_file, default_output_path, CompileOptions};
 
@@ -12,6 +12,9 @@ struct Cli {
     include_dirs: Vec<PathBuf>,
     library_dirs: Vec<PathBuf>,
     libraries: Vec<String>,
+    line_numbers: bool,
+    rebuild: bool,
+    binary: bool,
 }
 
 fn main() -> ExitCode {
@@ -26,12 +29,24 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let cli = parse_args(env::args().skip(1).collect())?;
+
+    let output_path = cli
+        .output
+        .clone()
+        .unwrap_or_else(|| default_output_path(cli.input.as_path()));
+
+    if !cli.rebuild && is_up_to_date(&cli.input, &output_path) {
+        println!("up to date: {}", output_path.display());
+        return Ok(());
+    }
+
     let options = CompileOptions {
         include_dirs: cli.include_dirs,
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
+        line_numbers: cli.line_numbers,
     };
-    let output = compile_file(&cli.input, &options).map_err(|diagnostics| {
+    let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
             .into_iter()
             .map(|diagnostic| diagnostic.to_string())
@@ -39,12 +54,49 @@ fn run() -> Result<(), String> {
             .join("\n")
     })?;
 
-    let output_path = cli
-        .output
-        .unwrap_or_else(|| default_output_path(cli.input.as_path()));
-    fs::write(&output_path, output)
+    fs::write(&output_path, &basic)
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
 
+    if cli.binary {
+        invoke_fbc(&output_path)?;
+    }
+
+    Ok(())
+}
+
+fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
+    let Ok(in_meta) = fs::metadata(input) else {
+        return false;
+    };
+    let Ok(out_meta) = fs::metadata(output) else {
+        return false;
+    };
+    let Ok(in_mtime) = in_meta.modified() else {
+        return false;
+    };
+    let Ok(out_mtime) = out_meta.modified() else {
+        return false;
+    };
+    out_mtime >= in_mtime
+}
+
+fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
+    let binary_path = bas_path.with_extension("");
+    let status = Command::new("fbc")
+        .arg("-lang")
+        .arg("qb")
+        .arg(bas_path)
+        .arg("-x")
+        .arg(&binary_path)
+        .status()
+        .map_err(|err| format!("error: failed to invoke fbc: {err}"))?;
+    if !status.success() {
+        return Err(format!(
+            "error: fbc failed compiling {}",
+            bas_path.display()
+        ));
+    }
+    println!("binary: {}", binary_path.display());
     Ok(())
 }
 
@@ -54,6 +106,9 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut include_dirs = Vec::new();
     let mut library_dirs = Vec::new();
     let mut libraries = Vec::new();
+    let mut line_numbers = false;
+    let mut rebuild = false;
+    let mut binary = false;
     let mut i = 0;
 
     while i < args.len() {
@@ -77,7 +132,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                 library_dirs
                     .push(PathBuf::from(args.get(i).ok_or_else(|| {
                         "error: -L requires a directory".to_string()
-                    })?));
+                      })?));
             }
             "-l" => {
                 i += 1;
@@ -87,6 +142,9 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                         .clone(),
                 );
             }
+            "--line-numbers" => line_numbers = true,
+            "--rebuild" | "-r" => rebuild = true,
+            "--binary" | "-b" => binary = true,
             "-h" | "--help" => return Err(usage()),
             flag if flag.starts_with('-') => return Err(format!("error: unknown flag `{flag}`")),
             path => {
@@ -104,9 +162,20 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         include_dirs,
         library_dirs,
         libraries,
+        line_numbers,
+        rebuild,
+        binary,
     })
 }
 
 fn usage() -> String {
-    "usage: bcc input.bcl [-o output.bas] [-I dir] [-L dir] [-l library]".to_string()
+    [
+        "usage: bcc input.bcl [-o output.bas] [-I dir] [-L dir] [-l library]",
+        "",
+        "Options:",
+        "  --line-numbers        Number every output line, not just branch targets",
+        "  --rebuild, -r        Recompile even if the output is already up to date",
+        "  --binary, -b         Invoke fbc to compile the generated .bas to a binary",
+    ]
+    .join("\n")
 }

@@ -8,6 +8,7 @@ pub struct Parser {
     filename: String,
     tokens: Vec<Token>,
     pos: usize,
+    pending_blank: bool,
 }
 
 impl Parser {
@@ -16,6 +17,7 @@ impl Parser {
             filename,
             tokens,
             pos: 0,
+            pending_blank: false,
         }
     }
 
@@ -44,7 +46,9 @@ impl Parser {
             } else {
                 statements.push(self.parse_statement()?);
             }
-            self.skip_newlines();
+            if self.take_pending_blank() && !self.is_eof() {
+                statements.push(Statement::BlankLine);
+            }
         }
 
         Ok(Program {
@@ -114,10 +118,13 @@ impl Parser {
 
     fn parse_block(&mut self, ends: &[BlockEnd]) -> ParseResult<Vec<Statement>> {
         let mut body = Vec::new();
+        self.pending_blank = false;
         self.skip_newlines();
         while !self.is_eof() && !self.at_any_block_end(ends) {
             body.push(self.parse_statement()?);
-            self.skip_newlines();
+            if self.take_pending_blank() && !self.at_any_block_end(ends) && !self.is_eof() {
+                body.push(Statement::BlankLine);
+            }
         }
         Ok(body)
     }
@@ -385,14 +392,31 @@ impl Parser {
             return Ok(());
         }
         if self.eat(TokenKind::Colon) || self.eat(TokenKind::Newline) {
-            self.skip_newlines();
+            let extra = self.count_and_skip_newlines();
+            if extra >= 1 {
+                self.pending_blank = true;
+            }
             return Ok(());
         }
         Err(self.error("expected end of line"))
     }
 
     fn skip_newlines(&mut self) {
-        while self.eat(TokenKind::Newline) {}
+        self.count_and_skip_newlines();
+    }
+
+    fn count_and_skip_newlines(&mut self) -> usize {
+        let mut count = 0;
+        while self.eat(TokenKind::Newline) {
+            count += 1;
+        }
+        count
+    }
+
+    fn take_pending_blank(&mut self) -> bool {
+        let val = self.pending_blank;
+        self.pending_blank = false;
+        val
     }
 
     fn at_line_end(&self) -> bool {

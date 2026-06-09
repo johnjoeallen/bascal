@@ -97,7 +97,7 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(condition, target) || statements_call_function(body, target)
         }
         Statement::ExprStmt(expr) => expr_calls_function(expr, target),
-        Statement::End | Statement::Raw(_) => false,
+        Statement::End | Statement::Raw(_) | Statement::BlankLine => false,
     }
 }
 

@@ -20,6 +20,9 @@ pub struct CompileOptions {
     pub include_dirs: Vec<PathBuf>,
     pub library_dirs: Vec<PathBuf>,
     pub libraries: Vec<String>,
+    /// Number every output line (BASCOM strict mode). When false, only lines
+    /// that are branch targets receive a line number.
+    pub line_numbers: bool,
 }
 
 impl CompileOptions {
@@ -28,6 +31,7 @@ impl CompileOptions {
             include_dirs: Vec::new(),
             library_dirs: Vec::new(),
             libraries: Vec::new(),
+            line_numbers: false,
         }
     }
 }
@@ -56,7 +60,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let mut visited = HashSet::new();
     let program = load_program_recursive(input, &options, &mut visited)?;
     resolver::validate(&program)?;
-    Ok(CodeGenerator::new().generate(&program))
+    Ok(CodeGenerator::new()
+        .with_line_numbers(options.line_numbers)
+        .generate(&program))
 }
 
 pub fn default_output_path(input: &Path) -> std::path::PathBuf {
@@ -201,7 +207,7 @@ mod tests {
         let output =
             compile_source("examples/sort_driver.bcl", source).expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort%"));
-        assert!(output.contains("bubbleSort%(bubbleData%(), 10)"));
+        assert!(output.contains("bubbleSort%(bubbleData%(), 5000)"));
         assert!(output.contains("END"));
     }
 
@@ -217,8 +223,20 @@ END
 "#;
 
         let output = compile_source("add.bcl", source).expect("sample should compile");
-        assert!(!output.contains("function add%"));
-        assert!(!output.contains("end function"));
+        assert!(output.contains("' function add%"), "spec comment should be emitted");
+        assert!(!output.lines().any(|l| {
+            let p = l.trim_start()
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start();
+            !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
+        }), "should not emit BASCOM function declarations");
+        assert!(output.contains("' end function add%"), "end function comment should be emitted");
+        assert!(!output.lines().any(|l| {
+            let p = l.trim_start()
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start();
+            !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
+        }), "should not emit BASCOM end function declarations");
         assert!(output.contains("add_left% = 10"));
         assert!(output.contains("add_right% = 20"));
         assert!(output.contains("GOSUB "));
@@ -266,14 +284,15 @@ END
         assert!(!output.contains("' require com.bascal.sort.bubbleSort%"));
         assert!(output.contains("' Sort driver for the BASCAL example sort library."));
         assert!(output.contains("' In-place bubble sort."));
-        assert!(output.contains("' ===== BEGIN FUNCTION bubbleSort% ====="));
-        assert!(output.contains("' ===== BEGIN FUNCTION shellSort% ====="));
-        assert!(output.contains("' ===== BEGIN FUNCTION touch% ====="));
+        assert!(output.contains("' function bubbleSort%(data%, count%)"));
+        assert!(output.contains("' function shellSort%(data%, count%)"));
+        assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
-        assert!(output.contains("bubblesort_data%(BCC_COPY%) = bubbleData%(BCC_COPY%)"));
-        assert!(output.contains("bubbleData%(BCC_COPY%) = bubblesort_data%(BCC_COPY%)"));
+        assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
+        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
+        assert!(output.lines().any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
         assert!(output.contains("bubblesort_data%(j%) = bubblesort_data%(j% + 1)"));
-        assert!(output.contains("quicksort_data%(min%) = temp%"));
+        assert!(output.contains("quicksort_data%(wall%) = quicksort_data%(qHigh%)"));
         assert!(output.contains("GOSUB "));
     }
 }
