@@ -27,16 +27,16 @@ env -u RUSTC_WRAPPER cargo build
 
 ```bash
 bcc input.bcl [-o output.bas] [-L dir] [-l library]
-              [--line-numbers] [--rebuild | -r] [--binary | -b]
+              [--line-numbers] [--clean | -c] [--binary | -b]
 ```
 
 | Flag | Meaning |
 |------|---------|
-| `-o output.bas` | Output path (default: input with `.bas` extension) |
+| `-o output.bas` | Output path (default: input with `.bas` extension, same directory) |
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets |
-| `--rebuild`, `-r` | Recompile even if output is already up to date |
+| `--clean`, `-c` | Recompile even if output is already up to date |
 | `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary |
 
 The input file's directory is always the first implicit search root. `-L` adds
@@ -120,7 +120,6 @@ parameters. Use an explicit stack array to simulate recursion.
 ```
 src/        Rust compiler source
 examples/   BASCAL source examples and dependency tree
-output/     generated BASIC output (refreshed by tests)
 tmp/        temporary compiled binaries (git-ignored)
 ```
 
@@ -130,13 +129,13 @@ The sort driver (`examples/sort_driver.bcl`) exercises recursive `require`,
 array argument passing, and timing:
 
 ```bash
-bcc examples/sort_driver.bcl -o output/sort_driver.bas
+bcc examples/sort_driver.bcl
 ```
 
 ## Run With FreeBASIC
 
 ```bash
-fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
+fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
 ./tmp/sort_driver
 ```
 

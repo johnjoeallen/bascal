@@ -12,7 +12,7 @@ struct Cli {
     library_dirs: Vec<PathBuf>,
     libraries: Vec<String>,
     line_numbers: bool,
-    rebuild: bool,
+    clean: bool,
     binary: bool,
 }
 
@@ -34,7 +34,10 @@ fn run() -> Result<(), String> {
         .clone()
         .unwrap_or_else(|| default_output_path(cli.input.as_path()));
 
-    if !cli.rebuild && is_up_to_date(&cli.input, &output_path) {
+    if !cli.clean && is_up_to_date(&cli.input, &output_path) {
+        if cli.binary && !is_up_to_date(&cli.input, &output_path.with_extension("")) {
+            return invoke_fbc(&output_path);
+        }
         println!("up to date: {}", output_path.display());
         return Ok(());
     }
@@ -104,7 +107,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut library_dirs = Vec::new();
     let mut libraries = Vec::new();
     let mut line_numbers = false;
-    let mut rebuild = false;
+    let mut clean = false;
     let mut binary = false;
     let mut i = 0;
 
@@ -133,7 +136,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                 );
             }
             "--line-numbers" => line_numbers = true,
-            "--rebuild" | "-r" => rebuild = true,
+            "--clean" | "-c" => clean = true,
             "--binary" | "-b" => binary = true,
             "-h" | "--help" => return Err(usage()),
             flag if flag.starts_with('-') => return Err(format!("error: unknown flag `{flag}`")),
@@ -152,7 +155,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         library_dirs,
         libraries,
         line_numbers,
-        rebuild,
+        clean,
         binary,
     })
 }
@@ -160,11 +163,13 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
 fn usage() -> String {
     [
         "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
+        "              [--line-numbers] [--clean | -c] [--binary | -b]",
         "",
         "Options:",
+        "  -o output.bas        Output path (default: input with .bas extension)",
         "  -L dir               Add a library search directory for require resolution",
         "  --line-numbers       Number every output line, not just branch targets",
-        "  --rebuild, -r        Recompile even if the output is already up to date",
+        "  --clean, -c          Recompile even if the output is already up to date",
         "  --binary, -b         Invoke fbc to compile the generated .bas to a binary",
     ]
     .join("\n")

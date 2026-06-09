@@ -6,8 +6,6 @@ use std::process::Command;
 fn compiles_every_example_bcl_file() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let examples_dir = repo_root.join("examples");
-    let output_dir = repo_root.join("output");
-    fs::create_dir_all(&output_dir).expect("output directory should be creatable");
 
     let mut examples = fs::read_dir(&examples_dir)
         .expect("examples directory should exist")
@@ -27,19 +25,17 @@ fn compiles_every_example_bcl_file() {
     );
 
     for example in examples {
-        compile_example(&example, &output_dir);
+        compile_example(&example);
     }
 }
 
-fn compile_example(path: &PathBuf, output_dir: &Path) {
+fn compile_example(path: &PathBuf) {
     let options = bcc::CompileOptions::new();
     let output = bcc::compile_file(path, &options).unwrap_or_else(|diagnostics| {
         panic!("failed to compile {}:\n{diagnostics:#?}", path.display())
     });
 
-    let output_path = output_dir
-        .join(path.file_name().expect("example should have a file name"))
-        .with_extension("bas");
+    let output_path = bcc::default_output_path(path);
     fs::write(&output_path, &output)
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", output_path.display()));
 
@@ -103,33 +99,21 @@ fn freebasic_runs_sort_driver_when_available() {
 
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = manifest_dir.join("examples/sort_driver.bcl");
-    let output_dir = manifest_dir.join("output");
-    let tmp_dir = manifest_dir.join("tmp");
-    fs::create_dir_all(&output_dir).expect("output directory should be creatable");
-    fs::create_dir_all(&tmp_dir).expect("tmp directory should be creatable");
 
-    let output = bcc::compile_file(&source_path, &bcc::CompileOptions::new())
-        .unwrap_or_else(|diagnostics| panic!("failed to compile sort driver:\n{diagnostics:#?}"));
-    let basic_path = output_dir.join("sort_driver.bas");
-    fs::write(&basic_path, output)
-        .unwrap_or_else(|err| panic!("failed to write {}: {err}", basic_path.display()));
-
-    let executable_path = tmp_dir.join("sort_driver_fbc");
-    let compile = Command::new("fbc")
-        .arg("-lang")
-        .arg("qb")
-        .arg(&basic_path)
-        .arg("-x")
-        .arg(&executable_path)
+    let compile = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--clean")
+        .arg("--binary")
         .output()
-        .expect("failed to run fbc");
+        .expect("failed to run bcc");
     assert!(
         compile.status.success(),
-        "fbc failed:\nstdout:\n{}\nstderr:\n{}",
+        "bcc --binary failed:\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&compile.stdout),
         String::from_utf8_lossy(&compile.stderr)
     );
 
+    let executable_path = source_path.with_extension("");
     let run = Command::new(&executable_path)
         .output()
         .expect("failed to run compiled sort driver");
