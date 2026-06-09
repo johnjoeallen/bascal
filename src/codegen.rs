@@ -47,9 +47,6 @@ impl CodeGenerator {
             self.line("' TODO: resolve BASCAL dependency selectors during link");
             for declaration in &program.declarations {
                 match declaration {
-                    DependencyDecl::Include(path) => {
-                        self.line(&format!("' include \"{}\"", escape_string(path)))
-                    }
                     DependencyDecl::Require(symbol) => {
                         self.line(&format!("' require {}", symbol.raw))
                     }

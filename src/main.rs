@@ -9,7 +9,6 @@ use bcc::{compile_file, default_output_path, CompileOptions};
 struct Cli {
     input: PathBuf,
     output: Option<PathBuf>,
-    include_dirs: Vec<PathBuf>,
     library_dirs: Vec<PathBuf>,
     libraries: Vec<String>,
     line_numbers: bool,
@@ -41,7 +40,6 @@ fn run() -> Result<(), String> {
     }
 
     let options = CompileOptions {
-        include_dirs: cli.include_dirs,
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
         line_numbers: cli.line_numbers,
@@ -103,7 +101,6 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
 fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut input = None;
     let mut output = None;
-    let mut include_dirs = Vec::new();
     let mut library_dirs = Vec::new();
     let mut libraries = Vec::new();
     let mut line_numbers = false;
@@ -118,13 +115,6 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                 output =
                     Some(PathBuf::from(args.get(i).ok_or_else(|| {
                         "error: -o requires an output path".to_string()
-                    })?));
-            }
-            "-I" => {
-                i += 1;
-                include_dirs
-                    .push(PathBuf::from(args.get(i).ok_or_else(|| {
-                        "error: -I requires a directory".to_string()
                     })?));
             }
             "-L" => {
@@ -159,7 +149,6 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     Ok(Cli {
         input: input.ok_or_else(usage)?,
         output,
-        include_dirs,
         library_dirs,
         libraries,
         line_numbers,
@@ -170,10 +159,11 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
 
 fn usage() -> String {
     [
-        "usage: bcc input.bcl [-o output.bas] [-I dir] [-L dir] [-l library]",
+        "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
         "",
         "Options:",
-        "  --line-numbers        Number every output line, not just branch targets",
+        "  -L dir               Add a library search directory for require resolution",
+        "  --line-numbers       Number every output line, not just branch targets",
         "  --rebuild, -r        Recompile even if the output is already up to date",
         "  --binary, -b         Invoke fbc to compile the generated .bas to a binary",
     ]

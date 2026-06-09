@@ -35,9 +35,7 @@ impl Parser {
 
         self.skip_newlines();
         while !self.is_eof() {
-            if self.check_keyword("include") {
-                declarations.push(self.parse_include()?);
-            } else if self.check_keyword("require") {
+            if self.check_keyword("require") {
                 declarations.push(self.parse_path_decl(false)?);
             } else if self.check_keyword("import") {
                 declarations.push(self.parse_path_decl(true)?);
@@ -56,13 +54,6 @@ impl Parser {
             statements,
             functions,
         })
-    }
-
-    fn parse_include(&mut self) -> ParseResult<DependencyDecl> {
-        self.expect_keyword("include")?;
-        let path = self.expect_string("expected include path string")?;
-        self.consume_line_end()?;
-        Ok(DependencyDecl::Include(path))
     }
 
     fn parse_path_decl(&mut self, import: bool) -> ParseResult<DependencyDecl> {
@@ -473,17 +464,6 @@ impl Parser {
         }
     }
 
-    fn expect_string(&mut self, message: &str) -> ParseResult<String> {
-        match &self.current().kind {
-            TokenKind::String(value) => {
-                let value = value.clone();
-                self.advance();
-                Ok(value)
-            }
-            _ => Err(self.error(message)),
-        }
-    }
-
     fn expect(&mut self, kind: TokenKind, message: &str) -> ParseResult<()> {
         if self.eat(kind) {
             Ok(())
@@ -597,17 +577,10 @@ mod tests {
     #[test]
     fn parses_dependency_declarations() {
         let program = parse(
-            "include \"strings.bcl\"\nrequire com.bascal.sort.bubbleSort%\nimport com.bascal.sort.shakerSort%\n",
+            "require com.bascal.sort.bubbleSort%\nimport com.bascal.sort.shakerSort%\n",
         );
-        assert!(matches!(
-            program.declarations[0],
-            DependencyDecl::Include(_)
-        ));
-        assert!(matches!(
-            program.declarations[1],
-            DependencyDecl::Require(_)
-        ));
-        assert!(matches!(program.declarations[2], DependencyDecl::Import(_)));
+        assert!(matches!(program.declarations[0], DependencyDecl::Require(_)));
+        assert!(matches!(program.declarations[1], DependencyDecl::Import(_)));
     }
 
     #[test]

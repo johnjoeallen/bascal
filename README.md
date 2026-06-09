@@ -7,24 +7,15 @@ BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:
 
 - multiline `if` / `else` / `end if`
+- `for` / `next` and `while` / `wend` loops
 - `function` declarations with explicit `return`
 - path-style `require` dependencies
-- BASIC type suffixes such as `%` and `$`
-- retained BASIC-style comments
+- BASIC type suffixes (`%` integer, `$` string, `!` single, `#` double, `&` long)
+- source comments preserved in generated output
 - generated `.bas` output using line-number `GOTO` / `GOSUB`
 
 Everything is still global. Path-style names are linker selectors, not runtime
-namespaces. For example:
-
-```basic
-require com.bascal.sort.bubbleSort%
-```
-
-loads a dependency, but the callable BASIC symbol is still:
-
-```basic
-bubbleSort%(data%(), 10)
-```
+namespaces.
 
 ## Build
 
@@ -32,75 +23,57 @@ bubbleSort%(data%(), 10)
 env -u RUSTC_WRAPPER cargo build
 ```
 
-The `env -u RUSTC_WRAPPER` prefix is only needed in environments where `sccache`
-is blocked.
-
-## Repository Layout
-
-```text
-src/        Rust compiler source
-examples/   BASCAL source examples and dependency tree
-output/     generated BASIC output from examples/tests
-tmp/        temporary compiled binaries
-```
-
-`tmp/` is ignored by git. Generated `.bas` files in `output/` are useful for
-inspection and are refreshed by the test suite.
-
-## Compile BASCAL
+## Usage
 
 ```bash
-target/debug/bcc examples/sort_driver.bcl -o output/sort_driver.bas
+bcc input.bcl [-o output.bas] [-L dir] [-l library]
+              [--line-numbers] [--rebuild | -r] [--binary | -b]
 ```
 
-If `-o` is omitted, `bcc` writes a `.bas` file next to the input:
+| Flag | Meaning |
+|------|---------|
+| `-o output.bas` | Output path (default: input with `.bas` extension) |
+| `-L dir` | Add a library search directory for `require` resolution (repeatable) |
+| `-l name` | Name a library (reserved for future use) |
+| `--line-numbers` | Number every output line, not just branch targets |
+| `--rebuild`, `-r` | Recompile even if output is already up to date |
+| `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary |
 
-```bash
-target/debug/bcc examples/add.bcl
-```
-
-Reserved search flags are accepted:
-
-```bash
-target/debug/bcc input.bcl -I ./src -L ./libs -l stdlib
-```
-
-`-I` and `-L` are used by the current dependency lookup. `-l` is accepted for
-future library support.
+The input file's directory is always the first implicit search root. `-L` adds
+additional roots searched in order.
 
 ## Dependencies
 
 `require` and `import` recursively load `.bcl` files and merge their functions
-into the generated BASIC program.
+into the generated output. The two keywords are equivalent.
 
-Current path mapping strips the BASIC suffix and maps dots to directories:
+Path mapping: the BASIC suffix is stripped and dots become directory separators.
 
-```basic
-require com.bascal.sort.bubbleSort%
+```
+require com.bascal.sort.bubbleSort%  →  com/bascal/sort/bubbleSort.bcl
 ```
 
-resolves as:
+The input file's directory is always searched first; additional roots are added
+with `-L`. Multiple `-L` flags are supported:
 
-```text
-com/bascal/sort/bubbleSort.bcl
+```bash
+bcc input.bcl -L ./libs -L ./vendor
 ```
 
-The input file's directory is an implicit search root. Additional roots can be
-provided with `-I` and `-L`.
-
-## Generated BASIC
+## Generated BASIC Shape
 
 Functions are lowered to global parameter/result variables plus `GOSUB`.
-Array arguments are copied into lowered function arrays before the call and
-copied back afterward.
+Array arguments use copy-in/copy-out around the call.
 
-BASCAL source comments beginning with `'` are retained in generated BASIC. This
-is useful because linked dependencies are merged into one output file, and the
-comments preserve context around generated sections.
+Only `GOTO` / `GOSUB` target lines receive line numbers (sparse mode). Use
+`--line-numbers` for every line.
+
+Source blank lines are preserved in the output. Multiple consecutive blank lines
+are folded to one. Generated array-copy blocks are surrounded by blank lines.
 
 Example BASCAL:
 
-```basic
+```
 function add%(left%, right%)
     return left% + right%
 end function
@@ -110,87 +83,75 @@ PRINT total%
 END
 ```
 
-Generated shape:
+Generated output:
 
-```basic
+```
+' BASCAL generated BASIC
+' Functions are lowered to global variables, labels, and GOSUB
+
 add_left% = 10
 add_right% = 20
 GOSUB 10
 total% = add_result%
 PRINT total%
 END
-' ===== BEGIN FUNCTION add% =====
-10     add_result% = add_left% + add_right%
+
+' function add%(left%, right%)
+10 add_result% = add_left% + add_right%
     RETURN
-' ===== END FUNCTION add% =====
+' end function add%
 ```
 
-Only `GOTO` / `GOSUB` target lines receive line numbers.
+## Condition Lowering
+
+`if` and `while` conditions use `(cond) = 0` to invert, not `NOT`. This is
+intentional: BASIC's `NOT` is bitwise, so `NOT 1 = -2` (still truthy), which
+breaks programmer-boolean values like `swapped% = 1`. The `= 0` test treats
+any non-zero as truthy, matching expected semantics.
+
+## Recursive Functions
+
+BASCAL does not support recursive functions. Functions are lowered to `GOSUB`
+with global parameter variables; a recursive call would overwrite its own
+parameters. Use an explicit stack array to simulate recursion.
+
+## Repository Layout
+
+```
+src/        Rust compiler source
+examples/   BASCAL source examples and dependency tree
+output/     generated BASIC output (refreshed by tests)
+tmp/        temporary compiled binaries (git-ignored)
+```
 
 ## Examples
 
-Example BASCAL programs live in:
-
-```text
-examples/
-```
-
-The example dependency tree uses the `com.bascal` namespace selector:
-
-```text
-examples/com/bascal/sort/
-```
-
-Generated BASIC outputs are written to:
-
-```text
-output/
-```
-
-Temporary compiled binaries are written to:
-
-```text
-tmp/
-```
-
-The sort driver demonstrates recursive `require` declarations and four sort
-routines:
+The sort driver (`examples/sort_driver.bcl`) exercises recursive `require`,
+array argument passing, and timing:
 
 ```bash
-target/debug/bcc examples/sort_driver.bcl -o output/sort_driver.bas
+bcc examples/sort_driver.bcl -o output/sort_driver.bas
 ```
-
-The generated `output/sort_driver.bas` is a complete BASIC program containing
-the main driver plus the recursively loaded sort functions.
 
 ## Run With FreeBASIC
 
-FreeBASIC can compile the generated BASIC in QB compatibility mode:
-
 ```bash
-fbc -lang qb output/sort_driver.bas -x tmp/sort_driver_fbc
-./tmp/sort_driver_fbc
+fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
+./tmp/sort_driver
 ```
 
-Expected output includes sorted results for bubble, shaker, shell, and quick
-sort sections:
+Expected output (5000 reverse-sorted elements):
 
-```text
-1
-3
-7
-12
-19
-21
-34
-42
-55
-88
 ```
-
-`quickSort%` is currently implemented as selection sort. For compatibility with
-the way 1980s BASIC handled `GOSUB` and global state, BASCAL does not support
-recursive functions either.
+Bubble sort time (ms):       ~200
+Bubble: OK
+Shaker sort time (ms):       ~180
+Shaker: OK
+Shell sort time (ms):        ~1
+Shell: OK
+Quick sort time (ms):        ~1
+Quick: OK
+```
 
 ## Tests
 
@@ -198,18 +159,12 @@ recursive functions either.
 env -u RUSTC_WRAPPER cargo test
 ```
 
-The test suite:
-
-- unit-tests lexer, parser, validation, and function lowering
-- compiles every `examples/*.bcl`
-- writes generated `.bas` files to `output/`
-- if `fbc` is installed, compiles `output/sort_driver.bas` to `tmp/` and runs it
+- Unit-tests for lexer, parser, validation, and function lowering
+- Compiles every `examples/*.bcl` and writes output to `output/`
+- If `fbc` is installed, compiles and runs `sort_driver` end-to-end
 
 ## Current Limits
 
-- No library archive format yet.
-- No transitive recursion analysis beyond simple validation.
-- Function lowering is global and non-recursive for compatibility with the way
-  1980s BASIC handled subroutines.
-- Array argument lowering uses copy-in/copy-out based on the following count
-  argument.
+- No library archive format.
+- No local variable scoping; all variables inside functions are global.
+- Array argument lowering uses the next argument as the element count.

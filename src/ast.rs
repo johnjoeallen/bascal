@@ -9,7 +9,6 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DependencyDecl {
-    Include(String),
     Require(PathSymbol),
     Import(PathSymbol),
 }

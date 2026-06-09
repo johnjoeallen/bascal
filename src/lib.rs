@@ -17,7 +17,6 @@ use parser::Parser;
 
 #[derive(Debug, Clone)]
 pub struct CompileOptions {
-    pub include_dirs: Vec<PathBuf>,
     pub library_dirs: Vec<PathBuf>,
     pub libraries: Vec<String>,
     /// Number every output line (BASCOM strict mode). When false, only lines
@@ -28,7 +27,6 @@ pub struct CompileOptions {
 impl CompileOptions {
     pub fn new() -> Self {
         Self {
-            include_dirs: Vec::new(),
             library_dirs: Vec::new(),
             libraries: Vec::new(),
             line_numbers: false,
@@ -55,8 +53,12 @@ pub fn compile_source(
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
     let mut options = options.clone();
     if let Some(parent) = input.parent() {
-        options.include_dirs.insert(0, parent.to_path_buf());
+        let parent = parent.to_path_buf();
+        if !options.library_dirs.contains(&parent) {
+            options.library_dirs.insert(0, parent);
+        }
     }
+    let options = &options;
     let mut visited = HashSet::new();
     let program = load_program_recursive(input, &options, &mut visited)?;
     resolver::validate(&program)?;
@@ -110,12 +112,6 @@ fn load_program_recursive(
                 merged.statements.extend(dependency.statements);
                 merged.functions.extend(dependency.functions);
             }
-            ast::DependencyDecl::Include(path) => {
-                let dependency_path = resolve_include_path(path, &input, options)?;
-                let dependency = load_program_recursive(&dependency_path, options, visited)?;
-                merged.statements.extend(dependency.statements);
-                merged.functions.extend(dependency.functions);
-            }
         }
     }
 
@@ -130,10 +126,7 @@ fn resolve_required_symbol(
     options: &CompileOptions,
 ) -> Result<PathBuf, Vec<Diagnostic>> {
     let relative = required_symbol_to_path(raw);
-    let mut roots = search_roots(source_file, options);
-    roots.extend(options.library_dirs.iter().cloned());
-
-    for root in roots {
+    for root in search_roots(source_file, options) {
         let candidate = root.join(&relative);
         if candidate.exists() {
             return Ok(candidate);
@@ -146,26 +139,6 @@ fn resolve_required_symbol(
             "failed to resolve required BASCAL symbol `{raw}` as {}",
             relative.display()
         ),
-    )])
-}
-
-fn resolve_include_path(
-    raw: &str,
-    source_file: &Path,
-    options: &CompileOptions,
-) -> Result<PathBuf, Vec<Diagnostic>> {
-    let include = PathBuf::from(raw);
-    let roots = search_roots(source_file, options);
-    for root in roots {
-        let candidate = root.join(&include);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(vec![Diagnostic::error(
-        diagnostics::SourcePos::new(source_file.display().to_string(), 1, 1),
-        format!("failed to resolve include `{raw}`"),
     )])
 }
 
@@ -189,7 +162,7 @@ fn search_roots(source_file: &Path, options: &CompileOptions) -> Vec<PathBuf> {
     if let Some(parent) = source_file.parent() {
         roots.push(parent.to_path_buf());
     }
-    roots.extend(options.include_dirs.iter().cloned());
+    roots.extend(options.library_dirs.iter().cloned());
     roots
 }
 
