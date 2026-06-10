@@ -1,17 +1,17 @@
 require com.bascal.examples.remline.lineparse
 require com.bascal.examples.remline.strings
 
-' Fixed-size reference tracking for the example.
-' BASCAL keeps everything global, so the reference list is a small shared
-' buffer that every helper can see.
+/* Fixed-size reference tracking for the example. */
+/* BASCAL keeps everything global, so the reference list is a small shared */
+/* buffer that every helper can see. */
 
 function addRef%(lineNo%)
-    ' Zero is not a useful line-number target.
+    /* Zero is not a useful line-number target. */
     if lineNo% = 0 then
         return 0
     end if
 
-    ' Do not record the same branch target twice.
+    /* Do not record the same branch target twice. */
     addref_i% = 1
     while addref_i% <= refCount%
         if refNumber%(addref_i%) = lineNo% then
@@ -41,8 +41,8 @@ function isReferenced%(lineNo%)
 end function
 
 function collectRefs%(line$)
-    ' Scan for the small set of direct numeric flow-control forms this example
-    ' supports.
+    /* Scan for the small set of direct numeric flow-control forms this example */
+    /* supports. */
     collectrefs_found% = 0
     collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "GOTO")
     collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "GOSUB")
@@ -55,8 +55,8 @@ function collectRefs%(line$)
 end function
 
 function scanKeywordRefs%(line$, keyword$)
-    ' We keep the scan intentionally simple: locate the keyword and read the
-    ' first number that follows it.
+    /* We keep the scan intentionally simple: locate the keyword and read the */
+    /* first number that follows it. */
     scankeywordrefs_upper_line$ = line$
     scankeywordrefs_upper_keyword$ = keyword$
     scankeywordrefs_upper_line$ = upper$(scankeywordrefs_upper_line$)

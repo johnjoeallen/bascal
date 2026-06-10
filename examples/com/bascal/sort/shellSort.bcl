@@ -1,14 +1,14 @@
-' Shell sort demonstrates a nested dependency. The helper is intentionally
-' trivial; the point is to exercise recursive require resolution.
+/* Shell sort demonstrates a nested dependency. The helper is intentionally */
+/* trivial; the point is to exercise recursive require resolution. */
 require com.bascal.sort.helpers.touch
 
 function shellSort%(data%, count%)
-    ' Normalize the count through a required helper so this file has its own
-    ' dependency chain.
+    /* Normalize the count through a required helper so this file has its own */
+    /* dependency chain. */
     count% = touch%(count%)
     gap% = count% / 2
 
-    ' Repeatedly insertion-sort elements that are gap positions apart.
+    /* Repeatedly insertion-sort elements that are gap positions apart. */
     while gap% > 0
         i% = gap% + 1
 

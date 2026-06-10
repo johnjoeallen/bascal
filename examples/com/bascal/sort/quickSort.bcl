@@ -1,5 +1,5 @@
-' Iterative quicksort using an explicit stack for partition bounds.
-' Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input.
+/* Iterative quicksort using an explicit stack for partition bounds. */
+/* Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input. */
 function quickSort%(data%, count%)
     DIM sLow%(64)
     DIM sHigh%(64)
@@ -14,13 +14,13 @@ function quickSort%(data%, count%)
         sTop% = sTop% - 1
 
         if qHigh% > qLow% then
-            ' Swap middle element to high as pivot.
+            /* Swap middle element to high as pivot. */
             mid% = qLow% + (qHigh% - qLow%) / 2
             temp% = data%(mid%)
             data%(mid%) = data%(qHigh%)
             data%(qHigh%) = temp%
 
-            ' Partition: move elements <= pivot left of wall.
+            /* Partition: move elements <= pivot left of wall. */
             pivot% = data%(qHigh%)
             wall% = qLow% - 1
 
@@ -33,7 +33,7 @@ function quickSort%(data%, count%)
                 end if
             NEXT j%
 
-            ' Place pivot at wall.
+            /* Place pivot at wall. */
             wall% = wall% + 1
             temp% = data%(wall%)
             data%(wall%) = data%(qHigh%)

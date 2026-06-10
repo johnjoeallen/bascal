@@ -34,11 +34,13 @@ pub enum TokenKind {
     Number(i64),
     String(String),
     Comment(String),
+    BlockComment(String),
     Newline,
     LParen,
     RParen,
     Comma,
     Colon,
+    Semicolon,
     Hash,
     Plus,
     Minus,
@@ -94,12 +96,19 @@ impl<'a> Lexer<'a> {
                 '(' => tokens.push(self.single(TokenKind::LParen)),
                 ')' => tokens.push(self.single(TokenKind::RParen)),
                 ',' => tokens.push(self.single(TokenKind::Comma)),
+                ';' => tokens.push(self.single(TokenKind::Semicolon)),
                 ':' => tokens.push(self.single(TokenKind::Colon)),
                 '#' => tokens.push(self.single(TokenKind::Hash)),
                 '+' => tokens.push(self.single(TokenKind::Plus)),
                 '-' => tokens.push(self.single(TokenKind::Minus)),
                 '*' => tokens.push(self.single(TokenKind::Star)),
-                '/' => tokens.push(self.single(TokenKind::Slash)),
+                '/' => {
+                    if self.peek_at(1) == Some('*') {
+                        tokens.push(self.block_comment());
+                    } else {
+                        tokens.push(self.single(TokenKind::Slash));
+                    }
+                }
                 '=' => tokens.push(self.single(TokenKind::Eq)),
                 '<' => {
                     let pos = self.pos();
@@ -195,6 +204,31 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn block_comment(&mut self) -> Token {
+        let pos = self.pos();
+        self.advance(); // '/'
+        self.advance(); // '*'
+        let mut value = String::new();
+        loop {
+            match self.peek() {
+                None => break,
+                Some('*') if self.peek_at(1) == Some('/') => {
+                    self.advance(); // '*'
+                    self.advance(); // '/'
+                    break;
+                }
+                Some(ch) => {
+                    value.push(ch);
+                    self.advance();
+                }
+            }
+        }
+        Token {
+            kind: TokenKind::BlockComment(value),
+            pos,
+        }
+    }
+
     fn comment(&mut self) -> Token {
         let pos = self.pos();
         self.advance();
@@ -219,7 +253,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek(&self) -> Option<char> {
-        self.chars.get(self.index).copied()
+        self.peek_at(0)
+    }
+
+    fn peek_at(&self, offset: usize) -> Option<char> {
+        self.chars.get(self.index + offset).copied()
     }
 
     fn advance(&mut self) {

@@ -109,7 +109,71 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(condition, target) || statements_call_function(body, target)
         }
         Statement::ExprStmt(expr) => expr_calls_function(expr, target),
-        Statement::End | Statement::Raw(_) | Statement::BlankLine => false,
+        Statement::Do { condition, body, post_condition } => {
+            condition.as_ref().is_some_and(|c| expr_calls_function(&c.expr, target))
+                || statements_call_function(body, target)
+                || post_condition.as_ref().is_some_and(|c| expr_calls_function(&c.expr, target))
+        }
+        Statement::Randomize(expr) => {
+            expr.as_ref().is_some_and(|e| expr_calls_function(e, target))
+        }
+        Statement::Swap(a, b) => {
+            expr_calls_function(a, target) || expr_calls_function(b, target)
+        }
+        Statement::Goto(e) | Statement::Gosub(e) | Statement::Restore(Some(e)) => {
+            expr_calls_function(e, target)
+        }
+        Statement::Input { vars, .. } | Statement::Read(vars) => {
+            vars.iter().any(|e| expr_calls_function(e, target))
+        }
+        Statement::InputFile { channel, vars } => {
+            expr_calls_function(channel, target)
+                || vars.iter().any(|e| expr_calls_function(e, target))
+        }
+        Statement::Data(values) => values.iter().any(|e| expr_calls_function(e, target)),
+        Statement::Const { value, .. } => expr_calls_function(value, target),
+        Statement::Write { channel, exprs } => {
+            expr_calls_function(channel, target)
+                || exprs.iter().any(|e| expr_calls_function(e, target))
+        }
+        Statement::Lprint(exprs) => exprs.iter().any(|e| expr_calls_function(e, target)),
+        Statement::SelectCase { expr, cases, else_body } => {
+            expr_calls_function(expr, target)
+                || cases.iter().any(|c| {
+                    c.values.iter().any(|v| match v {
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => {
+                            expr_calls_function(e, target)
+                        }
+                        CaseValue::Range { from, to } => {
+                            expr_calls_function(from, target) || expr_calls_function(to, target)
+                        }
+                    }) || statements_call_function(&c.body, target)
+                })
+                || statements_call_function(else_body, target)
+        }
+        Statement::Locate { row, col } => {
+            expr_calls_function(row, target) || expr_calls_function(col, target)
+        }
+        Statement::Color { fg, bg } => {
+            expr_calls_function(fg, target)
+                || bg.as_ref().is_some_and(|e| expr_calls_function(e, target))
+        }
+        Statement::OnBranch { expr, targets, .. } => {
+            expr_calls_function(expr, target)
+                || targets.iter().any(|e| expr_calls_function(e, target))
+        }
+        Statement::End
+        | Statement::Stop
+        | Statement::Cls
+        | Statement::Beep
+        | Statement::System
+        | Statement::ExitFor
+        | Statement::ExitWhile
+        | Statement::ExitDo
+        | Statement::Restore(None)
+        | Statement::Raw(_)
+        | Statement::BlockComment(_)
+        | Statement::BlankLine => false,
     }
 }
 
@@ -137,7 +201,13 @@ fn contains_return(statements: &[Statement]) -> bool {
             else_body,
             ..
         } => contains_return(then_body) || contains_return(else_body),
-        Statement::For { body, .. } | Statement::While { body, .. } => contains_return(body),
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => contains_return(body),
+        Statement::SelectCase { cases, else_body, .. } => {
+            cases.iter().any(|c| contains_return(&c.body))
+                || contains_return(else_body)
+        }
         _ => false,
     })
 }

@@ -1,5 +1,5 @@
-' Tiny helper used to prove recursive require resolution.
+/* Tiny helper used to prove recursive require resolution. */
 function touch%(value%)
-    ' Return the value unchanged.
+    /* Return the value unchanged. */
     return value%
 end function

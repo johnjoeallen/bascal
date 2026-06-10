@@ -1,10 +1,10 @@
-' Shared string helpers for REMLINE.
-' These helpers keep the parsing code readable without pretending BASCAL has
-' local scope or modules.
+/* Shared string helpers for REMLINE. */
+/* These helpers keep the parsing code readable without pretending BASCAL has */
+/* local scope or modules. */
 
 function trimLeft$(text$)
-    ' BASIC string handling is straightforward: walk from the left until the
-    ' first non-space character appears.
+    /* BASIC string handling is straightforward: walk from the left until the */
+    /* first non-space character appears. */
     trimleft_i% = 1
     while trimleft_i% <= len(text$)
         trimleft_ch$ = mid$(text$, trimleft_i%, 1)
@@ -17,12 +17,12 @@ function trimLeft$(text$)
 end function
 
 function upper$(text$)
-    ' Use the BASIC runtime's upper-case conversion directly.
+    /* Use the BASIC runtime's upper-case conversion directly. */
     return UCASE$(text$)
 end function
 
 function startsWithKeyword%(text$, keyword$)
-    ' Convenience helper for future extensions and tests.
+    /* Convenience helper for future extensions and tests. */
     startswithkeyword_text$ = trimLeft$(text$)
     startswithkeyword_keyword$ = keyword$
     startswithkeyword_text$ = upper$(startswithkeyword_text$)

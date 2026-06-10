@@ -2,9 +2,28 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    pub program_decl: Option<ProgramDecl>,
     pub declarations: Vec<DependencyDecl>,
+    pub common: Vec<CommonBlock>,
     pub statements: Vec<Statement>,
     pub functions: Vec<FunctionDef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgramDecl {
+    pub name: String,
+    pub suite: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommonBlock {
+    pub vars: Vec<CommonVar>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommonVar {
+    pub name: BasicIdent,
+    pub is_array: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -140,16 +159,91 @@ pub enum Statement {
         condition: Expr,
         body: Vec<Statement>,
     },
+    Do {
+        condition: Option<DoCondition>,
+        body: Vec<Statement>,
+        post_condition: Option<DoCondition>,
+    },
     ExprStmt(Expr),
     End,
+    Stop,
+    Cls,
+    Beep,
+    System,
+    Randomize(Option<Expr>),
+    Swap(Expr, Expr),
+    Goto(Expr),
+    Gosub(Expr),
+    Input {
+        prompt: Option<String>,
+        vars: Vec<Expr>,
+    },
+    InputFile {
+        channel: Expr,
+        vars: Vec<Expr>,
+    },
+    Data(Vec<Expr>),
+    Read(Vec<Expr>),
+    Restore(Option<Expr>),
+    Const {
+        name: BasicIdent,
+        value: Expr,
+    },
+    Write {
+        channel: Expr,
+        exprs: Vec<Expr>,
+    },
+    Lprint(Vec<Expr>),
+    ExitFor,
+    ExitWhile,
+    ExitDo,
+    SelectCase {
+        expr: Expr,
+        cases: Vec<CaseClause>,
+        else_body: Vec<Statement>,
+    },
+    Locate {
+        row: Expr,
+        col: Expr,
+    },
+    Color {
+        fg: Expr,
+        bg: Option<Expr>,
+    },
+    OnBranch {
+        expr: Expr,
+        targets: Vec<Expr>,
+        is_gosub: bool,
+    },
     Raw(String),
+    BlockComment(Vec<String>),
     BlankLine,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoCondition {
+    pub is_while: bool,
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaseClause {
+    pub values: Vec<CaseValue>,
+    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CaseValue {
+    Single(Expr),
+    Range { from: Expr, to: Expr },
+    Is { op: BinaryOp, value: Expr },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenMode {
     Input,
     Output,
+    Append,
 }
 
 #[derive(Debug, Clone, PartialEq)]

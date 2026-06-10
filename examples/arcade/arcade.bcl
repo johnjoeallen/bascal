@@ -1,0 +1,13 @@
+/*
+ * Shared state for the ARCADE suite.
+ * Any program declaring "suite arcade" receives these COMMON variables,
+ * which survive a CHAIN to the next program in the suite.
+ *
+ * Variables:
+ *   score%      - current accumulated score
+ *   level%      - current difficulty level (1 = easiest)
+ *   playerName$ - name entered at the menu
+ *   hiScore%    - all-time high score for this session
+ */
+common score%, level%, playerName$
+common hiScore%

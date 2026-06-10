@@ -128,9 +128,19 @@ fn collect_example_sources_recursive(dir: &Path, sources: &mut Vec<PathBuf>) {
 
 fn compile_example(path: &Path, examples_dir: &Path, output_dir: &Path) {
     let options = bcc::CompileOptions::new();
-    let output = bcc::compile_file(path, &options).unwrap_or_else(|diagnostics| {
-        panic!("failed to compile {}:\n{diagnostics:#?}", path.display())
-    });
+    let output = match bcc::compile_file(path, &options) {
+        Ok(o) => o,
+        Err(ref diagnostics)
+            if diagnostics
+                .iter()
+                .all(|d| d.message.contains("COMMON is only valid in suite files")) =>
+        {
+            return; // suite definition file — not a standalone compilable program
+        }
+        Err(diagnostics) => {
+            panic!("failed to compile {}:\n{diagnostics:#?}", path.display())
+        }
+    };
 
     let output_path = output_path_for_source(path, examples_dir, output_dir);
     if let Some(parent) = output_path.parent() {

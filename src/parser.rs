@@ -29,13 +29,23 @@ impl Parser {
     }
 
     fn parse_program_inner(&mut self) -> ParseResult<Program> {
+        let mut program_decl = None;
         let mut declarations = Vec::new();
+        let mut common = Vec::new();
         let mut statements = Vec::new();
         let mut functions = Vec::new();
 
         self.skip_newlines();
         while !self.is_eof() {
-            if self.check_keyword("require") {
+            if self.check_keyword("program") {
+                let decl = self.parse_program_decl()?;
+                if program_decl.is_some() {
+                    return Err(self.error("only one `program` declaration is allowed per file"));
+                }
+                program_decl = Some(decl);
+            } else if self.check_keyword("common") {
+                common.push(self.parse_common_block()?);
+            } else if self.check_keyword("require") {
                 declarations.push(self.parse_path_decl(false)?);
             } else if self.check_keyword("import") {
                 declarations.push(self.parse_path_decl(true)?);
@@ -50,10 +60,45 @@ impl Parser {
         }
 
         Ok(Program {
+            program_decl,
             declarations,
+            common,
             statements,
             functions,
         })
+    }
+
+    fn parse_program_decl(&mut self) -> ParseResult<ProgramDecl> {
+        self.expect_keyword("program")?;
+        let name = self.expect_ident("expected program name")?;
+        let suite = if self.check_keyword("suite") {
+            self.advance();
+            Some(self.expect_ident("expected suite name after `suite`")?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        Ok(ProgramDecl { name, suite })
+    }
+
+    fn parse_common_block(&mut self) -> ParseResult<CommonBlock> {
+        self.expect_keyword("common")?;
+        let mut vars = Vec::new();
+        loop {
+            let name = BasicIdent::parse(&self.expect_ident("expected variable name in COMMON")?);
+            let is_array = if self.eat(TokenKind::LParen) {
+                self.expect(TokenKind::RParen, "expected `)` after `(` in COMMON")?;
+                true
+            } else {
+                false
+            };
+            vars.push(CommonVar { name, is_array });
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+        self.consume_line_end()?;
+        Ok(CommonBlock { vars })
     }
 
     fn parse_path_decl(&mut self, import: bool) -> ParseResult<DependencyDecl> {
@@ -125,12 +170,20 @@ impl Parser {
             self.parse_dim()
         } else if matches!(self.current().kind, TokenKind::Comment(_)) {
             self.parse_comment()
+        } else if matches!(self.current().kind, TokenKind::BlockComment(_)) {
+            self.parse_block_comment()
         } else if self.check_keyword("print") {
             self.parse_print()
+        } else if self.check_keyword("lprint") {
+            self.parse_lprint()
         } else if self.check_keyword("open") {
             self.parse_open()
         } else if self.check_keyword("line") && self.check_next_keyword("input") {
             self.parse_line_input()
+        } else if self.check_keyword("input") {
+            self.parse_input()
+        } else if self.check_keyword("write") {
+            self.parse_write()
         } else if self.check_keyword("close") {
             self.parse_close()
         } else if self.check_keyword("return") {
@@ -141,8 +194,50 @@ impl Parser {
             self.parse_for()
         } else if self.check_keyword("while") {
             self.parse_while()
+        } else if self.check_keyword("do") {
+            self.parse_do()
+        } else if self.check_keyword("select") && self.check_next_keyword("case") {
+            self.parse_select_case()
         } else if self.check_keyword("end") {
             self.parse_end_statement()
+        } else if self.check_keyword("exit") {
+            self.parse_exit()
+        } else if self.check_keyword("goto") {
+            self.parse_goto()
+        } else if self.check_keyword("gosub") {
+            self.parse_gosub()
+        } else if self.check_keyword("on") {
+            self.parse_on_branch()
+        } else if self.check_keyword("stop") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::Stop)
+        } else if self.check_keyword("cls") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::Cls)
+        } else if self.check_keyword("beep") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::Beep)
+        } else if self.check_keyword("system") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::System)
+        } else if self.check_keyword("randomize") {
+            self.parse_randomize()
+        } else if self.check_keyword("swap") {
+            self.parse_swap()
+        } else if self.check_keyword("data") {
+            self.parse_data()
+        } else if self.check_keyword("read") {
+            self.parse_read()
+        } else if self.check_keyword("restore") {
+            self.parse_restore()
+        } else if self.check_keyword("const") {
+            self.parse_const()
+        } else if self.check_keyword("locate") {
+            self.parse_locate()
+        } else if self.check_keyword("color") {
+            self.parse_color()
+        } else if self.check_keyword("let") {
+            self.parse_let()
+        } else if self.check_keyword("common") {
+            Err(self.error("`common` is only valid at program level in a suite file"))
+        } else if self.check_keyword("program") {
+            Err(self.error("`program` declaration must appear before any statements"))
         } else {
             self.parse_assignment_or_expr()
         }
@@ -165,6 +260,24 @@ impl Parser {
         };
         self.consume_line_end()?;
         Ok(Statement::Dim { name, size })
+    }
+
+    fn parse_block_comment(&mut self) -> ParseResult<Statement> {
+        let text = match &self.current().kind {
+            TokenKind::BlockComment(text) => text.clone(),
+            _ => return Err(self.error("expected block comment")),
+        };
+        self.advance();
+        self.consume_line_end()?;
+        let lines = text
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                trimmed.strip_prefix('*').map(|s| s.trim()).unwrap_or(trimmed).to_string()
+            })
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>();
+        Ok(Statement::BlockComment(lines))
     }
 
     fn parse_comment(&mut self) -> ParseResult<Statement> {
@@ -217,8 +330,11 @@ impl Parser {
         } else if self.check_keyword("output") {
             self.expect_keyword("output")?;
             OpenMode::Output
+        } else if self.check_keyword("append") {
+            self.expect_keyword("append")?;
+            OpenMode::Append
         } else {
-            return Err(self.error("expected `input` or `output`"));
+            return Err(self.error("expected `input`, `output`, or `append`"));
         };
         self.expect_keyword("as")?;
         self.expect(TokenKind::Hash, "expected `#` before file number")?;
@@ -262,22 +378,49 @@ impl Parser {
         let condition = self.parse_expr(0)?;
         self.expect_keyword("then")?;
         self.consume_line_end()?;
-        let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::EndIf])?;
-        let else_body = if self.check_keyword("else") {
+        let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::ElseIf, BlockEnd::EndIf])?;
+        let else_body = if self.check_keyword("elseif") {
+            vec![self.parse_elseif()?]
+        } else if self.check_keyword("else") {
             self.expect_keyword("else")?;
             self.consume_line_end()?;
-            self.parse_block(&[BlockEnd::EndIf])?
+            let body = self.parse_block(&[BlockEnd::EndIf])?;
+            self.expect_keyword("end")?;
+            self.expect_keyword("if")?;
+            self.consume_line_end()?;
+            body
         } else {
+            self.expect_keyword("end")?;
+            self.expect_keyword("if")?;
+            self.consume_line_end()?;
             Vec::new()
         };
-        self.expect_keyword("end")?;
-        self.expect_keyword("if")?;
+        Ok(Statement::If { condition, then_body, else_body })
+    }
+
+    fn parse_elseif(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("elseif")?;
+        let condition = self.parse_expr(0)?;
+        self.expect_keyword("then")?;
         self.consume_line_end()?;
-        Ok(Statement::If {
-            condition,
-            then_body,
-            else_body,
-        })
+        let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::ElseIf, BlockEnd::EndIf])?;
+        let else_body = if self.check_keyword("elseif") {
+            vec![self.parse_elseif()?]
+        } else if self.check_keyword("else") {
+            self.expect_keyword("else")?;
+            self.consume_line_end()?;
+            let body = self.parse_block(&[BlockEnd::EndIf])?;
+            self.expect_keyword("end")?;
+            self.expect_keyword("if")?;
+            self.consume_line_end()?;
+            body
+        } else {
+            self.expect_keyword("end")?;
+            self.expect_keyword("if")?;
+            self.consume_line_end()?;
+            Vec::new()
+        };
+        Ok(Statement::If { condition, then_body, else_body })
     }
 
     fn parse_for(&mut self) -> ParseResult<Statement> {
@@ -321,11 +464,306 @@ impl Parser {
 
     fn parse_end_statement(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("end")?;
-        if self.check_keyword("if") || self.check_keyword("function") {
+        if self.check_keyword("if") || self.check_keyword("function") || self.check_keyword("select") {
             return Err(self.error("unexpected block terminator"));
         }
         self.consume_line_end()?;
         Ok(Statement::End)
+    }
+
+    fn parse_do(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("do")?;
+        let condition = if self.check_keyword("while") || self.check_keyword("until") {
+            Some(self.parse_do_condition()?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        let body = self.parse_block(&[BlockEnd::Loop])?;
+        self.expect_keyword("loop")?;
+        let post_condition = if self.check_keyword("while") || self.check_keyword("until") {
+            Some(self.parse_do_condition()?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Do { condition, body, post_condition })
+    }
+
+    fn parse_do_condition(&mut self) -> ParseResult<DoCondition> {
+        let is_while = if self.check_keyword("while") {
+            self.advance();
+            true
+        } else {
+            self.expect_keyword("until")?;
+            false
+        };
+        let expr = self.parse_expr(0)?;
+        Ok(DoCondition { is_while, expr })
+    }
+
+    fn parse_select_case(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("select")?;
+        self.expect_keyword("case")?;
+        let expr = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        self.skip_newlines();
+        let mut cases = Vec::new();
+        let mut else_body = Vec::new();
+        while !self.is_eof() && !(self.check_keyword("end") && self.check_next_keyword("select")) {
+            self.expect_keyword("case")?;
+            if self.check_keyword("else") {
+                self.advance();
+                self.consume_line_end()?;
+                else_body = self.parse_block(&[BlockEnd::EndSelect])?;
+                break;
+            }
+            let values = self.parse_case_values()?;
+            self.consume_line_end()?;
+            let body = self.parse_block(&[BlockEnd::Case, BlockEnd::EndSelect])?;
+            cases.push(CaseClause { values, body });
+        }
+        self.expect_keyword("end")?;
+        self.expect_keyword("select")?;
+        self.consume_line_end()?;
+        Ok(Statement::SelectCase { expr, cases, else_body })
+    }
+
+    fn parse_case_values(&mut self) -> ParseResult<Vec<CaseValue>> {
+        let mut values = Vec::new();
+        loop {
+            let value = if self.check_keyword("is") {
+                self.advance();
+                let op = self.parse_comparison_op()?;
+                let expr = self.parse_expr(0)?;
+                CaseValue::Is { op, value: expr }
+            } else {
+                let from = self.parse_expr(0)?;
+                if self.check_keyword("to") {
+                    self.advance();
+                    let to = self.parse_expr(0)?;
+                    CaseValue::Range { from, to }
+                } else {
+                    CaseValue::Single(from)
+                }
+            };
+            values.push(value);
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(values)
+    }
+
+    fn parse_comparison_op(&mut self) -> ParseResult<BinaryOp> {
+        let op = match &self.current().kind {
+            TokenKind::Eq => BinaryOp::Eq,
+            TokenKind::Ne => BinaryOp::Ne,
+            TokenKind::Lt => BinaryOp::Lt,
+            TokenKind::Le => BinaryOp::Le,
+            TokenKind::Gt => BinaryOp::Gt,
+            TokenKind::Ge => BinaryOp::Ge,
+            _ => return Err(self.error("expected comparison operator after IS")),
+        };
+        self.advance();
+        Ok(op)
+    }
+
+    fn parse_exit(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("exit")?;
+        if self.check_keyword("for") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::ExitFor)
+        } else if self.check_keyword("while") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::ExitWhile)
+        } else if self.check_keyword("do") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::ExitDo)
+        } else {
+            Err(self.error("expected `for`, `while`, or `do` after `exit`"))
+        }
+    }
+
+    fn parse_goto(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("goto")?;
+        let target = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Goto(target))
+    }
+
+    fn parse_gosub(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("gosub")?;
+        let target = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Gosub(target))
+    }
+
+    fn parse_on_branch(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("on")?;
+        let expr = self.parse_expr(0)?;
+        let is_gosub = if self.check_keyword("goto") {
+            self.advance(); false
+        } else {
+            self.expect_keyword("gosub")?; true
+        };
+        let mut targets = Vec::new();
+        loop {
+            targets.push(self.parse_expr(0)?);
+            if !self.eat(TokenKind::Comma) { break; }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::OnBranch { expr, targets, is_gosub })
+    }
+
+    fn parse_lprint(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("lprint")?;
+        let mut exprs = Vec::new();
+        if !self.at_line_end() {
+            loop {
+                exprs.push(self.parse_expr(0)?);
+                if !self.eat(TokenKind::Comma) { break; }
+            }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Lprint(exprs))
+    }
+
+    fn parse_write(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("write")?;
+        self.expect(TokenKind::Hash, "expected `#` after WRITE")?;
+        let channel = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` after file number")?;
+        let mut exprs = Vec::new();
+        if !self.at_line_end() {
+            loop {
+                exprs.push(self.parse_expr(0)?);
+                if !self.eat(TokenKind::Comma) { break; }
+            }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Write { channel, exprs })
+    }
+
+    fn parse_input(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("input")?;
+        if self.eat(TokenKind::Hash) {
+            let channel = self.parse_expr(0)?;
+            self.expect(TokenKind::Comma, "expected `,` after file number")?;
+            let mut vars = Vec::new();
+            loop {
+                vars.push(self.parse_expr(0)?);
+                if !self.eat(TokenKind::Comma) { break; }
+            }
+            self.consume_line_end()?;
+            return Ok(Statement::InputFile { channel, vars });
+        }
+        let prompt = if matches!(self.current().kind, TokenKind::String(_)) {
+            let text = match &self.current().kind {
+                TokenKind::String(s) => s.clone(),
+                _ => unreachable!(),
+            };
+            self.advance();
+            // accept either ; or , after the prompt string
+            if !self.eat(TokenKind::Semicolon) {
+                self.eat(TokenKind::Comma);
+            }
+            Some(text)
+        } else {
+            None
+        };
+        let mut vars = Vec::new();
+        loop {
+            vars.push(self.parse_expr(0)?);
+            if !self.eat(TokenKind::Comma) { break; }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Input { prompt, vars })
+    }
+
+    fn parse_randomize(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("randomize")?;
+        let expr = if !self.at_line_end() {
+            Some(self.parse_expr(0)?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Randomize(expr))
+    }
+
+    fn parse_swap(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("swap")?;
+        let a = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` in SWAP")?;
+        let b = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Swap(a, b))
+    }
+
+    fn parse_data(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("data")?;
+        let mut values = Vec::new();
+        loop {
+            values.push(self.parse_expr(0)?);
+            if !self.eat(TokenKind::Comma) { break; }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Data(values))
+    }
+
+    fn parse_read(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("read")?;
+        let mut vars = Vec::new();
+        loop {
+            vars.push(self.parse_expr(0)?);
+            if !self.eat(TokenKind::Comma) { break; }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Read(vars))
+    }
+
+    fn parse_restore(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("restore")?;
+        let target = if !self.at_line_end() {
+            Some(self.parse_expr(0)?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Restore(target))
+    }
+
+    fn parse_const(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("const")?;
+        let name = BasicIdent::parse(&self.expect_ident("expected CONST name")?);
+        self.expect(TokenKind::Eq, "expected `=` in CONST")?;
+        let value = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Const { name, value })
+    }
+
+    fn parse_locate(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("locate")?;
+        let row = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` in LOCATE")?;
+        let col = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Locate { row, col })
+    }
+
+    fn parse_color(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("color")?;
+        let fg = self.parse_expr(0)?;
+        let bg = if self.eat(TokenKind::Comma) {
+            Some(self.parse_expr(0)?)
+        } else {
+            None
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Color { fg, bg })
+    }
+
+    fn parse_let(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("let")?;
+        self.parse_assignment_or_expr()
     }
 
     fn parse_assignment_or_expr(&mut self) -> ParseResult<Statement> {
@@ -488,12 +926,16 @@ impl Parser {
     fn at_block_end(&self, end: BlockEnd) -> bool {
         match end {
             BlockEnd::Else => self.check_keyword("else"),
+            BlockEnd::ElseIf => self.check_keyword("elseif"),
             BlockEnd::EndIf => self.check_keyword("end") && self.check_next_keyword("if"),
             BlockEnd::EndFunction => {
                 self.check_keyword("end") && self.check_next_keyword("function")
             }
             BlockEnd::Next => self.check_keyword("next"),
             BlockEnd::Wend => self.check_keyword("wend"),
+            BlockEnd::Loop => self.check_keyword("loop"),
+            BlockEnd::Case => self.check_keyword("case"),
+            BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),
         }
     }
 
@@ -601,10 +1043,14 @@ fn keyword_eq(value: &str, keyword: &str) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BlockEnd {
     Else,
+    ElseIf,
     EndIf,
     EndFunction,
     Next,
     Wend,
+    Loop,
+    Case,
+    EndSelect,
 }
 
 #[cfg(test)]

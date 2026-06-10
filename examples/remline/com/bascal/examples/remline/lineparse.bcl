@@ -1,11 +1,11 @@
 require com.bascal.examples.remline.strings
 
-' Parse and strip leading decimal line numbers.
-' The example keeps parsing deliberately small and boring: a source line may
-' start with digits, optionally followed by one separating space.
+/* Parse and strip leading decimal line numbers. */
+/* The example keeps parsing deliberately small and boring: a source line may */
+/* start with digits, optionally followed by one separating space. */
 
 function parseLineNumber%(text$)
-    ' Trim only the left edge so the helper tolerates indented lines.
+    /* Trim only the left edge so the helper tolerates indented lines. */
     text$ = trimLeft$(text$)
     digits$ = ""
     parselinenumber_i% = 1
@@ -26,7 +26,7 @@ function parseLineNumber%(text$)
 end function
 
 function stripLineNumber$(text$)
-    ' Remove an initial decimal line number and one following space if present.
+    /* Remove an initial decimal line number and one following space if present. */
     text$ = trimLeft$(text$)
     striplinenumber_i% = 1
     striplinenumber_done% = 0

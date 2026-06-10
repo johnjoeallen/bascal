@@ -1,12 +1,12 @@
-require com.bascal.examples.remline.lineparse%
-require com.bascal.examples.remline.refs%
-require com.bascal.examples.remline.strings%
+require com.bascal.examples.remline.lineparse
+require com.bascal.examples.remline.refs
+require com.bascal.examples.remline.strings
 
-' REMLINE works on an input BASIC listing and writes a cleaned version.
-' The sample run reads examples/remline/sample/input.bas and writes
-' examples/remline/sample/output.bas.
-' In classic BASIC terms, this is the same kind of cleanup pass that utilities
-' like REMLINE.BAS performed on line-numbered source listings.
+/* REMLINE works on an input BASIC listing and writes a cleaned version. */
+/* The sample run reads examples/remline/sample/input.bas and writes */
+/* examples/remline/sample/output.bas. */
+/* In classic BASIC terms, this is the same kind of cleanup pass that utilities */
+/* like REMLINE.BAS performed on line-numbered source listings. */
 
 DIM rawLine$(1000)
 DIM lineText$(1000)
@@ -15,11 +15,11 @@ DIM keepLine%(1000)
 DIM refNumber%(1000)
 
 function loadLines%()
-    ' Reset the fixed-size buffers used by the sample.
+    /* Reset the fixed-size buffers used by the sample. */
     refCount% = 0
     lineCount% = 0
 
-    ' Read each line of the source listing into memory.
+    /* Read each line of the source listing into memory. */
     OPEN inputFile$ FOR INPUT AS #1
     while EOF(1) = 0
         lineCount% = lineCount% + 1
@@ -27,7 +27,7 @@ function loadLines%()
     wend
     CLOSE #1
 
-    ' Split each input line into its numeric prefix and remaining source text.
+    /* Split each input line into its numeric prefix and remaining source text. */
     loadlines_i% = 1
     while loadlines_i% <= lineCount%
         lineNumber%(loadlines_i%) = parseLineNumber%(rawLine$(loadlines_i%))
@@ -40,7 +40,7 @@ function loadLines%()
 end function
 
 function collectAllRefs%()
-    ' Scan each line for direct numeric branch targets.
+    /* Scan each line for direct numeric branch targets. */
     refCount% = 0
     collectallrefs_i% = 1
     while collectallrefs_i% <= lineCount%
@@ -51,7 +51,7 @@ function collectAllRefs%()
 end function
 
 function transformLines%()
-    ' Emit a cleaned listing to the configured output file.
+    /* Emit a cleaned listing to the configured output file. */
     OPEN outputFile$ FOR OUTPUT AS #2
     transformlines_i% = 1
     while transformlines_i% <= lineCount%

@@ -8,6 +8,7 @@ pub struct CodeGenerator {
     output: String,
     functions: Vec<FunctionInfo>,
     line_numbers: bool,
+    loop_exit_stack: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +27,7 @@ impl CodeGenerator {
             output: String::new(),
             functions: Vec::new(),
             line_numbers: false,
+            loop_exit_stack: Vec::new(),
         }
     }
 
@@ -43,6 +45,23 @@ impl CodeGenerator {
 
         self.line("' BASCAL generated BASIC");
         self.line("' Functions are lowered to global variables, labels, and GOSUB");
+
+        for block in &program.common {
+            let vars = block
+                .vars
+                .iter()
+                .map(|v| {
+                    if v.is_array {
+                        format!("{}()", v.name.as_basic())
+                    } else {
+                        v.name.as_basic()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.line(&format!("COMMON {vars}"));
+        }
+
         if !program.declarations.is_empty() {
             self.line("' TODO: resolve BASCAL dependency selectors during link");
             for declaration in &program.declarations {
@@ -129,6 +148,7 @@ impl CodeGenerator {
                 let mode = match mode {
                     OpenMode::Input => "INPUT",
                     OpenMode::Output => "OUTPUT",
+                    OpenMode::Append => "APPEND",
                 };
                 self.line(&format!("OPEN {file} FOR {mode} AS #{channel}"));
             }
@@ -233,15 +253,214 @@ impl CodeGenerator {
                 self.lines(prelude);
                 self.line(&format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
                 self.indent += 1;
+                self.loop_exit_stack.push(end_label.clone());
                 self.statements(body, current_function);
+                self.loop_exit_stack.pop();
                 self.line(&format!("GOTO {top_label}"));
                 self.indent -= 1;
                 self.line(&format!("{end_label}:"));
                 self.line("REM END WHILE");
             }
+            Statement::Do { condition, body, post_condition } => {
+                let id = self.next_label;
+                self.next_label += 1;
+                let top_label = format!("DO_{id:04}_TOP");
+                let end_label = format!("DO_{id:04}_END");
+                self.line(&format!("{top_label}:"));
+                if let Some(cond) = condition {
+                    let (prelude, expr) = self.expr(&cond.expr, current_function);
+                    self.lines(prelude);
+                    if cond.is_while {
+                        self.line(&format!("IF ({expr}) = 0 THEN GOTO {end_label}"));
+                    } else {
+                        self.line(&format!("IF ({expr}) <> 0 THEN GOTO {end_label}"));
+                    }
+                }
+                self.indent += 1;
+                self.loop_exit_stack.push(end_label.clone());
+                self.statements(body, current_function);
+                self.loop_exit_stack.pop();
+                if let Some(cond) = post_condition {
+                    let (prelude, expr) = self.expr(&cond.expr, current_function);
+                    self.lines(prelude);
+                    if cond.is_while {
+                        self.line(&format!("IF ({expr}) <> 0 THEN GOTO {top_label}"));
+                    } else {
+                        self.line(&format!("IF ({expr}) = 0 THEN GOTO {top_label}"));
+                    }
+                } else if condition.is_none() {
+                    self.line(&format!("GOTO {top_label}"));
+                }
+                self.indent -= 1;
+                self.line(&format!("{end_label}:"));
+                self.line("REM END DO");
+            }
             Statement::ExprStmt(expr_stmt) => self.expr_statement(expr_stmt, current_function),
             Statement::End => self.line("END"),
+            Statement::Stop => self.line("STOP"),
+            Statement::Cls => self.line("CLS"),
+            Statement::Beep => self.line("BEEP"),
+            Statement::System => self.line("SYSTEM"),
+            Statement::Randomize(expr) => {
+                if let Some(expr) = expr {
+                    let (prelude, expr) = self.expr(expr, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("RANDOMIZE {expr}"));
+                } else {
+                    self.line("RANDOMIZE");
+                }
+            }
+            Statement::Swap(a, b) => {
+                let (a_prelude, a) = self.expr(a, current_function);
+                let (b_prelude, b) = self.expr(b, current_function);
+                self.lines(a_prelude);
+                self.lines(b_prelude);
+                self.line(&format!("SWAP {a}, {b}"));
+            }
+            Statement::Goto(target) => {
+                let (prelude, target) = self.expr(target, current_function);
+                self.lines(prelude);
+                self.line(&format!("GOTO {target}"));
+            }
+            Statement::Gosub(target) => {
+                let (prelude, target) = self.expr(target, current_function);
+                self.lines(prelude);
+                self.line(&format!("GOSUB {target}"));
+            }
+            Statement::Input { prompt, vars } => {
+                let mut rendered = Vec::new();
+                for var in vars {
+                    let (prelude, var) = self.expr(var, current_function);
+                    self.lines(prelude);
+                    rendered.push(var);
+                }
+                let prompt_part = match prompt {
+                    Some(p) => format!("\"{p}\"; "),
+                    None => String::new(),
+                };
+                self.line(&format!("INPUT {}{}", prompt_part, rendered.join(", ")));
+            }
+            Statement::InputFile { channel, vars } => {
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                self.lines(channel_prelude);
+                let mut rendered = Vec::new();
+                for var in vars {
+                    let (prelude, var) = self.expr(var, current_function);
+                    self.lines(prelude);
+                    rendered.push(var);
+                }
+                self.line(&format!("INPUT #{channel}, {}", rendered.join(", ")));
+            }
+            Statement::Data(values) => {
+                let mut rendered = Vec::new();
+                for val in values {
+                    let (prelude, val) = self.expr(val, current_function);
+                    self.lines(prelude);
+                    rendered.push(val);
+                }
+                self.line(&format!("DATA {}", rendered.join(", ")));
+            }
+            Statement::Read(vars) => {
+                let mut rendered = Vec::new();
+                for var in vars {
+                    let (prelude, var) = self.expr(var, current_function);
+                    self.lines(prelude);
+                    rendered.push(var);
+                }
+                self.line(&format!("READ {}", rendered.join(", ")));
+            }
+            Statement::Restore(target) => {
+                if let Some(target) = target {
+                    let (prelude, target) = self.expr(target, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("RESTORE {target}"));
+                } else {
+                    self.line("RESTORE");
+                }
+            }
+            Statement::Const { name, value } => {
+                let (prelude, value) = self.expr(value, current_function);
+                self.lines(prelude);
+                self.line(&format!("CONST {} = {value}", self.ident(name, current_function)));
+            }
+            Statement::Write { channel, exprs } => {
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                self.lines(channel_prelude);
+                let mut rendered = Vec::new();
+                for item in exprs {
+                    let (prelude, item) = self.expr(item, current_function);
+                    self.lines(prelude);
+                    rendered.push(item);
+                }
+                self.line(&format!("WRITE #{channel}, {}", rendered.join(", ")));
+            }
+            Statement::Lprint(exprs) => {
+                let mut rendered = Vec::new();
+                for item in exprs {
+                    let (prelude, item) = self.expr(item, current_function);
+                    self.lines(prelude);
+                    rendered.push(item);
+                }
+                if rendered.is_empty() {
+                    self.line("LPRINT");
+                } else {
+                    self.line(&format!("LPRINT {}", rendered.join(", ")));
+                }
+            }
+            Statement::ExitFor => self.line("EXIT FOR"),
+            Statement::ExitWhile => {
+                if let Some(label) = self.loop_exit_stack.last().cloned() {
+                    self.line(&format!("GOTO {label}"));
+                } else {
+                    self.line("' warning: EXIT WHILE outside of WHILE loop");
+                }
+            }
+            Statement::ExitDo => {
+                if let Some(label) = self.loop_exit_stack.last().cloned() {
+                    self.line(&format!("GOTO {label}"));
+                } else {
+                    self.line("' warning: EXIT DO outside of DO loop");
+                }
+            }
+            Statement::SelectCase { expr, cases, else_body } => {
+                self.select_case(expr, cases, else_body, current_function);
+            }
+            Statement::Locate { row, col } => {
+                let (row_prelude, row) = self.expr(row, current_function);
+                let (col_prelude, col) = self.expr(col, current_function);
+                self.lines(row_prelude);
+                self.lines(col_prelude);
+                self.line(&format!("LOCATE {row}, {col}"));
+            }
+            Statement::Color { fg, bg } => {
+                let (fg_prelude, fg) = self.expr(fg, current_function);
+                self.lines(fg_prelude);
+                if let Some(bg) = bg {
+                    let (bg_prelude, bg) = self.expr(bg, current_function);
+                    self.lines(bg_prelude);
+                    self.line(&format!("COLOR {fg}, {bg}"));
+                } else {
+                    self.line(&format!("COLOR {fg}"));
+                }
+            }
+            Statement::OnBranch { expr, targets, is_gosub } => {
+                let (prelude, expr) = self.expr(expr, current_function);
+                self.lines(prelude);
+                let mut rendered = Vec::new();
+                for target in targets {
+                    let (t_prelude, t) = self.expr(target, current_function);
+                    self.lines(t_prelude);
+                    rendered.push(t);
+                }
+                let keyword = if *is_gosub { "GOSUB" } else { "GOTO" };
+                self.line(&format!("ON {expr} {keyword} {}", rendered.join(", ")));
+            }
             Statement::Raw(raw) => self.line(raw),
+            Statement::BlockComment(lines) => {
+                for line in lines {
+                    self.line(&format!("' {line}"));
+                }
+            }
             Statement::BlankLine => self.blank(),
         }
     }
@@ -293,6 +512,84 @@ impl CodeGenerator {
             self.indent -= 1;
             self.line(&format!("{end_label}:"));
             self.line("REM END IF");
+        }
+    }
+
+    fn select_case(
+        &mut self,
+        expr: &Expr,
+        cases: &[CaseClause],
+        else_body: &[Statement],
+        current_function: Option<&FunctionInfo>,
+    ) {
+        let id = self.next_label;
+        self.next_label += 1;
+        let end_label = format!("SEL_{id:04}_END");
+
+        // Store the select expression in a temp variable to avoid re-evaluation.
+        let (prelude, expr_str) = self.expr(expr, current_function);
+        self.lines(prelude);
+        let temp = self.next_temp_var();
+        self.line(&format!("{temp} = {expr_str}"));
+
+        // Emit dispatch: one IF/GOTO per case clause.
+        let case_labels: Vec<String> = (0..cases.len())
+            .map(|i| format!("SEL_{id:04}_C{i}"))
+            .collect();
+        let else_label = format!("SEL_{id:04}_ELSE");
+
+        for (i, clause) in cases.iter().enumerate() {
+            let cond = clause
+                .values
+                .iter()
+                .map(|v| self.case_value_cond(v, &temp, current_function))
+                .collect::<Vec<_>>()
+                .join(" OR ");
+            self.line(&format!("IF ({cond}) <> 0 THEN GOTO {}", case_labels[i]));
+        }
+        self.line(&format!("GOTO {}", if else_body.is_empty() { &end_label } else { &else_label }));
+
+        // Emit each case body.
+        for (i, clause) in cases.iter().enumerate() {
+            self.line(&format!("{}:", case_labels[i]));
+            self.indent += 1;
+            self.statements(&clause.body, current_function);
+            self.line(&format!("GOTO {end_label}"));
+            self.indent -= 1;
+        }
+
+        // Emit else body.
+        if !else_body.is_empty() {
+            self.line(&format!("{else_label}:"));
+            self.indent += 1;
+            self.statements(else_body, current_function);
+            self.indent -= 1;
+        }
+
+        self.line(&format!("{end_label}:"));
+        self.line("REM END SELECT");
+    }
+
+    fn case_value_cond(
+        &mut self,
+        value: &CaseValue,
+        temp: &str,
+        current_function: Option<&FunctionInfo>,
+    ) -> String {
+        match value {
+            CaseValue::Single(expr) => {
+                let (_, s) = self.expr(expr, current_function);
+                format!("{temp} = {s}")
+            }
+            CaseValue::Range { from, to } => {
+                let (_, from) = self.expr(from, current_function);
+                let (_, to) = self.expr(to, current_function);
+                format!("{temp} >= {from} AND {temp} <= {to}")
+            }
+            CaseValue::Is { op, value } => {
+                let (_, val) = self.expr(value, current_function);
+                format!("{temp} {} {val}", binary_op(*op))
+            }
         }
     }
 
@@ -725,7 +1022,12 @@ fn next_emitted_line_index(lines: &[&str], start: usize) -> Option<usize> {
 fn is_label_line(line: &str) -> Option<&str> {
     let trimmed = line.trim();
     let label = trimmed.strip_suffix(':')?;
-    if label.starts_with("IF_") || label.starts_with("FN_") || label.starts_with("WHILE_") {
+    if label.starts_with("IF_")
+        || label.starts_with("FN_")
+        || label.starts_with("WHILE_")
+        || label.starts_with("DO_")
+        || label.starts_with("SEL_")
+    {
         Some(label)
     } else {
         None

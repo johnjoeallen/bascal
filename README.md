@@ -1,15 +1,20 @@
 # BASCAL
 
 BASCAL is a Rust compiler for a structured extension of classic Microsoft BASIC.
-The compiler command is `bcc`.
+The compiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
+language reference.
 
 BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:
 
-- multiline `if` / `else` / `end if`
-- `for` / `next` and `while` / `wend` loops
+- multiline `if` / `else if` / `else` / `end if`
+- `for` / `next`, `while` / `wend`, and `do` / `loop` loops with early exit
 - `function` declarations with explicit `return`
 - path-style `require` dependencies
+- `program name [suite suitename]` declaration with `COMMON` block coordination
+- `select case` with single values, ranges, and `is` comparisons
+- `/* */` block comments flattened to `'` lines in generated output
+- `input`, `data` / `read` / `restore`, `const`, `locate`, `color`, `on ... goto`
 - BASIC type suffixes (`%` integer, `$` string, `!` single, `#` double, `&` long)
 - source comments preserved in generated output
 - generated `.bas` output using line-number `GOTO` / `GOSUB`
@@ -37,7 +42,7 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets |
 | `--clean`, `-c` | Recompile even if output is already up to date |
-| `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary |
+| `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary in `tmp/` |
 
 The input file's directory is always the first implicit search root. `-L` adds
 additional roots searched in order.
@@ -47,18 +52,72 @@ additional roots searched in order.
 `require` and `import` recursively load `.bcl` files and merge their functions
 into the generated output. The two keywords are equivalent.
 
-Path mapping: the BASIC suffix is stripped and dots become directory separators.
+Dots become directory separators:
 
 ```
 require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
 ```
 
 The input file's directory is always searched first; additional roots are added
-with `-L`. Multiple `-L` flags are supported:
+with `-L`:
 
 ```bash
 bcc input.bcl -L ./libs -L ./vendor
 ```
+
+## Suite COMMON
+
+In 1980s BASIC, multi-program systems used `COMMON` to pass shared variables
+across a `CHAIN` statement into the next program. Every chained program had to
+declare an **identical** `COMMON` list or variables would land in the wrong
+slots.
+
+BASCAL coordinates this with suite files. A suite file contains only `common`
+declarations; any program that names it with `suite` receives those declarations
+verbatim at the top of its generated `.bas` output.
+
+**Suite file `arcade.bcl`:**
+
+```
+' Shared state for the ARCADE suite.
+common score%, level%, playerName$
+common hiScore%
+```
+
+**Program files:**
+
+```
+program menu suite arcade
+
+INPUT "Your name: "; playerName$
+score% = 0
+level% = 1
+' CHAIN "game.bas"
+END
+```
+
+```
+program game suite arcade
+
+score% = score% + 50 * level%
+PRINT "Score: " + STR$(score%)
+' CHAIN "menu.bas"
+END
+```
+
+Both compile to `.bas` files that open with the same block:
+
+```
+COMMON score%, level%, playerName$
+COMMON hiScore%
+```
+
+Rules:
+- A suite file may contain only `common` declarations (and comments). Functions,
+  statements, and `require` are rejected.
+- `common` is illegal in any file that is not a suite file.
+- A `program` declaration (with or without `suite`) is illegal in library
+  modules loaded via `require`.
 
 ## Generated BASIC Shape
 
@@ -119,41 +178,20 @@ parameters. Use an explicit stack array to simulate recursion.
 
 ```
 src/        Rust compiler source
-examples/   BASCAL source examples and dependency tree
-output/     generated BASIC output from the example suite
+examples/   BASCAL source examples (.bas generated alongside each .bcl)
 tmp/        temporary compiled binaries (git-ignored)
 ```
 
 ## Examples
 
-The sort driver (`examples/sort_driver.bcl`) exercises recursive `require`,
-array argument passing, and timing:
+### Sort driver
+
+`examples/sort_driver.bcl` exercises recursive `require`, array argument
+passing, and timing:
 
 ```bash
-cargo run -- examples/sort_driver.bcl -o output/sort_driver.bas
-fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
-./tmp/sort_driver
-```
-
-### REMLINE
-
-`examples/remline` is a real-world BASCAL example inspired by old BASIC
-line-number utilities. It analyses a line-numbered BASIC program and removes
-unnecessary line numbers while preserving referenced targets. The generated
-program reads `examples/remline/sample/input.bas` and writes the cleaned
-listing to `examples/remline/sample/output.bas`.
-
-```bash
-cargo run -- examples/remline/remline.bcl -L examples/remline -o output/remline/remline.bas
-fbc -lang qb output/remline/remline.bas -x tmp/remline
-./tmp/remline > examples/remline/sample/output.bas
-diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
-```
-
-## Run With FreeBASIC
-
-```bash
-fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
+cargo run -- examples/sort_driver.bcl
+fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
 ./tmp/sort_driver
 ```
 
@@ -170,6 +208,41 @@ Quick sort time (ms):        ~1
 Quick: OK
 ```
 
+### REMLINE
+
+`examples/remline` is a real-world BASCAL example inspired by old BASIC
+line-number utilities. It analyses a line-numbered BASIC program and removes
+unnecessary line numbers while preserving referenced targets. The generated
+program reads `examples/remline/sample/input.bas` and writes the cleaned
+listing to `examples/remline/sample/output.bas`.
+
+```bash
+cargo run -- examples/remline/remline.bcl -L examples/remline
+fbc -lang qb examples/remline/remline.bas -x tmp/remline
+./tmp/remline
+diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
+```
+
+### Arcade suite
+
+`examples/arcade` demonstrates suite `COMMON` coordination across two programs
+that share score, level, and player state.
+
+```bash
+cargo run -- examples/arcade/menu.bcl
+cargo run -- examples/arcade/game.bcl
+```
+
+Both generated `.bas` files open with the same `COMMON` block drawn from
+`arcade.bcl`, ready to exchange state via `CHAIN`.
+
+## Run With FreeBASIC
+
+```bash
+fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
+./tmp/sort_driver
+```
+
 ## Tests
 
 ```bash
@@ -177,8 +250,8 @@ env -u RUSTC_WRAPPER cargo test
 ```
 
 - Unit-tests for lexer, parser, validation, and function lowering
-- Compiles every driver-style `examples/**/*.bcl` file outside dependency
-  `com/` trees and writes output to `output/`
+- Compiles every driver-style `examples/**/*.bcl` file (excluding `com/`
+  dependency trees) and writes `.bas` output alongside the source
 - If `fbc` is installed, compiles and runs `sort_driver` and `remline`
   end-to-end
 

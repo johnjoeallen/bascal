@@ -60,7 +60,21 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     }
     let options = &options;
     let mut visited = HashSet::new();
-    let program = load_program_recursive(input, &options, &mut visited)?;
+    let mut program = load_program_recursive(input, true, options, &mut visited)?;
+
+    // Resolve suite COMMON block if the program declares a suite.
+    if let Some(suite_name) = program
+        .program_decl
+        .as_ref()
+        .and_then(|d| d.suite.as_deref())
+        .map(str::to_string)
+    {
+        if let Some(suite_path) = resolve_suite_path(&suite_name, input, options) {
+            program.common = load_suite_file(&suite_path)?;
+        }
+        // Suite file not found → compile without COMMON (silent; suite may not exist yet).
+    }
+
     resolver::validate(&program)?;
     Ok(CodeGenerator::new()
         .with_line_numbers(options.line_numbers)
@@ -79,13 +93,16 @@ fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diag
 
 fn load_program_recursive(
     input: &Path,
+    is_root: bool,
     options: &CompileOptions,
     visited: &mut HashSet<PathBuf>,
 ) -> Result<ast::Program, Vec<Diagnostic>> {
     let input = normalize_path(input);
     if !visited.insert(input.clone()) {
         return Ok(ast::Program {
+            program_decl: None,
             declarations: Vec::new(),
+            common: Vec::new(),
             statements: Vec::new(),
             functions: Vec::new(),
         });
@@ -98,8 +115,37 @@ fn load_program_recursive(
         )]
     })?;
     let program = parse_source(input.display().to_string(), &source)?;
+
+    let mut errors = Vec::new();
+
+    if !is_root && program.program_decl.is_some() {
+        errors.push(Diagnostic::error(
+            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+            format!(
+                "`program` declaration is not allowed in library modules (`{}`)",
+                input.display()
+            ),
+        ));
+    }
+
+    if !program.common.is_empty() {
+        errors.push(Diagnostic::error(
+            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+            format!(
+                "COMMON is only valid in suite files, not in `{}`",
+                input.display()
+            ),
+        ));
+    }
+
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
     let mut merged = ast::Program {
+        program_decl: program.program_decl,
         declarations: Vec::new(),
+        common: Vec::new(),
         statements: Vec::new(),
         functions: Vec::new(),
     };
@@ -108,7 +154,8 @@ fn load_program_recursive(
         match declaration {
             ast::DependencyDecl::Require(symbol) | ast::DependencyDecl::Import(symbol) => {
                 let dependency_path = resolve_required_symbol(&symbol.raw, &input, options)?;
-                let dependency = load_program_recursive(&dependency_path, options, visited)?;
+                let dependency =
+                    load_program_recursive(&dependency_path, false, options, visited)?;
                 merged.statements.extend(dependency.statements);
                 merged.functions.extend(dependency.functions);
             }
@@ -118,6 +165,71 @@ fn load_program_recursive(
     merged.statements.extend(program.statements);
     merged.functions.extend(program.functions);
     Ok(merged)
+}
+
+fn load_suite_file(path: &Path) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
+    let source = fs::read_to_string(path).map_err(|err| {
+        vec![Diagnostic::error(
+            diagnostics::SourcePos::new(path.display().to_string(), 1, 1),
+            format!("failed to read suite file: {err}"),
+        )]
+    })?;
+    let program = parse_source(path.display().to_string(), &source)?;
+
+    let pos = diagnostics::SourcePos::new(path.display().to_string(), 1, 1);
+    let mut errors = Vec::new();
+
+    if program.statements.iter().any(|s| match s {
+        ast::Statement::BlankLine | ast::Statement::BlockComment(_) => false,
+        ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
+        _ => true,
+    }) {
+        errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` may only contain COMMON declarations (no statements)", path.display()),
+        ));
+    }
+    if !program.functions.is_empty() {
+        errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` may only contain COMMON declarations (no functions)", path.display()),
+        ));
+    }
+    if !program.declarations.is_empty() {
+        errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` may only contain COMMON declarations (no require/import)", path.display()),
+        ));
+    }
+    if program.program_decl.is_some() {
+        errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` may only contain COMMON declarations (no program declaration)", path.display()),
+        ));
+    }
+    if program.common.is_empty() {
+        errors.push(Diagnostic::error(
+            pos,
+            format!("suite file `{}` contains no COMMON declarations", path.display()),
+        ));
+    }
+
+    if !errors.is_empty() {
+        return Err(errors);
+    }
+
+    Ok(program.common)
+}
+
+fn resolve_suite_path(suite_name: &str, source_file: &Path, options: &CompileOptions) -> Option<PathBuf> {
+    let filename = format!("{suite_name}.bcl");
+    for root in search_roots(source_file, options) {
+        let candidate = root.join(&filename);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn resolve_required_symbol(
@@ -143,21 +255,7 @@ fn resolve_required_symbol(
 }
 
 fn required_symbol_to_path(raw: &str) -> PathBuf {
-    let mut parts = raw.split('.').map(str::to_string).collect::<Vec<_>>();
-    if let Some(last) = parts.last_mut() {
-        if last
-            .chars()
-            .last()
-            .is_some_and(|suffix| ast::TypeSuffix::from_char(suffix).is_some())
-        {
-            last.pop();
-        }
-    }
-
-    let mut path = PathBuf::new();
-    for part in parts {
-        path.push(part);
-    }
+    let mut path = raw.split('.').collect::<PathBuf>();
     path.set_extension("bcl");
     path
 }
@@ -201,34 +299,20 @@ END
 "#;
 
         let output = compile_source("add.bcl", source).expect("sample should compile");
-        assert!(
-            output.contains("' function add%"),
-            "spec comment should be emitted"
-        );
-        assert!(
-            !output.lines().any(|l| {
-                let p = l
-                    .trim_start()
-                    .trim_start_matches(|c: char| c.is_ascii_digit())
-                    .trim_start();
-                !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
-            }),
-            "should not emit BASCOM function declarations"
-        );
-        assert!(
-            output.contains("' end function add%"),
-            "end function comment should be emitted"
-        );
-        assert!(
-            !output.lines().any(|l| {
-                let p = l
-                    .trim_start()
-                    .trim_start_matches(|c: char| c.is_ascii_digit())
-                    .trim_start();
-                !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
-            }),
-            "should not emit BASCOM end function declarations"
-        );
+        assert!(output.contains("' function add%"), "spec comment should be emitted");
+        assert!(!output.lines().any(|l| {
+            let p = l.trim_start()
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start();
+            !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
+        }), "should not emit BASCOM function declarations");
+        assert!(output.contains("' end function add%"), "end function comment should be emitted");
+        assert!(!output.lines().any(|l| {
+            let p = l.trim_start()
+                .trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start();
+            !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
+        }), "should not emit BASCOM end function declarations");
         assert!(output.contains("add_left% = 10"));
         assert!(output.contains("add_right% = 20"));
         assert!(output.contains("GOSUB "));
@@ -280,19 +364,56 @@ END
         assert!(output.contains("' function shellSort%(data%, count%)"));
         assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
-        assert!(
-            !output.contains("BCC_COPY%"),
-            "hardcoded BCC_COPY% loop var should not appear"
-        );
-        assert!(output
-            .lines()
-            .any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
-        assert!(output
-            .lines()
-            .any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
+        assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
+        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
+        assert!(output.lines().any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
         assert!(output.contains("bubblesort_data%(j%) = bubblesort_data%(j% + 1)"));
         assert!(output.contains("quicksort_data%(wall%) = quicksort_data%(qHigh%)"));
         assert!(output.contains("GOSUB "));
+    }
+
+    #[test]
+    fn program_suite_loads_common_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let suite_path = dir.path().join("myapp.bcl");
+        let common_path = dir.path().join("mysuite.bcl");
+
+        std::fs::write(&suite_path, "program myapp suite mysuite\nPRINT \"hello\"\nEND\n").unwrap();
+        std::fs::write(&common_path, "common score%, level%\ncommon name$\n").unwrap();
+
+        let output = compile_file(&suite_path, &CompileOptions::new())
+            .expect("program with suite should compile");
+
+        assert!(output.contains("COMMON score%, level%"));
+        assert!(output.contains("COMMON name$"));
+        assert!(output.contains("PRINT \"hello\""));
+    }
+
+    #[test]
+    fn common_in_non_suite_file_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.bcl");
+        std::fs::write(&path, "common score%\nPRINT 1\nEND\n").unwrap();
+
+        let result = compile_file(&path, &CompileOptions::new());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("COMMON is only valid in suite files"));
+    }
+
+    #[test]
+    fn suite_file_with_statements_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let suite_path = dir.path().join("prog.bcl");
+        let bad_suite = dir.path().join("badcommon.bcl");
+
+        std::fs::write(&suite_path, "program prog suite badcommon\nEND\n").unwrap();
+        std::fs::write(&bad_suite, "common score%\nPRINT 1\n").unwrap();
+
+        let result = compile_file(&suite_path, &CompileOptions::new());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("may only contain COMMON declarations"));
     }
 
     #[test]

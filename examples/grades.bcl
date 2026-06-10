@@ -1,7 +1,7 @@
-' Nested multiline IF example.
+/* Nested multiline IF example. */
 score% = 97
 
-' The compiler lowers each block IF to numeric GOTO targets.
+/* The compiler lowers each block IF to numeric GOTO targets. */
 if score% >= 90 then
     if score% >= 95 then
         PRINT "A+"

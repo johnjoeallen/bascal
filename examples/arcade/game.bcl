@@ -1,0 +1,24 @@
+/*
+ * ARCADE suite — game program.
+ * Assumes the COMMON variables were initialised by menu.bas and survived
+ * the CHAIN.  Simulates one round: awards points, advances the level, and
+ * tracks the all-time high score.
+ */
+program game suite arcade
+
+PRINT "Player: " + playerName$
+PRINT "Level:  " + STR$(level%)
+
+score% = score% + 50 * level%
+level% = level% + 1
+
+if score% > hiScore% then
+    hiScore% = score%
+    PRINT "*** New high score: " + STR$(hiScore%) + " ***"
+end if
+
+PRINT "Score: " + STR$(score%)
+
+/* Chain back to menu or to the next level. */
+/* CHAIN "menu.bas" */
+END
