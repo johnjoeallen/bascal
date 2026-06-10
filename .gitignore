@@ -19,8 +19,8 @@ target
 # Generated BASIC output from test runs
 /output/
 
-# Generated BASIC files in tutorial (test output, E2E artifacts)
-tutorial/**/*.bas
+# Generated BASIC output from intermediate build artifacts
+/output/remline/
 tutorial/remline/sample/output.bas
 
 # RustRover
