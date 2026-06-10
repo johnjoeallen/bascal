@@ -52,6 +52,34 @@ function titleCase$(word$)
     return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
 end function
 
+/* Local variable scoping — each function has its own i% and acc% */
+function sumTo%(n%)
+    // i% and acc% are local to sumTo%.
+    acc% = 0
+    for i% = 1 to n%
+        acc% = acc% + i%
+    end for
+    return acc%
+end function
+
+function productTo%(n%)
+    // i% and acc% here are independent of sumTo%'s i% and acc%.
+    acc% = 1
+    for i% = 1 to n%
+        acc% = acc% * i%
+    end for
+    return acc%
+end function
+
+/* Global variable accessed inside a function with the global keyword */
+runningTotal% = 0
+
+function addToTotal%(x%)
+    global runningTotal%
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function
+
 /* --- Exercise the functions --- */
 
 PRINT "max(4, 9) = "    + STR$(max%(4, 9))      // 9
@@ -71,5 +99,14 @@ PRINT "lo = " + STR$(lo%)
 a$ = repeat$("x", 3)
 b$ = repeat$("y", 2)
 PRINT a$ + " " + b$    // xxx yy
+
+/* Local scoping: sumTo% and productTo% each use i% without conflict */
+PRINT "sumTo(5)     = " + STR$(sumTo%(5))      // 15
+PRINT "productTo(5) = " + STR$(productTo%(5))  // 120
+
+/* Global variable shared across calls */
+dummy% = addToTotal%(10)
+dummy% = addToTotal%(5)
+PRINT "runningTotal = " + STR$(runningTotal%)   // 15
 
 END

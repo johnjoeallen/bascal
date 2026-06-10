@@ -35,8 +35,8 @@ BASCAL is a compiler that translates structured `.bcl` source files into
 line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and
 FreeBASIC's QB compatibility mode.
 
-BASCAL keeps BASIC's global symbol model and run-time semantics while adding the
-structural constructs needed to write and maintain larger programs:
+BASCAL adds structured programming constructs on top of BASIC's run-time
+semantics:
 
 - Block `if` / `elseif` / `else` / `end if`
 - `for` / `end for`, `while` / `end while`, and `do` / `end do` loops with early exit
@@ -172,9 +172,27 @@ not perform static type inference.
 
 ### Variables
 
-All variables are **global**. There is no local variable scoping. Variables
-declared or assigned inside a function body are visible throughout the entire
-program.
+Variables declared or assigned at the top level are **global** and visible
+throughout the entire program.
+
+Variables inside a `function` or `procedure` body are **local by default**: the
+compiler automatically prefixes them with the function/procedure name so they
+cannot collide with variables elsewhere.  To read or write a global variable
+from inside a function or procedure, declare it at the top of the body with the
+`global` keyword:
+
+```
+total% = 0
+
+function addToTotal%(x%)
+    global total%           ' access the global variable, not a local one
+    total% = total% + x%
+    return total%
+end function
+```
+
+BASIC builtin functions (`UCASE$`, `STR$`, `LEN`, etc.) are always recognised as
+callables and are never treated as local variables.
 
 Variables do not require pre-declaration; they come into existence on first
 assignment. Use `DIM` to declare arrays or to make intent clear.
@@ -701,14 +719,37 @@ b$ = repeat$("y", 2)   ' repeat_result$ = "yy"   →  b$ = "yy"
 PRINT a$ + " " + b$    ' xxx yy
 ```
 
+### Variable Scoping
+
+Variables inside a function body are **local by default**: the compiler prefixes
+them with the function stem.  Two functions can each have a variable named `i%`
+with no conflict.  Use `global varname` to access a module-level variable:
+
+```
+function sumTo%(n%)
+    acc% = 0                ' local to sumTo%
+    for i% = 1 to n%       ' local to sumTo%
+        acc% = acc% + i%
+    end for
+    return acc%
+end function
+
+runningTotal% = 0
+
+function addToTotal%(x%)
+    global runningTotal%    ' refers to the module-level variable
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function
+```
+
 ### Restrictions
 
 - **No recursion.** Functions are lowered to `GOSUB` with global parameter
   variables. A recursive call would overwrite in-flight parameters. Use an
   explicit stack array to simulate recursion if needed.
-- **No local scope.** All variables inside a function body are global. Use
-  function-name-prefixed variable names (e.g., `myFunc_temp%`) to avoid
-  collisions.
+- **No return value from a procedure.** Functions must `return` a value;
+  for side-effect-only subroutines use `procedure` instead.
 
 ### How Functions Are Lowered
 
@@ -716,6 +757,9 @@ The compiler lowers each function call to:
 1. Assign each argument to a global variable `fname_paramname`
 2. `GOSUB` to the function's generated label
 3. Assign the result from `fname_result`
+
+Local variables in the function body are emitted as prefixed global BASIC
+variables (e.g., `i%` in `sumTo%` becomes `sumto_i%`).
 
 Array parameters use copy-in / copy-out: elements are copied into
 `fname_paramname(i)` before the call and back into the caller's array after.
@@ -803,12 +847,24 @@ end procedure
 fillRange(data%(), N%, 99)                  ' data%() — () at call site
 ```
 
+### Variable Scoping
+
+Same rules as functions: variables in the body are local by default; use
+`global varname` to access a module-level variable.
+
+```
+globalCount% = 0
+
+procedure increment()
+    global globalCount%
+    globalCount% = globalCount% + 1
+end procedure
+```
+
 ### Restrictions
 
 - **No recursion.**  Same GOSUB lowering as functions — a recursive call would
   overwrite in-flight parameters.
-- **No local scope.**  All variables in the body are global.  Use
-  procedure-name-prefixed names (e.g., `fillRange_i%`) to avoid collisions.
 - **No return value.**  Do not use a procedure where an expression is expected.
 
 ### How Procedures Are Lowered
@@ -818,6 +874,8 @@ Procedures use the same GOSUB mechanism as functions:
 1. Assign each argument to a global variable `pname_paramname`
 2. `GOSUB` to the procedure's generated label
 3. No result variable is read back
+
+Local variables in the body are emitted as prefixed global BASIC variables.
 
 ---
 

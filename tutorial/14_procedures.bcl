@@ -3,10 +3,9 @@
 // A procedure is like a function but returns no value.  Declare it with
 // PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.
 //
-// Procedures are lowered the same way as functions:
-//   1. Arguments are copied to global variables  procname_paramname
-//   2. GOSUB to the generated label
-//   3. No result variable is read back
+// Variables inside a procedure are LOCAL by default: the compiler prefixes
+// them with the procedure name.  To access a global variable, declare it
+// inside the body with:  global varname
 //
 // Use procedures for actions that produce side effects (output, file I/O,
 // modifying arrays) rather than for computing a value.
@@ -39,6 +38,14 @@ procedure fillRange(arr%, count%, value%)
     end for
 end procedure
 
+/* Procedure that uses a global variable */
+globalCount% = 0
+
+procedure increment()
+    global globalCount%
+    globalCount% = globalCount% + 1
+end procedure
+
 /* --- Drive the procedures --- */
 
 printSeparator()
@@ -59,5 +66,10 @@ PRINT "Filled array:"
 for i% = 0 to N% - 1
     PRINT "  data%(" + STR$(i%) + ") = " + STR$(data%(i%))
 end for
+
+increment()
+increment()
+increment()
+PRINT "globalCount = " + STR$(globalCount%)   // 3
 
 END
