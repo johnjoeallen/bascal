@@ -661,9 +661,8 @@ impl CodeGenerator {
                     prelude.extend(index_prelude);
                     rendered_indices.push(index);
                 }
-                let key = name.name.to_ascii_lowercase();
-                let base = if self.known_callables.contains(&key) {
-                    name.as_basic()
+                let base = if self.known_callables.contains(&name.name.to_ascii_lowercase()) {
+                    self.canonical_callable(name)
                 } else {
                     self.ident(name, current_function)
                 };
@@ -683,7 +682,12 @@ impl CodeGenerator {
                         prelude.extend(arg_prelude);
                         rendered_args.push(arg);
                     }
-                    (prelude, format!("{}({})", name, rendered_args.join(", ")))
+                    let emit_name = if self.known_callables.contains(&name.name.to_ascii_lowercase()) {
+                        self.canonical_callable(name)
+                    } else {
+                        name.as_basic()
+                    };
+                    (prelude, format!("{}({})", emit_name, rendered_args.join(", ")))
                 }
             }
             Expr::Unary { op, expr } => {
@@ -793,6 +797,14 @@ impl CodeGenerator {
         let id = self.next_label;
         self.next_label += 1;
         format!("BCC_T{id}%")
+    }
+
+    fn canonical_callable(&self, name: &BasicIdent) -> String {
+        BasicIdent {
+            name: name.name.to_ascii_uppercase(),
+            suffix: name.suffix,
+        }
+        .as_basic()
     }
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
