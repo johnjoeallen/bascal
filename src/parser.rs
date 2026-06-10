@@ -464,11 +464,11 @@ impl Parser {
             None
         };
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::Next])?;
-        self.expect_keyword("next")?;
-        if matches!(self.current().kind, TokenKind::Ident(_)) {
-            let _ = self.advance();
+        let body = self.parse_block(&[BlockEnd::ForEnd, BlockEnd::BareEnd])?;
+        if self.check_keyword("for") {
+            self.expect_keyword("for")?;
         }
+        self.expect_keyword("end")?;
         self.consume_line_end()?;
         Ok(Statement::For {
             var,
@@ -483,15 +483,21 @@ impl Parser {
         self.expect_keyword("while")?;
         let condition = self.parse_expr(0)?;
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::Wend])?;
-        self.expect_keyword("wend")?;
+        let body = self.parse_block(&[BlockEnd::WhileEnd, BlockEnd::BareEnd])?;
+        if self.check_keyword("while") {
+            self.expect_keyword("while")?;
+        }
+        self.expect_keyword("end")?;
         self.consume_line_end()?;
         Ok(Statement::While { condition, body })
     }
 
     fn parse_end_statement(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("end")?;
-        if self.check_keyword("if") || self.check_keyword("function") || self.check_keyword("select") {
+        if self.check_keyword("if") || self.check_keyword("function") || self.check_keyword("select")
+            || self.check_keyword("procedure") || self.check_keyword("while")
+            || self.check_keyword("for") || self.check_keyword("do")
+        {
             return Err(self.error("unexpected block terminator"));
         }
         self.consume_line_end()?;
@@ -506,15 +512,13 @@ impl Parser {
             None
         };
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::Loop])?;
-        self.expect_keyword("loop")?;
-        let post_condition = if self.check_keyword("while") || self.check_keyword("until") {
-            Some(self.parse_do_condition()?)
-        } else {
-            None
-        };
+        let body = self.parse_block(&[BlockEnd::DoEnd, BlockEnd::BareEnd])?;
+        if self.check_keyword("do") {
+            self.expect_keyword("do")?;
+        }
+        self.expect_keyword("end")?;
         self.consume_line_end()?;
-        Ok(Statement::Do { condition, body, post_condition })
+        Ok(Statement::Do { condition, body, post_condition: None })
     }
 
     fn parse_do_condition(&mut self) -> ParseResult<DoCondition> {
@@ -977,9 +981,10 @@ impl Parser {
             BlockEnd::EndProcedure => {
                 self.check_keyword("end") && self.check_next_keyword("procedure")
             }
-            BlockEnd::Next => self.check_keyword("next"),
-            BlockEnd::Wend => self.check_keyword("wend"),
-            BlockEnd::Loop => self.check_keyword("loop"),
+            BlockEnd::ForEnd => self.check_keyword("for") && self.check_next_keyword("end"),
+            BlockEnd::WhileEnd => self.check_keyword("while") && self.check_next_keyword("end"),
+            BlockEnd::DoEnd => self.check_keyword("do") && self.check_next_keyword("end"),
+            BlockEnd::BareEnd => self.check_keyword("end") && self.check_next_is_line_end(),
             BlockEnd::Case => self.check_keyword("case"),
             BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),
         }
@@ -1002,6 +1007,19 @@ impl Parser {
         matches!(
             self.tokens.get(self.pos + 1).map(|token| &token.kind),
             Some(TokenKind::Ident(value)) if keyword_eq(value, keyword)
+        )
+    }
+
+    fn check_next_is_line_end(&self) -> bool {
+        matches!(
+            self.tokens.get(self.pos + 1).map(|t| &t.kind),
+            Some(
+                TokenKind::Newline
+                    | TokenKind::Colon
+                    | TokenKind::Eof
+                    | TokenKind::Comment(_)
+                    | TokenKind::BlockComment(_)
+            ) | None
         )
     }
 
@@ -1093,9 +1111,10 @@ enum BlockEnd {
     EndIf,
     EndFunction,
     EndProcedure,
-    Next,
-    Wend,
-    Loop,
+    ForEnd,
+    WhileEnd,
+    DoEnd,
+    BareEnd,
     Case,
     EndSelect,
 }

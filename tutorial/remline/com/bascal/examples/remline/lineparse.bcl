@@ -18,7 +18,7 @@ function parseLineNumber%(text$)
             parselinenumber_done% = 1
         end if
         parselinenumber_i% = parselinenumber_i% + 1
-    wend
+    while end
     if len(digits$) = 0 then
         return 0
     end if
@@ -37,7 +37,7 @@ function stripLineNumber$(text$)
         else
             striplinenumber_done% = 1
         end if
-    wend
+    while end
     if striplinenumber_i% > len(text$) then
         return ""
     end if

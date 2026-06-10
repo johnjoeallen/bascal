@@ -31,7 +31,7 @@ function quickSort%(data%, count%)
                     data%(wall%) = data%(j%)
                     data%(j%) = temp%
                 end if
-            NEXT j%
+            for end
 
             /* Place pivot at wall. */
             wall% = wall% + 1
@@ -51,7 +51,7 @@ function quickSort%(data%, count%)
                 sHigh%(sTop%) = qHigh%
             end if
         end if
-    wend
+    while end
 
     return 0
 end function

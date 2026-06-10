@@ -14,14 +14,14 @@ DIM quickData%(5000)
 /* Fill with descending values: worst case for O(n^2) sorts. */
 FOR i% = 1 TO 5000
     source%(i%) = 1001 - i%
-NEXT i%
+for end
 
 FOR i% = 1 TO 5000
     bubbleData%(i%) = source%(i%)
     shakerData%(i%) = source%(i%)
     shellData%(i%) = source%(i%)
     quickData%(i%) = source%(i%)
-NEXT i%
+for end
 
 tStart# = TIMER
 bubbleSort%(bubbleData%(), 5000)
@@ -32,7 +32,7 @@ FOR i% = 1 TO 4999
     if bubbleData%(i%) > bubbleData%(i% + 1) then
         ok% = 0
     end if
-NEXT i%
+for end
 if ok% = 1 then
     PRINT "Bubble: OK"
 else
@@ -48,7 +48,7 @@ FOR i% = 1 TO 4999
     if shakerData%(i%) > shakerData%(i% + 1) then
         ok% = 0
     end if
-NEXT i%
+for end
 if ok% = 1 then
     PRINT "Shaker: OK"
 else
@@ -64,7 +64,7 @@ FOR i% = 1 TO 4999
     if shellData%(i%) > shellData%(i% + 1) then
         ok% = 0
     end if
-NEXT i%
+for end
 if ok% = 1 then
     PRINT "Shell: OK"
 else
@@ -80,7 +80,7 @@ FOR i% = 1 TO 4999
     if quickData%(i%) > quickData%(i% + 1) then
         ok% = 0
     end if
-NEXT i%
+for end
 if ok% = 1 then
     PRINT "Quick: OK"
 else

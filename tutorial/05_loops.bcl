@@ -2,29 +2,29 @@
 //
 // BASCAL provides three loop constructs:
 //
-//   FOR var = start TO end [STEP n] ... NEXT [var]
+//   FOR var = start TO end [STEP n] ... FOR END  (or bare END)
 //     Counted loop.  STEP defaults to 1; use negative STEP to count down.
-//     EXIT FOR jumps past NEXT immediately.
+//     EXIT FOR exits early.
 //
-//   WHILE condition ... WEND
+//   WHILE condition ... WHILE END  (or bare END)
 //     Condition tested before each iteration.
-//     EXIT WHILE jumps past WEND immediately.
+//     EXIT WHILE exits early.
 //
-//   DO [WHILE/UNTIL cond] ... LOOP [WHILE/UNTIL cond]
-//     Four forms depending on where the condition is placed.
-//     EXIT DO jumps past LOOP immediately.
+//   DO [WHILE/UNTIL cond] ... DO END  (or bare END)
+//     Condition tested at the top; use EXIT DO to break out.
+//     EXIT DO exits early.
 
 /* --- FOR / NEXT --- */
 PRINT "Squares 1..5:"
 for i% = 1 to 5
     PRINT "  " + STR$(i%) + "^2 = " + STR$(i% * i%)
-next i%
+for end
 
 /* Negative STEP — count down */
 PRINT "Countdown:"
 for n% = 3 to 1 step -1
     PRINT "  " + STR$(n%)
-next n%
+for end
 PRINT "  Go!"
 
 /* EXIT FOR — stop early */
@@ -34,7 +34,7 @@ for i% = 1 to 20
         PRINT "  " + STR$(i%)
         exit for
     end if
-next i%
+for end
 
 /* --- WHILE / WEND --- */
 PRINT "Powers of 2 under 100:"
@@ -42,7 +42,7 @@ p% = 1
 while p% < 100
     PRINT "  " + STR$(p%)
     p% = p% * 2
-wend
+while end
 
 /* EXIT WHILE */
 PRINT "Collatz from 27 (first 8 steps):"
@@ -60,7 +60,7 @@ while n% <> 1
     end if
     steps% = steps% + 1
     PRINT "  " + STR$(n%)
-wend
+while end
 
 /* --- DO / LOOP variants --- */
 
@@ -70,7 +70,7 @@ k% = 1
 do while k% <= 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-loop
+do end
 
 // DO UNTIL — enter while condition is false
 PRINT "DO UNTIL:"
@@ -78,15 +78,18 @@ k% = 1
 do until k% > 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-loop
+do end
 
-// DO ... LOOP WHILE — body runs at least once
-PRINT "DO...LOOP WHILE (body runs once even though false):"
+// DO ... DO END with post-check — body runs at least once
+PRINT "DO...DO END (body runs once even though false):"
 k% = 99
 do
     PRINT "  " + STR$(k%)
     k% = k% + 1
-loop while k% <= 3
+    if k% > 3 then
+        exit do
+    end if
+do end
 
 // EXIT DO
 PRINT "EXIT DO at 3:"
@@ -97,6 +100,6 @@ do
     end if
     PRINT "  " + STR$(k%)
     k% = k% + 1
-loop
+do end
 
 END

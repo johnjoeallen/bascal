@@ -24,7 +24,7 @@ function loadLines%()
     while EOF(1) = 0
         lineCount% = lineCount% + 1
         LINE INPUT #1, rawLine$(lineCount%)
-    wend
+    while end
     CLOSE #1
 
     /* Split each input line into its numeric prefix and remaining source text. */
@@ -34,7 +34,7 @@ function loadLines%()
         lineText$(loadlines_i%) = stripLineNumber$(rawLine$(loadlines_i%))
         keepLine%(loadlines_i%) = 0
         loadlines_i% = loadlines_i% + 1
-    wend
+    while end
 
     return 0
 end function
@@ -46,7 +46,7 @@ function collectAllRefs%()
     while collectallrefs_i% <= lineCount%
         keepLine%(collectallrefs_i%) = collectRefs%(lineText$(collectallrefs_i%))
         collectallrefs_i% = collectallrefs_i% + 1
-    wend
+    while end
     return 0
 end function
 
@@ -65,7 +65,7 @@ function transformLines%()
             PRINT #2, lineText$(transformlines_i%)
         end if
         transformlines_i% = transformlines_i% + 1
-    wend
+    while end
     CLOSE #2
     return 0
 end function
