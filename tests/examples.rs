@@ -11,25 +11,23 @@ fn is_library_path(path: &Path) -> bool {
 #[test]
 fn compiles_every_example_bcl_file() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let examples_dir = repo_root.join("examples");
     let tutorial_dir = repo_root.join("tutorial");
     let output_dir = repo_root.join("output");
 
-    let mut examples: Vec<PathBuf> = collect_example_sources(&examples_dir)
+    let mut examples: Vec<PathBuf> = collect_example_sources(&tutorial_dir)
         .into_iter()
-        .chain(collect_example_sources(&tutorial_dir))
         .filter(|path| !is_library_path(path))
         .collect();
     examples.sort();
 
     assert!(
         !examples.is_empty(),
-        "expected at least one .bcl example in {}",
-        examples_dir.display()
+        "expected at least one .bcl file in {}",
+        tutorial_dir.display()
     );
 
     for example in examples {
-        compile_example(&example, &examples_dir, &output_dir);
+        compile_example(&example, &tutorial_dir, &output_dir);
     }
 }
 
@@ -40,7 +38,7 @@ fn freebasic_runs_sort_driver_when_available() {
     }
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("examples/sort_driver.bcl");
+    let source_path = repo_root.join("tutorial/sort_driver.bcl");
     let output_path = repo_root.join("output/sort_driver.bas");
 
     compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
@@ -69,16 +67,16 @@ fn freebasic_runs_remline_when_available() {
     }
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("examples/remline/remline.bcl");
+    let source_path = repo_root.join("tutorial/remline/remline.bcl");
     let output_path = repo_root.join("output/remline/remline.bas");
-    let sample_output_path = repo_root.join("examples/remline/sample/output.bas");
+    let sample_output_path = repo_root.join("tutorial/remline/sample/output.bas");
 
     let _ = fs::remove_file(&sample_output_path);
 
     compile_with_cli(
         &source_path,
         &output_path,
-        &["-L", "examples/remline", "--clean", "--binary"],
+        &["-L", "tutorial/remline", "--clean", "--binary"],
     );
 
     let executable_path = repo_root.join("tmp/remline");
@@ -92,7 +90,7 @@ fn freebasic_runs_remline_when_available() {
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let expected = fs::read_to_string(repo_root.join("examples/remline/sample/expected.bas"))
+    let expected = fs::read_to_string(repo_root.join("tutorial/remline/sample/expected.bas"))
         .expect("expected output should be readable");
     let actual = fs::read_to_string(&sample_output_path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", sample_output_path.display()));
@@ -130,7 +128,7 @@ fn collect_example_sources_recursive(dir: &Path, sources: &mut Vec<PathBuf>) {
     }
 }
 
-fn compile_example(path: &Path, examples_dir: &Path, output_dir: &Path) {
+fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
     let mut options = bcc::CompileOptions::new();
     // Make any sibling `lib/` directory available as a search root.
     if let Some(parent) = path.parent() {
@@ -153,7 +151,7 @@ fn compile_example(path: &Path, examples_dir: &Path, output_dir: &Path) {
         }
     };
 
-    let output_path = output_path_for_source(path, examples_dir, output_dir);
+    let output_path = output_path_for_source(path, tutorial_dir, output_dir);
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
             .unwrap_or_else(|err| panic!("failed to create {}: {err}", parent.display()));
@@ -205,8 +203,10 @@ fn compile_with_cli(source_path: &Path, output_path: &Path, extra_args: &[&str])
     );
 }
 
-fn output_path_for_source(source: &Path, examples_dir: &Path, output_dir: &Path) -> PathBuf {
-    let relative = source.strip_prefix(examples_dir).unwrap_or(source);
+fn output_path_for_source(source: &Path, tutorial_dir: &Path, output_dir: &Path) -> PathBuf {
+    let relative = source
+        .strip_prefix(tutorial_dir)
+        .unwrap_or_else(|_| source.file_name().map(Path::new).unwrap_or(source));
     output_dir.join(relative).with_extension("bas")
 }
 

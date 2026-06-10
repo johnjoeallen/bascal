@@ -279,9 +279,9 @@ mod tests {
 
     #[test]
     fn compiles_sort_driver_sample() {
-        let source = include_str!("../examples/sort_driver.bcl");
+        let source = include_str!("../tutorial/sort_driver.bcl");
         let output =
-            compile_source("examples/sort_driver.bcl", source).expect("sample should compile");
+            compile_source("tutorial/sort_driver.bcl", source).expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         assert!(output.contains("bubbleSort%(bubbleData%(), 5000)"));
         assert!(output.contains("END"));
@@ -341,19 +341,19 @@ END
 
     #[test]
     fn assigns_repeated_function_results_to_variables() {
-        let source = include_str!("../examples/repeated_function_result.bcl");
-        let output = compile_source("examples/repeated_function_result.bcl", source)
+        let source = include_str!("../tutorial/07_functions.bcl");
+        let output = compile_source("tutorial/07_functions.bcl", source)
             .expect("sample should compile");
 
+        // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));
-        assert!(output.contains("a$ = x_result$"));
-        assert!(output.contains("b$ = x_result$"));
-        assert!(output.contains("x_result$ = \"result\""));
+        assert!(output.contains("a$ = repeat_result$"));
+        assert!(output.contains("b$ = repeat_result$"));
     }
 
     #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
         let output =
             compile_file(&input, &CompileOptions::new()).expect("sort driver should compile");
 

@@ -68,4 +68,9 @@ PRINT titleCase$("bASCAL")   // Bascal
 lo% = min%(max%(0, -5), 100)   // max(0,-5)=0, min(0,100)=0
 PRINT "lo = " + STR$(lo%)
 
+/* Calling the same function twice — each result is captured separately */
+a$ = repeat$("x", 3)
+b$ = repeat$("y", 2)
+PRINT a$ + " " + b$    // xxx yy
+
 END

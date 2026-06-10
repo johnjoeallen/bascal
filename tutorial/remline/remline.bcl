@@ -7,8 +7,8 @@ require com.bascal.examples.remline.refs
 require com.bascal.examples.remline.transform
 require com.bascal.examples.remline.strings
 
-inputFile$ = "examples/remline/sample/input.bas"
-outputFile$ = "examples/remline/sample/output.bas"
+inputFile$ = "tutorial/remline/sample/input.bas"
+outputFile$ = "tutorial/remline/sample/output.bas"
 
 PRINT "BASCAL REMLINE example"
 PRINT "Input: " + inputFile$

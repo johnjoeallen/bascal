@@ -1,0 +1,13 @@
+/*
+ * Suite file for Tutorial 13 — COMMON / CHAIN.
+ *
+ * A suite file contains only COMMON declarations.  Every program that
+ * begins with "program name suite shared" receives an identical COMMON
+ * block at the top of its generated BASIC, so the listed variables are
+ * shared across CHAINed programs in a multi-program application.
+ *
+ * This suite shares a counter and a label between two programs:
+ *   start.bcl  — initialises and increments the counter
+ *   show.bcl   — reports the final value
+ */
+common count%, label$

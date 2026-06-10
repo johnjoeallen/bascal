@@ -15,8 +15,13 @@ target
 
 # BASCAL temporary compiled binaries
 /tmp/
-examples/sort_driver
-examples/remline/sample/output.bas
+
+# Generated BASIC output from test runs
+/output/
+
+# Generated BASIC files in tutorial (test output, E2E artifacts)
+tutorial/**/*.bas
+tutorial/remline/sample/output.bas
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

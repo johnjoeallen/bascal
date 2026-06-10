@@ -1,0 +1,28 @@
+// Tutorial 13 — Suite COMMON, program 1 of 2
+//
+// "program name suite suitename" tells bcc to load suitename.bcl and
+// emit its COMMON declarations at the very top of the generated output.
+// All programs in the same suite emit the same COMMON block, so the
+// variables survive a CHAIN to the next program.
+//
+// Compile:
+//   bcc tutorial/13_suite/start.bcl
+//
+// The generated .bas will open with COMMON count%, label$ followed by
+// the program body below.
+
+program start suite shared
+
+label$ = "Counter demo"
+count% = 0
+
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+
+PRINT "Initialised: " + label$
+PRINT "Count after 3 increments: " + STR$(count%)
+
+/* In a real multi-program application you would chain to show.bas: */
+/* CHAIN "show.bas" */
+END
