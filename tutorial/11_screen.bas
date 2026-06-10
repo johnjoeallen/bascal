@@ -1,22 +1,22 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are lowered to global variables, labels, and GOSUB
 
-30 ' Tutorial 11 — Screen I/O: CLS, LOCATE, COLOR, BEEP, LPRINT
+30 ' Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
 40 ' 
 50 ' These statements control the terminal display and connected hardware.
 60 ' They map directly to the same-named BASCOM statements.
 70 ' 
-80 ' CLS             — clear the screen
-90 ' LOCATE row, col — move cursor; rows and columns are 1-based (80×25)
-100 ' COLOR fg[, bg]  — CGA colour numbers: 0-15 foreground, 0-7 background
+80 ' cls             — clear the screen
+90 ' locate row, col — move cursor; rows and columns are 1-based (80×25)
+100 ' color fg[, bg]  — CGA colour numbers: 0-15 foreground, 0-7 background
 110 ' 0 black  1 blue    2 green   3 cyan
 120 ' 4 red    5 magenta 6 brown   7 white
 130 ' 8-15: bright versions of 0-7
-140 ' BEEP            — sound the system bell
-150 ' LPRINT expr     — send output to the line printer
+140 ' beep            — sound the system bell
+150 ' lprint expr     — send output to the line printer
 160 ' 
-170 ' STOP   — halt execution (may invoke debugger)
-180 ' SYSTEM — exit to the operating system immediately
+170 ' stop   — halt execution (may invoke debugger)
+180 ' system — exit to the operating system immediately
 
 190 ' Clear screen and draw a simple title banner
 200 CLS
@@ -47,14 +47,14 @@
 410 BEEP
 
 420 ' Printer output — comment out if no printer is attached
-430 ' LPRINT "BASCAL screen demo printed at: " + DATE$
+430 ' lprint "BASCAL screen demo printed at: " + DATE$
 
-440 ' STOP and SYSTEM are for controlled termination:
-450 ' STOP   — pause (useful during debugging)
-460 ' SYSTEM — exit to OS immediately
+440 ' stop and system are for controlled termination:
+450 ' stop   — pause (useful during debugging)
+460 ' system — exit to OS immediately
 470 ' Uncomment to test:
-480 ' STOP
-490 ' SYSTEM
+480 ' stop
+490 ' system
 
 500 COLOR 7, 0
 510 LOCATE 25, 1

@@ -10,31 +10,31 @@
 //   &   long      — 32-bit signed integer
 //
 // All variables are global.  They spring into existence on first use;
-// DIM is needed only for arrays or when you want to be explicit.
+// dim is needed only for arrays or when you want to be explicit.
 //
-// CONST names a value that cannot change.  Use it for magic numbers
+// const names a value that cannot change.  Use it for magic numbers
 // so the intent is clear and the value lives in one place.
 
-CONST MAX_SCORE%  = 100
-CONST PASS_MARK%  = 60
-CONST APP_NAME$   = "Grade Checker"
-CONST TAX_RATE!   = 0.2
+const max_score%  = 100
+const pass_mark%  = 60
+const app_name$   = "Grade Checker"
+const tax_rate!   = 0.2
 
 // Variable assignment uses =
 playerName$  = "Alice"
 score%       = 87
 temperature! = 36.6
 
-// STR$() converts a number to a string for concatenation
-PRINT APP_NAME$
-PRINT "Player:      " + playerName$
-PRINT "Score:       " + STR$(score%) + " / " + STR$(MAX_SCORE%)
-PRINT "Pass mark:   " + STR$(PASS_MARK%)
-PRINT "Temperature: " + STR$(temperature!)
-PRINT "Tax rate:    " + STR$(TAX_RATE!)
+// str$() converts a number to a string for concatenation
+print app_name$
+print "Player:      " + playerName$
+print "Score:       " + str$(score%) + " / " + str$(max_score%)
+print "Pass mark:   " + str$(pass_mark%)
+print "Temperature: " + str$(temperature!)
+print "Tax rate:    " + str$(tax_rate!)
 
-// LET is optional; both forms are identical
-LET greeting$ = "Score is " + STR$(score%)
-PRINT greeting$
+// let is optional; both forms are identical
+let greeting$ = "Score is " + str$(score%)
+print greeting$
 
-END
+end

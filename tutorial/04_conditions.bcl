@@ -1,7 +1,7 @@
 // Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
 //
 // BASCAL supports multi-line block IF statements.  The compiler lowers
-// them to numeric GOTO targets so the generated BASIC is compatible with
+// them to numeric goto targets so the generated BASIC is compatible with
 // 1980s BASCOM.  You never write line numbers yourself.
 //
 // Forms:
@@ -12,15 +12,15 @@
 /* Simple IF */
 temperature% = 23
 if temperature% > 30 then
-    PRINT "Hot day"
+    print "Hot day"
 end if
 
 /* IF / ELSE */
 score% = 72
 if score% >= 60 then
-    PRINT "Pass (" + STR$(score%) + ")"
+    print "Pass (" + str$(score%) + ")"
 else
-    PRINT "Fail (" + STR$(score%) + ")"
+    print "Fail (" + str$(score%) + ")"
 end if
 
 /* IF / ELSEIF / ELSE — grade classification */
@@ -38,27 +38,27 @@ else
     grade$ = "F"
 end if
 
-PRINT "Grade: " + grade$
+print "Grade: " + grade$
 
 /* Nested IF */
 x% = 15
 if x% > 0 then
     if x% > 10 then
-        PRINT STR$(x%) + " is large and positive"
+        print str$(x%) + " is large and positive"
     else
-        PRINT STR$(x%) + " is small and positive"
+        print str$(x%) + " is small and positive"
     end if
 else
-    PRINT STR$(x%) + " is not positive"
+    print str$(x%) + " is not positive"
 end if
 
 /* Compound conditions */
 age%    = 25
 income% = 45000
 if age% >= 18 and income% >= 30000 then
-    PRINT "Eligible"
+    print "Eligible"
 else
-    PRINT "Not eligible"
+    print "Not eligible"
 end if
 
-END
+end

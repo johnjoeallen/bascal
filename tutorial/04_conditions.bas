@@ -4,7 +4,7 @@
 30 ' Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
 40 ' 
 50 ' BASCAL supports multi-line block IF statements.  The compiler lowers
-60 ' them to numeric GOTO targets so the generated BASIC is compatible with
+60 ' them to numeric goto targets so the generated BASIC is compatible with
 70 ' 1980s BASCOM.  You never write line numbers yourself.
 80 ' 
 90 ' Forms:

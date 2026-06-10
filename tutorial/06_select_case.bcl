@@ -2,7 +2,7 @@
 //
 // SELECT CASE tests one expression against multiple patterns.  The
 // compiler evaluates the expression once, stores it in a temporary
-// variable, and emits an IF/GOTO dispatch chain.
+// variable, and emits an IF/goto dispatch chain.
 //
 // Pattern forms:
 //   case value               — exact match
@@ -16,19 +16,19 @@ score% = 85
 
 select case score%
 case 100
-    PRINT "Perfect!"
+    print "Perfect!"
 case 90 to 99
-    PRINT "A  — Excellent"
+    print "A  — Excellent"
 case 80 to 89
-    PRINT "B  — Good"      // score% = 85 matches here
+    print "B  — Good"      // score% = 85 matches here
 case 70 to 79
-    PRINT "C  — Satisfactory"
+    print "C  — Satisfactory"
 case 60 to 69
-    PRINT "D  — Passing"
+    print "D  — Passing"
 case is >= 0
-    PRINT "F  — Fail"
+    print "F  — Fail"
 case else
-    PRINT "Invalid score"
+    print "Invalid score"
 end select
 
 /* String select: day-of-week classification */
@@ -36,11 +36,11 @@ day$ = "Saturday"
 
 select case day$
 case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
-    PRINT day$ + " is a weekday"
+    print day$ + " is a weekday"
 case "Saturday", "Sunday"
-    PRINT day$ + " is a weekend"   // matches here
+    print day$ + " is a weekend"   // matches here
 case else
-    PRINT "Unknown day: " + day$
+    print "Unknown day: " + day$
 end select
 
 /* IS comparisons on temperature */
@@ -48,15 +48,15 @@ temp% = -3
 
 select case temp%
 case is < 0
-    PRINT "Below freezing (" + STR$(temp%) + "°)"  // matches here
+    print "Below freezing (" + str$(temp%) + "°)"  // matches here
 case is < 10
-    PRINT "Cold (" + STR$(temp%) + "°)"
+    print "Cold (" + str$(temp%) + "°)"
 case is < 20
-    PRINT "Cool (" + STR$(temp%) + "°)"
+    print "Cool (" + str$(temp%) + "°)"
 case is < 30
-    PRINT "Warm (" + STR$(temp%) + "°)"
+    print "Warm (" + str$(temp%) + "°)"
 case else
-    PRINT "Hot (" + STR$(temp%) + "°)"
+    print "Hot (" + str$(temp%) + "°)"
 end select
 
 /* Multi-value list on a menu choice */
@@ -64,13 +64,13 @@ choice% = 2
 
 select case choice%
 case 1
-    PRINT "New game"
+    print "New game"
 case 2, 3
-    PRINT "Load game"   // choice% = 2 matches
+    print "Load game"   // choice% = 2 matches
 case 4
-    PRINT "Options"
+    print "Options"
 case else
-    PRINT "Quit"
+    print "Quit"
 end select
 
-END
+end

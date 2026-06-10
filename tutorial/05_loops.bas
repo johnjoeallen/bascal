@@ -1,13 +1,13 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are lowered to global variables, labels, and GOSUB
 
-30 ' Tutorial 5 — Loops: FOR, WHILE, DO
+30 ' Tutorial 5 — Loops: for, WHILE, DO
 40 ' 
 50 ' BASCAL provides three loop constructs:
 60 ' 
-70 ' FOR var = start TO end [STEP n] ... FOR END  (or bare END)
+70 ' for var = start to end [STEP n] ... for END  (or bare END)
 80 ' Counted loop.  STEP defaults to 1; use negative STEP to count down.
-90 ' EXIT FOR exits early.
+90 ' EXIT for exits early.
 100 ' 
 110 ' WHILE condition ... WHILE END  (or bare END)
 120 ' Condition tested before each iteration.
@@ -17,7 +17,7 @@
 160 ' Condition tested at the top; use EXIT DO to break out.
 170 ' EXIT DO exits early.
 
-180 ' --- FOR / NEXT ---
+180 ' --- for / NEXT ---
 190 PRINT "Squares 1..5:"
 200 FOR i% = 1 TO 5
 210     PRINT (("  " + STR$(i%)) + "^2 = ") + STR$(i% * i%)
@@ -30,7 +30,7 @@
 270 NEXT n%
 280 PRINT "  Go!"
 
-290 ' EXIT FOR — stop early
+290 ' EXIT for — stop early
 300 PRINT "First even > 4:"
 310 FOR i% = 1 TO 20
 320     IF ((i% > 4) AND (((i% / 2) * 2) = i%)) = 0 THEN GOTO 350

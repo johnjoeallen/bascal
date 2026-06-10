@@ -15,12 +15,12 @@
 
 /* Procedure with no parameters */
 procedure printSeparator()
-    PRINT "----------------------------"
+    print "----------------------------"
 end procedure
 
 /* Procedure that prints a labelled value */
 procedure printScore(label$, score%)
-    PRINT label$ + ": " + STR$(score%)
+    print label$ + ": " + str$(score%)
 end procedure
 
 /* Procedure with early exit */
@@ -28,7 +28,7 @@ procedure printIfPass(name$, score%)
     if score% < 60 then
         return          // early exit — nothing printed for failing scores
     end if
-    PRINT name$ + " passed with " + STR$(score%)
+    print name$ + " passed with " + str$(score%)
 end procedure
 
 /* Procedure that modifies an array in place (copy-in / copy-out) */
@@ -54,22 +54,22 @@ printScore("Bob",   54)
 printScore("Carol", 78)
 printSeparator()
 
-PRINT "Passes only:"
+print "Passes only:"
 printIfPass("Alice", 91)   // printed
 printIfPass("Bob",   54)   // skipped (score < 60)
 printIfPass("Carol", 78)   // printed
 
-CONST N% = 5
-DIM data%(N%)
+const N% = 5
+dim data%(N%)
 fillRange(data%(), N%, 99)
-PRINT "Filled array:"
+print "Filled array:"
 for i% = 0 to N% - 1
-    PRINT "  data%(" + STR$(i%) + ") = " + STR$(data%(i%))
+    print "  data%(" + str$(i%) + ") = " + str$(data%(i%))
 end for
 
 increment()
 increment()
 increment()
-PRINT "globalCount = " + STR$(globalCount%)   // 3
+print "globalCount = " + str$(globalCount%)   // 3
 
-END
+end

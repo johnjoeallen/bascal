@@ -9,13 +9,13 @@
 
 program show suite shared
 
-PRINT "Label:  " + label$
-PRINT "Count:  " + STR$(count%)
+print "Label:  " + label$
+print "Count:  " + str$(count%)
 
 if count% > 0 then
-    PRINT "Counter was incremented " + STR$(count%) + " time(s)."
+    print "Counter was incremented " + str$(count%) + " time(s)."
 else
-    PRINT "Counter was never incremented."
+    print "Counter was never incremented."
 end if
 
-END
+end

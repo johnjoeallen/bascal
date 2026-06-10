@@ -20,9 +20,9 @@ count% = count% + 1
 count% = count% + 1
 count% = count% + 1
 
-PRINT "Initialised: " + label$
-PRINT "Count after 3 increments: " + STR$(count%)
+print "Initialised: " + label$
+print "Count after 3 increments: " + str$(count%)
 
 /* In a real multi-program application you would chain to show.bas: */
 /* CHAIN "show.bas" */
-END
+end

@@ -21,7 +21,7 @@
 170 ' Local variable scoping — each function has its own i% and acc%
 
 180 ' Global variable accessed inside a function with the global keyword
-190 runningTotal% = 0
+190 runningtotal% = 0
 
 200 ' --- Exercise the functions ---
 
@@ -93,7 +93,7 @@
 810 addtototal_x% = 5
 820 GOSUB 1550
 830 dummy% = addtototal_result%
-840 PRINT "runningTotal = " + STR$(runningTotal%)
+840 PRINT "runningTotal = " + STR$(runningtotal%)
 
 850 END
 
@@ -141,7 +141,7 @@
 1240     RETURN
 1250 ' end function repeat$
 
-1260 ' function titleCase$(word$)
+1260 ' function titlecase$(word$)
 1270     ' Capitalise first letter, lowercase remainder.
 1280     ' Relies on the BASIC runtime's UCASE$/LCASE$ built-ins.
 1290     IF (LEN(titlecase_word$) = 0) = 0 THEN GOTO 1320
@@ -150,9 +150,9 @@
 1320     REM END IF
 1330     titlecase_result$ = UCASE$(LEFT$(titlecase_word$, 1)) + LCASE$(MID$(titlecase_word$, 2))
 1340     RETURN
-1350 ' end function titleCase$
+1350 ' end function titlecase$
 
-1360 ' function sumTo%(n%)
+1360 ' function sumto%(n%)
 1370     ' i% and acc% are local to sumTo%.
 1380     sumto_acc% = 0
 1390     FOR sumto_i% = 1 TO sumto_n%
@@ -160,9 +160,9 @@
 1410     NEXT sumto_i%
 1420     sumto_result% = sumto_acc%
 1430     RETURN
-1440 ' end function sumTo%
+1440 ' end function sumto%
 
-1450 ' function productTo%(n%)
+1450 ' function productto%(n%)
 1460     ' i% and acc% here are independent of sumTo%'s i% and acc%.
 1470     productto_acc% = 1
 1480     FOR productto_i% = 1 TO productto_n%
@@ -170,10 +170,10 @@
 1500     NEXT productto_i%
 1510     productto_result% = productto_acc%
 1520     RETURN
-1530 ' end function productTo%
+1530 ' end function productto%
 
-1540 ' function addToTotal%(x%)
-1550     runningTotal% = runningTotal% + addtototal_x%
-1560     addtototal_result% = runningTotal%
+1540 ' function addtototal%(x%)
+1550     runningtotal% = runningtotal% + addtototal_x%
+1560     addtototal_result% = runningtotal%
 1570     RETURN
-1580 ' end function addToTotal%
+1580 ' end function addtototal%

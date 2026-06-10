@@ -46,10 +46,10 @@ end function
 function titleCase$(word$)
     // Capitalise first letter, lowercase remainder.
     // Relies on the BASIC runtime's UCASE$/LCASE$ built-ins.
-    if LEN(word$) = 0 then
+    if len(word$) = 0 then
         return ""
     end if
-    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+    return ucase$(left$(word$, 1)) + lcase$(mid$(word$, 2))
 end function
 
 /* Local variable scoping — each function has its own i% and acc% */
@@ -82,31 +82,31 @@ end function
 
 /* --- Exercise the functions --- */
 
-PRINT "max(4, 9) = "    + STR$(max%(4, 9))      // 9
-PRINT "min(4, 9) = "    + STR$(min%(4, 9))      // 4
-PRINT "clamp(15,1,10) = " + STR$(clamp%(15, 1, 10))  // 10
-PRINT "clamp(-3,1,10) = " + STR$(clamp%(-3, 1, 10))  // 1
-PRINT "clamp(7,1,10)  = " + STR$(clamp%(7, 1, 10))   // 7
+print "max(4, 9) = "    + str$(max%(4, 9))      // 9
+print "min(4, 9) = "    + str$(min%(4, 9))      // 4
+print "clamp(15,1,10) = " + str$(clamp%(15, 1, 10))  // 10
+print "clamp(-3,1,10) = " + str$(clamp%(-3, 1, 10))  // 1
+print "clamp(7,1,10)  = " + str$(clamp%(7, 1, 10))   // 7
 
-PRINT repeat$("ab", 4)       // abababab
-PRINT titleCase$("bASCAL")   // Bascal
+print repeat$("ab", 4)       // abababab
+print titleCase$("bASCAL")   // Bascal
 
 /* Functions chained in expressions */
 lo% = min%(max%(0, -5), 100)   // max(0,-5)=0, min(0,100)=0
-PRINT "lo = " + STR$(lo%)
+print "lo = " + str$(lo%)
 
 /* Calling the same function twice — each result is captured separately */
 a$ = repeat$("x", 3)
 b$ = repeat$("y", 2)
-PRINT a$ + " " + b$    // xxx yy
+print a$ + " " + b$    // xxx yy
 
 /* Local scoping: sumTo% and productTo% each use i% without conflict */
-PRINT "sumTo(5)     = " + STR$(sumTo%(5))      // 15
-PRINT "productTo(5) = " + STR$(productTo%(5))  // 120
+print "sumTo(5)     = " + str$(sumTo%(5))      // 15
+print "productTo(5) = " + str$(productTo%(5))  // 120
 
 /* Global variable shared across calls */
 dummy% = addToTotal%(10)
 dummy% = addToTotal%(5)
-PRINT "runningTotal = " + STR$(runningTotal%)   // 15
+print "runningTotal = " + str$(runningTotal%)   // 15
 
-END
+end

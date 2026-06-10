@@ -25,7 +25,7 @@
 200 ' Procedure that modifies an array in place (copy-in / copy-out)
 
 210 ' Procedure that uses a global variable
-220 globalCount% = 0
+220 globalcount% = 0
 
 230 ' --- Drive the procedures ---
 
@@ -52,62 +52,62 @@
 430 printifpass_score% = 78
 440 GOSUB 770
 
-450 CONST N% = 5
-460 DIM data%(N%)
-470 fillrange_count% = N%
+450 CONST n% = 5
+460 DIM data%(n%)
+470 fillrange_count% = n%
 480 fillrange_value% = 99
-490 DIM fillrange_arr%(N%)
+490 DIM fillrange_arr%(n%)
 
 500 ' copy array argument into lowered function storage: data%() -> fillrange_arr%()
-510 FOR BCC_T1% = 1 TO N%
+510 FOR BCC_T1% = 1 TO n%
 520     fillrange_arr%(BCC_T1%) = data%(BCC_T1%)
 530 NEXT BCC_T1%
 
 540 GOSUB 840
 
 550 ' copy mutated array argument back to caller storage: fillrange_arr%() -> data%()
-560 FOR BCC_T2% = 1 TO N%
+560 FOR BCC_T2% = 1 TO n%
 570     data%(BCC_T2%) = fillrange_arr%(BCC_T2%)
 580 NEXT BCC_T2%
 
 590 PRINT "Filled array:"
-600 FOR i% = 0 TO N% - 1
+600 FOR i% = 0 TO n% - 1
 610     PRINT (("  data%(" + STR$(i%)) + ") = ") + STR$(data%(i%))
 620 NEXT i%
 
 630 GOSUB 900
 640 GOSUB 900
 650 GOSUB 900
-660 PRINT "globalCount = " + STR$(globalCount%)
+660 PRINT "globalCount = " + STR$(globalcount%)
 
 670 END
 
-680 ' procedure printSeparator()
+680 ' procedure printseparator()
 690     PRINT "----------------------------"
 700     RETURN
-710 ' end procedure printSeparator
+710 ' end procedure printseparator
 
-720 ' procedure printScore(label$, score%)
+720 ' procedure printscore(label$, score%)
 730     PRINT (printscore_label$ + ": ") + STR$(printscore_score%)
 740     RETURN
-750 ' end procedure printScore
+750 ' end procedure printscore
 
-760 ' procedure printIfPass(name$, score%)
+760 ' procedure printifpass(name$, score%)
 770     IF (printifpass_score% < 60) = 0 THEN GOTO 790
 780         RETURN
 790     REM END IF
 800     PRINT (printifpass_name$ + " passed with ") + STR$(printifpass_score%)
 810     RETURN
-820 ' end procedure printIfPass
+820 ' end procedure printifpass
 
-830 ' procedure fillRange(arr%, count%, value%)
+830 ' procedure fillrange(arr%, count%, value%)
 840     FOR fillrange_i% = 0 TO fillrange_count% - 1
 850         fillrange_arr%(fillrange_i%) = fillrange_value%
 860     NEXT fillrange_i%
 870     RETURN
-880 ' end procedure fillRange
+880 ' end procedure fillrange
 
 890 ' procedure increment()
-900     globalCount% = globalCount% + 1
+900     globalcount% = globalcount% + 1
 910     RETURN
 920 ' end procedure increment

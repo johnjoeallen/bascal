@@ -1,6 +1,6 @@
 // Tutorial 1 — Hello, World
 //
-// The simplest BASCAL program.  PRINT writes a line to the screen.
+// The simplest BASCAL program.  print writes a line to the screen.
 // END marks the bottom of the main program body; every program needs one.
 //
 // Three comment styles are available:
@@ -8,9 +8,9 @@
 //   // single-line (C style, same behaviour as ')
 //   /* ... */  block comment, each line becomes a ' comment in the output
 
-PRINT "Hello, World!"        // inline comment after a statement
-PRINT "Welcome to BASCAL."
-' PRINT "This line is commented out."
+print "Hello, World!"        // inline comment after a statement
+print "Welcome to BASCAL."
+' print "This line is commented out."
 
 /*
  * Expected output:
@@ -18,4 +18,4 @@ PRINT "Welcome to BASCAL."
  *   Welcome to BASCAL.
  */
 
-END
+end

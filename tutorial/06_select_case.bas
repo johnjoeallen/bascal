@@ -5,7 +5,7 @@
 40 ' 
 50 ' SELECT CASE tests one expression against multiple patterns.  The
 60 ' compiler evaluates the expression once, stores it in a temporary
-70 ' variable, and emits an IF/GOTO dispatch chain.
+70 ' variable, and emits an IF/goto dispatch chain.
 80 ' 
 90 ' Pattern forms:
 100 ' case value               — exact match

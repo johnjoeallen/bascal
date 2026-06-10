@@ -127,12 +127,15 @@ impl CodeGenerator {
         let params = function
             .params
             .iter()
-            .map(|p| p.as_basic())
+            .map(|p| BasicIdent { name: p.name.to_ascii_lowercase(), suffix: p.suffix }.as_basic())
             .collect::<Vec<_>>()
             .join(", ");
+        let lowered_name =
+            BasicIdent { name: function.name.name.to_ascii_lowercase(), suffix: function.name.suffix }
+                .as_basic();
         let kind = if function.is_procedure { "procedure" } else { "function" };
         self.blank();
-        self.line(&format!("' {kind} {}({})", function.name, params));
+        self.line(&format!("' {kind} {}({})", lowered_name, params));
         self.line(&format!("{}:", info.label));
         self.indent += 1;
         self.statements(&function.body, Some(&info));
@@ -140,7 +143,7 @@ impl CodeGenerator {
             self.line("RETURN");
         }
         self.indent -= 1;
-        self.line(&format!("' end {kind} {}", function.name));
+        self.line(&format!("' end {kind} {}", lowered_name));
     }
 
     fn statements(&mut self, statements: &[Statement], current_function: Option<&FunctionInfo>) {
@@ -415,7 +418,11 @@ impl CodeGenerator {
             Statement::Const { name, value } => {
                 let (prelude, value) = self.expr(value, current_function);
                 self.lines(prelude);
-                self.line(&format!("CONST {} = {value}", name.as_basic()));
+                self.line(&format!(
+                    "CONST {} = {value}",
+                    BasicIdent { name: name.name.to_ascii_lowercase(), suffix: name.suffix }
+                        .as_basic()
+                ));
             }
             Statement::Write { channel, exprs } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -682,12 +689,7 @@ impl CodeGenerator {
                         prelude.extend(arg_prelude);
                         rendered_args.push(arg);
                     }
-                    let emit_name = if self.known_callables.contains(&name.name.to_ascii_lowercase()) {
-                        self.canonical_callable(name)
-                    } else {
-                        name.as_basic()
-                    };
-                    (prelude, format!("{}({})", emit_name, rendered_args.join(", ")))
+                    (prelude, format!("{}({})", self.canonical_callable(name), rendered_args.join(", ")))
                 }
             }
             Expr::Unary { op, expr } => {
@@ -825,7 +827,7 @@ impl CodeGenerator {
                 .as_basic();
             }
         }
-        ident.as_basic()
+        BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
     }
 
     fn function_info(&self, name: &BasicIdent) -> Option<&FunctionInfo> {

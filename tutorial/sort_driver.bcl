@@ -5,86 +5,86 @@ require com.bascal.sort.shakerSort
 require com.bascal.sort.shellSort
 require com.bascal.sort.quickSort
 
-DIM source%(5000)
-DIM bubbleData%(5000)
-DIM shakerData%(5000)
-DIM shellData%(5000)
-DIM quickData%(5000)
+dim source%(5000)
+dim bubbleData%(5000)
+dim shakerData%(5000)
+dim shellData%(5000)
+dim quickData%(5000)
 
 /* Fill with descending values: worst case for O(n^2) sorts. */
-FOR i% = 1 TO 5000
+for i% = 1 to 5000
     source%(i%) = 1001 - i%
 end for
 
-FOR i% = 1 TO 5000
+for i% = 1 to 5000
     bubbleData%(i%) = source%(i%)
     shakerData%(i%) = source%(i%)
     shellData%(i%) = source%(i%)
     quickData%(i%) = source%(i%)
 end for
 
-tStart# = TIMER
+tStart# = timer
 bubbleSort%(bubbleData%(), 5000)
-tElapsed# = TIMER - tStart#
-PRINT "Bubble sort time (ms):", tElapsed# * 5000
+tElapsed# = timer - tStart#
+print "Bubble sort time (ms):", tElapsed# * 5000
 ok% = 1
-FOR i% = 1 TO 4999
+for i% = 1 to 4999
     if bubbleData%(i%) > bubbleData%(i% + 1) then
         ok% = 0
     end if
 end for
 if ok% = 1 then
-    PRINT "Bubble: OK"
+    print "Bubble: OK"
 else
-    PRINT "Bubble: FAILED"
+    print "Bubble: FAILED"
 end if
 
-tStart# = TIMER
+tStart# = timer
 shakerSort%(shakerData%(), 5000)
-tElapsed# = TIMER - tStart#
-PRINT "Shaker sort time (ms):", tElapsed# * 5000
+tElapsed# = timer - tStart#
+print "Shaker sort time (ms):", tElapsed# * 5000
 ok% = 1
-FOR i% = 1 TO 4999
+for i% = 1 to 4999
     if shakerData%(i%) > shakerData%(i% + 1) then
         ok% = 0
     end if
 end for
 if ok% = 1 then
-    PRINT "Shaker: OK"
+    print "Shaker: OK"
 else
-    PRINT "Shaker: FAILED"
+    print "Shaker: FAILED"
 end if
 
-tStart# = TIMER
+tStart# = timer
 shellSort%(shellData%(), 5000)
-tElapsed# = TIMER - tStart#
-PRINT "Shell sort time (ms):", tElapsed# * 5000
+tElapsed# = timer - tStart#
+print "Shell sort time (ms):", tElapsed# * 5000
 ok% = 1
-FOR i% = 1 TO 4999
+for i% = 1 to 4999
     if shellData%(i%) > shellData%(i% + 1) then
         ok% = 0
     end if
 end for
 if ok% = 1 then
-    PRINT "Shell: OK"
+    print "Shell: OK"
 else
-    PRINT "Shell: FAILED"
+    print "Shell: FAILED"
 end if
 
-tStart# = TIMER
+tStart# = timer
 quickSort%(quickData%(), 5000)
-tElapsed# = TIMER - tStart#
-PRINT "Quick sort time (ms):", tElapsed# * 5000
+tElapsed# = timer - tStart#
+print "Quick sort time (ms):", tElapsed# * 5000
 ok% = 1
-FOR i% = 1 TO 4999
+for i% = 1 to 4999
     if quickData%(i%) > quickData%(i% + 1) then
         ok% = 0
     end if
 end for
 if ok% = 1 then
-    PRINT "Quick: OK"
+    print "Quick: OK"
 else
-    PRINT "Quick: FAILED"
+    print "Quick: FAILED"
 end if
 
-END
+end

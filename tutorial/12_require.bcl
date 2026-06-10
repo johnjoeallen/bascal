@@ -18,8 +18,8 @@
 
 require stats
 
-CONST N% = 8
-DIM scores%(N%)
+const N% = 8
+dim scores%(N%)
 
 scores%(0) = 74
 scores%(1) = 91
@@ -30,10 +30,10 @@ scores%(5) = 97
 scores%(6) = 72
 scores%(7) = 84
 
-PRINT "Scores: 74 91 63 88 55 97 72 84"
-PRINT "Mean:   "  + STR$(mean!(scores%(), N%))
-PRINT "Max:    "  + STR$(maximum%(scores%(), N%))
-PRINT "Min:    "  + STR$(minimum%(scores%(), N%))
-PRINT "Range:  "  + STR$(rangeOf%(scores%(), N%))
+print "Scores: 74 91 63 88 55 97 72 84"
+print "Mean:   "  + str$(mean!(scores%(), N%))
+print "Max:    "  + str$(maximum%(scores%(), N%))
+print "Min:    "  + str$(minimum%(scores%(), N%))
+print "Range:  "  + str$(rangeOf%(scores%(), N%))
 
-END
+end

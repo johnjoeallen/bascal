@@ -1,6 +1,6 @@
 // Tutorial 8 — Arrays
 //
-// DIM name%(size) declares an array of size+1 elements indexed 0..size.
+// dim name%(size) declares an array of size+1 elements indexed 0..size.
 // Array elements are accessed with parentheses: arr%(i%).
 //
 // To pass an array to a function, use the plain variable name as the
@@ -8,8 +8,8 @@
 // to signal that an array is being passed.
 
 /* Declare and populate */
-CONST N% = 6
-DIM data%(N%)
+const N% = 6
+dim data%(N%)
 
 data%(0) = 64
 data%(1) = 25
@@ -46,28 +46,28 @@ end function
 function printArray%(arr%, count%)
     line$ = "["
     for i% = 0 to count% - 1
-        line$ = line$ + " " + STR$(arr%(i%))
+        line$ = line$ + " " + str$(arr%(i%))
     end for
-    PRINT line$ + " ]"
+    print line$ + " ]"
     return 0
 end function
 
 /* Before sort */
-PRINT "Before: "
+print "Before: "
 dummy% = printArray%(data%(), N%)
 
 /* Sort and show */
 dummy% = insertionSort%(data%(), N%)
-PRINT "After:  "
+print "After:  "
 dummy% = printArray%(data%(), N%)
 
 /* Search */
 target% = 22
 idx% = indexOf%(data%(), N%, target%)
 if idx% >= 0 then
-    PRINT STR$(target%) + " found at index " + STR$(idx%)
+    print str$(target%) + " found at index " + str$(idx%)
 else
-    PRINT STR$(target%) + " not found"
+    print str$(target%) + " not found"
 end if
 
-END
+end

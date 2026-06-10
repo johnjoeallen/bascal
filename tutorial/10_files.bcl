@@ -1,50 +1,50 @@
 // Tutorial 10 — File Input and Output
 //
-// BASCAL supports sequential file I/O through OPEN, CLOSE, and the
-// file-channel variants of PRINT, INPUT, LINE INPUT, and WRITE.
+// BASCAL supports sequential file I/O through open, close, and the
+// file-channel variants of print, input, line input, and write.
 //
-// OPEN filename$ FOR INPUT  AS #n   — read existing file
-// OPEN filename$ FOR OUTPUT AS #n   — create or overwrite
-// OPEN filename$ FOR APPEND AS #n   — add to end of existing file
-// CLOSE #n                          — flush and release the file
+// open filename$ for input  as #n   — read existing file
+// open filename$ for output as #n   — create or overwrite
+// open filename$ for append as #n   — add to end of existing file
+// close #n                          — flush and release the file
 //
-// PRINT #n, expr[, ...]   — write values separated by spaces
-// WRITE #n, expr[, ...]   — write quoted strings, comma-separated
-//                           (produces data that INPUT # can read back)
-// LINE INPUT #n, var$     — read one complete line into var$
-// INPUT #n, var[, ...]    — read comma-delimited values (matches WRITE)
-// EOF(n)                  — returns non-zero when file n is exhausted
+// print #n, expr[, ...]   — write values separated by spaces
+// write #n, expr[, ...]   — write quoted strings, comma-separated
+//                           (produces data that input # can read back)
+// line input #n, var$     — read one complete line into var$
+// input #n, var[, ...]    — read comma-delimited values (matches write)
+// eof(n)                  — returns non-zero when file n is exhausted
 
 csvFile$ = "tutorial_scores.csv"
 
 /* Write three records */
-OPEN csvFile$ FOR OUTPUT AS #1
-WRITE #1, "Alice", 95, "pass"
-WRITE #1, "Bob",   54, "fail"
-WRITE #1, "Carol", 78, "pass"
-CLOSE #1
+open csvFile$ for output as #1
+write #1, "Alice", 95, "pass"
+write #1, "Bob",   54, "fail"
+write #1, "Carol", 78, "pass"
+close #1
 
 /* Append a fourth record */
-OPEN csvFile$ FOR APPEND AS #1
-WRITE #1, "Dave", 88, "pass"
-CLOSE #1
+open csvFile$ for append as #1
+write #1, "Dave", 88, "pass"
+close #1
 
 /* Read and print every record */
-PRINT "All records in " + csvFile$ + ":"
-OPEN csvFile$ FOR INPUT AS #1
-while EOF(1) = 0
-    INPUT #1, name$, score%, result$
-    PRINT "  " + name$ + ": " + STR$(score%) + "  [" + result$ + "]"
+print "All records in " + csvFile$ + ":"
+open csvFile$ for input as #1
+while eof(1) = 0
+    input #1, name$, score%, result$
+    print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
 end while
-CLOSE #1
+close #1
 
-/* Read the file line by line using LINE INPUT */
-PRINT "Raw lines:"
-OPEN csvFile$ FOR INPUT AS #1
-while EOF(1) = 0
-    LINE INPUT #1, line$
-    PRINT "  " + line$
+/* Read the file line by line using line input */
+print "Raw lines:"
+open csvFile$ for input as #1
+while eof(1) = 0
+    line input #1, line$
+    print "  " + line$
 end while
-CLOSE #1
+close #1
 
-END
+end

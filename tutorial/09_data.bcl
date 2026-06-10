@@ -1,65 +1,65 @@
-// Tutorial 9 — DATA, READ, RESTORE, SWAP, RANDOMIZE
+// Tutorial 9 — data, read, restore, swap, randomize
 //
-// DATA embeds literal values directly in the program.  READ consumes
-// them in sequence.  RESTORE rewinds the pointer so data can be read
-// again.  The DATA statements may appear anywhere in the program body;
+// data embeds literal values directly in the program.  read consumes
+// them in sequence.  restore rewinds the pointer so data can be read
+// again.  The data statements may appear anywhere in the program body;
 // the generated BASIC places them after END.
 //
-// SWAP exchanges two variables atomically — no temporary needed.
+// swap exchanges two variables atomically — no temporary needed.
 //
-// RANDOMIZE seeds the BASIC RND function.  Pass TIMER for a
+// randomize seeds the BASIC RND function.  Pass timer for a
 // time-based seed; pass a literal for reproducible results.
 
-CONST NUM_CAPITALS% = 5
+const num_capitals% = 5
 
-DIM country$(NUM_CAPITALS%)
-DIM capital$(NUM_CAPITALS%)
+dim country$(num_capitals%)
+dim capital$(num_capitals%)
 
 /* Load the lookup table */
-for i% = 1 to NUM_CAPITALS%
-    READ country$(i%), capital$(i%)
+for i% = 1 to num_capitals%
+    read country$(i%), capital$(i%)
 end for
 
 /* Print the table */
-PRINT "Country         Capital"
-PRINT "--------------- ---------------"
-for i% = 1 to NUM_CAPITALS%
-    PRINT country$(i%) + "        " + capital$(i%)
+print "Country         Capital"
+print "--------------- ---------------"
+for i% = 1 to num_capitals%
+    print country$(i%) + "        " + capital$(i%)
 end for
 
-/* RESTORE lets us re-read from the beginning */
-RESTORE
-READ firstCountry$, firstCapital$
-PRINT "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
+/* restore lets us re-read from the beginning */
+restore
+read firstCountry$, firstCapital$
+print "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
 
-/* SWAP — sort two variables without a temp */
+/* swap — sort two variables without a temp */
 a% = 42
 b% = 17
-PRINT "Before SWAP: a=" + STR$(a%) + " b=" + STR$(b%)
-SWAP a%, b%
-PRINT "After SWAP:  a=" + STR$(a%) + " b=" + STR$(b%)
+print "Before swap: a=" + str$(a%) + " b=" + str$(b%)
+swap a%, b%
+print "After swap:  a=" + str$(a%) + " b=" + str$(b%)
 
-/* Bubble-sort the country array using SWAP */
-for pass% = 1 to NUM_CAPITALS% - 1
-    for i% = 1 to NUM_CAPITALS% - pass%
+/* Bubble-sort the country array using swap */
+for pass% = 1 to num_capitals% - 1
+    for i% = 1 to num_capitals% - pass%
         if country$(i%) > country$(i% + 1) then
-            SWAP country$(i%), country$(i% + 1)
-            SWAP capital$(i%), capital$(i% + 1)
+            swap country$(i%), country$(i% + 1)
+            swap capital$(i%), capital$(i% + 1)
         end if
     end for
 end for
-PRINT "Sorted by country:"
-for i% = 1 to NUM_CAPITALS%
-    PRINT "  " + country$(i%) + " -> " + capital$(i%)
+print "Sorted by country:"
+for i% = 1 to num_capitals%
+    print "  " + country$(i%) + " -> " + capital$(i%)
 end for
 
-/* RANDOMIZE — seed with a literal for reproducible output */
-RANDOMIZE 99
+/* randomize — seed with a literal for reproducible output */
+randomize 99
 
-END
+end
 
-DATA "France",  "Paris"
-DATA "Germany", "Berlin"
-DATA "Japan",   "Tokyo"
-DATA "Brazil",  "Brasilia"
-DATA "Egypt",   "Cairo"
+data "France",  "Paris"
+data "Germany", "Berlin"
+data "Japan",   "Tokyo"
+data "Brazil",  "Brasilia"
+data "Egypt",   "Cairo"

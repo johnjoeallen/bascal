@@ -283,18 +283,21 @@ mod tests {
         let output =
             compile_source("tutorial/sort_driver.bcl", source).expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
-        assert!(output.contains("bubbleSort%(bubbleData%(), 5000)"));
+        // Unknown callables uppercase (treated as BASIC builtins without the sort library);
+        // user variable bubbleData% normalised to lowercase bubbledata%.
+        assert!(output.contains("BUBBLESORT%(bubbledata%(), 5000)"));
         assert!(output.contains("END"));
     }
 
     #[test]
     fn lowers_functions_to_labels_and_gosub() {
-        let source = r#"function add%(left%, right%)
-    return left% + right%
+        // Mixed-case: function name, params, and caller variable are normalised to lowercase.
+        let source = r#"function Add%(Left%, Right%)
+    return Left% + Right%
 end function
 
-total% = add%(10, 20)
-PRINT total%
+Total% = Add%(10, 20)
+PRINT Total%
 END
 "#;
 
@@ -405,13 +408,15 @@ END
         assert!(!output.contains("' require com.bascal.sort.bubbleSort%"));
         assert!(output.contains("' Sort driver for the BASCAL example sort library."));
         assert!(output.contains("' In-place bubble sort."));
-        assert!(output.contains("' function bubbleSort%(data%, count%)"));
-        assert!(output.contains("' function shellSort%(data%, count%)"));
+        // Mixed-case source names are normalised to lowercase in comments.
+        assert!(output.contains("' function bubblesort%(data%, count%)"));
+        assert!(output.contains("' function shellsort%(data%, count%)"));
         assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
         assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
-        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
-        assert!(output.lines().any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
+        // sort_driver.bcl uses mixed-case `bubbleData%`; output normalises to lowercase.
+        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbledata%(")));
+        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesort_data%(")));
         assert!(output.contains("bubblesort_data%(bubblesort_j%) = bubblesort_data%(bubblesort_j% + 1)"));
         assert!(output.contains("quicksort_data%(quicksort_wall%) = quicksort_data%(quicksort_qhigh%)"));
         assert!(output.contains("GOSUB "));
@@ -463,17 +468,18 @@ END
 
     #[test]
     fn lowers_basic_file_io_statements() {
-        let source = r#"open inputFile$ for input as #1
-line input #1, line$
-print #2, line$
-close #1
+        // Mixed-case keywords and variable names: compiler normalises vars to lowercase.
+        let source = r#"OPEN InputFile$ FOR INPUT AS #1
+LINE INPUT #1, CurrentLine$
+PRINT #2, CurrentLine$
+CLOSE #1
 END
 "#;
 
         let output = compile_source("io.bcl", source).expect("sample should compile");
-        assert!(output.contains("OPEN inputFile$ FOR INPUT AS #1"));
-        assert!(output.contains("LINE INPUT #1, line$"));
-        assert!(output.contains("PRINT #2, line$"));
+        assert!(output.contains("OPEN inputfile$ FOR INPUT AS #1"));
+        assert!(output.contains("LINE INPUT #1, currentline$"));
+        assert!(output.contains("PRINT #2, currentline$"));
         assert!(output.contains("CLOSE #1"));
     }
 }

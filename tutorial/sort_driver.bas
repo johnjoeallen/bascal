@@ -15,10 +15,10 @@
 130 ' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
 
 140 DIM source%(5000)
-150 DIM bubbleData%(5000)
-160 DIM shakerData%(5000)
-170 DIM shellData%(5000)
-180 DIM quickData%(5000)
+150 DIM bubbledata%(5000)
+160 DIM shakerdata%(5000)
+170 DIM shelldata%(5000)
+180 DIM quickdata%(5000)
 
 190 ' Fill with descending values: worst case for O(n^2) sorts.
 200 FOR i% = 1 TO 5000
@@ -26,33 +26,33 @@
 220 NEXT i%
 
 230 FOR i% = 1 TO 5000
-240     bubbleData%(i%) = source%(i%)
-250     shakerData%(i%) = source%(i%)
-260     shellData%(i%) = source%(i%)
-270     quickData%(i%) = source%(i%)
+240     bubbledata%(i%) = source%(i%)
+250     shakerdata%(i%) = source%(i%)
+260     shelldata%(i%) = source%(i%)
+270     quickdata%(i%) = source%(i%)
 280 NEXT i%
 
-290 tStart# = TIMER
+290 tstart# = timer
 300 bubblesort_count% = 5000
 310 DIM bubblesort_data%(5000)
 
-320 ' copy array argument into lowered function storage: bubbleData%() -> bubblesort_data%()
+320 ' copy array argument into lowered function storage: bubbledata%() -> bubblesort_data%()
 330 FOR BCC_T1% = 1 TO 5000
-340     bubblesort_data%(BCC_T1%) = bubbleData%(BCC_T1%)
+340     bubblesort_data%(BCC_T1%) = bubbledata%(BCC_T1%)
 350 NEXT BCC_T1%
 
 360 GOSUB 1310
 
-370 ' copy mutated array argument back to caller storage: bubblesort_data%() -> bubbleData%()
+370 ' copy mutated array argument back to caller storage: bubblesort_data%() -> bubbledata%()
 380 FOR BCC_T2% = 1 TO 5000
-390     bubbleData%(BCC_T2%) = bubblesort_data%(BCC_T2%)
+390     bubbledata%(BCC_T2%) = bubblesort_data%(BCC_T2%)
 400 NEXT BCC_T2%
 
-410 tElapsed# = TIMER - tStart#
-420 PRINT "Bubble sort time (ms):", tElapsed# * 5000
+410 telapsed# = timer - tstart#
+420 PRINT "Bubble sort time (ms):", telapsed# * 5000
 430 ok% = 1
 440 FOR i% = 1 TO 4999
-450     IF (bubbleData%(i%) > bubbleData%(i% + 1)) = 0 THEN GOTO 470
+450     IF (bubbledata%(i%) > bubbledata%(i% + 1)) = 0 THEN GOTO 470
 460         ok% = 0
 470     REM END IF
 480 NEXT i%
@@ -62,27 +62,27 @@
 520     PRINT "Bubble: FAILED"
 530 REM END IF
 
-540 tStart# = TIMER
+540 tstart# = timer
 550 shakersort_count% = 5000
 560 DIM shakersort_data%(5000)
 
-570 ' copy array argument into lowered function storage: shakerData%() -> shakersort_data%()
+570 ' copy array argument into lowered function storage: shakerdata%() -> shakersort_data%()
 580 FOR BCC_T5% = 1 TO 5000
-590     shakersort_data%(BCC_T5%) = shakerData%(BCC_T5%)
+590     shakersort_data%(BCC_T5%) = shakerdata%(BCC_T5%)
 600 NEXT BCC_T5%
 
 610 GOSUB 1460
 
-620 ' copy mutated array argument back to caller storage: shakersort_data%() -> shakerData%()
+620 ' copy mutated array argument back to caller storage: shakersort_data%() -> shakerdata%()
 630 FOR BCC_T6% = 1 TO 5000
-640     shakerData%(BCC_T6%) = shakersort_data%(BCC_T6%)
+640     shakerdata%(BCC_T6%) = shakersort_data%(BCC_T6%)
 650 NEXT BCC_T6%
 
-660 tElapsed# = TIMER - tStart#
-670 PRINT "Shaker sort time (ms):", tElapsed# * 5000
+660 telapsed# = timer - tstart#
+670 PRINT "Shaker sort time (ms):", telapsed# * 5000
 680 ok% = 1
 690 FOR i% = 1 TO 4999
-700     IF (shakerData%(i%) > shakerData%(i% + 1)) = 0 THEN GOTO 720
+700     IF (shakerdata%(i%) > shakerdata%(i% + 1)) = 0 THEN GOTO 720
 710         ok% = 0
 720     REM END IF
 730 NEXT i%
@@ -92,27 +92,27 @@
 770     PRINT "Shaker: FAILED"
 780 REM END IF
 
-790 tStart# = TIMER
+790 tstart# = timer
 800 shellsort_count% = 5000
 810 DIM shellsort_data%(5000)
 
-820 ' copy array argument into lowered function storage: shellData%() -> shellsort_data%()
+820 ' copy array argument into lowered function storage: shelldata%() -> shellsort_data%()
 830 FOR BCC_T9% = 1 TO 5000
-840     shellsort_data%(BCC_T9%) = shellData%(BCC_T9%)
+840     shellsort_data%(BCC_T9%) = shelldata%(BCC_T9%)
 850 NEXT BCC_T9%
 
 860 GOSUB 1830
 
-870 ' copy mutated array argument back to caller storage: shellsort_data%() -> shellData%()
+870 ' copy mutated array argument back to caller storage: shellsort_data%() -> shelldata%()
 880 FOR BCC_T10% = 1 TO 5000
-890     shellData%(BCC_T10%) = shellsort_data%(BCC_T10%)
+890     shelldata%(BCC_T10%) = shellsort_data%(BCC_T10%)
 900 NEXT BCC_T10%
 
-910 tElapsed# = TIMER - tStart#
-920 PRINT "Shell sort time (ms):", tElapsed# * 5000
+910 telapsed# = timer - tstart#
+920 PRINT "Shell sort time (ms):", telapsed# * 5000
 930 ok% = 1
 940 FOR i% = 1 TO 4999
-950     IF (shellData%(i%) > shellData%(i% + 1)) = 0 THEN GOTO 970
+950     IF (shelldata%(i%) > shelldata%(i% + 1)) = 0 THEN GOTO 970
 960         ok% = 0
 970     REM END IF
 980 NEXT i%
@@ -122,27 +122,27 @@
 1020     PRINT "Shell: FAILED"
 1030 REM END IF
 
-1040 tStart# = TIMER
+1040 tstart# = timer
 1050 quicksort_count% = 5000
 1060 DIM quicksort_data%(5000)
 
-1070 ' copy array argument into lowered function storage: quickData%() -> quicksort_data%()
+1070 ' copy array argument into lowered function storage: quickdata%() -> quicksort_data%()
 1080 FOR BCC_T13% = 1 TO 5000
-1090     quicksort_data%(BCC_T13%) = quickData%(BCC_T13%)
+1090     quicksort_data%(BCC_T13%) = quickdata%(BCC_T13%)
 1100 NEXT BCC_T13%
 
 1110 GOSUB 2110
 
-1120 ' copy mutated array argument back to caller storage: quicksort_data%() -> quickData%()
+1120 ' copy mutated array argument back to caller storage: quicksort_data%() -> quickdata%()
 1130 FOR BCC_T14% = 1 TO 5000
-1140     quickData%(BCC_T14%) = quicksort_data%(BCC_T14%)
+1140     quickdata%(BCC_T14%) = quicksort_data%(BCC_T14%)
 1150 NEXT BCC_T14%
 
-1160 tElapsed# = TIMER - tStart#
-1170 PRINT "Quick sort time (ms):", tElapsed# * 5000
+1160 telapsed# = timer - tstart#
+1170 PRINT "Quick sort time (ms):", telapsed# * 5000
 1180 ok% = 1
 1190 FOR i% = 1 TO 4999
-1200     IF (quickData%(i%) > quickData%(i% + 1)) = 0 THEN GOTO 1220
+1200     IF (quickdata%(i%) > quickdata%(i% + 1)) = 0 THEN GOTO 1220
 1210         ok% = 0
 1220     REM END IF
 1230 NEXT i%
@@ -154,7 +154,7 @@
 
 1290 END
 
-1300 ' function bubbleSort%(data%, count%)
+1300 ' function bubblesort%(data%, count%)
 1310     ' After each outer pass, the largest remaining value has bubbled right.
 1320     FOR bubblesort_i% = 1 TO bubblesort_count% - 1
 1330         FOR bubblesort_j% = 1 TO bubblesort_count% - bubblesort_i%
@@ -168,9 +168,9 @@
 1410     NEXT bubblesort_i%
 1420     bubblesort_result% = 0
 1430     RETURN
-1440 ' end function bubbleSort%
+1440 ' end function bubblesort%
 
-1450 ' function shakerSort%(data%, count%)
+1450 ' function shakersort%(data%, count%)
 1460     shakersort_left% = 1
 1470     shakersort_right% = shakersort_count% - 1
 1480     shakersort_swapped% = 1
@@ -207,7 +207,7 @@
 
 1740     shakersort_result% = 0
 1750     RETURN
-1760 ' end function shakerSort%
+1760 ' end function shakersort%
 
 1770 ' function touch%(value%)
 1780     ' Return the value unchanged.
@@ -215,7 +215,7 @@
 1800     RETURN
 1810 ' end function touch%
 
-1820 ' function shellSort%(data%, count%)
+1820 ' function shellsort%(data%, count%)
 1830     ' Normalize the count through a required helper so this file has its own
 1840     ' dependency chain.
 1850     touch_value% = shellsort_count%
@@ -248,9 +248,9 @@
 
 2070     shellsort_result% = 0
 2080     RETURN
-2090 ' end function shellSort%
+2090 ' end function shellsort%
 
-2100 ' function quickSort%(data%, count%)
+2100 ' function quicksort%(data%, count%)
 2110     DIM quicksort_slow%(64)
 2120     DIM quicksort_shigh%(64)
 
@@ -306,4 +306,4 @@
 
 2550     quicksort_result% = 0
 2560     RETURN
-2570 ' end function quickSort%
+2570 ' end function quicksort%
