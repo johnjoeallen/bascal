@@ -689,7 +689,13 @@ impl CodeGenerator {
                         prelude.extend(arg_prelude);
                         rendered_args.push(arg);
                     }
-                    (prelude, format!("{}({})", self.canonical_callable(name), rendered_args.join(", ")))
+                    let key = name.name.to_ascii_lowercase();
+                    let emit_name = if self.known_callables.contains(&key) {
+                        self.canonical_callable(name)
+                    } else {
+                        BasicIdent { name: key, suffix: name.suffix }.as_basic()
+                    };
+                    (prelude, format!("{}({})", emit_name, rendered_args.join(", ")))
                 }
             }
             Expr::Unary { op, expr } => {

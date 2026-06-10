@@ -283,9 +283,9 @@ mod tests {
         let output =
             compile_source("tutorial/sort_driver.bcl", source).expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
-        // Unknown callables uppercase (treated as BASIC builtins without the sort library);
-        // user variable bubbleData% normalised to lowercase bubbledata%.
-        assert!(output.contains("BUBBLESORT%(bubbledata%(), 5000)"));
+        // Without the sort library bubbleSort% is not in the symbol table;
+        // it is emitted lowercase like any other user symbol, not uppercased.
+        assert!(output.contains("bubblesort%(bubbledata%(), 5000)"));
         assert!(output.contains("END"));
     }
 
