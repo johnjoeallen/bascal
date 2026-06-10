@@ -254,13 +254,18 @@ Use parentheses to override precedence.
 
 ### Single-Line Comments
 
-A single quote `'` begins a comment that extends to the end of the line.
-Comments are passed through to the generated BASIC output unchanged.
+A single quote `'` or a double slash `//` begins a comment that extends to the
+end of the line. Both forms are passed through to the generated BASIC output
+as `'` comments.
 
 ```
 ' This is a single-line comment
-score% = 0  ' inline comment
+// This is also a single-line comment
+score% = 0  ' inline comment after a statement
+score% = 0  // also valid inline
 ```
+
+All three comment styles may appear inline after any statement.
 
 ### Block Comments
 

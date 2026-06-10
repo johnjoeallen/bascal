@@ -527,9 +527,15 @@ impl CodeGenerator {
         let end_label = format!("SEL_{id:04}_END");
 
         // Store the select expression in a temp variable to avoid re-evaluation.
+        // The temp variable must carry the same type suffix as the expression.
         let (prelude, expr_str) = self.expr(expr, current_function);
         self.lines(prelude);
-        let temp = self.next_temp_var();
+        let suffix = expr_type_suffix(expr);
+        let temp = {
+            let id = self.next_label;
+            self.next_label += 1;
+            format!("BCC_T{id}{suffix}")
+        };
         self.line(&format!("{temp} = {expr_str}"));
 
         // Emit dispatch: one IF/GOTO per case clause.
@@ -1017,6 +1023,24 @@ fn next_emitted_line_index(lines: &[&str], start: usize) -> Option<usize> {
         return Some(index);
     }
     None
+}
+
+fn expr_type_suffix(expr: &Expr) -> &'static str {
+    match expr {
+        Expr::String(_) => "$",
+        Expr::Integer(_) => "%",
+        Expr::Ident(ident) | Expr::Call { name: ident, .. } | Expr::ArrayRef { name: ident, .. } => {
+            match ident.suffix {
+                Some(TypeSuffix::String) => "$",
+                Some(TypeSuffix::Single) => "!",
+                Some(TypeSuffix::Double) => "#",
+                Some(TypeSuffix::Long) => "&",
+                _ => "%",
+            }
+        }
+        Expr::Unary { expr, .. } => expr_type_suffix(expr),
+        Expr::Binary { left, .. } => expr_type_suffix(left),
+    }
 }
 
 fn is_label_line(line: &str) -> Option<&str> {

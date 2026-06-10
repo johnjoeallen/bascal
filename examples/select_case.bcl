@@ -1,0 +1,67 @@
+/*
+ * SELECT CASE and ELSEIF — demonstrating all matching forms.
+ *
+ * SELECT CASE is preferred over long IF/ELSEIF chains when testing a single
+ * expression against many values.  BASCAL lowers it to an IF/GOTO chain; the
+ * expression is evaluated exactly once.
+ */
+
+// --- Numeric: single value, comma list, TO range, IS comparison, CASE ELSE ---
+score% = 85
+select case score%
+case 100
+    PRINT "Perfect score!"
+case 95, 96, 97, 98, 99
+    PRINT "Near perfect"
+case 80 to 94
+    PRINT "Good"     // score% = 85 matches this arm
+case is >= 60
+    PRINT "Pass"
+case else
+    PRINT "Fail"
+end select
+
+// --- String: equality and list ---
+grade$ = "B"
+select case grade$
+case "A"
+    PRINT "Outstanding"
+case "B", "C"
+    PRINT "Satisfactory"  // grade$ = "B" matches here
+case "D", "E"
+    PRINT "Borderline"
+case else
+    PRINT "Invalid grade"
+end select
+
+// --- IS comparisons ---
+temp% = -5
+select case temp%
+case is < 0
+    PRINT "Freezing"    // temp% = -5 matches
+case is < 15
+    PRINT "Cold"
+case is < 25
+    PRINT "Mild"
+case else
+    PRINT "Hot"
+end select
+
+/*
+ * ELSEIF — chain of mutually exclusive conditions.
+ * Unlike SELECT CASE, each arm can test a different expression.
+ */
+x% = 42
+if x% < 0 then
+    PRINT "negative"
+elseif x% = 0 then
+    PRINT "zero"
+elseif x% < 10 then
+    PRINT "small positive"
+elseif x% < 100 then
+    PRINT "medium positive"  // x% = 42 matches here
+else
+    PRINT "large positive"
+end if
+
+END

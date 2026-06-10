@@ -881,6 +881,13 @@ impl Parser {
     }
 
     fn consume_line_end(&mut self) -> ParseResult<()> {
+        // Discard any trailing inline comment(s) before the actual line ending.
+        while matches!(
+            self.current().kind,
+            TokenKind::Comment(_) | TokenKind::BlockComment(_)
+        ) {
+            self.advance();
+        }
         if self.is_eof() {
             return Ok(());
         }
@@ -915,7 +922,11 @@ impl Parser {
     fn at_line_end(&self) -> bool {
         matches!(
             self.current().kind,
-            TokenKind::Newline | TokenKind::Colon | TokenKind::Eof
+            TokenKind::Newline
+                | TokenKind::Colon
+                | TokenKind::Eof
+                | TokenKind::Comment(_)
+                | TokenKind::BlockComment(_)
         )
     }
 

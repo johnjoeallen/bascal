@@ -11,6 +11,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn lexes_eol_comments_from_double_slash() {
+        let tokens = Lexer::new("test.bcl", "x% = 1 // set x\ny% = 2 ' set y\n").lex();
+        let comments: Vec<_> = tokens
+            .iter()
+            .filter_map(|t| match &t.kind {
+                TokenKind::Comment(c) => Some(c.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(comments, vec!["set x", "set y"]);
+    }
+
+    #[test]
     fn lexes_identifiers_with_basic_suffixes() {
         let tokens = Lexer::new("test.bcl", "name$ count% amount! distance# id&").lex();
         let idents = tokens
@@ -105,6 +118,8 @@ impl<'a> Lexer<'a> {
                 '/' => {
                     if self.peek_at(1) == Some('*') {
                         tokens.push(self.block_comment());
+                    } else if self.peek_at(1) == Some('/') {
+                        tokens.push(self.eol_comment());
                     } else {
                         tokens.push(self.single(TokenKind::Slash));
                     }
@@ -200,6 +215,24 @@ impl<'a> Lexer<'a> {
         }
         Token {
             kind: TokenKind::String(value),
+            pos,
+        }
+    }
+
+    fn eol_comment(&mut self) -> Token {
+        let pos = self.pos();
+        self.advance(); // first '/'
+        self.advance(); // second '/'
+        let mut value = String::new();
+        while let Some(ch) = self.peek() {
+            if ch == '\n' {
+                break;
+            }
+            value.push(ch);
+            self.advance();
+        }
+        Token {
+            kind: TokenKind::Comment(value.trim_start().to_string()),
             pos,
         }
     }
