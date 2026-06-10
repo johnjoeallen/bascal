@@ -37,13 +37,14 @@ FreeBASIC's QB compatibility mode.
 BASCAL keeps BASIC's global symbol model and run-time semantics while adding the
 structural constructs needed to write and maintain larger programs:
 
-- Block `if` / `else if` / `else` / `end if`
+- Block `if` / `elseif` / `else` / `end if`
 - `for` / `next`, `while` / `wend`, and `do` / `loop` loops with early exit
 - `function` declarations with typed return values and explicit `return`
 - Path-style `require` for multi-file projects
 - `program` / `suite` declarations for coordinating `COMMON` across chained
   programs
-- Multi-line `/* */` block comments in addition to single-line `'` comments
+- Multi-line `/* */` block comments and `//` end-of-line comments in addition
+  to the classic `'` comment
 - `select case` with range and `is` comparisons
 - All classic BASCOM 1980s statements: `DATA`/`READ`/`RESTORE`, `LOCATE`,
   `COLOR`, `ON ... GOTO`, `SWAP`, `RANDOMIZE`, `CONST`, and more
@@ -67,25 +68,35 @@ The compiled binary is `target/release/bcc`.
 
 ### Your First Program
 
-Create `hello.bcl`:
+The file `tutorial/01_hello.bcl` demonstrates all three comment styles and
+a basic PRINT/END structure:
 
 ```
+// Tutorial 1 — Hello, World
+' This is a classic single-quote comment (passes through to BASIC as-is).
+// This is a double-slash end-of-line comment (same behaviour).
+
+/*
+ * Block comments span multiple lines.  Each non-empty line is emitted
+ * as a separate ' comment in the generated output.
+ */
+
 PRINT "Hello, World!"
+PRINT "Welcome to BASCAL."
 END
 ```
 
 Compile it:
 
 ```
-bcc hello.bcl
+bcc tutorial/01_hello.bcl
 ```
 
-This produces `hello.bas` in the same directory. To compile and run with
-FreeBASIC:
+This produces `tutorial/01_hello.bas`. To compile and run with FreeBASIC:
 
 ```
-bcc hello.bcl --binary
-./tmp/hello
+bcc tutorial/01_hello.bcl --binary
+./tmp/01_hello
 ```
 
 ### A Simple Function
@@ -171,28 +182,47 @@ assignment. Use `DIM` to declare arrays or to make intent clear.
 Declares an array or a simple variable.
 
 ```
-DIM name%
-DIM scores%(100)
-DIM names$(50)
+DIM playerName$
+DIM scores%(100)       ' 101 elements: scores%(0) .. scores%(100)
+DIM table$(50)
 ```
 
 When a size expression is provided, the variable is treated as a fixed-size
 array with indices 0 through *size*. The size expression may be any integer
-expression.
+expression, including a constant:
+
+```
+CONST MAX_ITEMS% = 20
+DIM items$(MAX_ITEMS%)
+```
 
 ### CONST
 
-Declares a named constant. The value must be a compile-time literal or
-expression.
+Declares a named constant. The value must be a literal.
 
 ```
-CONST MAX_LINES% = 1000
-CONST GREETING$ = "Hello"
-CONST PI! = 3.14159
+CONST PASS_MARK%  = 60
+CONST APP_NAME$   = "Grade Checker"
+CONST PI!         = 3.14159
+CONST TAX_RATE!   = 0.2
 ```
 
 Constants follow the same type-suffix rules as variables. Once declared, a
 constant may not be reassigned.
+
+From `tutorial/02_variables.bcl`:
+
+```
+CONST PASS_MARK%  = 60
+CONST APP_NAME$   = "Grade Checker"
+
+score%       = 87
+playerName$  = "Alice"
+
+if score% >= PASS_MARK% then
+    PRINT APP_NAME$ + ": " + playerName$ + " passed with " + STR$(score%)
+end if
+```
 
 ---
 
@@ -206,6 +236,22 @@ constant may not be reassigned.
 | `-`      | Subtraction / unary negation    |
 | `*`      | Multiplication |
 | `/`      | Division       |
+
+From `tutorial/03_arithmetic.bcl`:
+
+```
+a% = 17
+b% = 5
+PRINT STR$(a%) + " + " + STR$(b%) + " = " + STR$(a% + b%)   ' 22
+PRINT STR$(a%) + " - " + STR$(b%) + " = " + STR$(a% - b%)   ' 12
+PRINT STR$(a%) + " * " + STR$(b%) + " = " + STR$(a% * b%)   ' 85
+PRINT STR$(a%) + " / " + STR$(b%) + " = " + STR$(a% / b%)   ' 3  (integer)
+
+' String concatenation
+first$ = "Ada"
+last$  = "Lovelace"
+PRINT first$ + " " + last$
+```
 
 ### Comparison Operators
 
@@ -234,6 +280,14 @@ runtime, consistent with Microsoft BASIC semantics.
 control-flow conditions so that programmer-boolean values like `found% = 1`
 behave as expected. Use explicit `= 0` or `<> 0` comparisons in your own code
 when testing boolean flags.
+
+```
+age%    = 25
+income% = 45000
+if age% >= 18 and income% >= 30000 then
+    PRINT "Eligible"
+end if
+```
 
 ### Operator Precedence (highest first)
 
@@ -275,13 +329,22 @@ valid.
 
 ```
 /*
- * ARCADE SUITE — menu program
- * Initialises shared state and welcomes the player.
- *
- * Variables shared with game.bas via the arcade.bcl suite:
- *   score%, level%, playerName$, hiScore%
+ * Insertion sort — sorts arr%(0..count%-1) in ascending order.
+ * Time complexity: O(n^2) average and worst case.
+ * Space complexity: O(1) — sorts in place.
  */
-program menu suite arcade
+function insertionSort%(arr%, count%)
+    for i% = 1 to count% - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% >= 0 and arr%(j%) > key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        wend
+        arr%(j% + 1) = key%
+    next i%
+    return 0
+end function
 ```
 
 Each non-empty line of a block comment is emitted as a separate `'` comment in
@@ -291,15 +354,20 @@ are stripped.
 One-line block comments are also valid:
 
 ```
-/* Set initial values. */
-score% = 0
+/* Clear screen and draw title banner */
+CLS
+LOCATE 1, 30
+PRINT "  BASCAL DEMO  "
 ```
 
 ---
 
 ## Control Flow
 
-### IF / ELSE IF / ELSE / END IF
+### IF / ELSEIF / ELSE / END IF
+
+BASCAL only supports block-style `if` statements. The body must be on a
+separate line; there is no single-line `IF … THEN stmt` form.
 
 ```
 if condition then
@@ -311,37 +379,68 @@ if condition then
 else
     ' else body
 end if
-
-if score% > 100 then
-    PRINT "High score!"
-elseif score% > 50 then
-    PRINT "Good score."
-else
-    PRINT "Keep trying."
-end if
 ```
 
-`elseif` chains may be arbitrarily deep. BASCAL lowers `elseif` to nested
-`if`/`else` structures; no new AST node is introduced.
+From `tutorial/04_conditions.bcl` — a grade classification chain:
+
+```
+score% = 72
+if score% >= 60 then
+    PRINT "Pass (" + STR$(score%) + ")"
+else
+    PRINT "Fail (" + STR$(score%) + ")"
+end if
+
+points% = 85
+if points% >= 90 then
+    grade$ = "A"
+elseif points% >= 80 then
+    grade$ = "B"        ' points% = 85 lands here
+elseif points% >= 70 then
+    grade$ = "C"
+elseif points% >= 60 then
+    grade$ = "D"
+else
+    grade$ = "F"
+end if
+PRINT "Grade: " + grade$
+```
+
+`elseif` chains may be arbitrarily deep.
 
 ### FOR / NEXT
 
 ```
-for i% = 1 to 10
-    PRINT i%
-next i%
-
-for i% = 10 to 1 step -1
-    PRINT i%
-next
-
-for i% = 0 to count% - 1 step 2
-    process%(data%(i%), data%(i% + 1))
-next i%
+for var = start to end [step n]
+    ' body
+next [var]
 ```
 
 The variable name after `next` is optional. The `step` clause is optional;
 the default step is 1.
+
+From `tutorial/05_loops.bcl`:
+
+```
+' Squares 1..5
+for i% = 1 to 5
+    PRINT "  " + STR$(i%) + "^2 = " + STR$(i% * i%)
+next i%
+
+' Countdown with negative step
+for n% = 3 to 1 step -1
+    PRINT "  " + STR$(n%)
+next n%
+PRINT "  Go!"
+
+' EXIT FOR — stop at the first even number greater than 4
+for i% = 1 to 20
+    if i% > 4 and (i% / 2) * 2 = i% then
+        PRINT "First even > 4: " + STR$(i%)
+        exit for
+    end if
+next i%
+```
 
 `exit for` exits the enclosing `for` loop immediately.
 
@@ -351,45 +450,73 @@ the default step is 1.
 while condition
     ' body
 wend
+```
 
-i% = 0
-while i% < 10
-    PRINT i%
-    i% = i% + 1
+From `tutorial/05_loops.bcl`:
+
+```
+' Powers of 2 under 100
+p% = 1
+while p% < 100
+    PRINT "  " + STR$(p%)
+    p% = p% * 2
+wend
+
+' EXIT WHILE — stop after 8 Collatz steps
+n% = 27
+steps% = 0
+while n% <> 1
+    if steps% = 8 then
+        PRINT "  ..."
+        exit while
+    end if
+    if (n% / 2) * 2 = n% then
+        n% = n% / 2
+    else
+        n% = n% * 3 + 1
+    end if
+    steps% = steps% + 1
+    PRINT "  " + STR$(n%)
 wend
 ```
 
-`exit while` exits the enclosing `while` loop immediately, jumping to the
-statement after `wend`.
+`exit while` exits the enclosing `while` loop immediately.
 
 ### DO / LOOP
 
-The `do` statement supports four forms:
+The `do` statement supports four forms. From `tutorial/05_loops.bcl`:
 
 ```
-' Unconditional loop (exit with EXIT DO or GOTO)
-do
-    ' body
+' DO WHILE — condition tested before body
+k% = 1
+do while k% <= 3
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
 loop
 
-' Test at top — loop while condition is true
-do while condition
-    ' body
+' DO UNTIL — enters while condition is false
+k% = 1
+do until k% > 3
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
 loop
 
-' Test at top — loop until condition is true
-do until condition
-    ' body
+' DO … LOOP WHILE — body runs at least once
+k% = 99
+do
+    PRINT "  " + STR$(k%)    ' prints 99 even though k% > 3
+    k% = k% + 1
+loop while k% <= 3
+
+' EXIT DO
+k% = 1
+do
+    if k% = 3 then
+        exit do
+    end if
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
 loop
-
-' Test at bottom — always executes body at least once
-do
-    ' body
-loop while condition
-
-do
-    ' body
-loop until condition
 ```
 
 `exit do` exits the enclosing `do` loop immediately.
@@ -413,6 +540,53 @@ end select
 
 The `select case` expression is evaluated once. Cases are tested in order.
 `case else` is optional and must be the last clause.
+
+From `tutorial/06_select_case.bcl`:
+
+```
+' Numeric score to letter grade
+score% = 85
+select case score%
+case 100
+    PRINT "Perfect!"
+case 90 to 99
+    PRINT "A  — Excellent"
+case 80 to 89
+    PRINT "B  — Good"      ' score% = 85 matches here
+case 70 to 79
+    PRINT "C  — Satisfactory"
+case 60 to 69
+    PRINT "D  — Passing"
+case is >= 0
+    PRINT "F  — Fail"
+case else
+    PRINT "Invalid score"
+end select
+
+' String select — weekend / weekday
+day$ = "Saturday"
+select case day$
+case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
+    PRINT day$ + " is a weekday"
+case "Saturday", "Sunday"
+    PRINT day$ + " is a weekend"
+case else
+    PRINT "Unknown day: " + day$
+end select
+
+' IS comparisons
+temp% = -3
+select case temp%
+case is < 0
+    PRINT "Below freezing"
+case is < 10
+    PRINT "Cold"
+case is < 20
+    PRINT "Cool"
+case else
+    PRINT "Warm or hot"
+end select
+```
 
 Supported `case` forms:
 
@@ -444,40 +618,7 @@ end function
 The function name carries the return type suffix. Parameter names also carry
 type suffixes. Functions may have zero or more parameters.
 
-```
-function add%(left%, right%)
-    return left% + right%
-end function
-
-function fullName$(first$, last$)
-    return first$ + " " + last$
-end function
-
-function noReturn%()
-    PRINT "side effect"
-    return 0
-end function
-```
-
-### Calling Functions
-
-```
-total% = add%(10, 20)
-PRINT fullName$("John", "Smith")
-dummy% = noReturn%()
-```
-
-Functions called as standalone statements (not used in an expression) are
-written as expression statements:
-
-```
-processData%(buffer%(), count%)
-```
-
-### Return
-
-Every function must contain at least one `return` statement. Implicit returns
-at end-of-body are not supported.
+From `tutorial/07_functions.bcl`:
 
 ```
 function max%(a%, b%)
@@ -487,6 +628,60 @@ function max%(a%, b%)
         return b%
     end if
 end function
+
+function min%(a%, b%)
+    if a% < b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function clamp%(value%, lo%, hi%)
+    ' Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function
+
+function titleCase$(word$)
+    ' Capitalise first letter, lowercase remainder.
+    if LEN(word$) = 0 then
+        return ""
+    end if
+    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+end function
+```
+
+### Calling Functions
+
+```
+PRINT "max(4, 9)      = " + STR$(max%(4, 9))         ' 9
+PRINT "clamp(15,1,10) = " + STR$(clamp%(15, 1, 10))  ' 10
+PRINT "clamp(-3,1,10) = " + STR$(clamp%(-3, 1, 10))  ' 1
+PRINT titleCase$("bASCAL")                            ' Bascal
+```
+
+Functions called only for their side effects (discarding the return value)
+are written as expression statements. The result variable is overwritten but
+not read:
+
+```
+dummy% = sortArray%(data%(), N%)
+```
+
+### Return
+
+Every function must contain at least one `return` statement. Implicit returns
+at end-of-body are not supported.
+
+### Calling the Same Function Twice
+
+Each call writes the shared `fname_result` variable, so assignments must be
+made before the next call overwrites it. BASCAL handles this automatically:
+
+```
+a$ = repeat$("x", 3)   ' repeat_result$ = "xxx"  →  a$ = "xxx"
+b$ = repeat$("y", 2)   ' repeat_result$ = "yy"   →  b$ = "yy"
+PRINT a$ + " " + b$    ' xxx yy
 ```
 
 ### Restrictions
@@ -505,7 +700,7 @@ The compiler lowers each function call to:
 2. `GOSUB` to the function's generated label
 3. Assign the result from `fname_result`
 
-Array parameters are copy-in / copy-out: the array elements are copied into
+Array parameters use copy-in / copy-out: elements are copied into
 `fname_paramname(i)` before the call and back into the caller's array after.
 
 ---
@@ -515,7 +710,7 @@ Array parameters are copy-in / copy-out: the array elements are copied into
 ### Declaration
 
 ```
-DIM values%(100)
+DIM values%(100)    ' 101 elements: values%(0) .. values%(100)
 DIM names$(50)
 ```
 
@@ -531,24 +726,53 @@ PRINT values%(i%)
 
 ### Passing Arrays to Functions
 
-Declare the parameter with an empty `()`:
+Declare the parameter with the plain variable name — **no `()` in the
+declaration**. At the call site, write `arr%()` to signal that an array is
+being passed:
 
 ```
-function sum%(data%(), count%)
-    total% = 0
-    for i% = 0 to count% - 1
-        total% = total% + data%(i%)
+function insertionSort%(arr%, count%)
+    for i% = 1 to count% - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% >= 0 and arr%(j%) > key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        wend
+        arr%(j% + 1) = key%
     next i%
-    return total%
+    return 0
 end function
 
-DIM nums%(5)
-nums%(0) = 10 : nums%(1) = 20 : nums%(2) = 30
-result% = sum%(nums%(), 3)
+function indexOf%(arr%, count%, target%)
+    for i% = 0 to count% - 1
+        if arr%(i%) = target% then
+            return i%
+        end if
+    next i%
+    return -1
+end function
 ```
 
-Array arguments use copy-in / copy-out. The next non-array argument after an
-array parameter is used as the element count for the copy loop.
+From `tutorial/08_arrays.bcl`:
+
+```
+CONST N% = 6
+DIM data%(N%)
+data%(0) = 64 : data%(1) = 25 : data%(2) = 12
+data%(3) = 22 : data%(4) =  3 : data%(5) = 11
+
+dummy% = insertionSort%(data%(), N%)   ' sorts in place
+
+idx% = indexOf%(data%(), N%, 22)
+if idx% >= 0 then
+    PRINT "22 found at index " + STR$(idx%)
+end if
+```
+
+Array arguments use copy-in / copy-out. The compiler generates loops that
+copy elements into the function's parameter array before the `GOSUB` and
+copy them back after the `RETURN`.
 
 ---
 
@@ -557,13 +781,13 @@ array parameter is used as the element count for the copy loop.
 ### PRINT
 
 Prints one or more expressions to the screen. Expressions are separated by
-commas.
+commas or concatenated with `+`.
 
 ```
 PRINT "Hello, World!"
-PRINT name$, score%
 PRINT "Score: " + STR$(score%)
-PRINT                        ' blank line
+PRINT name$, score%
+PRINT                              ' blank line
 ```
 
 ### LPRINT
@@ -571,8 +795,8 @@ PRINT                        ' blank line
 Sends output to the printer (line printer). Same syntax as `PRINT`.
 
 ```
-LPRINT "Report for: " + date$
-LPRINT total%
+LPRINT "BASCAL screen demo printed at: " + DATE$
+LPRINT "Score: " + STR$(score%)
 ```
 
 ### INPUT
@@ -586,19 +810,28 @@ INPUT "Width, height: "; width%, height%
 ```
 
 A prompt string followed by `;` suppresses the newline after the prompt (the
-cursor remains on the same line). A prompt followed by `,` adds a `?` after the
-prompt and moves to the next line before input. The `;` form is recommended.
+cursor remains on the same line). A prompt followed by `,` adds a `?` and
+moves to the next print zone. The `;` form is recommended.
 
 Multiple variables may be listed; the user enters values separated by commas.
 
 ### LOCATE
 
-Positions the cursor at a specific row and column before printing.
+Positions the cursor before printing. From `tutorial/11_screen.bcl`:
 
 ```
-LOCATE 12, 1
-PRINT "Centred text"
-LOCATE row%, col%
+CLS
+COLOR 14, 1            ' bright yellow on blue
+LOCATE 1, 30
+PRINT "  BASCAL DEMO  "
+
+COLOR 7, 0             ' restore white on black
+LOCATE 3, 1
+PRINT "Screen I/O tutorial"
+
+LOCATE 5, 1 : COLOR 10 : PRINT "Green text"
+LOCATE 6, 1 : COLOR 12 : PRINT "Red text"
+LOCATE 7, 1 : COLOR  7 : PRINT "Normal text"
 ```
 
 Rows and columns are 1-based on standard 80×25 displays.
@@ -608,8 +841,9 @@ Rows and columns are 1-based on standard 80×25 displays.
 Sets the foreground and optional background colour.
 
 ```
-COLOR 14          ' bright yellow foreground
+COLOR 14          ' bright yellow foreground, background unchanged
 COLOR 15, 1       ' bright white on blue
+COLOR 7, 0        ' grey on black (restore defaults)
 ```
 
 Colour values follow CGA/EGA standard colour numbers (0–15 foreground,
@@ -635,18 +869,19 @@ CLS
 
 ## File Input and Output
 
+From `tutorial/10_files.bcl`:
+
 ### OPEN
 
 Opens a file for reading, writing, or appending.
 
 ```
-OPEN filename$ FOR INPUT AS #1
+OPEN filename$ FOR INPUT  AS #1
 OPEN filename$ FOR OUTPUT AS #2
 OPEN filename$ FOR APPEND AS #3
 ```
 
 The file number (`#1`, `#2`, etc.) is used in subsequent file I/O statements.
-Up to a BASIC runtime limit of concurrent files may be open simultaneously.
 
 ### CLOSE
 
@@ -656,101 +891,111 @@ Closes an open file.
 CLOSE #1
 ```
 
-### LINE INPUT
+### WRITE # and INPUT #
 
-Reads one complete line from a file into a string variable.
+`WRITE #` stores values in a quoted, comma-separated format that `INPUT #`
+can read back reliably:
 
 ```
-LINE INPUT #1, line$
+csvFile$ = "tutorial_scores.csv"
+
+OPEN csvFile$ FOR OUTPUT AS #1
+WRITE #1, "Alice", 95, "pass"
+WRITE #1, "Bob",   54, "fail"
+WRITE #1, "Carol", 78, "pass"
+CLOSE #1
+
+OPEN csvFile$ FOR APPEND AS #1
+WRITE #1, "Dave", 88, "pass"
+CLOSE #1
+
+PRINT "Records in " + csvFile$ + ":"
+OPEN csvFile$ FOR INPUT AS #1
+while EOF(1) = 0
+    INPUT #1, name$, score%, result$
+    PRINT "  " + name$ + ": " + STR$(score%) + "  [" + result$ + "]"
+wend
+CLOSE #1
+```
+
+Output:
+```
+Records in tutorial_scores.csv:
+  Alice: 95  [pass]
+  Bob: 54  [fail]
+  Carol: 78  [pass]
+  Dave: 88  [pass]
+```
+
+### LINE INPUT #
+
+Reads one complete line (including commas) from a file into a string variable:
+
+```
+OPEN csvFile$ FOR INPUT AS #1
+while EOF(1) = 0
+    LINE INPUT #1, line$
+    PRINT "  " + line$
+wend
+CLOSE #1
 ```
 
 ### PRINT # (File Print)
 
-Writes expressions to a file.
+Writes expressions to a file without the quoting that `WRITE #` adds:
 
 ```
-PRINT #2, name$
+PRINT #2, "Header line"
 PRINT #2, count%, value!
-```
-
-### WRITE #
-
-Writes expressions to a file in a format readable by `INPUT #`. Strings are
-enclosed in double quotes; values are separated by commas.
-
-```
-WRITE #2, name$, score%, level%
-```
-
-### INPUT # (File Input)
-
-Reads comma-separated values from a file into variables.
-
-```
-INPUT #1, name$, score%, level%
-```
-
-### Typical File Loop Pattern
-
-```
-OPEN "data.txt" FOR INPUT AS #1
-while EOF(1) = 0
-    LINE INPUT #1, line$
-    PRINT line$
-wend
-CLOSE #1
 ```
 
 ---
 
 ## Data Statements
 
-`DATA`, `READ`, and `RESTORE` provide an embedded data table that the program
-reads at run time.
+`DATA`, `READ`, and `RESTORE` provide an embedded data table read at run time.
+`DATA` statements may appear anywhere in the program body; the generated BASIC
+places them after `END`.
 
-### DATA
-
-Embeds literal values into the program. `DATA` statements may appear anywhere
-in the program body.
+From `tutorial/09_data.bcl`:
 
 ```
-DATA 10, 20, 30, 40, 50
-DATA "Alice", "Bob", "Carol"
+CONST NUM_CAPITALS% = 5
+
+DIM country$(NUM_CAPITALS%)
+DIM capital$(NUM_CAPITALS%)
+
+for i% = 1 to NUM_CAPITALS%
+    READ country$(i%), capital$(i%)
+next i%
+
+PRINT "Country         Capital"
+PRINT "--------------- ---------------"
+for i% = 1 to NUM_CAPITALS%
+    PRINT country$(i%) + "        " + capital$(i%)
+next i%
+
+' RESTORE rewinds to the first DATA element
+RESTORE
+READ firstCountry$, firstCapital$
+PRINT "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
+
+END
+
+DATA "France",  "Paris"
+DATA "Germany", "Berlin"
+DATA "Japan",   "Tokyo"
+DATA "Brazil",  "Brasilia"
+DATA "Egypt",   "Cairo"
 ```
-
-### READ
-
-Reads the next value(s) from the `DATA` stream into variables.
-
-```
-READ value%
-READ name$, score%
-```
-
-Values are read in the order `DATA` statements appear in the generated output.
 
 ### RESTORE
 
 Resets the `DATA` pointer to the beginning (or to a specific line number).
 
 ```
-RESTORE
-RESTORE 1000
-```
-
-### Example
-
-```
-RESTORE
-for i% = 1 to 3
-    READ name$, score%
-    PRINT name$ + ": " + STR$(score%)
-next i%
-END
-
-DATA "Alice", 95
-DATA "Bob", 87
-DATA "Carol", 91
+RESTORE         ' rewind to the first DATA
+RESTORE 1000    ' rewind to the DATA at line 1000
 ```
 
 ---
@@ -759,11 +1004,25 @@ DATA "Carol", 91
 
 ### SWAP
 
-Exchanges the values of two variables.
+Exchanges the values of two variables — no explicit temporary needed.
+
+From `tutorial/09_data.bcl`:
 
 ```
+a% = 42
+b% = 17
+PRINT "Before SWAP: a=" + STR$(a%) + " b=" + STR$(b%)
 SWAP a%, b%
-SWAP names$(i%), names$(j%)
+PRINT "After SWAP:  a=" + STR$(a%) + " b=" + STR$(b%)
+' Before SWAP: a=42 b=17
+' After SWAP:  a=17 b=42
+```
+
+SWAP works on strings and array elements too:
+
+```
+SWAP first$, last$               ' exchange string variables
+SWAP country$(i%), country$(j%)  ' exchange array elements (used in bubble sort)
 ```
 
 ### RANDOMIZE
@@ -772,22 +1031,19 @@ Seeds the random number generator. With no argument, the runtime may prompt
 for a seed or use a default.
 
 ```
-RANDOMIZE
-RANDOMIZE TIMER
-RANDOMIZE seed%
+RANDOMIZE           ' prompt or default
+RANDOMIZE TIMER     ' time-based seed for different sequences each run
+RANDOMIZE 99        ' fixed seed for reproducible output
 ```
 
 ### GOTO
 
-Transfers control to a line number.
+Transfers control to a line number. Prefer `if`, loops, and functions;
+`GOTO` is primarily useful for error handlers.
 
 ```
 GOTO 1000
 ```
-
-Using `GOTO` with literal line numbers is valid but bypasses BASCAL's
-structured constructs. Prefer `if`, loops, and functions. `GOTO` is primarily
-useful for error handlers.
 
 ### GOSUB / RETURN (BASIC-level)
 
@@ -800,12 +1056,11 @@ GOSUB 2000
 
 ### ON ... GOTO / ON ... GOSUB
 
-Computed branch: transfers to one of several targets based on an integer
-expression. The expression selects the *n*th target (1-based).
+Computed branch: the integer expression selects the *n*th target (1-based).
 
 ```
 ON choice% GOTO 100, 200, 300
-ON mode% GOSUB 500, 600, 700
+ON mode%   GOSUB 500, 600, 700
 ```
 
 If the expression evaluates to 0 or exceeds the number of targets, execution
@@ -813,8 +1068,8 @@ continues with the next statement.
 
 ### STOP
 
-Terminates the program immediately (equivalent to `END` in most BASIC
-dialects; may invoke the debugger in some implementations).
+Terminates the program immediately; may invoke the debugger in some
+implementations.
 
 ```
 STOP
@@ -830,8 +1085,8 @@ SYSTEM
 
 ### END
 
-Signals the end of the main program body. `END` must appear at the logical end
-of the main program. Functions are emitted after `END` in the generated output.
+Signals the end of the main program body. Functions are emitted after `END`
+in the generated output.
 
 ```
 END
@@ -844,13 +1099,33 @@ END
 BASCAL supports multi-file projects through `require` (and its alias `import`).
 Dependencies are declared at the top of the file, before any statements.
 
+From `tutorial/12_require.bcl` — a program that uses a statistics library:
+
 ```
-require com.bascal.sort.bubbleSort
-require com.bascal.io.readline
-import  com.vendor.utils.strings
+require stats
+
+CONST N% = 8
+DIM scores%(N%)
+
+scores%(0) = 74 : scores%(1) = 91 : scores%(2) = 63 : scores%(3) = 88
+scores%(4) = 55 : scores%(5) = 97 : scores%(6) = 72 : scores%(7) = 84
+
+PRINT "Mean:   " + STR$(mean!(scores%(), N%))
+PRINT "Max:    " + STR$(maximum%(scores%(), N%))
+PRINT "Min:    " + STR$(minimum%(scores%(), N%))
+PRINT "Range:  " + STR$(rangeOf%(scores%(), N%))
+END
 ```
 
-`require` and `import` are identical in behaviour.
+Compile with `-L tutorial/lib` so that `require stats` resolves to
+`tutorial/lib/stats.bcl`:
+
+```
+bcc tutorial/12_require.bcl -L tutorial/lib
+```
+
+`tutorial/lib/stats.bcl` defines `mean!`, `maximum%`, `minimum%`, and
+`rangeOf%` — all merged into the single generated `.bas` output.
 
 ### Path Resolution
 
@@ -858,7 +1133,8 @@ The dot-separated path is converted to a file path by replacing each `.` with
 a directory separator and appending `.bcl`:
 
 ```
-com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
+require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
+require stats                       →  stats.bcl
 ```
 
 The compiler searches for the file in:
@@ -888,7 +1164,7 @@ By convention, library modules (files loaded via `require`) should:
 In classic BASCOM programs, multiple programs chained together with `CHAIN`
 share variables through `COMMON` declarations. For this to work correctly,
 every program in the chain must declare **identical** `COMMON` lists — the
-variable positions in the COMMON block must match exactly.
+variable positions in the `COMMON` block must match exactly.
 
 BASCAL coordinates `COMMON` through suite files. A suite file contains only
 `common` declarations; programs that belong to the suite reference it with a
@@ -899,10 +1175,17 @@ BASCAL coordinates `COMMON` through suite files. A suite file contains only
 A suite file is a `.bcl` file containing only `common` declarations (and
 comments). The file name, without extension, is the suite name.
 
+From `tutorial/13_suite/shared.bcl`:
+
 ```
-' arcade.bcl — suite definition for the ARCADE programs
-common score%, level%, playerName$
-common hiScore%
+/*
+ * Suite file for Tutorial 13 — COMMON / CHAIN.
+ *
+ * Every program that begins with "program name suite shared" receives
+ * an identical COMMON block at the top of its generated BASIC, so the
+ * listed variables survive a CHAIN to the next program.
+ */
+common count%, label$
 ```
 
 Rules for suite files:
@@ -938,54 +1221,57 @@ COMMON hiScore%
 ### Program Declaration with Suite
 
 ```
-program menu suite arcade
+program start suite shared
 ```
 
 When a suite name is present, the compiler:
-1. Searches for `arcade.bcl` in the source file's directory (then `-L` paths).
+1. Searches for `shared.bcl` in the source file's directory (then `-L` paths).
 2. Validates that the suite file contains only `common` declarations.
 3. Emits the `COMMON` lines at the very top of the generated `.bas` file,
    before any other output.
 
 ### Using the Suite
 
-Create one suite file and reference it from every program in the set:
+From `tutorial/13_suite/` — two programs that share `count%` and `label$`:
 
-**`arcade.bcl`** (suite file):
+**`shared.bcl`** (suite file):
 ```
-/* Shared variables for all ARCADE suite programs. */
-common score%, level%, playerName$
-common hiScore%
+common count%, label$
 ```
 
-**`menu.bcl`**:
+**`start.bcl`** (program 1):
 ```
-program menu suite arcade
+program start suite shared
 
-INPUT "Your name: "; playerName$
-score% = 0
-level% = 1
-PRINT "Welcome, " + playerName$
+label$ = "Counter demo"
+count% = 0
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+
+PRINT "Initialised: " + label$
+PRINT "Count after 3 increments: " + STR$(count%)
+
+/* CHAIN "show.bas" */
 END
 ```
 
-**`game.bcl`**:
+**`show.bcl`** (program 2):
 ```
-program game suite arcade
+program show suite shared
 
-score% = score% + 50 * level%
-level% = level% + 1
-PRINT "Score: " + STR$(score%)
+PRINT "Label:  " + label$
+PRINT "Count:  " + STR$(count%)
 END
 ```
 
-Both `menu.bas` and `game.bas` will begin with:
+Both `start.bas` and `show.bas` begin with:
+
 ```
-COMMON score%, level%, playerName$
-COMMON hiScore%
+COMMON count%, label$
 ```
 
-ensuring that `CHAIN "game.bas"` from `menu.bas` leaves the variables in the
+ensuring that `CHAIN "show.bas"` from `start.bas` leaves the variables in the
 correct slots.
 
 ### Restrictions
@@ -1044,16 +1330,20 @@ semantics (see [Operators](#operators-and-expressions)).
 ### While Lowering
 
 ```
-while i% < 10
-    i% = i% + 1
+p% = 1
+while p% < 100
+    PRINT STR$(p%)
+    p% = p% * 2
 wend
 ```
 
 Becomes:
 
 ```
-10 IF (i% < 10) = 0 THEN GOTO 20
-    i% = i% + 1
+p% = 1
+10 IF (p% < 100) = 0 THEN GOTO 20
+    PRINT STR$(p%)
+    p% = p% * 2
     GOTO 10
 20 REM END WHILE
 ```
@@ -1061,16 +1351,18 @@ Becomes:
 ### Do Lowering
 
 ```
-do while i% < 10
-    i% = i% + 1
+do while k% <= 3
+    PRINT STR$(k%)
+    k% = k% + 1
 loop
 ```
 
 Becomes:
 
 ```
-10 IF (i% < 10) = 0 THEN GOTO 20
-    i% = i% + 1
+10 IF (k% <= 3) = 0 THEN GOTO 20
+    PRINT STR$(k%)
+    k% = k% + 1
     GOTO 10
 20 REM END DO
 ```
@@ -1080,41 +1372,44 @@ Becomes:
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently:
 
 ```
-FOR i% = 1 TO 10
-    PRINT i%
+FOR i% = 1 TO 5
+    PRINT STR$(i%) + "^2 = " + STR$(i% * i%)
 NEXT i%
 ```
 
 ### Function Lowering
 
 ```
-function add%(left%, right%)
-    return left% + right%
+function clamp%(value%, lo%, hi%)
+    return max%(lo%, min%(value%, hi%))
 end function
 
-total% = add%(10, 20)
+result% = clamp%(15, 1, 10)
 ```
 
-Becomes:
+The calls to `max%` and `min%` inside `clamp%` are also lowered to GOSUBs.
+The outermost call produces:
 
 ```
-add_left% = 10
-add_right% = 20
-GOSUB 10
-total% = add_result%
+clamp_value% = 15
+clamp_lo%    = 1
+clamp_hi%    = 10
+GOSUB 100
+result% = clamp_result%
 ...
 END
 
-' function add%(left%, right%)
-10 add_result% = add_left% + add_right%
+' function clamp%(value%, lo%, hi%)
+100 ' (lowered body — calls max% and min% via GOSUB)
+    clamp_result% = ...
     RETURN
-' end function add%
+' end function clamp%
 ```
 
 ### Select Case Lowering
 
-`SELECT CASE` is lowered to a `IF`/`GOTO` dispatch chain. The select
-expression is stored in a temporary variable (`SEL_nnnn`) to avoid
+`SELECT CASE` is lowered to an `IF`/`GOTO` dispatch chain. The select
+expression is stored in a temporary variable (e.g., `BCC_T1%`) to avoid
 re-evaluation.
 
 ### Exit Statements
@@ -1155,6 +1450,7 @@ check covers the compiled binary.
 Multiple `-L` flags are supported:
 
 ```
+bcc tutorial/12_require.bcl -L tutorial/lib
 bcc main.bcl -L libs/sort -L libs/string
 ```
 
