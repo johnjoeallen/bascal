@@ -48,6 +48,7 @@ pub enum TokenKind {
     String(String),
     Comment(String),
     BlockComment(String),
+    Float(f64),
     Newline,
     LParen,
     RParen,
@@ -196,9 +197,26 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        Token {
-            kind: TokenKind::Number(value.parse().unwrap_or(0)),
-            pos,
+        if self.peek() == Some('.') && self.peek_at(1).is_some_and(|c| c.is_ascii_digit()) {
+            value.push('.');
+            self.advance();
+            while let Some(ch) = self.peek() {
+                if ch.is_ascii_digit() {
+                    value.push(ch);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            Token {
+                kind: TokenKind::Float(value.parse().unwrap_or(0.0)),
+                pos,
+            }
+        } else {
+            Token {
+                kind: TokenKind::Number(value.parse().unwrap_or(0)),
+                pos,
+            }
         }
     }
 

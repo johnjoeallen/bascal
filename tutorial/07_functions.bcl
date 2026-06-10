@@ -1,0 +1,71 @@
+// Tutorial 7 — Functions
+//
+// A BASCAL function is declared with FUNCTION ... END FUNCTION.
+// The function name carries the return type suffix.  Parameters
+// also carry type suffixes.  Every function must reach a RETURN.
+//
+// The compiler lowers each call to:
+//   1. Assign arguments to global variables  fname_paramname
+//   2. GOSUB to the function's generated label
+//   3. Copy  fname_result  into the destination variable
+//
+// Functions cannot call themselves recursively (parameters would be
+// overwritten).  Use an explicit stack array for recursive algorithms.
+
+/* Integer arithmetic functions */
+function max%(a%, b%)
+    if a% > b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function min%(a%, b%)
+    if a% < b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function clamp%(value%, lo%, hi%)
+    // Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function
+
+/* String functions */
+function repeat$(text$, n%)
+    // Concatenate text$ with itself n times.
+    result$ = ""
+    for i% = 1 to n%
+        result$ = result$ + text$
+    next i%
+    return result$
+end function
+
+function titleCase$(word$)
+    // Capitalise first letter, lowercase remainder.
+    // Relies on the BASIC runtime's UCASE$/LCASE$ built-ins.
+    if LEN(word$) = 0 then
+        return ""
+    end if
+    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+end function
+
+/* --- Exercise the functions --- */
+
+PRINT "max(4, 9) = "    + STR$(max%(4, 9))      // 9
+PRINT "min(4, 9) = "    + STR$(min%(4, 9))      // 4
+PRINT "clamp(15,1,10) = " + STR$(clamp%(15, 1, 10))  // 10
+PRINT "clamp(-3,1,10) = " + STR$(clamp%(-3, 1, 10))  // 1
+PRINT "clamp(7,1,10)  = " + STR$(clamp%(7, 1, 10))   // 7
+
+PRINT repeat$("ab", 4)       // abababab
+PRINT titleCase$("bASCAL")   // Bascal
+
+/* Functions chained in expressions */
+lo% = min%(max%(0, -5), 100)   // max(0,-5)=0, min(0,100)=0
+PRINT "lo = " + STR$(lo%)
+
+END

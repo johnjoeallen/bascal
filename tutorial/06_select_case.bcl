@@ -1,0 +1,76 @@
+// Tutorial 6 — SELECT CASE
+//
+// SELECT CASE tests one expression against multiple patterns.  The
+// compiler evaluates the expression once, stores it in a temporary
+// variable, and emits an IF/GOTO dispatch chain.
+//
+// Pattern forms:
+//   case value               — exact match
+//   case v1, v2, v3          — any of the listed values
+//   case low to high         — inclusive range
+//   case is <op> value       — comparison (=  <>  <  <=  >  >=)
+//   case else                — default; must be the last clause
+
+/* Integer select: convert numeric score to letter grade */
+score% = 85
+
+select case score%
+case 100
+    PRINT "Perfect!"
+case 90 to 99
+    PRINT "A  — Excellent"
+case 80 to 89
+    PRINT "B  — Good"      // score% = 85 matches here
+case 70 to 79
+    PRINT "C  — Satisfactory"
+case 60 to 69
+    PRINT "D  — Passing"
+case is >= 0
+    PRINT "F  — Fail"
+case else
+    PRINT "Invalid score"
+end select
+
+/* String select: day-of-week classification */
+day$ = "Saturday"
+
+select case day$
+case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
+    PRINT day$ + " is a weekday"
+case "Saturday", "Sunday"
+    PRINT day$ + " is a weekend"   // matches here
+case else
+    PRINT "Unknown day: " + day$
+end select
+
+/* IS comparisons on temperature */
+temp% = -3
+
+select case temp%
+case is < 0
+    PRINT "Below freezing (" + STR$(temp%) + "°)"  // matches here
+case is < 10
+    PRINT "Cold (" + STR$(temp%) + "°)"
+case is < 20
+    PRINT "Cool (" + STR$(temp%) + "°)"
+case is < 30
+    PRINT "Warm (" + STR$(temp%) + "°)"
+case else
+    PRINT "Hot (" + STR$(temp%) + "°)"
+end select
+
+/* Multi-value list on a menu choice */
+choice% = 2
+
+select case choice%
+case 1
+    PRINT "New game"
+case 2, 3
+    PRINT "Load game"   // choice% = 2 matches
+case 4
+    PRINT "Options"
+case else
+    PRINT "Quit"
+end select
+
+END

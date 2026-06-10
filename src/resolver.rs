@@ -189,7 +189,7 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
         Expr::Binary { left, right, .. } => {
             expr_calls_function(left, target) || expr_calls_function(right, target)
         }
-        Expr::Integer(_) | Expr::String(_) | Expr::Ident(_) => false,
+        Expr::Integer(_) | Expr::Float(_) | Expr::String(_) | Expr::Ident(_) => false,
     }
 }
 

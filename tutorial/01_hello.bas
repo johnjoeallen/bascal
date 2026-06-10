@@ -1,0 +1,22 @@
+' BASCAL generated BASIC
+' Functions are lowered to global variables, labels, and GOSUB
+
+' Tutorial 1 — Hello, World
+' 
+' The simplest BASCAL program.  PRINT writes a line to the screen.
+' END marks the bottom of the main program body; every program needs one.
+' 
+' Three comment styles are available:
+' '  single-line (BASIC style, passed through to generated output)
+' // single-line (C style, same behaviour as ')
+' /* ... */  block comment, each line becomes a ' comment in the output
+
+PRINT "Hello, World!"
+PRINT "Welcome to BASCAL."
+' PRINT "This line is commented out."
+
+' Expected output:
+' Hello, World!
+' Welcome to BASCAL.
+
+END

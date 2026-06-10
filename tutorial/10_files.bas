@@ -1,0 +1,55 @@
+' BASCAL generated BASIC
+' Functions are lowered to global variables, labels, and GOSUB
+
+' Tutorial 10 — File Input and Output
+' 
+' BASCAL supports sequential file I/O through OPEN, CLOSE, and the
+' file-channel variants of PRINT, INPUT, LINE INPUT, and WRITE.
+' 
+' OPEN filename$ FOR INPUT  AS #n   — read existing file
+' OPEN filename$ FOR OUTPUT AS #n   — create or overwrite
+' OPEN filename$ FOR APPEND AS #n   — add to end of existing file
+' CLOSE #n                          — flush and release the file
+' 
+' PRINT #n, expr[, ...]   — write values separated by spaces
+' WRITE #n, expr[, ...]   — write quoted strings, comma-separated
+' (produces data that INPUT # can read back)
+' LINE INPUT #n, var$     — read one complete line into var$
+' INPUT #n, var[, ...]    — read comma-delimited values (matches WRITE)
+' EOF(n)                  — returns non-zero when file n is exhausted
+
+csvFile$ = "tutorial_scores.csv"
+
+' Write three records
+OPEN csvFile$ FOR OUTPUT AS #1
+WRITE #1, "Alice", 95, "pass"
+WRITE #1, "Bob", 54, "fail"
+WRITE #1, "Carol", 78, "pass"
+CLOSE #1
+
+' Append a fourth record
+OPEN csvFile$ FOR APPEND AS #1
+WRITE #1, "Dave", 88, "pass"
+CLOSE #1
+
+' Read and print every record
+PRINT ("All records in " + csvFile$) + ":"
+OPEN csvFile$ FOR INPUT AS #1
+10 IF (EOF(1) = 0) = 0 THEN GOTO 20
+    INPUT #1, name$, score%, result$
+    PRINT ((((("  " + name$) + ": ") + STR$(score%)) + "  [") + result$) + "]"
+    GOTO 10
+20 REM END WHILE
+CLOSE #1
+
+' Read the file line by line using LINE INPUT
+PRINT "Raw lines:"
+OPEN csvFile$ FOR INPUT AS #1
+30 IF (EOF(1) = 0) = 0 THEN GOTO 40
+    LINE INPUT #1, line$
+    PRINT "  " + line$
+    GOTO 30
+40 REM END WHILE
+CLOSE #1
+
+END

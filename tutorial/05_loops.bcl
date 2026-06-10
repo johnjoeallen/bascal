@@ -1,0 +1,102 @@
+// Tutorial 5 — Loops: FOR, WHILE, DO
+//
+// BASCAL provides three loop constructs:
+//
+//   FOR var = start TO end [STEP n] ... NEXT [var]
+//     Counted loop.  STEP defaults to 1; use negative STEP to count down.
+//     EXIT FOR jumps past NEXT immediately.
+//
+//   WHILE condition ... WEND
+//     Condition tested before each iteration.
+//     EXIT WHILE jumps past WEND immediately.
+//
+//   DO [WHILE/UNTIL cond] ... LOOP [WHILE/UNTIL cond]
+//     Four forms depending on where the condition is placed.
+//     EXIT DO jumps past LOOP immediately.
+
+/* --- FOR / NEXT --- */
+PRINT "Squares 1..5:"
+for i% = 1 to 5
+    PRINT "  " + STR$(i%) + "^2 = " + STR$(i% * i%)
+next i%
+
+/* Negative STEP — count down */
+PRINT "Countdown:"
+for n% = 3 to 1 step -1
+    PRINT "  " + STR$(n%)
+next n%
+PRINT "  Go!"
+
+/* EXIT FOR — stop early */
+PRINT "First even > 4:"
+for i% = 1 to 20
+    if i% > 4 and (i% / 2) * 2 = i% then
+        PRINT "  " + STR$(i%)
+        exit for
+    end if
+next i%
+
+/* --- WHILE / WEND --- */
+PRINT "Powers of 2 under 100:"
+p% = 1
+while p% < 100
+    PRINT "  " + STR$(p%)
+    p% = p% * 2
+wend
+
+/* EXIT WHILE */
+PRINT "Collatz from 27 (first 8 steps):"
+n% = 27
+steps% = 0
+while n% <> 1
+    if steps% = 8 then
+        PRINT "  ..."
+        exit while
+    end if
+    if (n% / 2) * 2 = n% then  // even
+        n% = n% / 2
+    else
+        n% = n% * 3 + 1
+    end if
+    steps% = steps% + 1
+    PRINT "  " + STR$(n%)
+wend
+
+/* --- DO / LOOP variants --- */
+
+// DO WHILE — test before body
+PRINT "DO WHILE:"
+k% = 1
+do while k% <= 3
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
+loop
+
+// DO UNTIL — enter while condition is false
+PRINT "DO UNTIL:"
+k% = 1
+do until k% > 3
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
+loop
+
+// DO ... LOOP WHILE — body runs at least once
+PRINT "DO...LOOP WHILE (body runs once even though false):"
+k% = 99
+do
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
+loop while k% <= 3
+
+// EXIT DO
+PRINT "EXIT DO at 3:"
+k% = 1
+do
+    if k% = 3 then
+        exit do
+    end if
+    PRINT "  " + STR$(k%)
+    k% = k% + 1
+loop
+
+END

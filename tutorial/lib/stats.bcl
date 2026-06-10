@@ -1,0 +1,41 @@
+// stats.bcl — basic statistics library for the BASCAL tutorial.
+// Loaded by tutorial/12_require.bcl via:
+//   require stats
+//
+// Provides: mean!, maximum%, minimum%, rangeOf%
+
+function mean!(data%, count%)
+    // Arithmetic mean of data%(0..count%-1).
+    sum% = 0
+    for i% = 0 to count% - 1
+        sum% = sum% + data%(i%)
+    next i%
+    return sum% / count%
+end function
+
+function maximum%(data%, count%)
+    // Largest element in data%(0..count%-1).
+    best% = data%(0)
+    for i% = 1 to count% - 1
+        if data%(i%) > best% then
+            best% = data%(i%)
+        end if
+    next i%
+    return best%
+end function
+
+function minimum%(data%, count%)
+    // Smallest element in data%(0..count%-1).
+    best% = data%(0)
+    for i% = 1 to count% - 1
+        if data%(i%) < best% then
+            best% = data%(i%)
+        end if
+    next i%
+    return best%
+end function
+
+function rangeOf%(data%, count%)
+    // Difference between maximum and minimum.
+    return maximum%(data%(), count%) - minimum%(data%(), count%)
+end function

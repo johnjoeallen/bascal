@@ -2,20 +2,24 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+fn is_library_path(path: &Path) -> bool {
+    path.components().any(|c| {
+        matches!(c.as_os_str().to_str(), Some("com" | "lib"))
+    })
+}
+
 #[test]
 fn compiles_every_example_bcl_file() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let examples_dir = repo_root.join("examples");
+    let tutorial_dir = repo_root.join("tutorial");
     let output_dir = repo_root.join("output");
 
-    let mut examples = collect_example_sources(&examples_dir)
+    let mut examples: Vec<PathBuf> = collect_example_sources(&examples_dir)
         .into_iter()
-        .filter(|path| {
-            !path
-                .components()
-                .any(|component| component.as_os_str() == "com")
-        })
-        .collect::<Vec<_>>();
+        .chain(collect_example_sources(&tutorial_dir))
+        .filter(|path| !is_library_path(path))
+        .collect();
     examples.sort();
 
     assert!(
@@ -127,7 +131,14 @@ fn collect_example_sources_recursive(dir: &Path, sources: &mut Vec<PathBuf>) {
 }
 
 fn compile_example(path: &Path, examples_dir: &Path, output_dir: &Path) {
-    let options = bcc::CompileOptions::new();
+    let mut options = bcc::CompileOptions::new();
+    // Make any sibling `lib/` directory available as a search root.
+    if let Some(parent) = path.parent() {
+        let lib_dir = parent.join("lib");
+        if lib_dir.is_dir() {
+            options.library_dirs.push(lib_dir);
+        }
+    }
     let output = match bcc::compile_file(path, &options) {
         Ok(o) => o,
         Err(ref diagnostics)

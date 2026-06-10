@@ -788,6 +788,11 @@ impl Parser {
                 self.advance();
                 Expr::Integer(value)
             }
+            TokenKind::Float(value) => {
+                let value = *value;
+                self.advance();
+                Expr::Float(value)
+            }
             TokenKind::String(value) => {
                 let value = value.clone();
                 self.advance();

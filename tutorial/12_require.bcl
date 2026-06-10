@@ -1,0 +1,39 @@
+// Tutorial 12 — REQUIRE and multi-file projects
+//
+// REQUIRE loads another .bcl file and merges its functions into the
+// generated output.  The path is dot-separated and maps to a file:
+//
+//   require stats   →  stats.bcl  (in the same directory or a -L path)
+//   require com.bascal.sort.bubbleSort
+//                   →  com/bascal/sort/bubbleSort.bcl
+//
+// All required functions become part of the single generated .bas file.
+// The original require line is preserved as a comment in the output.
+//
+// Run with:
+//   bcc tutorial/12_require.bcl -L tutorial/lib
+//
+// The -L flag adds tutorial/lib/ to the search path so that
+//   require stats   resolves to  tutorial/lib/stats.bcl
+
+require stats
+
+CONST N% = 8
+DIM scores%(N%)
+
+scores%(0) = 74
+scores%(1) = 91
+scores%(2) = 63
+scores%(3) = 88
+scores%(4) = 55
+scores%(5) = 97
+scores%(6) = 72
+scores%(7) = 84
+
+PRINT "Scores: 74 91 63 88 55 97 72 84"
+PRINT "Mean:   "  + STR$(mean!(scores%(), N%))
+PRINT "Max:    "  + STR$(maximum%(scores%(), N%))
+PRINT "Min:    "  + STR$(minimum%(scores%(), N%))
+PRINT "Range:  "  + STR$(rangeOf%(scores%(), N%))
+
+END

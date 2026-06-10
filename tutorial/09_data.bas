@@ -1,0 +1,68 @@
+' BASCAL generated BASIC
+' Functions are lowered to global variables, labels, and GOSUB
+
+' Tutorial 9 — DATA, READ, RESTORE, SWAP, RANDOMIZE
+' 
+' DATA embeds literal values directly in the program.  READ consumes
+' them in sequence.  RESTORE rewinds the pointer so data can be read
+' again.  The DATA statements may appear anywhere in the program body;
+' the generated BASIC places them after END.
+' 
+' SWAP exchanges two variables atomically — no temporary needed.
+' 
+' RANDOMIZE seeds the BASIC RND function.  Pass TIMER for a
+' time-based seed; pass a literal for reproducible results.
+
+CONST NUM_CAPITALS% = 5
+
+DIM country$(NUM_CAPITALS%)
+DIM capital$(NUM_CAPITALS%)
+
+' Load the lookup table
+FOR i% = 1 TO NUM_CAPITALS%
+    READ country$(i%), capital$(i%)
+NEXT i%
+
+' Print the table
+PRINT "Country         Capital"
+PRINT "--------------- ---------------"
+FOR i% = 1 TO NUM_CAPITALS%
+    PRINT (country$(i%) + "        ") + capital$(i%)
+NEXT i%
+
+' RESTORE lets us re-read from the beginning
+RESTORE
+READ firstCountry$, firstCapital$
+PRINT (("First entry re-read: " + firstCountry$) + " -> ") + firstCapital$
+
+' SWAP — sort two variables without a temp
+a% = 42
+b% = 17
+PRINT (("Before SWAP: a=" + STR$(a%)) + " b=") + STR$(b%)
+SWAP a%, b%
+PRINT (("After SWAP:  a=" + STR$(a%)) + " b=") + STR$(b%)
+
+' Bubble-sort the country array using SWAP
+FOR pass% = 1 TO NUM_CAPITALS% - 1
+    FOR i% = 1 TO NUM_CAPITALS% - pass%
+        IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 10
+            SWAP country$(i%), country$(i% + 1)
+            SWAP capital$(i%), capital$(i% + 1)
+10 REM END IF
+    NEXT i%
+NEXT pass%
+PRINT "Sorted by country:"
+FOR i% = 1 TO NUM_CAPITALS%
+    PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
+NEXT i%
+
+' RANDOMIZE — seed with a literal for reproducible output
+RANDOMIZE 99
+
+END
+
+DATA "France", "Paris"
+DATA "Germany", "Berlin"
+DATA "Japan", "Tokyo"
+DATA "Brazil", "Brasilia"
+DATA "Egypt", "Cairo"

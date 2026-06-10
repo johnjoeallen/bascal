@@ -606,6 +606,7 @@ impl CodeGenerator {
     ) -> (Vec<String>, String) {
         match node {
             Expr::Integer(value) => (Vec::new(), value.to_string()),
+            Expr::Float(value) => (Vec::new(), value.to_string()),
             Expr::String(value) => (Vec::new(), format!("\"{}\"", escape_string(value))),
             Expr::Ident(ident) => (Vec::new(), self.ident(ident, current_function)),
             Expr::ArrayRef { name, indices } => {
@@ -1029,6 +1030,7 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
     match expr {
         Expr::String(_) => "$",
         Expr::Integer(_) => "%",
+        Expr::Float(_) => "!",
         Expr::Ident(ident) | Expr::Call { name: ident, .. } | Expr::ArrayRef { name: ident, .. } => {
             match ident.suffix {
                 Some(TypeSuffix::String) => "$",
