@@ -13,11 +13,11 @@
 ' BASCAL keeps everything global, so the reference list is a small shared
 ' buffer that every helper can see.
 
-' Embedded sample input matching sample/input.bas.
-' The example prints the transformed listing to stdout, which keeps the first
-' version simple while BASCAL grows file I/O support.
+' REMLINE works on an input BASIC listing and writes a cleaned version.
+' The sample run reads examples/remline/sample/input.bas and writes
+' examples/remline/sample/output.bas.
 ' In classic BASIC terms, this is the same kind of cleanup pass that utilities
-' like REMLINE.BAS did for line-numbered source listings.
+' like REMLINE.BAS performed on line-numbered source listings.
 
 DIM rawLine$(1000)
 DIM lineText$(1000)
@@ -26,14 +26,22 @@ DIM keepLine%(1000)
 DIM refNumber%(1000)
 
 ' REMLINE demo driver.
-' The first version uses embedded sample data because file I/O is not yet part
-' of the BASCAL runtime surface.
+' This version reads a line-numbered BASIC file and writes a cleaned copy.
 ' The dependency graph is still real: the driver pulls in parsing, reference
 ' collection, and string helpers through BASCAL's path-style require syntax.
 
+inputFile$ = "examples/remline/sample/input.bas"
+outputFile$ = "examples/remline/sample/output.bas"
+
+PRINT "BASCAL REMLINE example"
+PRINT "Input: " + inputFile$
+PRINT "Output: " + outputFile$
+
 GOSUB 350
-GOSUB 380
-GOSUB 410
+GOSUB 400
+GOSUB 430
+
+PRINT "Done"
 END
 
 ' function trimLeft$(text$)
@@ -64,15 +72,18 @@ END
     trimleft_text$ = startswithkeyword_text$
     GOSUB 10
     startswithkeyword_text$ = trimleft_result$
+    startswithkeyword_keyword$ = startswithkeyword_keyword$
+    upper_text$ = startswithkeyword_text$
+    GOSUB 50
+    startswithkeyword_text$ = upper_result$
+    upper_text$ = startswithkeyword_keyword$
+    GOSUB 50
+    startswithkeyword_keyword$ = upper_result$
     IF (len(startswithkeyword_text$) < len(startswithkeyword_keyword$)) = 0 THEN GOTO 70
         startswithkeyword_result% = 0
         RETURN
 70 REM END IF
-    upper_text$ = left$(startswithkeyword_text$, len(startswithkeyword_keyword$))
-    GOSUB 50
-    upper_text$ = startswithkeyword_keyword$
-    GOSUB 50
-    startswithkeyword_result% = upper_result$ = upper_result$
+    startswithkeyword_result% = left$(startswithkeyword_text$, len(startswithkeyword_keyword$)) = startswithkeyword_keyword$
     RETURN
 ' end function startsWithKeyword%
 
@@ -241,82 +252,75 @@ END
     RETURN
 ' end function scanKeywordRefs%
 
-' function loadSample%()
-350 ' Reset the small fixed-size buffers used by the sample.
+' function loadLines%()
+350 ' Reset the fixed-size buffers used by the sample.
     refCount% = 0
-    lineCount% = 13
+    lineCount% = 0
 
-    ' A tiny but representative BASIC listing. Line numbers that are branch
-    ' targets must survive the cleanup pass.
-    rawLine$(1) = "10 REM SAMPLE BASIC PROGRAM"
-    rawLine$(2) = "20 GOSUB 1000"
-    rawLine$(3) = "30 FOR I = 1 TO 5"
-    rawLine$(4) = "40 PRINT I"
-    rawLine$(5) = "50 NEXT I"
-    rawLine$(6) = "60 IF I > 5 THEN 200"
-    rawLine$(7) = (("70 PRINT " + CHR$(34)) + "SHOULD NOT HAPPEN") + CHR$(34)
-    rawLine$(8) = "80 GOTO 300"
-    rawLine$(9) = (("200 PRINT " + CHR$(34)) + "DONE") + CHR$(34)
-    rawLine$(10) = "300 END"
-    rawLine$(11) = "1000 REM HELPER ROUTINE"
-    rawLine$(12) = (("1010 PRINT " + CHR$(34)) + "IN SUBROUTINE") + CHR$(34)
-    rawLine$(13) = "1020 RETURN"
-
-    loadsample_i% = 1
-360 IF (loadsample_i% <= lineCount%) = 0 THEN GOTO 370
-        ' First pass: split each input line into its numeric prefix and the
-        ' remaining source text.
-        parselinenumber_text$ = rawLine$(loadsample_i%)
-        GOSUB 80
-        lineNumber%(loadsample_i%) = parselinenumber_result%
-        striplinenumber_text$ = rawLine$(loadsample_i%)
-        GOSUB 140
-        lineText$(loadsample_i%) = striplinenumber_result$
-        keepLine%(loadsample_i%) = 0
-        loadsample_i% = loadsample_i% + 1
+    ' Read each line of the source listing into memory.
+    OPEN inputFile$ FOR INPUT AS #1
+360 IF (EOF(1) = 0) = 0 THEN GOTO 370
+        lineCount% = lineCount% + 1
+        LINE INPUT #1, rawLine$(lineCount%)
         GOTO 360
 370 REM END WHILE
+    CLOSE #1
 
-    loadsample_result% = 0
+    ' Split each input line into its numeric prefix and remaining source text.
+    loadlines_i% = 1
+380 IF (loadlines_i% <= lineCount%) = 0 THEN GOTO 390
+        parselinenumber_text$ = rawLine$(loadlines_i%)
+        GOSUB 80
+        lineNumber%(loadlines_i%) = parselinenumber_result%
+        striplinenumber_text$ = rawLine$(loadlines_i%)
+        GOSUB 140
+        lineText$(loadlines_i%) = striplinenumber_result$
+        keepLine%(loadlines_i%) = 0
+        loadlines_i% = loadlines_i% + 1
+        GOTO 380
+390 REM END WHILE
+
+    loadlines_result% = 0
     RETURN
-' end function loadSample%
+' end function loadLines%
 
 ' function collectAllRefs%()
-380 ' Second pass: scan each line for direct numeric branch targets.
+400 ' Scan each line for direct numeric branch targets.
     refCount% = 0
     collectallrefs_i% = 1
-390 IF (collectallrefs_i% <= lineCount%) = 0 THEN GOTO 400
+410 IF (collectallrefs_i% <= lineCount%) = 0 THEN GOTO 420
         collectrefs_line$ = lineText$(collectallrefs_i%)
         GOSUB 310
         keepLine%(collectallrefs_i%) = collectrefs_result%
         collectallrefs_i% = collectallrefs_i% + 1
-        GOTO 390
-400 REM END WHILE
+        GOTO 410
+420 REM END WHILE
     collectallrefs_result% = 0
     RETURN
 ' end function collectAllRefs%
 
 ' function transformLines%()
-410 ' Final pass: emit a cleaned listing. Referenced targets keep their line
-    ' numbers; unreferenced ordinary lines are written without them.
+430 ' Emit a cleaned listing to the configured output file.
+    OPEN outputFile$ FOR OUTPUT AS #2
     transformlines_i% = 1
-420 IF (transformlines_i% <= lineCount%) = 0 THEN GOTO 470
-        IF (lineNumber%(transformlines_i%) > 0) = 0 THEN GOTO 450
+440 IF (transformlines_i% <= lineCount%) = 0 THEN GOTO 490
+        IF (lineNumber%(transformlines_i%) > 0) = 0 THEN GOTO 470
             isreferenced_lineno% = lineNumber%(transformlines_i%)
             GOSUB 270
-            IF ((keepLine%(transformlines_i%) <> 0) OR (isreferenced_result% <> 0)) = 0 THEN GOTO 430
+            IF ((keepLine%(transformlines_i%) <> 0) OR (isreferenced_result% <> 0)) = 0 THEN GOTO 450
                 trimleft_text$ = STR$(lineNumber%(transformlines_i%))
                 GOSUB 10
-                PRINT (trimleft_result$ + " ") + lineText$(transformlines_i%)
-                GOTO 440
-430 PRINT lineText$(transformlines_i%)
-440 REM END IF
-            GOTO 460
-450 PRINT lineText$(transformlines_i%)
+                PRINT #2, (trimleft_result$ + " ") + lineText$(transformlines_i%)
+                GOTO 460
+450 PRINT #2, lineText$(transformlines_i%)
 460 REM END IF
+            GOTO 480
+470 PRINT #2, lineText$(transformlines_i%)
+480 REM END IF
         transformlines_i% = transformlines_i% + 1
-        GOTO 420
-470 REM END WHILE
+        GOTO 440
+490 REM END WHILE
+    CLOSE #2
     transformlines_result% = 0
     RETURN
 ' end function transformLines%

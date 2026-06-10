@@ -23,9 +23,12 @@ end function
 
 function startsWithKeyword%(text$, keyword$)
     ' Convenience helper for future extensions and tests.
-    text$ = trimLeft$(text$)
-    if len(text$) < len(keyword$) then
+    startswithkeyword_text$ = trimLeft$(text$)
+    startswithkeyword_keyword$ = keyword$
+    startswithkeyword_text$ = upper$(startswithkeyword_text$)
+    startswithkeyword_keyword$ = upper$(startswithkeyword_keyword$)
+    if len(startswithkeyword_text$) < len(startswithkeyword_keyword$) then
         return 0
     end if
-    return upper$(left$(text$, len(keyword$))) = upper$(keyword$)
+    return left$(startswithkeyword_text$, len(startswithkeyword_keyword$)) = startswithkeyword_keyword$
 end function

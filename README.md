@@ -139,7 +139,9 @@ fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
 
 `examples/remline` is a real-world BASCAL example inspired by old BASIC
 line-number utilities. It analyses a line-numbered BASIC program and removes
-unnecessary line numbers while preserving referenced targets.
+unnecessary line numbers while preserving referenced targets. The generated
+program reads `examples/remline/sample/input.bas` and writes the cleaned
+listing to `examples/remline/sample/output.bas`.
 
 ```bash
 cargo run -- examples/remline/remline.bcl -L examples/remline -o output/remline/remline.bas
@@ -151,7 +153,7 @@ diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
 ## Run With FreeBASIC
 
 ```bash
-fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
+fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
 ./tmp/sort_driver
 ```
 

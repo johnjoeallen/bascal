@@ -117,6 +117,48 @@ impl CodeGenerator {
                 }
                 None => self.line(&format!("DIM {}", self.ident(name, current_function))),
             },
+            Statement::Open {
+                mode,
+                file,
+                channel,
+            } => {
+                let (file_prelude, file) = self.expr(file, current_function);
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                self.lines(file_prelude);
+                self.lines(channel_prelude);
+                let mode = match mode {
+                    OpenMode::Input => "INPUT",
+                    OpenMode::Output => "OUTPUT",
+                };
+                self.line(&format!("OPEN {file} FOR {mode} AS #{channel}"));
+            }
+            Statement::LineInput { channel, target } => {
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                let (target_prelude, target) = self.expr(target, current_function);
+                self.lines(channel_prelude);
+                self.lines(target_prelude);
+                self.line(&format!("LINE INPUT #{channel}, {target}"));
+            }
+            Statement::PrintFile { channel, exprs } => {
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                self.lines(channel_prelude);
+                let mut rendered = Vec::new();
+                for item in exprs {
+                    let (prelude, item) = self.expr(item, current_function);
+                    self.lines(prelude);
+                    rendered.push(item);
+                }
+                if rendered.is_empty() {
+                    self.line(&format!("PRINT #{channel}"));
+                } else {
+                    self.line(&format!("PRINT #{channel}, {}", rendered.join(", ")));
+                }
+            }
+            Statement::Close { channel } => {
+                let (channel_prelude, channel) = self.expr(channel, current_function);
+                self.lines(channel_prelude);
+                self.line(&format!("CLOSE #{channel}"));
+            }
             Statement::Assignment { target, value } => {
                 let (target_prelude, target) = self.expr(target, current_function);
                 let (value_prelude, value) = self.expr(value, current_function);

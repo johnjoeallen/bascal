@@ -127,6 +127,12 @@ impl Parser {
             self.parse_comment()
         } else if self.check_keyword("print") {
             self.parse_print()
+        } else if self.check_keyword("open") {
+            self.parse_open()
+        } else if self.check_keyword("line") && self.check_next_keyword("input") {
+            self.parse_line_input()
+        } else if self.check_keyword("close") {
+            self.parse_close()
         } else if self.check_keyword("return") {
             self.parse_return()
         } else if self.check_keyword("if") {
@@ -173,6 +179,21 @@ impl Parser {
 
     fn parse_print(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("print")?;
+        if self.eat(TokenKind::Hash) {
+            let channel = self.parse_expr(0)?;
+            self.expect(TokenKind::Comma, "expected `,` after file number")?;
+            let mut exprs = Vec::new();
+            if !self.at_line_end() {
+                loop {
+                    exprs.push(self.parse_expr(0)?);
+                    if !self.eat(TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.consume_line_end()?;
+            return Ok(Statement::PrintFile { channel, exprs });
+        }
         let mut exprs = Vec::new();
         if !self.at_line_end() {
             loop {
@@ -184,6 +205,49 @@ impl Parser {
         }
         self.consume_line_end()?;
         Ok(Statement::Print { exprs })
+    }
+
+    fn parse_open(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("open")?;
+        let file = self.parse_expr(0)?;
+        self.expect_keyword("for")?;
+        let mode = if self.check_keyword("input") {
+            self.expect_keyword("input")?;
+            OpenMode::Input
+        } else if self.check_keyword("output") {
+            self.expect_keyword("output")?;
+            OpenMode::Output
+        } else {
+            return Err(self.error("expected `input` or `output`"));
+        };
+        self.expect_keyword("as")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Open {
+            mode,
+            file,
+            channel,
+        })
+    }
+
+    fn parse_line_input(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("line")?;
+        self.expect_keyword("input")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` after file number")?;
+        let target = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::LineInput { channel, target })
+    }
+
+    fn parse_close(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("close")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Close { channel })
     }
 
     fn parse_return(&mut self) -> ParseResult<Statement> {
@@ -598,6 +662,17 @@ mod tests {
             }
             _ => panic!("expected assignment"),
         }
+    }
+
+    #[test]
+    fn parses_basic_file_io_statements() {
+        let program = parse(
+            "open inputFile$ for input as #1\nline input #1, line$\nprint #2, line$\nclose #1\n",
+        );
+        assert!(matches!(program.statements[0], Statement::Open { .. }));
+        assert!(matches!(program.statements[1], Statement::LineInput { .. }));
+        assert!(matches!(program.statements[2], Statement::PrintFile { .. }));
+        assert!(matches!(program.statements[3], Statement::Close { .. }));
     }
 
     #[test]

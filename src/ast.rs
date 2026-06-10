@@ -98,6 +98,22 @@ pub enum Statement {
         name: BasicIdent,
         size: Option<Expr>,
     },
+    Open {
+        mode: OpenMode,
+        file: Expr,
+        channel: Expr,
+    },
+    LineInput {
+        channel: Expr,
+        target: Expr,
+    },
+    PrintFile {
+        channel: Expr,
+        exprs: Vec<Expr>,
+    },
+    Close {
+        channel: Expr,
+    },
     Assignment {
         target: Expr,
         value: Expr,
@@ -128,6 +144,12 @@ pub enum Statement {
     End,
     Raw(String),
     BlankLine,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpenMode {
+    Input,
+    Output,
 }
 
 #[derive(Debug, Clone, PartialEq)]

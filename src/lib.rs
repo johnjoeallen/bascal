@@ -143,7 +143,21 @@ fn resolve_required_symbol(
 }
 
 fn required_symbol_to_path(raw: &str) -> PathBuf {
-    let mut path = raw.split('.').collect::<PathBuf>();
+    let mut parts = raw.split('.').map(str::to_string).collect::<Vec<_>>();
+    if let Some(last) = parts.last_mut() {
+        if last
+            .chars()
+            .last()
+            .is_some_and(|suffix| ast::TypeSuffix::from_char(suffix).is_some())
+        {
+            last.pop();
+        }
+    }
+
+    let mut path = PathBuf::new();
+    for part in parts {
+        path.push(part);
+    }
     path.set_extension("bcl");
     path
 }
@@ -279,5 +293,21 @@ END
         assert!(output.contains("bubblesort_data%(j%) = bubblesort_data%(j% + 1)"));
         assert!(output.contains("quicksort_data%(wall%) = quicksort_data%(qHigh%)"));
         assert!(output.contains("GOSUB "));
+    }
+
+    #[test]
+    fn lowers_basic_file_io_statements() {
+        let source = r#"open inputFile$ for input as #1
+line input #1, line$
+print #2, line$
+close #1
+END
+"#;
+
+        let output = compile_source("io.bcl", source).expect("sample should compile");
+        assert!(output.contains("OPEN inputFile$ FOR INPUT AS #1"));
+        assert!(output.contains("LINE INPUT #1, line$"));
+        assert!(output.contains("PRINT #2, line$"));
+        assert!(output.contains("CLOSE #1"));
     }
 }

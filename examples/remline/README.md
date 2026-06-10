@@ -7,8 +7,8 @@ It demonstrates BASCAL's fit for utility-style programs that operate over
 line-numbered BASIC source, while keeping the current version intentionally
 simple:
 
-- the sample input is embedded as data because file I/O is not yet part of the
-  compiler/runtime surface
+- the sample input is read from `examples/remline/sample/input.bas`
+- the cleaned listing is written to `examples/remline/sample/output.bas`
 - the program keeps the core logic split across small `require`d helper files
 - comments are retained in generated BASIC, so the lowered output stays readable
 - the program analyses direct numeric references in `GOTO`, `GOSUB`, `THEN`,
@@ -28,7 +28,7 @@ Compile the generated BASIC with FreeBASIC in QB mode:
 
 ```bash
 fbc -lang qb output/remline/remline.bas -x tmp/remline
-./tmp/remline > examples/remline/sample/output.bas
+./tmp/remline
 ```
 
 Compare against the expected output:
@@ -39,6 +39,5 @@ diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
 
 ## Current Behavior
 
-The first version prints the transformed sample listing to standard output.
-That is enough to validate the line-number removal algorithm, and it avoids
-depending on file I/O before BASCAL has that support end-to-end.
+The generated program reads the sample listing, writes the cleaned output
+file, and preserves referenced branch targets.

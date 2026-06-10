@@ -67,6 +67,9 @@ fn freebasic_runs_remline_when_available() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = repo_root.join("examples/remline/remline.bcl");
     let output_path = repo_root.join("output/remline/remline.bas");
+    let sample_output_path = repo_root.join("examples/remline/sample/output.bas");
+
+    let _ = fs::remove_file(&sample_output_path);
 
     compile_with_cli(
         &source_path,
@@ -87,8 +90,10 @@ fn freebasic_runs_remline_when_available() {
 
     let expected = fs::read_to_string(repo_root.join("examples/remline/sample/expected.bas"))
         .expect("expected output should be readable");
+    let actual = fs::read_to_string(&sample_output_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", sample_output_path.display()));
     assert_eq!(
-        normalize_newlines(&String::from_utf8_lossy(&run.stdout)),
+        normalize_newlines(&actual),
         normalize_newlines(&expected),
         "remline output should match the sample expectation"
     );
