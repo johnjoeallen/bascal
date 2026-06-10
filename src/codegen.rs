@@ -2,11 +2,26 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 
+const BASIC_BUILTINS: &[&str] = &[
+    // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
+    "ucase", "lcase", "str", "chr", "hex", "oct", "space", "environ",
+    "command", "ltrim", "rtrim", "trim",
+    // Multi-arg string (Expr::Call, but include for completeness)
+    "left", "right", "mid", "instr", "format", "string",
+    // Single-arg numeric (no suffix → Expr::Call already, but included for safety)
+    "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof",
+    "sin", "cos", "tan", "atn", "log", "exp", "cint", "clng", "csng", "cdbl",
+    "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
+    // Multi-arg numeric
+    "ubound", "lbound", "iif",
+];
+
 pub struct CodeGenerator {
     next_label: usize,
     indent: usize,
     output: String,
     functions: Vec<FunctionInfo>,
+    known_callables: HashSet<String>,
     line_numbers: bool,
     loop_exit_stack: Vec<String>,
 }
@@ -29,6 +44,7 @@ impl CodeGenerator {
             indent: 0,
             output: String::new(),
             functions: Vec::new(),
+            known_callables: HashSet::new(),
             line_numbers: false,
             loop_exit_stack: Vec::new(),
         }
@@ -44,6 +60,13 @@ impl CodeGenerator {
             .functions
             .iter()
             .map(FunctionInfo::from_def)
+            .collect();
+
+        self.known_callables = self
+            .functions
+            .iter()
+            .map(|f| f.source_name.name.to_ascii_lowercase())
+            .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
             .collect();
 
         self.line("' BASCAL generated BASIC");
@@ -638,14 +661,13 @@ impl CodeGenerator {
                     prelude.extend(index_prelude);
                     rendered_indices.push(index);
                 }
-                (
-                    prelude,
-                    format!(
-                        "{}({})",
-                        self.ident(name, current_function),
-                        rendered_indices.join(", ")
-                    ),
-                )
+                let key = name.name.to_ascii_lowercase();
+                let base = if self.known_callables.contains(&key) {
+                    name.as_basic()
+                } else {
+                    self.ident(name, current_function)
+                };
+                (prelude, format!("{}({})", base, rendered_indices.join(", ")))
             }
             Expr::Call { name, args } => {
                 if let Some(info) = self.function_info(name).cloned() {
@@ -775,10 +797,6 @@ impl CodeGenerator {
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
         if let Some(info) = current_function {
-            // BASIC builtins start with an uppercase letter; never prefix them.
-            if ident.name.starts_with(|c: char| c.is_ascii_uppercase()) {
-                return ident.as_basic();
-            }
             if let Some((_, lowered)) = info
                 .params
                 .iter()
