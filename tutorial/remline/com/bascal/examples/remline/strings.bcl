@@ -1,34 +1,29 @@
 /* Shared string helpers for REMLINE. */
-/* These helpers keep the parsing code readable without pretending BASCAL has */
-/* local scope or modules. */
 
 function trimLeft$(text$)
-    /* BASIC string handling is straightforward: walk from the left until the */
-    /* first non-space character appears. */
-    trimleft_i% = 1
-    while trimleft_i% <= len(text$)
-        trimleft_ch$ = mid$(text$, trimleft_i%, 1)
-        if trimleft_ch$ <> " " then
-            return mid$(text$, trimleft_i%)
+    /* Walk from the left until the first non-space character appears. */
+    i% = 1
+    while i% <= len(text$)
+        ch$ = mid$(text$, i%, 1)
+        if ch$ <> " " then
+            return mid$(text$, i%)
         end if
-        trimleft_i% = trimleft_i% + 1
+        i% = i% + 1
     end while
     return ""
 end function
 
 function upper$(text$)
-    /* Use the BASIC runtime's upper-case conversion directly. */
     return UCASE$(text$)
 end function
 
 function startsWithKeyword%(text$, keyword$)
-    /* Convenience helper for future extensions and tests. */
-    startswithkeyword_text$ = trimLeft$(text$)
-    startswithkeyword_keyword$ = keyword$
-    startswithkeyword_text$ = upper$(startswithkeyword_text$)
-    startswithkeyword_keyword$ = upper$(startswithkeyword_keyword$)
-    if len(startswithkeyword_text$) < len(startswithkeyword_keyword$) then
+    t$  = trimLeft$(text$)
+    kw$ = keyword$
+    t$  = upper$(t$)
+    kw$ = upper$(kw$)
+    if len(t$) < len(kw$) then
         return 0
     end if
-    return left$(startswithkeyword_text$, len(startswithkeyword_keyword$)) = startswithkeyword_keyword$
+    return left$(t$, len(kw$)) = kw$
 end function

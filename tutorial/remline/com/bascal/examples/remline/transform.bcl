@@ -3,10 +3,6 @@ require com.bascal.examples.remline.refs
 require com.bascal.examples.remline.strings
 
 /* REMLINE works on an input BASIC listing and writes a cleaned version. */
-/* The sample run reads examples/remline/sample/input.bas and writes */
-/* examples/remline/sample/output.bas. */
-/* In classic BASIC terms, this is the same kind of cleanup pass that utilities */
-/* like REMLINE.BAS performed on line-numbered source listings. */
 
 DIM rawLine$(1000)
 DIM lineText$(1000)
@@ -15,56 +11,64 @@ DIM keepLine%(1000)
 DIM refNumber%(1000)
 
 function loadLines%()
-    /* Reset the fixed-size buffers used by the sample. */
-    refCount% = 0
+    global refCount%
+    global lineCount%
+    global rawLine$
+    global lineText$
+    global lineNumber%
+    global keepLine%
+    global inputFile$
+    refCount%  = 0
     lineCount% = 0
-
-    /* Read each line of the source listing into memory. */
     OPEN inputFile$ FOR INPUT AS #1
     while EOF(1) = 0
         lineCount% = lineCount% + 1
         LINE INPUT #1, rawLine$(lineCount%)
     end while
     CLOSE #1
-
-    /* Split each input line into its numeric prefix and remaining source text. */
-    loadlines_i% = 1
-    while loadlines_i% <= lineCount%
-        lineNumber%(loadlines_i%) = parseLineNumber%(rawLine$(loadlines_i%))
-        lineText$(loadlines_i%) = stripLineNumber$(rawLine$(loadlines_i%))
-        keepLine%(loadlines_i%) = 0
-        loadlines_i% = loadlines_i% + 1
+    i% = 1
+    while i% <= lineCount%
+        lineNumber%(i%) = parseLineNumber%(rawLine$(i%))
+        lineText$(i%)   = stripLineNumber$(rawLine$(i%))
+        keepLine%(i%)   = 0
+        i% = i% + 1
     end while
-
     return 0
 end function
 
 function collectAllRefs%()
-    /* Scan each line for direct numeric branch targets. */
+    global refCount%
+    global lineCount%
+    global keepLine%
+    global lineText$
     refCount% = 0
-    collectallrefs_i% = 1
-    while collectallrefs_i% <= lineCount%
-        keepLine%(collectallrefs_i%) = collectRefs%(lineText$(collectallrefs_i%))
-        collectallrefs_i% = collectallrefs_i% + 1
+    i% = 1
+    while i% <= lineCount%
+        keepLine%(i%) = collectRefs%(lineText$(i%))
+        i% = i% + 1
     end while
     return 0
 end function
 
 function transformLines%()
-    /* Emit a cleaned listing to the configured output file. */
+    global lineCount%
+    global lineNumber%
+    global lineText$
+    global keepLine%
+    global outputFile$
     OPEN outputFile$ FOR OUTPUT AS #2
-    transformlines_i% = 1
-    while transformlines_i% <= lineCount%
-        if lineNumber%(transformlines_i%) > 0 then
-            if keepLine%(transformlines_i%) <> 0 or isReferenced%(lineNumber%(transformlines_i%)) <> 0 then
-                PRINT #2, trimLeft$(STR$(lineNumber%(transformlines_i%))) + " " + lineText$(transformlines_i%)
+    i% = 1
+    while i% <= lineCount%
+        if lineNumber%(i%) > 0 then
+            if keepLine%(i%) <> 0 or isReferenced%(lineNumber%(i%)) <> 0 then
+                PRINT #2, trimLeft$(STR$(lineNumber%(i%))) + " " + lineText$(i%)
             else
-                PRINT #2, lineText$(transformlines_i%)
+                PRINT #2, lineText$(i%)
             end if
         else
-            PRINT #2, lineText$(transformlines_i%)
+            PRINT #2, lineText$(i%)
         end if
-        transformlines_i% = transformlines_i% + 1
+        i% = i% + 1
     end while
     CLOSE #2
     return 0

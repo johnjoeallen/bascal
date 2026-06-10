@@ -412,8 +412,8 @@ END
         assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
         assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
         assert!(output.lines().any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
-        assert!(output.contains("bubblesort_data%(j%) = bubblesort_data%(j% + 1)"));
-        assert!(output.contains("quicksort_data%(wall%) = quicksort_data%(qHigh%)"));
+        assert!(output.contains("bubblesort_data%(bubblesort_j%) = bubblesort_data%(bubblesort_j% + 1)"));
+        assert!(output.contains("quicksort_data%(quicksort_wall%) = quicksort_data%(quicksort_qhigh%)"));
         assert!(output.contains("GOSUB "));
     }
 

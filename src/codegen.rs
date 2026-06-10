@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 
@@ -14,10 +14,12 @@ pub struct CodeGenerator {
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     source_name: BasicIdent,
+    stem: String,
     label: String,
     result: BasicIdent,
     params: Vec<(BasicIdent, BasicIdent)>,
     is_procedure: bool,
+    globals: HashSet<String>,
 }
 
 impl CodeGenerator {
@@ -390,7 +392,7 @@ impl CodeGenerator {
             Statement::Const { name, value } => {
                 let (prelude, value) = self.expr(value, current_function);
                 self.lines(prelude);
-                self.line(&format!("CONST {} = {value}", self.ident(name, current_function)));
+                self.line(&format!("CONST {} = {value}", name.as_basic()));
             }
             Statement::Write { channel, exprs } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -464,6 +466,7 @@ impl CodeGenerator {
                 let keyword = if *is_gosub { "GOSUB" } else { "GOTO" };
                 self.line(&format!("ON {expr} {keyword} {}", rendered.join(", ")));
             }
+            Statement::GlobalDecl(_) => {}
             Statement::Raw(raw) => self.line(raw),
             Statement::BlockComment(lines) => {
                 for line in lines {
@@ -772,12 +775,24 @@ impl CodeGenerator {
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
         if let Some(info) = current_function {
+            // BASIC builtins start with an uppercase letter; never prefix them.
+            if ident.name.starts_with(|c: char| c.is_ascii_uppercase()) {
+                return ident.as_basic();
+            }
             if let Some((_, lowered)) = info
                 .params
                 .iter()
                 .find(|(source, _)| same_ident(source, ident))
             {
                 return lowered.as_basic();
+            }
+            let key = ident.as_basic().to_ascii_lowercase();
+            if !info.globals.contains(&key) {
+                return BasicIdent {
+                    name: format!("{}_{}", info.stem, sanitize_symbol(&ident.name)),
+                    suffix: ident.suffix,
+                }
+                .as_basic();
             }
         }
         ident.as_basic()
@@ -824,8 +839,10 @@ impl FunctionInfo {
                 )
             })
             .collect();
+        let globals = collect_globals(&function.body);
         Self {
             source_name: function.name.clone(),
+            stem: stem.clone(),
             label: format!("FN_{stem}"),
             result: BasicIdent {
                 name: format!("{stem}_result"),
@@ -833,8 +850,37 @@ impl FunctionInfo {
             },
             params,
             is_procedure: function.is_procedure,
+            globals,
         }
     }
+}
+
+fn collect_globals(body: &[Statement]) -> HashSet<String> {
+    let mut globals = HashSet::new();
+    for stmt in body {
+        match stmt {
+            Statement::GlobalDecl(ident) => {
+                globals.insert(ident.as_basic().to_ascii_lowercase());
+            }
+            Statement::If { then_body, else_body, .. } => {
+                globals.extend(collect_globals(then_body));
+                globals.extend(collect_globals(else_body));
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
+                globals.extend(collect_globals(body));
+            }
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    globals.extend(collect_globals(&case.body));
+                }
+                globals.extend(collect_globals(else_body));
+            }
+            _ => {}
+        }
+    }
+    globals
 }
 
 fn same_ident(left: &BasicIdent, right: &BasicIdent) -> bool {

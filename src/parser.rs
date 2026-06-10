@@ -207,6 +207,8 @@ impl Parser {
             self.parse_write()
         } else if self.check_keyword("close") {
             self.parse_close()
+        } else if self.check_keyword("global") {
+            self.parse_global_decl()
         } else if self.check_keyword("return") {
             self.parse_return()
         } else if self.check_keyword("if") {
@@ -301,6 +303,13 @@ impl Parser {
         let end = lines.iter().rposition(|l| !l.is_empty()).map(|i| i + 1).unwrap_or(start);
         let lines = lines[start..end].to_vec();
         Ok(Statement::BlockComment(lines))
+    }
+
+    fn parse_global_decl(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("global")?;
+        let name = BasicIdent::parse(&self.expect_ident("expected variable name after `global`")?);
+        self.consume_line_end()?;
+        Ok(Statement::GlobalDecl(name))
     }
 
     fn parse_comment(&mut self) -> ParseResult<Statement> {

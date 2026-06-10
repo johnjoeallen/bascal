@@ -1,23 +1,20 @@
 require com.bascal.examples.remline.strings
 
 /* Parse and strip leading decimal line numbers. */
-/* The example keeps parsing deliberately small and boring: a source line may */
-/* start with digits, optionally followed by one separating space. */
 
 function parseLineNumber%(text$)
-    /* Trim only the left edge so the helper tolerates indented lines. */
     text$ = trimLeft$(text$)
     digits$ = ""
-    parselinenumber_i% = 1
-    parselinenumber_done% = 0
-    while parselinenumber_i% <= len(text$) and parselinenumber_done% = 0
-        parselinenumber_ch$ = mid$(text$, parselinenumber_i%, 1)
-        if parselinenumber_ch$ >= "0" and parselinenumber_ch$ <= "9" then
-            digits$ = digits$ + parselinenumber_ch$
+    i% = 1
+    done% = 0
+    while i% <= len(text$) and done% = 0
+        ch$ = mid$(text$, i%, 1)
+        if ch$ >= "0" and ch$ <= "9" then
+            digits$ = digits$ + ch$
         else
-            parselinenumber_done% = 1
+            done% = 1
         end if
-        parselinenumber_i% = parselinenumber_i% + 1
+        i% = i% + 1
     end while
     if len(digits$) = 0 then
         return 0
@@ -26,23 +23,22 @@ function parseLineNumber%(text$)
 end function
 
 function stripLineNumber$(text$)
-    /* Remove an initial decimal line number and one following space if present. */
     text$ = trimLeft$(text$)
-    striplinenumber_i% = 1
-    striplinenumber_done% = 0
-    while striplinenumber_i% <= len(text$) and striplinenumber_done% = 0
-        striplinenumber_ch$ = mid$(text$, striplinenumber_i%, 1)
-        if striplinenumber_ch$ >= "0" and striplinenumber_ch$ <= "9" then
-            striplinenumber_i% = striplinenumber_i% + 1
+    i% = 1
+    done% = 0
+    while i% <= len(text$) and done% = 0
+        ch$ = mid$(text$, i%, 1)
+        if ch$ >= "0" and ch$ <= "9" then
+            i% = i% + 1
         else
-            striplinenumber_done% = 1
+            done% = 1
         end if
     end while
-    if striplinenumber_i% > len(text$) then
+    if i% > len(text$) then
         return ""
     end if
-    if mid$(text$, striplinenumber_i%, 1) = " " then
-        striplinenumber_i% = striplinenumber_i% + 1
+    if mid$(text$, i%, 1) = " " then
+        i% = i% + 1
     end if
-    return mid$(text$, striplinenumber_i%)
+    return mid$(text$, i%)
 end function

@@ -217,6 +217,7 @@ pub enum Statement {
         is_gosub: bool,
     },
     ReturnVoid,
+    GlobalDecl(BasicIdent),
     Raw(String),
     BlockComment(Vec<String>),
     BlankLine,

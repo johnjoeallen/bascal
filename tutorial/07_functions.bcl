@@ -4,10 +4,9 @@
 // The function name carries the return type suffix.  Parameters
 // also carry type suffixes.  Every function must reach a RETURN.
 //
-// The compiler lowers each call to:
-//   1. Assign arguments to global variables  fname_paramname
-//   2. GOSUB to the function's generated label
-//   3. Copy  fname_result  into the destination variable
+// Variables declared inside a function are local by default: the compiler
+// prefixes them with the function name.  To access a global variable from
+// inside a function, declare it with:  global varname
 //
 // Functions cannot call themselves recursively (parameters would be
 // overwritten).  Use an explicit stack array for recursive algorithms.
@@ -37,11 +36,11 @@ end function
 /* String functions */
 function repeat$(text$, n%)
     // Concatenate text$ with itself n times.
-    result$ = ""
+    acc$ = ""
     for i% = 1 to n%
-        result$ = result$ + text$
+        acc$ = acc$ + text$
     end for
-    return result$
+    return acc$
 end function
 
 function titleCase$(word$)
