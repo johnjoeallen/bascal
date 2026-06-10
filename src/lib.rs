@@ -386,6 +386,17 @@ END
     }
 
     #[test]
+    fn block_comment_preserves_internal_blank_lines() {
+        let source = "/*\nFirst paragraph.\n\nSecond paragraph.\n*/\nEND\n";
+        let output = compile_source("comment.bcl", source).expect("should compile");
+        let lines: Vec<&str> = output.lines().collect();
+        let first = lines.iter().position(|l| l.contains("First paragraph.")).unwrap();
+        let second = lines.iter().position(|l| l.contains("Second paragraph.")).unwrap();
+        assert!(second > first + 1, "blank line should separate the two comment paragraphs");
+        assert!(lines[first + 1].trim().is_empty(), "line between paragraphs should be blank");
+    }
+
+    #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
         let output =

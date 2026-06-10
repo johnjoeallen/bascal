@@ -296,8 +296,10 @@ impl Parser {
                 let trimmed = line.trim();
                 trimmed.strip_prefix('*').map(|s| s.trim()).unwrap_or(trimmed).to_string()
             })
-            .filter(|line| !line.is_empty())
             .collect::<Vec<_>>();
+        let start = lines.iter().position(|l| !l.is_empty()).unwrap_or(0);
+        let end = lines.iter().rposition(|l| !l.is_empty()).map(|i| i + 1).unwrap_or(start);
+        let lines = lines[start..end].to_vec();
         Ok(Statement::BlockComment(lines))
     }
 

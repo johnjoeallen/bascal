@@ -467,7 +467,11 @@ impl CodeGenerator {
             Statement::Raw(raw) => self.line(raw),
             Statement::BlockComment(lines) => {
                 for line in lines {
-                    self.line(&format!("' {line}"));
+                    if line.is_empty() {
+                        self.blank();
+                    } else {
+                        self.line(&format!("' {line}"));
+                    }
                 }
             }
             Statement::BlankLine => self.blank(),

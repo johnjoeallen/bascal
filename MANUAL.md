@@ -15,16 +15,17 @@
 7. [Comments](#comments)
 8. [Control Flow](#control-flow)
 9. [Functions](#functions)
-10. [Arrays](#arrays)
-11. [Input and Output](#input-and-output)
-12. [File Input and Output](#file-input-and-output)
-13. [Data Statements](#data-statements)
-14. [Miscellaneous Statements](#miscellaneous-statements)
-15. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
-16. [Suite COMMON](#suite-common)
-17. [Generated BASIC Shape](#generated-basic-shape)
-18. [Command-Line Reference](#command-line-reference)
-19. [Statement Quick Reference](#statement-quick-reference)
+10. [Procedures](#procedures)
+11. [Arrays](#arrays)
+12. [Input and Output](#input-and-output)
+13. [File Input and Output](#file-input-and-output)
+14. [Data Statements](#data-statements)
+15. [Miscellaneous Statements](#miscellaneous-statements)
+16. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
+17. [Suite COMMON](#suite-common)
+18. [Generated BASIC Shape](#generated-basic-shape)
+19. [Command-Line Reference](#command-line-reference)
+20. [Statement Quick Reference](#statement-quick-reference)
 
 ---
 
@@ -40,6 +41,7 @@ structural constructs needed to write and maintain larger programs:
 - Block `if` / `elseif` / `else` / `end if`
 - `for` / `next`, `while` / `wend`, and `do` / `loop` loops with early exit
 - `function` declarations with typed return values and explicit `return`
+- `procedure` declarations for action subroutines with no return value
 - Path-style `require` for multi-file projects
 - `program` / `suite` declarations for coordinating `COMMON` across chained
   programs
@@ -77,8 +79,8 @@ a basic PRINT/END structure:
 // This is a double-slash end-of-line comment (same behaviour).
 
 /*
- * Block comments span multiple lines.  Each non-empty line is emitted
- * as a separate ' comment in the generated output.
+ * Block comments span multiple lines.  Each line is emitted as a separate
+ * ' comment in the generated output; blank lines are preserved as blank lines.
  */
 
 PRINT "Hello, World!"
@@ -347,9 +349,10 @@ function insertionSort%(arr%, count%)
 end function
 ```
 
-Each non-empty line of a block comment is emitted as a separate `'` comment in
-the generated BASIC output. Leading `*` characters and surrounding whitespace
-are stripped.
+Each line of a block comment is emitted as a separate `'` comment in the
+generated BASIC output. Leading `*` characters and surrounding whitespace are
+stripped. Blank lines within the comment are preserved as blank lines in the
+output.
 
 One-line block comments are also valid:
 
@@ -702,6 +705,105 @@ The compiler lowers each function call to:
 
 Array parameters use copy-in / copy-out: elements are copied into
 `fname_paramname(i)` before the call and back into the caller's array after.
+
+---
+
+## Procedures
+
+A procedure is a named subroutine that performs an action but returns no value.
+It is declared with `procedure` … `end procedure`.
+
+### Declaration
+
+```
+procedure name(param1%, param2$)
+    ' body
+end procedure
+```
+
+The procedure name has **no type suffix** — the absence of a suffix signals that
+there is no return value.  Parameter names still carry their usual type suffixes.
+
+From `tutorial/14_procedures.bcl`:
+
+```
+procedure printSeparator()
+    PRINT "----------------------------"
+end procedure
+
+procedure printScore(label$, score%)
+    PRINT label$ + ": " + STR$(score%)
+end procedure
+
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return          // early exit — nothing printed for failing scores
+    end if
+    PRINT name$ + " passed with " + STR$(score%)
+end procedure
+
+procedure fillRange(arr%, count%, value%)
+    for i% = 0 to count% - 1
+        arr%(i%) = value%
+    next i%
+end procedure
+```
+
+### Calling Procedures
+
+Procedures are called as statements (not inside expressions):
+
+```
+printSeparator()
+printScore("Alice", 91)
+printIfPass("Bob", 54)
+fillRange(data%(), N%, 99)
+```
+
+### Early Exit
+
+A bare `return` (no expression) exits a procedure immediately.
+Falling through to `end procedure` is equally valid — the compiler emits an
+implicit `RETURN`.
+
+```
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return      ' exit early; nothing is printed
+    end if
+    PRINT name$ + " passed with " + STR$(score%)
+end procedure
+```
+
+### Array Parameters
+
+Array parameters use the same copy-in / copy-out convention as functions.
+Declare the parameter without `()` in the procedure header; pass with `()` at
+the call site:
+
+```
+procedure fillRange(arr%, count%, value%)   ' arr% — no () in header
+    ...
+end procedure
+
+fillRange(data%(), N%, 99)                  ' data%() — () at call site
+```
+
+### Restrictions
+
+- **No recursion.**  Same GOSUB lowering as functions — a recursive call would
+  overwrite in-flight parameters.
+- **No local scope.**  All variables in the body are global.  Use
+  procedure-name-prefixed names (e.g., `fillRange_i%`) to avoid collisions.
+- **No return value.**  Do not use a procedure where an expression is expected.
+
+### How Procedures Are Lowered
+
+Procedures use the same GOSUB mechanism as functions:
+
+1. Assign each argument to a global variable `pname_paramname`
+2. `GOSUB` to the procedure's generated label
+3. No result variable is read back
 
 ---
 
@@ -1406,6 +1508,37 @@ END
 ' end function clamp%
 ```
 
+### Procedure Lowering
+
+Procedures follow the same GOSUB pattern as functions but have no result
+variable:
+
+```
+procedure printScore(label$, score%)
+    PRINT label$ + ": " + STR$(score%)
+end procedure
+
+printScore("Alice", 91)
+```
+
+Lowers to:
+
+```
+printscore_label$ = "Alice"
+printscore_score% = 91
+GOSUB 200
+...
+END
+
+' procedure printScore(label$, score%)
+200 PRINT (printscore_label$ + ": ") + STR$(printscore_score%)
+    RETURN
+' end procedure printScore
+```
+
+There is no `printscore_result` variable.  A bare `return` inside a procedure
+compiles to plain `RETURN`.
+
 ### Select Case Lowering
 
 `SELECT CASE` is lowered to an `IF`/`GOTO` dispatch chain. The select
@@ -1474,7 +1607,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `EXIT FOR` | `EXIT FOR` | Exit enclosing FOR loop |
 | `EXIT WHILE` | `EXIT WHILE` | Exit enclosing WHILE loop |
 | `FOR` | `FOR v = start TO end [STEP s]` … `NEXT [v]` | Counted loop |
-| `FUNCTION` | `FUNCTION name(params)` … `END FUNCTION` | Define a function |
+| `FUNCTION` | `FUNCTION name%(params)` … `END FUNCTION` | Define a function with a return value |
 | `GOSUB` | `GOSUB lineno` | Call BASIC subroutine |
 | `GOTO` | `GOTO lineno` | Unconditional branch |
 | `IF` | `IF cond THEN` … [`ELSEIF` …] [`ELSE` …] `END IF` | Conditional block |
@@ -1488,12 +1621,13 @@ bcc main.bcl -L libs/sort -L libs/string
 | `ON...GOSUB` | `ON expr GOSUB n1, n2, ...` | Computed GOSUB |
 | `OPEN` | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n` | Open file |
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
+| `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |
 | `PRINT #` | `PRINT #n, expr[, ...]` | Print to file |
 | `RANDOMIZE` | `RANDOMIZE [seed]` | Seed random number generator |
 | `READ` | `READ var[, ...]` | Read from DATA stream |
 | `REQUIRE` | `require path.symbol` | Load dependency module |
 | `RESTORE` | `RESTORE [lineno]` | Reset DATA pointer |
-| `RETURN` | `RETURN expr` | Return value from function |
+| `RETURN` | `RETURN expr` / `RETURN` | Return value from function; bare form exits a procedure early |
 | `SELECT CASE` | `SELECT CASE expr` … `END SELECT` | Multi-way branch |
 | `STOP` | `STOP` | Stop program execution |
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
