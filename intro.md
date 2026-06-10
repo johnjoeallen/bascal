@@ -1,5 +1,3 @@
-Here’s the regenerated preface with the weekend Pascal prototype and BASIC rewrite included.
-
 ## Preface: Why BASCAL Exists
 
 My first professional programming job was at Ramtech, starting in May 1985.
