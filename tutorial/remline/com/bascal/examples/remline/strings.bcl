@@ -12,7 +12,7 @@ function trimLeft$(text$)
             return mid$(text$, trimleft_i%)
         end if
         trimleft_i% = trimleft_i% + 1
-    while end
+    end while
     return ""
 end function
 

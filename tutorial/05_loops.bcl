@@ -18,13 +18,13 @@
 PRINT "Squares 1..5:"
 for i% = 1 to 5
     PRINT "  " + STR$(i%) + "^2 = " + STR$(i% * i%)
-for end
+end for
 
 /* Negative STEP — count down */
 PRINT "Countdown:"
 for n% = 3 to 1 step -1
     PRINT "  " + STR$(n%)
-for end
+end for
 PRINT "  Go!"
 
 /* EXIT FOR — stop early */
@@ -34,7 +34,7 @@ for i% = 1 to 20
         PRINT "  " + STR$(i%)
         exit for
     end if
-for end
+end for
 
 /* --- WHILE / WEND --- */
 PRINT "Powers of 2 under 100:"
@@ -42,7 +42,7 @@ p% = 1
 while p% < 100
     PRINT "  " + STR$(p%)
     p% = p% * 2
-while end
+end while
 
 /* EXIT WHILE */
 PRINT "Collatz from 27 (first 8 steps):"
@@ -60,7 +60,7 @@ while n% <> 1
     end if
     steps% = steps% + 1
     PRINT "  " + STR$(n%)
-while end
+end while
 
 /* --- DO / LOOP variants --- */
 
@@ -70,7 +70,7 @@ k% = 1
 do while k% <= 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 
 // DO UNTIL — enter while condition is false
 PRINT "DO UNTIL:"
@@ -78,7 +78,7 @@ k% = 1
 do until k% > 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 
 // DO ... DO END with post-check — body runs at least once
 PRINT "DO...DO END (body runs once even though false):"
@@ -89,7 +89,7 @@ do
     if k% > 3 then
         exit do
     end if
-do end
+end do
 
 // EXIT DO
 PRINT "EXIT DO at 3:"
@@ -100,6 +100,6 @@ do
     end if
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 
 END

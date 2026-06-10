@@ -36,7 +36,7 @@ end procedure
 procedure fillRange(arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
-    for end
+    end for
 end procedure
 
 /* --- Drive the procedures --- */
@@ -58,6 +58,6 @@ fillRange(data%(), N%, 99)
 PRINT "Filled array:"
 for i% = 0 to N% - 1
     PRINT "  data%(" + STR$(i%) + ") = " + STR$(data%(i%))
-for end
+end for
 
 END

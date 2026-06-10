@@ -18,14 +18,14 @@ DIM capital$(NUM_CAPITALS%)
 /* Load the lookup table */
 for i% = 1 to NUM_CAPITALS%
     READ country$(i%), capital$(i%)
-for end
+end for
 
 /* Print the table */
 PRINT "Country         Capital"
 PRINT "--------------- ---------------"
 for i% = 1 to NUM_CAPITALS%
     PRINT country$(i%) + "        " + capital$(i%)
-for end
+end for
 
 /* RESTORE lets us re-read from the beginning */
 RESTORE
@@ -46,12 +46,12 @@ for pass% = 1 to NUM_CAPITALS% - 1
             SWAP country$(i%), country$(i% + 1)
             SWAP capital$(i%), capital$(i% + 1)
         end if
-    for end
-for end
+    end for
+end for
 PRINT "Sorted by country:"
 for i% = 1 to NUM_CAPITALS%
     PRINT "  " + country$(i%) + " -> " + capital$(i%)
-for end
+end for
 
 /* RANDOMIZE — seed with a literal for reproducible output */
 RANDOMIZE 99

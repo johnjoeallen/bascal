@@ -9,7 +9,7 @@ function mean!(data%, count%)
     sum% = 0
     for i% = 0 to count% - 1
         sum% = sum% + data%(i%)
-    for end
+    end for
     return sum% / count%
 end function
 
@@ -20,7 +20,7 @@ function maximum%(data%, count%)
         if data%(i%) > best% then
             best% = data%(i%)
         end if
-    for end
+    end for
     return best%
 end function
 
@@ -31,7 +31,7 @@ function minimum%(data%, count%)
         if data%(i%) < best% then
             best% = data%(i%)
         end if
-    for end
+    end for
     return best%
 end function
 

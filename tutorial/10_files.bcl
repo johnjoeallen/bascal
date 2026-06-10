@@ -35,7 +35,7 @@ OPEN csvFile$ FOR INPUT AS #1
 while EOF(1) = 0
     INPUT #1, name$, score%, result$
     PRINT "  " + name$ + ": " + STR$(score%) + "  [" + result$ + "]"
-while end
+end while
 CLOSE #1
 
 /* Read the file line by line using LINE INPUT */
@@ -44,7 +44,7 @@ OPEN csvFile$ FOR INPUT AS #1
 while EOF(1) = 0
     LINE INPUT #1, line$
     PRINT "  " + line$
-while end
+end while
 CLOSE #1
 
 END

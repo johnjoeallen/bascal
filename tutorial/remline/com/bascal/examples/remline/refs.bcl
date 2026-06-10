@@ -18,7 +18,7 @@ function addRef%(lineNo%)
             return 0
         end if
         addref_i% = addref_i% + 1
-    while end
+    end while
 
     if refCount% >= 1000 then
         return 0
@@ -36,7 +36,7 @@ function isReferenced%(lineNo%)
             return 1
         end if
         isreferenced_i% = isreferenced_i% + 1
-    while end
+    end while
     return 0
 end function
 

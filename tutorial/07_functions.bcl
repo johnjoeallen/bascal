@@ -40,7 +40,7 @@ function repeat$(text$, n%)
     result$ = ""
     for i% = 1 to n%
         result$ = result$ + text$
-    for end
+    end for
     return result$
 end function
 

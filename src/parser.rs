@@ -465,10 +465,10 @@ impl Parser {
         };
         self.consume_line_end()?;
         let body = self.parse_block(&[BlockEnd::ForEnd, BlockEnd::BareEnd])?;
+        self.expect_keyword("end")?;
         if self.check_keyword("for") {
             self.expect_keyword("for")?;
         }
-        self.expect_keyword("end")?;
         self.consume_line_end()?;
         Ok(Statement::For {
             var,
@@ -484,10 +484,10 @@ impl Parser {
         let condition = self.parse_expr(0)?;
         self.consume_line_end()?;
         let body = self.parse_block(&[BlockEnd::WhileEnd, BlockEnd::BareEnd])?;
+        self.expect_keyword("end")?;
         if self.check_keyword("while") {
             self.expect_keyword("while")?;
         }
-        self.expect_keyword("end")?;
         self.consume_line_end()?;
         Ok(Statement::While { condition, body })
     }
@@ -513,10 +513,10 @@ impl Parser {
         };
         self.consume_line_end()?;
         let body = self.parse_block(&[BlockEnd::DoEnd, BlockEnd::BareEnd])?;
+        self.expect_keyword("end")?;
         if self.check_keyword("do") {
             self.expect_keyword("do")?;
         }
-        self.expect_keyword("end")?;
         self.consume_line_end()?;
         Ok(Statement::Do { condition, body, post_condition: None })
     }
@@ -981,9 +981,9 @@ impl Parser {
             BlockEnd::EndProcedure => {
                 self.check_keyword("end") && self.check_next_keyword("procedure")
             }
-            BlockEnd::ForEnd => self.check_keyword("for") && self.check_next_keyword("end"),
-            BlockEnd::WhileEnd => self.check_keyword("while") && self.check_next_keyword("end"),
-            BlockEnd::DoEnd => self.check_keyword("do") && self.check_next_keyword("end"),
+            BlockEnd::ForEnd => self.check_keyword("end") && self.check_next_keyword("for"),
+            BlockEnd::WhileEnd => self.check_keyword("end") && self.check_next_keyword("while"),
+            BlockEnd::DoEnd => self.check_keyword("end") && self.check_next_keyword("do"),
             BlockEnd::BareEnd => self.check_keyword("end") && self.check_next_is_line_end(),
             BlockEnd::Case => self.check_keyword("case"),
             BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),

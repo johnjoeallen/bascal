@@ -10,7 +10,7 @@ function bubbleSort%(data%, count%)
                 data%(j%) = data%(j% + 1)
                 data%(j% + 1) = temp%
             end if
-        for end
-    for end
+        end for
+    end for
     return 0
 end function

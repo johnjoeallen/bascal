@@ -19,14 +19,14 @@ function shellSort%(data%, count%)
             while j% > gap% and data%(j% - gap%) > temp%
                 data%(j%) = data%(j% - gap%)
                 j% = j% - gap%
-            while end
+            end while
 
             data%(j%) = temp%
             i% = i% + 1
-        while end
+        end while
 
         gap% = gap% / 2
-    while end
+    end while
 
     return 0
 end function

@@ -17,7 +17,7 @@ function shakerSort%(data%, count%)
                 data%(i% + 1) = temp%
                 swapped% = 1
             end if
-        for end
+        end for
 
         right% = right% - 1
 
@@ -29,10 +29,10 @@ function shakerSort%(data%, count%)
                 data%(i% + 1) = temp%
                 swapped% = 1
             end if
-        for end
+        end for
 
         left% = left% + 1
-    while end
+    end while
 
     return 0
 end function

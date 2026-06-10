@@ -39,7 +39,7 @@ BASCAL keeps BASIC's global symbol model and run-time semantics while adding the
 structural constructs needed to write and maintain larger programs:
 
 - Block `if` / `elseif` / `else` / `end if`
-- `for` / `for end`, `while` / `while end`, and `do` / `do end` loops with early exit
+- `for` / `end for`, `while` / `end while`, and `do` / `end do` loops with early exit
 - `function` declarations with typed return values and explicit `return`
 - `procedure` declarations for action subroutines with no return value
 - Path-style `require` for multi-file projects
@@ -342,9 +342,9 @@ function insertionSort%(arr%, count%)
         while j% >= 0 and arr%(j%) > key%
             arr%(j% + 1) = arr%(j%)
             j% = j% - 1
-        while end
+        end while
         arr%(j% + 1) = key%
-    for end
+    end for
     return 0
 end function
 ```
@@ -411,15 +411,15 @@ PRINT "Grade: " + grade$
 
 `elseif` chains may be arbitrarily deep.
 
-### FOR / FOR END
+### FOR / END FOR
 
 ```
 for var = start to end [step n]
     ' body
-for end
+end for
 ```
 
-`for end` closes the loop. Bare `end` also works. The `step` clause is
+`end for` closes the loop. Bare `end` also works. The `step` clause is
 optional; the default step is 1.
 
 From `tutorial/05_loops.bcl`:
@@ -428,12 +428,12 @@ From `tutorial/05_loops.bcl`:
 ' Squares 1..5
 for i% = 1 to 5
     PRINT "  " + STR$(i%) + "^2 = " + STR$(i% * i%)
-for end
+end for
 
 ' Countdown with negative step
 for n% = 3 to 1 step -1
     PRINT "  " + STR$(n%)
-for end
+end for
 PRINT "  Go!"
 
 ' EXIT FOR — stop at the first even number greater than 4
@@ -442,20 +442,20 @@ for i% = 1 to 20
         PRINT "First even > 4: " + STR$(i%)
         exit for
     end if
-for end
+end for
 ```
 
 `exit for` exits the enclosing `for` loop immediately.
 
-### WHILE / WHILE END
+### WHILE / END WHILE
 
 ```
 while condition
     ' body
-while end
+end while
 ```
 
-`while end` closes the loop. Bare `end` also works.
+`end while` closes the loop. Bare `end` also works.
 
 From `tutorial/05_loops.bcl`:
 
@@ -465,7 +465,7 @@ p% = 1
 while p% < 100
     PRINT "  " + STR$(p%)
     p% = p% * 2
-while end
+end while
 
 ' EXIT WHILE — stop after 8 Collatz steps
 n% = 27
@@ -482,20 +482,20 @@ while n% <> 1
     end if
     steps% = steps% + 1
     PRINT "  " + STR$(n%)
-while end
+end while
 ```
 
 `exit while` exits the enclosing `while` loop immediately.
 
-### DO / DO END
+### DO / END DO
 
 ```
 do [while/until condition]
     ' body
-do end
+end do
 ```
 
-`do end` closes the loop. Bare `end` also works. The optional `while` or
+`end do` closes the loop. Bare `end` also works. The optional `while` or
 `until` clause tests the condition before each iteration.
 
 From `tutorial/05_loops.bcl`:
@@ -506,14 +506,14 @@ k% = 1
 do while k% <= 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 
 ' DO UNTIL — enters while condition is false
 k% = 1
 do until k% > 3
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 
 ' Run body at least once (post-check via EXIT DO)
 k% = 99
@@ -523,7 +523,7 @@ do
     if k% > 3 then
         exit do
     end if
-do end
+end do
 
 ' EXIT DO
 k% = 1
@@ -533,7 +533,7 @@ do
     end if
     PRINT "  " + STR$(k%)
     k% = k% + 1
-do end
+end do
 ```
 
 `exit do` exits the enclosing `do` loop immediately.
@@ -759,7 +759,7 @@ end procedure
 procedure fillRange(arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
-    for end
+    end for
 end procedure
 ```
 
@@ -854,9 +854,9 @@ function insertionSort%(arr%, count%)
         while j% >= 0 and arr%(j%) > key%
             arr%(j% + 1) = arr%(j%)
             j% = j% - 1
-        while end
+        end while
         arr%(j% + 1) = key%
-    for end
+    end for
     return 0
 end function
 
@@ -865,7 +865,7 @@ function indexOf%(arr%, count%, target%)
         if arr%(i%) = target% then
             return i%
         end if
-    for end
+    end for
     return -1
 end function
 ```
@@ -1030,7 +1030,7 @@ OPEN csvFile$ FOR INPUT AS #1
 while EOF(1) = 0
     INPUT #1, name$, score%, result$
     PRINT "  " + name$ + ": " + STR$(score%) + "  [" + result$ + "]"
-while end
+end while
 CLOSE #1
 ```
 
@@ -1052,7 +1052,7 @@ OPEN csvFile$ FOR INPUT AS #1
 while EOF(1) = 0
     LINE INPUT #1, line$
     PRINT "  " + line$
-while end
+end while
 CLOSE #1
 ```
 
@@ -1083,13 +1083,13 @@ DIM capital$(NUM_CAPITALS%)
 
 for i% = 1 to NUM_CAPITALS%
     READ country$(i%), capital$(i%)
-for end
+end for
 
 PRINT "Country         Capital"
 PRINT "--------------- ---------------"
 for i% = 1 to NUM_CAPITALS%
     PRINT country$(i%) + "        " + capital$(i%)
-for end
+end for
 
 ' RESTORE rewinds to the first DATA element
 RESTORE
@@ -1450,7 +1450,7 @@ p% = 1
 while p% < 100
     PRINT STR$(p%)
     p% = p% * 2
-while end
+end while
 ```
 
 Becomes:
@@ -1470,7 +1470,7 @@ p% = 1
 do while k% <= 3
     PRINT STR$(k%)
     k% = k% + 1
-do end
+end do
 ```
 
 Becomes:
@@ -1486,7 +1486,7 @@ Becomes:
 ### For Lowering
 
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently.
-The BASCAL `for end` (or bare `end`) is stripped; the BASIC `NEXT` is emitted
+The BASCAL `end for` (or bare `end`) is stripped; the BASIC `NEXT` is emitted
 by the compiler:
 
 ```
@@ -1617,12 +1617,12 @@ bcc main.bcl -L libs/sort -L libs/string
 | `CONST` | `CONST name = expr` | Declare a named constant |
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
 | `DIM` | `DIM name[(size)]` | Declare a variable or array |
-| `DO` | `DO [WHILE/UNTIL cond]` … `DO END` | Conditional loop |
+| `DO` | `DO [WHILE/UNTIL cond]` … `END DO` | Conditional loop |
 | `END` | `END` | End of program |
 | `EXIT DO` | `EXIT DO` | Exit enclosing DO loop |
 | `EXIT FOR` | `EXIT FOR` | Exit enclosing FOR loop |
 | `EXIT WHILE` | `EXIT WHILE` | Exit enclosing WHILE loop |
-| `FOR` | `FOR v = start TO end [STEP s]` … `FOR END` | Counted loop |
+| `FOR` | `FOR v = start TO end [STEP s]` … `END FOR` | Counted loop |
 | `FUNCTION` | `FUNCTION name%(params)` … `END FUNCTION` | Define a function with a return value |
 | `GOSUB` | `GOSUB lineno` | Call BASIC subroutine |
 | `GOTO` | `GOTO lineno` | Unconditional branch |
@@ -1648,5 +1648,5 @@ bcc main.bcl -L libs/sort -L libs/string
 | `STOP` | `STOP` | Stop program execution |
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
 | `SYSTEM` | `SYSTEM` | Exit to operating system |
-| `WHILE` | `WHILE cond` … `WHILE END` | Condition-at-top loop |
+| `WHILE` | `WHILE cond` … `END WHILE` | Condition-at-top loop |
 | `WRITE #` | `WRITE #n, expr[, ...]` | Write to file (quoted format) |
