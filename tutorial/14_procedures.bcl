@@ -1,0 +1,63 @@
+// Tutorial 14 — Procedures
+//
+// A procedure is like a function but returns no value.  Declare it with
+// PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.
+//
+// Procedures are lowered the same way as functions:
+//   1. Arguments are copied to global variables  procname_paramname
+//   2. GOSUB to the generated label
+//   3. No result variable is read back
+//
+// Use procedures for actions that produce side effects (output, file I/O,
+// modifying arrays) rather than for computing a value.
+//
+// A bare RETURN exits a procedure early.  Falling through to END PROCEDURE
+// is also valid — an implicit RETURN is emitted.
+
+/* Procedure with no parameters */
+procedure printSeparator()
+    PRINT "----------------------------"
+end procedure
+
+/* Procedure that prints a labelled value */
+procedure printScore(label$, score%)
+    PRINT label$ + ": " + STR$(score%)
+end procedure
+
+/* Procedure with early exit */
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return          // early exit — nothing printed for failing scores
+    end if
+    PRINT name$ + " passed with " + STR$(score%)
+end procedure
+
+/* Procedure that modifies an array in place (copy-in / copy-out) */
+procedure fillRange(arr%, count%, value%)
+    for i% = 0 to count% - 1
+        arr%(i%) = value%
+    next i%
+end procedure
+
+/* --- Drive the procedures --- */
+
+printSeparator()
+printScore("Alice", 91)
+printScore("Bob",   54)
+printScore("Carol", 78)
+printSeparator()
+
+PRINT "Passes only:"
+printIfPass("Alice", 91)   // printed
+printIfPass("Bob",   54)   // skipped (score < 60)
+printIfPass("Carol", 78)   // printed
+
+CONST N% = 5
+DIM data%(N%)
+fillRange(data%(), N%, 99)
+PRINT "Filled array:"
+for i% = 0 to N% - 1
+    PRINT "  data%(" + STR$(i%) + ") = " + STR$(data%(i%))
+next i%
+
+END

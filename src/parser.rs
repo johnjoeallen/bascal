@@ -51,6 +51,8 @@ impl Parser {
                 declarations.push(self.parse_path_decl(true)?);
             } else if self.check_keyword("function") {
                 functions.push(self.parse_function()?);
+            } else if self.check_keyword("procedure") {
+                functions.push(self.parse_procedure()?);
             } else {
                 statements.push(self.parse_statement()?);
             }
@@ -133,7 +135,26 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("function")?;
         self.consume_line_end()?;
-        Ok(FunctionDef { name, params, body })
+        Ok(FunctionDef { name, params, body, is_procedure: false })
+    }
+
+    fn parse_procedure(&mut self) -> ParseResult<FunctionDef> {
+        self.expect_keyword("procedure")?;
+        let raw = self.expect_ident("expected procedure name")?;
+        let name = BasicIdent::parse(&raw);
+        if name.suffix.is_some() {
+            return Err(self.error("procedure names must not carry a type suffix"));
+        }
+        self.expect(TokenKind::LParen, "expected `(` after procedure name")?;
+        let params = self.parse_ident_list()?;
+        self.expect(TokenKind::RParen, "expected `)` after procedure parameters")?;
+        self.consume_line_end()?;
+
+        let body = self.parse_block(&[BlockEnd::EndProcedure])?;
+        self.expect_keyword("end")?;
+        self.expect_keyword("procedure")?;
+        self.consume_line_end()?;
+        Ok(FunctionDef { name, params, body, is_procedure: true })
     }
 
     fn parse_ident_list(&mut self) -> ParseResult<Vec<BasicIdent>> {
@@ -368,6 +389,10 @@ impl Parser {
 
     fn parse_return(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("return")?;
+        if self.at_line_end() {
+            self.consume_line_end()?;
+            return Ok(Statement::ReturnVoid);
+        }
         let value = self.parse_expr(0)?;
         self.consume_line_end()?;
         Ok(Statement::Return { value })
@@ -947,6 +972,9 @@ impl Parser {
             BlockEnd::EndFunction => {
                 self.check_keyword("end") && self.check_next_keyword("function")
             }
+            BlockEnd::EndProcedure => {
+                self.check_keyword("end") && self.check_next_keyword("procedure")
+            }
             BlockEnd::Next => self.check_keyword("next"),
             BlockEnd::Wend => self.check_keyword("wend"),
             BlockEnd::Loop => self.check_keyword("loop"),
@@ -1062,6 +1090,7 @@ enum BlockEnd {
     ElseIf,
     EndIf,
     EndFunction,
+    EndProcedure,
     Next,
     Wend,
     Loop,

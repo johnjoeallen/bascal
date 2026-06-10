@@ -352,6 +352,40 @@ END
     }
 
     #[test]
+    fn lowers_procedures_to_gosub_without_result_variable() {
+        let source = r#"procedure greet(name$)
+    PRINT "Hello, " + name$
+end procedure
+
+greet("World")
+END
+"#;
+        let output = compile_source("greet.bcl", source).expect("procedure should compile");
+        assert!(output.contains("GOSUB "), "should emit GOSUB for procedure call");
+        assert!(!output.contains("greet_result"), "procedures must not emit a result variable");
+        assert!(output.contains("' procedure greet("), "should annotate as procedure");
+        assert!(output.contains("' end procedure greet"), "should close annotation as procedure");
+    }
+
+    #[test]
+    fn procedure_early_return_emits_bare_return() {
+        let source = r#"procedure sayIfPositive(n%)
+    if n% <= 0 then
+        return
+    end if
+    PRINT STR$(n%)
+end procedure
+
+sayIfPositive(5)
+sayIfPositive(-1)
+END
+"#;
+        let output = compile_source("early.bcl", source).expect("procedure with return should compile");
+        assert!(output.contains("RETURN"), "should emit RETURN");
+        assert!(!output.contains("sayIfPositive_result"), "no result variable for procedure");
+    }
+
+    #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
         let output =

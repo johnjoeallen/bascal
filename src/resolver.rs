@@ -42,6 +42,9 @@ fn reject_direct_recursion(program: &Program, diagnostics: &mut Vec<Diagnostic>)
 
 fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     for function in &program.functions {
+        if function.is_procedure {
+            continue;
+        }
         if !contains_return(&function.body) {
             diagnostics.push(Diagnostic::error(
                 generated_pos(),
@@ -171,6 +174,7 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         | Statement::ExitWhile
         | Statement::ExitDo
         | Statement::Restore(None)
+        | Statement::ReturnVoid
         | Statement::Raw(_)
         | Statement::BlockComment(_)
         | Statement::BlankLine => false,
@@ -195,7 +199,7 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
 
 fn contains_return(statements: &[Statement]) -> bool {
     statements.iter().any(|statement| match statement {
-        Statement::Return { .. } => true,
+        Statement::Return { .. } | Statement::ReturnVoid => true,
         Statement::If {
             then_body,
             else_body,

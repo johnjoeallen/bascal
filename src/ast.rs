@@ -42,6 +42,7 @@ pub struct FunctionDef {
     pub name: BasicIdent,
     pub params: Vec<BasicIdent>,
     pub body: Vec<Statement>,
+    pub is_procedure: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -215,6 +216,7 @@ pub enum Statement {
         targets: Vec<Expr>,
         is_gosub: bool,
     },
+    ReturnVoid,
     Raw(String),
     BlockComment(Vec<String>),
     BlankLine,

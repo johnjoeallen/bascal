@@ -17,6 +17,7 @@ struct FunctionInfo {
     label: String,
     result: BasicIdent,
     params: Vec<(BasicIdent, BasicIdent)>,
+    is_procedure: bool,
 }
 
 impl CodeGenerator {
@@ -104,8 +105,9 @@ impl CodeGenerator {
             .map(|p| p.as_basic())
             .collect::<Vec<_>>()
             .join(", ");
+        let kind = if function.is_procedure { "procedure" } else { "function" };
         self.blank();
-        self.line(&format!("' function {}({})", function.name, params));
+        self.line(&format!("' {kind} {}({})", function.name, params));
         self.line(&format!("{}:", info.label));
         self.indent += 1;
         self.statements(&function.body, Some(&info));
@@ -113,7 +115,7 @@ impl CodeGenerator {
             self.line("RETURN");
         }
         self.indent -= 1;
-        self.line(&format!("' end function {}", function.name));
+        self.line(&format!("' end {kind} {}", function.name));
     }
 
     fn statements(&mut self, statements: &[Statement], current_function: Option<&FunctionInfo>) {
@@ -199,6 +201,9 @@ impl CodeGenerator {
                     self.line(&format!("PRINT {}", rendered.join(", ")));
                 }
             }
+            Statement::ReturnVoid => {
+                self.line("RETURN");
+            }
             Statement::Return { value } => {
                 let Some(info) = current_function else {
                     let (prelude, value) = self.expr(value, current_function);
@@ -206,10 +211,14 @@ impl CodeGenerator {
                     self.line(&format!("RETURN {}", value));
                     return;
                 };
-                let (prelude, value) = self.expr(value, current_function);
-                self.lines(prelude);
-                self.line(&format!("{} = {}", info.result.as_basic(), value));
-                self.line("RETURN");
+                if info.is_procedure {
+                    self.line("RETURN");
+                } else {
+                    let (prelude, value) = self.expr(value, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("{} = {}", info.result.as_basic(), value));
+                    self.line("RETURN");
+                }
             }
             Statement::If {
                 condition,
@@ -819,6 +828,7 @@ impl FunctionInfo {
                 suffix: function.name.suffix,
             },
             params,
+            is_procedure: function.is_procedure,
         }
     }
 }
@@ -928,7 +938,7 @@ fn ends_with_return(statements: &[Statement]) -> bool {
         .iter()
         .rev()
         .find(|s| !matches!(s, Statement::BlankLine))
-        .is_some_and(|s| matches!(s, Statement::Return { .. }))
+        .is_some_and(|s| matches!(s, Statement::Return { .. } | Statement::ReturnVoid))
 }
 
 fn number_basic_lines(source: &str, full: bool) -> String {
