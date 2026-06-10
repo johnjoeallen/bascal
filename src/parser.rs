@@ -576,10 +576,12 @@ mod tests {
 
     #[test]
     fn parses_dependency_declarations() {
-        let program = parse(
-            "require com.bascal.sort.bubbleSort%\nimport com.bascal.sort.shakerSort%\n",
-        );
-        assert!(matches!(program.declarations[0], DependencyDecl::Require(_)));
+        let program =
+            parse("require com.bascal.sort.bubbleSort\nimport com.bascal.sort.shakerSort\n");
+        assert!(matches!(
+            program.declarations[0],
+            DependencyDecl::Require(_)
+        ));
         assert!(matches!(program.declarations[1], DependencyDecl::Import(_)));
     }
 

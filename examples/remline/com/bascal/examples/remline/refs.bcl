@@ -1,0 +1,76 @@
+require com.bascal.examples.remline.lineparse
+require com.bascal.examples.remline.strings
+
+' Fixed-size reference tracking for the example.
+' BASCAL keeps everything global, so the reference list is a small shared
+' buffer that every helper can see.
+
+function addRef%(lineNo%)
+    ' Zero is not a useful line-number target.
+    if lineNo% = 0 then
+        return 0
+    end if
+
+    ' Do not record the same branch target twice.
+    addref_i% = 1
+    while addref_i% <= refCount%
+        if refNumber%(addref_i%) = lineNo% then
+            return 0
+        end if
+        addref_i% = addref_i% + 1
+    wend
+
+    if refCount% >= 1000 then
+        return 0
+    end if
+
+    refCount% = refCount% + 1
+    refNumber%(refCount%) = lineNo%
+    return 1
+end function
+
+function isReferenced%(lineNo%)
+    isreferenced_i% = 1
+    while isreferenced_i% <= refCount%
+        if refNumber%(isreferenced_i%) = lineNo% then
+            return 1
+        end if
+        isreferenced_i% = isreferenced_i% + 1
+    wend
+    return 0
+end function
+
+function collectRefs%(line$)
+    ' Scan for the small set of direct numeric flow-control forms this example
+    ' supports.
+    collectrefs_found% = 0
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "GOTO")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "GOSUB")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "THEN")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "ELSE")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "RESTORE")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "RESUME")
+    collectrefs_found% = collectrefs_found% or scanKeywordRefs%(line$, "RUN")
+    return collectrefs_found%
+end function
+
+function scanKeywordRefs%(line$, keyword$)
+    ' We keep the scan intentionally simple: locate the keyword and read the
+    ' first number that follows it.
+    scankeywordrefs_upper_line$ = line$
+    scankeywordrefs_upper_keyword$ = keyword$
+    scankeywordrefs_upper_line$ = upper$(scankeywordrefs_upper_line$)
+    scankeywordrefs_upper_keyword$ = upper$(scankeywordrefs_upper_keyword$)
+    scankeywordrefs_pos% = INSTR(scankeywordrefs_upper_line$, scankeywordrefs_upper_keyword$)
+    if scankeywordrefs_pos% = 0 then
+        return 0
+    end if
+
+    scankeywordrefs_after$ = trimLeft$(mid$(line$, scankeywordrefs_pos% + len(keyword$)))
+    scankeywordrefs_ref% = parseLineNumber%(scankeywordrefs_after$)
+    if scankeywordrefs_ref% > 0 then
+        addRef%(scankeywordrefs_ref%)
+        return 1
+    end if
+    return 0
+end function

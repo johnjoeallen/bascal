@@ -1,9 +1,9 @@
 ' Sort driver for the BASCAL example sort library.
 ' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
-require com.bascal.sort.bubbleSort%
-require com.bascal.sort.shakerSort%
-require com.bascal.sort.shellSort%
-require com.bascal.sort.quickSort%
+require com.bascal.sort.bubbleSort
+require com.bascal.sort.shakerSort
+require com.bascal.sort.shellSort
+require com.bascal.sort.quickSort
 
 DIM source%(5000)
 DIM bubbleData%(5000)

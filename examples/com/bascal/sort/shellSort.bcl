@@ -1,6 +1,6 @@
 ' Shell sort demonstrates a nested dependency. The helper is intentionally
 ' trivial; the point is to exercise recursive require resolution.
-require com.bascal.sort.helpers.touch%
+require com.bascal.sort.helpers.touch
 
 function shellSort%(data%, count%)
     ' Normalize the count through a required helper so this file has its own

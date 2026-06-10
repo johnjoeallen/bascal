@@ -50,7 +50,7 @@ into the generated output. The two keywords are equivalent.
 Path mapping: the BASIC suffix is stripped and dots become directory separators.
 
 ```
-require com.bascal.sort.bubbleSort%  →  com/bascal/sort/bubbleSort.bcl
+require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
 ```
 
 The input file's directory is always searched first; additional roots are added
@@ -120,6 +120,7 @@ parameters. Use an explicit stack array to simulate recursion.
 ```
 src/        Rust compiler source
 examples/   BASCAL source examples and dependency tree
+output/     generated BASIC output from the example suite
 tmp/        temporary compiled binaries (git-ignored)
 ```
 
@@ -129,7 +130,22 @@ The sort driver (`examples/sort_driver.bcl`) exercises recursive `require`,
 array argument passing, and timing:
 
 ```bash
-bcc examples/sort_driver.bcl
+cargo run -- examples/sort_driver.bcl -o output/sort_driver.bas
+fbc -lang qb output/sort_driver.bas -x tmp/sort_driver
+./tmp/sort_driver
+```
+
+### REMLINE
+
+`examples/remline` is a real-world BASCAL example inspired by old BASIC
+line-number utilities. It analyses a line-numbered BASIC program and removes
+unnecessary line numbers while preserving referenced targets.
+
+```bash
+cargo run -- examples/remline/remline.bcl -L examples/remline -o output/remline/remline.bas
+fbc -lang qb output/remline/remline.bas -x tmp/remline
+./tmp/remline > examples/remline/sample/output.bas
+diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
 ```
 
 ## Run With FreeBASIC
@@ -159,8 +175,10 @@ env -u RUSTC_WRAPPER cargo test
 ```
 
 - Unit-tests for lexer, parser, validation, and function lowering
-- Compiles every `examples/*.bcl` and writes output to `output/`
-- If `fbc` is installed, compiles and runs `sort_driver` end-to-end
+- Compiles every driver-style `examples/**/*.bcl` file outside dependency
+  `com/` trees and writes output to `output/`
+- If `fbc` is installed, compiles and runs `sort_driver` and `remline`
+  end-to-end
 
 ## Current Limits
 

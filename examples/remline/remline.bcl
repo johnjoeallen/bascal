@@ -1,0 +1,14 @@
+' REMLINE demo driver.
+' The first version uses embedded sample data because file I/O is not yet part
+' of the BASCAL runtime surface.
+' The dependency graph is still real: the driver pulls in parsing, reference
+' collection, and string helpers through BASCAL's path-style require syntax.
+require com.bascal.examples.remline.lineparse
+require com.bascal.examples.remline.refs
+require com.bascal.examples.remline.transform
+require com.bascal.examples.remline.strings
+
+loadSample%()
+collectAllRefs%()
+transformLines%()
+END

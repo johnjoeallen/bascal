@@ -6,15 +6,15 @@ use std::process::Command;
 fn compiles_every_example_bcl_file() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let examples_dir = repo_root.join("examples");
+    let output_dir = repo_root.join("output");
 
-    let mut examples = fs::read_dir(&examples_dir)
-        .expect("examples directory should exist")
-        .map(|entry| {
-            entry
-                .expect("example directory entry should be readable")
-                .path()
+    let mut examples = collect_example_sources(&examples_dir)
+        .into_iter()
+        .filter(|path| {
+            !path
+                .components()
+                .any(|component| component.as_os_str() == "com")
         })
-        .filter(|path| path.extension().is_some_and(|extension| extension == "bcl"))
         .collect::<Vec<_>>();
     examples.sort();
 
@@ -25,17 +25,113 @@ fn compiles_every_example_bcl_file() {
     );
 
     for example in examples {
-        compile_example(&example);
+        compile_example(&example, &examples_dir, &output_dir);
     }
 }
 
-fn compile_example(path: &PathBuf) {
+#[test]
+fn freebasic_runs_sort_driver_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("examples/sort_driver.bcl");
+    let output_path = repo_root.join("output/sort_driver.bas");
+
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/sort_driver");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled sort driver");
+    assert!(
+        run.status.success(),
+        "compiled sort driver failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    for label in ["Bubble: OK", "Shaker: OK", "Shell: OK", "Quick: OK"] {
+        assert_eq!(stdout.matches(label).count(), 1, "missing {label}");
+    }
+}
+
+#[test]
+fn freebasic_runs_remline_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("examples/remline/remline.bcl");
+    let output_path = repo_root.join("output/remline/remline.bas");
+
+    compile_with_cli(
+        &source_path,
+        &output_path,
+        &["-L", "examples/remline", "--clean", "--binary"],
+    );
+
+    let executable_path = repo_root.join("tmp/remline");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled remline example");
+    assert!(
+        run.status.success(),
+        "compiled remline example failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let expected = fs::read_to_string(repo_root.join("examples/remline/sample/expected.bas"))
+        .expect("expected output should be readable");
+    assert_eq!(
+        normalize_newlines(&String::from_utf8_lossy(&run.stdout)),
+        normalize_newlines(&expected),
+        "remline output should match the sample expectation"
+    );
+}
+
+fn collect_example_sources(dir: &Path) -> Vec<PathBuf> {
+    let mut sources = Vec::new();
+    collect_example_sources_recursive(dir, &mut sources);
+    sources
+}
+
+fn collect_example_sources_recursive(dir: &Path, sources: &mut Vec<PathBuf>) {
+    let entries = fs::read_dir(dir).unwrap_or_else(|err| {
+        panic!("failed to read {}: {err}", dir.display());
+    });
+
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|err| panic!("failed to read entry in {}: {err}", dir.display()))
+            .path();
+
+        if path.is_dir() {
+            collect_example_sources_recursive(&path, sources);
+            continue;
+        }
+
+        if path.extension().is_some_and(|extension| extension == "bcl") {
+            sources.push(path);
+        }
+    }
+}
+
+fn compile_example(path: &Path, examples_dir: &Path, output_dir: &Path) {
     let options = bcc::CompileOptions::new();
     let output = bcc::compile_file(path, &options).unwrap_or_else(|diagnostics| {
         panic!("failed to compile {}:\n{diagnostics:#?}", path.display())
     });
 
-    let output_path = bcc::default_output_path(path);
+    let output_path = output_path_for_source(path, examples_dir, output_dir);
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)
+            .unwrap_or_else(|err| panic!("failed to create {}: {err}", parent.display()));
+    }
     fs::write(&output_path, &output)
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", output_path.display()));
 
@@ -62,25 +158,75 @@ fn compile_example(path: &PathBuf) {
     assert_branch_targets_are_numeric(&output, path);
 }
 
+fn compile_with_cli(source_path: &Path, output_path: &Path, extra_args: &[&str]) {
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)
+            .unwrap_or_else(|err| panic!("failed to create {}: {err}", parent.display()));
+    }
+
+    let mut command = Command::new(env!("CARGO_BIN_EXE_bcc"));
+    command.arg(source_path).arg("-o").arg(output_path);
+    for arg in extra_args {
+        command.arg(arg);
+    }
+
+    let compile = command.output().expect("failed to run bcc");
+    assert!(
+        compile.status.success(),
+        "bcc failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&compile.stdout),
+        String::from_utf8_lossy(&compile.stderr)
+    );
+}
+
+fn output_path_for_source(source: &Path, examples_dir: &Path, output_dir: &Path) -> PathBuf {
+    let relative = source.strip_prefix(examples_dir).unwrap_or(source);
+    output_dir.join(relative).with_extension("bas")
+}
+
 fn assert_branch_targets_are_numeric(output: &str, path: &Path) {
     for line in output.lines() {
         if line_payload_is_comment(line) {
             continue;
         }
-        for keyword in ["GOTO", "GOSUB"] {
-            if let Some((_, target)) = line.split_once(keyword) {
-                let target = target.trim();
-                assert!(
-                    target
-                        .chars()
-                        .next()
-                        .is_some_and(|first| first.is_ascii_digit()),
-                    "{} should use numeric {keyword} targets, got `{line}`",
-                    path.display()
-                );
+        let trimmed = line.trim_start();
+        if let Some(target) = branch_target_after_keyword(trimmed, "GOTO") {
+            assert!(
+                target
+                    .chars()
+                    .next()
+                    .is_some_and(|first| first.is_ascii_digit()),
+                "{} should use numeric GOTO targets, got `{line}`",
+                path.display()
+            );
+        }
+        if let Some(target) = branch_target_after_keyword(trimmed, "GOSUB") {
+            assert!(
+                target
+                    .chars()
+                    .next()
+                    .is_some_and(|first| first.is_ascii_digit()),
+                "{} should use numeric GOSUB targets, got `{line}`",
+                path.display()
+            );
+        }
+    }
+}
+
+fn branch_target_after_keyword<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
+    if line.starts_with(keyword) {
+        return line.strip_prefix(keyword).map(str::trim_start);
+    }
+
+    if line.starts_with("IF ") {
+        for marker in [format!(" THEN {keyword} "), format!(" THEN {keyword}\t")] {
+            if let Some(index) = line.find(&marker) {
+                return Some(line[index + marker.len()..].trim_start());
             }
         }
     }
+
+    None
 }
 
 fn line_payload_is_comment(line: &str) -> bool {
@@ -91,41 +237,6 @@ fn line_payload_is_comment(line: &str) -> bool {
     payload.starts_with('\'')
 }
 
-#[test]
-fn freebasic_runs_sort_driver_when_available() {
-    if Command::new("fbc").arg("-version").output().is_err() {
-        return;
-    }
-
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = manifest_dir.join("examples/sort_driver.bcl");
-
-    let compile = Command::new(env!("CARGO_BIN_EXE_bcc"))
-        .arg(&source_path)
-        .arg("--clean")
-        .arg("--binary")
-        .output()
-        .expect("failed to run bcc");
-    assert!(
-        compile.status.success(),
-        "bcc --binary failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&compile.stdout),
-        String::from_utf8_lossy(&compile.stderr)
-    );
-
-    let executable_path = source_path.with_extension("");
-    let run = Command::new(&executable_path)
-        .output()
-        .expect("failed to run compiled sort driver");
-    assert!(
-        run.status.success(),
-        "compiled sort driver failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&run.stdout),
-        String::from_utf8_lossy(&run.stderr)
-    );
-
-    let stdout = String::from_utf8_lossy(&run.stdout);
-    for label in ["Bubble: OK", "Shaker: OK", "Shell: OK", "Quick: OK"] {
-        assert_eq!(stdout.matches(label).count(), 1, "missing {label}");
-    }
+fn normalize_newlines(text: &str) -> String {
+    text.replace("\r\n", "\n")
 }

@@ -34,8 +34,20 @@ fn run() -> Result<(), String> {
         .clone()
         .unwrap_or_else(|| default_output_path(cli.input.as_path()));
 
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "error: failed to create output directory {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
-        if cli.binary && !is_up_to_date(&cli.input, &output_path.with_extension("")) {
+        let binary_path = PathBuf::from("tmp").join(output_path.file_stem().ok_or_else(|| {
+            format!("error: invalid BASIC output path {}", output_path.display())
+        })?);
+        if cli.binary && !is_up_to_date(&cli.input, &binary_path) {
             return invoke_fbc(&output_path);
         }
         println!("up to date: {}", output_path.display());
@@ -82,7 +94,13 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
 }
 
 fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
-    let binary_path = bas_path.with_extension("");
+    let binary_name = bas_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid BASIC output path {}", bas_path.display()))?;
+    let binary_dir = PathBuf::from("tmp");
+    fs::create_dir_all(&binary_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
+    let binary_path = binary_dir.join(binary_name);
     let status = Command::new("fbc")
         .arg("-lang")
         .arg("qb")
@@ -125,7 +143,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                 library_dirs
                     .push(PathBuf::from(args.get(i).ok_or_else(|| {
                         "error: -L requires a directory".to_string()
-                      })?));
+                    })?));
             }
             "-l" => {
                 i += 1;
@@ -170,7 +188,7 @@ fn usage() -> String {
         "  -L dir               Add a library search directory for require resolution",
         "  --line-numbers       Number every output line, not just branch targets",
         "  --clean, -c          Recompile even if the output is already up to date",
-        "  --binary, -b         Invoke fbc to compile the generated .bas to a binary",
+        "  --binary, -b         Invoke fbc to compile the generated .bas to tmp/<stem>",
     ]
     .join("\n")
 }

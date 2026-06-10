@@ -143,16 +143,7 @@ fn resolve_required_symbol(
 }
 
 fn required_symbol_to_path(raw: &str) -> PathBuf {
-    let mut symbol = raw.to_string();
-    if symbol
-        .chars()
-        .last()
-        .is_some_and(|suffix| ast::TypeSuffix::from_char(suffix).is_some())
-    {
-        symbol.pop();
-    }
-
-    let mut path = symbol.split('.').collect::<PathBuf>();
+    let mut path = raw.split('.').collect::<PathBuf>();
     path.set_extension("bcl");
     path
 }
@@ -179,7 +170,7 @@ mod tests {
         let source = include_str!("../examples/sort_driver.bcl");
         let output =
             compile_source("examples/sort_driver.bcl", source).expect("sample should compile");
-        assert!(output.contains("' require com.bascal.sort.bubbleSort%"));
+        assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         assert!(output.contains("bubbleSort%(bubbleData%(), 5000)"));
         assert!(output.contains("END"));
     }
@@ -196,20 +187,34 @@ END
 "#;
 
         let output = compile_source("add.bcl", source).expect("sample should compile");
-        assert!(output.contains("' function add%"), "spec comment should be emitted");
-        assert!(!output.lines().any(|l| {
-            let p = l.trim_start()
-                .trim_start_matches(|c: char| c.is_ascii_digit())
-                .trim_start();
-            !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
-        }), "should not emit BASCOM function declarations");
-        assert!(output.contains("' end function add%"), "end function comment should be emitted");
-        assert!(!output.lines().any(|l| {
-            let p = l.trim_start()
-                .trim_start_matches(|c: char| c.is_ascii_digit())
-                .trim_start();
-            !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
-        }), "should not emit BASCOM end function declarations");
+        assert!(
+            output.contains("' function add%"),
+            "spec comment should be emitted"
+        );
+        assert!(
+            !output.lines().any(|l| {
+                let p = l
+                    .trim_start()
+                    .trim_start_matches(|c: char| c.is_ascii_digit())
+                    .trim_start();
+                !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
+            }),
+            "should not emit BASCOM function declarations"
+        );
+        assert!(
+            output.contains("' end function add%"),
+            "end function comment should be emitted"
+        );
+        assert!(
+            !output.lines().any(|l| {
+                let p = l
+                    .trim_start()
+                    .trim_start_matches(|c: char| c.is_ascii_digit())
+                    .trim_start();
+                !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
+            }),
+            "should not emit BASCOM end function declarations"
+        );
         assert!(output.contains("add_left% = 10"));
         assert!(output.contains("add_right% = 20"));
         assert!(output.contains("GOSUB "));
@@ -261,9 +266,16 @@ END
         assert!(output.contains("' function shellSort%(data%, count%)"));
         assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
-        assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
-        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
-        assert!(output.lines().any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
+        assert!(
+            !output.contains("BCC_COPY%"),
+            "hardcoded BCC_COPY% loop var should not appear"
+        );
+        assert!(output
+            .lines()
+            .any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbleData%(")));
+        assert!(output
+            .lines()
+            .any(|l| l.contains("bubbleData%(") && l.contains(") = bubblesort_data%(")));
         assert!(output.contains("bubblesort_data%(j%) = bubblesort_data%(j% + 1)"));
         assert!(output.contains("quicksort_data%(wall%) = quicksort_data%(qHigh%)"));
         assert!(output.contains("GOSUB "));

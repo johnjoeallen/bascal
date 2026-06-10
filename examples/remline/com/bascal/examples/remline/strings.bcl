@@ -1,0 +1,31 @@
+' Shared string helpers for REMLINE.
+' These helpers keep the parsing code readable without pretending BASCAL has
+' local scope or modules.
+
+function trimLeft$(text$)
+    ' BASIC string handling is straightforward: walk from the left until the
+    ' first non-space character appears.
+    trimleft_i% = 1
+    while trimleft_i% <= len(text$)
+        trimleft_ch$ = mid$(text$, trimleft_i%, 1)
+        if trimleft_ch$ <> " " then
+            return mid$(text$, trimleft_i%)
+        end if
+        trimleft_i% = trimleft_i% + 1
+    wend
+    return ""
+end function
+
+function upper$(text$)
+    ' Use the BASIC runtime's upper-case conversion directly.
+    return UCASE$(text$)
+end function
+
+function startsWithKeyword%(text$, keyword$)
+    ' Convenience helper for future extensions and tests.
+    text$ = trimLeft$(text$)
+    if len(text$) < len(keyword$) then
+        return 0
+    end if
+    return upper$(left$(text$, len(keyword$))) = upper$(keyword$)
+end function
