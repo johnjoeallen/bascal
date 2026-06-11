@@ -257,6 +257,8 @@ impl Parser {
             self.advance(); self.consume_line_end()?; Ok(Statement::System)
         } else if self.check_keyword("randomize") {
             self.parse_randomize()
+        } else if self.check_keyword("poke") {
+            self.parse_poke()
         } else if self.check_keyword("swap") {
             self.parse_swap()
         } else if self.check_keyword("data") {
@@ -883,6 +885,15 @@ impl Parser {
         Ok(Statement::Randomize(expr))
     }
 
+    fn parse_poke(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("poke")?;
+        let address = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` in POKE")?;
+        let value = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Poke { address, value })
+    }
+
     fn parse_swap(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("swap")?;
         let a = self.parse_expr(0)?;
@@ -981,6 +992,11 @@ impl Parser {
                 let value = *value;
                 self.advance();
                 Expr::Integer(value)
+            }
+            TokenKind::HexLit(s) => {
+                let s = s.clone();
+                self.advance();
+                Expr::HexLit(s)
             }
             TokenKind::Float(value) => {
                 let value = *value;

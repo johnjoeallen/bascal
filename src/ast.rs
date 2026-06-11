@@ -201,6 +201,10 @@ pub enum Statement {
     System,
     Randomize(Option<Expr>),
     Swap(Expr, Expr),
+    Poke {
+        address: Expr,
+        value: Expr,
+    },
     Goto(Expr),
     Gosub(Expr),
     Input {
@@ -313,6 +317,7 @@ pub enum OpenMode {
 pub enum Expr {
     Integer(i64),
     Float(f64),
+    HexLit(String),
     String(String),
     Ident(BasicIdent),
     ArrayRef {

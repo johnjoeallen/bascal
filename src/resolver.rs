@@ -148,6 +148,9 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Swap(a, b) => {
             expr_calls_function(a, target) || expr_calls_function(b, target)
         }
+        Statement::Poke { address, value } => {
+            expr_calls_function(address, target) || expr_calls_function(value, target)
+        }
         Statement::Goto(e) | Statement::Gosub(e) | Statement::Restore(Some(e)) => {
             expr_calls_function(e, target)
         }
@@ -237,7 +240,7 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
         Expr::Binary { left, right, .. } => {
             expr_calls_function(left, target) || expr_calls_function(right, target)
         }
-        Expr::Integer(_) | Expr::Float(_) | Expr::String(_) | Expr::Ident(_) => false,
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => false,
     }
 }
 

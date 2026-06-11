@@ -12,6 +12,9 @@ const BASIC_BUILTINS: &[&str] = &[
     "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof",
     "sin", "cos", "tan", "atn", "log", "exp", "cint", "clng", "csng", "cdbl",
     "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
+    "fre", "lpos", "varptr",
+    // Print-position helpers (used inside PRINT)
+    "tab", "spc",
     // Multi-arg numeric
     "ubound", "lbound", "iif",
     // Random-access record packing/unpacking
@@ -385,6 +388,13 @@ impl CodeGenerator {
                 self.lines(a_prelude);
                 self.lines(b_prelude);
                 self.line(&format!("SWAP {a}, {b}"));
+            }
+            Statement::Poke { address, value } => {
+                let (addr_prelude, addr) = self.expr(address, current_function);
+                let (val_prelude, val) = self.expr(value, current_function);
+                self.lines(addr_prelude);
+                self.lines(val_prelude);
+                self.line(&format!("POKE {addr}, {val}"));
             }
             Statement::Goto(target) => {
                 let (prelude, target) = self.expr(target, current_function);
@@ -766,6 +776,7 @@ impl CodeGenerator {
         match node {
             Expr::Integer(value) => (Vec::new(), value.to_string()),
             Expr::Float(value) => (Vec::new(), value.to_string()),
+            Expr::HexLit(s) => (Vec::new(), s.clone()),
             Expr::String(value) => (Vec::new(), format!("\"{}\"", escape_string(value))),
             Expr::Ident(ident) => (Vec::new(), self.ident(ident, current_function)),
             Expr::ArrayRef { name, indices } => {
@@ -1288,6 +1299,7 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
                 _ => "%",
             }
         }
+        Expr::HexLit(_) => "%",
         Expr::Unary { expr, .. } => expr_type_suffix(expr),
         Expr::Binary { left, .. } => expr_type_suffix(left),
     }

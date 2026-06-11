@@ -56,6 +56,7 @@ pub enum TokenKind {
     Colon,
     Semicolon,
     Hash,
+    HexLit(String),
     Plus,
     Minus,
     Star,
@@ -108,6 +109,7 @@ impl<'a> Lexer<'a> {
                 '\'' => tokens.push(self.comment()),
                 '"' => tokens.push(self.string()),
                 '0'..='9' => tokens.push(self.number()),
+                '&' => tokens.push(self.hex_or_octal_lit()),
                 'A'..='Z' | 'a'..='z' | '_' => tokens.push(self.ident()),
                 '(' => tokens.push(self.single(TokenKind::LParen)),
                 ')' => tokens.push(self.single(TokenKind::RParen)),
@@ -187,6 +189,29 @@ impl<'a> Lexer<'a> {
         Token {
             kind: TokenKind::Ident(value),
             pos,
+        }
+    }
+
+    fn hex_or_octal_lit(&mut self) -> Token {
+        let pos = self.pos();
+        self.advance(); // consume '&'
+        let prefix = self.peek().map(|c| c.to_ascii_uppercase()).unwrap_or(' ');
+        if prefix == 'H' || prefix == 'O' {
+            self.advance(); // consume 'H' or 'O'
+            let mut digits = String::new();
+            while let Some(ch) = self.peek() {
+                if ch.is_ascii_hexdigit() {
+                    digits.push(ch.to_ascii_uppercase());
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            let lit = format!("&{prefix}{digits}");
+            Token { kind: TokenKind::HexLit(lit), pos }
+        } else {
+            // bare & — emit as integer 0 (shouldn't occur in valid BASCAL)
+            Token { kind: TokenKind::Number(0), pos }
         }
     }
 

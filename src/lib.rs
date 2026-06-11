@@ -546,6 +546,30 @@ end\n";
     }
 
     #[test]
+    fn peek_poke_and_new_builtins() {
+        let source = r#"' POKE writes; PEEK reads (builtin function)
+poke &H0400, 42
+x% = peek(&H0400)
+' TAB and SPC are recognised builtins for use in PRINT
+print tab(10); "hi"
+print spc(5); "hello"
+' FRE, LPOS, VARPTR
+f% = fre(0)
+p% = lpos(0)
+v% = varptr(x%)
+end
+"#;
+        let output = compile_source("hw.bcl", source).expect("should compile");
+        assert!(output.contains("POKE &H0400, 42"));
+        assert!(output.contains("x% = PEEK(&H0400)"));
+        assert!(output.contains("PRINT TAB(10); \"hi\""));
+        assert!(output.contains("PRINT SPC(5); \"hello\""));
+        assert!(output.contains("f% = FRE(0)"));
+        assert!(output.contains("p% = LPOS(0)"));
+        assert!(output.contains("v% = VARPTR(x%)"));
+    }
+
+    #[test]
     fn kill_and_name_as_statements() {
         let source = r#"kill "old.dat"
 name "old.dat" as "new.dat"
