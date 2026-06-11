@@ -287,20 +287,22 @@ impl Parser {
     fn parse_dim(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("dim")?;
         let name = BasicIdent::parse(&self.expect_ident("expected DIM variable name")?);
-        let size = if self.eat(TokenKind::LParen) {
-            let size = if self.eat(TokenKind::RParen) {
-                None
+        let sizes = if self.eat(TokenKind::LParen) {
+            if self.eat(TokenKind::RParen) {
+                Vec::new() // dim arr%() — declare without bounds
             } else {
-                let expr = self.parse_expr(0)?;
-                self.expect(TokenKind::RParen, "expected `)` after DIM size")?;
-                Some(expr)
-            };
-            size
+                let mut sizes = vec![self.parse_expr(0)?];
+                while self.eat(TokenKind::Comma) {
+                    sizes.push(self.parse_expr(0)?);
+                }
+                self.expect(TokenKind::RParen, "expected `)` after DIM dimensions")?;
+                sizes
+            }
         } else {
-            None
+            Vec::new()
         };
         self.consume_line_end()?;
-        Ok(Statement::Dim { name, size })
+        Ok(Statement::Dim { name, sizes })
     }
 
     fn parse_block_comment(&mut self) -> ParseResult<Statement> {

@@ -65,9 +65,7 @@ fn statements_call_function(statements: &[Statement], target: &BasicIdent) -> bo
 
 fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool {
     match statement {
-        Statement::Dim { size, .. } => size
-            .as_ref()
-            .is_some_and(|expr| expr_calls_function(expr, target)),
+        Statement::Dim { sizes, .. } => sizes.iter().any(|e| expr_calls_function(e, target)),
         Statement::Assignment { target: lhs, value } => {
             expr_calls_function(lhs, target) || expr_calls_function(value, target)
         }

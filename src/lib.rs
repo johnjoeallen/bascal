@@ -546,6 +546,21 @@ end\n";
     }
 
     #[test]
+    fn multidimensional_arrays() {
+        let source = r#"dim grid%(3, 4)
+dim cube%(2, 3, 4)
+grid%(1, 2) = 99
+x% = grid%(1, 2)
+end
+"#;
+        let output = compile_source("md.bcl", source).expect("should compile");
+        assert!(output.contains("DIM grid%(3, 4)"));
+        assert!(output.contains("DIM cube%(2, 3, 4)"));
+        assert!(output.contains("grid%(1, 2) = 99"));
+        assert!(output.contains("x% = grid%(1, 2)"));
+    }
+
+    #[test]
     fn peek_poke_and_new_builtins() {
         let source = r#"' POKE writes; PEEK reads (builtin function)
 poke &H0400, 42

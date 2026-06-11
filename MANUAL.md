@@ -203,19 +203,31 @@ assignment. Use `DIM` to declare arrays or to make intent clear.
 Declares an array or a simple variable.
 
 ```
-DIM playerName$
-DIM scores%(100)       ' 101 elements: scores%(0) .. scores%(100)
-DIM table$(50)
+dim playerName$
+dim scores%(100)       ' 1-D: 101 elements, scores%(0) .. scores%(100)
+dim grid%(9, 9)        ' 2-D: 10×10 grid, grid%(row, col)
+dim cube%(3, 4, 5)     ' 3-D: up to 8 dimensions supported
 ```
 
-When a size expression is provided, the variable is treated as a fixed-size
-array with indices 0 through *size*. The size expression may be any integer
-expression, including a constant:
+The bounds expression for each dimension may be any integer expression,
+including a constant. Elements are indexed from 0 to *bound* in each
+dimension (following `OPTION BASE 0`, the default):
 
 ```
-CONST MAX_ITEMS% = 20
-DIM items$(MAX_ITEMS%)
+const rows% = 4
+const cols% = 4
+dim matrix%(rows% - 1, cols% - 1)
+
+for r% = 0 to rows% - 1
+    for c% = 0 to cols% - 1
+        matrix%(r%, c%) = r% * cols% + c%
+    end for
+end for
 ```
+
+`dim name%()` (empty parens) declares an array without specifying bounds — use
+this when the array will be passed in from outside or when BASIC's default
+sizing is sufficient.
 
 ### CONST
 
@@ -1820,7 +1832,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `COMMON` | `common var[, ...]` | Declare suite COMMON variables (suite files only) |
 | `CONST` | `CONST name = expr` | Declare a named constant |
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
-| `DIM` | `DIM name[(size)]` | Declare a variable or array |
+| `DIM` | `DIM name[(d1[, d2, ...])]` | Declare a variable or 1-D/multi-D array |
 | `DO` | `DO [WHILE/UNTIL cond]` … `END DO` | Conditional loop |
 | `END` | `END` | End of program |
 | `EXIT DO` | `EXIT DO` | Exit enclosing DO loop |

@@ -1,7 +1,8 @@
 // Tutorial 8 — Arrays
 //
-// dim name%(size) declares an array of size+1 elements indexed 0..size.
-// Array elements are accessed with parentheses: arr%(i%).
+// dim name%(size) declares a 1-D array of size+1 elements, indexed 0..size.
+// dim name%(rows, cols) declares a 2-D array; more dimensions are allowed.
+// Array elements are accessed with parentheses: arr%(i%) or grid%(r%, c%).
 //
 // To pass an array to a function, use the plain variable name as the
 // parameter (e.g. arr%, not arr%()).  At the call site, write arr%()
@@ -69,5 +70,22 @@ if idx% >= 0 then
 else
     print str$(target%) + " not found"
 end if
+
+/* 2-D array — 3×3 identity matrix */
+dim identity%(2, 2)
+for r% = 0 to 2
+    for c% = 0 to 2
+        if r% = c% then
+            identity%(r%, c%) = 1
+        else
+            identity%(r%, c%) = 0
+        end if
+    end for
+end for
+
+print "Identity matrix:"
+for r% = 0 to 2
+    print identity%(r%, 0); identity%(r%, 1); identity%(r%, 2)
+end for
 
 end

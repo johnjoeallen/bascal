@@ -127,7 +127,7 @@ pub enum PrintToken {
 pub enum Statement {
     Dim {
         name: BasicIdent,
-        size: Option<Expr>,
+        sizes: Vec<Expr>,
     },
     Open {
         mode: OpenMode,

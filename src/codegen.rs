@@ -160,18 +160,20 @@ impl CodeGenerator {
 
     fn statement(&mut self, statement: &Statement, current_function: Option<&FunctionInfo>) {
         match statement {
-            Statement::Dim { name, size } => match size {
-                Some(size) => {
-                    let (prelude, size) = self.expr(size, current_function);
-                    self.lines(prelude);
-                    self.line(&format!(
-                        "DIM {}({})",
-                        self.ident(name, current_function),
-                        size
-                    ));
+            Statement::Dim { name, sizes } => {
+                let base = self.ident(name, current_function);
+                if sizes.is_empty() {
+                    self.line(&format!("DIM {base}"));
+                } else {
+                    let mut rendered = Vec::new();
+                    for s in sizes {
+                        let (prelude, val) = self.expr(s, current_function);
+                        self.lines(prelude);
+                        rendered.push(val);
+                    }
+                    self.line(&format!("DIM {base}({})", rendered.join(", ")));
                 }
-                None => self.line(&format!("DIM {}", self.ident(name, current_function))),
-            },
+            }
             Statement::Open { mode, file, channel, len } => {
                 let (file_prelude, file) = self.expr(file, current_function);
                 let (channel_prelude, channel) = self.expr(channel, current_function);
