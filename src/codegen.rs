@@ -212,6 +212,18 @@ impl CodeGenerator {
                 self.lines(channel_prelude);
                 self.line(&format!("CLOSE #{channel}"));
             }
+            Statement::Kill { file } => {
+                let (prelude, file) = self.expr(file, current_function);
+                self.lines(prelude);
+                self.line(&format!("KILL {file}"));
+            }
+            Statement::Name { from, to } => {
+                let (from_prelude, from) = self.expr(from, current_function);
+                let (to_prelude, to) = self.expr(to, current_function);
+                self.lines(from_prelude);
+                self.lines(to_prelude);
+                self.line(&format!("NAME {from} AS {to}"));
+            }
             Statement::Assignment { target, value } => {
                 let (target_prelude, target) = self.expr(target, current_function);
                 let (value_prelude, value) = self.expr(value, current_function);

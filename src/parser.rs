@@ -217,6 +217,10 @@ impl Parser {
             self.parse_rset()
         } else if self.check_keyword("seek") {
             self.parse_seek()
+        } else if self.check_keyword("kill") {
+            self.parse_kill()
+        } else if self.check_keyword("name") {
+            self.parse_name()
         } else if self.check_keyword("close") {
             self.parse_close()
         } else if self.check_keyword("global") {
@@ -504,6 +508,22 @@ impl Parser {
         let target = self.parse_expr(0)?;
         self.consume_line_end()?;
         Ok(Statement::LineInput { channel, target })
+    }
+
+    fn parse_kill(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("kill")?;
+        let file = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Kill { file })
+    }
+
+    fn parse_name(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("name")?;
+        let from = self.parse_expr(0)?;
+        self.expect_keyword("as")?;
+        let to = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Name { from, to })
     }
 
     fn parse_close(&mut self) -> ParseResult<Statement> {

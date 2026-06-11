@@ -1070,6 +1070,29 @@ Closes an open file.
 CLOSE #1
 ```
 
+### KILL
+
+Deletes a file from disk.
+
+```
+kill "temp.dat"
+kill tempFile$
+```
+
+Generates `KILL filename$`. The file must exist or a runtime error occurs.
+
+### NAME ... AS
+
+Renames (or moves) a file.
+
+```
+name "old.dat" as "new.dat"
+name srcFile$ as destFile$
+```
+
+Generates `NAME old AS new`. Both arguments are expressions; string variables
+or literals work equally well.
+
 ### WRITE # and INPUT #
 
 `WRITE #` stores values in a quoted, comma-separated format that `INPUT #`
@@ -1783,11 +1806,13 @@ bcc main.bcl -L libs/sort -L libs/string
 | `GOTO` | `GOTO lineno` | Unconditional branch |
 | `IF` | `IF cond THEN` … [`ELSEIF` …] [`ELSE` …] `END IF` | Conditional block |
 | `INPUT` | `INPUT [prompt;] var[, ...]` | Read from keyboard |
+| `KILL` | `KILL file$` | Delete a file |
 | `INPUT #` | `INPUT #n, var[, ...]` | Read from file |
 | `LET` | `LET var = expr` | Assignment (keyword optional) |
 | `LINE INPUT` | `LINE INPUT #n, var$` | Read full line from file |
 | `LOCATE` | `LOCATE row, col` | Position cursor |
 | `LPRINT` | `LPRINT expr[, ...]` | Print to printer |
+| `NAME` | `NAME old$ AS new$` | Rename a file |
 | `ON...GOTO` | `ON expr GOTO n1, n2, ...` | Computed GOTO |
 | `ON...GOSUB` | `ON expr GOSUB n1, n2, ...` | Computed GOSUB |
 | `OPEN` | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n` | Open file |

@@ -90,6 +90,10 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
                 })
         }
         Statement::Close { channel } => expr_calls_function(channel, target),
+        Statement::Kill { file } => expr_calls_function(file, target),
+        Statement::Name { from, to } => {
+            expr_calls_function(from, target) || expr_calls_function(to, target)
+        }
         Statement::Return { value } => expr_calls_function(value, target),
         Statement::If {
             condition,

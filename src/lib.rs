@@ -528,6 +528,17 @@ end
     }
 
     #[test]
+    fn kill_and_name_as_statements() {
+        let source = r#"kill "old.dat"
+name "old.dat" as "new.dat"
+end
+"#;
+        let output = compile_source("files.bcl", source).expect("should compile");
+        assert!(output.contains(r#"KILL "old.dat""#));
+        assert!(output.contains(r#"NAME "old.dat" AS "new.dat""#));
+    }
+
+    #[test]
     fn supports_new_binary_operators() {
         let source = r#"' exponentiation, integer division, MOD, XOR
 a% = 2 ^ 8

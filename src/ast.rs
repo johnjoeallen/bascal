@@ -146,6 +146,13 @@ pub enum Statement {
     Close {
         channel: Expr,
     },
+    Kill {
+        file: Expr,
+    },
+    Name {
+        from: Expr,
+        to: Expr,
+    },
     Assignment {
         target: Expr,
         value: Expr,
