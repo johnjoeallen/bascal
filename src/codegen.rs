@@ -239,6 +239,28 @@ impl CodeGenerator {
                     self.line(&format!("PRINT {body}"));
                 }
             }
+            Statement::PrintUsing { format, tokens } => {
+                let (fmt_pre, fmt_str) = self.expr(format, current_function);
+                self.lines(fmt_pre);
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
+                    self.line(&format!("PRINT USING {fmt_str}"));
+                } else {
+                    self.line(&format!("PRINT USING {fmt_str}; {body}"));
+                }
+            }
+            Statement::PrintFileUsing { channel, format, tokens } => {
+                let (ch_pre, ch) = self.expr(channel, current_function);
+                let (fmt_pre, fmt_str) = self.expr(format, current_function);
+                self.lines(ch_pre);
+                self.lines(fmt_pre);
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
+                    self.line(&format!("PRINT #{ch}, USING {fmt_str}"));
+                } else {
+                    self.line(&format!("PRINT #{ch}, USING {fmt_str}; {body}"));
+                }
+            }
             Statement::ReturnVoid => {
                 self.line("RETURN");
             }
@@ -527,6 +549,16 @@ impl CodeGenerator {
                     self.line("LPRINT");
                 } else {
                     self.line(&format!("LPRINT {body}"));
+                }
+            }
+            Statement::LprintUsing { format, tokens } => {
+                let (fmt_pre, fmt_str) = self.expr(format, current_function);
+                self.lines(fmt_pre);
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
+                    self.line(&format!("LPRINT USING {fmt_str}"));
+                } else {
+                    self.line(&format!("LPRINT USING {fmt_str}; {body}"));
                 }
             }
             Statement::ExitFor => self.line("EXIT FOR"),

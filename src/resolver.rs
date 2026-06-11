@@ -89,6 +89,21 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
                     _ => false,
                 })
         }
+        Statement::PrintUsing { format, tokens } | Statement::LprintUsing { format, tokens } => {
+            expr_calls_function(format, target)
+                || tokens.iter().any(|t| match t {
+                    PrintToken::Expr(e) => expr_calls_function(e, target),
+                    _ => false,
+                })
+        }
+        Statement::PrintFileUsing { channel, format, tokens } => {
+            expr_calls_function(channel, target)
+                || expr_calls_function(format, target)
+                || tokens.iter().any(|t| match t {
+                    PrintToken::Expr(e) => expr_calls_function(e, target),
+                    _ => false,
+                })
+        }
         Statement::Close { channel } => expr_calls_function(channel, target),
         Statement::Kill { file } => expr_calls_function(file, target),
         Statement::Name { from, to } => {

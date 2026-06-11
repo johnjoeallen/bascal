@@ -528,6 +528,24 @@ end
     }
 
     #[test]
+    fn print_using_formats_output() {
+        let source = "amount! = 1234.5\n\
+count% = 7\n\
+print using \"####.##\"; amount!\n\
+print using \"Item ##\"; count%\n\
+lprint using \"####.##\"; amount!\n\
+open \"out.txt\" for output as #1\n\
+print #1, using \"####.##\"; amount!\n\
+close #1\n\
+end\n";
+        let output = compile_source("fmt.bcl", source).expect("should compile");
+        assert!(output.contains("PRINT USING \"####.##\"; amount!"));
+        assert!(output.contains("PRINT USING \"Item ##\"; count%"));
+        assert!(output.contains("LPRINT USING \"####.##\"; amount!"));
+        assert!(output.contains("PRINT #1, USING \"####.##\"; amount!"));
+    }
+
+    #[test]
     fn kill_and_name_as_statements() {
         let source = r#"kill "old.dat"
 name "old.dat" as "new.dat"

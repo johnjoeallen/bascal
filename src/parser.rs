@@ -361,9 +361,25 @@ impl Parser {
             let channel = self.parse_expr(0)?;
             // structural comma separating channel from content
             self.expect(TokenKind::Comma, "expected `,` after file number")?;
+            if self.check_keyword("using") {
+                self.expect_keyword("using")?;
+                let format = self.parse_expr(0)?;
+                self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+                let tokens = self.parse_print_tokens()?;
+                self.consume_line_end()?;
+                return Ok(Statement::PrintFileUsing { channel, format, tokens });
+            }
             let tokens = self.parse_print_tokens()?;
             self.consume_line_end()?;
             return Ok(Statement::PrintFile { channel, tokens });
+        }
+        if self.check_keyword("using") {
+            self.expect_keyword("using")?;
+            let format = self.parse_expr(0)?;
+            self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+            let tokens = self.parse_print_tokens()?;
+            self.consume_line_end()?;
+            return Ok(Statement::PrintUsing { format, tokens });
         }
         let tokens = self.parse_print_tokens()?;
         self.consume_line_end()?;
@@ -791,6 +807,14 @@ impl Parser {
 
     fn parse_lprint(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("lprint")?;
+        if self.check_keyword("using") {
+            self.expect_keyword("using")?;
+            let format = self.parse_expr(0)?;
+            self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+            let tokens = self.parse_print_tokens()?;
+            self.consume_line_end()?;
+            return Ok(Statement::LprintUsing { format, tokens });
+        }
         let tokens = self.parse_print_tokens()?;
         self.consume_line_end()?;
         Ok(Statement::Lprint(tokens))

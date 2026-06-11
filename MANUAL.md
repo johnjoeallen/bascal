@@ -1151,6 +1151,32 @@ PRINT #2, "Header line"
 PRINT #2, count%, value!
 ```
 
+### PRINT USING
+
+Formats output with a template string before printing to the screen, printer,
+or a file.  The format string uses MS-BASIC format characters (`#` for digit
+positions, `.` for the decimal point, `,` for thousands separator, `+`/`-` for
+sign, etc.).
+
+```
+print using "####.##"; amount!          ' screen
+lprint using "####.##"; amount!         ' printer
+print #1, using "####.##"; amount!      ' file channel #1
+```
+
+Multiple values are separated by `;` or `,` exactly like a normal `PRINT`:
+
+```
+print using "Item ##: ####.##"; itemNo%, price!
+```
+
+The format string is any string expression; it does not have to be a literal:
+
+```
+fmt$ = "###.#"
+print using fmt$; x!; y!; z!
+```
+
 ---
 
 ## Random-Access File I/O
@@ -1819,6 +1845,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
 | `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |
 | `PRINT #` | `PRINT #n, expr[, ...]` | Print to file |
+| `PRINT USING` | `PRINT USING fmt$; expr[; ...]` | Formatted print (also `LPRINT USING`, `PRINT #n, USING`) |
 | `RANDOMIZE` | `RANDOMIZE [seed]` | Seed random number generator |
 | `READ` | `READ var[, ...]` | Read from DATA stream |
 | `REQUIRE` | `require path.symbol` | Load dependency module |

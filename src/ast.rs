@@ -143,6 +143,15 @@ pub enum Statement {
         channel: Expr,
         tokens: Vec<PrintToken>,
     },
+    PrintUsing {
+        format: Expr,
+        tokens: Vec<PrintToken>,
+    },
+    PrintFileUsing {
+        channel: Expr,
+        format: Expr,
+        tokens: Vec<PrintToken>,
+    },
     Close {
         channel: Expr,
     },
@@ -240,6 +249,10 @@ pub enum Statement {
         position: Expr,
     },
     Lprint(Vec<PrintToken>),
+    LprintUsing {
+        format: Expr,
+        tokens: Vec<PrintToken>,
+    },
     ExitFor,
     ExitWhile,
     ExitDo,
