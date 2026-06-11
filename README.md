@@ -28,6 +28,13 @@ namespaces.
 env -u RUSTC_WRAPPER cargo build
 ```
 
+## Release Packages
+
+GitHub Actions builds release packages from `.github/workflows/packages.yml`.
+Run the **Packages** workflow manually to produce downloadable artifacts, or
+push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
+`.tar.gz`, and Windows `.zip` packages to a GitHub Release.
+
 ## Usage
 
 ```bash

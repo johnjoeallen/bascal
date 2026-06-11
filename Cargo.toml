@@ -3,6 +3,31 @@ name = "bcc"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
+description = "Translates structured .bcl source into plain 1980s Microsoft BASIC"
+
+[package.metadata.deb]
+name = "bascal"
+maintainer = "BASCAL contributors"
+copyright = "2026 BASCAL contributors"
+license-file = ["LICENSE", "0"]
+extended-description = """\
+BASCAL translates structured .bcl source into plain 1980s Microsoft BASIC.\
+"""
+section = "devel"
+priority = "optional"
+assets = [
+    ["target/release/bcc", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/bascal/README.md", "644"],
+    ["MANUAL.md", "usr/share/doc/bascal/MANUAL.md", "644"],
+    ["intro.md", "usr/share/doc/bascal/intro.md", "644"],
+    ["tutorial/**/*.bcl", "usr/share/doc/bascal/tutorial/", "644"],
+    ["tutorial/**/*.md", "usr/share/doc/bascal/tutorial/", "644"],
+    ["tutorial/*.bas", "usr/share/doc/bascal/tutorial/", "644"],
+    ["tutorial/13_suite/*.bas", "usr/share/doc/bascal/tutorial/13_suite/", "644"],
+    ["tutorial/remline/remline.bas", "usr/share/doc/bascal/tutorial/remline/remline.bas", "644"],
+    ["tutorial/remline/sample/expected.bas", "usr/share/doc/bascal/tutorial/remline/sample/expected.bas", "644"],
+    ["tutorial/remline/sample/input.bas", "usr/share/doc/bascal/tutorial/remline/sample/input.bas", "644"],
+]
 
 [dependencies]
 

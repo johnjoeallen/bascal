@@ -1,0 +1,194 @@
+name: Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  debian:
+    name: Debian package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: Build Debian package
+        run: cargo deb --locked
+
+      - name: Upload Debian artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: target/debian/*.deb
+
+  linux:
+    name: Linux tarball and RPM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install RPM tools
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Create Linux tarball
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          package_name="bascal-${version}-linux-x86_64"
+          package_dir="dist/${package_name}"
+          mkdir -p "$package_dir"
+          cp target/release/bcc "$package_dir/"
+          for file in README.md MANUAL.md intro.md LICENSE $(git ls-files tutorial); do
+            mkdir -p "$package_dir/$(dirname "$file")"
+            cp "$file" "$package_dir/$file"
+          done
+          tar -C dist -czf "dist/${package_name}.tar.gz" "$package_name"
+
+      - name: Build RPM package
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          topdir="$PWD/target/rpmbuild"
+          root="$topdir/SOURCES/bascal-${version}"
+          rm -rf "$topdir"
+          mkdir -p "$root/usr/bin" "$root/usr/share/doc/bascal" "$root/usr/share/licenses/bascal"
+          cp target/release/bcc "$root/usr/bin/bcc"
+          cp README.md MANUAL.md intro.md "$root/usr/share/doc/bascal/"
+          cp LICENSE "$root/usr/share/licenses/bascal/LICENSE"
+          for file in $(git ls-files tutorial); do
+            mkdir -p "$root/usr/share/doc/bascal/$(dirname "$file")"
+            cp "$file" "$root/usr/share/doc/bascal/$file"
+          done
+          tar -C "$topdir/SOURCES" -czf "$topdir/SOURCES/bascal-${version}.tar.gz" "bascal-${version}"
+          mkdir -p "$topdir/SPECS"
+          cat > "$topdir/SPECS/bascal.spec" <<EOF
+          Name: bascal
+          Version: ${version}
+          Release: 1%{?dist}
+          Summary: Translates structured .bcl source into plain 1980s Microsoft BASIC
+          License: GPL-3.0-only
+          Source0: %{name}-%{version}.tar.gz
+
+          %description
+          BASCAL translates structured .bcl source into plain 1980s Microsoft BASIC.
+
+          %prep
+          %setup -q
+
+          %build
+
+          %install
+          mkdir -p %{buildroot}
+          cp -a usr %{buildroot}/
+
+          %files
+          /usr/bin/bcc
+          %doc /usr/share/doc/bascal
+          %license /usr/share/licenses/bascal/LICENSE
+
+          %changelog
+          * Thu Jun 11 2026 BASCAL contributors <noreply@example.com> - ${version}-1
+          - Build GitHub release RPM
+          EOF
+          sed -i 's/^          //' "$topdir/SPECS/bascal.spec"
+          rpmbuild --define "_topdir $topdir" -ba "$topdir/SPECS/bascal.spec"
+
+      - name: Upload Linux tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-tarball
+          path: dist/*.tar.gz
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: target/rpmbuild/RPMS/**/*.rpm
+
+  windows:
+    name: Windows package
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Create Windows package
+        shell: pwsh
+        run: |
+          $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+          $version = $metadata.packages[0].version
+          $packageName = "bascal-$version-windows-x86_64"
+          $packageDir = Join-Path "dist" $packageName
+          New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+          Copy-Item "target/release/bcc.exe" $packageDir
+          $files = @("README.md", "MANUAL.md", "intro.md", "LICENSE") + (git ls-files tutorial)
+          foreach ($file in $files) {
+            $destination = Join-Path $packageDir $file
+            New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
+            Copy-Item $file $destination
+          }
+          Compress-Archive -Path $packageDir -DestinationPath "dist/$packageName.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: dist/*.zip
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - debian
+      - linux
+      - windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Attach packages to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Release $GITHUB_REF_NAME"
+          files=$(find dist -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.tar.gz' -o -name '*.zip' \) -print)
+          gh release upload "$GITHUB_REF_NAME" $files --clobber
