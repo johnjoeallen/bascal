@@ -16,28 +16,28 @@
 // IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 // Test for false with (expr) = 0, not NOT expr.
 
-/* Arithmetic */
+/* Arithmetic — mix labels and numbers with ; */
 a% = 17
 b% = 5
-print str$(a%) + " + " + str$(b%) + " = " + str$(a% + b%)   // 22
-print str$(a%) + " - " + str$(b%) + " = " + str$(a% - b%)   // 12
-print str$(a%) + " * " + str$(b%) + " = " + str$(a% * b%)   // 85
-print str$(a%) + " / " + str$(b%) + " = " + str$(a% / b%)   // 3  (truncates)
+print a%; "+ "; b%; "="; a% + b%   // 17 + 5 = 22
+print a%; "- "; b%; "="; a% - b%   // 17 - 5 = 12
+print a%; "* "; b%; "="; a% * b%   // 17 * 5 = 85
+print a%; "/ "; b%; "="; a% / b%   // 17 / 5 = 3  (truncates)
 
 /* Precedence */
-print str$(2 + 3 * 4)       + "  (expect 14 — * before +)"
-print str$((2 + 3) * 4)     + "  (expect 20 — parens first)"
+print 2 + 3 * 4; " (expect 14 — * before +)"
+print (2 + 3) * 4; " (expect 20 — parens first)"
 
 /* Comparison — -1 means true, 0 means false */
-print str$(10 > 3)           + "  (expect -1)"
-print str$(10 < 3)           + "  (expect  0)"
-print str$(7 = 7)            + "  (expect -1)"
-print str$(7 <> 8)           + "  (expect -1)"
+print 10 > 3; " (expect -1)"
+print 10 < 3; " (expect  0)"
+print 7 = 7;  " (expect -1)"
+print 7 <> 8; " (expect -1)"
 
 /* Logical — AND and OR are bitwise but work correctly with 0/-1 values */
 x% = 7
 if x% > 0 and x% < 10 then
-    print str$(x%) + " is in 1..9"
+    print x%; "is in 1..9"
 end if
 
 /* String concatenation */
@@ -45,6 +45,6 @@ print "Hello" + ", " + "World" + "!"
 
 /* Unary negation */
 n% = 42
-print str$(-n%)              // -42
+print -n%              // -42
 
 end

@@ -197,19 +197,14 @@ impl CodeGenerator {
                 self.lines(target_prelude);
                 self.line(&format!("LINE INPUT #{channel}, {target}"));
             }
-            Statement::PrintFile { channel, exprs } => {
+            Statement::PrintFile { channel, tokens } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
                 self.lines(channel_prelude);
-                let mut rendered = Vec::new();
-                for item in exprs {
-                    let (prelude, item) = self.expr(item, current_function);
-                    self.lines(prelude);
-                    rendered.push(item);
-                }
-                if rendered.is_empty() {
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
                     self.line(&format!("PRINT #{channel}"));
                 } else {
-                    self.line(&format!("PRINT #{channel}, {}", rendered.join(", ")));
+                    self.line(&format!("PRINT #{channel}, {body}"));
                 }
             }
             Statement::Close { channel } => {
@@ -224,17 +219,12 @@ impl CodeGenerator {
                 self.lines(value_prelude);
                 self.line(&format!("{target} = {value}"));
             }
-            Statement::Print { exprs } => {
-                let mut rendered = Vec::new();
-                for item in exprs {
-                    let (prelude, item) = self.expr(item, current_function);
-                    self.lines(prelude);
-                    rendered.push(item);
-                }
-                if rendered.is_empty() {
+            Statement::Print { tokens } => {
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
                     self.line("PRINT");
                 } else {
-                    self.line(&format!("PRINT {}", rendered.join(", ")));
+                    self.line(&format!("PRINT {body}"));
                 }
             }
             Statement::ReturnVoid => {
@@ -519,17 +509,12 @@ impl CodeGenerator {
                 self.lines(pos_pre);
                 self.line(&format!("SEEK #{ch}, {pos}"));
             }
-            Statement::Lprint(exprs) => {
-                let mut rendered = Vec::new();
-                for item in exprs {
-                    let (prelude, item) = self.expr(item, current_function);
-                    self.lines(prelude);
-                    rendered.push(item);
-                }
-                if rendered.is_empty() {
+            Statement::Lprint(tokens) => {
+                let body = self.render_print_tokens(tokens, current_function);
+                if body.is_empty() {
                     self.line("LPRINT");
                 } else {
-                    self.line(&format!("LPRINT {}", rendered.join(", ")));
+                    self.line(&format!("LPRINT {body}"));
                 }
             }
             Statement::ExitFor => self.line("EXIT FOR"),
@@ -924,6 +909,39 @@ impl CodeGenerator {
         self.functions
             .iter()
             .find(|function| same_ident(&function.source_name, name))
+    }
+
+    fn render_print_tokens(
+        &mut self,
+        tokens: &[PrintToken],
+        current_function: Option<&FunctionInfo>,
+    ) -> String {
+        let mut out = String::new();
+        // after_sep: push a space BEFORE the next Expr (readable: `; x%` not `;x%`)
+        // Starts false so the very first Expr gets no leading space.
+        let mut after_sep = false;
+        for token in tokens {
+            match token {
+                PrintToken::Expr(e) => {
+                    let (prelude, rendered) = self.expr(e, current_function);
+                    self.lines(prelude);
+                    if after_sep {
+                        out.push(' ');
+                    }
+                    out.push_str(&rendered);
+                    after_sep = false;
+                }
+                PrintToken::Semi => {
+                    out.push(';');
+                    after_sep = true;
+                }
+                PrintToken::Comma => {
+                    out.push(',');
+                    after_sep = true;
+                }
+            }
+        }
+        out
     }
 
     fn lines(&mut self, lines: Vec<String>) {

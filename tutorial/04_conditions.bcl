@@ -18,9 +18,9 @@ end if
 /* IF / ELSE */
 score% = 72
 if score% >= 60 then
-    print "Pass (" + str$(score%) + ")"
+    print "Pass ("; score%; ")"
 else
-    print "Fail (" + str$(score%) + ")"
+    print "Fail ("; score%; ")"
 end if
 
 /* IF / ELSEIF / ELSE — grade classification */
@@ -44,12 +44,12 @@ print "Grade: " + grade$
 x% = 15
 if x% > 0 then
     if x% > 10 then
-        print str$(x%) + " is large and positive"
+        print x%; "is large and positive"
     else
-        print str$(x%) + " is small and positive"
+        print x%; "is small and positive"
     end if
 else
-    print str$(x%) + " is not positive"
+    print x%; "is not positive"
 end if
 
 /* Compound conditions */

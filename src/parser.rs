@@ -334,34 +334,36 @@ impl Parser {
         Ok(Statement::Raw(format!("' {comment}")))
     }
 
+    fn parse_print_tokens(&mut self) -> ParseResult<Vec<PrintToken>> {
+        let mut tokens = Vec::new();
+        loop {
+            if self.at_line_end() {
+                break;
+            }
+            if self.eat(TokenKind::Semicolon) {
+                tokens.push(PrintToken::Semi);
+            } else if self.eat(TokenKind::Comma) {
+                tokens.push(PrintToken::Comma);
+            } else {
+                tokens.push(PrintToken::Expr(self.parse_expr(0)?));
+            }
+        }
+        Ok(tokens)
+    }
+
     fn parse_print(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("print")?;
         if self.eat(TokenKind::Hash) {
             let channel = self.parse_expr(0)?;
+            // structural comma separating channel from content
             self.expect(TokenKind::Comma, "expected `,` after file number")?;
-            let mut exprs = Vec::new();
-            if !self.at_line_end() {
-                loop {
-                    exprs.push(self.parse_expr(0)?);
-                    if !self.eat(TokenKind::Comma) {
-                        break;
-                    }
-                }
-            }
+            let tokens = self.parse_print_tokens()?;
             self.consume_line_end()?;
-            return Ok(Statement::PrintFile { channel, exprs });
+            return Ok(Statement::PrintFile { channel, tokens });
         }
-        let mut exprs = Vec::new();
-        if !self.at_line_end() {
-            loop {
-                exprs.push(self.parse_expr(0)?);
-                if !self.eat(TokenKind::Comma) {
-                    break;
-                }
-            }
-        }
+        let tokens = self.parse_print_tokens()?;
         self.consume_line_end()?;
-        Ok(Statement::Print { exprs })
+        Ok(Statement::Print { tokens })
     }
 
     fn parse_open(&mut self) -> ParseResult<Statement> {
@@ -769,15 +771,9 @@ impl Parser {
 
     fn parse_lprint(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("lprint")?;
-        let mut exprs = Vec::new();
-        if !self.at_line_end() {
-            loop {
-                exprs.push(self.parse_expr(0)?);
-                if !self.eat(TokenKind::Comma) { break; }
-            }
-        }
+        let tokens = self.parse_print_tokens()?;
         self.consume_line_end()?;
-        Ok(Statement::Lprint(exprs))
+        Ok(Statement::Lprint(tokens))
     }
 
     fn parse_write(&mut self) -> ParseResult<Statement> {

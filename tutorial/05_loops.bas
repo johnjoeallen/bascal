@@ -1,110 +1,110 @@
-10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+' BASCAL generated BASIC
+' Functions are lowered to global variables, labels, and GOSUB
 
-30 ' Tutorial 5 — Loops: for, WHILE, DO
-40 ' 
-50 ' BASCAL provides three loop constructs:
-60 ' 
-70 ' for var = start to end [STEP n] ... for END  (or bare END)
-80 ' Counted loop.  STEP defaults to 1; use negative STEP to count down.
-90 ' EXIT for exits early.
-100 ' 
-110 ' WHILE condition ... WHILE END  (or bare END)
-120 ' Condition tested before each iteration.
-130 ' EXIT WHILE exits early.
-140 ' 
-150 ' DO [WHILE/UNTIL cond] ... DO END  (or bare END)
-160 ' Condition tested at the top; use EXIT DO to break out.
-170 ' EXIT DO exits early.
+' Tutorial 5 — Loops: for, WHILE, DO
+' 
+' BASCAL provides three loop constructs:
+' 
+' for var = start to end [STEP n] ... for END  (or bare END)
+' Counted loop.  STEP defaults to 1; use negative STEP to count down.
+' EXIT for exits early.
+' 
+' WHILE condition ... WHILE END  (or bare END)
+' Condition tested before each iteration.
+' EXIT WHILE exits early.
+' 
+' DO [WHILE/UNTIL cond] ... DO END  (or bare END)
+' Condition tested at the top; use EXIT DO to break out.
+' EXIT DO exits early.
 
-180 ' --- for / NEXT ---
-190 PRINT "Squares 1..5:"
-200 FOR i% = 1 TO 5
-210     PRINT (("  " + STR$(i%)) + "^2 = ") + STR$(i% * i%)
-220 NEXT i%
+' --- for / NEXT ---
+PRINT "Squares 1..5:"
+FOR i% = 1 TO 5
+    PRINT "  "; i%; "^2 = "; i% * i%
+NEXT i%
 
-230 ' Negative STEP — count down
-240 PRINT "Countdown:"
-250 FOR n% = 3 TO 1 STEP -1
-260     PRINT "  " + STR$(n%)
-270 NEXT n%
-280 PRINT "  Go!"
+' Negative STEP — count down
+PRINT "Countdown:"
+FOR n% = 3 TO 1 STEP -1
+    PRINT "  "; n%
+NEXT n%
+PRINT "  Go!"
 
-290 ' EXIT for — stop early
-300 PRINT "First even > 4:"
-310 FOR i% = 1 TO 20
-320     IF ((i% > 4) AND (((i% / 2) * 2) = i%)) = 0 THEN GOTO 350
-330         PRINT "  " + STR$(i%)
-340         EXIT FOR
-350     REM END IF
-360 NEXT i%
+' EXIT for — stop early
+PRINT "First even > 4:"
+FOR i% = 1 TO 20
+    IF ((i% > 4) AND (((i% / 2) * 2) = i%)) = 0 THEN GOTO 10
+        PRINT "  "; i%
+        EXIT FOR
+10 REM END IF
+NEXT i%
 
-370 ' --- WHILE / WEND ---
-380 PRINT "Powers of 2 under 100:"
-390 p% = 1
-400 IF (p% < 100) = 0 THEN GOTO 440
-410     PRINT "  " + STR$(p%)
-420     p% = p% * 2
-430     GOTO 400
-440 REM END WHILE
+' --- WHILE / WEND ---
+PRINT "Powers of 2 under 100:"
+p% = 1
+20 IF (p% < 100) = 0 THEN GOTO 30
+    PRINT "  "; p%
+    p% = p% * 2
+    GOTO 20
+30 REM END WHILE
 
-450 ' EXIT WHILE
-460 PRINT "Collatz from 27 (first 8 steps):"
-470 n% = 27
-480 steps% = 0
-490 IF (n% <> 1) = 0 THEN GOTO 620
-500     IF (steps% = 8) = 0 THEN GOTO 530
-510         PRINT "  ..."
-520         GOTO 620
-530     REM END IF
-540     IF (((n% / 2) * 2) = n%) = 0 THEN GOTO 570
-550         n% = n% / 2
-560         GOTO 580
-570         n% = (n% * 3) + 1
-580     REM END IF
-590     steps% = steps% + 1
-600     PRINT "  " + STR$(n%)
-610     GOTO 490
-620 REM END WHILE
+' EXIT WHILE
+PRINT "Collatz from 27 (first 8 steps):"
+n% = 27
+steps% = 0
+40 IF (n% <> 1) = 0 THEN GOTO 80
+    IF (steps% = 8) = 0 THEN GOTO 50
+        PRINT "  ..."
+        GOTO 80
+50 REM END IF
+    IF (((n% / 2) * 2) = n%) = 0 THEN GOTO 60
+        n% = n% / 2
+        GOTO 70
+60 n% = (n% * 3) + 1
+70 REM END IF
+    steps% = steps% + 1
+    PRINT "  "; n%
+    GOTO 40
+80 REM END WHILE
 
-630 ' --- DO / LOOP variants ---
+' --- DO / LOOP variants ---
 
-640 ' DO WHILE — test before body
-650 PRINT "DO WHILE:"
-660 k% = 1
-670 IF (k% <= 3) = 0 THEN GOTO 700
-680     PRINT "  " + STR$(k%)
-690     k% = k% + 1
-700 REM END DO
+' DO WHILE — test before body
+PRINT "DO WHILE:"
+k% = 1
+90 IF (k% <= 3) = 0 THEN GOTO 100
+    PRINT "  "; k%
+    k% = k% + 1
+100 REM END DO
 
-710 ' DO UNTIL — enter while condition is false
-720 PRINT "DO UNTIL:"
-730 k% = 1
-740 IF (k% > 3) <> 0 THEN GOTO 770
-750     PRINT "  " + STR$(k%)
-760     k% = k% + 1
-770 REM END DO
+' DO UNTIL — enter while condition is false
+PRINT "DO UNTIL:"
+k% = 1
+110 IF (k% > 3) <> 0 THEN GOTO 120
+    PRINT "  "; k%
+    k% = k% + 1
+120 REM END DO
 
-780 ' DO ... DO END with post-check — body runs at least once
-790 PRINT "DO...DO END (body runs once even though false):"
-800 k% = 99
-810     PRINT "  " + STR$(k%)
-820     k% = k% + 1
-830     IF (k% > 3) = 0 THEN GOTO 850
-840         GOTO 870
-850     REM END IF
-860     GOTO 810
-870 REM END DO
+' DO ... DO END with post-check — body runs at least once
+PRINT "DO...DO END (body runs once even though false):"
+k% = 99
+130 PRINT "  "; k%
+    k% = k% + 1
+    IF (k% > 3) = 0 THEN GOTO 140
+        GOTO 150
+140 REM END IF
+    GOTO 130
+150 REM END DO
 
-880 ' EXIT DO
-890 PRINT "EXIT DO at 3:"
-900 k% = 1
-910     IF (k% = 3) = 0 THEN GOTO 930
-920         GOTO 970
-930     REM END IF
-940     PRINT "  " + STR$(k%)
-950     k% = k% + 1
-960     GOTO 910
-970 REM END DO
+' EXIT DO
+PRINT "EXIT DO at 3:"
+k% = 1
+160 IF (k% = 3) = 0 THEN GOTO 170
+        GOTO 180
+170 REM END IF
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 160
+180 REM END DO
 
-980 END
+END

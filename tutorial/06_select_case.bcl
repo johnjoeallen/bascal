@@ -48,15 +48,15 @@ temp% = -3
 
 select case temp%
 case is < 0
-    print "Below freezing (" + str$(temp%) + "°)"  // matches here
+    print "Below freezing ("; temp%; "°)"  // matches here
 case is < 10
-    print "Cold (" + str$(temp%) + "°)"
+    print "Cold ("; temp%; "°)"
 case is < 20
-    print "Cool (" + str$(temp%) + "°)"
+    print "Cool ("; temp%; "°)"
 case is < 30
-    print "Warm (" + str$(temp%) + "°)"
+    print "Warm ("; temp%; "°)"
 case else
-    print "Hot (" + str$(temp%) + "°)"
+    print "Hot ("; temp%; "°)"
 end select
 
 /* Multi-value list on a menu choice */

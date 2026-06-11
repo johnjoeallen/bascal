@@ -505,4 +505,25 @@ end
         assert!(output.contains("SEEK #1, 2"));
         assert!(output.contains("CLOSE #1"));
     }
+
+    #[test]
+    fn print_supports_semicolon_separator_and_direct_numeric() {
+        // Semicolons between items: no gap, no trailing newline when trailing.
+        // Commas between items: tab-zone advance.
+        // Numeric expressions printed directly without str$().
+        let source = r#"x% = 42
+print "value: "; x%
+print "a"; "b"; "c"
+print "col1", "col2"
+print "no newline";
+print x%, "done"
+end
+"#;
+        let output = compile_source("print.bcl", source).expect("should compile");
+        assert!(output.contains(r#"PRINT "value: "; x%"#));
+        assert!(output.contains(r#"PRINT "a"; "b"; "c""#));
+        assert!(output.contains(r#"PRINT "col1", "col2""#));
+        assert!(output.contains(r#"PRINT "no newline";"#));
+        assert!(output.contains(r#"PRINT x%, "done""#));
+    }
 }

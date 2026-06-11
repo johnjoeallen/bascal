@@ -82,31 +82,32 @@ end function
 
 /* --- Exercise the functions --- */
 
-print "max(4, 9) = "    + str$(max%(4, 9))      // 9
-print "min(4, 9) = "    + str$(min%(4, 9))      // 4
-print "clamp(15,1,10) = " + str$(clamp%(15, 1, 10))  // 10
-print "clamp(-3,1,10) = " + str$(clamp%(-3, 1, 10))  // 1
-print "clamp(7,1,10)  = " + str$(clamp%(7, 1, 10))   // 7
+// print mixes string labels and numeric results directly with ;
+print "max(4, 9) = "; max%(4, 9)        // 9
+print "min(4, 9) = "; min%(4, 9)        // 4
+print "clamp(15,1,10) = "; clamp%(15, 1, 10)  // 10
+print "clamp(-3,1,10) = "; clamp%(-3, 1, 10)  // 1
+print "clamp(7,1,10)  = "; clamp%(7, 1, 10)   // 7
 
 print repeat$("ab", 4)       // abababab
 print titleCase$("bASCAL")   // Bascal
 
 /* Functions chained in expressions */
 lo% = min%(max%(0, -5), 100)   // max(0,-5)=0, min(0,100)=0
-print "lo = " + str$(lo%)
+print "lo = "; lo%
 
 /* Calling the same function twice — each result is captured separately */
 a$ = repeat$("x", 3)
 b$ = repeat$("y", 2)
-print a$ + " " + b$    // xxx yy
+print a$; " "; b$    // xxx yy
 
 /* Local scoping: sumTo% and productTo% each use i% without conflict */
-print "sumTo(5)     = " + str$(sumTo%(5))      // 15
-print "productTo(5) = " + str$(productTo%(5))  // 120
+print "sumTo(5)     = "; sumTo%(5)      // 15
+print "productTo(5) = "; productTo%(5)  // 120
 
 /* Global variable shared across calls */
 dummy% = addToTotal%(10)
 dummy% = addToTotal%(5)
-print "runningTotal = " + str$(runningTotal%)   // 15
+print "runningTotal = "; runningTotal%  // 15
 
 end

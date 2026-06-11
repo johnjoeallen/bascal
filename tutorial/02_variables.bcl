@@ -25,15 +25,15 @@ playerName$  = "Alice"
 score%       = 87
 temperature! = 36.6
 
-// str$() converts a number to a string for concatenation
+// print mixes strings and numbers directly with ; (no str$() needed)
 print app_name$
-print "Player:      " + playerName$
-print "Score:       " + str$(score%) + " / " + str$(max_score%)
-print "Pass mark:   " + str$(pass_mark%)
-print "Temperature: " + str$(temperature!)
-print "Tax rate:    " + str$(tax_rate!)
+print "Player:      "; playerName$
+print "Score:       "; score%; "/ "; max_score%
+print "Pass mark:   "; pass_mark%
+print "Temperature: "; temperature!
+print "Tax rate:    "; tax_rate!
 
-// let is optional; both forms are identical
+// str$() is still available when you need to build a string value
 let greeting$ = "Score is " + str$(score%)
 print greeting$
 

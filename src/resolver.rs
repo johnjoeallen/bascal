@@ -71,7 +71,10 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Assignment { target: lhs, value } => {
             expr_calls_function(lhs, target) || expr_calls_function(value, target)
         }
-        Statement::Print { exprs } => exprs.iter().any(|expr| expr_calls_function(expr, target)),
+        Statement::Print { tokens } => tokens.iter().any(|t| match t {
+            PrintToken::Expr(e) => expr_calls_function(e, target),
+            _ => false,
+        }),
         Statement::Open { file, channel, .. } => {
             expr_calls_function(file, target) || expr_calls_function(channel, target)
         }
@@ -79,9 +82,12 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             channel,
             target: line_target,
         } => expr_calls_function(channel, target) || expr_calls_function(line_target, target),
-        Statement::PrintFile { channel, exprs } => {
+        Statement::PrintFile { channel, tokens } => {
             expr_calls_function(channel, target)
-                || exprs.iter().any(|expr| expr_calls_function(expr, target))
+                || tokens.iter().any(|t| match t {
+                    PrintToken::Expr(e) => expr_calls_function(e, target),
+                    _ => false,
+                })
         }
         Statement::Close { channel } => expr_calls_function(channel, target),
         Statement::Return { value } => expr_calls_function(value, target),
@@ -139,7 +145,10 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(channel, target)
                 || exprs.iter().any(|e| expr_calls_function(e, target))
         }
-        Statement::Lprint(exprs) => exprs.iter().any(|e| expr_calls_function(e, target)),
+        Statement::Lprint(tokens) => tokens.iter().any(|t| match t {
+            PrintToken::Expr(e) => expr_calls_function(e, target),
+            _ => false,
+        }),
         Statement::SelectCase { expr, cases, else_body } => {
             expr_calls_function(expr, target)
                 || cases.iter().any(|c| {

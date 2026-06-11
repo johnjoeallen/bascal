@@ -17,13 +17,13 @@
 /* --- for / NEXT --- */
 print "Squares 1..5:"
 for i% = 1 to 5
-    print "  " + str$(i%) + "^2 = " + str$(i% * i%)
+    print "  "; i%; "^2 = "; i% * i%
 end for
 
 /* Negative STEP — count down */
 print "Countdown:"
 for n% = 3 to 1 step -1
-    print "  " + str$(n%)
+    print "  "; n%
 end for
 print "  Go!"
 
@@ -31,7 +31,7 @@ print "  Go!"
 print "First even > 4:"
 for i% = 1 to 20
     if i% > 4 and (i% / 2) * 2 = i% then
-        print "  " + str$(i%)
+        print "  "; i%
         exit for
     end if
 end for
@@ -40,7 +40,7 @@ end for
 print "Powers of 2 under 100:"
 p% = 1
 while p% < 100
-    print "  " + str$(p%)
+    print "  "; p%
     p% = p% * 2
 end while
 
@@ -59,7 +59,7 @@ while n% <> 1
         n% = n% * 3 + 1
     end if
     steps% = steps% + 1
-    print "  " + str$(n%)
+    print "  "; n%
 end while
 
 /* --- DO / LOOP variants --- */
@@ -68,7 +68,7 @@ end while
 print "DO WHILE:"
 k% = 1
 do while k% <= 3
-    print "  " + str$(k%)
+    print "  "; k%
     k% = k% + 1
 end do
 
@@ -76,7 +76,7 @@ end do
 print "DO UNTIL:"
 k% = 1
 do until k% > 3
-    print "  " + str$(k%)
+    print "  "; k%
     k% = k% + 1
 end do
 
@@ -84,7 +84,7 @@ end do
 print "DO...DO END (body runs once even though false):"
 k% = 99
 do
-    print "  " + str$(k%)
+    print "  "; k%
     k% = k% + 1
     if k% > 3 then
         exit do
@@ -98,7 +98,7 @@ do
     if k% = 3 then
         exit do
     end if
-    print "  " + str$(k%)
+    print "  "; k%
     k% = k% + 1
 end do
 

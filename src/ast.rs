@@ -112,6 +112,17 @@ impl fmt::Display for TypeSuffix {
     }
 }
 
+/// One item in a PRINT / LPRINT / PRINT# argument list.
+/// Semi and Comma are separators (`;` suppresses the trailing newline;
+/// `,` advances to the next 14-char tab zone and suppresses the newline).
+/// A trailing Semi or Comma as the last token suppresses the newline.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PrintToken {
+    Expr(Expr),
+    Semi,
+    Comma,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Dim {
@@ -130,7 +141,7 @@ pub enum Statement {
     },
     PrintFile {
         channel: Expr,
-        exprs: Vec<Expr>,
+        tokens: Vec<PrintToken>,
     },
     Close {
         channel: Expr,
@@ -140,7 +151,7 @@ pub enum Statement {
         value: Expr,
     },
     Print {
-        exprs: Vec<Expr>,
+        tokens: Vec<PrintToken>,
     },
     Return {
         value: Expr,
@@ -221,7 +232,7 @@ pub enum Statement {
         channel: Expr,
         position: Expr,
     },
-    Lprint(Vec<Expr>),
+    Lprint(Vec<PrintToken>),
     ExitFor,
     ExitWhile,
     ExitDo,
