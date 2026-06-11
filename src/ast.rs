@@ -122,6 +122,7 @@ pub enum Statement {
         mode: OpenMode,
         file: Expr,
         channel: Expr,
+        len: Option<Expr>,
     },
     LineInput {
         channel: Expr,
@@ -194,6 +195,32 @@ pub enum Statement {
         channel: Expr,
         exprs: Vec<Expr>,
     },
+    Field {
+        channel: Expr,
+        fields: Vec<(Expr, BasicIdent)>,
+    },
+    Get {
+        channel: Expr,
+        record: Option<Expr>,
+        var: Option<Expr>,
+    },
+    Put {
+        channel: Expr,
+        record: Option<Expr>,
+        var: Option<Expr>,
+    },
+    Lset {
+        var: BasicIdent,
+        value: Expr,
+    },
+    Rset {
+        var: BasicIdent,
+        value: Expr,
+    },
+    Seek {
+        channel: Expr,
+        position: Expr,
+    },
     Lprint(Vec<Expr>),
     ExitFor,
     ExitWhile,
@@ -247,6 +274,8 @@ pub enum OpenMode {
     Input,
     Output,
     Append,
+    Random,
+    Binary,
 }
 
 #[derive(Debug, Clone, PartialEq)]

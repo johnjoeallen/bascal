@@ -165,6 +165,21 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(expr, target)
                 || targets.iter().any(|e| expr_calls_function(e, target))
         }
+        Statement::Field { channel, fields } => {
+            expr_calls_function(channel, target)
+                || fields.iter().any(|(w, _)| expr_calls_function(w, target))
+        }
+        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+            expr_calls_function(channel, target)
+                || record.as_ref().is_some_and(|e| expr_calls_function(e, target))
+                || var.as_ref().is_some_and(|e| expr_calls_function(e, target))
+        }
+        Statement::Lset { value, .. } | Statement::Rset { value, .. } => {
+            expr_calls_function(value, target)
+        }
+        Statement::Seek { channel, position } => {
+            expr_calls_function(channel, target) || expr_calls_function(position, target)
+        }
         Statement::End
         | Statement::Stop
         | Statement::Cls

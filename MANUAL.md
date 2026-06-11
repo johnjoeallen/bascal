@@ -19,13 +19,14 @@
 11. [Arrays](#arrays)
 12. [Input and Output](#input-and-output)
 13. [File Input and Output](#file-input-and-output)
-14. [Data Statements](#data-statements)
-15. [Miscellaneous Statements](#miscellaneous-statements)
-16. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
-17. [Suite COMMON](#suite-common)
-18. [Generated BASIC Shape](#generated-basic-shape)
-19. [Command-Line Reference](#command-line-reference)
-20. [Statement Quick Reference](#statement-quick-reference)
+14. [Random-Access File I/O](#random-access-file-io)
+15. [Data Statements](#data-statements)
+16. [Miscellaneous Statements](#miscellaneous-statements)
+17. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
+18. [Suite COMMON](#suite-common)
+19. [Generated BASIC Shape](#generated-basic-shape)
+20. [Command-Line Reference](#command-line-reference)
+21. [Statement Quick Reference](#statement-quick-reference)
 
 ---
 
@@ -1121,6 +1122,98 @@ Writes expressions to a file without the quoting that `WRITE #` adds:
 ```
 PRINT #2, "Header line"
 PRINT #2, count%, value!
+```
+
+---
+
+## Random-Access File I/O
+
+From `tutorial/15_random_files.bcl`:
+
+Random-access files store fixed-length records that can be read or written in
+any order, without scanning from the beginning.
+
+### OPEN FOR RANDOM
+
+```
+open filename$ for random as #1 len = recLen%
+```
+
+`len` sets the record size in bytes.  Every record occupies exactly that many
+bytes on disk.  Records are numbered from 1.
+
+### FIELD
+
+Binds string variables to regions of the shared file buffer:
+
+```
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+```
+
+The widths must sum to the record length.  Only string variables may appear in
+a `FIELD` statement.
+
+### LSET and RSET
+
+Copy data into a field-bound buffer variable, padded to the field width:
+
+```
+lset nameBuf$ = "Alice"    ' left-justified, padded with spaces on the right
+rset idBuf$   = "42"       ' right-justified, padded with spaces on the left
+```
+
+### PUT and GET
+
+Write or read a numbered record:
+
+```
+put #1, recordNum%    ' write current buffer as record recordNum%
+get #1, recordNum%    ' load record recordNum% into buffer variables
+```
+
+Omitting the record number reads/writes at the current file position.
+
+### SEEK
+
+Move the file pointer to a given record position:
+
+```
+seek #1, recordNum%
+```
+
+### Packing Helpers
+
+Numeric values must be packed into strings before storing in a `FIELD` buffer,
+and unpacked after reading:
+
+| Pack         | Unpack        | Type             |
+|--------------|---------------|------------------|
+| `mki%(n%)`   | `cvi%(s$)`    | 2-byte integer   |
+| `mkl&(n&)`   | `cvl&(s$)`    | 4-byte long      |
+| `mks!(n!)`   | `cvs!(s$)`    | 4-byte single    |
+| `mkd#(n#)`   | `cvd#(s$)`    | 8-byte double    |
+
+Example — writing and reading a numeric score:
+
+```
+const rec_len% = 30
+
+open "students.dat" for random as #1 len = rec_len%
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+
+lset idBuf$    = mki%(1)
+lset nameBuf$  = "Alice"
+lset scoreBuf$ = mkd#(95.0)
+put #1, 1
+
+get #1, 1
+print rtrim$(nameBuf$) + ": " + str$(cvd#(scoreBuf$))
+close #1
+```
+
+Output:
+```
+Alice: 95
 ```
 
 ---

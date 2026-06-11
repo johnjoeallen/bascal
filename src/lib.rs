@@ -482,4 +482,27 @@ END
         assert!(output.contains("PRINT #2, currentline$"));
         assert!(output.contains("CLOSE #1"));
     }
+
+    #[test]
+    fn compiles_random_access_file_io() {
+        let source = r#"open DataFile$ for random as #1 len = 128
+field #1, 4 as RecNum$, 124 as RecData$
+lset RecNum$ = mki%(1)
+lset RecData$ = "hello"
+put #1, 1
+get #1, 1
+seek #1, 2
+close #1
+end
+"#;
+        let output = compile_source("random.bcl", source).expect("random-access sample should compile");
+        assert!(output.contains("OPEN datafile$ FOR RANDOM AS #1 LEN = 128"));
+        assert!(output.contains("FIELD #1, 4 AS recnum$, 124 AS recdata$"));
+        assert!(output.contains("LSET recnum$ = MKI%(1)"));
+        assert!(output.contains("LSET recdata$ = \"hello\""));
+        assert!(output.contains("PUT #1, 1"));
+        assert!(output.contains("GET #1, 1"));
+        assert!(output.contains("SEEK #1, 2"));
+        assert!(output.contains("CLOSE #1"));
+    }
 }

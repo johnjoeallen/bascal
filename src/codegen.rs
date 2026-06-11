@@ -14,6 +14,9 @@ const BASIC_BUILTINS: &[&str] = &[
     "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
     // Multi-arg numeric
     "ubound", "lbound", "iif",
+    // Random-access record packing/unpacking
+    "mki", "mkl", "mks", "mkd",
+    "cvi", "cvl", "cvs", "cvd",
 ];
 
 pub struct CodeGenerator {
@@ -166,21 +169,26 @@ impl CodeGenerator {
                 }
                 None => self.line(&format!("DIM {}", self.ident(name, current_function))),
             },
-            Statement::Open {
-                mode,
-                file,
-                channel,
-            } => {
+            Statement::Open { mode, file, channel, len } => {
                 let (file_prelude, file) = self.expr(file, current_function);
                 let (channel_prelude, channel) = self.expr(channel, current_function);
                 self.lines(file_prelude);
                 self.lines(channel_prelude);
-                let mode = match mode {
+                let mode_str = match mode {
                     OpenMode::Input => "INPUT",
                     OpenMode::Output => "OUTPUT",
                     OpenMode::Append => "APPEND",
+                    OpenMode::Random => "RANDOM",
+                    OpenMode::Binary => "BINARY",
                 };
-                self.line(&format!("OPEN {file} FOR {mode} AS #{channel}"));
+                let len_clause = if let Some(len_expr) = len {
+                    let (len_pre, len_val) = self.expr(len_expr, current_function);
+                    self.lines(len_pre);
+                    format!(" LEN = {len_val}")
+                } else {
+                    String::new()
+                };
+                self.line(&format!("OPEN {file} FOR {mode_str} AS #{channel}{len_clause}"));
             }
             Statement::LineInput { channel, target } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -434,6 +442,82 @@ impl CodeGenerator {
                     rendered.push(item);
                 }
                 self.line(&format!("WRITE #{channel}, {}", rendered.join(", ")));
+            }
+            Statement::Field { channel, fields } => {
+                let (ch_pre, ch) = self.expr(channel, current_function);
+                self.lines(ch_pre);
+                let mut parts = Vec::new();
+                for (width, var) in fields {
+                    let (w_pre, w) = self.expr(width, current_function);
+                    self.lines(w_pre);
+                    parts.push(format!("{w} AS {}", self.ident(var, current_function)));
+                }
+                self.line(&format!("FIELD #{ch}, {}", parts.join(", ")));
+            }
+            Statement::Get { channel, record, var } => {
+                let (ch_pre, ch) = self.expr(channel, current_function);
+                self.lines(ch_pre);
+                match (record, var) {
+                    (None, None) => self.line(&format!("GET #{ch}")),
+                    (Some(rec), None) => {
+                        let (r_pre, r) = self.expr(rec, current_function);
+                        self.lines(r_pre);
+                        self.line(&format!("GET #{ch}, {r}"));
+                    }
+                    (None, Some(v)) => {
+                        let (v_pre, v) = self.expr(v, current_function);
+                        self.lines(v_pre);
+                        self.line(&format!("GET #{ch}, , {v}"));
+                    }
+                    (Some(rec), Some(v)) => {
+                        let (r_pre, r) = self.expr(rec, current_function);
+                        let (v_pre, v) = self.expr(v, current_function);
+                        self.lines(r_pre);
+                        self.lines(v_pre);
+                        self.line(&format!("GET #{ch}, {r}, {v}"));
+                    }
+                }
+            }
+            Statement::Put { channel, record, var } => {
+                let (ch_pre, ch) = self.expr(channel, current_function);
+                self.lines(ch_pre);
+                match (record, var) {
+                    (None, None) => self.line(&format!("PUT #{ch}")),
+                    (Some(rec), None) => {
+                        let (r_pre, r) = self.expr(rec, current_function);
+                        self.lines(r_pre);
+                        self.line(&format!("PUT #{ch}, {r}"));
+                    }
+                    (None, Some(v)) => {
+                        let (v_pre, v) = self.expr(v, current_function);
+                        self.lines(v_pre);
+                        self.line(&format!("PUT #{ch}, , {v}"));
+                    }
+                    (Some(rec), Some(v)) => {
+                        let (r_pre, r) = self.expr(rec, current_function);
+                        let (v_pre, v) = self.expr(v, current_function);
+                        self.lines(r_pre);
+                        self.lines(v_pre);
+                        self.line(&format!("PUT #{ch}, {r}, {v}"));
+                    }
+                }
+            }
+            Statement::Lset { var, value } => {
+                let (v_pre, v) = self.expr(value, current_function);
+                self.lines(v_pre);
+                self.line(&format!("LSET {} = {v}", self.ident(var, current_function)));
+            }
+            Statement::Rset { var, value } => {
+                let (v_pre, v) = self.expr(value, current_function);
+                self.lines(v_pre);
+                self.line(&format!("RSET {} = {v}", self.ident(var, current_function)));
+            }
+            Statement::Seek { channel, position } => {
+                let (ch_pre, ch) = self.expr(channel, current_function);
+                let (pos_pre, pos) = self.expr(position, current_function);
+                self.lines(ch_pre);
+                self.lines(pos_pre);
+                self.line(&format!("SEEK #{ch}, {pos}"));
             }
             Statement::Lprint(exprs) => {
                 let mut rendered = Vec::new();

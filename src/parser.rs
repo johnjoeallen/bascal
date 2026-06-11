@@ -205,6 +205,18 @@ impl Parser {
             self.parse_input()
         } else if self.check_keyword("write") {
             self.parse_write()
+        } else if self.check_keyword("field") {
+            self.parse_field()
+        } else if self.check_keyword("get") {
+            self.parse_get()
+        } else if self.check_keyword("put") {
+            self.parse_put()
+        } else if self.check_keyword("lset") {
+            self.parse_lset()
+        } else if self.check_keyword("rset") {
+            self.parse_rset()
+        } else if self.check_keyword("seek") {
+            self.parse_seek()
         } else if self.check_keyword("close") {
             self.parse_close()
         } else if self.check_keyword("global") {
@@ -365,18 +377,120 @@ impl Parser {
         } else if self.check_keyword("append") {
             self.expect_keyword("append")?;
             OpenMode::Append
+        } else if self.check_keyword("random") {
+            self.expect_keyword("random")?;
+            OpenMode::Random
+        } else if self.check_keyword("binary") {
+            self.expect_keyword("binary")?;
+            OpenMode::Binary
         } else {
-            return Err(self.error("expected `input`, `output`, or `append`"));
+            return Err(self.error("expected `input`, `output`, `append`, `random`, or `binary`"));
         };
         self.expect_keyword("as")?;
         self.expect(TokenKind::Hash, "expected `#` before file number")?;
         let channel = self.parse_expr(0)?;
+        let len = if self.check_keyword("len") {
+            self.expect_keyword("len")?;
+            self.expect(TokenKind::Eq, "expected `=` after `len`")?;
+            Some(self.parse_expr(0)?)
+        } else {
+            None
+        };
         self.consume_line_end()?;
-        Ok(Statement::Open {
-            mode,
-            file,
-            channel,
-        })
+        Ok(Statement::Open { mode, file, channel, len })
+    }
+
+    fn parse_field(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("field")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` after file number")?;
+        let mut fields = Vec::new();
+        loop {
+            let width = self.parse_expr(0)?;
+            self.expect_keyword("as")?;
+            let var = BasicIdent::parse(&self.expect_ident("expected variable name after `as`")?);
+            fields.push((width, var));
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Field { channel, fields })
+    }
+
+    fn parse_get(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("get")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        let (record, var) = if self.eat(TokenKind::Comma) {
+            let record = if self.current().kind == TokenKind::Comma || self.at_line_end() {
+                None
+            } else {
+                Some(self.parse_expr(0)?)
+            };
+            let var = if self.eat(TokenKind::Comma) {
+                Some(self.parse_expr(0)?)
+            } else {
+                None
+            };
+            (record, var)
+        } else {
+            (None, None)
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Get { channel, record, var })
+    }
+
+    fn parse_put(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("put")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        let (record, var) = if self.eat(TokenKind::Comma) {
+            let record = if self.current().kind == TokenKind::Comma || self.at_line_end() {
+                None
+            } else {
+                Some(self.parse_expr(0)?)
+            };
+            let var = if self.eat(TokenKind::Comma) {
+                Some(self.parse_expr(0)?)
+            } else {
+                None
+            };
+            (record, var)
+        } else {
+            (None, None)
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Put { channel, record, var })
+    }
+
+    fn parse_lset(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("lset")?;
+        let var = BasicIdent::parse(&self.expect_ident("expected variable name after `lset`")?);
+        self.expect(TokenKind::Eq, "expected `=`")?;
+        let value = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Lset { var, value })
+    }
+
+    fn parse_rset(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("rset")?;
+        let var = BasicIdent::parse(&self.expect_ident("expected variable name after `rset`")?);
+        self.expect(TokenKind::Eq, "expected `=`")?;
+        let value = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Rset { var, value })
+    }
+
+    fn parse_seek(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("seek")?;
+        self.expect(TokenKind::Hash, "expected `#` before file number")?;
+        let channel = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` after file number")?;
+        let position = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Seek { channel, position })
     }
 
     fn parse_line_input(&mut self) -> ParseResult<Statement> {
