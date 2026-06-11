@@ -206,6 +206,8 @@ pub enum Statement {
     Cls,
     Beep,
     System,
+    OptionBase(Expr),
+    Erase(Vec<BasicIdent>),
     Randomize(Option<Expr>),
     Swap(Expr, Expr),
     Poke {

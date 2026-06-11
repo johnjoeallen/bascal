@@ -375,6 +375,18 @@ impl CodeGenerator {
             Statement::Cls => self.line("CLS"),
             Statement::Beep => self.line("BEEP"),
             Statement::System => self.line("SYSTEM"),
+            Statement::OptionBase(expr) => {
+                let (prelude, base) = self.expr(expr, current_function);
+                self.lines(prelude);
+                self.line(&format!("OPTION BASE {base}"));
+            }
+            Statement::Erase(vars) => {
+                let names: Vec<String> = vars
+                    .iter()
+                    .map(|v| self.ident(v, current_function))
+                    .collect();
+                self.line(&format!("ERASE {}", names.join(", ")));
+            }
             Statement::Randomize(expr) => {
                 if let Some(expr) = expr {
                     let (prelude, expr) = self.expr(expr, current_function);

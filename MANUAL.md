@@ -229,6 +229,34 @@ end for
 this when the array will be passed in from outside or when BASIC's default
 sizing is sufficient.
 
+### OPTION BASE
+
+Sets the default lower bound for all subsequently declared arrays. Must be
+placed before any `DIM` statements it is meant to affect.
+
+```
+option base 0   ' arrays start at index 0 (default)
+option base 1   ' arrays start at index 1
+```
+
+With `OPTION BASE 1`, `dim scores%(10)` allocates 10 elements indexed 1..10
+instead of 11 elements indexed 0..10.
+
+### ERASE
+
+Frees memory occupied by one or more arrays. After `ERASE`, the array
+variables are undefined until re-declared.
+
+```
+dim bigTable%(1000, 200)
+' ... use bigTable% ...
+erase bigTable%          ' release memory
+
+dim names$(50), codes%(50)
+' ... use both ...
+erase names$, codes%     ' erase multiple at once
+```
+
 ### CONST
 
 Declares a named constant. The value must be a literal.
@@ -1942,6 +1970,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `CONST` | `CONST name = expr` | Declare a named constant |
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
 | `DIM` | `DIM name[(d1[, d2, ...])]` | Declare a variable or 1-D/multi-D array |
+| `ERASE` | `ERASE arr[, ...]` | Free memory used by arrays |
 | `DO` | `DO [WHILE/UNTIL cond]` … `END DO` | Conditional loop |
 | `END` | `END` | End of program |
 | `EXIT DO` | `EXIT DO` | Exit enclosing DO loop |
@@ -1961,6 +1990,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `LOCATE` | `LOCATE row, col` | Position cursor |
 | `LPRINT` | `LPRINT expr[, ...]` | Print to printer |
 | `NAME` | `NAME old$ AS new$` | Rename a file |
+| `OPTION BASE` | `OPTION BASE 0\|1` | Set default array lower bound |
 | `ON...GOTO` | `ON expr GOTO n1, n2, ...` | Computed GOTO |
 | `ON...GOSUB` | `ON expr GOSUB n1, n2, ...` | Computed GOSUB |
 | `ON ERROR GOTO` | `ON ERROR GOTO n` | Install error handler at line *n* (`0` = disable) |

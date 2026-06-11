@@ -546,6 +546,23 @@ end\n";
     }
 
     #[test]
+    fn option_base_and_erase() {
+        let source = r#"option base 1
+dim scores%(10)
+dim names$(10)
+dim grid%(4, 4)
+' ... use arrays ...
+erase scores%
+erase names$, grid%
+end
+"#;
+        let output = compile_source("ob.bcl", source).expect("should compile");
+        assert!(output.contains("OPTION BASE 1"));
+        assert!(output.contains("ERASE scores%"));
+        assert!(output.contains("ERASE names$, grid%"));
+    }
+
+    #[test]
     fn error_handling_statements() {
         let source = r#"' set and clear error trap
 on error goto 9000

@@ -251,6 +251,10 @@ impl Parser {
             self.parse_resume()
         } else if self.check_keyword("error") {
             self.parse_error_stmt()
+        } else if self.check_keyword("option") {
+            self.parse_option_base()
+        } else if self.check_keyword("erase") {
+            self.parse_erase()
         } else if self.check_keyword("stop") {
             self.advance(); self.consume_line_end()?; Ok(Statement::Stop)
         } else if self.check_keyword("cls") {
@@ -906,6 +910,28 @@ impl Parser {
         }
         self.consume_line_end()?;
         Ok(Statement::Input { prompt, vars })
+    }
+
+    fn parse_option_base(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("option")?;
+        self.expect_keyword("base")?;
+        let base = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::OptionBase(base))
+    }
+
+    fn parse_erase(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("erase")?;
+        let mut vars = Vec::new();
+        loop {
+            let name = self.expect_ident("expected array name in ERASE")?;
+            vars.push(BasicIdent::parse(&name));
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Erase(vars))
     }
 
     fn parse_randomize(&mut self) -> ParseResult<Statement> {

@@ -216,6 +216,8 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Seek { channel, position } => {
             expr_calls_function(channel, target) || expr_calls_function(position, target)
         }
+        Statement::OptionBase(e) => expr_calls_function(e, target),
+        Statement::Erase(_) => false,
         Statement::End
         | Statement::Stop
         | Statement::Cls
