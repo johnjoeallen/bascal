@@ -4,7 +4,7 @@ My first professional programming job was at Ramtech, starting in May 1985.
 
 By that point I had already spent time with Z80 assembly, 8086 assembly, C, and Pascal. I had been exposed to languages and environments that gave me a sense of structure, control, and abstraction. Then I found myself writing business software professionally in Microsoft BASIC.
 
-That was a shock.
+I had also become very enamoured with Turbo Pascal. The language itself was fantastic, but the Turbo Pascal environment was amazing: an integrated editor, compiler, and run loop that made development feel lightning fast. Nothing in BASCAL or Ramtech BASIC brought that same fast edit-compile cycle to classic BASIC, but that experience shaped what I wanted: more structure, less friction, and a development process that felt more flexible.
 
 BASIC was approachable and productive, but compared with the tools and languages I had already used, the working environment felt very limited. The language encouraged large global programs, weak structure, remembered line numbers, and repetitive copying of shared code. I wanted a better way to work. I wanted some of the discipline and convenience I was used to from Pascal and C, but without abandoning the BASIC system we actually had to deliver software with.
 
