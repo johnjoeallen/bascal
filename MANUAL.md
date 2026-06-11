@@ -1535,6 +1535,74 @@ Note: error handler labels (`errHandler:`) are BASIC raw labels. Use
 `goto` with numeric line targets or embed the handler inline with a
 preceding `goto` that skips past it, as shown above.
 
+### POKE
+
+Writes a byte value to a memory address. The address is an integer expression.
+
+```
+poke &H0400, 3      ' write to segment-zero address using hex literal
+poke address%, val%
+```
+
+Generates `POKE address, value`. Use with care — writing to arbitrary addresses
+is hardware-specific and may crash the runtime.
+
+### OUT
+
+Writes a byte to a hardware I/O port. Syntax mirrors `POKE`.
+
+```
+out 888, 3          ' send value 3 to port 888 (parallel port control)
+out port%, val%
+```
+
+Generates `OUT port, value`. Port numbers and semantics are
+hardware-specific.
+
+### WIDTH
+
+Sets the output line width for the screen or an open file channel.
+
+```
+width 80            ' set console line width to 80 characters
+width 40            ' narrow console mode
+width #1, 132       ' set line width for file channel #1
+```
+
+The optional `#n, ` prefix targets a file channel; without it, the console
+width is set. Generates `WIDTH cols` or `WIDTH #n, cols`.
+
+### CLEAR
+
+Resets all program variables to their zero/empty defaults and closes all open
+files. Useful at the start of a program or before reinitialising state.
+
+```
+clear
+```
+
+Generates `CLEAR`.
+
+### DATE$, TIME$, TIMER
+
+Read-only system pseudo-variables that return the current date, time, and
+elapsed time. No parentheses — they are used as plain identifiers.
+
+```
+print "Today is "; date$         ' e.g.  06-11-2026
+print "Time:    "; time$         ' e.g.  14:35:02
+randomize timer                  ' time-based RNG seed
+```
+
+| Name     | Returns                                         |
+|----------|-------------------------------------------------|
+| `DATE$`  | Current date as `MM-DD-YYYY` string             |
+| `TIME$`  | Current time as `HH:MM:SS` string               |
+| `TIMER`  | Seconds since midnight (single-precision float) |
+
+These are passed through verbatim as `DATE$`, `TIME$`, and `TIMER` in the
+generated BASIC.
+
 ### STOP
 
 Terminates the program immediately; may invoke the debugger in some
@@ -1963,6 +2031,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | Statement | Syntax | Description |
 |-----------|--------|-------------|
 | `BEEP` | `BEEP` | Sound the system bell |
+| `CLEAR` | `CLEAR` | Reset all variables and close all files |
 | `CLS` | `CLS` | Clear the screen |
 | `CLOSE` | `CLOSE #n` | Close file channel *n* |
 | `COLOR` | `COLOR fg[, bg]` | Set foreground/background colour |
@@ -1997,6 +2066,8 @@ bcc main.bcl -L libs/sort -L libs/string
 | `ERROR` | `ERROR n` | Trigger runtime error code *n* |
 | `RESUME` | `RESUME` / `RESUME NEXT` / `RESUME n` | Resume after error handler |
 | `OPEN` | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n` | Open file |
+| `OUT` | `OUT port, val` | Write byte to hardware I/O port |
+| `POKE` | `POKE address, val` | Write byte to memory address |
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
 | `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |
 | `PRINT #` | `PRINT #n, expr[, ...]` | Print to file |
@@ -2011,4 +2082,13 @@ bcc main.bcl -L libs/sort -L libs/string
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
 | `SYSTEM` | `SYSTEM` | Exit to operating system |
 | `WHILE` | `WHILE cond` … `END WHILE` | Condition-at-top loop |
+| `WIDTH` | `WIDTH [#n,] cols` | Set line width for console or file channel |
 | `WRITE #` | `WRITE #n, expr[, ...]` | Write to file (quoted format) |
+
+### System pseudo-variables (no parentheses)
+
+| Name | Type | Returns |
+|------|------|---------|
+| `DATE$` | String | Current date as `MM-DD-YYYY` |
+| `TIME$` | String | Current time as `HH:MM:SS` |
+| `TIMER` | Single | Seconds elapsed since midnight |

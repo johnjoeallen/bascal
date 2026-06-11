@@ -13,6 +13,7 @@ const BASIC_BUILTINS: &[&str] = &[
     "sin", "cos", "tan", "atn", "log", "exp", "cint", "clng", "csng", "cdbl",
     "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
     "fre", "lpos", "varptr",
+    "date", "time", "timer",
     // Print-position helpers (used inside PRINT)
     "tab", "spc",
     // Multi-arg numeric
@@ -409,6 +410,28 @@ impl CodeGenerator {
                 self.lines(addr_prelude);
                 self.lines(val_prelude);
                 self.line(&format!("POKE {addr}, {val}"));
+            }
+            Statement::Out { port, value } => {
+                let (port_prelude, port) = self.expr(port, current_function);
+                let (val_prelude, val) = self.expr(value, current_function);
+                self.lines(port_prelude);
+                self.lines(val_prelude);
+                self.line(&format!("OUT {port}, {val}"));
+            }
+            Statement::Width { channel, cols } => {
+                let (cols_prelude, cols_s) = self.expr(cols, current_function);
+                self.lines(cols_prelude);
+                match channel {
+                    Some(ch) => {
+                        let (ch_prelude, ch_s) = self.expr(ch, current_function);
+                        self.lines(ch_prelude);
+                        self.line(&format!("WIDTH #{ch_s}, {cols_s}"));
+                    }
+                    None => self.line(&format!("WIDTH {cols_s}")),
+                }
+            }
+            Statement::Clear => {
+                self.line("CLEAR");
             }
             Statement::Goto(target) => {
                 let (prelude, target) = self.expr(target, current_function);
@@ -811,7 +834,17 @@ impl CodeGenerator {
             Expr::Float(value) => (Vec::new(), value.to_string()),
             Expr::HexLit(s) => (Vec::new(), s.clone()),
             Expr::String(value) => (Vec::new(), format!("\"{}\"", escape_string(value))),
-            Expr::Ident(ident) => (Vec::new(), self.ident(ident, current_function)),
+            Expr::Ident(ident) => {
+                let is_param = current_function
+                    .is_some_and(|f| f.params.iter().any(|(src, _)| same_ident(src, ident)));
+                let emitted =
+                    if !is_param && self.known_callables.contains(&ident.name.to_ascii_lowercase()) {
+                        self.canonical_callable(ident)
+                    } else {
+                        self.ident(ident, current_function)
+                    };
+                (Vec::new(), emitted)
+            }
             Expr::ArrayRef { name, indices } => {
                 if let Some(info) = self.function_info(name).cloned() {
                     let call = self.call_lines(&info, indices, current_function);

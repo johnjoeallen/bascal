@@ -649,6 +649,25 @@ end
     }
 
     #[test]
+    fn out_width_clear_and_date_time_builtins() {
+        let source = r#"out 888, 3
+width 80
+width #1, 132
+clear
+print date$; " "; time$; timer
+end
+"#;
+        let output = compile_source("sys.bcl", source).expect("should compile");
+        assert!(output.contains("OUT 888, 3"));
+        assert!(output.contains("WIDTH 80"));
+        assert!(output.contains("WIDTH #1, 132"));
+        assert!(output.contains("CLEAR"));
+        assert!(output.contains("DATE$"));
+        assert!(output.contains("TIME$"));
+        assert!(output.contains("TIMER"));
+    }
+
+    #[test]
     fn supports_new_binary_operators() {
         let source = r#"' exponentiation, integer division, MOD, XOR
 a% = 2 ^ 8

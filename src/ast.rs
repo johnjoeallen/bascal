@@ -290,6 +290,15 @@ pub enum Statement {
         targets: Vec<Expr>,
         is_gosub: bool,
     },
+    Out {
+        port: Expr,
+        value: Expr,
+    },
+    Width {
+        channel: Option<Expr>,
+        cols: Expr,
+    },
+    Clear,
     ReturnVoid,
     GlobalDecl(BasicIdent),
     Raw(String),

@@ -218,10 +218,18 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         }
         Statement::OptionBase(e) => expr_calls_function(e, target),
         Statement::Erase(_) => false,
+        Statement::Out { port, value } => {
+            expr_calls_function(port, target) || expr_calls_function(value, target)
+        }
+        Statement::Width { channel, cols } => {
+            channel.as_ref().is_some_and(|c| expr_calls_function(c, target))
+                || expr_calls_function(cols, target)
+        }
         Statement::End
         | Statement::Stop
         | Statement::Cls
         | Statement::Beep
+        | Statement::Clear
         | Statement::System
         | Statement::ExitFor
         | Statement::ExitWhile

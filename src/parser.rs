@@ -267,6 +267,12 @@ impl Parser {
             self.parse_randomize()
         } else if self.check_keyword("poke") {
             self.parse_poke()
+        } else if self.check_keyword("out") {
+            self.parse_out()
+        } else if self.check_keyword("width") {
+            self.parse_width()
+        } else if self.check_keyword("clear") {
+            self.advance(); self.consume_line_end()?; Ok(Statement::Clear)
         } else if self.check_keyword("swap") {
             self.parse_swap()
         } else if self.check_keyword("data") {
@@ -952,6 +958,29 @@ impl Parser {
         let value = self.parse_expr(0)?;
         self.consume_line_end()?;
         Ok(Statement::Poke { address, value })
+    }
+
+    fn parse_out(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("out")?;
+        let port = self.parse_expr(0)?;
+        self.expect(TokenKind::Comma, "expected `,` in OUT")?;
+        let value = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Out { port, value })
+    }
+
+    fn parse_width(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("width")?;
+        let channel = if self.eat(TokenKind::Hash) {
+            let ch = self.parse_expr(0)?;
+            self.expect(TokenKind::Comma, "expected `,` after channel in WIDTH")?;
+            Some(ch)
+        } else {
+            None
+        };
+        let cols = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::Width { channel, cols })
     }
 
     fn parse_swap(&mut self) -> ParseResult<Statement> {
