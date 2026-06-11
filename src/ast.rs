@@ -334,4 +334,8 @@ pub enum BinaryOp {
     Ge,
     And,
     Or,
+    Xor,
+    Mod,
+    IntDiv,
+    Pow,
 }

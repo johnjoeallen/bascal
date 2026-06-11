@@ -60,6 +60,8 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
+    Backslash,
+    Caret,
     Eq,
     Ne,
     Lt,
@@ -116,6 +118,8 @@ impl<'a> Lexer<'a> {
                 '+' => tokens.push(self.single(TokenKind::Plus)),
                 '-' => tokens.push(self.single(TokenKind::Minus)),
                 '*' => tokens.push(self.single(TokenKind::Star)),
+                '^' => tokens.push(self.single(TokenKind::Caret)),
+                '\\' => tokens.push(self.single(TokenKind::Backslash)),
                 '/' => {
                     if self.peek_at(1) == Some('*') {
                         tokens.push(self.block_comment());

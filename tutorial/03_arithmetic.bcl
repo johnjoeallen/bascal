@@ -1,17 +1,22 @@
 // Tutorial 3 — Operators and Expressions
 //
-// Arithmetic:   +  -  *  /
+// Arithmetic:   +  -  *  /  \  MOD  ^
 // Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)
-// Logical:      AND  OR  NOT  (bitwise — see note below)
+// Logical:      AND  OR  NOT  XOR  (bitwise — see note below)
 // String:       + concatenates strings
 //
 // Precedence (highest first):
-//   unary - NOT       level 7
-//   * /               level 6
-//   + -               level 5
-//   = <> < <= > >=    level 4
-//   AND               level 3
-//   OR                level 2
+//   ^                 exponentiation (right-associative)
+//   unary -           negation
+//   * /               multiply / divide
+//   \                 integer (floor) division
+//   MOD               modulus (remainder)
+//   + -               add / subtract
+//   = <> < <= > >=    comparison
+//   NOT               bitwise NOT
+//   AND               bitwise AND
+//   OR                bitwise OR
+//   XOR               bitwise XOR
 //
 // IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 // Test for false with (expr) = 0, not NOT expr.
@@ -24,6 +29,14 @@ print a%; "- "; b%; "="; a% - b%   // 17 - 5 = 12
 print a%; "* "; b%; "="; a% * b%   // 17 * 5 = 85
 print a%; "/ "; b%; "="; a% / b%   // 17 / 5 = 3  (truncates)
 
+/* Integer division and MOD */
+print a%; "\ "; b%; "="; a% \ b%   // 17 \ 5 = 3  (integer quotient)
+print a%; "MOD "; b%; "="; a% mod b%  // 17 MOD 5 = 2  (remainder)
+
+/* Exponentiation — right-associative */
+print "2 ^ 8 ="; 2 ^ 8                   // 256
+print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2          // 512  (= 2 ^ (3^2) = 2^9)
+
 /* Precedence */
 print 2 + 3 * 4; " (expect 14 — * before +)"
 print (2 + 3) * 4; " (expect 20 — parens first)"
@@ -34,11 +47,12 @@ print 10 < 3; " (expect  0)"
 print 7 = 7;  " (expect -1)"
 print 7 <> 8; " (expect -1)"
 
-/* Logical — AND and OR are bitwise but work correctly with 0/-1 values */
+/* Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values */
 x% = 7
 if x% > 0 and x% < 10 then
     print x%; "is in 1..9"
 end if
+print 6 xor 3; " (expect 5 — 110 XOR 011 = 101)"
 
 /* String concatenation */
 print "Hello" + ", " + "World" + "!"

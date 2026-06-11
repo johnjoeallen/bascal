@@ -526,4 +526,27 @@ end
         assert!(output.contains(r#"PRINT "no newline";"#));
         assert!(output.contains(r#"PRINT x%, "done""#));
     }
+
+    #[test]
+    fn supports_new_binary_operators() {
+        let source = r#"' exponentiation, integer division, MOD, XOR
+a% = 2 ^ 8
+b% = 17 \ 5
+c% = 17 mod 5
+d% = 6 xor 3
+' precedence: 2 ^ 3 ^ 2 = 2 ^ (3 ^ 2) = 512 (right-assoc)
+e% = 2 ^ 3 ^ 2
+' MOD < \ in precedence: (10 \ 3) mod 2 = 3 mod 2 = 1
+f% = 10 \ 3 mod 2
+print a%; b%; c%; d%; e%; f%
+end
+"#;
+        let output = compile_source("ops.bcl", source).expect("should compile");
+        assert!(output.contains("a% = 2 ^ 8"));
+        assert!(output.contains("b% = 17 \\ 5"));
+        assert!(output.contains("c% = 17 MOD 5"));
+        assert!(output.contains("d% = 6 XOR 3"));
+        assert!(output.contains("e% = 2 ^ (3 ^ 2)"));    // right-associative ^
+        assert!(output.contains("f% = (10 \\ 3) MOD 2")); // \ binds tighter than MOD
+    }
 }

@@ -256,22 +256,19 @@ end if
 | `+`      | Addition / string concatenation |
 | `-`      | Subtraction / unary negation    |
 | `*`      | Multiplication |
-| `/`      | Division       |
-
-From `tutorial/03_arithmetic.bcl`:
+| `/`      | Division (truncates toward zero) |
+| `\`      | Integer division (floor quotient) |
+| `MOD`    | Modulus (remainder after integer division) |
+| `^`      | Exponentiation (right-associative) |
 
 ```
 a% = 17
 b% = 5
-PRINT STR$(a%) + " + " + STR$(b%) + " = " + STR$(a% + b%)   ' 22
-PRINT STR$(a%) + " - " + STR$(b%) + " = " + STR$(a% - b%)   ' 12
-PRINT STR$(a%) + " * " + STR$(b%) + " = " + STR$(a% * b%)   ' 85
-PRINT STR$(a%) + " / " + STR$(b%) + " = " + STR$(a% / b%)   ' 3  (integer)
-
-' String concatenation
-first$ = "Ada"
-last$  = "Lovelace"
-PRINT first$ + " " + last$
+print a%; "+ "; b%; "="; a% + b%    // 22
+print a%; "\ "; b%; "="; a% \ b%    // 3  (integer quotient)
+print a%; "MOD "; b%; "="; a% mod b% // 2  (remainder)
+print "2 ^ 8 ="; 2 ^ 8              // 256
+print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))
 ```
 
 ### Comparison Operators
@@ -295,6 +292,7 @@ runtime, consistent with Microsoft BASIC semantics.
 | `AND`    | Bitwise AND (also serves as logical AND when operands are 0/−1) |
 | `OR`     | Bitwise OR  |
 | `NOT`    | Bitwise NOT |
+| `XOR`    | Bitwise XOR |
 
 **Important:** `NOT` is bitwise in Microsoft BASIC. `NOT 1` yields `−2`, not
 `0`. BASCAL's compiler emits `(expr) = 0` instead of `NOT expr` in generated
@@ -306,20 +304,26 @@ when testing boolean flags.
 age%    = 25
 income% = 45000
 if age% >= 18 and income% >= 30000 then
-    PRINT "Eligible"
+    print "Eligible"
 end if
+print 6 xor 3   // 5  (110 XOR 011 = 101)
 ```
 
 ### Operator Precedence (highest first)
 
 | Level | Operators        |
 |-------|------------------|
-| 7     | Unary `-`, `NOT` |
-| 6     | `*`, `/`         |
-| 5     | `+`, `-`         |
-| 4     | `=`, `<>`, `<`, `<=`, `>`, `>=` |
-| 3     | `AND`            |
-| 2     | `OR`             |
+| 9     | `^` (right-associative) |
+| 8     | Unary `-`        |
+| 7     | `*`, `/`         |
+| 6     | `\`              |
+| 5     | `MOD`            |
+| 4     | `+`, `-`         |
+| 3     | `=`, `<>`, `<`, `<=`, `>`, `>=` |
+| 2     | `NOT`            |
+| 1     | `AND`            |
+| 0     | `OR`             |
+| −1    | `XOR`            |
 
 Use parentheses to override precedence.
 

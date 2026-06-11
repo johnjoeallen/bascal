@@ -1108,6 +1108,10 @@ fn binary_op(op: BinaryOp) -> &'static str {
         BinaryOp::Ge => ">=",
         BinaryOp::And => "AND",
         BinaryOp::Or => "OR",
+        BinaryOp::Xor => "XOR",
+        BinaryOp::Mod => "MOD",
+        BinaryOp::IntDiv => "\\",
+        BinaryOp::Pow => "^",
     }
 }
 

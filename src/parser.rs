@@ -917,7 +917,7 @@ impl Parser {
     }
 
     fn parse_assignment_or_expr(&mut self) -> ParseResult<Statement> {
-        let expr = self.parse_expr(6)?;
+        let expr = self.parse_expr(8)?;
         if self.eat(TokenKind::Eq) {
             let value = self.parse_expr(0)?;
             self.consume_line_end()?;
@@ -950,7 +950,7 @@ impl Parser {
             }
             TokenKind::Ident(value) if keyword_eq(value, "not") => {
                 self.advance();
-                let expr = self.parse_expr(7)?;
+                let expr = self.parse_expr(6)?;
                 Expr::Unary {
                     op: UnaryOp::Not,
                     expr: Box::new(expr),
@@ -958,7 +958,7 @@ impl Parser {
             }
             TokenKind::Minus => {
                 self.advance();
-                let expr = self.parse_expr(7)?;
+                let expr = self.parse_expr(17)?;
                 Expr::Unary {
                     op: UnaryOp::Neg,
                     expr: Box::new(expr),
@@ -1019,18 +1019,28 @@ impl Parser {
 
     fn infix_binding_power(&self) -> Option<(u8, u8, BinaryOp)> {
         match &self.current().kind {
-            TokenKind::Ident(value) if keyword_eq(value, "or") => Some((1, 2, BinaryOp::Or)),
-            TokenKind::Ident(value) if keyword_eq(value, "and") => Some((3, 4, BinaryOp::And)),
-            TokenKind::Eq => Some((5, 6, BinaryOp::Eq)),
-            TokenKind::Ne => Some((5, 6, BinaryOp::Ne)),
-            TokenKind::Lt => Some((5, 6, BinaryOp::Lt)),
-            TokenKind::Le => Some((5, 6, BinaryOp::Le)),
-            TokenKind::Gt => Some((5, 6, BinaryOp::Gt)),
-            TokenKind::Ge => Some((5, 6, BinaryOp::Ge)),
+            // Logical — lowest precedence (MS-BASIC order: XOR < OR < AND < NOT)
+            TokenKind::Ident(value) if keyword_eq(value, "xor") => Some((1, 2, BinaryOp::Xor)),
+            TokenKind::Ident(value) if keyword_eq(value, "or") => Some((3, 4, BinaryOp::Or)),
+            TokenKind::Ident(value) if keyword_eq(value, "and") => Some((5, 6, BinaryOp::And)),
+            // Comparison
+            TokenKind::Eq => Some((7, 8, BinaryOp::Eq)),
+            TokenKind::Ne => Some((7, 8, BinaryOp::Ne)),
+            TokenKind::Lt => Some((7, 8, BinaryOp::Lt)),
+            TokenKind::Le => Some((7, 8, BinaryOp::Le)),
+            TokenKind::Gt => Some((7, 8, BinaryOp::Gt)),
+            TokenKind::Ge => Some((7, 8, BinaryOp::Ge)),
+            // Additive
             TokenKind::Plus => Some((9, 10, BinaryOp::Add)),
             TokenKind::Minus => Some((9, 10, BinaryOp::Sub)),
-            TokenKind::Star => Some((11, 12, BinaryOp::Mul)),
-            TokenKind::Slash => Some((11, 12, BinaryOp::Div)),
+            // Integer MOD and \ (between additive and multiplicative)
+            TokenKind::Ident(value) if keyword_eq(value, "mod") => Some((11, 12, BinaryOp::Mod)),
+            TokenKind::Backslash => Some((13, 14, BinaryOp::IntDiv)),
+            // Multiplicative
+            TokenKind::Star => Some((15, 16, BinaryOp::Mul)),
+            TokenKind::Slash => Some((15, 16, BinaryOp::Div)),
+            // Exponentiation — right-associative, highest arithmetic precedence
+            TokenKind::Caret => Some((18, 17, BinaryOp::Pow)),
             _ => None,
         }
     }
