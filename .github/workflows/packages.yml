@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
@@ -31,7 +31,7 @@ jobs:
         run: cargo deb --locked
 
       - name: Upload Debian artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: debian-package
           path: target/debian/*.deb
@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
@@ -118,13 +118,13 @@ jobs:
           rpmbuild --define "_topdir $topdir" -ba "$topdir/SPECS/bascal.spec"
 
       - name: Upload Linux tarball artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-tarball
           path: dist/*.tar.gz
 
       - name: Upload RPM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: rpm-package
           path: target/rpmbuild/RPMS/**/*.rpm
@@ -135,7 +135,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
@@ -164,7 +164,7 @@ jobs:
           Compress-Archive -Path $packageDir -DestinationPath "dist/$packageName.zip" -Force
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-package
           path: dist/*.zip
@@ -180,7 +180,7 @@ jobs:
 
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: dist
 
