@@ -1420,6 +1420,93 @@ ON mode%   GOSUB 500, 600, 700
 If the expression evaluates to 0 or exceeds the number of targets, execution
 continues with the next statement.
 
+### ON ERROR GOTO / RESUME / ERROR
+
+MS-BASIC structured error handling: trap runtime errors, handle them, and
+resume execution.
+
+#### ON ERROR GOTO
+
+Installs an error handler at a given line number. Any subsequent runtime
+error causes execution to jump to that line.
+
+```
+on error goto 9000   ' jump to line 9000 on any error
+on error goto 0      ' disable the error trap
+```
+
+`ON ERROR GOTO 0` turns off trapping so errors propagate normally.
+
+#### RESUME
+
+Resumes execution after an error handler has run.
+
+```
+resume          ' retry the statement that caused the error
+resume next     ' continue at the statement after the failing one
+resume 9999     ' jump to a specific line number
+```
+
+`RESUME` without an argument retries the failing statement (useful for
+recoverable errors like "disk full — retry after making space").
+`RESUME NEXT` skips the failing statement.
+
+#### ERROR
+
+Triggers a runtime error with the given code, as if that error occurred
+naturally. Useful for re-raising an error in a handler or testing.
+
+```
+error 53     ' simulate "file not found"
+error code%  ' variable error code
+```
+
+#### ERR and ERL
+
+Inside an error handler, the system pseudo-variables `err` and `erl`
+hold the error code and the BASIC line number where the error occurred.
+Write them without a type suffix; BASIC treats them as numeric:
+
+```
+on error goto 9000
+' ...
+goto 9999
+' 9000 is the error handler line (reached via ON ERROR GOTO)
+if err = 53 then
+    print "File not found"
+    resume next
+end if
+error err   ' re-raise unhandled errors
+' 9999 continues here
+end
+```
+
+#### Typical pattern
+
+```
+on error goto errHandler
+open fileName$ for input as #1
+' ... file processing ...
+close #1
+on error goto 0
+goto done
+
+errHandler:
+if err = 53 then
+    print "Cannot open "; fileName$
+    resume next
+else
+    error err
+end if
+
+done:
+end
+```
+
+Note: error handler labels (`errHandler:`) are BASIC raw labels. Use
+`goto` with numeric line targets or embed the handler inline with a
+preceding `goto` that skips past it, as shown above.
+
 ### STOP
 
 Terminates the program immediately; may invoke the debugger in some
@@ -1876,6 +1963,9 @@ bcc main.bcl -L libs/sort -L libs/string
 | `NAME` | `NAME old$ AS new$` | Rename a file |
 | `ON...GOTO` | `ON expr GOTO n1, n2, ...` | Computed GOTO |
 | `ON...GOSUB` | `ON expr GOSUB n1, n2, ...` | Computed GOSUB |
+| `ON ERROR GOTO` | `ON ERROR GOTO n` | Install error handler at line *n* (`0` = disable) |
+| `ERROR` | `ERROR n` | Trigger runtime error code *n* |
+| `RESUME` | `RESUME` / `RESUME NEXT` / `RESUME n` | Resume after error handler |
 | `OPEN` | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n` | Open file |
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
 | `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |

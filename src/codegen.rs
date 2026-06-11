@@ -408,6 +408,25 @@ impl CodeGenerator {
                 self.lines(prelude);
                 self.line(&format!("GOSUB {target}"));
             }
+            Statement::OnErrorGoto { target } => {
+                let (prelude, target) = self.expr(target, current_function);
+                self.lines(prelude);
+                self.line(&format!("ON ERROR GOTO {target}"));
+            }
+            Statement::Resume(kind) => match kind {
+                ResumeTarget::Same => self.line("RESUME"),
+                ResumeTarget::Next => self.line("RESUME NEXT"),
+                ResumeTarget::Line(expr) => {
+                    let (prelude, target) = self.expr(expr, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("RESUME {target}"));
+                }
+            },
+            Statement::ErrorStmt { code } => {
+                let (prelude, code) = self.expr(code, current_function);
+                self.lines(prelude);
+                self.line(&format!("ERROR {code}"));
+            }
             Statement::Input { prompt, vars } => {
                 let mut rendered = Vec::new();
                 for var in vars {

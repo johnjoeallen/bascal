@@ -546,6 +546,28 @@ end\n";
     }
 
     #[test]
+    fn error_handling_statements() {
+        let source = r#"' set and clear error trap
+on error goto 9000
+on error goto 0
+' resume forms
+resume
+resume next
+resume 9000
+' trigger a synthetic error
+error 53
+end
+"#;
+        let output = compile_source("err.bcl", source).expect("should compile");
+        assert!(output.contains("ON ERROR GOTO 9000"));
+        assert!(output.contains("ON ERROR GOTO 0"));
+        assert!(output.contains("RESUME\n") || output.ends_with("RESUME"));
+        assert!(output.contains("RESUME NEXT"));
+        assert!(output.contains("RESUME 9000"));
+        assert!(output.contains("ERROR 53"));
+    }
+
+    #[test]
     fn mid_statement_form() {
         // MID$(str$, start[, length]) = replacement$ — in-place substring replace
         let source = r#"s$ = "Hello World"

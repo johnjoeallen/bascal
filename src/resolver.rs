@@ -152,6 +152,13 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Goto(e) | Statement::Gosub(e) | Statement::Restore(Some(e)) => {
             expr_calls_function(e, target)
         }
+        Statement::OnErrorGoto { target: t } | Statement::ErrorStmt { code: t } => {
+            expr_calls_function(t, target)
+        }
+        Statement::Resume(kind) => match kind {
+            ResumeTarget::Line(e) => expr_calls_function(e, target),
+            _ => false,
+        },
         Statement::Input { vars, .. } | Statement::Read(vars) => {
             vars.iter().any(|e| expr_calls_function(e, target))
         }

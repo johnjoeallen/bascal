@@ -246,7 +246,11 @@ impl Parser {
         } else if self.check_keyword("gosub") {
             self.parse_gosub()
         } else if self.check_keyword("on") {
-            self.parse_on_branch()
+            self.parse_on()
+        } else if self.check_keyword("resume") {
+            self.parse_resume()
+        } else if self.check_keyword("error") {
+            self.parse_error_stmt()
         } else if self.check_keyword("stop") {
             self.advance(); self.consume_line_end()?; Ok(Statement::Stop)
         } else if self.check_keyword("cls") {
@@ -792,8 +796,15 @@ impl Parser {
         Ok(Statement::Gosub(target))
     }
 
-    fn parse_on_branch(&mut self) -> ParseResult<Statement> {
+    fn parse_on(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("on")?;
+        if self.check_keyword("error") {
+            self.expect_keyword("error")?;
+            self.expect_keyword("goto")?;
+            let target = self.parse_expr(0)?;
+            self.consume_line_end()?;
+            return Ok(Statement::OnErrorGoto { target });
+        }
         let expr = self.parse_expr(0)?;
         let is_gosub = if self.check_keyword("goto") {
             self.advance(); false
@@ -807,6 +818,27 @@ impl Parser {
         }
         self.consume_line_end()?;
         Ok(Statement::OnBranch { expr, targets, is_gosub })
+    }
+
+    fn parse_resume(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("resume")?;
+        let target = if self.at_line_end() {
+            ResumeTarget::Same
+        } else if self.check_keyword("next") {
+            self.advance();
+            ResumeTarget::Next
+        } else {
+            ResumeTarget::Line(self.parse_expr(0)?)
+        };
+        self.consume_line_end()?;
+        Ok(Statement::Resume(target))
+    }
+
+    fn parse_error_stmt(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("error")?;
+        let code = self.parse_expr(0)?;
+        self.consume_line_end()?;
+        Ok(Statement::ErrorStmt { code })
     }
 
     fn parse_lprint(&mut self) -> ParseResult<Statement> {

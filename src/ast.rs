@@ -124,6 +124,13 @@ pub enum PrintToken {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ResumeTarget {
+    Same,        // RESUME — retry the statement that caused the error
+    Next,        // RESUME NEXT — continue after the failing statement
+    Line(Expr),  // RESUME lineno
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Dim {
         name: BasicIdent,
@@ -207,6 +214,9 @@ pub enum Statement {
     },
     Goto(Expr),
     Gosub(Expr),
+    OnErrorGoto { target: Expr },
+    Resume(ResumeTarget),
+    ErrorStmt { code: Expr },
     Input {
         prompt: Option<String>,
         vars: Vec<Expr>,
