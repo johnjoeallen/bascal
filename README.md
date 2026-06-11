@@ -1,6 +1,6 @@
 # BASCAL
 
-BASCAL is a Rust compiler for a structured extension of classic Microsoft BASIC.
+BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
 The compiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
 language reference.
 
