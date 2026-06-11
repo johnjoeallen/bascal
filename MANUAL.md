@@ -1334,6 +1334,28 @@ RESTORE 1000    ' rewind to the DATA at line 1000
 
 ## Miscellaneous Statements
 
+### MID$ (statement form)
+
+Replaces characters inside a string in place, without allocating a new string.
+
+```
+mid$(target$, start[, length]) = replacement$
+```
+
+`start` is 1-based. The optional `length` caps how many characters are
+replaced; if omitted, replacement continues to the end of `target$` or until
+`replacement$` runs out of characters, whichever comes first.
+
+```
+s$ = "Hello World"
+mid$(s$, 7, 5) = "BASIC"   ' s$ → "Hello BASIC"
+mid$(s$, 1)    = "Goodbye"  ' s$ → "GoodbyeBASIC" (no length cap)
+```
+
+This is distinct from the `mid$()` *function*, which extracts a substring
+without modifying the original.  BASCAL handles the statement form as an
+ordinary assignment whose left-hand side is `mid$(...)`.
+
 ### SWAP
 
 Exchanges the values of two variables — no explicit temporary needed.
@@ -1847,6 +1869,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `KILL` | `KILL file$` | Delete a file |
 | `INPUT #` | `INPUT #n, var[, ...]` | Read from file |
 | `LET` | `LET var = expr` | Assignment (keyword optional) |
+| `MID$` (stmt) | `MID$(str$, start[, len]) = repl$` | In-place substring replacement |
 | `LINE INPUT` | `LINE INPUT #n, var$` | Read full line from file |
 | `LOCATE` | `LOCATE row, col` | Position cursor |
 | `LPRINT` | `LPRINT expr[, ...]` | Print to printer |

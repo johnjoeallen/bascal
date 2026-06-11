@@ -546,6 +546,20 @@ end\n";
     }
 
     #[test]
+    fn mid_statement_form() {
+        // MID$(str$, start[, length]) = replacement$ — in-place substring replace
+        let source = r#"s$ = "Hello World"
+mid$(s$, 7, 5) = "BASIC"
+mid$(s$, 1) = "Goodbye"
+print s$
+end
+"#;
+        let output = compile_source("mid.bcl", source).expect("should compile");
+        assert!(output.contains(r#"MID$(s$, 7, 5) = "BASIC""#));
+        assert!(output.contains(r#"MID$(s$, 1) = "Goodbye""#));
+    }
+
+    #[test]
     fn multidimensional_arrays() {
         let source = r#"dim grid%(3, 4)
 dim cube%(2, 3, 4)
