@@ -1,24 +1,24 @@
 # BASCAL — Agent Instructions
 
-## Version bumping
+## Releasing
 
-Every commit that changes source code (`src/`) or tests (`tests/`, `src/lib.rs`)
-must be preceded by a patch-level version bump:
+When the user says **"release"** (or "cut a release", "tag a release", etc.):
 
-1. Increment the patch number in `Cargo.toml` (e.g. `0.99.2` → `0.99.3`).
+1. Increment the patch number in `Cargo.toml` (e.g. `0.99.3` → `0.99.4`).
 2. Run `cargo build -q` to propagate the change into `Cargo.lock`.
-3. Stage both `Cargo.toml` and `Cargo.lock` and include them in the same commit
-   as the code change (not a separate commit).
+3. Commit **only** `Cargo.toml` and `Cargo.lock` with the message
+   `chore: bump version to <new-version>`.
+4. Run `cargo test`. If any test fails, fix it before continuing — do not tag
+   a broken build.
+5. Create an annotated tag on that commit:
+   ```
+   git tag -a v<new-version> -m "Release v<new-version>"
+   ```
 
-After committing, run `cargo test`. If all tests pass, create an annotated tag
-matching the new version:
+## Regular commits
 
-```
-git tag -a v<new-version> -m "Release v<new-version>"
-```
-
-If any test fails, fix the failure before tagging — do not tag a broken build.
+Source code and test commits (`src/`, `tests/`) do **not** automatically
+trigger a version bump — the bump happens only at release time (step above).
 
 Documentation-only commits (`MANUAL.md`, `*.md`, `tutorial/`) and
-compiled-output refreshes (`.bas` files) do **not** require a version bump or
-a new tag.
+compiled-output refreshes (`.bas` files) do not require a version bump.
