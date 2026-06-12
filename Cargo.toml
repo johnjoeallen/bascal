@@ -1,6 +1,6 @@
 [package]
 name = "bcc"
-version = "0.99.1"
+version = "0.99.2"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Translates structured .bcl source into plain 1980s Microsoft BASIC"
