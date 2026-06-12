@@ -177,10 +177,10 @@ Variables declared or assigned at the top level are **global** and visible
 throughout the entire program.
 
 Variables inside a `function` or `procedure` body are **local by default**: the
-compiler automatically prefixes them with the function/procedure name so they
-cannot collide with variables elsewhere.  To read or write a global variable
-from inside a function or procedure, declare it at the top of the body with the
-`global` keyword:
+compiler maps them to uniquely-generated BASIC names (e.g. `fname_var_0%`) that
+are guaranteed never to collide with global variables or with locals in other
+functions.  To read or write a global variable from inside a function or
+procedure, declare it at the top of the body with the `global` keyword:
 
 ```
 total% = 0
@@ -755,7 +755,7 @@ at end-of-body are not supported.
 
 ### Calling the Same Function Twice
 
-Each call writes the shared `fname_result` variable, so assignments must be
+Each call writes the shared `fname_result_0` variable, so assignments must be
 made before the next call overwrites it. BASCAL handles this automatically:
 
 ```
@@ -766,9 +766,11 @@ PRINT a$ + " " + b$    ' xxx yy
 
 ### Variable Scoping
 
-Variables inside a function body are **local by default**: the compiler prefixes
-them with the function stem.  Two functions can each have a variable named `i%`
-with no conflict.  Use `global varname` to access a module-level variable:
+Variables inside a function body are **local by default**: the compiler maps
+them to uniquely-generated BASIC names of the form `stem_var_0%`, `_1%`, etc.
+Two functions can each have a variable named `i%` with no conflict, and a local
+can never accidentally shadow a global that happens to share the naive prefix.
+Use `global varname` to access a module-level variable:
 
 ```
 function sumTo%(n%)
@@ -799,15 +801,19 @@ end function
 ### How Functions Are Lowered
 
 The compiler lowers each function call to:
-1. Assign each argument to a global variable `fname_paramname`
+1. Assign each argument to a generated global variable (e.g. `fname_param_0%`)
 2. `GOSUB` to the function's generated label
-3. Assign the result from `fname_result`
+3. Assign the result from the generated result variable (e.g. `fname_result_0%`)
 
-Local variables in the function body are emitted as prefixed global BASIC
-variables (e.g., `i%` in `sumTo%` becomes `sumto_i%`).
+Local variables in the function body are emitted as uniquely-indexed BASIC
+globals (`fname_var_0%`, `fname_var_1%`, …).  The index is chosen so the name
+does not clash with any global variable or with any name allocated by an
+earlier function, making collisions impossible regardless of what names the
+developer uses at global scope.
 
-Array parameters use copy-in / copy-out: elements are copied into
-`fname_paramname(i)` before the call and back into the caller's array after.
+Array parameters use copy-in / copy-out: elements are copied into the
+parameter's generated name before the call and back into the caller's array
+after.
 
 ---
 
@@ -916,11 +922,13 @@ end procedure
 
 Procedures use the same GOSUB mechanism as functions:
 
-1. Assign each argument to a global variable `pname_paramname`
+1. Assign each argument to a generated global variable (e.g. `pname_param_0%`)
 2. `GOSUB` to the procedure's generated label
 3. No result variable is read back
 
-Local variables in the body are emitted as prefixed global BASIC variables.
+Local variables in the body are emitted as uniquely-indexed BASIC globals
+(`pname_var_0%`, `pname_var_1%`, …) using the same collision-free scheme as
+functions.
 
 ---
 
