@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
+use crate::diagnostics::{Diagnostic, SourcePos};
 
 const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
@@ -1551,7 +1552,7 @@ fn array_copy_lines(
     ]
 }
 
-fn sanitize_symbol(value: &str) -> String {
+pub(crate) fn sanitize_symbol(value: &str) -> String {
     value
         .chars()
         .map(|ch| {
@@ -1732,5 +1733,109 @@ fn is_label_line(line: &str) -> Option<&str> {
         Some(label)
     } else {
         None
+    }
+}
+
+/// Pre-generation validation: report every global variable whose name matches
+/// a compiler-generated local name (`stem_var_0suffix`), which would silently
+/// produce a BASIC program with two distinct roles sharing the same identifier.
+///
+/// Checks the result variable, every parameter, and every local variable
+/// reference in each function body.
+pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnostic> {
+    let globals = collect_program_names(program);
+
+    // Names the compiler will never treat as locals.
+    let builtin_stems: HashSet<&str> = BASIC_BUILTINS.iter().copied().collect();
+    let function_stems: HashSet<String> = program
+        .functions
+        .iter()
+        .map(|f| sanitize_symbol(&f.name.name))
+        .collect();
+
+    let mut diagnostics = Vec::new();
+
+    for func in &program.functions {
+        let stem = sanitize_symbol(&func.name.name);
+        let param_keys: HashSet<String> =
+            func.params.iter().map(|p| p.as_basic().to_ascii_lowercase()).collect();
+        let global_decls = collect_globals(&func.body);
+
+        // ── result variable ────────────────────────────────────────────────
+        check_one_conflict(
+            &globals,
+            &stem,
+            "result",
+            func.name.suffix,
+            &func.name,
+            &format!("result variable for `{}`", func.name.as_basic()),
+            &mut diagnostics,
+        );
+
+        // ── parameters ────────────────────────────────────────────────────
+        for param in &func.params {
+            check_one_conflict(
+                &globals,
+                &stem,
+                &sanitize_symbol(&param.name),
+                param.suffix,
+                &func.name,
+                &format!("parameter `{}` of `{}`", param.as_basic(), func.name.as_basic()),
+                &mut diagnostics,
+            );
+        }
+
+        // ── locals referenced in the body ──────────────────────────────────
+        let mut body_names: HashSet<String> = HashSet::new();
+        collect_names_from_stmts(&func.body, &mut body_names);
+
+        for key in &body_names {
+            if param_keys.contains(key) || global_decls.contains(key) {
+                continue;
+            }
+            let local = BasicIdent::parse(key);
+            let bare = local.name.to_ascii_lowercase();
+            if builtin_stems.contains(bare.as_str()) || function_stems.contains(&bare) {
+                continue;
+            }
+            check_one_conflict(
+                &globals,
+                &stem,
+                &sanitize_symbol(&local.name),
+                local.suffix,
+                &func.name,
+                &format!("local variable `{}` in `{}`", local.as_basic(), func.name.as_basic()),
+                &mut diagnostics,
+            );
+        }
+    }
+
+    diagnostics
+}
+
+fn check_one_conflict(
+    globals: &HashSet<String>,
+    stem: &str,
+    var_stem: &str,
+    suffix: Option<TypeSuffix>,
+    func_name: &BasicIdent,
+    description: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let candidate = BasicIdent {
+        name: format!("{}_{}_0", stem, var_stem),
+        suffix,
+    };
+    if globals.contains(&candidate.as_basic().to_ascii_lowercase()) {
+        diagnostics.push(Diagnostic::error(
+            SourcePos::new("<validation>", 1, 1),
+            format!(
+                "global `{}` conflicts with the compiler-generated name for {}; \
+                 rename the global or the function `{}`",
+                candidate.as_basic(),
+                description,
+                func_name.as_basic(),
+            ),
+        ));
     }
 }

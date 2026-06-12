@@ -47,6 +47,10 @@ pub fn compile_source(
     let filename = filename.into();
     let program = parse_source(filename, source)?;
     resolver::validate(&program)?;
+    let conflicts = codegen::check_generated_name_conflicts(&program);
+    if !conflicts.is_empty() {
+        return Err(conflicts);
+    }
     Ok(CodeGenerator::new().generate(&program))
 }
 
@@ -711,5 +715,67 @@ end
         assert!(output.contains("foo_x_0%"), "param x% must use indexed name foo_x_0%");
         // The two names must be distinct — no line should assign foo_x% from foo_x%.
         assert!(!output.contains("foo_x% = foo_x%"), "names must not collide");
+    }
+
+    // ── generated-name conflict detection ─────────────────────────────────
+
+    #[test]
+    fn global_matching_generated_param_name_is_an_error() {
+        // foo_x_0% is exactly what the compiler would generate for param x% in foo%.
+        // Declaring it as a global must be rejected.
+        let source = r#"
+foo_x_0% = 99
+function foo%(x%)
+  return x% + 1
+end function
+print foo%(1)
+end
+"#;
+        let err = compile_source("conflict_param.bcl", source)
+            .expect_err("should reject global that conflicts with generated param name");
+        assert!(
+            err.iter().any(|d| d.message.contains("foo_x_0%")),
+            "error must name the conflicting global: {:?}", err
+        );
+    }
+
+    #[test]
+    fn global_matching_generated_result_name_is_an_error() {
+        // foo_result_0% is what the compiler generates for the result variable of foo%.
+        let source = r#"
+foo_result_0% = 0
+function foo%(n%)
+  return n% * 2
+end function
+print foo%(3)
+end
+"#;
+        let err = compile_source("conflict_result.bcl", source)
+            .expect_err("should reject global that conflicts with generated result name");
+        assert!(
+            err.iter().any(|d| d.message.contains("foo_result_0%")),
+            "error must name the conflicting global: {:?}", err
+        );
+    }
+
+    #[test]
+    fn global_matching_generated_local_name_is_an_error() {
+        // foo_acc_0% is what the compiler would generate for local acc% inside foo%.
+        let source = r#"
+foo_acc_0% = 0
+function foo%(n%)
+  acc% = 0
+  acc% = acc% + n%
+  return acc%
+end function
+print foo%(5)
+end
+"#;
+        let err = compile_source("conflict_local.bcl", source)
+            .expect_err("should reject global that conflicts with generated local name");
+        assert!(
+            err.iter().any(|d| d.message.contains("foo_acc_0%")),
+            "error must name the conflicting global: {:?}", err
+        );
     }
 }
