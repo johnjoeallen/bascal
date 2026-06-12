@@ -265,5 +265,4 @@ env -u RUSTC_WRAPPER cargo test
 ## Current Limits
 
 - No library archive format.
-- No local variable scoping; all variables inside functions are global.
 - Array argument lowering uses the next argument as the element count.
