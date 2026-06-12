@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
@@ -31,6 +32,9 @@ pub struct CodeGenerator {
     known_callables: HashSet<String>,
     line_numbers: bool,
     loop_exit_stack: Vec<String>,
+    // All BASIC names already claimed: global vars + every allocated param/result/local name.
+    // RefCell because ident() must read and extend this set through a shared &self reference.
+    taken_names: RefCell<HashSet<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +46,9 @@ struct FunctionInfo {
     params: Vec<(BasicIdent, BasicIdent)>,
     is_procedure: bool,
     globals: HashSet<String>,
+    // Cache of source-variable-key → allocated lowered BASIC name for locals in this function.
+    // RefCell because ident() populates this lazily through a shared &FunctionInfo reference.
+    local_var_map: RefCell<HashMap<String, String>>,
 }
 
 impl CodeGenerator {
@@ -54,6 +61,7 @@ impl CodeGenerator {
             known_callables: HashSet::new(),
             line_numbers: false,
             loop_exit_stack: Vec::new(),
+            taken_names: RefCell::new(HashSet::new()),
         }
     }
 
@@ -63,11 +71,16 @@ impl CodeGenerator {
     }
 
     pub fn generate(mut self, program: &Program) -> String {
-        self.functions = program
-            .functions
-            .iter()
-            .map(FunctionInfo::from_def)
-            .collect();
+        // Seed the name registry with every variable visible at global scope.
+        // Function params/results are registered as each FunctionInfo is built so
+        // later functions cannot collide with earlier ones either.
+        let mut taken = collect_program_names(program);
+        let mut functions = Vec::new();
+        for f in &program.functions {
+            functions.push(FunctionInfo::from_def(f, &mut taken));
+        }
+        self.functions = functions;
+        *self.taken_names.borrow_mut() = taken;
 
         self.known_callables = self
             .functions
@@ -1007,6 +1020,7 @@ impl CodeGenerator {
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
         if let Some(info) = current_function {
+            // Params have already-allocated lowered names.
             if let Some((_, lowered)) = info
                 .params
                 .iter()
@@ -1014,13 +1028,30 @@ impl CodeGenerator {
             {
                 return lowered.as_basic();
             }
-            let key = ident.as_basic().to_ascii_lowercase();
-            if !info.globals.contains(&key) {
-                return BasicIdent {
-                    name: format!("{}_{}", info.stem, sanitize_symbol(&ident.name)),
-                    suffix: ident.suffix,
+            let source_key = ident.as_basic().to_ascii_lowercase();
+            if !info.globals.contains(&source_key) {
+                // Check per-function cache first.
+                {
+                    let cache = info.local_var_map.borrow();
+                    if let Some(cached) = cache.get(&source_key) {
+                        return cached.clone();
+                    }
                 }
-                .as_basic();
+                // Allocate a name that doesn't clash with any already-claimed BASIC name.
+                let preferred_stem =
+                    format!("{}_{}", info.stem, sanitize_symbol(&ident.name));
+                let lowered = {
+                    let taken = self.taken_names.borrow();
+                    allocate_unique(&preferred_stem, ident.suffix, &taken)
+                };
+                let lowered_basic = lowered.as_basic();
+                self.taken_names
+                    .borrow_mut()
+                    .insert(lowered_basic.to_ascii_lowercase());
+                info.local_var_map
+                    .borrow_mut()
+                    .insert(source_key, lowered_basic.clone());
+                return lowered_basic;
             }
         }
         BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
@@ -1085,33 +1116,30 @@ impl CodeGenerator {
 }
 
 impl FunctionInfo {
-    fn from_def(function: &FunctionDef) -> Self {
+    fn from_def(function: &FunctionDef, taken: &mut HashSet<String>) -> Self {
         let stem = sanitize_symbol(&function.name.name);
         let params = function
             .params
             .iter()
             .map(|param| {
-                (
-                    param.clone(),
-                    BasicIdent {
-                        name: format!("{}_{}", stem, sanitize_symbol(&param.name)),
-                        suffix: param.suffix,
-                    },
-                )
+                let preferred = format!("{}_{}", stem, sanitize_symbol(&param.name));
+                let lowered = allocate_unique(&preferred, param.suffix, taken);
+                taken.insert(lowered.as_basic().to_ascii_lowercase());
+                (param.clone(), lowered)
             })
             .collect();
+        let result = allocate_unique(&format!("{stem}_result"), function.name.suffix, taken);
+        taken.insert(result.as_basic().to_ascii_lowercase());
         let globals = collect_globals(&function.body);
         Self {
             source_name: function.name.clone(),
             stem: stem.clone(),
             label: format!("FN_{stem}"),
-            result: BasicIdent {
-                name: format!("{stem}_result"),
-                suffix: function.name.suffix,
-            },
+            result,
             params,
             is_procedure: function.is_procedure,
             globals,
+            local_var_map: RefCell::new(HashMap::new()),
         }
     }
 }
@@ -1142,6 +1170,327 @@ fn collect_globals(body: &[Statement]) -> HashSet<String> {
         }
     }
     globals
+}
+
+/// Returns a `BasicIdent` whose BASIC form is not present in `taken`.
+/// Always uses the indexed form `preferred_stem_0`, `_1`, … so that allocated
+/// names are visually distinct from bare global names and can never coincide
+/// with an unindexed global even if no collision exists today.
+fn allocate_unique(
+    preferred_stem: &str,
+    suffix: Option<TypeSuffix>,
+    taken: &HashSet<String>,
+) -> BasicIdent {
+    for i in 0u32.. {
+        let candidate = BasicIdent { name: format!("{}_{}", preferred_stem, i), suffix };
+        if !taken.contains(&candidate.as_basic().to_ascii_lowercase()) {
+            return candidate;
+        }
+    }
+    unreachable!("allocate_unique exhausted u32 candidates")
+}
+
+/// Collect the lowercase BASIC form of every variable name used at global
+/// (program-level) scope, plus any names declared as `global` inside
+/// functions.  This forms the initial "taken" set before function params and
+/// results are allocated.
+fn collect_program_names(program: &Program) -> HashSet<String> {
+    let mut names = HashSet::new();
+    collect_names_from_stmts(&program.statements, &mut names);
+    for block in &program.common {
+        for var in &block.vars {
+            names.insert(var.name.as_basic().to_ascii_lowercase());
+        }
+    }
+    for func in &program.functions {
+        collect_global_decl_names(&func.body, &mut names);
+    }
+    names
+}
+
+fn collect_names_from_stmts(stmts: &[Statement], names: &mut HashSet<String>) {
+    for stmt in stmts {
+        collect_names_from_stmt(stmt, names);
+    }
+}
+
+fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
+    match stmt {
+        Statement::Assignment { target, value } => {
+            collect_names_from_expr(target, names);
+            collect_names_from_expr(value, names);
+        }
+        Statement::Dim { name, .. } => {
+            names.insert(name.as_basic().to_ascii_lowercase());
+        }
+        Statement::Const { name, value } => {
+            names.insert(name.as_basic().to_ascii_lowercase());
+            collect_names_from_expr(value, names);
+        }
+        Statement::Print { tokens } | Statement::Lprint(tokens) => {
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    collect_names_from_expr(e, names);
+                }
+            }
+        }
+        Statement::PrintUsing { format, tokens } | Statement::LprintUsing { format, tokens } => {
+            collect_names_from_expr(format, names);
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    collect_names_from_expr(e, names);
+                }
+            }
+        }
+        Statement::PrintFile { channel, tokens } => {
+            collect_names_from_expr(channel, names);
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    collect_names_from_expr(e, names);
+                }
+            }
+        }
+        Statement::PrintFileUsing { channel, format, tokens } => {
+            collect_names_from_expr(channel, names);
+            collect_names_from_expr(format, names);
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    collect_names_from_expr(e, names);
+                }
+            }
+        }
+        Statement::If { condition, then_body, else_body } => {
+            collect_names_from_expr(condition, names);
+            collect_names_from_stmts(then_body, names);
+            collect_names_from_stmts(else_body, names);
+        }
+        Statement::For { var, start, end, step, body } => {
+            names.insert(var.as_basic().to_ascii_lowercase());
+            collect_names_from_expr(start, names);
+            collect_names_from_expr(end, names);
+            if let Some(s) = step {
+                collect_names_from_expr(s, names);
+            }
+            collect_names_from_stmts(body, names);
+        }
+        Statement::While { condition, body } => {
+            collect_names_from_expr(condition, names);
+            collect_names_from_stmts(body, names);
+        }
+        Statement::Do { condition, body, post_condition } => {
+            if let Some(c) = condition {
+                collect_names_from_expr(&c.expr, names);
+            }
+            collect_names_from_stmts(body, names);
+            if let Some(c) = post_condition {
+                collect_names_from_expr(&c.expr, names);
+            }
+        }
+        Statement::SelectCase { expr, cases, else_body } => {
+            collect_names_from_expr(expr, names);
+            for case in cases {
+                for v in &case.values {
+                    match v {
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => {
+                            collect_names_from_expr(e, names);
+                        }
+                        CaseValue::Range { from, to } => {
+                            collect_names_from_expr(from, names);
+                            collect_names_from_expr(to, names);
+                        }
+                    }
+                }
+                collect_names_from_stmts(&case.body, names);
+            }
+            collect_names_from_stmts(else_body, names);
+        }
+        Statement::ExprStmt(e) => collect_names_from_expr(e, names),
+        Statement::Return { value } => collect_names_from_expr(value, names),
+        Statement::Input { vars, .. } | Statement::Read(vars) => {
+            for e in vars {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::InputFile { channel, vars } => {
+            collect_names_from_expr(channel, names);
+            for e in vars {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::Data(values) => {
+            for e in values {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::Open { file, channel, .. } => {
+            collect_names_from_expr(file, names);
+            collect_names_from_expr(channel, names);
+        }
+        Statement::Close { channel } => collect_names_from_expr(channel, names),
+        Statement::LineInput { channel, target } => {
+            collect_names_from_expr(channel, names);
+            collect_names_from_expr(target, names);
+        }
+        Statement::Write { channel, exprs } => {
+            collect_names_from_expr(channel, names);
+            for e in exprs {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::Field { channel, fields } => {
+            collect_names_from_expr(channel, names);
+            for (w, v) in fields {
+                collect_names_from_expr(w, names);
+                names.insert(v.as_basic().to_ascii_lowercase());
+            }
+        }
+        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+            collect_names_from_expr(channel, names);
+            if let Some(e) = record {
+                collect_names_from_expr(e, names);
+            }
+            if let Some(e) = var {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::Lset { var, value } | Statement::Rset { var, value } => {
+            names.insert(var.as_basic().to_ascii_lowercase());
+            collect_names_from_expr(value, names);
+        }
+        Statement::Seek { channel, position } => {
+            collect_names_from_expr(channel, names);
+            collect_names_from_expr(position, names);
+        }
+        Statement::Locate { row, col } => {
+            collect_names_from_expr(row, names);
+            collect_names_from_expr(col, names);
+        }
+        Statement::Color { fg, bg } => {
+            collect_names_from_expr(fg, names);
+            if let Some(e) = bg {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::Poke { address, value } => {
+            collect_names_from_expr(address, names);
+            collect_names_from_expr(value, names);
+        }
+        Statement::Out { port, value } => {
+            collect_names_from_expr(port, names);
+            collect_names_from_expr(value, names);
+        }
+        Statement::Width { channel, cols } => {
+            if let Some(c) = channel {
+                collect_names_from_expr(c, names);
+            }
+            collect_names_from_expr(cols, names);
+        }
+        Statement::Swap(a, b) => {
+            collect_names_from_expr(a, names);
+            collect_names_from_expr(b, names);
+        }
+        Statement::Randomize(e) => {
+            if let Some(e) = e {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::OnBranch { expr, targets, .. } => {
+            collect_names_from_expr(expr, names);
+            for t in targets {
+                collect_names_from_expr(t, names);
+            }
+        }
+        Statement::OnErrorGoto { target } | Statement::ErrorStmt { code: target } => {
+            collect_names_from_expr(target, names);
+        }
+        Statement::Goto(e) | Statement::Gosub(e) | Statement::Restore(Some(e)) => {
+            collect_names_from_expr(e, names);
+        }
+        Statement::Resume(kind) => {
+            if let ResumeTarget::Line(e) = kind {
+                collect_names_from_expr(e, names);
+            }
+        }
+        Statement::OptionBase(e) => collect_names_from_expr(e, names),
+        Statement::Kill { file } => collect_names_from_expr(file, names),
+        Statement::Name { from, to } => {
+            collect_names_from_expr(from, names);
+            collect_names_from_expr(to, names);
+        }
+        Statement::GlobalDecl(ident) => {
+            names.insert(ident.as_basic().to_ascii_lowercase());
+        }
+        Statement::Erase(_)
+        | Statement::End
+        | Statement::Stop
+        | Statement::Cls
+        | Statement::Beep
+        | Statement::Clear
+        | Statement::System
+        | Statement::ExitFor
+        | Statement::ExitWhile
+        | Statement::ExitDo
+        | Statement::Restore(None)
+        | Statement::ReturnVoid
+        | Statement::Raw(_)
+        | Statement::BlockComment(_)
+        | Statement::BlankLine => {}
+    }
+}
+
+fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
+    match expr {
+        Expr::Ident(ident) => {
+            names.insert(ident.as_basic().to_ascii_lowercase());
+        }
+        Expr::ArrayRef { name, indices } => {
+            names.insert(name.as_basic().to_ascii_lowercase());
+            for i in indices {
+                collect_names_from_expr(i, names);
+            }
+        }
+        Expr::Call { args, .. } => {
+            for a in args {
+                collect_names_from_expr(a, names);
+            }
+        }
+        Expr::Unary { expr, .. } => collect_names_from_expr(expr, names),
+        Expr::Binary { left, right, .. } => {
+            collect_names_from_expr(left, names);
+            collect_names_from_expr(right, names);
+        }
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) => {}
+    }
+}
+
+/// Collect names from `GlobalDecl` statements anywhere in a function body.
+/// These become global-scope names in the emitted BASIC, so they must be
+/// excluded from the "taken" set to avoid double-counting but we still need
+/// the bare name reserved.
+fn collect_global_decl_names(body: &[Statement], names: &mut HashSet<String>) {
+    for stmt in body {
+        match stmt {
+            Statement::GlobalDecl(ident) => {
+                names.insert(ident.as_basic().to_ascii_lowercase());
+            }
+            Statement::If { then_body, else_body, .. } => {
+                collect_global_decl_names(then_body, names);
+                collect_global_decl_names(else_body, names);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
+                collect_global_decl_names(body, names);
+            }
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_global_decl_names(&case.body, names);
+                }
+                collect_global_decl_names(else_body, names);
+            }
+            _ => {}
+        }
+    }
 }
 
 fn same_ident(left: &BasicIdent, right: &BasicIdent) -> bool {

@@ -30,44 +30,44 @@
 230 ' --- Drive the procedures ---
 
 240 GOSUB 690
-250 printscore_label$ = "Alice"
-260 printscore_score% = 91
+250 printscore_label_0$ = "Alice"
+260 printscore_score_0% = 91
 270 GOSUB 730
-280 printscore_label$ = "Bob"
-290 printscore_score% = 54
+280 printscore_label_0$ = "Bob"
+290 printscore_score_0% = 54
 300 GOSUB 730
-310 printscore_label$ = "Carol"
-320 printscore_score% = 78
+310 printscore_label_0$ = "Carol"
+320 printscore_score_0% = 78
 330 GOSUB 730
 340 GOSUB 690
 
 350 PRINT "Passes only:"
-360 printifpass_name$ = "Alice"
-370 printifpass_score% = 91
+360 printifpass_name_0$ = "Alice"
+370 printifpass_score_0% = 91
 380 GOSUB 770
-390 printifpass_name$ = "Bob"
-400 printifpass_score% = 54
+390 printifpass_name_0$ = "Bob"
+400 printifpass_score_0% = 54
 410 GOSUB 770
-420 printifpass_name$ = "Carol"
-430 printifpass_score% = 78
+420 printifpass_name_0$ = "Carol"
+430 printifpass_score_0% = 78
 440 GOSUB 770
 
 450 CONST n% = 5
 460 DIM data%(n%)
-470 fillrange_count% = n%
-480 fillrange_value% = 99
-490 DIM fillrange_arr%(n%)
+470 fillrange_count_0% = n%
+480 fillrange_value_0% = 99
+490 DIM fillrange_arr_0%(n%)
 
-500 ' copy array argument into lowered function storage: data%() -> fillrange_arr%()
+500 ' copy array argument into lowered function storage: data%() -> fillrange_arr_0%()
 510 FOR BCC_T1% = 1 TO n%
-520     fillrange_arr%(BCC_T1%) = data%(BCC_T1%)
+520     fillrange_arr_0%(BCC_T1%) = data%(BCC_T1%)
 530 NEXT BCC_T1%
 
 540 GOSUB 840
 
-550 ' copy mutated array argument back to caller storage: fillrange_arr%() -> data%()
+550 ' copy mutated array argument back to caller storage: fillrange_arr_0%() -> data%()
 560 FOR BCC_T2% = 1 TO n%
-570     data%(BCC_T2%) = fillrange_arr%(BCC_T2%)
+570     data%(BCC_T2%) = fillrange_arr_0%(BCC_T2%)
 580 NEXT BCC_T2%
 
 590 PRINT "Filled array:"
@@ -88,22 +88,22 @@
 710 ' end procedure printseparator
 
 720 ' procedure printscore(label$, score%)
-730     PRINT (printscore_label$ + ": ") + STR$(printscore_score%)
+730     PRINT (printscore_label_0$ + ": ") + STR$(printscore_score_0%)
 740     RETURN
 750 ' end procedure printscore
 
 760 ' procedure printifpass(name$, score%)
-770     IF (printifpass_score% < 60) = 0 THEN GOTO 790
+770     IF (printifpass_score_0% < 60) = 0 THEN GOTO 790
 780         RETURN
 790     REM END IF
-800     PRINT (printifpass_name$ + " passed with ") + STR$(printifpass_score%)
+800     PRINT (printifpass_name_0$ + " passed with ") + STR$(printifpass_score_0%)
 810     RETURN
 820 ' end procedure printifpass
 
 830 ' procedure fillrange(arr%, count%, value%)
-840     FOR fillrange_i% = 0 TO fillrange_count% - 1
-850         fillrange_arr%(fillrange_i%) = fillrange_value%
-860     NEXT fillrange_i%
+840     FOR fillrange_i_0% = 0 TO fillrange_count_0% - 1
+850         fillrange_arr_0%(fillrange_i_0%) = fillrange_value_0%
+860     NEXT fillrange_i_0%
 870     RETURN
 880 ' end procedure fillrange
 

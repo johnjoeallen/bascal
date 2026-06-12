@@ -1,291 +1,291 @@
-' BASCAL generated BASIC
-' Functions are lowered to global variables, labels, and GOSUB
+10 ' BASCAL generated BASIC
+20 ' Functions are lowered to global variables, labels, and GOSUB
 
-' Shared string helpers for REMLINE.
+30 ' Shared string helpers for REMLINE.
 
-' Parse and strip leading decimal line numbers.
+40 ' Parse and strip leading decimal line numbers.
 
-' Fixed-size reference tracking for the example.
+50 ' Fixed-size reference tracking for the example.
 
-' REMLINE works on an input BASIC listing and writes a cleaned version.
+60 ' REMLINE works on an input BASIC listing and writes a cleaned version.
 
-DIM rawline$(1000)
-DIM linetext$(1000)
-DIM linenumber%(1000)
-DIM keepline%(1000)
-DIM refnumber%(1000)
+70 DIM rawline$(1000)
+80 DIM linetext$(1000)
+90 DIM linenumber%(1000)
+100 DIM keepline%(1000)
+110 DIM refnumber%(1000)
 
-' REMLINE demo driver.
-' This version reads a line-numbered BASIC file and writes a cleaned copy.
-' The dependency graph is still real: the driver pulls in parsing, reference
-' collection, and string helpers through BASCAL's path-style require syntax.
+120 ' REMLINE demo driver.
+130 ' This version reads a line-numbered BASIC file and writes a cleaned copy.
+140 ' The dependency graph is still real: the driver pulls in parsing, reference
+150 ' collection, and string helpers through BASCAL's path-style require syntax.
 
-inputfile$ = "tutorial/remline/sample/input.bas"
-outputfile$ = "tutorial/remline/sample/output.bas"
+160 inputfile$ = "tutorial/remline/sample/input.bas"
+170 outputfile$ = "tutorial/remline/sample/output.bas"
 
-PRINT "BASCAL REMLINE example"
-PRINT "Input: " + inputfile$
-PRINT "Output: " + outputfile$
+180 PRINT "BASCAL REMLINE example"
+190 PRINT "Input: " + inputfile$
+200 PRINT "Output: " + outputfile$
 
-GOSUB 350
-GOSUB 400
-GOSUB 430
+210 GOSUB 2090
+220 GOSUB 2340
+230 GOSUB 2470
 
-PRINT "Done"
-END
+240 PRINT "Done"
+250 END
 
-' function trimleft$(text$)
-10 ' Walk from the left until the first non-space character appears.
-    trimleft_i% = 1
-20 IF (trimleft_i% <= LEN(trimleft_text$)) = 0 THEN GOTO 40
-        trimleft_ch$ = MID$(trimleft_text$, trimleft_i%, 1)
-        IF (trimleft_ch$ <> " ") = 0 THEN GOTO 30
-            trimleft_result$ = MID$(trimleft_text$, trimleft_i%)
-            RETURN
-30 REM END IF
-        trimleft_i% = trimleft_i% + 1
-        GOTO 20
-40 REM END WHILE
-    trimleft_result$ = ""
-    RETURN
-' end function trimleft$
+260 ' function trimleft$(text$)
+270     ' Walk from the left until the first non-space character appears.
+280     trimleft_i_0% = 1
+290     IF (trimleft_i_0% <= LEN(trimleft_text_0$)) = 0 THEN GOTO 370
+300         trimleft_ch_0$ = MID$(trimleft_text_0$, trimleft_i_0%, 1)
+310         IF (trimleft_ch_0$ <> " ") = 0 THEN GOTO 340
+320             trimleft_result_0$ = MID$(trimleft_text_0$, trimleft_i_0%)
+330             RETURN
+340         REM END IF
+350         trimleft_i_0% = trimleft_i_0% + 1
+360         GOTO 290
+370     REM END WHILE
+380     trimleft_result_0$ = ""
+390     RETURN
+400 ' end function trimleft$
 
-' function upper$(text$)
-50 upper_result$ = UCASE$(upper_text$)
-    RETURN
-' end function upper$
+410 ' function upper$(text$)
+420     upper_result_0$ = UCASE$(upper_text_0$)
+430     RETURN
+440 ' end function upper$
 
-' function startswithkeyword%(text$, keyword$)
-60 trimleft_text$ = startswithkeyword_text$
-    GOSUB 10
-    startswithkeyword_t$ = trimleft_result$
-    startswithkeyword_kw$ = startswithkeyword_keyword$
-    upper_text$ = startswithkeyword_t$
-    GOSUB 50
-    startswithkeyword_t$ = upper_result$
-    upper_text$ = startswithkeyword_kw$
-    GOSUB 50
-    startswithkeyword_kw$ = upper_result$
-    IF (LEN(startswithkeyword_t$) < LEN(startswithkeyword_kw$)) = 0 THEN GOTO 70
-        startswithkeyword_result% = 0
-        RETURN
-70 REM END IF
-    startswithkeyword_result% = LEFT$(startswithkeyword_t$, LEN(startswithkeyword_kw$)) = startswithkeyword_kw$
-    RETURN
-' end function startswithkeyword%
+450 ' function startswithkeyword%(text$, keyword$)
+460     trimleft_text_0$ = startswithkeyword_text_0$
+470     GOSUB 270
+480     startswithkeyword_t_0$ = trimleft_result_0$
+490     startswithkeyword_kw_0$ = startswithkeyword_keyword_0$
+500     upper_text_0$ = startswithkeyword_t_0$
+510     GOSUB 420
+520     startswithkeyword_t_0$ = upper_result_0$
+530     upper_text_0$ = startswithkeyword_kw_0$
+540     GOSUB 420
+550     startswithkeyword_kw_0$ = upper_result_0$
+560     IF (LEN(startswithkeyword_t_0$) < LEN(startswithkeyword_kw_0$)) = 0 THEN GOTO 590
+570         startswithkeyword_result_0% = 0
+580         RETURN
+590     REM END IF
+600     startswithkeyword_result_0% = LEFT$(startswithkeyword_t_0$, LEN(startswithkeyword_kw_0$)) = startswithkeyword_kw_0$
+610     RETURN
+620 ' end function startswithkeyword%
 
-' function parselinenumber%(text$)
-80 trimleft_text$ = parselinenumber_text$
-    GOSUB 10
-    parselinenumber_text$ = trimleft_result$
-    parselinenumber_digits$ = ""
-    parselinenumber_i% = 1
-    parselinenumber_done% = 0
-90 IF ((parselinenumber_i% <= LEN(parselinenumber_text$)) AND (parselinenumber_done% = 0)) = 0 THEN GOTO 120
-        parselinenumber_ch$ = MID$(parselinenumber_text$, parselinenumber_i%, 1)
-        IF ((parselinenumber_ch$ >= "0") AND (parselinenumber_ch$ <= "9")) = 0 THEN GOTO 100
-            parselinenumber_digits$ = parselinenumber_digits$ + parselinenumber_ch$
-            GOTO 110
-100 parselinenumber_done% = 1
-110 REM END IF
-        parselinenumber_i% = parselinenumber_i% + 1
-        GOTO 90
-120 REM END WHILE
-    IF (LEN(parselinenumber_digits$) = 0) = 0 THEN GOTO 130
-        parselinenumber_result% = 0
-        RETURN
-130 REM END IF
-    parselinenumber_result% = VAL(parselinenumber_digits$)
-    RETURN
-' end function parselinenumber%
+630 ' function parselinenumber%(text$)
+640     trimleft_text_0$ = parselinenumber_text_0$
+650     GOSUB 270
+660     parselinenumber_text_0$ = trimleft_result_0$
+670     parselinenumber_digits_0$ = ""
+680     parselinenumber_i_0% = 1
+690     parselinenumber_done_0% = 0
+700     IF ((parselinenumber_i_0% <= LEN(parselinenumber_text_0$)) AND (parselinenumber_done_0% = 0)) = 0 THEN GOTO 790
+710         parselinenumber_ch_0$ = MID$(parselinenumber_text_0$, parselinenumber_i_0%, 1)
+720         IF ((parselinenumber_ch_0$ >= "0") AND (parselinenumber_ch_0$ <= "9")) = 0 THEN GOTO 750
+730             parselinenumber_digits_0$ = parselinenumber_digits_0$ + parselinenumber_ch_0$
+740             GOTO 760
+750             parselinenumber_done_0% = 1
+760         REM END IF
+770         parselinenumber_i_0% = parselinenumber_i_0% + 1
+780         GOTO 700
+790     REM END WHILE
+800     IF (LEN(parselinenumber_digits_0$) = 0) = 0 THEN GOTO 830
+810         parselinenumber_result_0% = 0
+820         RETURN
+830     REM END IF
+840     parselinenumber_result_0% = VAL(parselinenumber_digits_0$)
+850     RETURN
+860 ' end function parselinenumber%
 
-' function striplinenumber$(text$)
-140 trimleft_text$ = striplinenumber_text$
-    GOSUB 10
-    striplinenumber_text$ = trimleft_result$
-    striplinenumber_i% = 1
-    striplinenumber_done% = 0
-150 IF ((striplinenumber_i% <= LEN(striplinenumber_text$)) AND (striplinenumber_done% = 0)) = 0 THEN GOTO 180
-        striplinenumber_ch$ = MID$(striplinenumber_text$, striplinenumber_i%, 1)
-        IF ((striplinenumber_ch$ >= "0") AND (striplinenumber_ch$ <= "9")) = 0 THEN GOTO 160
-            striplinenumber_i% = striplinenumber_i% + 1
-            GOTO 170
-160 striplinenumber_done% = 1
-170 REM END IF
-        GOTO 150
-180 REM END WHILE
-    IF (striplinenumber_i% > LEN(striplinenumber_text$)) = 0 THEN GOTO 190
-        striplinenumber_result$ = ""
-        RETURN
-190 REM END IF
-    IF (MID$(striplinenumber_text$, striplinenumber_i%, 1) = " ") = 0 THEN GOTO 200
-        striplinenumber_i% = striplinenumber_i% + 1
-200 REM END IF
-    striplinenumber_result$ = MID$(striplinenumber_text$, striplinenumber_i%)
-    RETURN
-' end function striplinenumber$
+870 ' function striplinenumber$(text$)
+880     trimleft_text_0$ = striplinenumber_text_0$
+890     GOSUB 270
+900     striplinenumber_text_0$ = trimleft_result_0$
+910     striplinenumber_i_0% = 1
+920     striplinenumber_done_0% = 0
+930     IF ((striplinenumber_i_0% <= LEN(striplinenumber_text_0$)) AND (striplinenumber_done_0% = 0)) = 0 THEN GOTO 1010
+940         striplinenumber_ch_0$ = MID$(striplinenumber_text_0$, striplinenumber_i_0%, 1)
+950         IF ((striplinenumber_ch_0$ >= "0") AND (striplinenumber_ch_0$ <= "9")) = 0 THEN GOTO 980
+960             striplinenumber_i_0% = striplinenumber_i_0% + 1
+970             GOTO 990
+980             striplinenumber_done_0% = 1
+990         REM END IF
+1000         GOTO 930
+1010     REM END WHILE
+1020     IF (striplinenumber_i_0% > LEN(striplinenumber_text_0$)) = 0 THEN GOTO 1050
+1030         striplinenumber_result_0$ = ""
+1040         RETURN
+1050     REM END IF
+1060     IF (MID$(striplinenumber_text_0$, striplinenumber_i_0%, 1) = " ") = 0 THEN GOTO 1080
+1070         striplinenumber_i_0% = striplinenumber_i_0% + 1
+1080     REM END IF
+1090     striplinenumber_result_0$ = MID$(striplinenumber_text_0$, striplinenumber_i_0%)
+1100     RETURN
+1110 ' end function striplinenumber$
 
-' function addref%(lineno%)
-210 IF (addref_lineno% = 0) = 0 THEN GOTO 220
-        addref_result% = 0
-        RETURN
-220 REM END IF
-    addref_i% = 1
-230 IF (addref_i% <= refcount%) = 0 THEN GOTO 250
-        IF (refnumber%(addref_i%) = addref_lineno%) = 0 THEN GOTO 240
-            addref_result% = 0
-            RETURN
-240 REM END IF
-        addref_i% = addref_i% + 1
-        GOTO 230
-250 REM END WHILE
-    IF (refcount% >= 1000) = 0 THEN GOTO 260
-        addref_result% = 0
-        RETURN
-260 REM END IF
-    refcount% = refcount% + 1
-    refnumber%(refcount%) = addref_lineno%
-    addref_result% = 1
-    RETURN
-' end function addref%
+1120 ' function addref%(lineno%)
+1130     IF (addref_lineno_0% = 0) = 0 THEN GOTO 1160
+1140         addref_result_0% = 0
+1150         RETURN
+1160     REM END IF
+1170     addref_i_0% = 1
+1180     IF (addref_i_0% <= refcount%) = 0 THEN GOTO 1250
+1190         IF (refnumber%(addref_i_0%) = addref_lineno_0%) = 0 THEN GOTO 1220
+1200             addref_result_0% = 0
+1210             RETURN
+1220         REM END IF
+1230         addref_i_0% = addref_i_0% + 1
+1240         GOTO 1180
+1250     REM END WHILE
+1260     IF (refcount% >= 1000) = 0 THEN GOTO 1290
+1270         addref_result_0% = 0
+1280         RETURN
+1290     REM END IF
+1300     refcount% = refcount% + 1
+1310     refnumber%(refcount%) = addref_lineno_0%
+1320     addref_result_0% = 1
+1330     RETURN
+1340 ' end function addref%
 
-' function isreferenced%(lineno%)
-270 isreferenced_i% = 1
-280 IF (isreferenced_i% <= refcount%) = 0 THEN GOTO 300
-        IF (refnumber%(isreferenced_i%) = isreferenced_lineno%) = 0 THEN GOTO 290
-            isreferenced_result% = 1
-            RETURN
-290 REM END IF
-        isreferenced_i% = isreferenced_i% + 1
-        GOTO 280
-300 REM END WHILE
-    isreferenced_result% = 0
-    RETURN
-' end function isreferenced%
+1350 ' function isreferenced%(lineno%)
+1360     isreferenced_i_0% = 1
+1370     IF (isreferenced_i_0% <= refcount%) = 0 THEN GOTO 1440
+1380         IF (refnumber%(isreferenced_i_0%) = isreferenced_lineno_0%) = 0 THEN GOTO 1410
+1390             isreferenced_result_0% = 1
+1400             RETURN
+1410         REM END IF
+1420         isreferenced_i_0% = isreferenced_i_0% + 1
+1430         GOTO 1370
+1440     REM END WHILE
+1450     isreferenced_result_0% = 0
+1460     RETURN
+1470 ' end function isreferenced%
 
-' function collectrefs%(line$)
-310 collectrefs_found% = 0
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "GOTO"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "GOSUB"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "THEN"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "ELSE"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "RESTORE"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "RESUME"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    scankeywordrefs_line$ = collectrefs_line$
-    scankeywordrefs_keyword$ = "RUN"
-    GOSUB 320
-    collectrefs_found% = collectrefs_found% OR scankeywordrefs_result%
-    collectrefs_result% = collectrefs_found%
-    RETURN
-' end function collectrefs%
+1480 ' function collectrefs%(line$)
+1490     collectrefs_found_0% = 0
+1500     scankeywordrefs_line_0$ = collectrefs_line_0$
+1510     scankeywordrefs_keyword_0$ = "GOTO"
+1520     GOSUB 1820
+1530     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1540     scankeywordrefs_line_0$ = collectrefs_line_0$
+1550     scankeywordrefs_keyword_0$ = "GOSUB"
+1560     GOSUB 1820
+1570     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1580     scankeywordrefs_line_0$ = collectrefs_line_0$
+1590     scankeywordrefs_keyword_0$ = "THEN"
+1600     GOSUB 1820
+1610     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1620     scankeywordrefs_line_0$ = collectrefs_line_0$
+1630     scankeywordrefs_keyword_0$ = "ELSE"
+1640     GOSUB 1820
+1650     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1660     scankeywordrefs_line_0$ = collectrefs_line_0$
+1670     scankeywordrefs_keyword_0$ = "RESTORE"
+1680     GOSUB 1820
+1690     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1700     scankeywordrefs_line_0$ = collectrefs_line_0$
+1710     scankeywordrefs_keyword_0$ = "RESUME"
+1720     GOSUB 1820
+1730     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1740     scankeywordrefs_line_0$ = collectrefs_line_0$
+1750     scankeywordrefs_keyword_0$ = "RUN"
+1760     GOSUB 1820
+1770     collectrefs_found_0% = collectrefs_found_0% OR scankeywordrefs_result_0%
+1780     collectrefs_result_0% = collectrefs_found_0%
+1790     RETURN
+1800 ' end function collectrefs%
 
-' function scankeywordrefs%(line$, keyword$)
-320 upper_text$ = scankeywordrefs_line$
-    GOSUB 50
-    scankeywordrefs_ul$ = upper_result$
-    upper_text$ = scankeywordrefs_keyword$
-    GOSUB 50
-    scankeywordrefs_uk$ = upper_result$
-    scankeywordrefs_pos% = INSTR(scankeywordrefs_ul$, scankeywordrefs_uk$)
-    IF (scankeywordrefs_pos% = 0) = 0 THEN GOTO 330
-        scankeywordrefs_result% = 0
-        RETURN
-330 REM END IF
-    trimleft_text$ = MID$(scankeywordrefs_line$, scankeywordrefs_pos% + LEN(scankeywordrefs_keyword$))
-    GOSUB 10
-    scankeywordrefs_after$ = trimleft_result$
-    parselinenumber_text$ = scankeywordrefs_after$
-    GOSUB 80
-    scankeywordrefs_ref% = parselinenumber_result%
-    IF (scankeywordrefs_ref% > 0) = 0 THEN GOTO 340
-        addref_lineno% = scankeywordrefs_ref%
-        GOSUB 210
-        scankeywordrefs_result% = 1
-        RETURN
-340 REM END IF
-    scankeywordrefs_result% = 0
-    RETURN
-' end function scankeywordrefs%
+1810 ' function scankeywordrefs%(line$, keyword$)
+1820     upper_text_0$ = scankeywordrefs_line_0$
+1830     GOSUB 420
+1840     scankeywordrefs_ul_0$ = upper_result_0$
+1850     upper_text_0$ = scankeywordrefs_keyword_0$
+1860     GOSUB 420
+1870     scankeywordrefs_uk_0$ = upper_result_0$
+1880     POS% = INSTR(scankeywordrefs_ul_0$, scankeywordrefs_uk_0$)
+1890     IF (POS% = 0) = 0 THEN GOTO 1920
+1900         scankeywordrefs_result_0% = 0
+1910         RETURN
+1920     REM END IF
+1930     trimleft_text_0$ = MID$(scankeywordrefs_line_0$, POS% + LEN(scankeywordrefs_keyword_0$))
+1940     GOSUB 270
+1950     scankeywordrefs_after_0$ = trimleft_result_0$
+1960     parselinenumber_text_0$ = scankeywordrefs_after_0$
+1970     GOSUB 640
+1980     scankeywordrefs_ref_0% = parselinenumber_result_0%
+1990     IF (scankeywordrefs_ref_0% > 0) = 0 THEN GOTO 2040
+2000         addref_lineno_0% = scankeywordrefs_ref_0%
+2010         GOSUB 1130
+2020         scankeywordrefs_result_0% = 1
+2030         RETURN
+2040     REM END IF
+2050     scankeywordrefs_result_0% = 0
+2060     RETURN
+2070 ' end function scankeywordrefs%
 
-' function loadlines%()
-350 refcount% = 0
-    linecount% = 0
-    OPEN inputfile$ FOR INPUT AS #1
-360 IF (EOF(1) = 0) = 0 THEN GOTO 370
-        linecount% = linecount% + 1
-        LINE INPUT #1, rawline$(linecount%)
-        GOTO 360
-370 REM END WHILE
-    CLOSE #1
-    loadlines_i% = 1
-380 IF (loadlines_i% <= linecount%) = 0 THEN GOTO 390
-        parselinenumber_text$ = rawline$(loadlines_i%)
-        GOSUB 80
-        linenumber%(loadlines_i%) = parselinenumber_result%
-        striplinenumber_text$ = rawline$(loadlines_i%)
-        GOSUB 140
-        linetext$(loadlines_i%) = striplinenumber_result$
-        keepline%(loadlines_i%) = 0
-        loadlines_i% = loadlines_i% + 1
-        GOTO 380
-390 REM END WHILE
-    loadlines_result% = 0
-    RETURN
-' end function loadlines%
+2080 ' function loadlines%()
+2090     refcount% = 0
+2100     linecount% = 0
+2110     OPEN inputfile$ FOR INPUT AS #1
+2120     IF (EOF(1) = 0) = 0 THEN GOTO 2160
+2130         linecount% = linecount% + 1
+2140         LINE INPUT #1, rawline$(linecount%)
+2150         GOTO 2120
+2160     REM END WHILE
+2170     CLOSE #1
+2180     loadlines_i_0% = 1
+2190     IF (loadlines_i_0% <= linecount%) = 0 THEN GOTO 2290
+2200         parselinenumber_text_0$ = rawline$(loadlines_i_0%)
+2210         GOSUB 640
+2220         linenumber%(loadlines_i_0%) = parselinenumber_result_0%
+2230         striplinenumber_text_0$ = rawline$(loadlines_i_0%)
+2240         GOSUB 880
+2250         linetext$(loadlines_i_0%) = striplinenumber_result_0$
+2260         keepline%(loadlines_i_0%) = 0
+2270         loadlines_i_0% = loadlines_i_0% + 1
+2280         GOTO 2190
+2290     REM END WHILE
+2300     loadlines_result_0% = 0
+2310     RETURN
+2320 ' end function loadlines%
 
-' function collectallrefs%()
-400 refcount% = 0
-    collectallrefs_i% = 1
-410 IF (collectallrefs_i% <= linecount%) = 0 THEN GOTO 420
-        collectrefs_line$ = linetext$(collectallrefs_i%)
-        GOSUB 310
-        keepline%(collectallrefs_i%) = collectrefs_result%
-        collectallrefs_i% = collectallrefs_i% + 1
-        GOTO 410
-420 REM END WHILE
-    collectallrefs_result% = 0
-    RETURN
-' end function collectallrefs%
+2330 ' function collectallrefs%()
+2340     refcount% = 0
+2350     collectallrefs_i_0% = 1
+2360     IF (collectallrefs_i_0% <= linecount%) = 0 THEN GOTO 2420
+2370         collectrefs_line_0$ = linetext$(collectallrefs_i_0%)
+2380         GOSUB 1490
+2390         keepline%(collectallrefs_i_0%) = collectrefs_result_0%
+2400         collectallrefs_i_0% = collectallrefs_i_0% + 1
+2410         GOTO 2360
+2420     REM END WHILE
+2430     collectallrefs_result_0% = 0
+2440     RETURN
+2450 ' end function collectallrefs%
 
-' function transformlines%()
-430 OPEN outputfile$ FOR OUTPUT AS #2
-    transformlines_i% = 1
-440 IF (transformlines_i% <= linecount%) = 0 THEN GOTO 490
-        IF (linenumber%(transformlines_i%) > 0) = 0 THEN GOTO 470
-            isreferenced_lineno% = linenumber%(transformlines_i%)
-            GOSUB 270
-            IF ((keepline%(transformlines_i%) <> 0) OR (isreferenced_result% <> 0)) = 0 THEN GOTO 450
-                trimleft_text$ = STR$(linenumber%(transformlines_i%))
-                GOSUB 10
-                PRINT #2, (trimleft_result$ + " ") + linetext$(transformlines_i%)
-                GOTO 460
-450 PRINT #2, linetext$(transformlines_i%)
-460 REM END IF
-            GOTO 480
-470 PRINT #2, linetext$(transformlines_i%)
-480 REM END IF
-        transformlines_i% = transformlines_i% + 1
-        GOTO 440
-490 REM END WHILE
-    CLOSE #2
-    transformlines_result% = 0
-    RETURN
-' end function transformlines%
+2460 ' function transformlines%()
+2470     OPEN outputfile$ FOR OUTPUT AS #2
+2480     transformlines_i_0% = 1
+2490     IF (transformlines_i_0% <= linecount%) = 0 THEN GOTO 2650
+2500         IF (linenumber%(transformlines_i_0%) > 0) = 0 THEN GOTO 2610
+2510             isreferenced_lineno_0% = linenumber%(transformlines_i_0%)
+2520             GOSUB 1360
+2530             IF ((keepline%(transformlines_i_0%) <> 0) OR (isreferenced_result_0% <> 0)) = 0 THEN GOTO 2580
+2540                 trimleft_text_0$ = STR$(linenumber%(transformlines_i_0%))
+2550                 GOSUB 270
+2560                 PRINT #2, (trimleft_result_0$ + " ") + linetext$(transformlines_i_0%)
+2570                 GOTO 2590
+2580                 PRINT #2, linetext$(transformlines_i_0%)
+2590             REM END IF
+2600             GOTO 2620
+2610             PRINT #2, linetext$(transformlines_i_0%)
+2620         REM END IF
+2630         transformlines_i_0% = transformlines_i_0% + 1
+2640         GOTO 2490
+2650     REM END WHILE
+2660     CLOSE #2
+2670     transformlines_result_0% = 0
+2680     RETURN
+2690 ' end function transformlines%

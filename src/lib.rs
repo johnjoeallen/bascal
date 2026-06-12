@@ -316,12 +316,12 @@ END
                 .trim_start();
             !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
         }), "should not emit BASCOM end function declarations");
-        assert!(output.contains("add_left% = 10"));
-        assert!(output.contains("add_right% = 20"));
+        assert!(output.contains("add_left_0% = 10"));
+        assert!(output.contains("add_right_0% = 20"));
         assert!(output.contains("GOSUB "));
-        assert!(output.contains("total% = add_result%"));
+        assert!(output.contains("total% = add_result_0%"));
         assert!(!output.contains("FN_add"));
-        assert!(output.contains("add_result% = add_left% + add_right%"));
+        assert!(output.contains("add_result_0% = add_left_0% + add_right_0%"));
     }
 
     #[test]
@@ -335,11 +335,11 @@ END
 "#;
 
         let output = compile_source("double.bcl", source).expect("sample should compile");
-        assert!(output.contains("double_value% = 21"));
+        assert!(output.contains("double_value_0% = 21"));
         assert!(output.contains("GOSUB "));
         assert!(!output.contains("FN_double"));
-        assert!(output.contains("answer% = double_result%"));
-        assert!(output.contains("double_result% = double_value% * 2"));
+        assert!(output.contains("answer% = double_result_0%"));
+        assert!(output.contains("double_result_0% = double_value_0% * 2"));
     }
 
     #[test]
@@ -350,8 +350,8 @@ END
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));
-        assert!(output.contains("a$ = repeat_result$"));
-        assert!(output.contains("b$ = repeat_result$"));
+        assert!(output.contains("a$ = repeat_result_0$"));
+        assert!(output.contains("b$ = repeat_result_0$"));
     }
 
     #[test]
@@ -415,10 +415,10 @@ END
         assert!(!output.contains("placeholder"));
         assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
         // sort_driver.bcl uses mixed-case `bubbleData%`; output normalises to lowercase.
-        assert!(output.lines().any(|l| l.contains("bubblesort_data%(") && l.contains(") = bubbledata%(")));
-        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesort_data%(")));
-        assert!(output.contains("bubblesort_data%(bubblesort_j%) = bubblesort_data%(bubblesort_j% + 1)"));
-        assert!(output.contains("quicksort_data%(quicksort_wall%) = quicksort_data%(quicksort_qhigh%)"));
+        assert!(output.lines().any(|l| l.contains("bubblesort_data_0%(") && l.contains(") = bubbledata%(")));
+        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesort_data_0%(")));
+        assert!(output.contains("bubblesort_data_0%(bubblesort_j_0%) = bubblesort_data_0%(bubblesort_j_0% + 1)"));
+        assert!(output.contains("quicksort_data_0%(quicksort_wall_0%) = quicksort_data_0%(quicksort_qhigh_0%)"));
         assert!(output.contains("GOSUB "));
     }
 
@@ -688,5 +688,28 @@ end
         assert!(output.contains("d% = 6 XOR 3"));
         assert!(output.contains("e% = 2 ^ (3 ^ 2)"));    // right-associative ^
         assert!(output.contains("f% = (10 \\ 3) MOD 2")); // \ binds tighter than MOD
+    }
+
+    #[test]
+    fn local_names_always_use_indexed_scheme() {
+        // All params, results, and locals always get an indexed suffix (_0, _1, …)
+        // so they can never silently collide with a bare global name.
+        // Global `foo_x%` must be distinct from parameter `x%` in function `foo%`.
+        let source = r#"
+foo_x% = 99
+function foo%(x%)
+  global foo_x%
+  return x% + foo_x%
+end function
+print foo%(1)
+end
+"#;
+        let output = compile_source("collision.bcl", source).expect("should compile");
+        // Global must appear as-is.
+        assert!(output.contains("foo_x%"), "global foo_x% must be present");
+        // Parameter x% must be lowered to an indexed name, never the bare foo_x%.
+        assert!(output.contains("foo_x_0%"), "param x% must use indexed name foo_x_0%");
+        // The two names must be distinct — no line should assign foo_x% from foo_x%.
+        assert!(!output.contains("foo_x% = foo_x%"), "names must not collide");
     }
 }
