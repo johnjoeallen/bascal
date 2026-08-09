@@ -267,7 +267,7 @@
 
     <div class="compare">
       <h3>1. Declare the record shape and open the file</h3>
-      <p class="note">The DSL sums the field widths for you and generates the matching <code>FIELD</code> binding — get one field's width wrong by hand and every record after it reads/writes off by that many bytes.</p>
+      <p class="note">BASCAL sums the field widths for you and generates the matching <code>FIELD</code> binding — get one field's width wrong by hand and every record after it reads/writes off by that many bytes.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -278,7 +278,7 @@ open db_file$ for random as #1 len = rec_len%
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>record Student
     id:    int16
     name:  string(20)
@@ -292,7 +292,7 @@ file db as Student = open("students.dat")</code></pre>
 
     <div class="compare">
       <h3>2. Write a whole record</h3>
-      <p class="note">Every declared field is required in the DSL literal — a field forgotten by hand ships silently; a field forgotten in <code>{ ... }</code> is a compile error.</p>
+      <p class="note">Every declared field is required in the record literal — a field forgotten by hand ships silently; a field forgotten in <code>{ ... }</code> is a compile error.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -302,7 +302,7 @@ lset scoreBuf$ = mkd#(95.0)
 put #1, 1</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>db[1] = { id: 1, name: "Alice", score: 95.0 }</code></pre>
         </div>
       </div>
@@ -323,7 +323,7 @@ put #1, 1</code></pre>
 end for</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>for i = 3 downto 1
     let s = db[i]
     print "[" + s.id + "] " + s.name + " -- " + s.score
@@ -343,7 +343,7 @@ lset scoreBuf$ = mkd#(61.5)
 put #1, 2</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>db[2].score = 61.5</code></pre>
         </div>
       </div>
@@ -361,14 +361,29 @@ lset scoreBuf$ = mkd#(91.0)
 put #1, 1</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>db[1] = ?{ name: "Alice Smith", score: 91.0 }</code></pre>
         </div>
       </div>
       <div class="tally">
         <span><b>Generated BASIC:</b> 4 lines, 3 buffer names, 1 pack call, repeated per edit</span>
-        <span><b>DSL:</b> 1 line, still exactly one <code>GET</code> + one <code>PUT</code> generated</span>
+        <span><b>BASCAL:</b> 1 line, still exactly one <code>GET</code> + one <code>PUT</code> generated</span>
       </div>
+      <blockquote>
+        <strong>Why <code>?{ ... }</code>?</strong> A few spellings for
+        "partial record literal" were considered — <code>.{ ... }</code>,
+        <code>&lt;-{ ... }</code> — but <code>?</code> won because it reads
+        as "this might be incomplete," the same sense it carries for
+        optional values in most other languages, and it was free: nothing
+        else in BASCAL's grammar used a bare <code>?</code>, so adding it
+        couldn't collide with or reinterpret any existing program. It's
+        also deliberately a <em>second</em> spelling rather than a relaxed
+        <code>{ ... }</code> — keeping <code>{ ... }</code> strict means a
+        record literal that's missing a field by accident is still always a
+        compile error. <code>?{ ... }</code> exists so that incompleteness
+        has to be opted into explicitly, one call site at a time, instead of
+        silently allowed everywhere.
+      </blockquote>
     </div>
 
     <div class="compare">
@@ -383,7 +398,7 @@ lset scoreBuf$ = mkd#(88.0)
 put #1, 3</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>let carol = db[3]
 carol.name  = "Carol Jones"
 carol.score = 88.0
@@ -400,14 +415,14 @@ db[3] = carol</code></pre>
           <pre><code>close #1</code></pre>
         </div>
         <div class="pane new">
-          <span class="tag">BASCAL DSL</span>
+          <span class="tag">BASCAL</span>
           <pre><code>db.close()</code></pre>
         </div>
       </div>
     </div>
 
     <p class="lede">
-      Nothing above runs slower — every DSL line transpiles to exactly the same
+      Nothing above runs slower — every line here transpiles to exactly the same
       <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code>
       calls shown on the left, generated for you instead of typed and kept
       in sync by hand. See the
@@ -420,7 +435,7 @@ db[3] = carol</code></pre>
   <section id="control-flow">
     <h2>Control flow: structured vs hand-rolled GOTO</h2>
     <p class="lede">
-      The record/file DSL is the newest addition, but the same trade lives
+      The record/file syntax is the newest addition, but the same trade lives
       throughout BASCAL: the line-numbered dialects <code>bcc</code> targets
       have no <code>SELECT CASE</code>, no <code>DO</code>/<code>LOOP</code>,
       and no multiline <code>IF</code> — every branch and loop is really
