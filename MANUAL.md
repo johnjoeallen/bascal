@@ -1353,7 +1353,7 @@ of its field widths, in declaration order.
 file db as Student = open("students.dat")
 ```
 
-Lowers to one `OPEN ... FOR RANDOM AS #n LEN = <width>` plus one matching
+Transpiles to one `OPEN ... FOR RANDOM AS #n LEN = <width>` plus one matching
 `FIELD #n, ...` statement, binding one string buffer variable per field.
 File numbers are allocated automatically, starting at `#1`, in the order
 `file` declarations appear in the source.
@@ -1364,7 +1364,7 @@ File numbers are allocated automatically, starting at `#1`, in the order
 db[1] = { id: 1, name: "Alice", score: 95.0 }
 ```
 
-Every declared field must be supplied exactly once. Lowers to one `LSET`
+Every declared field must be supplied exactly once. Transpiles to one `LSET`
 per field — numeric fields are packed first (`MKI%`/`MKL&`/`MKS!`/`MKD#`),
 string fields are assigned directly — followed by a single `PUT #n, 1`.
 `LSET` is used for every field, numeric or string: once a numeric value is
@@ -1413,7 +1413,7 @@ preserve.
 let s = db[i]
 ```
 
-Lowers to `GET #n, i` followed by one unpacking assignment per field
+Transpiles to `GET #n, i` followed by one unpacking assignment per field
 (`CVI%`/`CVL&`/`CVS!`/`CVD#` for numeric fields, `RTRIM$` for strings), each
 one written into a scalar named `<var>_<field>` — e.g. `s_id%`, `s_name$`,
 `s_score#`. Later references to `s.id`, `s.name`, `s.score` in the source
@@ -1437,7 +1437,7 @@ for the explicit commit step.
 db[i].field = value
 ```
 
-For a single field, on its own, this is the terse form: it lowers to an
+For a single field, on its own, this is the terse form: it transpiles to an
 implicit `GET #n, i`, a single `LSET` for just that field, then `PUT #n, i`.
 
 This form does its own `GET`/`PUT` every time it appears, so chaining several
@@ -1472,7 +1472,7 @@ compile-time error.
 db.close()
 ```
 
-Lowers to `CLOSE #n`.
+Transpiles to `CLOSE #n`.
 
 ### downto
 
@@ -2143,7 +2143,7 @@ end procedure
 printScore("Alice", 91)
 ```
 
-Lowers to:
+Transpiles to:
 
 ```
 printscore_label$ = "Alice"

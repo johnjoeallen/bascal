@@ -5,7 +5,7 @@
 40 ' 
 50 ' This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
 60 ' random-access file primitives directly. Part 2 uses BASCAL's `record`/
-70 ' `file` DSL, which lowers to exactly the same primitives — nothing about
+70 ' `file` DSL, which transpiles to exactly the same primitives — nothing about
 80 ' the *generated* BASIC changes, only how much of it you have to write by
 90 ' hand. Read Part 1 first; the comments between the two parts explain what
 100 ' the DSL is buying you and why.

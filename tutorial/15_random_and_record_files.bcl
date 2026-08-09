@@ -2,7 +2,7 @@
 //
 // This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
 // random-access file primitives directly. Part 2 uses BASCAL's `record`/
-// `file` DSL, which lowers to exactly the same primitives — nothing about
+// `file` DSL, which transpiles to exactly the same primitives — nothing about
 // the *generated* BASIC changes, only how much of it you have to write by
 // hand. Read Part 1 first; the comments between the two parts explain what
 // the DSL is buying you and why.
