@@ -675,6 +675,75 @@ end
     }
 
     #[test]
+    fn record_partial_literal_missing_fields_inserts_get() {
+        let source = r#"record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+file db as Student = open("students.dat")
+db[2] = ?{ score: 61.5 }
+end
+"#;
+        let output = compile_source("partial.bcl", source).expect("should compile");
+        assert!(output.contains("GET #1, 2"), "partial write covering only some fields needs a GET");
+        assert!(output.contains("LSET db_scorebuf$ = MKD#(61.5)"));
+        assert!(!output.contains("LSET db_idbuf$"), "unmentioned fields must not be LSET");
+        assert!(!output.contains("LSET db_namebuf$"), "unmentioned fields must not be LSET");
+        assert!(output.contains("PUT #1, 2"));
+    }
+
+    #[test]
+    fn record_partial_literal_covering_every_field_skips_get() {
+        // Static analysis: a `?{ ... }` that happens to name every declared
+        // field needs no GET, exactly like a plain `{ ... }` literal.
+        let source = r#"record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+file db as Student = open("students.dat")
+db[3] = ?{ id: 3, name: "Carol", score: 78.0 }
+end
+"#;
+        let output = compile_source("partial_full.bcl", source).expect("should compile");
+        assert!(!output.contains("GET #1"), "covering every field needs no GET");
+        assert!(output.contains("LSET db_idbuf$ = MKI%(3)"));
+        assert!(output.contains("LSET db_namebuf$ = \"Carol\""));
+        assert!(output.contains("LSET db_scorebuf$ = MKD#(78)"));
+        assert!(output.contains("PUT #1, 3"));
+    }
+
+    #[test]
+    fn record_full_literal_still_rejects_missing_field() {
+        // `{ ... }` (no `?`) keeps the completeness safety net.
+        let source = r#"record A
+    n: int16
+    m: int16
+end record
+file db as A = open("a.dat")
+db[1] = { n: 1 }
+end
+"#;
+        let err = compile_source("full.bcl", source).expect_err("should reject incomplete full literal");
+        assert!(err.iter().any(|d| d.message.contains("missing field `m`")));
+        assert!(err.iter().any(|d| d.message.contains("?{")), "error should point at the partial alternative");
+    }
+
+    #[test]
+    fn record_partial_literal_still_rejects_unknown_field() {
+        let source = r#"record A
+    n: int16
+end record
+file db as A = open("a.dat")
+db[1] = ?{ bogus: 1 }
+end
+"#;
+        let err = compile_source("bogus.bcl", source).expect_err("should reject unknown field even in a partial literal");
+        assert!(err.iter().any(|d| d.message.contains("bogus")));
+    }
+
+    #[test]
     fn record_rejects_unknown_field_in_literal() {
         let source = r#"record A
     n: int16

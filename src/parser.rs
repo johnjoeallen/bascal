@@ -1239,20 +1239,14 @@ impl Parser {
             }
             TokenKind::LBrace => {
                 self.advance();
-                let mut fields = Vec::new();
-                if !matches!(self.current().kind, TokenKind::RBrace) {
-                    loop {
-                        let field_name = self.expect_ident("expected field name in record literal")?;
-                        self.expect(TokenKind::Colon, "expected `:` after field name in record literal")?;
-                        let value = self.parse_expr(0)?;
-                        fields.push((field_name, value));
-                        if !self.eat(TokenKind::Comma) {
-                            break;
-                        }
-                    }
-                }
-                self.expect(TokenKind::RBrace, "expected `}` after record literal")?;
-                Expr::RecordLit(fields)
+                let fields = self.parse_record_lit_fields()?;
+                Expr::RecordLit { fields, partial: false }
+            }
+            TokenKind::Question => {
+                self.advance();
+                self.expect(TokenKind::LBrace, "expected `{` after `?`")?;
+                let fields = self.parse_record_lit_fields()?;
+                Expr::RecordLit { fields, partial: true }
             }
             _ => return Err(self.error("expected expression")),
         };
@@ -1287,6 +1281,25 @@ impl Parser {
         }
 
         Ok(left)
+    }
+
+    /// Parses `ident: expr, ident: expr, ... }` — the caller has already
+    /// consumed the opening `{` (whether it arrived bare or after `?`).
+    fn parse_record_lit_fields(&mut self) -> ParseResult<Vec<(String, Expr)>> {
+        let mut fields = Vec::new();
+        if !matches!(self.current().kind, TokenKind::RBrace) {
+            loop {
+                let field_name = self.expect_ident("expected field name in record literal")?;
+                self.expect(TokenKind::Colon, "expected `:` after field name in record literal")?;
+                let value = self.parse_expr(0)?;
+                fields.push((field_name, value));
+                if !self.eat(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(TokenKind::RBrace, "expected `}` after record literal")?;
+        Ok(fields)
     }
 
     fn parse_expr_list_until_rparen(&mut self) -> ParseResult<Vec<Expr>> {
@@ -1705,7 +1718,8 @@ mod tests {
             Statement::Assignment { target, value } => {
                 assert!(matches!(target, Expr::FileIndex { .. }));
                 match value {
-                    Expr::RecordLit(fields) => {
+                    Expr::RecordLit { fields, partial } => {
+                        assert!(!*partial);
                         assert_eq!(fields.len(), 3);
                         assert_eq!(fields[0].0, "id");
                         assert_eq!(fields[1].0, "name");
@@ -1714,6 +1728,22 @@ mod tests {
                     other => panic!("expected RecordLit, got {other:?}"),
                 }
             }
+            other => panic!("expected assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_partial_record_literal() {
+        let program = parse("db[1] = ?{ score: 88.0 }\nend\n");
+        match &program.statements[0] {
+            Statement::Assignment { value, .. } => match value {
+                Expr::RecordLit { fields, partial } => {
+                    assert!(*partial);
+                    assert_eq!(fields.len(), 1);
+                    assert_eq!(fields[0].0, "score");
+                }
+                other => panic!("expected RecordLit, got {other:?}"),
+            },
             other => panic!("expected assignment, got {other:?}"),
         }
     }

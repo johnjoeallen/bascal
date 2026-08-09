@@ -262,7 +262,7 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
         Expr::MethodCall { base, args, .. } => {
             expr_calls_function(base, target) || args.iter().any(|a| expr_calls_function(a, target))
         }
-        Expr::RecordLit(fields) => fields.iter().any(|(_, e)| expr_calls_function(e, target)),
+        Expr::RecordLit { fields, .. } => fields.iter().any(|(_, e)| expr_calls_function(e, target)),
     }
 }
 

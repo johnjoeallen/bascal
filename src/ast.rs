@@ -409,8 +409,13 @@ pub enum Expr {
         method: String,
         args: Vec<Expr>,
     },
-    /// `{ field: value, ... }` — record/file DSL sugar.
-    RecordLit(Vec<(String, Expr)>),
+    /// `{ field: value, ... }` (every declared field required) or
+    /// `?{ field: value, ... }` (a subset is allowed — `partial: true`) —
+    /// record/file DSL sugar.
+    RecordLit {
+        fields: Vec<(String, Expr)>,
+        partial: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

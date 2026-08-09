@@ -29,6 +29,15 @@
 //   Partial update: reads record n, rewrites just one field, writes it back.
 //   Own GET+PUT every time — fine for a single field, wasteful if chained.
 //
+// <file>[<n>] = ?{ field: value, ... }
+//   Partial-record write: any subset of fields, unlisted ones are left
+//   untouched on disk. Whether a GET is needed is decided at compile time
+//   by comparing the given field names against the record's declared
+//   fields: some fields missing -> GET first, then LSET just those fields,
+//   then PUT; every field given anyway -> no GET, same as a plain `{...}`.
+//   Unlike `{...}`, an *unknown* field name is still a compile-time error —
+//   only *missing* fields are allowed, not misspelled ones.
+//
 // let <var> = <file>[<n>]
 // <var>.<field> = value  (any number of times)
 // <file>[<n>] = <var>
@@ -75,6 +84,13 @@ end for
 
 // Bob just scraped a pass on re-mark
 db[2].score = 61.5
+
+/* ---- Partial-record write: several fields, still one GET and one PUT ---- */
+
+// Alice got married and re-sat the exam — update two fields in one shot.
+// `name` and `score` don't cover every field of Student, so this needs an
+// implicit GET first (id is preserved from the existing record).
+db[1] = ?{ name: "Alice Smith", score: 91.0 }
 
 /* ---- Batched update: change several fields with one GET and one PUT ---- */
 

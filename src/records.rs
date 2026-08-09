@@ -418,11 +418,12 @@ impl Lowerer {
     }
 
     fn lower_assignment(&mut self, target: Expr, value: Expr, out: &mut Vec<Statement>) {
-        if let (Expr::FileIndex { var, index }, Expr::RecordLit(pairs)) = (&target, &value) {
+        if let (Expr::FileIndex { var, index }, Expr::RecordLit { fields, partial }) = (&target, &value) {
             let var = var.clone();
             let index = (**index).clone();
-            let pairs = pairs.clone();
-            self.lower_whole_write(var, index, pairs, out);
+            let fields = fields.clone();
+            let partial = *partial;
+            self.lower_whole_write(var, index, fields, partial, out);
             return;
         }
         if let (Expr::Ident(name), Expr::FileIndex { var, index }) = (&target, &value) {
@@ -460,17 +461,27 @@ impl Lowerer {
         out.push(Statement::Assignment { target, value });
     }
 
+    /// `db[i] = { ... }` (`partial: false`, every declared field required —
+    /// no `GET`, since every byte of the buffer is about to be overwritten)
+    /// or `db[i] = ?{ ... }` (`partial: true`, a subset is allowed). Whether
+    /// a `GET` is needed is decided purely by comparing the given field
+    /// names against the record's declared fields — fully static, no
+    /// runtime check — so a partial literal that happens to name every
+    /// field gets the same no-`GET` treatment as a full one.
     fn lower_whole_write(
         &mut self,
         var: BasicIdent,
         index: Expr,
         pairs: Vec<(String, Expr)>,
+        partial: bool,
         out: &mut Vec<Statement>,
     ) {
         let index = self.rewrite_expr(index).0;
         let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
 
-        out.push(Statement::Raw(format!("' {}[...] = {{ ... }}  (whole-record write)", var.name)));
+        let literal_syntax = if partial { "?{ ... }" } else { "{ ... }" };
+        let kind = if partial { "partial-record write" } else { "whole-record write" };
+        out.push(Statement::Raw(format!("' {}[...] = {literal_syntax}  ({kind})", var.name)));
 
         let mut provided: HashMap<String, Expr> = HashMap::new();
         for (name, value) in pairs {
@@ -488,13 +499,30 @@ impl Lowerer {
                 ));
             }
         }
-        for f in &rec.fields {
-            if !provided.contains_key(&f.name.to_ascii_lowercase()) {
-                self.diagnostics.push(Diagnostic::error(
-                    generated_pos(),
-                    format!("record literal for `{type_name}` is missing field `{}`", f.name),
-                ));
+
+        let covers_every_field =
+            rec.fields.iter().all(|f| provided.contains_key(&f.name.to_ascii_lowercase()));
+
+        if !partial && !covers_every_field {
+            for f in &rec.fields {
+                if !provided.contains_key(&f.name.to_ascii_lowercase()) {
+                    self.diagnostics.push(Diagnostic::error(
+                        generated_pos(),
+                        format!(
+                            "record literal for `{type_name}` is missing field `{}` (use `?{{ ... }}` for a partial update)",
+                            f.name
+                        ),
+                    ));
+                }
             }
+        }
+
+        if partial && !covers_every_field {
+            out.push(Statement::Get {
+                channel: Expr::Integer(channel),
+                record: Some(index.clone()),
+                var: None,
+            });
         }
 
         for f in &rec.fields {
@@ -760,10 +788,10 @@ impl Lowerer {
                 ));
                 (Expr::Integer(0), None)
             }
-            Expr::RecordLit(_) => {
+            Expr::RecordLit { .. } => {
                 self.diagnostics.push(Diagnostic::error(
                     generated_pos(),
-                    "record literal `{ ... }` may only be used as the right-hand side of `file[i] = { ... }`".to_string(),
+                    "record literal `{ ... }` / `?{ ... }` may only be used as the right-hand side of `file[i] = { ... }` or `file[i] = ?{ ... }`".to_string(),
                 ));
                 (Expr::Integer(0), None)
             }

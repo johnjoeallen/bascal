@@ -932,7 +932,7 @@ impl CodeGenerator {
             Expr::FileIndex { .. }
             | Expr::FieldAccess { .. }
             | Expr::MethodCall { .. }
-            | Expr::RecordLit(_) => {
+            | Expr::RecordLit { .. } => {
                 unreachable!("record/file DSL must be lowered before codegen")
             }
         }
@@ -1476,7 +1476,7 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
         Expr::FileIndex { .. }
         | Expr::FieldAccess { .. }
         | Expr::MethodCall { .. }
-        | Expr::RecordLit(_) => {
+        | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
         }
     }
@@ -1739,7 +1739,7 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
         Expr::FileIndex { .. }
         | Expr::FieldAccess { .. }
         | Expr::MethodCall { .. }
-        | Expr::RecordLit(_) => {
+        | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
         }
     }

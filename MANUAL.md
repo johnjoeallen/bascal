@@ -1371,6 +1371,42 @@ string fields are assigned directly — followed by a single `PUT #n, 1`.
 packed, the result is exact-width binary, so left/right justification makes
 no difference (this matches real BASCOM practice).
 
+A record literal missing a declared field is a **compile-time error** — this
+is a safety net that real BASIC's raw `FIELD`/`LSET`/`PUT` gives you no
+equivalent of (see [Partial-record write](#partial-record-write) for the
+deliberately-incomplete form).
+
+### Partial-record write
+
+```
+db[2] = ?{ score: 61.5 }
+```
+
+`?{ ... }` is `{ ... }`'s deliberately-incomplete counterpart: any subset of
+fields is allowed, and unlisted fields are left untouched on disk rather
+than erroring. `?` doesn't collide with anything — it isn't tokenized at
+all outside this position.
+
+Whether the fields you *didn't* mention need preserving is fully decided at
+compile time, by comparing the field names you gave against the record's
+declared fields — there's no runtime check:
+
+- If the listed fields don't cover every declared field, an implicit
+  `GET #n, i` is emitted first (so the unlisted fields keep their current
+  on-disk values), then `LSET` for only the fields given, then `PUT #n, i`.
+- If the listed fields happen to cover every declared field anyway, no
+  `GET` is emitted — it lowers exactly like a plain `{ ... }` literal.
+
+Unlike `{ ... }`, an unknown field name inside `?{ ... }` is still a
+compile-time error — only *missing* fields are permitted, not *misspelled*
+ones.
+
+Note: `GET`ing a record number past the current end of a random-access file
+doesn't error in real BASIC (records can be sparse), but the fields you
+meant to "preserve" will simply read back as zero/blank the first time a
+given record number is touched, since there was nothing on disk yet to
+preserve.
+
 ### Whole-record read
 
 ```
@@ -1406,8 +1442,10 @@ implicit `GET #n, i`, a single `LSET` for just that field, then `PUT #n, i`.
 
 This form does its own `GET`/`PUT` every time it appears, so chaining several
 of them against the same record index costs one full round trip per field.
-To change several fields on one record with a single `GET`/`PUT`, read it
-into a variable first and write it back once — see below.
+To change several fields on one record with a single `GET`/`PUT`, either use
+[a partial-record write](#partial-record-write) (`db[i] = ?{ ... }`) with
+several fields at once, or read it into a variable first and write it back
+once — see below.
 
 ### Writing a record variable back
 
