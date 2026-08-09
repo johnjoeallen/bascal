@@ -209,8 +209,8 @@
   <div class="wrap">
     <a href="#why">Why BASCAL</a>
     <a href="#features">Features</a>
-    <a href="#tutorial">Record files: BASCAL vs generated BASIC</a>
     <a href="#control-flow">Control flow: structured vs GOTO</a>
+    <a href="#tutorial">Record files: BASCAL vs generated BASIC</a>
     <a href="#more">Full tutorial list</a>
   </div>
 </nav>
@@ -249,6 +249,182 @@
       <li>A typed <code>record</code>/<code>file</code> syntax for random-access file I/O — see below</li>
       <li>Generated <code>.bas</code> output stays hand-readable, with source comments preserved</li>
     </ul>
+  </section>
+
+  <section id="control-flow">
+    <h2>Control flow: structured vs hand-rolled GOTO</h2>
+    <p class="lede">
+      The line-numbered dialects <code>bcc</code> targets have no
+      <code>SELECT CASE</code>, no <code>DO</code>/<code>LOOP</code>, and no
+      multiline <code>IF</code> — every branch and loop is really just
+      <code>IF ... THEN GOTO</code> threaded by hand. The panes on the left
+      below are what that threading looks like written directly; the panes
+      on the right are what <code>bcc</code> lets you write instead.
+      <code>bcc</code> still generates the GOTO chain — it just generates it
+      correctly, every time, so you never have to count line numbers or
+      trace jumps yourself. Full sources:
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl">tutorial/06_select_case.bcl</a>
+      and
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl">tutorial/05_loops.bcl</a>.
+    </p>
+
+    <div class="compare">
+      <h3>1. SELECT CASE</h3>
+      <p class="note">Six clauses means six branch targets and a fall-through target to keep numbered and pointed at the right place by hand — miswire one <code>GOTO</code> and a case silently falls into the wrong branch.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>score% = 85
+IF score% = 100 THEN GOTO 250
+IF score% &gt;= 90 AND score% &lt;= 99 THEN GOTO 270
+IF score% &gt;= 80 AND score% &lt;= 89 THEN GOTO 290
+IF score% &gt;= 70 AND score% &lt;= 79 THEN GOTO 310
+IF score% &gt;= 60 AND score% &lt;= 69 THEN GOTO 330
+IF score% &gt;= 0 THEN GOTO 350
+GOTO 370
+250 PRINT "Perfect!" : GOTO 380
+270 PRINT "A -- Excellent" : GOTO 380
+290 PRINT "B -- Good" : GOTO 380
+310 PRINT "C -- Satisfactory" : GOTO 380
+330 PRINT "D -- Passing" : GOTO 380
+350 PRINT "F -- Fail" : GOTO 380
+370 PRINT "Invalid score"
+380 REM ...</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>select case score%
+case 100
+    print "Perfect!"
+case 90 to 99
+    print "A -- Excellent"
+case 80 to 89
+    print "B -- Good"
+case 70 to 79
+    print "C -- Satisfactory"
+case 60 to 69
+    print "D -- Passing"
+case is &gt;= 0
+    print "F -- Fail"
+case else
+    print "Invalid score"
+end select</code></pre>
+        </div>
+      </div>
+      <p class="note">This is genuinely what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is a compiler numbered and wired every jump, instead of you.</p>
+    </div>
+
+    <div class="compare">
+      <h3>2. WHILE / WEND</h3>
+      <p class="note">A pre-check loop is one <code>IF ... THEN GOTO</code> guarding the top and one <code>GOTO</code> looping back at the bottom — both have to name the same line number.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>p% = 1
+400 IF p% &gt;= 100 THEN GOTO 440
+    PRINT "  "; p%
+    p% = p% * 2
+    GOTO 400
+440 REM ...</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>p% = 1
+while p% &lt; 100
+    print "  "; p%
+    p% = p% * 2
+end while</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>3. DO WHILE / DO UNTIL</h3>
+      <p class="note">Same pre-check shape as <code>WHILE</code>, spelled two ways depending on whether the loop-continues condition reads more naturally as a "while" or an "until".</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>k% = 1
+670 IF k% &gt; 3 THEN GOTO 700
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 670
+700 REM ...
+
+k% = 1
+740 IF k% &lt;= 3 THEN GOTO 770
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 740
+770 REM ...</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>k% = 1
+do while k% &lt;= 3
+    print "  "; k%
+    k% = k% + 1
+end do
+
+k% = 1
+do until k% &gt; 3
+    print "  "; k%
+    k% = k% + 1
+end do</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>4. Post-check loop ("repeat until") and a mid-loop exit</h3>
+      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> either — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's bare <code>do ... end do</code> plus <code>exit do</code> covers both without the loop's exit condition having to live at a fixed position.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>' body always runs at least once
+k% = 99
+810 PRINT "  "; k%
+    k% = k% + 1
+    IF k% &lt;= 3 THEN GOTO 810
+
+' exit from the middle, at k% = 3
+k% = 1
+910 IF k% = 3 THEN GOTO 970
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 910
+970 REM ...</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>' body always runs at least once
+k% = 99
+do
+    print "  "; k%
+    k% = k% + 1
+    if k% &gt; 3 then
+        exit do
+    end if
+end do
+
+' exit from the middle, at k% = 3
+k% = 1
+do
+    if k% = 3 then
+        exit do
+    end if
+    print "  "; k%
+    k% = k% + 1
+end do</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede">
+      <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-lowering">Condition Lowering</a>
+      note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows the same trade — it's just the newest place BASCAL makes it.
+    </p>
   </section>
 
   <section id="tutorial">
@@ -429,183 +605,6 @@ db[3] = carol</code></pre>
       <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md#record-files">Record Files section of the manual</a>
       for the full semantics, including the exact static rule for when a
       partial write needs a <code>GET</code>.
-    </p>
-  </section>
-
-  <section id="control-flow">
-    <h2>Control flow: structured vs hand-rolled GOTO</h2>
-    <p class="lede">
-      The record/file syntax is the newest addition, but the same trade lives
-      throughout BASCAL: the line-numbered dialects <code>bcc</code> targets
-      have no <code>SELECT CASE</code>, no <code>DO</code>/<code>LOOP</code>,
-      and no multiline <code>IF</code> — every branch and loop is really
-      just <code>IF ... THEN GOTO</code> threaded by hand. The panes on the
-      left below are what that threading looks like written directly; the
-      panes on the right are what <code>bcc</code> lets you write instead.
-      <code>bcc</code> still generates the GOTO chain — it just generates it
-      correctly, every time, so you never have to count line numbers or
-      trace jumps yourself. Full sources:
-      <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl">tutorial/06_select_case.bcl</a>
-      and
-      <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl">tutorial/05_loops.bcl</a>.
-    </p>
-
-    <div class="compare">
-      <h3>1. SELECT CASE</h3>
-      <p class="note">Six clauses means six branch targets and a fall-through target to keep numbered and pointed at the right place by hand — miswire one <code>GOTO</code> and a case silently falls into the wrong branch.</p>
-      <div class="compare-grid">
-        <div class="pane old">
-          <span class="tag">Generated BASIC</span>
-          <pre><code>score% = 85
-IF score% = 100 THEN GOTO 250
-IF score% &gt;= 90 AND score% &lt;= 99 THEN GOTO 270
-IF score% &gt;= 80 AND score% &lt;= 89 THEN GOTO 290
-IF score% &gt;= 70 AND score% &lt;= 79 THEN GOTO 310
-IF score% &gt;= 60 AND score% &lt;= 69 THEN GOTO 330
-IF score% &gt;= 0 THEN GOTO 350
-GOTO 370
-250 PRINT "Perfect!" : GOTO 380
-270 PRINT "A -- Excellent" : GOTO 380
-290 PRINT "B -- Good" : GOTO 380
-310 PRINT "C -- Satisfactory" : GOTO 380
-330 PRINT "D -- Passing" : GOTO 380
-350 PRINT "F -- Fail" : GOTO 380
-370 PRINT "Invalid score"
-380 REM ...</code></pre>
-        </div>
-        <div class="pane new">
-          <span class="tag">BASCAL</span>
-          <pre><code>select case score%
-case 100
-    print "Perfect!"
-case 90 to 99
-    print "A -- Excellent"
-case 80 to 89
-    print "B -- Good"
-case 70 to 79
-    print "C -- Satisfactory"
-case 60 to 69
-    print "D -- Passing"
-case is &gt;= 0
-    print "F -- Fail"
-case else
-    print "Invalid score"
-end select</code></pre>
-        </div>
-      </div>
-      <p class="note">This is genuinely what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is a compiler numbered and wired every jump, instead of you.</p>
-    </div>
-
-    <div class="compare">
-      <h3>2. WHILE / WEND</h3>
-      <p class="note">A pre-check loop is one <code>IF ... THEN GOTO</code> guarding the top and one <code>GOTO</code> looping back at the bottom — both have to name the same line number.</p>
-      <div class="compare-grid">
-        <div class="pane old">
-          <span class="tag">Generated BASIC</span>
-          <pre><code>p% = 1
-400 IF p% &gt;= 100 THEN GOTO 440
-    PRINT "  "; p%
-    p% = p% * 2
-    GOTO 400
-440 REM ...</code></pre>
-        </div>
-        <div class="pane new">
-          <span class="tag">BASCAL</span>
-          <pre><code>p% = 1
-while p% &lt; 100
-    print "  "; p%
-    p% = p% * 2
-end while</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="compare">
-      <h3>3. DO WHILE / DO UNTIL</h3>
-      <p class="note">Same pre-check shape as <code>WHILE</code>, spelled two ways depending on whether the loop-continues condition reads more naturally as a "while" or an "until".</p>
-      <div class="compare-grid">
-        <div class="pane old">
-          <span class="tag">Generated BASIC</span>
-          <pre><code>k% = 1
-670 IF k% &gt; 3 THEN GOTO 700
-    PRINT "  "; k%
-    k% = k% + 1
-    GOTO 670
-700 REM ...
-
-k% = 1
-740 IF k% &lt;= 3 THEN GOTO 770
-    PRINT "  "; k%
-    k% = k% + 1
-    GOTO 740
-770 REM ...</code></pre>
-        </div>
-        <div class="pane new">
-          <span class="tag">BASCAL</span>
-          <pre><code>k% = 1
-do while k% &lt;= 3
-    print "  "; k%
-    k% = k% + 1
-end do
-
-k% = 1
-do until k% &gt; 3
-    print "  "; k%
-    k% = k% + 1
-end do</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <div class="compare">
-      <h3>4. Post-check loop ("repeat until") and a mid-loop exit</h3>
-      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> either — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's bare <code>do ... end do</code> plus <code>exit do</code> covers both without the loop's exit condition having to live at a fixed position.</p>
-      <div class="compare-grid">
-        <div class="pane old">
-          <span class="tag">Generated BASIC</span>
-          <pre><code>' body always runs at least once
-k% = 99
-810 PRINT "  "; k%
-    k% = k% + 1
-    IF k% &lt;= 3 THEN GOTO 810
-
-' exit from the middle, at k% = 3
-k% = 1
-910 IF k% = 3 THEN GOTO 970
-    PRINT "  "; k%
-    k% = k% + 1
-    GOTO 910
-970 REM ...</code></pre>
-        </div>
-        <div class="pane new">
-          <span class="tag">BASCAL</span>
-          <pre><code>' body always runs at least once
-k% = 99
-do
-    print "  "; k%
-    k% = k% + 1
-    if k% &gt; 3 then
-        exit do
-    end if
-end do
-
-' exit from the middle, at k% = 3
-k% = 1
-do
-    if k% = 3 then
-        exit do
-    end if
-    print "  "; k%
-    k% = k% + 1
-end do</code></pre>
-        </div>
-      </div>
-    </div>
-
-    <p class="lede">
-      <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
-      <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-lowering">Condition Lowering</a>
-      note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>.
     </p>
   </section>
 
