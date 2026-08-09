@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASCAL — a structured compiler for classic BASIC</title>
+<meta name="description" content="BASCAL compiles structured .bcl source into classic 1980s Microsoft BASIC. Side-by-side samples of what the record/file DSL saves you over hand-written FIELD/GET/PUT/LSET.">
+<style>
+  :root {
+    --bg: #faf8f3;
+    --bg-alt: #f1ede2;
+    --fg: #2b2620;
+    --fg-dim: #6b6255;
+    --accent: #9a3324;
+    --accent-2: #1f6f5c;
+    --card-bg: #ffffff;
+    --card-border: #e2dbc9;
+    --code-bg: #2b2620;
+    --code-fg: #f1ede2;
+    --code-hi: #ffd479;
+    --old-tag: #9a3324;
+    --new-tag: #1f6f5c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1a16;
+      --bg-alt: #242019;
+      --fg: #f1ede2;
+      --fg-dim: #b8ae9a;
+      --accent: #e07a5f;
+      --accent-2: #6fd8b8;
+      --card-bg: #24211b;
+      --card-border: #3a3428;
+      --code-bg: #16140f;
+      --code-fg: #f1ede2;
+      --code-hi: #ffd479;
+      --old-tag: #e07a5f;
+      --new-tag: #6fd8b8;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  a { color: var(--accent-2); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.5rem; }
+
+  header.hero {
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--card-border);
+    padding: 3.5rem 0 2.5rem;
+  }
+  header.hero h1 {
+    font-size: 2.6rem;
+    margin: 0 0 .3rem;
+    letter-spacing: .02em;
+  }
+  header.hero .tagline {
+    font-size: 1.2rem;
+    color: var(--fg-dim);
+    margin: 0 0 1.5rem;
+    max-width: 46rem;
+  }
+  .cta-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: .55rem 1.1rem;
+    border-radius: .4rem;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: .95rem;
+    border: 1px solid var(--card-border);
+  }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.ghost { color: var(--fg); }
+
+  nav.subnav {
+    background: var(--bg);
+    border-bottom: 1px solid var(--card-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  nav.subnav .wrap { display: flex; gap: 1.25rem; padding: .7rem 1.5rem; overflow-x: auto; }
+  nav.subnav a { color: var(--fg-dim); text-decoration: none; font-size: .9rem; white-space: nowrap; }
+  nav.subnav a:hover { color: var(--accent-2); }
+
+  main { padding: 2.5rem 0 1rem; }
+  section { margin-bottom: 3.2rem; }
+  section h2 { font-size: 1.6rem; margin-bottom: .4rem; }
+  section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .9rem;
+    list-style: none;
+    margin: 1.2rem 0 0;
+    padding: 0;
+  }
+  .features li {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: .5rem;
+    padding: .8rem 1rem;
+    font-size: .92rem;
+  }
+  .features code { color: var(--accent); }
+
+  .compare {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: .6rem;
+    padding: 1.1rem 1.2rem 1.3rem;
+    margin-bottom: 1.4rem;
+  }
+  .compare h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
+  .compare .note { color: var(--fg-dim); font-size: .9rem; margin: 0 0 .9rem; }
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  @media (max-width: 700px) {
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+  .pane { min-width: 0; }
+  .pane .tag {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    padding: .15rem .5rem;
+    border-radius: 1rem;
+    margin-bottom: .45rem;
+  }
+  .pane.old .tag { background: color-mix(in srgb, var(--old-tag) 18%, transparent); color: var(--old-tag); }
+  .pane.new .tag { background: color-mix(in srgb, var(--new-tag) 18%, transparent); color: var(--new-tag); }
+  pre {
+    margin: 0;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: .4rem;
+    padding: .8rem .9rem;
+    overflow-x: auto;
+    font-size: .84rem;
+    line-height: 1.5;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  .hl { color: var(--code-hi); font-weight: 600; }
+  .dim { opacity: .6; }
+
+  .tally {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-top: .5rem;
+    font-size: .9rem;
+    color: var(--fg-dim);
+  }
+  .tally b { color: var(--fg); }
+
+  blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 1.2rem 0;
+    padding: .2rem 0 .2rem 1rem;
+    color: var(--fg-dim);
+    font-style: italic;
+  }
+
+  footer {
+    border-top: 1px solid var(--card-border);
+    padding: 2rem 0 3rem;
+    color: var(--fg-dim);
+    font-size: .88rem;
+  }
+  footer a { color: var(--fg-dim); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>BASCAL</h1>
+    <p class="tagline">
+      A structured compiler for classic 1980s Microsoft BASIC. Write
+      <code>.bcl</code> source with real control flow, functions, arrays,
+      and a typed record/file DSL — <code>bcc</code> lowers it straight to
+      plain line-numbered BASIC you can still hand-read and compile with
+      period-accurate tooling like FreeBASIC.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/johnjoeallen/bascal">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">Language Manual</a>
+      <a class="btn ghost" href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl">Full tutorial source</a>
+    </div>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="#why">Why BASCAL</a>
+    <a href="#features">Features</a>
+    <a href="#tutorial">Record files: hand-written vs DSL</a>
+    <a href="#more">Full tutorial list</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section id="why">
+    <h2>Why BASCAL exists</h2>
+    <p class="lede">
+      BASCAL keeps BASIC's global symbol model — variables and functions are
+      still global, still lowered to <code>GOTO</code>/<code>GOSUB</code> —
+      while adding enough structure that larger programs stay maintainable.
+    </p>
+    <blockquote>
+      Make BASIC more pleasant to write, without pretending it is a
+      different runtime.
+    </blockquote>
+    <p>
+      It traces back to a preprocessor written for a real BASIC shop in
+      1985, built to stop copying a shared routine library by hand into
+      every program and to stop remembering which line number a subroutine
+      lived at. BASCAL is a modern reconstruction of that idea in Rust: a
+      real compiler, not a text preprocessor, that still respects the
+      classic BASIC it targets.
+    </p>
+  </section>
+
+  <section id="features">
+    <h2>What BASCAL adds over raw BASIC</h2>
+    <ul class="features">
+      <li>Multiline <code>if</code>/<code>else if</code>/<code>else</code>/<code>end if</code>, <code>for</code>/<code>next</code>, <code>while</code>/<code>wend</code>, <code>do</code>/<code>loop</code></li>
+      <li><code>function</code>/<code>procedure</code> declarations with explicit <code>return</code>, lowered to global vars + <code>GOSUB</code></li>
+      <li>Path-style <code>require</code>/<code>import</code> dependencies (dots become directories)</li>
+      <li><code>select case</code> with ranges and <code>is</code> comparisons</li>
+      <li><code>program ... suite ...</code> with <code>COMMON</code>-block coordination across chained programs</li>
+      <li>A typed <code>record</code>/<code>file</code> DSL for random-access file I/O — see below</li>
+      <li>Generated <code>.bas</code> output stays hand-readable, with source comments preserved</li>
+    </ul>
+  </section>
+
+  <section id="tutorial">
+    <h2>Record files: hand-written vs the record/file DSL</h2>
+    <p class="lede">
+      BASCAL already supported classic random-access file I/O
+      (<code>OPEN ... FOR RANDOM</code>, <code>FIELD</code>,
+      <code>GET</code>/<code>PUT</code>, <code>LSET</code>,
+      <code>MKx</code>/<code>CVx</code>) — writing it by hand is exactly the
+      kind of repetitive, error-prone bookkeeping a compiler should do
+      instead. Every pane on the right below is <strong>generated</strong>
+      by the pane on the left; the DSL doesn't change what runs, only how
+      much of it you have to type and keep in sync yourself. Full source:
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl">tutorial/15_random_and_record_files.bcl</a>.
+    </p>
+
+    <div class="compare">
+      <h3>1. Declare the record shape and open the file</h3>
+      <p class="note">The DSL sums the field widths for you and generates the matching <code>FIELD</code> binding — get one field's width wrong by hand and every record after it reads/writes off by that many bytes.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>const rec_len%  = <span class="hl">30</span>   ' 2+20+8, by hand
+const db_file$  = "students.dat"
+
+open db_file$ for random as #1 len = rec_len%
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file db as Student = open("students.dat")</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>2. Write a whole record</h3>
+      <p class="note">Every declared field is required in the DSL literal — a field forgotten by hand ships silently; a field forgotten in <code>{ ... }</code> is a compile error.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>lset idBuf$    = mki%(1)
+lset nameBuf$  = "Alice"
+lset scoreBuf$ = mkd#(95.0)
+put #1, 1</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>db[1] = { id: 1, name: "Alice", score: 95.0 }</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>3. Read records back in reverse order</h3>
+      <p class="note"><code>downto</code> is sugar for <code>step -1</code>; <code>s.id</code>/<code>s.name</code>/<code>s.score</code> resolve straight to the unpacked scalars — no <code>cvi%</code>/<code>cvd#</code>/<code>rtrim$</code> to remember or mismatch.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>for i% = num_recs% to 1 step -1
+    get #1, i%
+    id%    = cvi%(idBuf$)
+    score# = cvd#(scoreBuf$)
+    print "[" + str$(id%) + "] " _
+        + rtrim$(nameBuf$) + " -- " + str$(score#)
+end for</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>for i = 3 downto 1
+    let s = db[i]
+    print "[" + s.id + "] " + s.name + " -- " + s.score
+end for</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>4. Update a single field</h3>
+      <p class="note">Bob just scraped a pass on re-mark — only the score changes, but <code>PUT</code> always writes the whole buffer, so a <code>GET</code> has to come first either way.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>get #1, 2
+lset scoreBuf$ = mkd#(61.5)
+put #1, 2</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>db[2].score = 61.5</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>5. Update two fields in one shot</h3>
+      <p class="note">Alice got married and re-sat the exam. Whether the fields you <em>didn't</em> list need a <code>GET</code> first is decided at <strong>compile time</strong> — the compiler compares the field names you gave against the record's declared fields. Give it every field and the <code>GET</code> disappears entirely, same as a plain <code>{ ... }</code>. Misspell a field name and it's still a compile error, not silent data loss.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>get #1, 1
+lset nameBuf$  = "Alice Smith"
+lset scoreBuf$ = mkd#(91.0)
+put #1, 1</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>db[1] = ?{ name: "Alice Smith", score: 91.0 }</code></pre>
+        </div>
+      </div>
+      <div class="tally">
+        <span><b>Hand-written:</b> 4 lines, 3 buffer names, 1 pack call, repeated per edit</span>
+        <span><b>DSL:</b> 1 line, still exactly one <code>GET</code> + one <code>PUT</code> generated</span>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>6. Batched update via read → mutate → write back</h3>
+      <p class="note">Same one-<code>GET</code>-one-<code>PUT</code> shape as <code>?{ ... }</code> above, spelled as read/mutate/write-back instead — useful when the new values aren't just one-line literals. <code>s.field = value</code> alone is pure in-memory assignment; nothing touches disk until the final write-back.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>get #1, 3
+lset nameBuf$  = "Carol Jones"
+lset scoreBuf$ = mkd#(88.0)
+put #1, 3</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>let carol = db[3]
+carol.name  = "Carol Jones"
+carol.score = 88.0
+db[3] = carol</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare">
+      <h3>7. Close</h3>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Hand-written</span>
+          <pre><code>close #1</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL DSL</span>
+          <pre><code>db.close()</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede">
+      Nothing above runs slower — every DSL line lowers to exactly the same
+      <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code>
+      calls shown on the left, generated for you instead of typed and kept
+      in sync by hand. See the
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md#record-files">Record Files section of the manual</a>
+      for the full semantics, including the exact static rule for when a
+      partial write needs a <code>GET</code>.
+    </p>
+  </section>
+
+  <section id="more">
+    <h2>Full tutorial list</h2>
+    <p class="lede">Every tutorial below is a real, compiling <code>.bcl</code> file in the repo, alongside its generated <code>.bas</code> output.</p>
+    <ul class="features">
+      <li><code>01</code> Hello world</li>
+      <li><code>02</code> Variables</li>
+      <li><code>03</code> Arithmetic</li>
+      <li><code>04</code> Conditions</li>
+      <li><code>05</code> Loops</li>
+      <li><code>06</code> Select case</li>
+      <li><code>07</code> Functions</li>
+      <li><code>08</code> Arrays</li>
+      <li><code>09</code> Data statements</li>
+      <li><code>10</code> File I/O</li>
+      <li><code>11</code> Screen control</li>
+      <li><code>12</code> Require / dependencies</li>
+      <li><code>13</code> Suite COMMON</li>
+      <li><code>14</code> Procedures</li>
+      <li><code>15</code> Random-access &amp; record files (this page)</li>
+    </ul>
+    <p><a href="https://github.com/johnjoeallen/bascal/tree/main/tutorial">Browse the full tutorial/ directory on GitHub →</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>
