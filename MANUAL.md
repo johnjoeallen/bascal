@@ -1230,7 +1230,7 @@ print using fmt$; x!; y!; z!
 
 ## Random-Access File I/O
 
-From `tutorial/15_random_files.bcl`:
+From Part 1 of `tutorial/15_random_and_record_files.bcl`:
 
 Random-access files store fixed-length records that can be read or written in
 any order, without scanning from the beginning.
@@ -1322,7 +1322,7 @@ Alice: 95
 
 ## Record Files
 
-From `tutorial/16_record_files.bcl`:
+From Part 2 of `tutorial/15_random_and_record_files.bcl`:
 
 The `record` / `file` DSL is sugar over everything in
 [Random-Access File I/O](#random-access-file-io) above. It computes the

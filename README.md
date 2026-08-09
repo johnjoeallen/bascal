@@ -24,7 +24,7 @@ larger programs practical:
   `db[i].field = value`, `db[i] = s`, and `db.close()`, all lowered to plain
   `FIELD`/`PUT`/`GET`/`LSET`/`MKx`/`CVx` — see
   [MANUAL.md](MANUAL.md#record-files) and
-  [`tutorial/16_record_files.bcl`](tutorial/16_record_files.bcl)
+  [`tutorial/15_random_and_record_files.bcl`](tutorial/15_random_and_record_files.bcl)
 
 Everything is still global. Path-style names are linker selectors, not runtime
 namespaces.
