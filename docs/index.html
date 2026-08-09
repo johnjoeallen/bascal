@@ -5,185 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BASCAL — a structured compiler for classic BASIC</title>
 <meta name="description" content="BASCAL compiles structured .bcl source into classic 1980s Microsoft BASIC. Side-by-side samples of what the record/file syntax saves you over generated FIELD/GET/PUT/LSET.">
-<style>
-  :root {
-    --bg: #faf8f3;
-    --bg-alt: #f1ede2;
-    --fg: #2b2620;
-    --fg-dim: #6b6255;
-    --accent: #9a3324;
-    --accent-2: #1f6f5c;
-    --card-bg: #ffffff;
-    --card-border: #e2dbc9;
-    --code-bg: #2b2620;
-    --code-fg: #f1ede2;
-    --code-hi: #ffd479;
-    --old-tag: #9a3324;
-    --new-tag: #1f6f5c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1c1a16;
-      --bg-alt: #242019;
-      --fg: #f1ede2;
-      --fg-dim: #b8ae9a;
-      --accent: #e07a5f;
-      --accent-2: #6fd8b8;
-      --card-bg: #24211b;
-      --card-border: #3a3428;
-      --code-bg: #16140f;
-      --code-fg: #f1ede2;
-      --code-hi: #ffd479;
-      --old-tag: #e07a5f;
-      --new-tag: #6fd8b8;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.6;
-  }
-  a { color: var(--accent-2); }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.5rem; }
-
-  header.hero {
-    background: var(--bg-alt);
-    border-bottom: 1px solid var(--card-border);
-    padding: 3.5rem 0 2.5rem;
-  }
-  header.hero h1 {
-    font-size: 2.6rem;
-    margin: 0 0 .3rem;
-    letter-spacing: .02em;
-  }
-  header.hero .tagline {
-    font-size: 1.2rem;
-    color: var(--fg-dim);
-    margin: 0 0 1.5rem;
-    max-width: 46rem;
-  }
-  .cta-row { display: flex; gap: .75rem; flex-wrap: wrap; }
-  .btn {
-    display: inline-block;
-    padding: .55rem 1.1rem;
-    border-radius: .4rem;
-    text-decoration: none;
-    font-weight: 600;
-    font-size: .95rem;
-    border: 1px solid var(--card-border);
-  }
-  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .btn.ghost { color: var(--fg); }
-
-  nav.subnav {
-    background: var(--bg);
-    border-bottom: 1px solid var(--card-border);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  nav.subnav .wrap { display: flex; gap: 1.25rem; padding: .7rem 1.5rem; overflow-x: auto; }
-  nav.subnav a { color: var(--fg-dim); text-decoration: none; font-size: .9rem; white-space: nowrap; }
-  nav.subnav a:hover { color: var(--accent-2); }
-
-  main { padding: 2.5rem 0 1rem; }
-  section { margin-bottom: 3.2rem; }
-  section h2 { font-size: 1.6rem; margin-bottom: .4rem; }
-  section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
-
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: .9rem;
-    list-style: none;
-    margin: 1.2rem 0 0;
-    padding: 0;
-  }
-  .features li {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: .5rem;
-    padding: .8rem 1rem;
-    font-size: .92rem;
-  }
-  .features code { color: var(--accent); }
-
-  .compare {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: .6rem;
-    padding: 1.1rem 1.2rem 1.3rem;
-    margin-bottom: 1.4rem;
-  }
-  .compare h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
-  .compare .note { color: var(--fg-dim); font-size: .9rem; margin: 0 0 .9rem; }
-  .compare-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  @media (max-width: 700px) {
-    .compare-grid { grid-template-columns: 1fr; }
-  }
-  .pane { min-width: 0; }
-  .pane.new { order: 1; }
-  .pane.old { order: 2; }
-  .pane .tag {
-    display: inline-block;
-    font-size: .72rem;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-    padding: .15rem .5rem;
-    border-radius: 1rem;
-    margin-bottom: .45rem;
-  }
-  .pane.old .tag { background: color-mix(in srgb, var(--old-tag) 18%, transparent); color: var(--old-tag); }
-  .pane.new .tag { background: color-mix(in srgb, var(--new-tag) 18%, transparent); color: var(--new-tag); }
-  pre {
-    margin: 0;
-    background: var(--code-bg);
-    color: var(--code-fg);
-    border-radius: .4rem;
-    padding: .8rem .9rem;
-    overflow-x: auto;
-    font-size: .84rem;
-    line-height: 1.5;
-  }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-  .hl { color: var(--code-hi); font-weight: 600; }
-  .dim { opacity: .6; }
-
-  .tally {
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-    margin-top: .5rem;
-    font-size: .9rem;
-    color: var(--fg-dim);
-  }
-  .tally b { color: var(--fg); }
-
-  blockquote {
-    border-left: 3px solid var(--accent);
-    margin: 1.2rem 0;
-    padding: .2rem 0 .2rem 1rem;
-    color: var(--fg-dim);
-    font-style: italic;
-  }
-
-  footer {
-    border-top: 1px solid var(--card-border);
-    padding: 2rem 0 3rem;
-    color: var(--fg-dim);
-    font-size: .88rem;
-  }
-  footer a { color: var(--fg-dim); }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -199,8 +21,8 @@
     </p>
     <div class="cta-row">
       <a class="btn primary" href="https://github.com/johnjoeallen/bascal">View on GitHub</a>
-      <a class="btn ghost" href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">Language Manual</a>
-      <a class="btn ghost" href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl">Full tutorial source</a>
+      <a class="btn ghost" href="manual.html">Language Manual</a>
+      <a class="btn ghost" href="tutorials/">Tutorials</a>
     </div>
   </div>
 </header>
@@ -211,7 +33,8 @@
     <a href="#features">Features</a>
     <a href="#control-flow">Control flow: structured vs GOTO</a>
     <a href="#tutorial">Record files: BASCAL vs generated BASIC</a>
-    <a href="#more">Full tutorial list</a>
+    <a href="manual.html">Manual</a>
+    <a href="tutorials/">Tutorials</a>
   </div>
 </nav>
 
@@ -610,25 +433,25 @@ db[3] = carol</code></pre>
 
   <section id="more">
     <h2>Full tutorial list</h2>
-    <p class="lede">Every tutorial below is a real, compiling <code>.bcl</code> file in the repo, alongside its generated <code>.bas</code> output.</p>
-    <ul class="features">
-      <li><code>01</code> Hello world</li>
-      <li><code>02</code> Variables</li>
-      <li><code>03</code> Arithmetic</li>
-      <li><code>04</code> Conditions</li>
-      <li><code>05</code> Loops</li>
-      <li><code>06</code> Select case</li>
-      <li><code>07</code> Functions</li>
-      <li><code>08</code> Arrays</li>
-      <li><code>09</code> Data statements</li>
-      <li><code>10</code> File I/O</li>
-      <li><code>11</code> Screen control</li>
-      <li><code>12</code> Require / dependencies</li>
-      <li><code>13</code> Suite COMMON</li>
-      <li><code>14</code> Procedures</li>
-      <li><code>15</code> Random-access &amp; record files (this page)</li>
+    <p class="lede">Every tutorial below has its own page with a short walkthrough and a few snippets, plus a link to the real, compiling <code>.bcl</code> source (and its generated <code>.bas</code> output) in the repo.</p>
+    <ul class="features linked">
+      <li><a href="tutorials/01_hello.html"><span class="num">01</span> Hello world</a></li>
+      <li><a href="tutorials/02_variables.html"><span class="num">02</span> Variables</a></li>
+      <li><a href="tutorials/03_arithmetic.html"><span class="num">03</span> Arithmetic</a></li>
+      <li><a href="tutorials/04_conditions.html"><span class="num">04</span> Conditions</a></li>
+      <li><a href="tutorials/05_loops.html"><span class="num">05</span> Loops</a></li>
+      <li><a href="tutorials/06_select_case.html"><span class="num">06</span> Select case</a></li>
+      <li><a href="tutorials/07_functions.html"><span class="num">07</span> Functions</a></li>
+      <li><a href="tutorials/08_arrays.html"><span class="num">08</span> Arrays</a></li>
+      <li><a href="tutorials/09_data.html"><span class="num">09</span> Data statements</a></li>
+      <li><a href="tutorials/10_files.html"><span class="num">10</span> File I/O</a></li>
+      <li><a href="tutorials/11_screen.html"><span class="num">11</span> Screen control</a></li>
+      <li><a href="tutorials/12_require.html"><span class="num">12</span> Require / dependencies</a></li>
+      <li><a href="tutorials/13_suite.html"><span class="num">13</span> Suite COMMON</a></li>
+      <li><a href="tutorials/14_procedures.html"><span class="num">14</span> Procedures</a></li>
+      <li><a href="tutorials/15_random_and_record_files.html"><span class="num">15</span> Random-access &amp; record files</a></li>
     </ul>
-    <p><a href="https://github.com/johnjoeallen/bascal/tree/main/tutorial">Browse the full tutorial/ directory on GitHub →</a></p>
+    <p><a href="tutorials/">Open the tutorials index →</a></p>
   </section>
 
 </main>

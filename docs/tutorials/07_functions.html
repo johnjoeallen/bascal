@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Functions — BASCAL Tutorials</title>
+<meta name="description" content="BASCAL functions -- typed return values, local variable scoping, and the global keyword for shared state.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>07. Functions</h1>
+    <p class="tagline">function ... end function with a typed return, local-by-default variables, and no recursion.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual.html">Manual</a>
+    <a href="./" class="current">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Functions</p>
+
+  <div class="prose">
+<p>A function is declared <code>function name%(...) ... end function</code>; the name
+carries the return-type suffix and every path must reach a <code>return</code>.
+Variables declared inside a function are local by default — the compiler
+prefixes them with the function name — so two functions can each use <code>i%</code>
+without conflict. To touch a global from inside a function, declare it with
+<code>global varname</code>. Functions can't call themselves recursively, since a
+recursive call would overwrite its own parameter variables.</p>
+  </div>
+
+    <div class="snippet">
+      <h3>Typed return and calling one function from another</h3>
+      <pre><code>function clamp%(value%, lo%, hi%)
+    // Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>global for shared state</h3>
+      <pre><code>runningTotal% = 0
+
+function addToTotal%(x%)
+    global runningTotal%
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function</code></pre>
+    </div>
+
+
+  <p class="lede">
+    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl">tutorial/07_functions.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bas">tutorial/07_functions.bas</a>.
+  </p>
+
+  <p class="crumbs">
+    <a href="06_select_case.html">&larr; 06. Select Case</a> &nbsp;&middot;&nbsp; <a href="08_arrays.html">08. Arrays &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>

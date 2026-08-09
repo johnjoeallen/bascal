@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loops — BASCAL Tutorials</title>
+<meta name="description" content="BASCAL's three loop constructs -- for, while, and do -- and their exit for/while/do statements.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>05. Loops</h1>
+    <p class="tagline">for/next, while/wend, and do/loop, each with an early-exit statement.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual.html">Manual</a>
+    <a href="./" class="current">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Loops</p>
+
+  <div class="prose">
+<p>BASCAL has three loop constructs: counted <code>for ... to [step n] ... end for</code>,
+pre-check <code>while ... end while</code>, and <code>do [while/until cond] ...
+end do</code> (condition at the top, or a bare <code>do</code> with a manual
+<code>exit do</code> for a post-check loop). Each has a matching early-exit
+statement. See the
+<a href="../#control-flow">control-flow comparison</a> on the homepage for what
+each one compiles down to.</p>
+  </div>
+
+    <div class="snippet">
+      <h3>for / next with an early exit</h3>
+      <pre><code>for i% = 1 to 20
+    if i% &gt; 4 and (i% / 2) * 2 = i% then
+        print &quot;  &quot;; i%
+        exit for
+    end if
+end for</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>DO WHILE and DO UNTIL</h3>
+      <p class="note">Two spellings of the same pre-check loop shape.</p>
+      <pre><code>do while k% &lt;= 3
+    print &quot;  &quot;; k%
+    k% = k% + 1
+end do
+
+do until k% &gt; 3
+    print &quot;  &quot;; k%
+    k% = k% + 1
+end do</code></pre>
+    </div>
+
+
+  <p class="lede">
+    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl">tutorial/05_loops.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bas">tutorial/05_loops.bas</a>.
+  </p>
+
+  <p class="crumbs">
+    <a href="04_conditions.html">&larr; 04. Conditions</a> &nbsp;&middot;&nbsp; <a href="06_select_case.html">06. Select Case &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>

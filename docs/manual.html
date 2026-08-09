@@ -1,0 +1,1875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Language Manual — BASCAL</title>
+<meta name="description" content="The full BASCAL language reference manual: syntax, statements, and generated-BASIC semantics for every construct.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Language Manual</h1>
+    <p class="tagline">The complete BASCAL language reference — every statement, expression, and the classic BASIC it lowers to.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="./">Home</a>
+    <a href="manual.html" class="current">Manual</a>
+    <a href="tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="./">Home</a> / Manual</p>
+  <div class="prose">
+<div class="toc-card"><h2 id="table-of-contents">Table of Contents</h2>
+<ol type="1">
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#getting-started">Getting Started</a></li>
+<li><a href="#program-structure">Program Structure</a></li>
+<li><a href="#data-types-and-type-suffixes">Data Types and Type Suffixes</a></li>
+<li><a href="#variables-and-constants">Variables and Constants</a></li>
+<li><a href="#operators-and-expressions">Operators and Expressions</a></li>
+<li><a href="#comments">Comments</a></li>
+<li><a href="#control-flow">Control Flow</a></li>
+<li><a href="#functions">Functions</a></li>
+<li><a href="#procedures">Procedures</a></li>
+<li><a href="#arrays">Arrays</a></li>
+<li><a href="#input-and-output">Input and Output</a></li>
+<li><a href="#file-input-and-output">File Input and Output</a></li>
+<li><a href="#random-access-file-io">Random-Access File I/O</a></li>
+<li><a href="#record-files">Record Files</a></li>
+<li><a href="#data-statements">Data Statements</a></li>
+<li><a href="#miscellaneous-statements">Miscellaneous Statements</a></li>
+<li><a href="#dependencies--require-and-import">Dependencies — REQUIRE and IMPORT</a></li>
+<li><a href="#suite-common">Suite COMMON</a></li>
+<li><a href="#generated-basic-shape">Generated BASIC Shape</a></li>
+<li><a href="#command-line-reference">Command-Line Reference</a></li>
+<li><a href="#statement-quick-reference">Statement Quick Reference</a></li>
+</ol></div>
+<h2 id="introduction">Introduction</h2>
+<p>BASCAL is a compiler that translates structured <code>.bcl</code> source files into line-numbered Microsoft BASIC programs (<code>.bas</code>) compatible with BASCOM and FreeBASIC's QB compatibility mode.</p>
+<p>BASCAL adds structured programming constructs on top of BASIC's run-time semantics:</p>
+<ul>
+<li>Block <code>if</code> / <code>elseif</code> / <code>else</code> / <code>end if</code></li>
+<li><code>for</code> / <code>end for</code>, <code>while</code> / <code>end while</code>, and <code>do</code> / <code>end do</code> loops with early exit</li>
+<li><code>function</code> declarations with typed return values and explicit <code>return</code></li>
+<li><code>procedure</code> declarations for action subroutines with no return value</li>
+<li>Path-style <code>require</code> for multi-file projects</li>
+<li><code>program</code> / <code>suite</code> declarations for coordinating <code>COMMON</code> across chained programs</li>
+<li>Multi-line <code>/* */</code> block comments and <code>//</code> end-of-line comments in addition to the classic <code>'</code> comment</li>
+<li><code>select case</code> with range and <code>is</code> comparisons</li>
+<li>All classic BASCOM 1980s statements: <code>DATA</code>/<code>READ</code>/<code>RESTORE</code>, <code>LOCATE</code>, <code>COLOR</code>, <code>ON ... GOTO</code>, <code>SWAP</code>, <code>RANDOMIZE</code>, <code>CONST</code>, and more</li>
+</ul>
+<p><strong>BASCAL does not invent a new runtime.</strong> Every BASCAL program compiles to plain Microsoft BASIC. The structured constructs are lowered by the compiler: functions become <code>GOSUB</code> subroutines, loops become <code>GOTO</code>-based constructs, and <code>if</code> chains become <code>IF ... THEN GOTO</code> sequences.</p>
+<hr />
+<h2 id="getting-started">Getting Started</h2>
+<h3 id="building-the-compiler">Building the Compiler</h3>
+<pre><code>env -u RUSTC_WRAPPER cargo build --release</code></pre>
+<p>The compiled binary is <code>target/release/bcc</code>.</p>
+<h3 id="your-first-program">Your First Program</h3>
+<p>The file <code>tutorial/01_hello.bcl</code> demonstrates all three comment styles and a basic PRINT/END structure:</p>
+<pre><code>// Tutorial 1 — Hello, World
+&#39; This is a classic single-quote comment (passes through to BASIC as-is).
+// This is a double-slash end-of-line comment (same behaviour).
+
+/*
+ * Block comments span multiple lines.  Each line is emitted as a separate
+ * &#39; comment in the generated output; blank lines are preserved as blank lines.
+ */
+
+PRINT &quot;Hello, World!&quot;
+PRINT &quot;Welcome to BASCAL.&quot;
+END</code></pre>
+<p>Compile it:</p>
+<pre><code>bcc tutorial/01_hello.bcl</code></pre>
+<p>This produces <code>tutorial/01_hello.bas</code>. To compile and run with FreeBASIC:</p>
+<pre><code>bcc tutorial/01_hello.bcl --binary
+./tmp/01_hello</code></pre>
+<h3 id="a-simple-function">A Simple Function</h3>
+<pre><code>function greet$(name$)
+    return &quot;Hello, &quot; + name$ + &quot;!&quot;
+end function
+
+msg$ = greet$(&quot;BASCOM&quot;)
+PRINT msg$
+END</code></pre>
+<hr />
+<h2 id="program-structure">Program Structure</h2>
+<p>A <code>.bcl</code> file consists of optional sections in the following order:</p>
+<ol type="1">
+<li>Optional <code>program</code> declaration</li>
+<li><code>require</code> / <code>import</code> dependency declarations</li>
+<li><code>common</code> declarations (suite files only)</li>
+<li>Top-level statements (the main program body)</li>
+<li><code>function</code> definitions (may appear in any order relative to statements)</li>
+</ol>
+<h3 id="program-declaration">Program Declaration</h3>
+<pre><code>program name
+program name suite suitename</code></pre>
+<p>The <code>program</code> declaration is optional. When present it must be the first non-comment, non-blank line in the file. It identifies the program by name and optionally links it to a suite (see <a href="#suite-common">Suite COMMON</a>).</p>
+<p>A <code>program</code> declaration is <strong>not allowed</strong> in library modules loaded via <code>require</code>.</p>
+<h3 id="file-encoding">File Encoding</h3>
+<p>Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are separated by newlines; a colon <code>:</code> may also separate statements on one line.</p>
+<hr />
+<h2 id="data-types-and-type-suffixes">Data Types and Type Suffixes</h2>
+<p>BASCAL uses Microsoft BASIC's type-suffix convention. Every variable or function name carries its type in the final character:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Suffix</th>
+<th>Type</th>
+<th>Range / Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>%</code></td>
+<td>Integer</td>
+<td>16-bit signed, −32768 to 32767</td>
+</tr>
+<tr class="even">
+<td><code>$</code></td>
+<td>String</td>
+<td>Variable-length string</td>
+</tr>
+<tr class="odd">
+<td><code>!</code></td>
+<td>Single</td>
+<td>32-bit IEEE 754 single-precision float</td>
+</tr>
+<tr class="even">
+<td><code>#</code></td>
+<td>Double</td>
+<td>64-bit IEEE 754 double-precision float</td>
+</tr>
+<tr class="odd">
+<td><code>&amp;</code></td>
+<td>Long</td>
+<td>32-bit signed integer</td>
+</tr>
+</tbody>
+</table>
+<p>Variables without a suffix follow the DEFtype settings of the BASIC runtime (default: single precision). In BASCAL source it is strongly recommended to always use explicit suffixes.</p>
+<p>All type checking is deferred to the BASIC runtime. The BASCAL compiler does not perform static type inference.</p>
+<hr />
+<h2 id="variables-and-constants">Variables and Constants</h2>
+<h3 id="variables">Variables</h3>
+<p>Variables declared or assigned at the top level are <strong>global</strong> and visible throughout the entire program.</p>
+<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fname_var_0%</code>) that are guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
+<pre><code>total% = 0
+
+function addToTotal%(x%)
+    global total%           &#39; access the global variable, not a local one
+    total% = total% + x%
+    return total%
+end function</code></pre>
+<p>BASIC builtin functions (<code>UCASE$</code>, <code>STR$</code>, <code>LEN</code>, etc.) are always recognised as callables and are never treated as local variables.</p>
+<p>Variables do not require pre-declaration; they come into existence on first assignment. Use <code>DIM</code> to declare arrays or to make intent clear.</p>
+<h3 id="dim">DIM</h3>
+<p>Declares an array or a simple variable.</p>
+<pre><code>dim playerName$
+dim scores%(100)       &#39; 1-D: 101 elements, scores%(0) .. scores%(100)
+dim grid%(9, 9)        &#39; 2-D: 10×10 grid, grid%(row, col)
+dim cube%(3, 4, 5)     &#39; 3-D: up to 8 dimensions supported</code></pre>
+<p>The bounds expression for each dimension may be any integer expression, including a constant. Elements are indexed from 0 to <em>bound</em> in each dimension (following <code>OPTION BASE 0</code>, the default):</p>
+<pre><code>const rows% = 4
+const cols% = 4
+dim matrix%(rows% - 1, cols% - 1)
+
+for r% = 0 to rows% - 1
+    for c% = 0 to cols% - 1
+        matrix%(r%, c%) = r% * cols% + c%
+    end for
+end for</code></pre>
+<p><code>dim name%()</code> (empty parens) declares an array without specifying bounds — use this when the array will be passed in from outside or when BASIC's default sizing is sufficient.</p>
+<h3 id="option-base">OPTION BASE</h3>
+<p>Sets the default lower bound for all subsequently declared arrays. Must be placed before any <code>DIM</code> statements it is meant to affect.</p>
+<pre><code>option base 0   &#39; arrays start at index 0 (default)
+option base 1   &#39; arrays start at index 1</code></pre>
+<p>With <code>OPTION BASE 1</code>, <code>dim scores%(10)</code> allocates 10 elements indexed 1..10 instead of 11 elements indexed 0..10.</p>
+<h3 id="erase">ERASE</h3>
+<p>Frees memory occupied by one or more arrays. After <code>ERASE</code>, the array variables are undefined until re-declared.</p>
+<pre><code>dim bigTable%(1000, 200)
+&#39; ... use bigTable% ...
+erase bigTable%          &#39; release memory
+
+dim names$(50), codes%(50)
+&#39; ... use both ...
+erase names$, codes%     &#39; erase multiple at once</code></pre>
+<h3 id="const">CONST</h3>
+<p>Declares a named constant. The value must be a literal.</p>
+<pre><code>CONST PASS_MARK%  = 60
+CONST APP_NAME$   = &quot;Grade Checker&quot;
+CONST PI!         = 3.14159
+CONST TAX_RATE!   = 0.2</code></pre>
+<p>Constants follow the same type-suffix rules as variables. Once declared, a constant may not be reassigned.</p>
+<p>From <code>tutorial/02_variables.bcl</code>:</p>
+<pre><code>CONST PASS_MARK%  = 60
+CONST APP_NAME$   = &quot;Grade Checker&quot;
+
+score%       = 87
+playerName$  = &quot;Alice&quot;
+
+if score% &gt;= PASS_MARK% then
+    PRINT APP_NAME$ + &quot;: &quot; + playerName$ + &quot; passed with &quot; + STR$(score%)
+end if</code></pre>
+<hr />
+<h2 id="operators-and-expressions">Operators and Expressions</h2>
+<h3 id="arithmetic-operators">Arithmetic Operators</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Operation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>+</code></td>
+<td>Addition / string concatenation</td>
+</tr>
+<tr class="even">
+<td><code>-</code></td>
+<td>Subtraction / unary negation</td>
+</tr>
+<tr class="odd">
+<td><code>*</code></td>
+<td>Multiplication</td>
+</tr>
+<tr class="even">
+<td><code>/</code></td>
+<td>Division (truncates toward zero)</td>
+</tr>
+<tr class="odd">
+<td><code>\</code></td>
+<td>Integer division (floor quotient)</td>
+</tr>
+<tr class="even">
+<td><code>MOD</code></td>
+<td>Modulus (remainder after integer division)</td>
+</tr>
+<tr class="odd">
+<td><code>^</code></td>
+<td>Exponentiation (right-associative)</td>
+</tr>
+</tbody>
+</table>
+<pre><code>a% = 17
+b% = 5
+print a%; &quot;+ &quot;; b%; &quot;=&quot;; a% + b%    // 22
+print a%; &quot;\ &quot;; b%; &quot;=&quot;; a% \ b%    // 3  (integer quotient)
+print a%; &quot;MOD &quot;; b%; &quot;=&quot;; a% mod b% // 2  (remainder)
+print &quot;2 ^ 8 =&quot;; 2 ^ 8              // 256
+print &quot;2 ^ 3 ^ 2 =&quot;; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))</code></pre>
+<h3 id="comparison-operators">Comparison Operators</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>=</code></td>
+<td>Equal</td>
+</tr>
+<tr class="even">
+<td><code>&lt;&gt;</code></td>
+<td>Not equal</td>
+</tr>
+<tr class="odd">
+<td><code>&lt;</code></td>
+<td>Less than</td>
+</tr>
+<tr class="even">
+<td><code>&lt;=</code></td>
+<td>Less than or equal</td>
+</tr>
+<tr class="odd">
+<td><code>&gt;</code></td>
+<td>Greater than</td>
+</tr>
+<tr class="even">
+<td><code>&gt;=</code></td>
+<td>Greater than or equal</td>
+</tr>
+</tbody>
+</table>
+<p>Comparison expressions evaluate to −1 (true) or 0 (false) at the BASIC runtime, consistent with Microsoft BASIC semantics.</p>
+<h3 id="logical-operators">Logical Operators</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>AND</code></td>
+<td>Bitwise AND (also serves as logical AND when operands are 0/−1)</td>
+</tr>
+<tr class="even">
+<td><code>OR</code></td>
+<td>Bitwise OR</td>
+</tr>
+<tr class="odd">
+<td><code>NOT</code></td>
+<td>Bitwise NOT</td>
+</tr>
+<tr class="even">
+<td><code>XOR</code></td>
+<td>Bitwise XOR</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Important:</strong> <code>NOT</code> is bitwise in Microsoft BASIC. <code>NOT 1</code> yields <code>−2</code>, not <code>0</code>. BASCAL's compiler emits <code>(expr) = 0</code> instead of <code>NOT expr</code> in generated control-flow conditions so that programmer-boolean values like <code>found% = 1</code> behave as expected. Use explicit <code>= 0</code> or <code>&lt;&gt; 0</code> comparisons in your own code when testing boolean flags.</p>
+<pre><code>age%    = 25
+income% = 45000
+if age% &gt;= 18 and income% &gt;= 30000 then
+    print &quot;Eligible&quot;
+end if
+print 6 xor 3   // 5  (110 XOR 011 = 101)</code></pre>
+<h3 id="operator-precedence-highest-first">Operator Precedence (highest first)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Level</th>
+<th>Operators</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>9</td>
+<td><code>^</code> (right-associative)</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Unary <code>-</code></td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>*</code>, <code>/</code></td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>\</code></td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>MOD</code></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>+</code>, <code>-</code></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>=</code>, <code>&lt;&gt;</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>NOT</code></td>
+</tr>
+<tr class="odd">
+<td>1</td>
+<td><code>AND</code></td>
+</tr>
+<tr class="even">
+<td>0</td>
+<td><code>OR</code></td>
+</tr>
+<tr class="odd">
+<td>−1</td>
+<td><code>XOR</code></td>
+</tr>
+</tbody>
+</table>
+<p>Use parentheses to override precedence.</p>
+<hr />
+<h2 id="comments">Comments</h2>
+<h3 id="single-line-comments">Single-Line Comments</h3>
+<p>A single quote <code>'</code> or a double slash <code>//</code> begins a comment that extends to the end of the line. Both forms are passed through to the generated BASIC output as <code>'</code> comments.</p>
+<pre><code>&#39; This is a single-line comment
+// This is also a single-line comment
+score% = 0  &#39; inline comment after a statement
+score% = 0  // also valid inline</code></pre>
+<p>All three comment styles may appear inline after any statement.</p>
+<h3 id="block-comments">Block Comments</h3>
+<p>Block comments span multiple lines. The opening delimiter is <code>/*</code> and the closing delimiter is <code>*/</code>. Block comments may appear anywhere a statement is valid.</p>
+<pre><code>/*
+ * Insertion sort — sorts arr%(0..count%-1) in ascending order.
+ * Time complexity: O(n^2) average and worst case.
+ * Space complexity: O(1) — sorts in place.
+ */
+function insertionSort%(arr%, count%)
+    for i% = 1 to count% - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% &gt;= 0 and arr%(j%) &gt; key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function</code></pre>
+<p>Each line of a block comment is emitted as a separate <code>'</code> comment in the generated BASIC output. Leading <code>*</code> characters and surrounding whitespace are stripped. Blank lines within the comment are preserved as blank lines in the output.</p>
+<p>One-line block comments are also valid:</p>
+<pre><code>/* Clear screen and draw title banner */
+CLS
+LOCATE 1, 30
+PRINT &quot;  BASCAL DEMO  &quot;</code></pre>
+<hr />
+<h2 id="control-flow">Control Flow</h2>
+<h3 id="if--elseif--else--end-if">IF / ELSEIF / ELSE / END IF</h3>
+<p>BASCAL only supports block-style <code>if</code> statements. The body must be on a separate line; there is no single-line <code>IF … THEN stmt</code> form.</p>
+<pre><code>if condition then
+    &#39; then body
+end if
+
+if condition then
+    &#39; then body
+else
+    &#39; else body
+end if</code></pre>
+<p>From <code>tutorial/04_conditions.bcl</code> — a grade classification chain:</p>
+<pre><code>score% = 72
+if score% &gt;= 60 then
+    PRINT &quot;Pass (&quot; + STR$(score%) + &quot;)&quot;
+else
+    PRINT &quot;Fail (&quot; + STR$(score%) + &quot;)&quot;
+end if
+
+points% = 85
+if points% &gt;= 90 then
+    grade$ = &quot;A&quot;
+elseif points% &gt;= 80 then
+    grade$ = &quot;B&quot;        &#39; points% = 85 lands here
+elseif points% &gt;= 70 then
+    grade$ = &quot;C&quot;
+elseif points% &gt;= 60 then
+    grade$ = &quot;D&quot;
+else
+    grade$ = &quot;F&quot;
+end if
+PRINT &quot;Grade: &quot; + grade$</code></pre>
+<p><code>elseif</code> chains may be arbitrarily deep.</p>
+<h3 id="for--end-for">FOR / END FOR</h3>
+<pre><code>for var = start to end [step n]
+    &#39; body
+end for</code></pre>
+<p><code>end for</code> closes the loop. Bare <code>end</code> also works. The <code>step</code> clause is optional; the default step is 1.</p>
+<p>From <code>tutorial/05_loops.bcl</code>:</p>
+<pre><code>&#39; Squares 1..5
+for i% = 1 to 5
+    PRINT &quot;  &quot; + STR$(i%) + &quot;^2 = &quot; + STR$(i% * i%)
+end for
+
+&#39; Countdown with negative step
+for n% = 3 to 1 step -1
+    PRINT &quot;  &quot; + STR$(n%)
+end for
+PRINT &quot;  Go!&quot;
+
+&#39; EXIT FOR — stop at the first even number greater than 4
+for i% = 1 to 20
+    if i% &gt; 4 and (i% / 2) * 2 = i% then
+        PRINT &quot;First even &gt; 4: &quot; + STR$(i%)
+        exit for
+    end if
+end for</code></pre>
+<p><code>exit for</code> exits the enclosing <code>for</code> loop immediately.</p>
+<h3 id="while--end-while">WHILE / END WHILE</h3>
+<pre><code>while condition
+    &#39; body
+end while</code></pre>
+<p><code>end while</code> closes the loop. Bare <code>end</code> also works.</p>
+<p>From <code>tutorial/05_loops.bcl</code>:</p>
+<pre><code>&#39; Powers of 2 under 100
+p% = 1
+while p% &lt; 100
+    PRINT &quot;  &quot; + STR$(p%)
+    p% = p% * 2
+end while
+
+&#39; EXIT WHILE — stop after 8 Collatz steps
+n% = 27
+steps% = 0
+while n% &lt;&gt; 1
+    if steps% = 8 then
+        PRINT &quot;  ...&quot;
+        exit while
+    end if
+    if (n% / 2) * 2 = n% then
+        n% = n% / 2
+    else
+        n% = n% * 3 + 1
+    end if
+    steps% = steps% + 1
+    PRINT &quot;  &quot; + STR$(n%)
+end while</code></pre>
+<p><code>exit while</code> exits the enclosing <code>while</code> loop immediately.</p>
+<h3 id="do--end-do">DO / END DO</h3>
+<pre><code>do [while/until condition]
+    &#39; body
+end do</code></pre>
+<p><code>end do</code> closes the loop. Bare <code>end</code> also works. The optional <code>while</code> or <code>until</code> clause tests the condition before each iteration.</p>
+<p>From <code>tutorial/05_loops.bcl</code>:</p>
+<pre><code>&#39; DO WHILE — condition tested before body
+k% = 1
+do while k% &lt;= 3
+    PRINT &quot;  &quot; + STR$(k%)
+    k% = k% + 1
+end do
+
+&#39; DO UNTIL — enters while condition is false
+k% = 1
+do until k% &gt; 3
+    PRINT &quot;  &quot; + STR$(k%)
+    k% = k% + 1
+end do
+
+&#39; Run body at least once (post-check via EXIT DO)
+k% = 99
+do
+    PRINT &quot;  &quot; + STR$(k%)    &#39; prints 99 even though k% &gt; 3
+    k% = k% + 1
+    if k% &gt; 3 then
+        exit do
+    end if
+end do
+
+&#39; EXIT DO
+k% = 1
+do
+    if k% = 3 then
+        exit do
+    end if
+    PRINT &quot;  &quot; + STR$(k%)
+    k% = k% + 1
+end do</code></pre>
+<p><code>exit do</code> exits the enclosing <code>do</code> loop immediately.</p>
+<h3 id="select-case">SELECT CASE</h3>
+<pre><code>select case expression
+case value
+    &#39; body
+case value1, value2
+    &#39; body for either value
+case low to high
+    &#39; body for values in range [low, high]
+case is &gt; threshold
+    &#39; body when expression &gt; threshold
+case else
+    &#39; default body
+end select</code></pre>
+<p>The <code>select case</code> expression is evaluated once. Cases are tested in order. <code>case else</code> is optional and must be the last clause.</p>
+<p>From <code>tutorial/06_select_case.bcl</code>:</p>
+<pre><code>&#39; Numeric score to letter grade
+score% = 85
+select case score%
+case 100
+    PRINT &quot;Perfect!&quot;
+case 90 to 99
+    PRINT &quot;A  — Excellent&quot;
+case 80 to 89
+    PRINT &quot;B  — Good&quot;      &#39; score% = 85 matches here
+case 70 to 79
+    PRINT &quot;C  — Satisfactory&quot;
+case 60 to 69
+    PRINT &quot;D  — Passing&quot;
+case is &gt;= 0
+    PRINT &quot;F  — Fail&quot;
+case else
+    PRINT &quot;Invalid score&quot;
+end select
+
+&#39; String select — weekend / weekday
+day$ = &quot;Saturday&quot;
+select case day$
+case &quot;Monday&quot;, &quot;Tuesday&quot;, &quot;Wednesday&quot;, &quot;Thursday&quot;, &quot;Friday&quot;
+    PRINT day$ + &quot; is a weekday&quot;
+case &quot;Saturday&quot;, &quot;Sunday&quot;
+    PRINT day$ + &quot; is a weekend&quot;
+case else
+    PRINT &quot;Unknown day: &quot; + day$
+end select
+
+&#39; IS comparisons
+temp% = -3
+select case temp%
+case is &lt; 0
+    PRINT &quot;Below freezing&quot;
+case is &lt; 10
+    PRINT &quot;Cold&quot;
+case is &lt; 20
+    PRINT &quot;Cool&quot;
+case else
+    PRINT &quot;Warm or hot&quot;
+end select</code></pre>
+<p>Supported <code>case</code> forms:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Form</th>
+<th>Matches when</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>case value</code></td>
+<td>expression = value</td>
+</tr>
+<tr class="even">
+<td><code>case v1, v2, v3</code></td>
+<td>expression = any listed value</td>
+</tr>
+<tr class="odd">
+<td><code>case low to high</code></td>
+<td>low ≤ expression ≤ high</td>
+</tr>
+<tr class="even">
+<td><code>case is = value</code></td>
+<td>expression = value</td>
+</tr>
+<tr class="odd">
+<td><code>case is &lt;&gt; value</code></td>
+<td>expression ≠ value</td>
+</tr>
+<tr class="even">
+<td><code>case is &lt; value</code></td>
+<td>expression &lt; value</td>
+</tr>
+<tr class="odd">
+<td><code>case is &lt;= value</code></td>
+<td>expression ≤ value</td>
+</tr>
+<tr class="even">
+<td><code>case is &gt; value</code></td>
+<td>expression &gt; value</td>
+</tr>
+<tr class="odd">
+<td><code>case is &gt;= value</code></td>
+<td>expression ≥ value</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="functions">Functions</h2>
+<h3 id="declaration">Declaration</h3>
+<pre><code>function name%(param1%, param2%)
+    &#39; body
+    return expression
+end function</code></pre>
+<p>The function name carries the return type suffix. Parameter names also carry type suffixes. Functions may have zero or more parameters.</p>
+<p>From <code>tutorial/07_functions.bcl</code>:</p>
+<pre><code>function max%(a%, b%)
+    if a% &gt; b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function min%(a%, b%)
+    if a% &lt; b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function clamp%(value%, lo%, hi%)
+    &#39; Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function
+
+function titleCase$(word$)
+    &#39; Capitalise first letter, lowercase remainder.
+    if LEN(word$) = 0 then
+        return &quot;&quot;
+    end if
+    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+end function</code></pre>
+<h3 id="calling-functions">Calling Functions</h3>
+<pre><code>PRINT &quot;max(4, 9)      = &quot; + STR$(max%(4, 9))         &#39; 9
+PRINT &quot;clamp(15,1,10) = &quot; + STR$(clamp%(15, 1, 10))  &#39; 10
+PRINT &quot;clamp(-3,1,10) = &quot; + STR$(clamp%(-3, 1, 10))  &#39; 1
+PRINT titleCase$(&quot;bASCAL&quot;)                            &#39; Bascal</code></pre>
+<p>Functions called only for their side effects (discarding the return value) are written as expression statements. The result variable is overwritten but not read:</p>
+<pre><code>dummy% = sortArray%(data%(), N%)</code></pre>
+<h3 id="return">Return</h3>
+<p>Every function must contain at least one <code>return</code> statement. Implicit returns at end-of-body are not supported.</p>
+<h3 id="calling-the-same-function-twice">Calling the Same Function Twice</h3>
+<p>Each call writes the shared <code>fname_result_0</code> variable, so assignments must be made before the next call overwrites it. BASCAL handles this automatically:</p>
+<pre><code>a$ = repeat$(&quot;x&quot;, 3)   &#39; repeat_result$ = &quot;xxx&quot;  →  a$ = &quot;xxx&quot;
+b$ = repeat$(&quot;y&quot;, 2)   &#39; repeat_result$ = &quot;yy&quot;   →  b$ = &quot;yy&quot;
+PRINT a$ + &quot; &quot; + b$    &#39; xxx yy</code></pre>
+<h3 id="variable-scoping">Variable Scoping</h3>
+<p>Variables inside a function body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names of the form <code>stem_var_0%</code>, <code>_1%</code>, etc. Two functions can each have a variable named <code>i%</code> with no conflict, and a local can never accidentally shadow a global that happens to share the naive prefix. Use <code>global varname</code> to access a module-level variable:</p>
+<pre><code>function sumTo%(n%)
+    acc% = 0                &#39; local to sumTo%
+    for i% = 1 to n%       &#39; local to sumTo%
+        acc% = acc% + i%
+    end for
+    return acc%
+end function
+
+runningTotal% = 0
+
+function addToTotal%(x%)
+    global runningTotal%    &#39; refers to the module-level variable
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function</code></pre>
+<h3 id="restrictions">Restrictions</h3>
+<ul>
+<li><strong>No recursion.</strong> Functions are lowered to <code>GOSUB</code> with global parameter variables. A recursive call would overwrite in-flight parameters. Use an explicit stack array to simulate recursion if needed.</li>
+<li><strong>No return value from a procedure.</strong> Functions must <code>return</code> a value; for side-effect-only subroutines use <code>procedure</code> instead.</li>
+</ul>
+<h3 id="how-functions-are-lowered">How Functions Are Lowered</h3>
+<p>The compiler lowers each function call to:</p>
+<ol type="1">
+<li>Assign each argument to a generated global variable (e.g. <code>fname_param_0%</code>)</li>
+<li><code>GOSUB</code> to the function's generated label</li>
+<li>Assign the result from the generated result variable (e.g. <code>fname_result_0%</code>)</li>
+</ol>
+<p>Local variables in the function body are emitted as uniquely-indexed BASIC globals (<code>fname_var_0%</code>, <code>fname_var_1%</code>, …). The index is chosen so the name does not clash with any global variable or with any name allocated by an earlier function, making collisions impossible regardless of what names the developer uses at global scope.</p>
+<p>Array parameters use copy-in / copy-out: elements are copied into the parameter's generated name before the call and back into the caller's array after.</p>
+<hr />
+<h2 id="procedures">Procedures</h2>
+<p>A procedure is a named subroutine that performs an action but returns no value. It is declared with <code>procedure</code> … <code>end procedure</code>.</p>
+<h3 id="declaration-1">Declaration</h3>
+<pre><code>procedure name(param1%, param2$)
+    &#39; body
+end procedure</code></pre>
+<p>The procedure name has <strong>no type suffix</strong> — the absence of a suffix signals that there is no return value. Parameter names still carry their usual type suffixes.</p>
+<p>From <code>tutorial/14_procedures.bcl</code>:</p>
+<pre><code>procedure printSeparator()
+    PRINT &quot;----------------------------&quot;
+end procedure
+
+procedure printScore(label$, score%)
+    PRINT label$ + &quot;: &quot; + STR$(score%)
+end procedure
+
+procedure printIfPass(name$, score%)
+    if score% &lt; 60 then
+        return          // early exit — nothing printed for failing scores
+    end if
+    PRINT name$ + &quot; passed with &quot; + STR$(score%)
+end procedure
+
+procedure fillRange(arr%, count%, value%)
+    for i% = 0 to count% - 1
+        arr%(i%) = value%
+    end for
+end procedure</code></pre>
+<h3 id="calling-procedures">Calling Procedures</h3>
+<p>Procedures are called as statements (not inside expressions):</p>
+<pre><code>printSeparator()
+printScore(&quot;Alice&quot;, 91)
+printIfPass(&quot;Bob&quot;, 54)
+fillRange(data%(), N%, 99)</code></pre>
+<h3 id="early-exit">Early Exit</h3>
+<p>A bare <code>return</code> (no expression) exits a procedure immediately. Falling through to <code>end procedure</code> is equally valid — the compiler emits an implicit <code>RETURN</code>.</p>
+<pre><code>procedure printIfPass(name$, score%)
+    if score% &lt; 60 then
+        return      &#39; exit early; nothing is printed
+    end if
+    PRINT name$ + &quot; passed with &quot; + STR$(score%)
+end procedure</code></pre>
+<h3 id="array-parameters">Array Parameters</h3>
+<p>Array parameters use the same copy-in / copy-out convention as functions. Declare the parameter without <code>()</code> in the procedure header; pass with <code>()</code> at the call site:</p>
+<pre><code>procedure fillRange(arr%, count%, value%)   &#39; arr% — no () in header
+    ...
+end procedure
+
+fillRange(data%(), N%, 99)                  &#39; data%() — () at call site</code></pre>
+<h3 id="variable-scoping-1">Variable Scoping</h3>
+<p>Same rules as functions: variables in the body are local by default; use <code>global varname</code> to access a module-level variable.</p>
+<pre><code>globalCount% = 0
+
+procedure increment()
+    global globalCount%
+    globalCount% = globalCount% + 1
+end procedure</code></pre>
+<h3 id="restrictions-1">Restrictions</h3>
+<ul>
+<li><strong>No recursion.</strong> Same GOSUB lowering as functions — a recursive call would overwrite in-flight parameters.</li>
+<li><strong>No return value.</strong> Do not use a procedure where an expression is expected.</li>
+</ul>
+<h3 id="how-procedures-are-lowered">How Procedures Are Lowered</h3>
+<p>Procedures use the same GOSUB mechanism as functions:</p>
+<ol type="1">
+<li>Assign each argument to a generated global variable (e.g. <code>pname_param_0%</code>)</li>
+<li><code>GOSUB</code> to the procedure's generated label</li>
+<li>No result variable is read back</li>
+</ol>
+<p>Local variables in the body are emitted as uniquely-indexed BASIC globals (<code>pname_var_0%</code>, <code>pname_var_1%</code>, …) using the same collision-free scheme as functions.</p>
+<hr />
+<h2 id="arrays">Arrays</h2>
+<h3 id="declaration-2">Declaration</h3>
+<pre><code>DIM values%(100)    &#39; 101 elements: values%(0) .. values%(100)
+DIM names$(50)</code></pre>
+<p>Array indices run from 0 to <em>size</em> (i.e., <em>size</em>+1 elements in total, using BASIC's default <code>OPTION BASE 0</code>).</p>
+<h3 id="access">Access</h3>
+<pre><code>values%(0) = 42
+PRINT values%(i%)</code></pre>
+<h3 id="passing-arrays-to-functions">Passing Arrays to Functions</h3>
+<p>Declare the parameter with the plain variable name — <strong>no <code>()</code> in the declaration</strong>. At the call site, write <code>arr%()</code> to signal that an array is being passed:</p>
+<pre><code>function insertionSort%(arr%, count%)
+    for i% = 1 to count% - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% &gt;= 0 and arr%(j%) &gt; key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function
+
+function indexOf%(arr%, count%, target%)
+    for i% = 0 to count% - 1
+        if arr%(i%) = target% then
+            return i%
+        end if
+    end for
+    return -1
+end function</code></pre>
+<p>From <code>tutorial/08_arrays.bcl</code>:</p>
+<pre><code>CONST N% = 6
+DIM data%(N%)
+data%(0) = 64 : data%(1) = 25 : data%(2) = 12
+data%(3) = 22 : data%(4) =  3 : data%(5) = 11
+
+dummy% = insertionSort%(data%(), N%)   &#39; sorts in place
+
+idx% = indexOf%(data%(), N%, 22)
+if idx% &gt;= 0 then
+    PRINT &quot;22 found at index &quot; + STR$(idx%)
+end if</code></pre>
+<p>Array arguments use copy-in / copy-out. The compiler generates loops that copy elements into the function's parameter array before the <code>GOSUB</code> and copy them back after the <code>RETURN</code>.</p>
+<hr />
+<h2 id="input-and-output">Input and Output</h2>
+<h3 id="print">PRINT</h3>
+<p>Prints one or more expressions to the screen. Expressions are separated by commas or concatenated with <code>+</code>.</p>
+<pre><code>PRINT &quot;Hello, World!&quot;
+PRINT &quot;Score: &quot; + STR$(score%)
+PRINT name$, score%
+PRINT                              &#39; blank line</code></pre>
+<h3 id="lprint">LPRINT</h3>
+<p>Sends output to the printer (line printer). Same syntax as <code>PRINT</code>.</p>
+<pre><code>LPRINT &quot;BASCAL screen demo printed at: &quot; + DATE$
+LPRINT &quot;Score: &quot; + STR$(score%)</code></pre>
+<h3 id="input">INPUT</h3>
+<p>Reads values from the keyboard.</p>
+<pre><code>INPUT name$
+INPUT &quot;Enter your name: &quot;; name$
+INPUT &quot;Width, height: &quot;; width%, height%</code></pre>
+<p>A prompt string followed by <code>;</code> suppresses the newline after the prompt (the cursor remains on the same line). A prompt followed by <code>,</code> adds a <code>?</code> and moves to the next print zone. The <code>;</code> form is recommended.</p>
+<p>Multiple variables may be listed; the user enters values separated by commas.</p>
+<h3 id="locate">LOCATE</h3>
+<p>Positions the cursor before printing. From <code>tutorial/11_screen.bcl</code>:</p>
+<pre><code>CLS
+COLOR 14, 1            &#39; bright yellow on blue
+LOCATE 1, 30
+PRINT &quot;  BASCAL DEMO  &quot;
+
+COLOR 7, 0             &#39; restore white on black
+LOCATE 3, 1
+PRINT &quot;Screen I/O tutorial&quot;
+
+LOCATE 5, 1 : COLOR 10 : PRINT &quot;Green text&quot;
+LOCATE 6, 1 : COLOR 12 : PRINT &quot;Red text&quot;
+LOCATE 7, 1 : COLOR  7 : PRINT &quot;Normal text&quot;</code></pre>
+<p>Rows and columns are 1-based on standard 80×25 displays.</p>
+<h3 id="color">COLOR</h3>
+<p>Sets the foreground and optional background colour.</p>
+<pre><code>COLOR 14          &#39; bright yellow foreground, background unchanged
+COLOR 15, 1       &#39; bright white on blue
+COLOR 7, 0        &#39; grey on black (restore defaults)</code></pre>
+<p>Colour values follow CGA/EGA standard colour numbers (0–15 foreground, 0–7 background).</p>
+<h3 id="beep">BEEP</h3>
+<p>Sounds the system bell.</p>
+<pre><code>BEEP</code></pre>
+<h3 id="cls">CLS</h3>
+<p>Clears the screen.</p>
+<pre><code>CLS</code></pre>
+<hr />
+<h2 id="file-input-and-output">File Input and Output</h2>
+<p>From <code>tutorial/10_files.bcl</code>:</p>
+<h3 id="open">OPEN</h3>
+<p>Opens a file for reading, writing, or appending.</p>
+<pre><code>OPEN filename$ FOR INPUT  AS #1
+OPEN filename$ FOR OUTPUT AS #2
+OPEN filename$ FOR APPEND AS #3</code></pre>
+<p>The file number (<code>#1</code>, <code>#2</code>, etc.) is used in subsequent file I/O statements.</p>
+<h3 id="close">CLOSE</h3>
+<p>Closes an open file.</p>
+<pre><code>CLOSE #1</code></pre>
+<h3 id="kill">KILL</h3>
+<p>Deletes a file from disk.</p>
+<pre><code>kill &quot;temp.dat&quot;
+kill tempFile$</code></pre>
+<p>Generates <code>KILL filename$</code>. The file must exist or a runtime error occurs.</p>
+<h3 id="name--as">NAME ... AS</h3>
+<p>Renames (or moves) a file.</p>
+<pre><code>name &quot;old.dat&quot; as &quot;new.dat&quot;
+name srcFile$ as destFile$</code></pre>
+<p>Generates <code>NAME old AS new</code>. Both arguments are expressions; string variables or literals work equally well.</p>
+<h3 id="write--and-input">WRITE # and INPUT</h3>
+<p><code>WRITE #</code> stores values in a quoted, comma-separated format that <code>INPUT #</code> can read back reliably:</p>
+<pre><code>csvFile$ = &quot;tutorial_scores.csv&quot;
+
+OPEN csvFile$ FOR OUTPUT AS #1
+WRITE #1, &quot;Alice&quot;, 95, &quot;pass&quot;
+WRITE #1, &quot;Bob&quot;,   54, &quot;fail&quot;
+WRITE #1, &quot;Carol&quot;, 78, &quot;pass&quot;
+CLOSE #1
+
+OPEN csvFile$ FOR APPEND AS #1
+WRITE #1, &quot;Dave&quot;, 88, &quot;pass&quot;
+CLOSE #1
+
+PRINT &quot;Records in &quot; + csvFile$ + &quot;:&quot;
+OPEN csvFile$ FOR INPUT AS #1
+while EOF(1) = 0
+    INPUT #1, name$, score%, result$
+    PRINT &quot;  &quot; + name$ + &quot;: &quot; + STR$(score%) + &quot;  [&quot; + result$ + &quot;]&quot;
+end while
+CLOSE #1</code></pre>
+<p>Output:</p>
+<pre><code>Records in tutorial_scores.csv:
+  Alice: 95  [pass]
+  Bob: 54  [fail]
+  Carol: 78  [pass]
+  Dave: 88  [pass]</code></pre>
+<h3 id="line-input">LINE INPUT</h3>
+<p>Reads one complete line (including commas) from a file into a string variable:</p>
+<pre><code>OPEN csvFile$ FOR INPUT AS #1
+while EOF(1) = 0
+    LINE INPUT #1, line$
+    PRINT &quot;  &quot; + line$
+end while
+CLOSE #1</code></pre>
+<h3 id="print--file-print">PRINT # (File Print)</h3>
+<p>Writes expressions to a file without the quoting that <code>WRITE #</code> adds:</p>
+<pre><code>PRINT #2, &quot;Header line&quot;
+PRINT #2, count%, value!</code></pre>
+<h3 id="print-using">PRINT USING</h3>
+<p>Formats output with a template string before printing to the screen, printer, or a file. The format string uses MS-BASIC format characters (<code>#</code> for digit positions, <code>.</code> for the decimal point, <code>,</code> for thousands separator, <code>+</code>/<code>-</code> for sign, etc.).</p>
+<pre><code>print using &quot;####.##&quot;; amount!          &#39; screen
+lprint using &quot;####.##&quot;; amount!         &#39; printer
+print #1, using &quot;####.##&quot;; amount!      &#39; file channel #1</code></pre>
+<p>Multiple values are separated by <code>;</code> or <code>,</code> exactly like a normal <code>PRINT</code>:</p>
+<pre><code>print using &quot;Item ##: ####.##&quot;; itemNo%, price!</code></pre>
+<p>The format string is any string expression; it does not have to be a literal:</p>
+<pre><code>fmt$ = &quot;###.#&quot;
+print using fmt$; x!; y!; z!</code></pre>
+<hr />
+<h2 id="random-access-file-io">Random-Access File I/O</h2>
+<p>From Part 1 of <code>tutorial/15_random_and_record_files.bcl</code>:</p>
+<p>Random-access files store fixed-length records that can be read or written in any order, without scanning from the beginning.</p>
+<h3 id="open-for-random">OPEN FOR RANDOM</h3>
+<pre><code>open filename$ for random as #1 len = recLen%</code></pre>
+<p><code>len</code> sets the record size in bytes. Every record occupies exactly that many bytes on disk. Records are numbered from 1.</p>
+<h3 id="field">FIELD</h3>
+<p>Binds string variables to regions of the shared file buffer:</p>
+<pre><code>field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$</code></pre>
+<p>The widths must sum to the record length. Only string variables may appear in a <code>FIELD</code> statement.</p>
+<h3 id="lset-and-rset">LSET and RSET</h3>
+<p>Copy data into a field-bound buffer variable, padded to the field width:</p>
+<pre><code>lset nameBuf$ = &quot;Alice&quot;    &#39; left-justified, padded with spaces on the right
+rset idBuf$   = &quot;42&quot;       &#39; right-justified, padded with spaces on the left</code></pre>
+<h3 id="put-and-get">PUT and GET</h3>
+<p>Write or read a numbered record:</p>
+<pre><code>put #1, recordNum%    &#39; write current buffer as record recordNum%
+get #1, recordNum%    &#39; load record recordNum% into buffer variables</code></pre>
+<p>Omitting the record number reads/writes at the current file position.</p>
+<h3 id="seek">SEEK</h3>
+<p>Move the file pointer to a given record position:</p>
+<pre><code>seek #1, recordNum%</code></pre>
+<h3 id="packing-helpers">Packing Helpers</h3>
+<p>Numeric values must be packed into strings before storing in a <code>FIELD</code> buffer, and unpacked after reading:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Pack</th>
+<th>Unpack</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mki%(n%)</code></td>
+<td><code>cvi%(s$)</code></td>
+<td>2-byte integer</td>
+</tr>
+<tr class="even">
+<td><code>mkl&amp;(n&amp;)</code></td>
+<td><code>cvl&amp;(s$)</code></td>
+<td>4-byte long</td>
+</tr>
+<tr class="odd">
+<td><code>mks!(n!)</code></td>
+<td><code>cvs!(s$)</code></td>
+<td>4-byte single</td>
+</tr>
+<tr class="even">
+<td><code>mkd#(n#)</code></td>
+<td><code>cvd#(s$)</code></td>
+<td>8-byte double</td>
+</tr>
+</tbody>
+</table>
+<p>Example — writing and reading a numeric score:</p>
+<pre><code>const rec_len% = 30
+
+open &quot;students.dat&quot; for random as #1 len = rec_len%
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+
+lset idBuf$    = mki%(1)
+lset nameBuf$  = &quot;Alice&quot;
+lset scoreBuf$ = mkd#(95.0)
+put #1, 1
+
+get #1, 1
+print rtrim$(nameBuf$) + &quot;: &quot; + str$(cvd#(scoreBuf$))
+close #1</code></pre>
+<p>Output:</p>
+<pre><code>Alice: 95</code></pre>
+<hr />
+<h2 id="record-files">Record Files</h2>
+<p>From Part 2 of <code>tutorial/15_random_and_record_files.bcl</code>:</p>
+<p>The <code>record</code> / <code>file</code> DSL is sugar over everything in <a href="#random-access-file-io">Random-Access File I/O</a> above. It computes the record's byte width, allocates the file number, and generates the <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>RSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code> calls for you — nothing about the <em>generated</em> BASIC changes; only the BASCAL source you write does.</p>
+<h3 id="record--end-record">record ... end record</h3>
+<p>Declares a fixed-layout record type:</p>
+<pre><code>record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record</code></pre>
+<p>Supported field types and their packed width: <code>int16</code> (2 bytes), <code>int32</code> (4 bytes), <code>float32</code> (4 bytes), <code>float64</code> (8 bytes), <code>string(N)</code> (N bytes). The record's total width — used as the <code>OPEN ... LEN = </code> value — is the sum of its field widths, in declaration order.</p>
+<h3 id="file--as---open">file ... as ... = open(...)</h3>
+<pre><code>file db as Student = open(&quot;students.dat&quot;)</code></pre>
+<p>Lowers to one <code>OPEN ... FOR RANDOM AS #n LEN = &lt;width&gt;</code> plus one matching <code>FIELD #n, ...</code> statement, binding one string buffer variable per field. File numbers are allocated automatically, starting at <code>#1</code>, in the order <code>file</code> declarations appear in the source.</p>
+<h3 id="whole-record-write">Whole-record write</h3>
+<pre><code>db[1] = { id: 1, name: &quot;Alice&quot;, score: 95.0 }</code></pre>
+<p>Every declared field must be supplied exactly once. Lowers to one <code>LSET</code> per field — numeric fields are packed first (<code>MKI%</code>/<code>MKL&amp;</code>/<code>MKS!</code>/<code>MKD#</code>), string fields are assigned directly — followed by a single <code>PUT #n, 1</code>. <code>LSET</code> is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).</p>
+<p>A record literal missing a declared field is a <strong>compile-time error</strong> — this is a safety net that real BASIC's raw <code>FIELD</code>/<code>LSET</code>/<code>PUT</code> gives you no equivalent of (see <a href="#partial-record-write">Partial-record write</a> for the deliberately-incomplete form).</p>
+<h3 id="partial-record-write">Partial-record write</h3>
+<pre><code>db[2] = ?{ score: 61.5 }</code></pre>
+<p><code>?{ ... }</code> is <code>{ ... }</code>'s deliberately-incomplete counterpart: any subset of fields is allowed, and unlisted fields are left untouched on disk rather than erroring. <code>?</code> doesn't collide with anything — it isn't tokenized at all outside this position.</p>
+<p>Whether the fields you <em>didn't</em> mention need preserving is fully decided at compile time, by comparing the field names you gave against the record's declared fields — there's no runtime check:</p>
+<ul>
+<li>If the listed fields don't cover every declared field, an implicit <code>GET #n, i</code> is emitted first (so the unlisted fields keep their current on-disk values), then <code>LSET</code> for only the fields given, then <code>PUT #n, i</code>.</li>
+<li>If the listed fields happen to cover every declared field anyway, no <code>GET</code> is emitted — it lowers exactly like a plain <code>{ ... }</code> literal.</li>
+</ul>
+<p>Unlike <code>{ ... }</code>, an unknown field name inside <code>?{ ... }</code> is still a compile-time error — only <em>missing</em> fields are permitted, not <em>misspelled</em> ones.</p>
+<p>Note: <code>GET</code>ing a record number past the current end of a random-access file doesn't error in real BASIC (records can be sparse), but the fields you meant to "preserve" will simply read back as zero/blank the first time a given record number is touched, since there was nothing on disk yet to preserve.</p>
+<h3 id="whole-record-read">Whole-record read</h3>
+<pre><code>let s = db[i]</code></pre>
+<p>Lowers to <code>GET #n, i</code> followed by one unpacking assignment per field (<code>CVI%</code>/<code>CVL&amp;</code>/<code>CVS!</code>/<code>CVD#</code> for numeric fields, <code>RTRIM$</code> for strings), each one written into a scalar named <code>&lt;var&gt;_&lt;field&gt;</code> — e.g. <code>s_id%</code>, <code>s_name$</code>, <code>s_score#</code>. Later references to <code>s.id</code>, <code>s.name</code>, <code>s.score</code> in the source resolve directly to those scalars; no <code>Ident</code> named literally <code>s.id</code> is ever emitted.</p>
+<p>Because BASIC has no user-visible string-concatenation type coercion, writing a numeric field next to a string with <code>+</code> (as in `print "[" + s.id</p>
+<ul>
+<li>"]"<code>) automatically wraps the numeric side in </code>STR$(...)<code>— but only where a record field is actually involved; ordinary BASCAL</code>+` expressions are untouched.</li>
+</ul>
+<p>Once <code>s</code> exists, <code>s.field = value</code> reassigns only the in-memory scalar (<code>s_field</code>) — it does <strong>not</strong> touch the file. Assignment alone never causes disk I/O; see <a href="#writing-a-record-variable-back">Writing a record variable back</a> for the explicit commit step.</p>
+<h3 id="partial-field-update">Partial-field update</h3>
+<pre><code>db[i].field = value</code></pre>
+<p>For a single field, on its own, this is the terse form: it lowers to an implicit <code>GET #n, i</code>, a single <code>LSET</code> for just that field, then <code>PUT #n, i</code>.</p>
+<p>This form does its own <code>GET</code>/<code>PUT</code> every time it appears, so chaining several of them against the same record index costs one full round trip per field. To change several fields on one record with a single <code>GET</code>/<code>PUT</code>, either use <a href="#partial-record-write">a partial-record write</a> (<code>db[i] = ?{ ... }</code>) with several fields at once, or read it into a variable first and write it back once — see below.</p>
+<h3 id="writing-a-record-variable-back">Writing a record variable back</h3>
+<pre><code>let s = db[i]
+s.name  = &quot;Alicia&quot;
+s.score = 99.0
+db[i] = s</code></pre>
+<p><code>db[i] = s</code> — where <code>s</code> was bound by an earlier <code>let s = db[...]</code> — packs every field straight from <code>s</code>'s scalars and issues a single <code>PUT #n, i</code>, regardless of how many of <code>s</code>'s fields were reassigned first. Combined with the fact that <code>s.field = value</code> is pure in-memory assignment, this is the one-<code>GET</code>-one-<code>PUT</code> way to change multiple fields: exactly one <code>GET</code> (from the <code>let</code>) and one <code>PUT</code> (from the write-back) no matter how many fields in between were changed. <code>s</code> must have been read from a <code>file</code> of the same record type as the target; writing an <code>A</code> into a <code>file</code> of <code>B</code>s is a compile-time error.</p>
+<h3 id="fileclose">file.close()</h3>
+<pre><code>db.close()</code></pre>
+<p>Lowers to <code>CLOSE #n</code>.</p>
+<h3 id="downto">downto</h3>
+<pre><code>for i = 3 downto 1
+    ...
+end for</code></pre>
+<p>Sugar for <code>for i = 3 to 1 step -1</code>; ascending <code>for i = A to B</code> is unchanged.</p>
+<h3 id="type-checking">Type checking</h3>
+<p>The lowering pass rejects, at compile time: field names not declared on the record (in a record literal or a <code>.field</code> access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its <code>string(N)</code> field, a string literal assigned to a numeric field (or vice versa), an unknown record type named by <code>file ... as ...</code>, and any reference to a <code>file</code> or <code>let</code>-bound record variable that was never declared.</p>
+<hr />
+<h2 id="data-statements">Data Statements</h2>
+<p><code>DATA</code>, <code>READ</code>, and <code>RESTORE</code> provide an embedded data table read at run time. <code>DATA</code> statements may appear anywhere in the program body; the generated BASIC places them after <code>END</code>.</p>
+<p>From <code>tutorial/09_data.bcl</code>:</p>
+<pre><code>CONST NUM_CAPITALS% = 5
+
+DIM country$(NUM_CAPITALS%)
+DIM capital$(NUM_CAPITALS%)
+
+for i% = 1 to NUM_CAPITALS%
+    READ country$(i%), capital$(i%)
+end for
+
+PRINT &quot;Country         Capital&quot;
+PRINT &quot;--------------- ---------------&quot;
+for i% = 1 to NUM_CAPITALS%
+    PRINT country$(i%) + &quot;        &quot; + capital$(i%)
+end for
+
+&#39; RESTORE rewinds to the first DATA element
+RESTORE
+READ firstCountry$, firstCapital$
+PRINT &quot;First entry re-read: &quot; + firstCountry$ + &quot; -&gt; &quot; + firstCapital$
+
+END
+
+DATA &quot;France&quot;,  &quot;Paris&quot;
+DATA &quot;Germany&quot;, &quot;Berlin&quot;
+DATA &quot;Japan&quot;,   &quot;Tokyo&quot;
+DATA &quot;Brazil&quot;,  &quot;Brasilia&quot;
+DATA &quot;Egypt&quot;,   &quot;Cairo&quot;</code></pre>
+<h3 id="restore">RESTORE</h3>
+<p>Resets the <code>DATA</code> pointer to the beginning (or to a specific line number).</p>
+<pre><code>RESTORE         &#39; rewind to the first DATA
+RESTORE 1000    &#39; rewind to the DATA at line 1000</code></pre>
+<hr />
+<h2 id="miscellaneous-statements">Miscellaneous Statements</h2>
+<h3 id="mid-statement-form">MID$ (statement form)</h3>
+<p>Replaces characters inside a string in place, without allocating a new string.</p>
+<pre><code>mid$(target$, start[, length]) = replacement$</code></pre>
+<p><code>start</code> is 1-based. The optional <code>length</code> caps how many characters are replaced; if omitted, replacement continues to the end of <code>target$</code> or until <code>replacement$</code> runs out of characters, whichever comes first.</p>
+<pre><code>s$ = &quot;Hello World&quot;
+mid$(s$, 7, 5) = &quot;BASIC&quot;   &#39; s$ → &quot;Hello BASIC&quot;
+mid$(s$, 1)    = &quot;Goodbye&quot;  &#39; s$ → &quot;GoodbyeBASIC&quot; (no length cap)</code></pre>
+<p>This is distinct from the <code>mid$()</code> <em>function</em>, which extracts a substring without modifying the original. BASCAL handles the statement form as an ordinary assignment whose left-hand side is <code>mid$(...)</code>.</p>
+<h3 id="swap">SWAP</h3>
+<p>Exchanges the values of two variables — no explicit temporary needed.</p>
+<p>From <code>tutorial/09_data.bcl</code>:</p>
+<pre><code>a% = 42
+b% = 17
+PRINT &quot;Before SWAP: a=&quot; + STR$(a%) + &quot; b=&quot; + STR$(b%)
+SWAP a%, b%
+PRINT &quot;After SWAP:  a=&quot; + STR$(a%) + &quot; b=&quot; + STR$(b%)
+&#39; Before SWAP: a=42 b=17
+&#39; After SWAP:  a=17 b=42</code></pre>
+<p>SWAP works on strings and array elements too:</p>
+<pre><code>SWAP first$, last$               &#39; exchange string variables
+SWAP country$(i%), country$(j%)  &#39; exchange array elements (used in bubble sort)</code></pre>
+<h3 id="randomize">RANDOMIZE</h3>
+<p>Seeds the random number generator. With no argument, the runtime may prompt for a seed or use a default.</p>
+<pre><code>RANDOMIZE           &#39; prompt or default
+RANDOMIZE TIMER     &#39; time-based seed for different sequences each run
+RANDOMIZE 99        &#39; fixed seed for reproducible output</code></pre>
+<h3 id="goto">GOTO</h3>
+<p>Transfers control to a line number. Prefer <code>if</code>, loops, and functions; <code>GOTO</code> is primarily useful for error handlers.</p>
+<pre><code>GOTO 1000</code></pre>
+<h3 id="gosub--return-basic-level">GOSUB / RETURN (BASIC-level)</h3>
+<p>Calls a BASIC subroutine at a line number. Note this is the raw BASIC <code>GOSUB</code>, distinct from the function-call mechanism BASCAL generates internally.</p>
+<pre><code>GOSUB 2000</code></pre>
+<h3 id="on--goto--on--gosub">ON ... GOTO / ON ... GOSUB</h3>
+<p>Computed branch: the integer expression selects the <em>n</em>th target (1-based).</p>
+<pre><code>ON choice% GOTO 100, 200, 300
+ON mode%   GOSUB 500, 600, 700</code></pre>
+<p>If the expression evaluates to 0 or exceeds the number of targets, execution continues with the next statement.</p>
+<h3 id="on-error-goto--resume--error">ON ERROR GOTO / RESUME / ERROR</h3>
+<p>MS-BASIC structured error handling: trap runtime errors, handle them, and resume execution.</p>
+<h4 id="on-error-goto">ON ERROR GOTO</h4>
+<p>Installs an error handler at a given line number. Any subsequent runtime error causes execution to jump to that line.</p>
+<pre><code>on error goto 9000   &#39; jump to line 9000 on any error
+on error goto 0      &#39; disable the error trap</code></pre>
+<p><code>ON ERROR GOTO 0</code> turns off trapping so errors propagate normally.</p>
+<h4 id="resume">RESUME</h4>
+<p>Resumes execution after an error handler has run.</p>
+<pre><code>resume          &#39; retry the statement that caused the error
+resume next     &#39; continue at the statement after the failing one
+resume 9999     &#39; jump to a specific line number</code></pre>
+<p><code>RESUME</code> without an argument retries the failing statement (useful for recoverable errors like "disk full — retry after making space"). <code>RESUME NEXT</code> skips the failing statement.</p>
+<h4 id="error">ERROR</h4>
+<p>Triggers a runtime error with the given code, as if that error occurred naturally. Useful for re-raising an error in a handler or testing.</p>
+<pre><code>error 53     &#39; simulate &quot;file not found&quot;
+error code%  &#39; variable error code</code></pre>
+<h4 id="err-and-erl">ERR and ERL</h4>
+<p>Inside an error handler, the system pseudo-variables <code>err</code> and <code>erl</code> hold the error code and the BASIC line number where the error occurred. Write them without a type suffix; BASIC treats them as numeric:</p>
+<pre><code>on error goto 9000
+&#39; ...
+goto 9999
+&#39; 9000 is the error handler line (reached via ON ERROR GOTO)
+if err = 53 then
+    print &quot;File not found&quot;
+    resume next
+end if
+error err   &#39; re-raise unhandled errors
+&#39; 9999 continues here
+end</code></pre>
+<h4 id="typical-pattern">Typical pattern</h4>
+<pre><code>on error goto errHandler
+open fileName$ for input as #1
+&#39; ... file processing ...
+close #1
+on error goto 0
+goto done
+
+errHandler:
+if err = 53 then
+    print &quot;Cannot open &quot;; fileName$
+    resume next
+else
+    error err
+end if
+
+done:
+end</code></pre>
+<p>Note: error handler labels (<code>errHandler:</code>) are BASIC raw labels. Use <code>goto</code> with numeric line targets or embed the handler inline with a preceding <code>goto</code> that skips past it, as shown above.</p>
+<h3 id="poke">POKE</h3>
+<p>Writes a byte value to a memory address. The address is an integer expression.</p>
+<pre><code>poke &amp;H0400, 3      &#39; write to segment-zero address using hex literal
+poke address%, val%</code></pre>
+<p>Generates <code>POKE address, value</code>. Use with care — writing to arbitrary addresses is hardware-specific and may crash the runtime.</p>
+<h3 id="out">OUT</h3>
+<p>Writes a byte to a hardware I/O port. Syntax mirrors <code>POKE</code>.</p>
+<pre><code>out 888, 3          &#39; send value 3 to port 888 (parallel port control)
+out port%, val%</code></pre>
+<p>Generates <code>OUT port, value</code>. Port numbers and semantics are hardware-specific.</p>
+<h3 id="width">WIDTH</h3>
+<p>Sets the output line width for the screen or an open file channel.</p>
+<pre><code>width 80            &#39; set console line width to 80 characters
+width 40            &#39; narrow console mode
+width #1, 132       &#39; set line width for file channel #1</code></pre>
+<p>The optional <code>#n, </code> prefix targets a file channel; without it, the console width is set. Generates <code>WIDTH cols</code> or <code>WIDTH #n, cols</code>.</p>
+<h3 id="clear">CLEAR</h3>
+<p>Resets all program variables to their zero/empty defaults and closes all open files. Useful at the start of a program or before reinitialising state.</p>
+<pre><code>clear</code></pre>
+<p>Generates <code>CLEAR</code>.</p>
+<h3 id="date-time-timer">DATE<span class="math inline">, <em>T</em><em>I</em><em>M</em><em>E</em></span>, TIMER</h3>
+<p>Read-only system pseudo-variables that return the current date, time, and elapsed time. No parentheses — they are used as plain identifiers.</p>
+<pre><code>print &quot;Today is &quot;; date$         &#39; e.g.  06-11-2026
+print &quot;Time:    &quot;; time$         &#39; e.g.  14:35:02
+randomize timer                  &#39; time-based RNG seed</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th>Name</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>DATE$</code></td>
+<td>Current date as <code>MM-DD-YYYY</code> string</td>
+</tr>
+<tr class="even">
+<td><code>TIME$</code></td>
+<td>Current time as <code>HH:MM:SS</code> string</td>
+</tr>
+<tr class="odd">
+<td><code>TIMER</code></td>
+<td>Seconds since midnight (single-precision float)</td>
+</tr>
+</tbody>
+</table>
+<p>These are passed through verbatim as <code>DATE$</code>, <code>TIME$</code>, and <code>TIMER</code> in the generated BASIC.</p>
+<h3 id="stop">STOP</h3>
+<p>Terminates the program immediately; may invoke the debugger in some implementations.</p>
+<pre><code>STOP</code></pre>
+<h3 id="system">SYSTEM</h3>
+<p>Exits to the operating system immediately.</p>
+<pre><code>SYSTEM</code></pre>
+<h3 id="end">END</h3>
+<p>Signals the end of the main program body. Functions are emitted after <code>END</code> in the generated output.</p>
+<pre><code>END</code></pre>
+<hr />
+<h2 id="dependencies--require-and-import">Dependencies — REQUIRE and IMPORT</h2>
+<p>BASCAL supports multi-file projects through <code>require</code> (and its alias <code>import</code>). Dependencies are declared at the top of the file, before any statements.</p>
+<p>From <code>tutorial/12_require.bcl</code> — a program that uses a statistics library:</p>
+<pre><code>require stats
+
+CONST N% = 8
+DIM scores%(N%)
+
+scores%(0) = 74 : scores%(1) = 91 : scores%(2) = 63 : scores%(3) = 88
+scores%(4) = 55 : scores%(5) = 97 : scores%(6) = 72 : scores%(7) = 84
+
+PRINT &quot;Mean:   &quot; + STR$(mean!(scores%(), N%))
+PRINT &quot;Max:    &quot; + STR$(maximum%(scores%(), N%))
+PRINT &quot;Min:    &quot; + STR$(minimum%(scores%(), N%))
+PRINT &quot;Range:  &quot; + STR$(rangeOf%(scores%(), N%))
+END</code></pre>
+<p>Compile with <code>-L tutorial/lib</code> so that <code>require stats</code> resolves to <code>tutorial/lib/stats.bcl</code>:</p>
+<pre><code>bcc tutorial/12_require.bcl -L tutorial/lib</code></pre>
+<p><code>tutorial/lib/stats.bcl</code> defines <code>mean!</code>, <code>maximum%</code>, <code>minimum%</code>, and <code>rangeOf%</code> — all merged into the single generated <code>.bas</code> output.</p>
+<h3 id="path-resolution">Path Resolution</h3>
+<p>The dot-separated path is converted to a file path by replacing each <code>.</code> with a directory separator and appending <code>.bcl</code>:</p>
+<pre><code>require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
+require stats                       →  stats.bcl</code></pre>
+<p>The compiler searches for the file in:</p>
+<ol type="1">
+<li>The directory containing the current source file</li>
+<li>Additional directories supplied with <code>-L</code> flags (in order)</li>
+</ol>
+<p>Dependencies are resolved recursively. A file is loaded at most once per compilation (circular dependencies are silently ignored after the first load).</p>
+<h3 id="function-merging">Function Merging</h3>
+<p>All functions from a required file (and its transitive dependencies) are merged into the generated output. Duplicate function names are rejected with a diagnostic error.</p>
+<h3 id="module-conventions">Module Conventions</h3>
+<p>By convention, library modules (files loaded via <code>require</code>) should:</p>
+<ul>
+<li>Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements</li>
+<li>Not contain a <code>program</code> declaration</li>
+<li>Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></li>
+</ul>
+<hr />
+<h2 id="suite-common">Suite COMMON</h2>
+<p>In classic BASCOM programs, multiple programs chained together with <code>CHAIN</code> share variables through <code>COMMON</code> declarations. For this to work correctly, every program in the chain must declare <strong>identical</strong> <code>COMMON</code> lists — the variable positions in the <code>COMMON</code> block must match exactly.</p>
+<p>BASCAL coordinates <code>COMMON</code> through suite files. A suite file contains only <code>common</code> declarations; programs that belong to the suite reference it with a <code>suite</code> clause on their <code>program</code> declaration.</p>
+<h3 id="suite-file">Suite File</h3>
+<p>A suite file is a <code>.bcl</code> file containing only <code>common</code> declarations (and comments). The file name, without extension, is the suite name.</p>
+<p>From <code>tutorial/13_suite/shared.bcl</code>:</p>
+<pre><code>/*
+ * Suite file for Tutorial 13 — COMMON / CHAIN.
+ *
+ * Every program that begins with &quot;program name suite shared&quot; receives
+ * an identical COMMON block at the top of its generated BASIC, so the
+ * listed variables survive a CHAIN to the next program.
+ */
+common count%, label$</code></pre>
+<p>Rules for suite files:</p>
+<ul>
+<li>Only <code>common</code> declarations, blank lines, and comments are allowed.</li>
+<li><code>require</code>, <code>function</code>, executable statements, and <code>program</code> declarations are all rejected with a diagnostic error.</li>
+<li>The suite file must contain at least one <code>common</code> declaration.</li>
+</ul>
+<h3 id="common-declaration">COMMON Declaration</h3>
+<pre><code>common var1%, var2$, arr%()</code></pre>
+<p>Lists the variables that participate in the <code>COMMON</code> block. Array names are written with empty parentheses <code>()</code>.</p>
+<p>Multiple <code>common</code> declarations are allowed; each generates a separate <code>COMMON</code> line in the output:</p>
+<pre><code>common score%, level%, playerName$
+common hiScore%</code></pre>
+<p>Generates:</p>
+<pre><code>COMMON score%, level%, playerName$
+COMMON hiScore%</code></pre>
+<h3 id="program-declaration-with-suite">Program Declaration with Suite</h3>
+<pre><code>program start suite shared</code></pre>
+<p>When a suite name is present, the compiler:</p>
+<ol type="1">
+<li>Searches for <code>shared.bcl</code> in the source file's directory (then <code>-L</code> paths).</li>
+<li>Validates that the suite file contains only <code>common</code> declarations.</li>
+<li>Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</li>
+</ol>
+<h3 id="using-the-suite">Using the Suite</h3>
+<p>From <code>tutorial/13_suite/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
+<p><strong><code>shared.bcl</code></strong> (suite file):</p>
+<pre><code>common count%, label$</code></pre>
+<p><strong><code>start.bcl</code></strong> (program 1):</p>
+<pre><code>program start suite shared
+
+label$ = &quot;Counter demo&quot;
+count% = 0
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+
+PRINT &quot;Initialised: &quot; + label$
+PRINT &quot;Count after 3 increments: &quot; + STR$(count%)
+
+/* CHAIN &quot;show.bas&quot; */
+END</code></pre>
+<p><strong><code>show.bcl</code></strong> (program 2):</p>
+<pre><code>program show suite shared
+
+PRINT &quot;Label:  &quot; + label$
+PRINT &quot;Count:  &quot; + STR$(count%)
+END</code></pre>
+<p>Both <code>start.bas</code> and <code>show.bas</code> begin with:</p>
+<pre><code>COMMON count%, label$</code></pre>
+<p>ensuring that <code>CHAIN "show.bas"</code> from <code>start.bas</code> leaves the variables in the correct slots.</p>
+<h3 id="restrictions-2">Restrictions</h3>
+<ul>
+<li><code>common</code> is illegal everywhere except in suite files. Using <code>common</code> in a regular program or library module is a compile error.</li>
+<li>A <code>program</code> declaration is illegal in library modules (files loaded via <code>require</code>).</li>
+<li>If the named suite file does not exist, the program compiles without a <code>COMMON</code> block (no error). This allows incremental development.</li>
+</ul>
+<hr />
+<h2 id="generated-basic-shape">Generated BASIC Shape</h2>
+<p>Understanding how BASCAL lowers its constructs helps when reading generated output or debugging.</p>
+<h3 id="header">Header</h3>
+<p>Every generated file begins with:</p>
+<pre><code>&#39; BASCAL generated BASIC
+&#39; Functions are lowered to global variables, labels, and GOSUB</code></pre>
+<h3 id="common-block">COMMON Block</h3>
+<p>If a suite is declared, <code>COMMON</code> lines appear before the header comment.</p>
+<h3 id="line-numbers">Line Numbers</h3>
+<p>By default, only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) receive line numbers. All other lines are unnumbered. Use <code>--line-numbers</code> to number every line.</p>
+<h3 id="if-lowering">If Lowering</h3>
+<pre><code>if x% &gt; 0 then
+    PRINT &quot;positive&quot;
+end if</code></pre>
+<p>Becomes:</p>
+<pre><code>IF (x% &gt; 0) = 0 THEN GOTO 10
+    PRINT &quot;positive&quot;
+10 REM END IF</code></pre>
+<p>The condition is inverted with <code>= 0</code> rather than <code>NOT</code> to avoid bitwise semantics (see <a href="#operators-and-expressions">Operators</a>).</p>
+<h3 id="while-lowering">While Lowering</h3>
+<pre><code>p% = 1
+while p% &lt; 100
+    PRINT STR$(p%)
+    p% = p% * 2
+end while</code></pre>
+<p>Becomes:</p>
+<pre><code>p% = 1
+10 IF (p% &lt; 100) = 0 THEN GOTO 20
+    PRINT STR$(p%)
+    p% = p% * 2
+    GOTO 10
+20 REM END WHILE</code></pre>
+<h3 id="do-lowering">Do Lowering</h3>
+<pre><code>do while k% &lt;= 3
+    PRINT STR$(k%)
+    k% = k% + 1
+end do</code></pre>
+<p>Becomes:</p>
+<pre><code>10 IF (k% &lt;= 3) = 0 THEN GOTO 20
+    PRINT STR$(k%)
+    k% = k% + 1
+    GOTO 10
+20 REM END DO</code></pre>
+<h3 id="for-lowering">For Lowering</h3>
+<p>BASCAL emits native <code>FOR</code> / <code>NEXT</code>, which BASIC runtimes handle efficiently. The BASCAL <code>end for</code> (or bare <code>end</code>) is stripped; the BASIC <code>NEXT</code> is emitted by the compiler:</p>
+<pre><code>FOR i% = 1 TO 5
+    PRINT STR$(i%) + &quot;^2 = &quot; + STR$(i% * i%)
+NEXT i%</code></pre>
+<h3 id="function-lowering">Function Lowering</h3>
+<pre><code>function clamp%(value%, lo%, hi%)
+    return max%(lo%, min%(value%, hi%))
+end function
+
+result% = clamp%(15, 1, 10)</code></pre>
+<p>The calls to <code>max%</code> and <code>min%</code> inside <code>clamp%</code> are also lowered to GOSUBs. The outermost call produces:</p>
+<pre><code>clamp_value% = 15
+clamp_lo%    = 1
+clamp_hi%    = 10
+GOSUB 100
+result% = clamp_result%
+...
+END
+
+&#39; function clamp%(value%, lo%, hi%)
+100 &#39; (lowered body — calls max% and min% via GOSUB)
+    clamp_result% = ...
+    RETURN
+&#39; end function clamp%</code></pre>
+<h3 id="procedure-lowering">Procedure Lowering</h3>
+<p>Procedures follow the same GOSUB pattern as functions but have no result variable:</p>
+<pre><code>procedure printScore(label$, score%)
+    PRINT label$ + &quot;: &quot; + STR$(score%)
+end procedure
+
+printScore(&quot;Alice&quot;, 91)</code></pre>
+<p>Lowers to:</p>
+<pre><code>printscore_label$ = &quot;Alice&quot;
+printscore_score% = 91
+GOSUB 200
+...
+END
+
+&#39; procedure printScore(label$, score%)
+200 PRINT (printscore_label$ + &quot;: &quot;) + STR$(printscore_score%)
+    RETURN
+&#39; end procedure printScore</code></pre>
+<p>There is no <code>printscore_result</code> variable. A bare <code>return</code> inside a procedure compiles to plain <code>RETURN</code>.</p>
+<h3 id="select-case-lowering">Select Case Lowering</h3>
+<p><code>SELECT CASE</code> is lowered to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCC_T1%</code>) to avoid re-evaluation.</p>
+<h3 id="exit-statements">Exit Statements</h3>
+<ul>
+<li><code>exit for</code> → <code>EXIT FOR</code> (native FreeBASIC / QB extension)</li>
+<li><code>exit while</code> → <code>GOTO end_label</code></li>
+<li><code>exit do</code> → <code>GOTO end_label</code></li>
+</ul>
+<hr />
+<h2 id="command-line-reference">Command-Line Reference</h2>
+<pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
+              [--line-numbers] [--clean | -c] [--binary | -b]</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th>Flag</th>
+<th>Short</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>-o output.bas</code></td>
+<td></td>
+<td>Output file path. Default: source path with <code>.bas</code> extension in the same directory.</td>
+</tr>
+<tr class="even">
+<td><code>-L dir</code></td>
+<td></td>
+<td>Add a directory to the library search path. Repeatable.</td>
+</tr>
+<tr class="odd">
+<td><code>-l name</code></td>
+<td></td>
+<td>Name a library (reserved).</td>
+</tr>
+<tr class="even">
+<td><code>--line-numbers</code></td>
+<td></td>
+<td>Number every output line, not just branch targets.</td>
+</tr>
+<tr class="odd">
+<td><code>--clean</code></td>
+<td><code>-c</code></td>
+<td>Recompile even if the output is already up to date.</td>
+</tr>
+<tr class="even">
+<td><code>--binary</code></td>
+<td><code>-b</code></td>
+<td>Invoke <code>fbc</code> after compilation to produce a binary. The binary is placed in <code>tmp/</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="up-to-date-check">Up-to-Date Check</h3>
+<p>Without <code>--clean</code>, the compiler skips recompilation if the output <code>.bas</code> file is newer than all input <code>.bcl</code> files. With <code>--binary</code>, a second up-to-date check covers the compiled binary.</p>
+<h3 id="library-search-order">Library Search Order</h3>
+<ol type="1">
+<li>The directory containing the primary source file (always first).</li>
+<li>Paths supplied with <code>-L</code>, in the order given.</li>
+</ol>
+<p>Multiple <code>-L</code> flags are supported:</p>
+<pre><code>bcc tutorial/12_require.bcl -L tutorial/lib
+bcc main.bcl -L libs/sort -L libs/string</code></pre>
+<hr />
+<h2 id="statement-quick-reference">Statement Quick Reference</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Statement</th>
+<th>Syntax</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>BEEP</code></td>
+<td><code>BEEP</code></td>
+<td>Sound the system bell</td>
+</tr>
+<tr class="even">
+<td><code>CLEAR</code></td>
+<td><code>CLEAR</code></td>
+<td>Reset all variables and close all files</td>
+</tr>
+<tr class="odd">
+<td><code>CLS</code></td>
+<td><code>CLS</code></td>
+<td>Clear the screen</td>
+</tr>
+<tr class="even">
+<td><code>CLOSE</code></td>
+<td><code>CLOSE #n</code></td>
+<td>Close file channel <em>n</em></td>
+</tr>
+<tr class="odd">
+<td><code>COLOR</code></td>
+<td><code>COLOR fg[, bg]</code></td>
+<td>Set foreground/background colour</td>
+</tr>
+<tr class="even">
+<td><code>COMMON</code></td>
+<td><code>common var[, ...]</code></td>
+<td>Declare suite COMMON variables (suite files only)</td>
+</tr>
+<tr class="odd">
+<td><code>CONST</code></td>
+<td><code>CONST name = expr</code></td>
+<td>Declare a named constant</td>
+</tr>
+<tr class="even">
+<td><code>DATA</code></td>
+<td><code>DATA val[, ...]</code></td>
+<td>Embed literal data values</td>
+</tr>
+<tr class="odd">
+<td><code>DIM</code></td>
+<td><code>DIM name[(d1[, d2, ...])]</code></td>
+<td>Declare a variable or 1-D/multi-D array</td>
+</tr>
+<tr class="even">
+<td><code>ERASE</code></td>
+<td><code>ERASE arr[, ...]</code></td>
+<td>Free memory used by arrays</td>
+</tr>
+<tr class="odd">
+<td><code>DO</code></td>
+<td><code>DO [WHILE/UNTIL cond]</code> … <code>END DO</code></td>
+<td>Conditional loop</td>
+</tr>
+<tr class="even">
+<td><code>END</code></td>
+<td><code>END</code></td>
+<td>End of program</td>
+</tr>
+<tr class="odd">
+<td><code>EXIT DO</code></td>
+<td><code>EXIT DO</code></td>
+<td>Exit enclosing DO loop</td>
+</tr>
+<tr class="even">
+<td><code>EXIT FOR</code></td>
+<td><code>EXIT FOR</code></td>
+<td>Exit enclosing FOR loop</td>
+</tr>
+<tr class="odd">
+<td><code>EXIT WHILE</code></td>
+<td><code>EXIT WHILE</code></td>
+<td>Exit enclosing WHILE loop</td>
+</tr>
+<tr class="even">
+<td><code>FOR</code></td>
+<td><code>FOR v = start TO end [STEP s]</code> … <code>END FOR</code></td>
+<td>Counted loop</td>
+</tr>
+<tr class="odd">
+<td><code>FUNCTION</code></td>
+<td><code>FUNCTION name%(params)</code> … <code>END FUNCTION</code></td>
+<td>Define a function with a return value</td>
+</tr>
+<tr class="even">
+<td><code>GOSUB</code></td>
+<td><code>GOSUB lineno</code></td>
+<td>Call BASIC subroutine</td>
+</tr>
+<tr class="odd">
+<td><code>GOTO</code></td>
+<td><code>GOTO lineno</code></td>
+<td>Unconditional branch</td>
+</tr>
+<tr class="even">
+<td><code>IF</code></td>
+<td><code>IF cond THEN</code> … [<code>ELSEIF</code> …] [<code>ELSE</code> …] <code>END IF</code></td>
+<td>Conditional block</td>
+</tr>
+<tr class="odd">
+<td><code>INPUT</code></td>
+<td><code>INPUT [prompt;] var[, ...]</code></td>
+<td>Read from keyboard</td>
+</tr>
+<tr class="even">
+<td><code>KILL</code></td>
+<td><code>KILL file$</code></td>
+<td>Delete a file</td>
+</tr>
+<tr class="odd">
+<td><code>INPUT #</code></td>
+<td><code>INPUT #n, var[, ...]</code></td>
+<td>Read from file</td>
+</tr>
+<tr class="even">
+<td><code>LET</code></td>
+<td><code>LET var = expr</code></td>
+<td>Assignment (keyword optional)</td>
+</tr>
+<tr class="odd">
+<td><code>MID$</code> (stmt)</td>
+<td><code>MID$(str$, start[, len]) = repl$</code></td>
+<td>In-place substring replacement</td>
+</tr>
+<tr class="even">
+<td><code>LINE INPUT</code></td>
+<td><code>LINE INPUT #n, var$</code></td>
+<td>Read full line from file</td>
+</tr>
+<tr class="odd">
+<td><code>LOCATE</code></td>
+<td><code>LOCATE row, col</code></td>
+<td>Position cursor</td>
+</tr>
+<tr class="even">
+<td><code>LPRINT</code></td>
+<td><code>LPRINT expr[, ...]</code></td>
+<td>Print to printer</td>
+</tr>
+<tr class="odd">
+<td><code>NAME</code></td>
+<td><code>NAME old$ AS new$</code></td>
+<td>Rename a file</td>
+</tr>
+<tr class="even">
+<td><code>OPTION BASE</code></td>
+<td><code>OPTION BASE 0|1</code></td>
+<td>Set default array lower bound</td>
+</tr>
+<tr class="odd">
+<td><code>ON...GOTO</code></td>
+<td><code>ON expr GOTO n1, n2, ...</code></td>
+<td>Computed GOTO</td>
+</tr>
+<tr class="even">
+<td><code>ON...GOSUB</code></td>
+<td><code>ON expr GOSUB n1, n2, ...</code></td>
+<td>Computed GOSUB</td>
+</tr>
+<tr class="odd">
+<td><code>ON ERROR GOTO</code></td>
+<td><code>ON ERROR GOTO n</code></td>
+<td>Install error handler at line <em>n</em> (<code>0</code> = disable)</td>
+</tr>
+<tr class="even">
+<td><code>ERROR</code></td>
+<td><code>ERROR n</code></td>
+<td>Trigger runtime error code <em>n</em></td>
+</tr>
+<tr class="odd">
+<td><code>RESUME</code></td>
+<td><code>RESUME</code> / <code>RESUME NEXT</code> / <code>RESUME n</code></td>
+<td>Resume after error handler</td>
+</tr>
+<tr class="even">
+<td><code>OPEN</code></td>
+<td><code>OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n</code></td>
+<td>Open file</td>
+</tr>
+<tr class="odd">
+<td><code>OUT</code></td>
+<td><code>OUT port, val</code></td>
+<td>Write byte to hardware I/O port</td>
+</tr>
+<tr class="even">
+<td><code>POKE</code></td>
+<td><code>POKE address, val</code></td>
+<td>Write byte to memory address</td>
+</tr>
+<tr class="odd">
+<td><code>PRINT</code></td>
+<td><code>PRINT expr[, ...]</code></td>
+<td>Print to screen</td>
+</tr>
+<tr class="even">
+<td><code>PROCEDURE</code></td>
+<td><code>PROCEDURE name(params)</code> … <code>END PROCEDURE</code></td>
+<td>Define a procedure (no return value)</td>
+</tr>
+<tr class="odd">
+<td><code>PRINT #</code></td>
+<td><code>PRINT #n, expr[, ...]</code></td>
+<td>Print to file</td>
+</tr>
+<tr class="even">
+<td><code>PRINT USING</code></td>
+<td><code>PRINT USING fmt$; expr[; ...]</code></td>
+<td>Formatted print (also <code>LPRINT USING</code>, <code>PRINT #n, USING</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>RANDOMIZE</code></td>
+<td><code>RANDOMIZE [seed]</code></td>
+<td>Seed random number generator</td>
+</tr>
+<tr class="even">
+<td><code>READ</code></td>
+<td><code>READ var[, ...]</code></td>
+<td>Read from DATA stream</td>
+</tr>
+<tr class="odd">
+<td><code>REQUIRE</code></td>
+<td><code>require path.symbol</code></td>
+<td>Load dependency module</td>
+</tr>
+<tr class="even">
+<td><code>RESTORE</code></td>
+<td><code>RESTORE [lineno]</code></td>
+<td>Reset DATA pointer</td>
+</tr>
+<tr class="odd">
+<td><code>RETURN</code></td>
+<td><code>RETURN expr</code> / <code>RETURN</code></td>
+<td>Return value from function; bare form exits a procedure early</td>
+</tr>
+<tr class="even">
+<td><code>SELECT CASE</code></td>
+<td><code>SELECT CASE expr</code> … <code>END SELECT</code></td>
+<td>Multi-way branch</td>
+</tr>
+<tr class="odd">
+<td><code>STOP</code></td>
+<td><code>STOP</code></td>
+<td>Stop program execution</td>
+</tr>
+<tr class="even">
+<td><code>SWAP</code></td>
+<td><code>SWAP a, b</code></td>
+<td>Exchange two variable values</td>
+</tr>
+<tr class="odd">
+<td><code>SYSTEM</code></td>
+<td><code>SYSTEM</code></td>
+<td>Exit to operating system</td>
+</tr>
+<tr class="even">
+<td><code>WHILE</code></td>
+<td><code>WHILE cond</code> … <code>END WHILE</code></td>
+<td>Condition-at-top loop</td>
+</tr>
+<tr class="odd">
+<td><code>WIDTH</code></td>
+<td><code>WIDTH [#n,] cols</code></td>
+<td>Set line width for console or file channel</td>
+</tr>
+<tr class="even">
+<td><code>WRITE #</code></td>
+<td><code>WRITE #n, expr[, ...]</code></td>
+<td>Write to file (quoted format)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-pseudo-variables-no-parentheses">System pseudo-variables (no parentheses)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Name</th>
+<th>Type</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>DATE$</code></td>
+<td>String</td>
+<td>Current date as <code>MM-DD-YYYY</code></td>
+</tr>
+<tr class="even">
+<td><code>TIME$</code></td>
+<td>String</td>
+<td>Current time as <code>HH:MM:SS</code></td>
+</tr>
+<tr class="odd">
+<td><code>TIMER</code></td>
+<td>Single</td>
+<td>Seconds elapsed since midnight</td>
+</tr>
+</tbody>
+</table>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+</body>
+</html>

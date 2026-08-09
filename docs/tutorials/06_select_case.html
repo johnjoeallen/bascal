@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Select Case — BASCAL Tutorials</title>
+<meta name="description" content="SELECT CASE in BASCAL -- value, list, range, and IS comparison patterns, lowered to an IF/GOTO dispatch chain.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>06. Select Case</h1>
+    <p class="tagline">One expression, evaluated once, tested against exact values, lists, ranges, and IS comparisons.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual.html">Manual</a>
+    <a href="./" class="current">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Select Case</p>
+
+  <div class="prose">
+<p><code>select case</code> evaluates its expression once, stores it in a compiler-
+generated temporary, and dispatches against each <code>case</code> clause in
+order. Patterns can be an exact value, a comma-separated list, an inclusive
+<code>lo to hi</code> range, or an <code>is &lt;op&gt; value</code> comparison; <code>case
+else</code> is the default and must come last. See the
+<a href="../#control-flow">control-flow comparison</a> on the homepage for the
+GOTO dispatch chain this compiles to.</p>
+  </div>
+
+    <div class="snippet">
+      <h3>IS comparisons</h3>
+      <pre><code>select case temp%
+case is &lt; 0
+    print &quot;Below freezing (&quot;; temp%; &quot;deg)&quot;
+case is &lt; 10
+    print &quot;Cold (&quot;; temp%; &quot;deg)&quot;
+case is &lt; 20
+    print &quot;Cool (&quot;; temp%; &quot;deg)&quot;
+case else
+    print &quot;Hot (&quot;; temp%; &quot;deg)&quot;
+end select</code></pre>
+    </div>
+
+
+  <p class="lede">
+    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl">tutorial/06_select_case.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>.
+  </p>
+
+  <p class="crumbs">
+    <a href="05_loops.html">&larr; 05. Loops</a> &nbsp;&middot;&nbsp; <a href="07_functions.html">07. Functions &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>

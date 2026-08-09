@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrays — BASCAL Tutorials</title>
+<meta name="description" content="Declaring and indexing arrays in BASCAL, and the arr%() call-site convention for passing them to functions.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>08. Arrays</h1>
+    <p class="tagline">dim for 1-D and N-D arrays, and passing them into functions.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual.html">Manual</a>
+    <a href="./" class="current">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Arrays</p>
+
+  <div class="prose">
+<p><code>dim name%(size)</code> declares a 1-D array of <code>size + 1</code> elements,
+indexed <code>0..size</code>; <code>dim name%(rows, cols)</code> declares a 2-D array, and
+more dimensions are allowed. To pass an array into a function, the parameter
+is just the plain variable name (<code>arr%</code>, not <code>arr%()</code>); at the call
+site you write <code>arr%()</code> to signal that an array is being passed.</p>
+  </div>
+
+    <div class="snippet">
+      <h3>Insertion sort, in place</h3>
+      <pre><code>function insertionSort%(arr%, count%)
+    for i% = 1 to count% - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% &gt;= 0 and arr%(j%) &gt; key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>Calling it, and a 2-D array</h3>
+      <pre><code>dim data%(N%)
+&#x27; ... populate data%(0..N%-1) ...
+dummy% = insertionSort%(data%(), N%)
+
+dim identity%(2, 2)
+identity%(1, 1) = 1</code></pre>
+    </div>
+
+
+  <p class="lede">
+    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bcl">tutorial/08_arrays.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bas">tutorial/08_arrays.bas</a>.
+  </p>
+
+  <p class="crumbs">
+    <a href="07_functions.html">&larr; 07. Functions</a> &nbsp;&middot;&nbsp; <a href="09_data.html">09. Data, Read, Restore, Swap &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>

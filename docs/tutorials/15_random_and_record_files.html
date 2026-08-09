@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Random-Access and Record Files — BASCAL Tutorials</title>
+<meta name="description" content="Random-access file I/O in BASCAL, hand-written and then again with the record/file syntax.">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>15. Random-Access and Record Files</h1>
+    <p class="tagline">Classic FIELD/GET/PUT file I/O, and the record/file syntax that generates it for you.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual.html">Manual</a>
+    <a href="./" class="current">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Random-Access and Record Files</p>
+
+  <div class="prose">
+<p>This tutorial writes one program twice: first with classic random-access
+primitives (<code>OPEN ... FOR RANDOM</code>, <code>FIELD</code>, <code>GET</code>/<code>PUT</code>,
+<code>LSET</code>, <code>MKx</code>/<code>CVx</code>), then again with BASCAL's typed
+<code>record</code>/<code>file</code> syntax, which generates exactly that primitive code for
+you. The full seven-way, side-by-side breakdown — including the
+<code>?{ ... }</code> partial-write syntax and why it's spelled that way — lives on
+the <a href="../#tutorial">homepage</a>; this page just shows where the two
+halves of the file meet.</p>
+  </div>
+
+    <div class="snippet">
+      <h3>Declaring the record shape</h3>
+      <p class="note">Replaces a hand-computed byte width and a matching FIELD statement.</p>
+      <pre><code>record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file db as Student = open(&quot;students.dat&quot;)</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>A partial update, still one GET and one PUT</h3>
+      <p class="note">See the homepage for why this is spelled ?{ ... }.</p>
+      <pre><code>db[1] = ?{ name: &quot;Alice Smith&quot;, score: 91.0 }</code></pre>
+    </div>
+
+
+  <p class="lede">
+    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl">tutorial/15_random_and_record_files.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bas">tutorial/15_random_and_record_files.bas</a>.
+  </p>
+
+  <p class="crumbs">
+    <a href="14_procedures.html">&larr; 14. Procedures</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+</body>
+</html>
