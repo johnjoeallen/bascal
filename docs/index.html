@@ -407,7 +407,7 @@ db[3] = carol</code></pre>
     </div>
 
     <p class="lede">
-      Nothing above runs slower — every DSL line lowers to exactly the same
+      Nothing above runs slower — every DSL line transpiles to exactly the same
       <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code>
       calls shown on the left, generated for you instead of typed and kept
       in sync by hand. See the
@@ -588,7 +588,7 @@ end do</code></pre>
     </div>
 
     <p class="lede">
-      <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> lowers to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
+      <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
       <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-lowering">Condition Lowering</a>
       note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>.
     </p>
