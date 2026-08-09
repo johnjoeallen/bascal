@@ -1390,14 +1390,43 @@ writing a numeric field next to a string with `+` (as in `print "[" + s.id
 a record field is actually involved; ordinary BASCAL `+` expressions are
 untouched.
 
+Once `s` exists, `s.field = value` reassigns only the in-memory scalar
+(`s_field`) — it does **not** touch the file. Assignment alone never causes
+disk I/O; see [Writing a record variable back](#writing-a-record-variable-back)
+for the explicit commit step.
+
 ### Partial-field update
 
 ```
 db[i].field = value
 ```
 
-Lowers to an implicit `GET #n, i`, a single `LSET` for just that field, then
-`PUT #n, i`.
+For a single field, on its own, this is the terse form: it lowers to an
+implicit `GET #n, i`, a single `LSET` for just that field, then `PUT #n, i`.
+
+This form does its own `GET`/`PUT` every time it appears, so chaining several
+of them against the same record index costs one full round trip per field.
+To change several fields on one record with a single `GET`/`PUT`, read it
+into a variable first and write it back once — see below.
+
+### Writing a record variable back
+
+```
+let s = db[i]
+s.name  = "Alicia"
+s.score = 99.0
+db[i] = s
+```
+
+`db[i] = s` — where `s` was bound by an earlier `let s = db[...]` — packs
+every field straight from `s`'s scalars and issues a single `PUT #n, i`,
+regardless of how many of `s`'s fields were reassigned first. Combined with
+the fact that `s.field = value` is pure in-memory assignment, this is the
+one-`GET`-one-`PUT` way to change multiple fields: exactly one `GET` (from
+the `let`) and one `PUT` (from the write-back) no matter how many fields
+in between were changed. `s` must have been read from a `file` of the same
+record type as the target; writing an `A` into a `file` of `B`s is a
+compile-time error.
 
 ### file.close()
 

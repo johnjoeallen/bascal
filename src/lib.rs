@@ -624,6 +624,57 @@ end
     }
 
     #[test]
+    fn record_batched_field_mutation_is_one_get_one_put() {
+        // `s.field = value` after `let s = db[i]` must touch only the
+        // in-memory scalar (no GET/PUT); the write-back happens exactly
+        // once, at `db[i] = s`.
+        let source = r#"record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file db as Student = open("students.dat")
+
+let s = db[1]
+s.name = "Alicia"
+s.score = 99.0
+db[1] = s
+
+end
+"#;
+        let output = compile_source("batch.bcl", source).expect("should compile");
+        assert_eq!(output.matches("GET #1").count(), 1, "exactly one GET for the whole batch");
+        assert_eq!(output.matches("PUT #1").count(), 1, "exactly one PUT for the whole batch");
+        assert!(output.contains(r#"s_name$ = "Alicia""#), "field mutation is a plain in-memory assignment");
+        assert!(output.contains("s_score# = 99"), "field mutation is a plain in-memory assignment");
+        assert!(output.contains("LSET db_idbuf$ = MKI%(s_id%)"));
+        assert!(output.contains("LSET db_namebuf$ = s_name$"));
+        assert!(output.contains("LSET db_scorebuf$ = MKD#(s_score#)"));
+    }
+
+    #[test]
+    fn record_write_back_rejects_mismatched_record_type() {
+        let source = r#"record A
+    n: int16
+end record
+
+record B
+    n: int16
+end record
+
+file fa as A = open("a.dat")
+file fb as B = open("b.dat")
+
+let s = fa[1]
+fb[1] = s
+end
+"#;
+        let err = compile_source("mismatch.bcl", source).expect_err("should reject type mismatch");
+        assert!(err.iter().any(|d| d.message.contains("holds `B` records")));
+    }
+
+    #[test]
     fn record_rejects_unknown_field_in_literal() {
         let source = r#"record A
     n: int16

@@ -432,6 +432,20 @@ impl Lowerer {
             self.lower_whole_read(name, var, index, out);
             return;
         }
+        // `db[i] = s` — write a `let`-bound record variable back in one shot
+        // (one PUT), as opposed to `db[i] = { ... }` which writes a fresh
+        // literal. Only takes this path when `s` is actually a known
+        // record variable; otherwise falls through to the generic case
+        // below, where a bare `Expr::FileIndex` target is rejected.
+        if let (Expr::FileIndex { var, index }, Expr::Ident(record_var)) = (&target, &value) {
+            if self.record_vars.contains_key(&record_var.name.to_ascii_lowercase()) {
+                let var = var.clone();
+                let index = (**index).clone();
+                let record_var = record_var.clone();
+                self.lower_whole_write_from_var(var, index, record_var, out);
+                return;
+            }
+        }
         if let Expr::FieldAccess { base, field } = &target {
             if let Expr::FileIndex { var, index } = base.as_ref() {
                 let var = var.clone();
@@ -489,6 +503,55 @@ impl Lowerer {
             let value_expr = self.rewrite_expr(value_expr).0;
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, value_expr);
+            out.push(Statement::Lset { var: buf_ident, value: packed });
+        }
+
+        out.push(Statement::Put { channel: Expr::Integer(channel), record: Some(index), var: None });
+    }
+
+    /// `db[i] = s` where `s` was bound by an earlier `let s = db[j]`. Packs
+    /// every field straight from `s`'s already-unpacked scalars (`s_field`)
+    /// and issues a single `PUT` — this is the batched write-back path: any
+    /// number of prior `s.field = value` assignments (which only touch the
+    /// in-memory scalar, see `resolve_field_access`) are committed in one
+    /// round trip here, instead of one `GET`+`PUT` per field.
+    fn lower_whole_write_from_var(
+        &mut self,
+        var: BasicIdent,
+        index: Expr,
+        record_var: BasicIdent,
+        out: &mut Vec<Statement>,
+    ) {
+        let index = self.rewrite_expr(index).0;
+        let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
+
+        let record_var_key = record_var.name.to_ascii_lowercase();
+        let Some(record_var_type) = self.record_vars.get(&record_var_key).cloned() else {
+            // lower_assignment only takes this path when the key exists.
+            return;
+        };
+        if !record_var_type.eq_ignore_ascii_case(&type_name) {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "cannot write `{}` (a `{record_var_type}`) into `{}`, which holds `{type_name}` records",
+                    record_var.name, var.name
+                ),
+            ));
+            return;
+        }
+
+        out.push(Statement::Raw(format!(
+            "' {}[...] = {}  (write back a let-bound record)",
+            var.name, record_var.name
+        )));
+
+        for f in &rec.fields {
+            let scalar_name =
+                format!("{}_{}", record_var.name.to_ascii_lowercase(), f.name.to_ascii_lowercase());
+            let scalar_ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&f.ty)) };
+            let buf_ident = self.buffer_ident(&var.name, &f.name);
+            let packed = pack_expr(&f.ty, Expr::Ident(scalar_ident));
             out.push(Statement::Lset { var: buf_ident, value: packed });
         }
 

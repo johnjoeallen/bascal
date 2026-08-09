@@ -27,6 +27,15 @@
 //
 // <file>[<n>].<field> = value
 //   Partial update: reads record n, rewrites just one field, writes it back.
+//   Own GET+PUT every time — fine for a single field, wasteful if chained.
+//
+// let <var> = <file>[<n>]
+// <var>.<field> = value  (any number of times)
+// <file>[<n>] = <var>
+//   Batched update: the `let` does one GET; each `<var>.<field> = value` is
+//   a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
+//   packs every field from `<var>` and does one PUT. One GET, one PUT, no
+//   matter how many fields changed in between.
 //
 // for <var> = <A> downto <B> ... end for
 //   Sugar for `for <var> = <A> to <B> step -1`.
@@ -66,6 +75,15 @@ end for
 
 // Bob just scraped a pass on re-mark
 db[2].score = 61.5
+
+/* ---- Batched update: change several fields with one GET and one PUT ---- */
+
+// Carol changed her name and improved her score — read once, mutate the
+// in-memory record twice, write back once.
+let carol = db[3]
+carol.name  = "Carol Jones"
+carol.score = 88.0
+db[3] = carol
 
 /* ---- Verify the update ---- */
 
