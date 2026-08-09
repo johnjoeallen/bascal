@@ -1,9 +1,9 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
 40 ' 
-50 ' BASCAL supports multi-line block IF statements.  The compiler lowers
+50 ' BASCAL supports multi-line block IF statements.  The compiler transpiles
 60 ' them to numeric goto targets so the generated BASIC is compatible with
 70 ' 1980s BASCOM.  You never write line numbers yourself.
 80 ' 

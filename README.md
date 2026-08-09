@@ -21,7 +21,7 @@ larger programs practical:
 - `record` / `file` DSL: typed fixed-layout records (`int16`, `int32`,
   `float32`, `float64`, `string(N)`) with `file db as T = open(path)`,
   `db[i] = { ... }` / `db[i] = ?{ ... }` (partial), `let s = db[i]`,
-  `db[i].field = value`, `db[i] = s`, and `db.close()`, all lowered to plain
+  `db[i].field = value`, `db[i] = s`, and `db.close()`, all transpiled to plain
   `FIELD`/`PUT`/`GET`/`LSET`/`MKx`/`CVx` — see
   [MANUAL.md](MANUAL.md#record-files) and
   [`tutorial/15_random_and_record_files.bcl`](tutorial/15_random_and_record_files.bcl)
@@ -135,7 +135,7 @@ Rules:
 
 ## Generated BASIC Shape
 
-Functions are lowered to global parameter/result variables plus `GOSUB`.
+Functions are transpiled to global parameter/result variables plus `GOSUB`.
 Array arguments use copy-in/copy-out around the call.
 
 Only `GOTO` / `GOSUB` target lines receive line numbers (sparse mode). Use
@@ -160,7 +160,7 @@ Generated output:
 
 ```
 ' BASCAL generated BASIC
-' Functions are lowered to global variables, labels, and GOSUB
+' Functions are transpiled to global variables, labels, and GOSUB
 
 add_left% = 10
 add_right% = 20
@@ -175,7 +175,7 @@ END
 ' end function add%
 ```
 
-## Condition Lowering
+## Condition Transpilation
 
 `if` and `while` conditions use `(cond) = 0` to invert, not `NOT`. This is
 intentional: BASIC's `NOT` is bitwise, so `NOT 1 = -2` (still truthy), which
@@ -184,7 +184,7 @@ any non-zero as truthy, matching expected semantics.
 
 ## Recursive Functions
 
-BASCAL does not support recursive functions. Functions are lowered to `GOSUB`
+BASCAL does not support recursive functions. Functions are transpiled to `GOSUB`
 with global parameter variables; a recursive call would overwrite its own
 parameters. Use an explicit stack array to simulate recursion.
 
@@ -263,7 +263,7 @@ fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
 env -u RUSTC_WRAPPER cargo test
 ```
 
-- Unit-tests for lexer, parser, validation, and function lowering
+- Unit-tests for lexer, parser, validation, and function transpilation
 - Compiles every driver-style `examples/**/*.bcl` file (excluding `com/`
   dependency trees) and writes `.bas` output alongside the source
 - If `fbc` is installed, compiles and runs `sort_driver` and `remline`
@@ -272,4 +272,4 @@ env -u RUSTC_WRAPPER cargo test
 ## Current Limits
 
 - No library archive format.
-- Array argument lowering uses the next argument as the element count.
+- Array argument transpilation uses the next argument as the element count.

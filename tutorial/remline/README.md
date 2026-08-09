@@ -10,7 +10,7 @@ simple:
 - the sample input is read from `examples/remline/sample/input.bas`
 - the cleaned listing is written to `examples/remline/sample/output.bas`
 - the program keeps the core logic split across small `require`d helper files
-- comments are retained in generated BASIC, so the lowered output stays readable
+- comments are retained in generated BASIC, so the transpiled output stays readable
 - the program analyses direct numeric references in `GOTO`, `GOSUB`, `THEN`,
   `ELSE`, `RESTORE`, `RESUME`, and `RUN`
 - referenced target lines stay numbered

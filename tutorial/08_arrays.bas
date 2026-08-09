@@ -1,5 +1,5 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial 8 — Arrays
 40 ' 
@@ -33,7 +33,7 @@
 260 printarray_count_0% = n%
 270 DIM printarray_arr_0%(n%)
 
-280 ' copy array argument into lowered function storage: data%() -> printarray_arr_0%()
+280 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
 290 FOR BCC_T1% = 1 TO n%
 300     printarray_arr_0%(BCC_T1%) = data%(BCC_T1%)
 310 NEXT BCC_T1%
@@ -51,7 +51,7 @@
 390 insertionsort_count_0% = n%
 400 DIM insertionsort_arr_0%(n%)
 
-410 ' copy array argument into lowered function storage: data%() -> insertionsort_arr_0%()
+410 ' copy array argument into transpiled function storage: data%() -> insertionsort_arr_0%()
 420 FOR BCC_T3% = 1 TO n%
 430     insertionsort_arr_0%(BCC_T3%) = data%(BCC_T3%)
 440 NEXT BCC_T3%
@@ -68,7 +68,7 @@
 520 printarray_count_0% = n%
 530 DIM printarray_arr_0%(n%)
 
-540 ' copy array argument into lowered function storage: data%() -> printarray_arr_0%()
+540 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
 550 FOR BCC_T5% = 1 TO n%
 560     printarray_arr_0%(BCC_T5%) = data%(BCC_T5%)
 570 NEXT BCC_T5%
@@ -88,7 +88,7 @@
 670 indexof_target_0% = target%
 680 DIM indexof_arr_0%(n%)
 
-690 ' copy array argument into lowered function storage: data%() -> indexof_arr_0%()
+690 ' copy array argument into transpiled function storage: data%() -> indexof_arr_0%()
 700 FOR BCC_T7% = 1 TO n%
 710     indexof_arr_0%(BCC_T7%) = data%(BCC_T7%)
 720 NEXT BCC_T7%

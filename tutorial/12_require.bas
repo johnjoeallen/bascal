@@ -1,5 +1,5 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' stats.bcl — basic statistics library for the BASCAL tutorial.
 40 ' Loaded by tutorial/12_require.bcl via:
@@ -41,7 +41,7 @@
 360 mean_count_0% = n%
 370 DIM mean_data_0%(n%)
 
-380 ' copy array argument into lowered function storage: scores%() -> mean_data_0%()
+380 ' copy array argument into transpiled function storage: scores%() -> mean_data_0%()
 390 FOR BCC_T1% = 1 TO n%
 400     mean_data_0%(BCC_T1%) = scores%(BCC_T1%)
 410 NEXT BCC_T1%
@@ -57,7 +57,7 @@
 480 maximum_count_0% = n%
 490 DIM maximum_data_0%(n%)
 
-500 ' copy array argument into lowered function storage: scores%() -> maximum_data_0%()
+500 ' copy array argument into transpiled function storage: scores%() -> maximum_data_0%()
 510 FOR BCC_T3% = 1 TO n%
 520     maximum_data_0%(BCC_T3%) = scores%(BCC_T3%)
 530 NEXT BCC_T3%
@@ -73,7 +73,7 @@
 600 minimum_count_0% = n%
 610 DIM minimum_data_0%(n%)
 
-620 ' copy array argument into lowered function storage: scores%() -> minimum_data_0%()
+620 ' copy array argument into transpiled function storage: scores%() -> minimum_data_0%()
 630 FOR BCC_T5% = 1 TO n%
 640     minimum_data_0%(BCC_T5%) = scores%(BCC_T5%)
 650 NEXT BCC_T5%
@@ -89,7 +89,7 @@
 720 rangeof_count_0% = n%
 730 DIM rangeof_data_0%(n%)
 
-740 ' copy array argument into lowered function storage: scores%() -> rangeof_data_0%()
+740 ' copy array argument into transpiled function storage: scores%() -> rangeof_data_0%()
 750 FOR BCC_T7% = 1 TO n%
 760     rangeof_data_0%(BCC_T7%) = scores%(BCC_T7%)
 770 NEXT BCC_T7%
@@ -144,7 +144,7 @@
 1180     maximum_count_0% = rangeof_count_0%
 1190     DIM maximum_data_0%(rangeof_count_0%)
 
-1200     ' copy array argument into lowered function storage: rangeof_data_0%() -> maximum_data_0%()
+1200     ' copy array argument into transpiled function storage: rangeof_data_0%() -> maximum_data_0%()
 1210     FOR BCC_T11% = 1 TO rangeof_count_0%
 1220         maximum_data_0%(BCC_T11%) = rangeof_data_0%(BCC_T11%)
 1230     NEXT BCC_T11%
@@ -159,7 +159,7 @@
 1290     minimum_count_0% = rangeof_count_0%
 1300     DIM minimum_data_0%(rangeof_count_0%)
 
-1310     ' copy array argument into lowered function storage: rangeof_data_0%() -> minimum_data_0%()
+1310     ' copy array argument into transpiled function storage: rangeof_data_0%() -> minimum_data_0%()
 1320     FOR BCC_T13% = 1 TO rangeof_count_0%
 1330         minimum_data_0%(BCC_T13%) = rangeof_data_0%(BCC_T13%)
 1340     NEXT BCC_T13%

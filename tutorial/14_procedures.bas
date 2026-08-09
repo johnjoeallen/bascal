@@ -1,5 +1,5 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial 14 — Procedures
 40 ' 
@@ -58,7 +58,7 @@
 480 fillrange_value_0% = 99
 490 DIM fillrange_arr_0%(n%)
 
-500 ' copy array argument into lowered function storage: data%() -> fillrange_arr_0%()
+500 ' copy array argument into transpiled function storage: data%() -> fillrange_arr_0%()
 510 FOR BCC_T1% = 1 TO n%
 520     fillrange_arr_0%(BCC_T1%) = data%(BCC_T1%)
 530 NEXT BCC_T1%

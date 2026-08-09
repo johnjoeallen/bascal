@@ -1,5 +1,5 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
 40 ' 
@@ -323,7 +323,7 @@
 2730 ' ------------------------------------------------------------------------
 2740 ' Part 2 is the same three writes, the same reverse-order read, and the
 2750 ' same three updates as Part 1 — Alice's and Bob's and Carol's updates
-2760 ' still lower to exactly one GET and one PUT each, nothing runs slower.
+2760 ' still transpile to exactly one GET and one PUT each, nothing runs slower.
 2770 ' What's gone is everything that was bookkeeping rather than logic: the
 2780 ' hand-computed record width, the repeated buffer-variable/FIELD
 2790 ' boilerplate in every block, the pack/unpack call picked by hand per

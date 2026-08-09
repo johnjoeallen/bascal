@@ -44,7 +44,7 @@
     <h2>Why BASCAL exists</h2>
     <p class="lede">
       BASCAL keeps BASIC's global symbol model — variables and functions are
-      still global, still lowered to <code>GOTO</code>/<code>GOSUB</code> —
+      still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> —
       while adding enough structure that larger programs stay maintainable.
     </p>
     <blockquote>
@@ -65,7 +65,7 @@
     <h2>What BASCAL adds over raw BASIC</h2>
     <ul class="features">
       <li>Multiline <code>if</code>/<code>else if</code>/<code>else</code>/<code>end if</code>, <code>for</code>/<code>next</code>, <code>while</code>/<code>wend</code>, <code>do</code>/<code>loop</code></li>
-      <li><code>function</code>/<code>procedure</code> declarations with explicit <code>return</code>, lowered to global vars + <code>GOSUB</code></li>
+      <li><code>function</code>/<code>procedure</code> declarations with explicit <code>return</code>, transpiled to global vars + <code>GOSUB</code></li>
       <li>Path-style <code>require</code>/<code>import</code> dependencies (dots become directories)</li>
       <li><code>select case</code> with ranges and <code>is</code> comparisons</li>
       <li><code>program ... suite ...</code> with <code>COMMON</code>-block coordination across chained programs</li>
@@ -245,7 +245,7 @@ end do</code></pre>
 
     <p class="lede">
       <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
-      <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-lowering">Condition Lowering</a>
+      <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a>
       note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows the same trade — it's just the newest place BASCAL makes it.
     </p>
   </section>

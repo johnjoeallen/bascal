@@ -288,7 +288,7 @@ db.close()
 // ------------------------------------------------------------------------
 // Part 2 is the same three writes, the same reverse-order read, and the
 // same three updates as Part 1 — Alice's and Bob's and Carol's updates
-// still lower to exactly one GET and one PUT each, nothing runs slower.
+// still transpile to exactly one GET and one PUT each, nothing runs slower.
 // What's gone is everything that was bookkeeping rather than logic: the
 // hand-computed record width, the repeated buffer-variable/FIELD
 // boilerplate in every block, the pack/unpack call picked by hand per

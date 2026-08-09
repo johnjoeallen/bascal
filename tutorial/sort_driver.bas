@@ -1,8 +1,8 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' In-place bubble sort.
-40 ' data% is an array parameter; bcc lowers calls with copy-in/copy-out.
+40 ' data% is an array parameter; bcc transpiles calls with copy-in/copy-out.
 50 ' In-place cocktail shaker sort.
 60 ' This is a bidirectional bubble sort over the active range.
 70 ' Tiny helper used to prove recursive require resolution.
@@ -36,7 +36,7 @@
 300 bubblesort_count_0% = 5000
 310 DIM bubblesort_data_0%(5000)
 
-320 ' copy array argument into lowered function storage: bubbledata%() -> bubblesort_data_0%()
+320 ' copy array argument into transpiled function storage: bubbledata%() -> bubblesort_data_0%()
 330 FOR BCC_T1% = 1 TO 5000
 340     bubblesort_data_0%(BCC_T1%) = bubbledata%(BCC_T1%)
 350 NEXT BCC_T1%
@@ -66,7 +66,7 @@
 550 shakersort_count_0% = 5000
 560 DIM shakersort_data_0%(5000)
 
-570 ' copy array argument into lowered function storage: shakerdata%() -> shakersort_data_0%()
+570 ' copy array argument into transpiled function storage: shakerdata%() -> shakersort_data_0%()
 580 FOR BCC_T5% = 1 TO 5000
 590     shakersort_data_0%(BCC_T5%) = shakerdata%(BCC_T5%)
 600 NEXT BCC_T5%
@@ -96,7 +96,7 @@
 800 shellsort_count_0% = 5000
 810 DIM shellsort_data_0%(5000)
 
-820 ' copy array argument into lowered function storage: shelldata%() -> shellsort_data_0%()
+820 ' copy array argument into transpiled function storage: shelldata%() -> shellsort_data_0%()
 830 FOR BCC_T9% = 1 TO 5000
 840     shellsort_data_0%(BCC_T9%) = shelldata%(BCC_T9%)
 850 NEXT BCC_T9%
@@ -126,7 +126,7 @@
 1050 quicksort_count_0% = 5000
 1060 DIM quicksort_data_0%(5000)
 
-1070 ' copy array argument into lowered function storage: quickdata%() -> quicksort_data_0%()
+1070 ' copy array argument into transpiled function storage: quickdata%() -> quicksort_data_0%()
 1080 FOR BCC_T13% = 1 TO 5000
 1090     quicksort_data_0%(BCC_T13%) = quickdata%(BCC_T13%)
 1100 NEXT BCC_T13%

@@ -91,7 +91,7 @@ impl CodeGenerator {
             .collect();
 
         self.line("' BASCAL generated BASIC");
-        self.line("' Functions are lowered to global variables, labels, and GOSUB");
+        self.line("' Functions are transpiled to global variables, labels, and GOSUB");
 
         for block in &program.common {
             let vars = block
@@ -976,7 +976,7 @@ impl CodeGenerator {
                         &lowered.as_basic(),
                         &actual_array,
                         &bound,
-                        "copy array argument into lowered function storage",
+                        "copy array argument into transpiled function storage",
                         &loop_var,
                     ));
                 }

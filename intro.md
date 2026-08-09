@@ -38,8 +38,8 @@ The core idea remains the same:
 
 > Make BASIC more pleasant to write, without pretending it is a different runtime.
 
-BASCAL deliberately preserves BASIC's global symbol model. Variables and functions are global. Path-style names are dependency selectors, not runtime namespaces. Functions are lowered to global parameter/result variables plus `GOSUB`. Array arguments use copy-in/copy-out around the call. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.
+BASCAL deliberately preserves BASIC's global symbol model. Variables and functions are global. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus `GOSUB`. Array arguments use copy-in/copy-out around the call. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.
 
-Generated BASIC is intentionally conservative. BASCAL lowers structured source into line-numbered `GOTO` / `GOSUB` style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.
+Generated BASIC is intentionally conservative. BASCAL transpiles structured source into line-numbered `GOTO` / `GOSUB` style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.
 
 In that sense, BASCAL is both a small compiler project and a personal historical exercise: a chance to revisit the frustration that led to Ramtech BASIC, and to build the version of the tool I would have loved to have had at the start of my career.

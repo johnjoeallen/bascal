@@ -54,7 +54,7 @@ semantics:
   `COLOR`, `ON ... GOTO`, `SWAP`, `RANDOMIZE`, `CONST`, and more
 
 **BASCAL does not invent a new runtime.** Every BASCAL program compiles to
-plain Microsoft BASIC. The structured constructs are lowered by the compiler:
+plain Microsoft BASIC. The structured constructs are transpiled by the compiler:
 functions become `GOSUB` subroutines, loops become `GOTO`-based constructs,
 and `if` chains become `IF ... THEN GOTO` sequences.
 
@@ -793,15 +793,15 @@ end function
 
 ### Restrictions
 
-- **No recursion.** Functions are lowered to `GOSUB` with global parameter
+- **No recursion.** Functions are transpiled to `GOSUB` with global parameter
   variables. A recursive call would overwrite in-flight parameters. Use an
   explicit stack array to simulate recursion if needed.
 - **No return value from a procedure.** Functions must `return` a value;
   for side-effect-only subroutines use `procedure` instead.
 
-### How Functions Are Lowered
+### How Functions Are Transpiled
 
-The compiler lowers each function call to:
+The compiler transpiles each function call to:
 1. Assign each argument to a generated global variable (e.g. `fname_param_0%`)
 2. `GOSUB` to the function's generated label
 3. Assign the result from the generated result variable (e.g. `fname_result_0%`)
@@ -915,11 +915,11 @@ end procedure
 
 ### Restrictions
 
-- **No recursion.**  Same GOSUB lowering as functions — a recursive call would
+- **No recursion.**  Same GOSUB transpilation as functions — a recursive call would
   overwrite in-flight parameters.
 - **No return value.**  Do not use a procedure where an expression is expected.
 
-### How Procedures Are Lowered
+### How Procedures Are Transpiled
 
 Procedures use the same GOSUB mechanism as functions:
 
@@ -1395,7 +1395,7 @@ declared fields — there's no runtime check:
   `GET #n, i` is emitted first (so the unlisted fields keep their current
   on-disk values), then `LSET` for only the fields given, then `PUT #n, i`.
 - If the listed fields happen to cover every declared field anyway, no
-  `GET` is emitted — it lowers exactly like a plain `{ ... }` literal.
+  `GET` is emitted — it transpiles exactly like a plain `{ ... }` literal.
 
 Unlike `{ ... }`, an unknown field name inside `?{ ... }` is still a
 compile-time error — only *missing* fields are permitted, not *misspelled*
@@ -1486,7 +1486,7 @@ Sugar for `for i = 3 to 1 step -1`; ascending `for i = A to B` is unchanged.
 
 ### Type checking
 
-The lowering pass rejects, at compile time: field names not declared on the
+The transpilation pass rejects, at compile time: field names not declared on the
 record (in a record literal or a `.field` access), a record literal that is
 missing a declared field or repeats one, a string literal that is wider
 than its `string(N)` field, a string literal assigned to a numeric field (or
@@ -2009,7 +2009,7 @@ correct slots.
 
 ## Generated BASIC Shape
 
-Understanding how BASCAL lowers its constructs helps when reading generated
+Understanding how BASCAL transpiles its constructs helps when reading generated
 output or debugging.
 
 ### Header
@@ -2017,7 +2017,7 @@ output or debugging.
 Every generated file begins with:
 ```
 ' BASCAL generated BASIC
-' Functions are lowered to global variables, labels, and GOSUB
+' Functions are transpiled to global variables, labels, and GOSUB
 ```
 
 ### COMMON Block
@@ -2030,7 +2030,7 @@ By default, only lines that are branch targets (destinations of `GOTO` or
 `GOSUB`) receive line numbers. All other lines are unnumbered. Use
 `--line-numbers` to number every line.
 
-### If Lowering
+### If Transpilation
 
 ```
 if x% > 0 then
@@ -2049,7 +2049,7 @@ IF (x% > 0) = 0 THEN GOTO 10
 The condition is inverted with `= 0` rather than `NOT` to avoid bitwise
 semantics (see [Operators](#operators-and-expressions)).
 
-### While Lowering
+### While Transpilation
 
 ```
 p% = 1
@@ -2070,7 +2070,7 @@ p% = 1
 20 REM END WHILE
 ```
 
-### Do Lowering
+### Do Transpilation
 
 ```
 do while k% <= 3
@@ -2089,7 +2089,7 @@ Becomes:
 20 REM END DO
 ```
 
-### For Lowering
+### For Transpilation
 
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently.
 The BASCAL `end for` (or bare `end`) is stripped; the BASIC `NEXT` is emitted
@@ -2101,7 +2101,7 @@ FOR i% = 1 TO 5
 NEXT i%
 ```
 
-### Function Lowering
+### Function Transpilation
 
 ```
 function clamp%(value%, lo%, hi%)
@@ -2111,7 +2111,7 @@ end function
 result% = clamp%(15, 1, 10)
 ```
 
-The calls to `max%` and `min%` inside `clamp%` are also lowered to GOSUBs.
+The calls to `max%` and `min%` inside `clamp%` are also transpiled to GOSUBs.
 The outermost call produces:
 
 ```
@@ -2124,13 +2124,13 @@ result% = clamp_result%
 END
 
 ' function clamp%(value%, lo%, hi%)
-100 ' (lowered body — calls max% and min% via GOSUB)
+100 ' (transpiled body — calls max% and min% via GOSUB)
     clamp_result% = ...
     RETURN
 ' end function clamp%
 ```
 
-### Procedure Lowering
+### Procedure Transpilation
 
 Procedures follow the same GOSUB pattern as functions but have no result
 variable:
@@ -2161,9 +2161,9 @@ END
 There is no `printscore_result` variable.  A bare `return` inside a procedure
 compiles to plain `RETURN`.
 
-### Select Case Lowering
+### Select Case Transpilation
 
-`SELECT CASE` is lowered to an `IF`/`GOTO` dispatch chain. The select
+`SELECT CASE` is transpiled to an `IF`/`GOTO` dispatch chain. The select
 expression is stored in a temporary variable (e.g., `BCC_T1%`) to avoid
 re-evaluation.
 

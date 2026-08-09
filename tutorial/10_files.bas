@@ -1,5 +1,5 @@
 10 ' BASCAL generated BASIC
-20 ' Functions are lowered to global variables, labels, and GOSUB
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial 10 — File Input and Output
 40 ' 

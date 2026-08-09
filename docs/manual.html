@@ -67,7 +67,7 @@
 <li><code>select case</code> with range and <code>is</code> comparisons</li>
 <li>All classic BASCOM 1980s statements: <code>DATA</code>/<code>READ</code>/<code>RESTORE</code>, <code>LOCATE</code>, <code>COLOR</code>, <code>ON ... GOTO</code>, <code>SWAP</code>, <code>RANDOMIZE</code>, <code>CONST</code>, and more</li>
 </ul>
-<p><strong>BASCAL does not invent a new runtime.</strong> Every BASCAL program compiles to plain Microsoft BASIC. The structured constructs are lowered by the compiler: functions become <code>GOSUB</code> subroutines, loops become <code>GOTO</code>-based constructs, and <code>if</code> chains become <code>IF ... THEN GOTO</code> sequences.</p>
+<p><strong>BASCAL does not invent a new runtime.</strong> Every BASCAL program compiles to plain Microsoft BASIC. The structured constructs are transpiled by the compiler: functions become <code>GOSUB</code> subroutines, loops become <code>GOTO</code>-based constructs, and <code>if</code> chains become <code>IF ... THEN GOTO</code> sequences.</p>
 <hr />
 <h2 id="getting-started">Getting Started</h2>
 <h3 id="building-the-compiler">Building the Compiler</h3>
@@ -732,11 +732,11 @@ function addToTotal%(x%)
 end function</code></pre>
 <h3 id="restrictions">Restrictions</h3>
 <ul>
-<li><strong>No recursion.</strong> Functions are lowered to <code>GOSUB</code> with global parameter variables. A recursive call would overwrite in-flight parameters. Use an explicit stack array to simulate recursion if needed.</li>
+<li><strong>No recursion.</strong> Functions are transpiled to <code>GOSUB</code> with global parameter variables. A recursive call would overwrite in-flight parameters. Use an explicit stack array to simulate recursion if needed.</li>
 <li><strong>No return value from a procedure.</strong> Functions must <code>return</code> a value; for side-effect-only subroutines use <code>procedure</code> instead.</li>
 </ul>
-<h3 id="how-functions-are-lowered">How Functions Are Lowered</h3>
-<p>The compiler lowers each function call to:</p>
+<h3 id="how-functions-are-transpiled">How Functions Are Transpiled</h3>
+<p>The compiler transpiles each function call to:</p>
 <ol type="1">
 <li>Assign each argument to a generated global variable (e.g. <code>fname_param_0%</code>)</li>
 <li><code>GOSUB</code> to the function's generated label</li>
@@ -804,10 +804,10 @@ procedure increment()
 end procedure</code></pre>
 <h3 id="restrictions-1">Restrictions</h3>
 <ul>
-<li><strong>No recursion.</strong> Same GOSUB lowering as functions — a recursive call would overwrite in-flight parameters.</li>
+<li><strong>No recursion.</strong> Same GOSUB transpilation as functions — a recursive call would overwrite in-flight parameters.</li>
 <li><strong>No return value.</strong> Do not use a procedure where an expression is expected.</li>
 </ul>
-<h3 id="how-procedures-are-lowered">How Procedures Are Lowered</h3>
+<h3 id="how-procedures-are-transpiled">How Procedures Are Transpiled</h3>
 <p>Procedures use the same GOSUB mechanism as functions:</p>
 <ol type="1">
 <li>Assign each argument to a generated global variable (e.g. <code>pname_param_0%</code>)</li>
@@ -1074,7 +1074,7 @@ end record</code></pre>
 <p>Whether the fields you <em>didn't</em> mention need preserving is fully decided at compile time, by comparing the field names you gave against the record's declared fields — there's no runtime check:</p>
 <ul>
 <li>If the listed fields don't cover every declared field, an implicit <code>GET #n, i</code> is emitted first (so the unlisted fields keep their current on-disk values), then <code>LSET</code> for only the fields given, then <code>PUT #n, i</code>.</li>
-<li>If the listed fields happen to cover every declared field anyway, no <code>GET</code> is emitted — it lowers exactly like a plain <code>{ ... }</code> literal.</li>
+<li>If the listed fields happen to cover every declared field anyway, no <code>GET</code> is emitted — it transpiles exactly like a plain <code>{ ... }</code> literal.</li>
 </ul>
 <p>Unlike <code>{ ... }</code>, an unknown field name inside <code>?{ ... }</code> is still a compile-time error — only <em>missing</em> fields are permitted, not <em>misspelled</em> ones.</p>
 <p>Note: <code>GET</code>ing a record number past the current end of a random-access file doesn't error in real BASIC (records can be sparse), but the fields you meant to "preserve" will simply read back as zero/blank the first time a given record number is touched, since there was nothing on disk yet to preserve.</p>
@@ -1105,7 +1105,7 @@ db[i] = s</code></pre>
 end for</code></pre>
 <p>Sugar for <code>for i = 3 to 1 step -1</code>; ascending <code>for i = A to B</code> is unchanged.</p>
 <h3 id="type-checking">Type checking</h3>
-<p>The lowering pass rejects, at compile time: field names not declared on the record (in a record literal or a <code>.field</code> access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its <code>string(N)</code> field, a string literal assigned to a numeric field (or vice versa), an unknown record type named by <code>file ... as ...</code>, and any reference to a <code>file</code> or <code>let</code>-bound record variable that was never declared.</p>
+<p>The transpilation pass rejects, at compile time: field names not declared on the record (in a record literal or a <code>.field</code> access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its <code>string(N)</code> field, a string literal assigned to a numeric field (or vice versa), an unknown record type named by <code>file ... as ...</code>, and any reference to a <code>file</code> or <code>let</code>-bound record variable that was never declared.</p>
 <hr />
 <h2 id="data-statements">Data Statements</h2>
 <p><code>DATA</code>, <code>READ</code>, and <code>RESTORE</code> provide an embedded data table read at run time. <code>DATA</code> statements may appear anywhere in the program body; the generated BASIC places them after <code>END</code>.</p>
@@ -1398,16 +1398,16 @@ END</code></pre>
 </ul>
 <hr />
 <h2 id="generated-basic-shape">Generated BASIC Shape</h2>
-<p>Understanding how BASCAL lowers its constructs helps when reading generated output or debugging.</p>
+<p>Understanding how BASCAL transpiles its constructs helps when reading generated output or debugging.</p>
 <h3 id="header">Header</h3>
 <p>Every generated file begins with:</p>
 <pre><code>&#39; BASCAL generated BASIC
-&#39; Functions are lowered to global variables, labels, and GOSUB</code></pre>
+&#39; Functions are transpiled to global variables, labels, and GOSUB</code></pre>
 <h3 id="common-block">COMMON Block</h3>
 <p>If a suite is declared, <code>COMMON</code> lines appear before the header comment.</p>
 <h3 id="line-numbers">Line Numbers</h3>
 <p>By default, only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) receive line numbers. All other lines are unnumbered. Use <code>--line-numbers</code> to number every line.</p>
-<h3 id="if-lowering">If Lowering</h3>
+<h3 id="if-transpilation">If Transpilation</h3>
 <pre><code>if x% &gt; 0 then
     PRINT &quot;positive&quot;
 end if</code></pre>
@@ -1416,7 +1416,7 @@ end if</code></pre>
     PRINT &quot;positive&quot;
 10 REM END IF</code></pre>
 <p>The condition is inverted with <code>= 0</code> rather than <code>NOT</code> to avoid bitwise semantics (see <a href="#operators-and-expressions">Operators</a>).</p>
-<h3 id="while-lowering">While Lowering</h3>
+<h3 id="while-transpilation">While Transpilation</h3>
 <pre><code>p% = 1
 while p% &lt; 100
     PRINT STR$(p%)
@@ -1429,7 +1429,7 @@ end while</code></pre>
     p% = p% * 2
     GOTO 10
 20 REM END WHILE</code></pre>
-<h3 id="do-lowering">Do Lowering</h3>
+<h3 id="do-transpilation">Do Transpilation</h3>
 <pre><code>do while k% &lt;= 3
     PRINT STR$(k%)
     k% = k% + 1
@@ -1440,18 +1440,18 @@ end do</code></pre>
     k% = k% + 1
     GOTO 10
 20 REM END DO</code></pre>
-<h3 id="for-lowering">For Lowering</h3>
+<h3 id="for-transpilation">For Transpilation</h3>
 <p>BASCAL emits native <code>FOR</code> / <code>NEXT</code>, which BASIC runtimes handle efficiently. The BASCAL <code>end for</code> (or bare <code>end</code>) is stripped; the BASIC <code>NEXT</code> is emitted by the compiler:</p>
 <pre><code>FOR i% = 1 TO 5
     PRINT STR$(i%) + &quot;^2 = &quot; + STR$(i% * i%)
 NEXT i%</code></pre>
-<h3 id="function-lowering">Function Lowering</h3>
+<h3 id="function-transpilation">Function Transpilation</h3>
 <pre><code>function clamp%(value%, lo%, hi%)
     return max%(lo%, min%(value%, hi%))
 end function
 
 result% = clamp%(15, 1, 10)</code></pre>
-<p>The calls to <code>max%</code> and <code>min%</code> inside <code>clamp%</code> are also lowered to GOSUBs. The outermost call produces:</p>
+<p>The calls to <code>max%</code> and <code>min%</code> inside <code>clamp%</code> are also transpiled to GOSUBs. The outermost call produces:</p>
 <pre><code>clamp_value% = 15
 clamp_lo%    = 1
 clamp_hi%    = 10
@@ -1461,11 +1461,11 @@ result% = clamp_result%
 END
 
 &#39; function clamp%(value%, lo%, hi%)
-100 &#39; (lowered body — calls max% and min% via GOSUB)
+100 &#39; (transpiled body — calls max% and min% via GOSUB)
     clamp_result% = ...
     RETURN
 &#39; end function clamp%</code></pre>
-<h3 id="procedure-lowering">Procedure Lowering</h3>
+<h3 id="procedure-transpilation">Procedure Transpilation</h3>
 <p>Procedures follow the same GOSUB pattern as functions but have no result variable:</p>
 <pre><code>procedure printScore(label$, score%)
     PRINT label$ + &quot;: &quot; + STR$(score%)
@@ -1484,8 +1484,8 @@ END
     RETURN
 &#39; end procedure printScore</code></pre>
 <p>There is no <code>printscore_result</code> variable. A bare <code>return</code> inside a procedure compiles to plain <code>RETURN</code>.</p>
-<h3 id="select-case-lowering">Select Case Lowering</h3>
-<p><code>SELECT CASE</code> is lowered to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCC_T1%</code>) to avoid re-evaluation.</p>
+<h3 id="select-case-transpilation">Select Case Transpilation</h3>
+<p><code>SELECT CASE</code> is transpiled to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCC_T1%</code>) to avoid re-evaluation.</p>
 <h3 id="exit-statements">Exit Statements</h3>
 <ul>
 <li><code>exit for</code> → <code>EXIT FOR</code> (native FreeBASIC / QB extension)</li>

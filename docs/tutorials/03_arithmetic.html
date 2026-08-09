@@ -44,7 +44,7 @@ print a%; &quot;MOD &quot;; b%; &quot;=&quot;; a% mod b%  // 17 MOD 5 = 2  (rema
     </div>
     <div class="snippet">
       <h3>The NOT gotcha</h3>
-      <p class="note">This is why BASCAL's own if/while lowering inverts conditions with (cond) = 0 instead of NOT — see Condition Lowering in the README.</p>
+      <p class="note">This is why BASCAL's own if/while transpilation inverts conditions with (cond) = 0 instead of NOT — see Condition Transpilation in the README.</p>
       <pre><code>x% = 7
 if x% &gt; 0 and x% &lt; 10 then
     print x%; &quot;is in 1..9&quot;
