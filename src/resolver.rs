@@ -76,6 +76,7 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Open { file, channel, .. } => {
             expr_calls_function(file, target) || expr_calls_function(channel, target)
         }
+        Statement::FileDecl { path, .. } => expr_calls_function(path, target),
         Statement::LineInput {
             channel,
             target: line_target,
@@ -256,6 +257,12 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
             expr_calls_function(left, target) || expr_calls_function(right, target)
         }
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => false,
+        Expr::FileIndex { index, .. } => expr_calls_function(index, target),
+        Expr::FieldAccess { base, .. } => expr_calls_function(base, target),
+        Expr::MethodCall { base, args, .. } => {
+            expr_calls_function(base, target) || args.iter().any(|a| expr_calls_function(a, target))
+        }
+        Expr::RecordLit(fields) => fields.iter().any(|(_, e)| expr_calls_function(e, target)),
     }
 }
 

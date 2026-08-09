@@ -210,6 +210,9 @@ impl CodeGenerator {
                 };
                 self.line(&format!("OPEN {file} FOR {mode_str} AS #{channel}{len_clause}"));
             }
+            Statement::FileDecl { .. } => {
+                unreachable!("record/file DSL must be lowered before codegen")
+            }
             Statement::LineInput { channel, target } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
                 let (target_prelude, target) = self.expr(target, current_function);
@@ -926,6 +929,12 @@ impl CodeGenerator {
                 };
                 (prelude, format!("{left_r} {} {right_r}", binary_op(*op)))
             }
+            Expr::FileIndex { .. }
+            | Expr::FieldAccess { .. }
+            | Expr::MethodCall { .. }
+            | Expr::RecordLit(_) => {
+                unreachable!("record/file DSL must be lowered before codegen")
+            }
         }
     }
 
@@ -1327,6 +1336,9 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
             collect_names_from_expr(file, names);
             collect_names_from_expr(channel, names);
         }
+        Statement::FileDecl { .. } => {
+            unreachable!("record/file DSL must be lowered before codegen")
+        }
         Statement::Close { channel } => collect_names_from_expr(channel, names),
         Statement::LineInput { channel, target } => {
             collect_names_from_expr(channel, names);
@@ -1461,6 +1473,12 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
             collect_names_from_expr(right, names);
         }
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) => {}
+        Expr::FileIndex { .. }
+        | Expr::FieldAccess { .. }
+        | Expr::MethodCall { .. }
+        | Expr::RecordLit(_) => {
+            unreachable!("record/file DSL must be lowered before codegen")
+        }
     }
 }
 
@@ -1718,6 +1736,12 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
         Expr::HexLit(_) => "%",
         Expr::Unary { expr, .. } => expr_type_suffix(expr),
         Expr::Binary { left, .. } => expr_type_suffix(left),
+        Expr::FileIndex { .. }
+        | Expr::FieldAccess { .. }
+        | Expr::MethodCall { .. }
+        | Expr::RecordLit(_) => {
+            unreachable!("record/file DSL must be lowered before codegen")
+        }
     }
 }
 

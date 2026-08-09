@@ -39,6 +39,50 @@ mod tests {
             vec!["name$", "count%", "amount!", "distance#", "id&"]
         );
     }
+
+    #[test]
+    fn lexes_bracket_brace_and_standalone_dot() {
+        // Regression test: a `.` that does not immediately follow an
+        // identifier-start character used to be silently dropped by the
+        // lexer's catch-all case instead of producing a token.
+        let tokens = Lexer::new("test.bcl", "db[i].field {a: 1}").lex();
+        let kinds: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokenKind::Eof))
+            .map(|t| t.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("db".to_string()),
+                TokenKind::LBracket,
+                TokenKind::Ident("i".to_string()),
+                TokenKind::RBracket,
+                TokenKind::Dot,
+                TokenKind::Ident("field".to_string()),
+                TokenKind::LBrace,
+                TokenKind::Ident("a".to_string()),
+                TokenKind::Colon,
+                TokenKind::Number(1),
+                TokenKind::RBrace,
+            ]
+        );
+    }
+
+    #[test]
+    fn dotted_identifier_still_lexes_as_one_token() {
+        // `s.id` and dotted require/import paths must keep lexing as a
+        // single Ident token — only a *standalone* `.` gets its own token.
+        let tokens = Lexer::new("test.bcl", "s.id com.bascal.sort.bubbleSort").lex();
+        let idents: Vec<_> = tokens
+            .into_iter()
+            .filter_map(|t| match t.kind {
+                TokenKind::Ident(v) => Some(v),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(idents, vec!["s.id", "com.bascal.sort.bubbleSort"]);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,10 +96,15 @@ pub enum TokenKind {
     Newline,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
+    LBrace,
+    RBrace,
     Comma,
     Colon,
     Semicolon,
     Hash,
+    Dot,
     HexLit(String),
     Plus,
     Minus,
@@ -113,10 +162,15 @@ impl<'a> Lexer<'a> {
                 'A'..='Z' | 'a'..='z' | '_' => tokens.push(self.ident()),
                 '(' => tokens.push(self.single(TokenKind::LParen)),
                 ')' => tokens.push(self.single(TokenKind::RParen)),
+                '[' => tokens.push(self.single(TokenKind::LBracket)),
+                ']' => tokens.push(self.single(TokenKind::RBracket)),
+                '{' => tokens.push(self.single(TokenKind::LBrace)),
+                '}' => tokens.push(self.single(TokenKind::RBrace)),
                 ',' => tokens.push(self.single(TokenKind::Comma)),
                 ';' => tokens.push(self.single(TokenKind::Semicolon)),
                 ':' => tokens.push(self.single(TokenKind::Colon)),
                 '#' => tokens.push(self.single(TokenKind::Hash)),
+                '.' => tokens.push(self.single(TokenKind::Dot)),
                 '+' => tokens.push(self.single(TokenKind::Plus)),
                 '-' => tokens.push(self.single(TokenKind::Minus)),
                 '*' => tokens.push(self.single(TokenKind::Star)),

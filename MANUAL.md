@@ -20,13 +20,14 @@
 12. [Input and Output](#input-and-output)
 13. [File Input and Output](#file-input-and-output)
 14. [Random-Access File I/O](#random-access-file-io)
-15. [Data Statements](#data-statements)
-16. [Miscellaneous Statements](#miscellaneous-statements)
-17. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
-18. [Suite COMMON](#suite-common)
-19. [Generated BASIC Shape](#generated-basic-shape)
-20. [Command-Line Reference](#command-line-reference)
-21. [Statement Quick Reference](#statement-quick-reference)
+15. [Record Files](#record-files)
+16. [Data Statements](#data-statements)
+17. [Miscellaneous Statements](#miscellaneous-statements)
+18. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
+19. [Suite COMMON](#suite-common)
+20. [Generated BASIC Shape](#generated-basic-shape)
+21. [Command-Line Reference](#command-line-reference)
+22. [Statement Quick Reference](#statement-quick-reference)
 
 ---
 
@@ -1316,6 +1317,115 @@ Output:
 ```
 Alice: 95
 ```
+
+---
+
+## Record Files
+
+From `tutorial/16_record_files.bcl`:
+
+The `record` / `file` DSL is sugar over everything in
+[Random-Access File I/O](#random-access-file-io) above. It computes the
+record's byte width, allocates the file number, and generates the
+`OPEN`/`FIELD`/`LSET`/`RSET`/`PUT`/`GET`/`MKx`/`CVx` calls for you — nothing
+about the *generated* BASIC changes; only the BASCAL source you write does.
+
+### record ... end record
+
+Declares a fixed-layout record type:
+
+```
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+```
+
+Supported field types and their packed width: `int16` (2 bytes), `int32`
+(4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes).
+The record's total width — used as the `OPEN ... LEN = ` value — is the sum
+of its field widths, in declaration order.
+
+### file ... as ... = open(...)
+
+```
+file db as Student = open("students.dat")
+```
+
+Lowers to one `OPEN ... FOR RANDOM AS #n LEN = <width>` plus one matching
+`FIELD #n, ...` statement, binding one string buffer variable per field.
+File numbers are allocated automatically, starting at `#1`, in the order
+`file` declarations appear in the source.
+
+### Whole-record write
+
+```
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+```
+
+Every declared field must be supplied exactly once. Lowers to one `LSET`
+per field — numeric fields are packed first (`MKI%`/`MKL&`/`MKS!`/`MKD#`),
+string fields are assigned directly — followed by a single `PUT #n, 1`.
+`LSET` is used for every field, numeric or string: once a numeric value is
+packed, the result is exact-width binary, so left/right justification makes
+no difference (this matches real BASCOM practice).
+
+### Whole-record read
+
+```
+let s = db[i]
+```
+
+Lowers to `GET #n, i` followed by one unpacking assignment per field
+(`CVI%`/`CVL&`/`CVS!`/`CVD#` for numeric fields, `RTRIM$` for strings), each
+one written into a scalar named `<var>_<field>` — e.g. `s_id%`, `s_name$`,
+`s_score#`. Later references to `s.id`, `s.name`, `s.score` in the source
+resolve directly to those scalars; no `Ident` named literally `s.id` is ever
+emitted.
+
+Because BASIC has no user-visible string-concatenation type coercion,
+writing a numeric field next to a string with `+` (as in `print "[" + s.id
++ "]"`) automatically wraps the numeric side in `STR$(...)` — but only where
+a record field is actually involved; ordinary BASCAL `+` expressions are
+untouched.
+
+### Partial-field update
+
+```
+db[i].field = value
+```
+
+Lowers to an implicit `GET #n, i`, a single `LSET` for just that field, then
+`PUT #n, i`.
+
+### file.close()
+
+```
+db.close()
+```
+
+Lowers to `CLOSE #n`.
+
+### downto
+
+```
+for i = 3 downto 1
+    ...
+end for
+```
+
+Sugar for `for i = 3 to 1 step -1`; ascending `for i = A to B` is unchanged.
+
+### Type checking
+
+The lowering pass rejects, at compile time: field names not declared on the
+record (in a record literal or a `.field` access), a record literal that is
+missing a declared field or repeats one, a string literal that is wider
+than its `string(N)` field, a string literal assigned to a numeric field (or
+vice versa), an unknown record type named by `file ... as ...`, and any
+reference to a `file` or `let`-bound record variable that was never
+declared.
 
 ---
 

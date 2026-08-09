@@ -1,0 +1,81 @@
+// Tutorial 16 — Record Files (record / file DSL)
+//
+// This is the same random-access file I/O shown in Tutorial 15, but written
+// with BASCAL's higher-level `record`/`file` sugar instead of hand-written
+// FIELD/PUT/GET/LSET/MKx/CVx calls. The compiler computes the record's byte
+// width, allocates the file number, and lowers every DSL construct straight
+// down to the same low-level BASIC primitives from Tutorial 15 — see that
+// tutorial for what each one does.
+//
+// record <Name> ... end record
+//   Declares a fixed-layout record type. Supported field types: int16,
+//   int32, float32, float64, and string(N). The record's total byte width
+//   is the sum of its field widths, computed automatically.
+//
+// file <var> as <RecordType> = open(<path>)
+//   Opens (or creates) a random-access file sized for one record, and binds
+//   FIELD buffer variables for every field. File numbers are allocated
+//   automatically, starting at #1, in the order `file` declarations appear.
+//
+// <file>[<n>] = { field: value, ... }
+//   Whole-record write: packs every field (LSET, MKx% for numeric fields)
+//   and writes record n.
+//
+// let <var> = <file>[<n>]
+//   Whole-record read: reads record n and unpacks every field (CVx$,
+//   RTRIM$ for strings) into `<var>.<field>`.
+//
+// <file>[<n>].<field> = value
+//   Partial update: reads record n, rewrites just one field, writes it back.
+//
+// for <var> = <A> downto <B> ... end for
+//   Sugar for `for <var> = <A> to <B> step -1`.
+//
+// <file>.close()
+//   Closes the file.
+
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file db as Student = open("tutorial_students.dat")
+
+/* ---- Write three records ---- */
+
+// Record 1: Alice, 95
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+
+// Record 2: Bob, 54
+db[2] = { id: 2, name: "Bob", score: 54.0 }
+
+// Record 3: Carol, 78
+db[3] = { id: 3, name: "Carol", score: 78.0 }
+
+/* ---- Read records in reverse order ---- */
+
+print "Reading records in reverse order:"
+
+for i = 3 downto 1
+    let s = db[i]
+    print "  [" + s.id + "] " + s.name + " " + s.score
+end for
+
+/* ---- Update one record in place ---- */
+
+// Bob just scraped a pass on re-mark
+db[2].score = 61.5
+
+/* ---- Verify the update ---- */
+
+print "After update:"
+
+for i = 1 to 3
+    let s = db[i]
+    print "  " + s.name + ": " + s.score
+end for
+
+db.close()
+
+end

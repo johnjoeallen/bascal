@@ -4,6 +4,7 @@ pub mod diagnostics;
 pub mod lexer;
 pub mod linker;
 pub mod parser;
+pub mod records;
 pub mod resolver;
 
 use std::collections::HashSet;
@@ -46,6 +47,7 @@ pub fn compile_source(
 ) -> Result<String, Vec<Diagnostic>> {
     let filename = filename.into();
     let program = parse_source(filename, source)?;
+    let program = records::lower(program)?;
     resolver::validate(&program)?;
     let conflicts = codegen::check_generated_name_conflicts(&program);
     if !conflicts.is_empty() {
@@ -79,6 +81,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         // Suite file not found → compile without COMMON (silent; suite may not exist yet).
     }
 
+    let program = records::lower(program)?;
     resolver::validate(&program)?;
     Ok(CodeGenerator::new()
         .with_line_numbers(options.line_numbers)
@@ -109,6 +112,7 @@ fn load_program_recursive(
             common: Vec::new(),
             statements: Vec::new(),
             functions: Vec::new(),
+            records: Vec::new(),
         });
     }
 
@@ -152,6 +156,7 @@ fn load_program_recursive(
         common: Vec::new(),
         statements: Vec::new(),
         functions: Vec::new(),
+        records: Vec::new(),
     };
 
     for declaration in &program.declarations {
@@ -162,12 +167,14 @@ fn load_program_recursive(
                     load_program_recursive(&dependency_path, false, options, visited)?;
                 merged.statements.extend(dependency.statements);
                 merged.functions.extend(dependency.functions);
+                merged.records.extend(dependency.records);
             }
         }
     }
 
     merged.statements.extend(program.statements);
     merged.functions.extend(program.functions);
+    merged.records.extend(program.records);
     Ok(merged)
 }
 
@@ -508,6 +515,212 @@ end
         assert!(output.contains("GET #1, 1"));
         assert!(output.contains("SEEK #1, 2"));
         assert!(output.contains("CLOSE #1"));
+    }
+
+    // ── record/file DSL ────────────────────────────────────────────────
+
+    fn record_dsl_source() -> &'static str {
+        r#"record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file db as Student = open("tutorial_students.dat")
+
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+
+for i = 3 downto 1
+    let s = db[i]
+    print "[" + s.id + "] " + s.name + " " + s.score
+end for
+
+db[2].score = 61.5
+
+db.close()
+
+end
+"#
+    }
+
+    #[test]
+    fn record_file_declares_open_and_field() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains(r#"OPEN "tutorial_students.dat" FOR RANDOM AS #1 LEN = 30"#));
+        assert!(output.contains("FIELD #1, 2 AS db_idbuf$, 20 AS db_namebuf$, 8 AS db_scorebuf$"));
+    }
+
+    #[test]
+    fn record_whole_write_lowers_to_lset_and_put() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains("LSET db_idbuf$ = MKI%(1)"));
+        assert!(output.contains(r#"LSET db_namebuf$ = "Alice""#));
+        assert!(output.contains("LSET db_scorebuf$ = MKD#(95)"));
+        assert!(output.contains("PUT #1, 1"));
+    }
+
+    #[test]
+    fn record_whole_read_lowers_to_get_and_unpack() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains("GET #1, i"));
+        assert!(output.contains("s_id% = CVI%(db_idbuf$)"));
+        assert!(output.contains("s_name$ = RTRIM$(db_namebuf$)"));
+        assert!(output.contains("s_score# = CVD#(db_scorebuf$)"));
+    }
+
+    #[test]
+    fn record_dotted_field_access_resolves_to_unpacked_scalar() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        // s.name is already a string — must not be STR$()-wrapped.
+        assert!(output.contains("+ s_name$"));
+        assert!(!output.contains("STR$(s_name$)"));
+        // s.id / s.score are numeric and combined with strings via `+` — must be wrapped.
+        assert!(output.contains("STR$(s_id%)"));
+        assert!(output.contains("STR$(s_score#)"));
+    }
+
+    #[test]
+    fn record_partial_update_lowers_to_get_lset_put() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains("GET #1, 2"));
+        assert!(output.contains("LSET db_scorebuf$ = MKD#(61.5)"));
+        assert!(output.contains("PUT #1, 2"));
+    }
+
+    #[test]
+    fn record_close_lowers_to_close_statement() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains("CLOSE #1"));
+    }
+
+    #[test]
+    fn record_downto_lowers_to_step_negative_one() {
+        let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
+        assert!(output.contains("FOR i = 3 TO 1 STEP -1"));
+    }
+
+    #[test]
+    fn record_multiple_files_allocate_sequential_channels() {
+        let source = r#"record A
+    n: int16
+end record
+
+record B
+    n: int16
+end record
+
+file first as A = open("a.dat")
+file second as B = open("b.dat")
+
+first.close()
+second.close()
+end
+"#;
+        let output = compile_source("multi.bcl", source).expect("should compile");
+        assert!(output.contains("OPEN \"a.dat\" FOR RANDOM AS #1 LEN = 2"));
+        assert!(output.contains("OPEN \"b.dat\" FOR RANDOM AS #2 LEN = 2"));
+        assert!(output.contains("CLOSE #1"));
+        assert!(output.contains("CLOSE #2"));
+    }
+
+    #[test]
+    fn record_rejects_unknown_field_in_literal() {
+        let source = r#"record A
+    n: int16
+end record
+file db as A = open("a.dat")
+db[1] = { n: 1, bogus: 2 }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject unknown field");
+        assert!(err.iter().any(|d| d.message.contains("bogus")));
+    }
+
+    #[test]
+    fn record_rejects_missing_field_in_literal() {
+        let source = r#"record A
+    n: int16
+    m: int16
+end record
+file db as A = open("a.dat")
+db[1] = { n: 1 }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject missing field");
+        assert!(err.iter().any(|d| d.message.contains("missing field")));
+    }
+
+    #[test]
+    fn record_rejects_oversized_string_literal() {
+        let source = r#"record A
+    name: string(3)
+end record
+file db as A = open("a.dat")
+db[1] = { name: "TooLong" }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject oversized string literal");
+        assert!(err.iter().any(|d| d.message.contains("exceeds string(3)")));
+    }
+
+    #[test]
+    fn record_rejects_string_literal_for_numeric_field() {
+        let source = r#"record A
+    n: int16
+end record
+file db as A = open("a.dat")
+db[1] = { n: "oops" }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject string for numeric field");
+        assert!(err.iter().any(|d| d.message.contains("numeric")));
+    }
+
+    #[test]
+    fn record_rejects_numeric_literal_for_string_field() {
+        let source = r#"record A
+    name: string(10)
+end record
+file db as A = open("a.dat")
+db[1] = { name: 5 }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject numeric for string field");
+        assert!(err.iter().any(|d| d.message.contains("string(N)")));
+    }
+
+    #[test]
+    fn record_rejects_unknown_record_type() {
+        let source = r#"file db as Nope = open("a.dat")
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject unknown record type");
+        assert!(err.iter().any(|d| d.message.contains("unknown record type")));
+    }
+
+    #[test]
+    fn record_rejects_undeclared_file_var() {
+        let source = r#"record A
+    n: int16
+end record
+db[1] = { n: 1 }
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject undeclared file var");
+        assert!(err.iter().any(|d| d.message.contains("not a declared `file`")));
+    }
+
+    #[test]
+    fn record_rejects_bare_field_read_without_let() {
+        let source = r#"record A
+    n: int16
+end record
+file db as A = open("a.dat")
+print db[1].n
+end
+"#;
+        let err = compile_source("bad.bcl", source).expect_err("should reject bare field read");
+        assert!(!err.is_empty());
     }
 
     #[test]

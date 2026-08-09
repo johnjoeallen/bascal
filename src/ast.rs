@@ -7,6 +7,31 @@ pub struct Program {
     pub common: Vec<CommonBlock>,
     pub statements: Vec<Statement>,
     pub functions: Vec<FunctionDef>,
+    pub records: Vec<RecordDef>,
+}
+
+/// A `record ... end record` declaration: a fixed-layout struct that the
+/// `records` lowering pass (src/records.rs) desugars into `FIELD`-bound
+/// buffer variables and MKx$/CVx$ packing calls before codegen ever runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordDef {
+    pub name: String,
+    pub fields: Vec<RecordFieldDef>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecordFieldDef {
+    pub name: String,
+    pub ty: RecordFieldType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordFieldType {
+    Int16,
+    Int32,
+    Float32,
+    Float64,
+    Str(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +166,14 @@ pub enum Statement {
         file: Expr,
         channel: Expr,
         len: Option<Expr>,
+    },
+    /// `file <var> as <RecordType> = open(<path>)` — high-level record/file
+    /// DSL sugar. Always eliminated by `records::lower` before codegen runs;
+    /// see src/records.rs.
+    FileDecl {
+        var: BasicIdent,
+        record_type: String,
+        path: Expr,
     },
     LineInput {
         channel: Expr,
@@ -358,6 +391,26 @@ pub enum Expr {
         op: BinaryOp,
         right: Box<Expr>,
     },
+    /// `db[i]` — record/file DSL sugar. Always eliminated by `records::lower`
+    /// before codegen runs; see src/records.rs.
+    FileIndex {
+        var: BasicIdent,
+        index: Box<Expr>,
+    },
+    /// `s.field` / `db[i].field` — record/file DSL sugar.
+    FieldAccess {
+        base: Box<Expr>,
+        field: String,
+    },
+    /// `db.close()` — record/file DSL sugar (currently the only recognized
+    /// method is `close`; any other method is rejected during lowering).
+    MethodCall {
+        base: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+    },
+    /// `{ field: value, ... }` — record/file DSL sugar.
+    RecordLit(Vec<(String, Expr)>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

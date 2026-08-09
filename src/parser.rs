@@ -34,6 +34,7 @@ impl Parser {
         let mut common = Vec::new();
         let mut statements = Vec::new();
         let mut functions = Vec::new();
+        let mut records = Vec::new();
 
         self.skip_newlines();
         while !self.is_eof() {
@@ -53,6 +54,8 @@ impl Parser {
                 functions.push(self.parse_function()?);
             } else if self.check_keyword("procedure") {
                 functions.push(self.parse_procedure()?);
+            } else if self.check_keyword("record") {
+                records.push(self.parse_record_def()?);
             } else {
                 statements.push(self.parse_statement()?);
             }
@@ -67,6 +70,7 @@ impl Parser {
             common,
             statements,
             functions,
+            records,
         })
     }
 
@@ -157,6 +161,76 @@ impl Parser {
         Ok(FunctionDef { name, params, body, is_procedure: true })
     }
 
+    fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
+        self.expect_keyword("record")?;
+        let name = self.expect_ident("expected record name")?;
+        self.consume_line_end()?;
+        self.skip_newlines();
+        let mut fields = Vec::new();
+        while !self.is_eof() && !(self.check_keyword("end") && self.check_next_keyword("record")) {
+            let field_name = self.expect_ident("expected record field name")?;
+            self.expect(TokenKind::Colon, "expected `:` after record field name")?;
+            let ty = self.parse_record_field_type()?;
+            self.consume_line_end()?;
+            fields.push(RecordFieldDef { name: field_name, ty });
+            self.skip_newlines();
+        }
+        self.expect_keyword("end")?;
+        self.expect_keyword("record")?;
+        self.consume_line_end()?;
+        Ok(RecordDef { name, fields })
+    }
+
+    fn parse_record_field_type(&mut self) -> ParseResult<RecordFieldType> {
+        let raw = self.expect_ident("expected record field type")?;
+        match raw.to_ascii_lowercase().as_str() {
+            "int16" => Ok(RecordFieldType::Int16),
+            "int32" => Ok(RecordFieldType::Int32),
+            "float32" => Ok(RecordFieldType::Float32),
+            "float64" => Ok(RecordFieldType::Float64),
+            "string" => {
+                self.expect(TokenKind::LParen, "expected `(` after `string`")?;
+                let width = self.expect_number_literal("expected string field width")?;
+                self.expect(TokenKind::RParen, "expected `)` after string field width")?;
+                if width <= 0 {
+                    return Err(self.error("string field width must be a positive integer"));
+                }
+                Ok(RecordFieldType::Str(width as u32))
+            }
+            other => Err(self.error(format!(
+                "unknown record field type `{other}`; expected int16, int32, float32, float64, or string(N)"
+            ))),
+        }
+    }
+
+    fn expect_number_literal(&mut self, message: &str) -> ParseResult<i64> {
+        match &self.current().kind {
+            TokenKind::Number(value) => {
+                let value = *value;
+                self.advance();
+                Ok(value)
+            }
+            _ => Err(self.error(message)),
+        }
+    }
+
+    fn parse_file_decl(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("file")?;
+        let var = BasicIdent::parse(&self.expect_ident("expected file variable name")?);
+        self.expect_keyword("as")?;
+        let record_type = self.expect_ident("expected record type name after `as`")?;
+        self.expect(TokenKind::Eq, "expected `=` in file declaration")?;
+        if !self.check_keyword("open") {
+            return Err(self.error("expected `open(...)` in file declaration"));
+        }
+        self.advance(); // consume `open`
+        self.expect(TokenKind::LParen, "expected `(` after `open`")?;
+        let path = self.parse_expr(0)?;
+        self.expect(TokenKind::RParen, "expected `)` after file path")?;
+        self.consume_line_end()?;
+        Ok(Statement::FileDecl { var, record_type, path })
+    }
+
     fn parse_ident_list(&mut self) -> ParseResult<Vec<BasicIdent>> {
         let mut items = Vec::new();
         if matches!(self.current().kind, TokenKind::RParen) {
@@ -189,6 +263,10 @@ impl Parser {
     fn parse_statement(&mut self) -> ParseResult<Statement> {
         if self.check_keyword("dim") {
             self.parse_dim()
+        } else if self.check_keyword("file") {
+            self.parse_file_decl()
+        } else if self.check_keyword("record") {
+            Err(self.error("`record` declarations are only valid at program level"))
         } else if matches!(self.current().kind, TokenKind::Comment(_)) {
             self.parse_comment()
         } else if matches!(self.current().kind, TokenKind::BlockComment(_)) {
@@ -634,13 +712,21 @@ impl Parser {
         let var = BasicIdent::parse(&self.expect_ident("expected FOR variable")?);
         self.expect(TokenKind::Eq, "expected `=` in FOR statement")?;
         let start = self.parse_expr(0)?;
-        self.expect_keyword("to")?;
-        let end = self.parse_expr(0)?;
-        let step = if self.check_keyword("step") {
-            self.expect_keyword("step")?;
-            Some(self.parse_expr(0)?)
+        let (end, step) = if self.check_keyword("downto") {
+            self.expect_keyword("downto")?;
+            let end = self.parse_expr(0)?;
+            // `for i = A downto B` is sugar for `for i = A to B step -1`.
+            (end, Some(Expr::Integer(-1)))
         } else {
-            None
+            self.expect_keyword("to")?;
+            let end = self.parse_expr(0)?;
+            let step = if self.check_keyword("step") {
+                self.expect_keyword("step")?;
+                Some(self.parse_expr(0)?)
+            } else {
+                None
+            };
+            (end, step)
         };
         self.consume_line_end()?;
         let body = self.parse_block(&[BlockEnd::ForEnd, BlockEnd::BareEnd])?;
@@ -1116,9 +1202,31 @@ impl Parser {
             TokenKind::Ident(value) => {
                 let ident = BasicIdent::parse(value);
                 self.advance();
-                if self.eat(TokenKind::LParen) {
+                // A dotted identifier (`s.id`, `db.close`) already lexes as one
+                // token (see lexer.rs `ident()`) — split on the last `.` to
+                // build record-file field-access/method-call sugar. This is
+                // safe because no other BASCAL construct produces a dotted
+                // identifier through expression parsing (dotted `require`/
+                // `import` paths are parsed via a separate grammar path).
+                if let Some(dot_pos) = ident.name.rfind('.') {
+                    let base = BasicIdent {
+                        name: ident.name[..dot_pos].to_string(),
+                        suffix: None,
+                    };
+                    let member = ident.name[dot_pos + 1..].to_string();
+                    if self.eat(TokenKind::LParen) {
+                        let args = self.parse_expr_list_until_rparen()?;
+                        Expr::MethodCall { base: Box::new(Expr::Ident(base)), method: member, args }
+                    } else {
+                        Expr::FieldAccess { base: Box::new(Expr::Ident(base)), field: member }
+                    }
+                } else if self.eat(TokenKind::LParen) {
                     let args = self.parse_expr_list_until_rparen()?;
                     make_paren_ident_expr(ident, args)
+                } else if self.eat(TokenKind::LBracket) {
+                    let index = self.parse_expr(0)?;
+                    self.expect(TokenKind::RBracket, "expected `]` after file index")?;
+                    Expr::FileIndex { var: ident, index: Box::new(index) }
                 } else {
                     Expr::Ident(ident)
                 }
@@ -1129,8 +1237,38 @@ impl Parser {
                 self.expect(TokenKind::RParen, "expected `)`")?;
                 expr
             }
+            TokenKind::LBrace => {
+                self.advance();
+                let mut fields = Vec::new();
+                if !matches!(self.current().kind, TokenKind::RBrace) {
+                    loop {
+                        let field_name = self.expect_ident("expected field name in record literal")?;
+                        self.expect(TokenKind::Colon, "expected `:` after field name in record literal")?;
+                        let value = self.parse_expr(0)?;
+                        fields.push((field_name, value));
+                        if !self.eat(TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(TokenKind::RBrace, "expected `}` after record literal")?;
+                Expr::RecordLit(fields)
+            }
             _ => return Err(self.error("expected expression")),
         };
+
+        // Postfix `.field` / `.method(...)` — handles `db[i].field`, where the
+        // preceding `]` prevents the lexer from gluing the dot into an
+        // identifier token (unlike `s.id`, handled above).
+        while self.eat(TokenKind::Dot) {
+            let member = self.expect_ident("expected field or method name after `.`")?;
+            if self.eat(TokenKind::LParen) {
+                let args = self.parse_expr_list_until_rparen()?;
+                left = Expr::MethodCall { base: Box::new(left), method: member, args };
+            } else {
+                left = Expr::FieldAccess { base: Box::new(left), field: member };
+            }
+        }
 
         loop {
             let Some((left_bp, right_bp, op)) = self.infix_binding_power() else {
@@ -1477,5 +1615,119 @@ mod tests {
             .unwrap_err()
             .iter()
             .any(|diagnostic| diagnostic.message.contains("returns")));
+    }
+
+    #[test]
+    fn parses_record_def() {
+        let program = parse(
+            "record Student\n    id: int16\n    name: string(20)\n    score: float64\nend record\nend\n",
+        );
+        assert_eq!(program.records.len(), 1);
+        let rec = &program.records[0];
+        assert_eq!(rec.name, "Student");
+        assert_eq!(rec.fields.len(), 3);
+        assert_eq!(rec.fields[0].name, "id");
+        assert_eq!(rec.fields[0].ty, RecordFieldType::Int16);
+        assert_eq!(rec.fields[1].name, "name");
+        assert_eq!(rec.fields[1].ty, RecordFieldType::Str(20));
+        assert_eq!(rec.fields[2].name, "score");
+        assert_eq!(rec.fields[2].ty, RecordFieldType::Float64);
+    }
+
+    #[test]
+    fn parses_file_decl() {
+        let program = parse("file db as Student = open(\"students.dat\")\nend\n");
+        match &program.statements[0] {
+            Statement::FileDecl { var, record_type, path } => {
+                assert_eq!(var.name, "db");
+                assert_eq!(record_type, "Student");
+                assert!(matches!(path, Expr::String(s) if s == "students.dat"));
+            }
+            other => panic!("expected FileDecl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_file_index_expr() {
+        let program = parse("let s = db[i]\nend\n");
+        match &program.statements[0] {
+            Statement::Assignment { value, .. } => {
+                assert!(matches!(value, Expr::FileIndex { .. }));
+            }
+            other => panic!("expected assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_bracketed_field_access() {
+        // db[i].field — the `.` follows `]`, so it must come through the
+        // lexer's new standalone Dot token, not the glued-identifier path.
+        let program = parse("db[i].score = 61.5\nend\n");
+        match &program.statements[0] {
+            Statement::Assignment { target, .. } => match target {
+                Expr::FieldAccess { base, field } => {
+                    assert_eq!(field, "score");
+                    assert!(matches!(base.as_ref(), Expr::FileIndex { .. }));
+                }
+                other => panic!("expected FieldAccess, got {other:?}"),
+            },
+            other => panic!("expected assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_dotted_field_access_and_method_call() {
+        let program = parse("print s.id\ndb.close()\nend\n");
+        match &program.statements[0] {
+            Statement::Print { tokens } => match &tokens[0] {
+                PrintToken::Expr(Expr::FieldAccess { base, field }) => {
+                    assert_eq!(field, "id");
+                    assert!(matches!(base.as_ref(), Expr::Ident(i) if i.name == "s"));
+                }
+                other => panic!("expected FieldAccess print token, got {other:?}"),
+            },
+            other => panic!("expected print, got {other:?}"),
+        }
+        match &program.statements[1] {
+            Statement::ExprStmt(Expr::MethodCall { base, method, args }) => {
+                assert!(matches!(base.as_ref(), Expr::Ident(i) if i.name == "db"));
+                assert_eq!(method, "close");
+                assert!(args.is_empty());
+            }
+            other => panic!("expected MethodCall exprstmt, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_record_literal() {
+        let program = parse("db[1] = { id: 1, name: \"Alice\", score: 95.0 }\nend\n");
+        match &program.statements[0] {
+            Statement::Assignment { target, value } => {
+                assert!(matches!(target, Expr::FileIndex { .. }));
+                match value {
+                    Expr::RecordLit(fields) => {
+                        assert_eq!(fields.len(), 3);
+                        assert_eq!(fields[0].0, "id");
+                        assert_eq!(fields[1].0, "name");
+                        assert_eq!(fields[2].0, "score");
+                    }
+                    other => panic!("expected RecordLit, got {other:?}"),
+                }
+            }
+            other => panic!("expected assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_for_downto_as_step_negative_one() {
+        let program = parse("for i = 3 downto 1\nprint i\nend for\nend\n");
+        match &program.statements[0] {
+            Statement::For { start, end, step, .. } => {
+                assert!(matches!(start, Expr::Integer(3)));
+                assert!(matches!(end, Expr::Integer(1)));
+                assert!(matches!(step, Some(Expr::Integer(-1))));
+            }
+            other => panic!("expected for statement, got {other:?}"),
+        }
     }
 }

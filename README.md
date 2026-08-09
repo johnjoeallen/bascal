@@ -18,6 +18,12 @@ larger programs practical:
 - BASIC type suffixes (`%` integer, `$` string, `!` single, `#` double, `&` long)
 - source comments preserved in generated output
 - generated `.bas` output using line-number `GOTO` / `GOSUB`
+- `record` / `file` DSL: typed fixed-layout records (`int16`, `int32`,
+  `float32`, `float64`, `string(N)`) with `file db as T = open(path)`,
+  `db[i] = { ... }`, `let s = db[i]`, `db[i].field = value`, and
+  `db.close()`, all lowered to plain `FIELD`/`PUT`/`GET`/`LSET`/`MKx`/`CVx`
+  — see [MANUAL.md](MANUAL.md#record-files) and
+  [`tutorial/16_record_files.bcl`](tutorial/16_record_files.bcl)
 
 Everything is still global. Path-style names are linker selectors, not runtime
 namespaces.
