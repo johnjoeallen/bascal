@@ -54,6 +54,12 @@ header.hero h1 {
   letter-spacing: .02em;
 }
 header.hero.compact h1 { font-size: 1.9rem; }
+header.hero .backronym {
+  font-size: .85rem;
+  color: var(--fg-dim);
+  letter-spacing: .01em;
+  margin: 0 0 1rem;
+}
 header.hero .tagline {
   font-size: 1.2rem;
   color: var(--fg-dim);
