@@ -358,19 +358,31 @@ end</code></pre>
       <p class="note"><code>on error goto 0</code> is the one numeric exception — it isn't a line number, it's the sentinel that disables the error trap. Everywhere else, a raw number in a branch-target position is a compile-time error.</p>
     </div>
 
-    <p class="lede">
-      <code>for</code>/<code>next</code> is the one exception to the GOTO-chain
-      shape above: it compiles straight to a native BASIC <code>FOR ... NEXT</code>
-      block, and <code>exit for</code> transpiles directly to BASIC's own
-      <code>EXIT FOR</code> — there's no guarded jump or local label involved,
-      since <code>FOR ... NEXT</code> already has everything it needs
-      built in to the target dialect. Multiline <code>if</code>/<code>else
-      if</code>/<code>else</code>, on the other hand, does compile to the
-      same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain as the loops
-      above — see the
-      <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a>
-      note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.
-    </p>
+    <div class="compare">
+      <h3>The one exception: <code>for</code>/<code>next</code></h3>
+      <p class="note">Every loop above compiles to a guarded <code>GOTO</code> chain with a local label. <code>for</code>/<code>next</code> doesn't need that trick: BASIC already has a native counted loop, so BASCAL compiles straight to it, and <code>exit for</code> becomes BASIC's own <code>EXIT FOR</code> — no guard, no label.</p>
+      <div class="compare-grid">
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>for i% = 1 to 20
+    if i% &gt; 4 then
+        print i%
+        exit for
+    end if
+end for</code></pre>
+        </div>
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>FOR i% = 1 TO 20
+    IF (i% &gt; 4) = 0 THEN GOTO 10
+        PRINT i%
+        EXIT FOR
+10 REM END IF
+NEXT i%</code></pre>
+        </div>
+      </div>
+      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above (that's where <code>exit for</code> lives). See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.</p>
+    </div>
   </section>
 
   <section id="tutorial">
