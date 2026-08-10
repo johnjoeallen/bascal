@@ -341,9 +341,7 @@ impl CodeGenerator {
                 let top_label = format!("WHILE_{id:04}_TOP");
                 let end_label = format!("WHILE_{id:04}_END");
                 self.line(&format!("{top_label}:"));
-                let (prelude, condition) = self.expr(condition, current_function);
-                self.lines(prelude);
-                self.line(&format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                self.condition_jump(condition, &end_label, false, current_function);
                 self.indent += 1;
                 self.loop_exit_stack.push(end_label.clone());
                 self.statements(body, current_function);
@@ -360,27 +358,23 @@ impl CodeGenerator {
                 let end_label = format!("DO_{id:04}_END");
                 self.line(&format!("{top_label}:"));
                 if let Some(cond) = condition {
-                    let (prelude, expr) = self.expr(&cond.expr, current_function);
-                    self.lines(prelude);
-                    if cond.is_while {
-                        self.line(&format!("IF ({expr}) = 0 THEN GOTO {end_label}"));
-                    } else {
-                        self.line(&format!("IF ({expr}) <> 0 THEN GOTO {end_label}"));
-                    }
+                    // is_while -> exit when false (invert=false); is_until -> exit when true (invert=true).
+                    self.condition_jump(&cond.expr, &end_label, !cond.is_while, current_function);
                 }
                 self.indent += 1;
                 self.loop_exit_stack.push(end_label.clone());
                 self.statements(body, current_function);
                 self.loop_exit_stack.pop();
                 if let Some(cond) = post_condition {
-                    let (prelude, expr) = self.expr(&cond.expr, current_function);
-                    self.lines(prelude);
-                    if cond.is_while {
-                        self.line(&format!("IF ({expr}) <> 0 THEN GOTO {top_label}"));
-                    } else {
-                        self.line(&format!("IF ({expr}) = 0 THEN GOTO {top_label}"));
-                    }
-                } else if condition.is_none() {
+                    // is_while -> repeat when true (invert=true); is_until -> repeat when false (invert=false).
+                    self.condition_jump(&cond.expr, &top_label, cond.is_while, current_function);
+                } else {
+                    // No post-condition: loop back to re-check the pre-condition (if
+                    // any) or repeat unconditionally (bare `do ... end do`, relying on
+                    // `exit do` to leave). Previously this only fired for a bare
+                    // `do`, so a pre-condition-only `do while`/`do until` loop never
+                    // actually looped — it ran the body at most once and fell
+                    // through, regardless of the condition.
                     self.line(&format!("GOTO {top_label}"));
                 }
                 self.indent -= 1;
@@ -720,6 +714,72 @@ impl CodeGenerator {
         self.line(&expr_stmt);
     }
 
+    /// Emits guarded-jump code for `condition`: jumps to `target` when the
+    /// condition is false (`invert = false`) or true (`invert = true`),
+    /// otherwise falls through to whatever is emitted next.
+    ///
+    /// Detects a top-level `&&`/`||` chain (only ever produced by
+    /// `Parser::parse_condition`) and emits one short-circuit guard line per
+    /// operand instead of rendering the whole condition as a single BASIC
+    /// expression. Each operand's own prelude (e.g. a `GOSUB` for a function
+    /// call) is emitted immediately before that operand's guard line, not
+    /// hoisted to the top — this is what makes a later operand's side
+    /// effects genuinely not run once an earlier operand already decided
+    /// the outcome, the actual point of the feature.
+    ///
+    /// Any condition that isn't a chain falls back to exactly the
+    /// single-`IF` behavior this replaced, so every existing condition is
+    /// byte-for-byte unchanged.
+    fn condition_jump(
+        &mut self,
+        condition: &Expr,
+        target: &str,
+        invert: bool,
+        current_function: Option<&FunctionInfo>,
+    ) {
+        let chain_op = match condition {
+            Expr::Binary { op: op @ (BinaryOp::AndAnd | BinaryOp::OrOr), .. } => Some(*op),
+            _ => None,
+        };
+
+        let Some(chain_op) = chain_op else {
+            let (prelude, text) = self.expr(condition, current_function);
+            self.lines(prelude);
+            let polarity = if invert { "<> 0" } else { "= 0" };
+            self.line(&format!("IF ({text}) {polarity} THEN GOTO {target}"));
+            return;
+        };
+
+        let mut operands = Vec::new();
+        flatten_chain(condition, chain_op, &mut operands);
+
+        let is_and = matches!(chain_op, BinaryOp::AndAnd);
+        let polarity = if is_and { "= 0" } else { "<> 0" };
+        // De Morgan duality: an AND-chain under `invert` behaves like a
+        // plain OR-chain (needs a "some operand already decided true" skip
+        // label) and vice versa — captured by this single XOR flag.
+        let simple = is_and != invert;
+
+        let jump_dest = if simple {
+            target.to_string()
+        } else {
+            let id = self.next_label;
+            self.next_label += 1;
+            format!("SC_{id:04}_CONT")
+        };
+
+        for operand in &operands {
+            let (prelude, text) = self.expr(operand, current_function);
+            self.lines(prelude);
+            self.line(&format!("IF ({text}) {polarity} THEN GOTO {jump_dest}"));
+        }
+
+        if !simple {
+            self.line(&format!("GOTO {target}"));
+            self.line(&format!("{jump_dest}:"));
+        }
+    }
+
     fn if_statement(
         &mut self,
         condition: &Expr,
@@ -727,23 +787,20 @@ impl CodeGenerator {
         else_body: &[Statement],
         current_function: Option<&FunctionInfo>,
     ) {
-        let (prelude, condition) = self.expr(condition, current_function);
-        self.lines(prelude);
-
         let id = self.next_label;
         self.next_label += 1;
         let else_label = format!("IF_{id:04}_ELSE");
         let end_label = format!("IF_{id:04}_END");
 
         if else_body.is_empty() {
-            self.line(&format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+            self.condition_jump(condition, &end_label, false, current_function);
             self.indent += 1;
             self.statements(then_body, current_function);
             self.indent -= 1;
             self.line(&format!("{end_label}:"));
             self.line("REM END IF");
         } else {
-            self.line(&format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+            self.condition_jump(condition, &else_label, false, current_function);
             self.indent += 1;
             self.statements(then_body, current_function);
             self.line(&format!("GOTO {end_label}"));
@@ -1583,6 +1640,18 @@ pub(crate) fn sanitize_symbol(value: &str) -> String {
         .collect()
 }
 
+/// Flattens a left-associated `&&`/`||` chain (as built by
+/// `Parser::parse_condition`) into its operands, left to right.
+fn flatten_chain<'a>(expr: &'a Expr, op: BinaryOp, out: &mut Vec<&'a Expr>) {
+    match expr {
+        Expr::Binary { left, op: o, right } if *o == op => {
+            flatten_chain(left, op, out);
+            out.push(right);
+        }
+        _ => out.push(expr),
+    }
+}
+
 fn binary_op(op: BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "+",
@@ -1601,6 +1670,9 @@ fn binary_op(op: BinaryOp) -> &'static str {
         BinaryOp::Mod => "MOD",
         BinaryOp::IntDiv => "\\",
         BinaryOp::Pow => "^",
+        BinaryOp::AndAnd | BinaryOp::OrOr => {
+            unreachable!("&&/|| only valid as an if/while/do condition chain — codegen bug if reached here")
+        }
     }
 }
 
@@ -1753,6 +1825,7 @@ fn is_label_line(line: &str) -> Option<&str> {
         || label.starts_with("WHILE_")
         || label.starts_with("DO_")
         || label.starts_with("SEL_")
+        || label.starts_with("SC_")
     {
         Some(label)
     } else {

@@ -72,39 +72,41 @@
 640 ' DO WHILE — test before body
 650 PRINT "DO WHILE:"
 660 k% = 1
-670 IF (k% <= 3) = 0 THEN GOTO 700
+670 IF (k% <= 3) = 0 THEN GOTO 710
 680     PRINT "  "; k%
 690     k% = k% + 1
-700 REM END DO
+700     GOTO 670
+710 REM END DO
 
-710 ' DO UNTIL — enter while condition is false
-720 PRINT "DO UNTIL:"
-730 k% = 1
-740 IF (k% > 3) <> 0 THEN GOTO 770
-750     PRINT "  "; k%
-760     k% = k% + 1
-770 REM END DO
+720 ' DO UNTIL — enter while condition is false
+730 PRINT "DO UNTIL:"
+740 k% = 1
+750 IF (k% > 3) <> 0 THEN GOTO 790
+760     PRINT "  "; k%
+770     k% = k% + 1
+780     GOTO 750
+790 REM END DO
 
-780 ' DO ... DO END with post-check — body runs at least once
-790 PRINT "DO...DO END (body runs once even though false):"
-800 k% = 99
-810     PRINT "  "; k%
-820     k% = k% + 1
-830     IF (k% > 3) = 0 THEN GOTO 850
-840         GOTO 870
-850     REM END IF
-860     GOTO 810
-870 REM END DO
+800 ' DO ... DO END with post-check — body runs at least once
+810 PRINT "DO...DO END (body runs once even though false):"
+820 k% = 99
+830     PRINT "  "; k%
+840     k% = k% + 1
+850     IF (k% > 3) = 0 THEN GOTO 870
+860         GOTO 890
+870     REM END IF
+880     GOTO 830
+890 REM END DO
 
-880 ' EXIT DO
-890 PRINT "EXIT DO at 3:"
-900 k% = 1
-910     IF (k% = 3) = 0 THEN GOTO 930
-920         GOTO 970
-930     REM END IF
-940     PRINT "  "; k%
-950     k% = k% + 1
-960     GOTO 910
-970 REM END DO
+900 ' EXIT DO
+910 PRINT "EXIT DO at 3:"
+920 k% = 1
+930     IF (k% = 3) = 0 THEN GOTO 950
+940         GOTO 990
+950     REM END IF
+960     PRINT "  "; k%
+970     k% = k% + 1
+980     GOTO 930
+990 REM END DO
 
-980 END
+1000 END

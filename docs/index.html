@@ -243,6 +243,29 @@ end do</code></pre>
       </div>
     </div>
 
+    <div class="compare">
+      <h3>5. Short-circuit <code>&amp;&amp;</code> / <code>||</code></h3>
+      <p class="note">Classic BASIC's <code>AND</code>/<code>OR</code> are bitwise and always evaluate both sides — there's no short-circuit primitive in the target language at all. Getting the same safety by hand means nesting an <code>IF</code> per operand, so the guarded call is textually inside the guard. BASCAL's <code>&amp;&amp;</code>/<code>||</code> are real short-circuit operators, restricted to <code>if</code>/<code>elseif</code>/<code>while</code>/<code>do</code> conditions, that transpile straight to that same nested-<code>IF</code> shape — one guarded jump per operand, in order, each operand's own setup code emitted right before its guard so a later operand's side effects genuinely don't run once an earlier one already decided the answer.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>IF (ptr% &gt;= 0) = 0 THEN GOTO 10
+ispositive_n_0% = scores%(ptr%)
+GOSUB 20
+IF (ispositive_result_0% &gt; 0) = 0 THEN GOTO 10
+    PRINT "safe to read"
+10 REM END IF</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>if ptr% &gt;= 0 &amp;&amp; isPositive%(scores%(ptr%)) &gt; 0 then
+    print "safe to read"
+end if</code></pre>
+        </div>
+      </div>
+      <p class="note">A <code>||</code> chain (or an inverted <code>do until ... &amp;&amp; ...</code>) needs exactly one extra local label — the point where the chain can stop early once <em>any</em> operand has already decided the answer — worked out by the compiler per condition, not something to reason about by hand.</p>
+    </div>
+
     <p class="lede">
       <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
       <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a>
@@ -450,6 +473,7 @@ db[3] = carol</code></pre>
       <li><a href="tutorials/13_suite.html"><span class="num">13</span> Suite COMMON</a></li>
       <li><a href="tutorials/14_procedures.html"><span class="num">14</span> Procedures</a></li>
       <li><a href="tutorials/15_random_and_record_files.html"><span class="num">15</span> Random-access &amp; record files</a></li>
+      <li><a href="tutorials/16_short_circuit.html"><span class="num">16</span> Short-circuit &amp;&amp; and ||</a></li>
     </ul>
     <p><a href="tutorials/">Open the tutorials index →</a></p>
   </section>

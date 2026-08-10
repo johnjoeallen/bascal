@@ -16,6 +16,9 @@ larger programs practical:
 - path-style `require` dependencies
 - `program name [suite suitename]` declaration with `COMMON` block coordination
 - `select case` with single values, ranges, and `is` comparisons
+- `&&` / `||` short-circuit operators for `if`/`elseif`/`while`/`do` conditions
+  — unlike bitwise `AND`/`OR`, the second operand is only evaluated when it
+  can still change the answer
 - `/* */` block comments flattened to `'` lines in generated output
 - `input`, `data` / `read` / `restore`, `const`, `locate`, `color`, `on ... goto`
 - BASIC type suffixes (`%` integer, `$` string, `!` single, `#` double, `&` long)

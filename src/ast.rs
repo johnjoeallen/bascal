@@ -442,4 +442,10 @@ pub enum BinaryOp {
     Mod,
     IntDiv,
     Pow,
+    /// `&&` — short-circuit AND. Only ever constructed by
+    /// `Parser::parse_condition`, and only ever valid as the top-level
+    /// shape (or a same-operator chain) of an `if`/`while`/`do` condition.
+    AndAnd,
+    /// `||` — short-circuit OR. See `AndAnd`.
+    OrOr,
 }

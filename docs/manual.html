@@ -332,6 +332,7 @@ print &quot;2 ^ 3 ^ 2 =&quot;; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))</c
 </tbody>
 </table>
 <p><strong>Important:</strong> <code>NOT</code> is bitwise in Microsoft BASIC. <code>NOT 1</code> yields <code>−2</code>, not <code>0</code>. BASCAL's compiler emits <code>(expr) = 0</code> instead of <code>NOT expr</code> in generated control-flow conditions so that programmer-boolean values like <code>found% = 1</code> behave as expected. Use explicit <code>= 0</code> or <code>&lt;&gt; 0</code> comparisons in your own code when testing boolean flags.</p>
+<p><code>AND</code>/<code>OR</code> always evaluate both sides — there's no short-circuit primitive in generated BASIC at all. See <a href="#short-circuit--and-">Short-Circuit <code>&amp;&amp;</code> and <code>||</code></a> for BASCAL's condition-only short-circuit operators.</p>
 <pre><code>age%    = 25
 income% = 45000
 if age% &gt;= 18 and income% &gt;= 30000 then
@@ -662,6 +663,37 @@ end select</code></pre>
 </tr>
 </tbody>
 </table>
+<h3 id="short-circuit--and-">Short-Circuit &amp;&amp; and ||</h3>
+<pre><code>if a% &gt; 0 &amp;&amp; b% &gt; 0 then
+    &#39; body only runs if BOTH are true -- b% &gt; 0 is never evaluated
+    &#39; unless a% &gt; 0 already passed
+end if
+
+do until done% || attempts% &gt;= max_attempts%
+    ...
+end do</code></pre>
+<p>Unlike <code>AND</code>/<code>OR</code> (bitwise, always evaluate both sides — see <a href="#operators-and-expressions">Logical Operators</a>), <code>&amp;&amp;</code> and <code>||</code> are true short-circuit operators: <code>a% &gt; 0 &amp;&amp; f%()</code> never calls <code>f%()</code> when <code>a% &gt; 0</code> is already false, and <code>a% &gt; 0 || f%()</code> never calls <code>f%()</code> when <code>a% &gt; 0</code> is already true.</p>
+<p><code>&amp;&amp;</code>/<code>||</code> are only legal directly in the condition of <code>if</code>/<code>elseif</code>/ <code>while</code>/<code>do [while/until]</code> — not as a general expression (can't be assigned to a variable, passed as a function argument, etc.). A condition may chain any number of the <em>same</em> operator (<code>a &amp;&amp; b &amp;&amp; c</code>); mixing <code>&amp;&amp;</code> and <code>||</code> in one condition is a compile-time error — split into nested <code>if</code> statements instead.</p>
+<p>From <code>tutorial/16_short_circuit.bcl</code>, an <code>&amp;&amp;</code> guard transpiles to one guarded <code>IF</code> per operand — no bitwise <code>AND</code>, no wasted call:</p>
+<pre><code>if ptr% &gt;= 0 &amp;&amp; isPositive%(scores%(ptr%)) &gt; 0 then
+    print &quot;safe to read&quot;
+end if</code></pre>
+<pre><code>IF (ptr% &gt;= 0) = 0 THEN GOTO 10
+ispositive_n_0% = scores%(ptr%)
+GOSUB 20
+IF (ispositive_result_0% &gt; 0) = 0 THEN GOTO 10
+    PRINT &quot;safe to read&quot;
+10 REM END IF</code></pre>
+<p><code>||</code> needs one extra label, since a <em>chain</em> has to keep checking until either an operand proves it true or every operand has been tried:</p>
+<pre><code>if a% = 1 || a% = 2 then
+    print &quot;one or two&quot;
+end if</code></pre>
+<pre><code>IF (a% = 1) &lt;&gt; 0 THEN GOTO 10
+IF (a% = 2) &lt;&gt; 0 THEN GOTO 10
+GOTO 20
+10     PRINT &quot;one or two&quot;
+20 REM END IF</code></pre>
+<p><code>do until</code>/<code>do while</code>'s inverted polarity applies the same duality: a <code>do until a% &amp;&amp; b%</code> needs the extra label (mirroring a plain <code>||</code>), while a <code>do until a% || b%</code> doesn't (mirroring a plain <code>&amp;&amp;</code>) — the compiler works this out per condition; it isn't something you need to reason about yourself.</p>
 <hr />
 <h2 id="functions">Functions</h2>
 <h3 id="declaration">Declaration</h3>

@@ -1111,4 +1111,195 @@ end
             "error must name the conflicting global: {:?}", err
         );
     }
+
+    // ── short-circuit && / || ──────────────────────────────────────────
+
+    /// Returns the label named by the first `THEN GOTO <label>` in `output`.
+    fn first_goto_target(output: &str) -> &str {
+        let idx = output.find("THEN GOTO ").expect("expected a THEN GOTO line");
+        output[idx + "THEN GOTO ".len()..]
+            .split_whitespace()
+            .next()
+            .expect("label after THEN GOTO")
+    }
+
+    /// Returns the target of the first *unconditional* `GOTO <label>` line
+    /// (no `THEN` on the same line) — the "chain exhausted" jump a
+    /// not-simple `&&`/`||` chain emits after its per-operand guards.
+    fn first_bare_goto_target(output: &str) -> &str {
+        output
+            .lines()
+            .map(str::trim)
+            .find(|l| l.starts_with("GOTO ") && !l.contains("THEN"))
+            .expect("expected a bare GOTO line")
+            .trim_start_matches("GOTO ")
+    }
+
+    #[test]
+    fn double_amp_chain_is_one_guard_per_operand_no_extra_label() {
+        let source = r#"if a% > 0 && b% > 0 then
+    print "yes"
+end if
+end
+"#;
+        let output = compile_source("sc_and.bcl", source).expect("should compile");
+        let target = first_goto_target(&output);
+        let guard_a = format!("IF (a% > 0) = 0 THEN GOTO {target}");
+        let guard_b = format!("IF (b% > 0) = 0 THEN GOTO {target}");
+        assert!(output.contains(&guard_a), "missing: {guard_a}\n{output}");
+        assert!(output.contains(&guard_b), "missing: {guard_b}\n{output}");
+        // Simple AND-chain (not inverted) needs no extra "continue" label.
+        assert!(!output.contains("SC_"), "unexpected short-circuit label:\n{output}");
+    }
+
+    #[test]
+    fn double_pipe_chain_needs_one_continue_label() {
+        let source = r#"if a% > 0 || b% > 0 then
+    print "yes"
+end if
+end
+"#;
+        let output = compile_source("sc_or.bcl", source).expect("should compile");
+        let cont = first_goto_target(&output);
+        let guard_a = format!("IF (a% > 0) <> 0 THEN GOTO {cont}");
+        let guard_b = format!("IF (b% > 0) <> 0 THEN GOTO {cont}");
+        assert!(output.contains(&guard_a), "missing: {guard_a}\n{output}");
+        assert!(output.contains(&guard_b), "missing: {guard_b}\n{output}");
+        // Exactly one continue label for the whole chain, not one per operand:
+        // a single bare GOTO to a *different* target (the exit label) sits
+        // between the two guards and the continue point.
+        let exit = first_bare_goto_target(&output);
+        assert_ne!(cont, exit, "continue and exit targets must differ:\n{output}");
+    }
+
+    #[test]
+    fn three_operand_amp_chain_emits_three_guards() {
+        let source = r#"if a% > 0 && b% > 0 && c% > 0 then
+    print "yes"
+end if
+end
+"#;
+        let output = compile_source("sc_and3.bcl", source).expect("should compile");
+        let target = first_goto_target(&output);
+        for var in ["a%", "b%", "c%"] {
+            let guard = format!("IF ({var} > 0) = 0 THEN GOTO {target}");
+            assert!(output.contains(&guard), "missing: {guard}\n{output}");
+        }
+    }
+
+    #[test]
+    fn do_until_amp_chain_is_inverted_and_needs_continue_label() {
+        // `do until a && b` exits only when BOTH are true -- the De Morgan
+        // mirror of a plain `if a && b`, so (unlike the simple if-case) it
+        // needs a continue label, exactly like a plain OR chain does.
+        let source = r#"k% = 0
+do until a% > 0 && b% > 0
+    k% = k% + 1
+end do
+end
+"#;
+        let output = compile_source("sc_do_until_and.bcl", source).expect("should compile");
+        let cont = first_goto_target(&output);
+        let guard_a = format!("IF (a% > 0) = 0 THEN GOTO {cont}");
+        let guard_b = format!("IF (b% > 0) = 0 THEN GOTO {cont}");
+        assert!(output.contains(&guard_a), "missing: {guard_a}\n{output}");
+        assert!(output.contains(&guard_b), "missing: {guard_b}\n{output}");
+        // A bare GOTO to a *different* target (the loop's exit label) sits
+        // right after the two guards.
+        let exit = first_bare_goto_target(&output);
+        assert_ne!(cont, exit, "continue and exit targets must differ:\n{output}");
+    }
+
+    #[test]
+    fn do_until_pipe_chain_is_simple_no_extra_label() {
+        // `do until a || b` exits as soon as EITHER is true -- the De Morgan
+        // mirror of a plain `if a || b`, so (unlike the simple if-case for
+        // OR) it needs no continue label, matching a plain AND-chain's shape.
+        let source = r#"k% = 0
+do until a% > 0 || b% > 0
+    k% = k% + 1
+end do
+end
+"#;
+        let output = compile_source("sc_do_until_or.bcl", source).expect("should compile");
+        assert!(!output.contains("SC_"), "unexpected continue label for simple inverted OR-chain:\n{output}");
+        let target = first_goto_target(&output);
+        let guard_a = format!("IF (a% > 0) <> 0 THEN GOTO {target}");
+        let guard_b = format!("IF (b% > 0) <> 0 THEN GOTO {target}");
+        assert!(output.contains(&guard_a), "missing: {guard_a}\n{output}");
+        assert!(output.contains(&guard_b), "missing: {guard_b}\n{output}");
+    }
+
+    #[test]
+    fn do_while_pre_condition_loop_actually_loops() {
+        // Regression test: a do while/do until loop with only a
+        // pre-condition (no post-condition) previously never emitted a
+        // GOTO back to re-check the condition, so it ran its body at most
+        // once regardless of the condition -- discovered while verifying
+        // the short-circuit `&&`/`||` condition lowering by hand.
+        let source = r#"k% = 1
+do while k% <= 3
+    print k%
+    k% = k% + 1
+end do
+end
+"#;
+        let output = compile_source("do_loops_back.bcl", source).expect("should compile");
+        // The line number prefixing the condition check itself (`IF (k% <= 3) ...`)
+        // is the loop's top -- confirm some later line jumps back to it.
+        let top = output
+            .lines()
+            .find(|l| l.contains("IF (k% <= 3)"))
+            .and_then(|l| l.split_whitespace().next())
+            .expect("numbered condition-check line");
+        let loop_back = format!("GOTO {top}");
+        assert_eq!(
+            output.matches(&loop_back).count(),
+            1,
+            "expected exactly one `{loop_back}` after the loop body, jumping back to re-check the condition:\n{output}"
+        );
+    }
+
+    #[test]
+    fn non_chain_condition_is_unchanged_by_short_circuit_support() {
+        // Plain bitwise `and`/comparisons must render exactly as before --
+        // condition_jump's fallback path for non-chain conditions.
+        let source = r#"if a% > 0 and b% > 0 then
+    print "yes"
+end if
+end
+"#;
+        let output = compile_source("sc_plain_and.bcl", source).expect("should compile");
+        assert!(
+            output.contains("IF ((a% > 0) AND (b% > 0)) = 0 THEN GOTO"),
+            "unexpected rendering:\n{output}"
+        );
+        assert!(!output.contains("SC_"));
+    }
+
+    #[test]
+    fn chain_operand_side_effect_only_evaluated_after_earlier_guard() {
+        // A later operand's prelude (the GOSUB for a function call) must be
+        // emitted after the earlier operand's own guard line, not hoisted
+        // to the top -- proof that a false first operand really does skip
+        // calling the second.
+        let source = r#"function check%(n%)
+    return n%
+end function
+
+if a% > 0 && check%(b%) > 0 then
+    print "yes"
+end if
+end
+"#;
+        let output = compile_source("sc_side_effect.bcl", source).expect("should compile");
+        let first_guard = output.find("IF (a% > 0) = 0 THEN GOTO").expect("first guard");
+        // Search for the actual GOSUB *statement* (line-initial), not the
+        // word "GOSUB" that also appears in the generated header comment.
+        let gosub = output.find("\nGOSUB ").expect("GOSUB statement for check%(b%) call");
+        assert!(
+            gosub > first_guard,
+            "check%(b%)'s GOSUB must come after a%'s guard line, not before:\n{output}"
+        );
+    }
 }

@@ -657,9 +657,43 @@ impl Parser {
         Ok(Statement::Return { value })
     }
 
+    /// Parses the condition of an `if`/`elseif`/`while`/`do` — a single
+    /// expression, or a chain of `&&`-only or `||`-only operands. `&&`/`||`
+    /// are deliberately kept out of `infix_binding_power` so `parse_expr(0)`
+    /// naturally stops right before them; mixing the two operators in one
+    /// condition is a parse error for now (split into nested `if`s instead).
+    fn parse_condition(&mut self) -> ParseResult<Expr> {
+        let mut expr = self.parse_expr(0)?;
+        if matches!(self.current().kind, TokenKind::AndAnd) {
+            while self.eat(TokenKind::AndAnd) {
+                let rhs = self.parse_expr(0)?;
+                expr = Expr::Binary {
+                    left: Box::new(expr),
+                    op: BinaryOp::AndAnd,
+                    right: Box::new(rhs),
+                };
+            }
+        } else if matches!(self.current().kind, TokenKind::OrOr) {
+            while self.eat(TokenKind::OrOr) {
+                let rhs = self.parse_expr(0)?;
+                expr = Expr::Binary {
+                    left: Box::new(expr),
+                    op: BinaryOp::OrOr,
+                    right: Box::new(rhs),
+                };
+            }
+        }
+        if matches!(self.current().kind, TokenKind::AndAnd | TokenKind::OrOr) {
+            return Err(self.error(
+                "mixing `&&` and `||` in one condition isn't supported yet — split into nested `if` statements",
+            ));
+        }
+        Ok(expr)
+    }
+
     fn parse_if(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("if")?;
-        let condition = self.parse_expr(0)?;
+        let condition = self.parse_condition()?;
         self.expect_keyword("then")?;
         self.consume_line_end()?;
         let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::ElseIf, BlockEnd::EndIf])?;
@@ -684,7 +718,7 @@ impl Parser {
 
     fn parse_elseif(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("elseif")?;
-        let condition = self.parse_expr(0)?;
+        let condition = self.parse_condition()?;
         self.expect_keyword("then")?;
         self.consume_line_end()?;
         let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::ElseIf, BlockEnd::EndIf])?;
@@ -746,7 +780,7 @@ impl Parser {
 
     fn parse_while(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("while")?;
-        let condition = self.parse_expr(0)?;
+        let condition = self.parse_condition()?;
         self.consume_line_end()?;
         let body = self.parse_block(&[BlockEnd::WhileEnd, BlockEnd::BareEnd])?;
         self.expect_keyword("end")?;
@@ -794,7 +828,7 @@ impl Parser {
             self.expect_keyword("until")?;
             false
         };
-        let expr = self.parse_expr(0)?;
+        let expr = self.parse_condition()?;
         Ok(DoCondition { is_while, expr })
     }
 
@@ -1758,6 +1792,69 @@ mod tests {
                 assert!(matches!(step, Some(Expr::Integer(-1))));
             }
             other => panic!("expected for statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_double_amp_chain_as_left_folded_and_and() {
+        let program = parse("if a > 0 && b > 0 && c > 0 then\nprint a\nend if\nend\n");
+        match &program.statements[0] {
+            Statement::If { condition, .. } => match condition {
+                Expr::Binary { op: BinaryOp::AndAnd, left, right } => {
+                    assert!(matches!(right.as_ref(), Expr::Binary { op: BinaryOp::Gt, .. }));
+                    match left.as_ref() {
+                        Expr::Binary { op: BinaryOp::AndAnd, .. } => {}
+                        other => panic!("expected nested && on the left, got {other:?}"),
+                    }
+                }
+                other => panic!("expected && chain, got {other:?}"),
+            },
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_double_pipe_chain_as_or_or() {
+        let program = parse("if a = 1 || a = 2 then\nprint a\nend if\nend\n");
+        match &program.statements[0] {
+            Statement::If { condition, .. } => {
+                assert!(matches!(condition, Expr::Binary { op: BinaryOp::OrOr, .. }));
+            }
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_mixed_double_amp_and_double_pipe_in_one_condition() {
+        let tokens = Lexer::new("test.bcl", "if a && b || c then\nprint a\nend if\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for mixed && and ||");
+        assert!(errs.iter().any(|d| d.message.contains("mixing `&&` and `||`")));
+    }
+
+    #[test]
+    fn not_still_applies_to_a_single_operand_of_a_double_amp_chain() {
+        let program = parse("if not flag && b > 0 then\nprint b\nend if\nend\n");
+        match &program.statements[0] {
+            Statement::If { condition, .. } => match condition {
+                Expr::Binary { op: BinaryOp::AndAnd, left, .. } => {
+                    assert!(matches!(left.as_ref(), Expr::Unary { op: UnaryOp::Not, .. }));
+                }
+                other => panic!("expected && chain, got {other:?}"),
+            },
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn do_until_condition_supports_double_pipe_chain() {
+        let program = parse("do until done || attempts >= 3\nprint 1\nend do\nend\n");
+        match &program.statements[0] {
+            Statement::Do { condition: Some(cond), .. } => {
+                assert!(!cond.is_while);
+                assert!(matches!(cond.expr, Expr::Binary { op: BinaryOp::OrOr, .. }));
+            }
+            other => panic!("expected do statement with condition, got {other:?}"),
         }
     }
 }

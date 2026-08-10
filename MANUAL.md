@@ -341,6 +341,10 @@ control-flow conditions so that programmer-boolean values like `found% = 1`
 behave as expected. Use explicit `= 0` or `<> 0` comparisons in your own code
 when testing boolean flags.
 
+`AND`/`OR` always evaluate both sides — there's no short-circuit primitive in
+generated BASIC at all. See [Short-Circuit `&&` and `||`](#short-circuit--and-)
+for BASCAL's condition-only short-circuit operators.
+
 ```
 age%    = 25
 income% = 45000
@@ -682,6 +686,71 @@ Supported `case` forms:
 | `case is <= value` | expression ≤ value |
 | `case is > value` | expression > value |
 | `case is >= value` | expression ≥ value |
+
+### Short-Circuit && and ||
+
+```
+if a% > 0 && b% > 0 then
+    ' body only runs if BOTH are true -- b% > 0 is never evaluated
+    ' unless a% > 0 already passed
+end if
+
+do until done% || attempts% >= max_attempts%
+    ...
+end do
+```
+
+Unlike `AND`/`OR` (bitwise, always evaluate both sides — see
+[Logical Operators](#operators-and-expressions)), `&&` and `||` are true
+short-circuit operators: `a% > 0 && f%()` never calls `f%()` when `a% > 0`
+is already false, and `a% > 0 || f%()` never calls `f%()` when `a% > 0` is
+already true.
+
+`&&`/`||` are only legal directly in the condition of `if`/`elseif`/
+`while`/`do [while/until]` — not as a general expression (can't be assigned
+to a variable, passed as a function argument, etc.). A condition may chain
+any number of the *same* operator (`a && b && c`); mixing `&&` and `||` in
+one condition is a compile-time error — split into nested `if` statements
+instead.
+
+From `tutorial/16_short_circuit.bcl`, an `&&` guard transpiles to one
+guarded `IF` per operand — no bitwise `AND`, no wasted call:
+
+```
+if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
+    print "safe to read"
+end if
+```
+```
+IF (ptr% >= 0) = 0 THEN GOTO 10
+ispositive_n_0% = scores%(ptr%)
+GOSUB 20
+IF (ispositive_result_0% > 0) = 0 THEN GOTO 10
+    PRINT "safe to read"
+10 REM END IF
+```
+
+`||` needs one extra label, since a *chain* has to keep checking until
+either an operand proves it true or every operand has been tried:
+
+```
+if a% = 1 || a% = 2 then
+    print "one or two"
+end if
+```
+```
+IF (a% = 1) <> 0 THEN GOTO 10
+IF (a% = 2) <> 0 THEN GOTO 10
+GOTO 20
+10     PRINT "one or two"
+20 REM END IF
+```
+
+`do until`/`do while`'s inverted polarity applies the same duality: a
+`do until a% && b%` needs the extra label (mirroring a plain `||`), while
+a `do until a% || b%` doesn't (mirroring a plain `&&`) — the compiler
+works this out per condition; it isn't something you need to reason about
+yourself.
 
 ---
 

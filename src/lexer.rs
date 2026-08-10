@@ -83,6 +83,51 @@ mod tests {
             .collect();
         assert_eq!(idents, vec!["s.id", "com.bascal.sort.bubbleSort"]);
     }
+
+    #[test]
+    fn lexes_double_amp_and_pipe_as_short_circuit_operators() {
+        let tokens = Lexer::new("test.bcl", "a && b\nc || d\nx&&y").lex();
+        let kinds: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokenKind::Eof | TokenKind::Newline))
+            .map(|t| t.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("a".to_string()),
+                TokenKind::AndAnd,
+                TokenKind::Ident("b".to_string()),
+                TokenKind::Ident("c".to_string()),
+                TokenKind::OrOr,
+                TokenKind::Ident("d".to_string()),
+                TokenKind::Ident("x".to_string()),
+                TokenKind::AndAnd,
+                TokenKind::Ident("y".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn long_suffix_and_hex_octal_literals_unaffected_by_double_amp() {
+        // Regression test: adding `&&` must not break the existing single-`&`
+        // uses — the `Long` type suffix on an identifier, and `&H`/`&O`
+        // hex/octal literal prefixes.
+        let tokens = Lexer::new("test.bcl", "count& &H1A &O17").lex();
+        let kinds: Vec<_> = tokens
+            .into_iter()
+            .filter(|t| !matches!(t.kind, TokenKind::Eof))
+            .map(|t| t.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident("count&".to_string()),
+                TokenKind::HexLit("&H1A".to_string()),
+                TokenKind::HexLit("&O17".to_string()),
+            ]
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,6 +164,8 @@ pub enum TokenKind {
     Le,
     Gt,
     Ge,
+    AndAnd,
+    OrOr,
     Eof,
 }
 
@@ -159,7 +206,22 @@ impl<'a> Lexer<'a> {
                 '\'' => tokens.push(self.comment()),
                 '"' => tokens.push(self.string()),
                 '0'..='9' => tokens.push(self.number()),
-                '&' => tokens.push(self.hex_or_octal_lit()),
+                '&' => {
+                    if self.peek_at(1) == Some('&') {
+                        let pos = self.pos();
+                        self.advance();
+                        self.advance();
+                        tokens.push(Token { kind: TokenKind::AndAnd, pos });
+                    } else {
+                        tokens.push(self.hex_or_octal_lit());
+                    }
+                }
+                '|' if self.peek_at(1) == Some('|') => {
+                    let pos = self.pos();
+                    self.advance();
+                    self.advance();
+                    tokens.push(Token { kind: TokenKind::OrOr, pos });
+                }
                 'A'..='Z' | 'a'..='z' | '_' => tokens.push(self.ident()),
                 '(' => tokens.push(self.single(TokenKind::LParen)),
                 ')' => tokens.push(self.single(TokenKind::RParen)),
@@ -238,7 +300,9 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        if matches!(self.peek(), Some('%' | '$' | '!' | '#' | '&')) {
+        if matches!(self.peek(), Some('%' | '$' | '!' | '#'))
+            || (self.peek() == Some('&') && self.peek_at(1) != Some('&'))
+        {
             value.push(self.peek().unwrap());
             self.advance();
         }
