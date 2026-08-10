@@ -108,7 +108,7 @@ across a `CHAIN` statement into the next program. Every chained program had to
 declare an **identical** `COMMON` list or variables would land in the wrong
 slots.
 
-BASCAL coordinates this with suite files. A suite file contains only `common`
+BASCAL coordinates this with suite files. A suite file contains only variable
 declarations; any program that names it with `suite` receives those declarations
 verbatim at the top of its generated `.bas` output.
 
@@ -116,9 +116,19 @@ verbatim at the top of its generated `.bas` output.
 
 ```
 ' Shared state for the ARCADE suite.
-common score%, level%, playerName$
-common hiScore%
+suite arcade
+
+dim score%
+dim level%
+dim playerName$
+dim hiScore%
 ```
+
+The `suite <name>` header (mirroring a regular file's `program <name>`) plus
+plain `dim` declarations is the recommended form. The older spelling — no
+header, just `common score%, level%, playerName$` / `common hiScore%`, with
+the suite name taken from the filename alone — still works and compiles to
+identical output.
 
 **Program files:**
 
@@ -149,9 +159,11 @@ COMMON hiScore%
 ```
 
 Rules:
-- A suite file may contain only `common` declarations (and comments). Functions,
-  statements, and `require` are rejected.
-- `common` is illegal in any file that is not a suite file.
+- A suite file may contain only `dim`/`common` declarations (and comments).
+  Functions, statements, and `require` are rejected.
+- `common` and a `suite <name>` header are both illegal in any file that
+  isn't a suite file.
+- A file can't have both a `program` header and a `suite` header.
 - A `program` declaration (with or without `suite`) is illegal in library
   modules loaded via `require`.
 

@@ -3,6 +3,12 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub program_decl: Option<ProgramDecl>,
+    /// `suite <name>` — present when this file declares *itself* to be the
+    /// suite definition named `<name>`, an alternative to the older
+    /// filename-only convention (see load_suite_file in lib.rs). Distinct
+    /// from `ProgramDecl.suite`, which is a *reference* to a suite by name
+    /// from an ordinary program.
+    pub suite_decl: Option<String>,
     pub declarations: Vec<DependencyDecl>,
     pub common: Vec<CommonBlock>,
     pub statements: Vec<Statement>,
@@ -159,6 +165,10 @@ pub enum ResumeTarget {
 pub enum Statement {
     Dim {
         name: BasicIdent,
+        /// True whenever `(...)` was written at all, even empty (`dim
+        /// arr%()`) -- distinct from `sizes` being empty, which alone can't
+        /// tell an unbounded array apart from a plain scalar `dim x%`.
+        is_array: bool,
         sizes: Vec<Expr>,
     },
     Open {

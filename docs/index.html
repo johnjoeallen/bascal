@@ -174,9 +174,12 @@ end select</code></pre>
 
       <div class="snippet">
         <h3>Suite COMMON</h3>
-        <p class="note">A suite file's <code>common</code> list is emitted identically into every <code>program ... suite ...</code> that references it, so a <code>CHAIN</code>ed program can't drift out of sync with the variable slots it's sharing.</p>
-        <p class="note"><code>shared.bcl</code> (suite file):</p>
-        <pre><code>common count%, label$</code></pre>
+        <p class="note">A suite file's shared variables are emitted identically into every <code>program ... suite ...</code> that references it, so a <code>CHAIN</code>ed program can't drift out of sync with the variable slots it's sharing.</p>
+        <p class="note"><code>shared.bcl</code> (suite file) — <code>suite &lt;name&gt;</code> plus <code>dim</code> is the recommended form; the older headerless <code>common count%, label$</code> spelling still works too:</p>
+        <pre><code>suite shared
+
+dim count%
+dim label$</code></pre>
         <p class="note"><code>show.bcl</code>:</p>
         <pre><code>program show suite shared
 

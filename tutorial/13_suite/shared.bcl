@@ -1,13 +1,21 @@
 /*
  * Suite file for Tutorial 13 — COMMON / CHAIN.
  *
- * A suite file contains only COMMON declarations.  Every program that
- * begins with "program name suite shared" receives an identical COMMON
- * block at the top of its generated BASIC, so the listed variables are
- * shared across CHAINed programs in a multi-program application.
+ * `suite shared` declares this file as the suite itself, named `shared`
+ * (matching this filename, shared.bcl). Every program that begins with
+ * "program name suite shared" receives an identical COMMON block at the
+ * top of its generated BASIC, built from the `dim` declarations below --
+ * so the listed variables are shared across CHAINed programs in a
+ * multi-program application.
+ *
+ * (The older spelling -- no `suite` header, just `common count%, label$`,
+ * with the suite name taken from the filename alone -- still works too.)
  *
  * This suite shares a counter and a label between two programs:
  *   start.bcl  — initialises and increments the counter
  *   show.bcl   — reports the final value
  */
-common count%, label$
+suite shared
+
+dim count%
+dim label$

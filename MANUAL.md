@@ -2121,13 +2121,19 @@ every program in the chain must declare **identical** `COMMON` lists — the
 variable positions in the `COMMON` block must match exactly.
 
 BASCAL coordinates `COMMON` through suite files. A suite file contains only
-`common` declarations; programs that belong to the suite reference it with a
-`suite` clause on their `program` declaration.
+variable declarations (see below); programs that belong to the suite
+reference it with a `suite` clause on their `program` declaration.
 
 ### Suite File
 
-A suite file is a `.bcl` file containing only `common` declarations (and
-comments). The file name, without extension, is the suite name.
+A suite file is a `.bcl` file containing only variable declarations — `dim`
+and/or `common` (see [DIM Declaration](#dim-declaration-recommended) and
+[COMMON Declaration](#common-declaration) below) — plus blank lines and
+comments.
+
+The canonical form starts with a `suite <name>` header, analogous to a
+regular file's `program <name>` header, and declares its shared variables
+with ordinary `dim`:
 
 From `tutorial/13_suite/shared.bcl`:
 
@@ -2139,14 +2145,48 @@ From `tutorial/13_suite/shared.bcl`:
  * an identical COMMON block at the top of its generated BASIC, so the
  * listed variables survive a CHAIN to the next program.
  */
-common count%, label$
+suite shared
+
+dim count%
+dim label$
 ```
 
+The older filename-only form — no `suite` header, just one or more `common`
+declarations, with the suite name taken purely from the filename — still
+works and compiles to identical output; see
+[COMMON Declaration](#common-declaration) below.
+
 Rules for suite files:
-- Only `common` declarations, blank lines, and comments are allowed.
+- Only `dim`/`common` declarations, blank lines, and comments are allowed.
 - `require`, `function`, executable statements, and `program` declarations
   are all rejected with a diagnostic error.
-- The suite file must contain at least one `common` declaration.
+- The suite file must contain at least one `dim` or `common` declaration.
+- A file may not have both a `program` header and a `suite` header — a file
+  is either an ordinary program (optionally referencing a suite) or a suite
+  definition, never both.
+
+### DIM Declaration (recommended)
+
+```
+suite shared
+
+dim count%
+dim label$
+dim scores%()
+```
+
+Inside a `suite <name>`-headed file, every top-level `dim` becomes one
+shared variable, in declaration order — exactly the [DIM](#dim) statement
+used anywhere else in BASCAL, including its multi-name comma form
+(`dim count%, label$`) and array declarations (`dim scores%()`,
+empty-parens, same as a `COMMON` array). No bounds are stored either way —
+`common`/suite `dim` only ever declares *that* a name is an array, not its
+size.
+
+If present, the `suite <name>` header's name must match the filename the
+compiler resolved it as (`shared.bcl` → `suite shared`) — a mismatch is a
+compile-time error, catching a suite file copied to a new filename without
+updating its own header.
 
 ### COMMON Declaration
 
@@ -2154,8 +2194,10 @@ Rules for suite files:
 common var1%, var2$, arr%()
 ```
 
-Lists the variables that participate in the `COMMON` block. Array names are
-written with empty parentheses `()`.
+The older, pre-`suite`-header spelling: lists the variables that participate
+in the `COMMON` block directly, without a `dim`. Array names are written
+with empty parentheses `()`. Still fully supported — a suite file needs
+*either* `dim` or `common` declarations (or both), not specifically one.
 
 Multiple `common` declarations are allowed; each generates a separate `COMMON`
 line in the output:
@@ -2190,7 +2232,10 @@ From `tutorial/13_suite/` — two programs that share `count%` and `label$`:
 
 **`shared.bcl`** (suite file):
 ```
-common count%, label$
+suite shared
+
+dim count%
+dim label$
 ```
 
 **`start.bcl`** (program 1):
@@ -2232,8 +2277,12 @@ correct slots.
 
 - `common` is illegal everywhere except in suite files. Using `common` in a
   regular program or library module is a compile error.
+- A `suite <name>` header is illegal everywhere except in a suite file being
+  loaded as a suite — a stray `suite` header in an ordinary program or
+  library module is a compile error, same as `common`.
 - A `program` declaration is illegal in library modules (files loaded via
   `require`).
+- A file cannot have both a `program` header and a `suite` header.
 - If the named suite file does not exist, the program compiles without a
   `COMMON` block (no error). This allows incremental development.
 
@@ -2518,6 +2567,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `RETURN` | `RETURN expr` / `RETURN` | Return value from function; bare form exits a procedure early |
 | `SELECT CASE` | `SELECT CASE expr` … `END SELECT` | Multi-way branch |
 | `STOP` | `STOP` | Stop program execution |
+| `SUITE` | `suite name` | Declare this file as suite `name` (suite files only; shared vars listed via `dim`) |
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
 | `SYSTEM` | `SYSTEM` | Exit to operating system |
 | `WHILE` | `WHILE cond` … `END WHILE` (or `WEND`) | Condition-at-top loop |

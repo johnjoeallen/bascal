@@ -1410,9 +1410,10 @@ require stats                       →  stats.bcl</code></pre>
 <hr />
 <h2 id="suite-common">Suite COMMON</h2>
 <p>In classic BASCOM programs, multiple programs chained together with <code>CHAIN</code> share variables through <code>COMMON</code> declarations. For this to work correctly, every program in the chain must declare <strong>identical</strong> <code>COMMON</code> lists — the variable positions in the <code>COMMON</code> block must match exactly.</p>
-<p>BASCAL coordinates <code>COMMON</code> through suite files. A suite file contains only <code>common</code> declarations; programs that belong to the suite reference it with a <code>suite</code> clause on their <code>program</code> declaration.</p>
+<p>BASCAL coordinates <code>COMMON</code> through suite files. A suite file contains only variable declarations (see below); programs that belong to the suite reference it with a <code>suite</code> clause on their <code>program</code> declaration.</p>
 <h3 id="suite-file">Suite File</h3>
-<p>A suite file is a <code>.bcl</code> file containing only <code>common</code> declarations (and comments). The file name, without extension, is the suite name.</p>
+<p>A suite file is a <code>.bcl</code> file containing only variable declarations — <code>dim</code> and/or <code>common</code> (see <a href="#dim-declaration-recommended">DIM Declaration</a> and <a href="#common-declaration">COMMON Declaration</a> below) — plus blank lines and comments.</p>
+<p>The canonical form starts with a <code>suite &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
 <p>From <code>tutorial/13_suite/shared.bcl</code>:</p>
 <pre><code>/*
  * Suite file for Tutorial 13 — COMMON / CHAIN.
@@ -1421,16 +1422,29 @@ require stats                       →  stats.bcl</code></pre>
  * an identical COMMON block at the top of its generated BASIC, so the
  * listed variables survive a CHAIN to the next program.
  */
-common count%, label$</code></pre>
+suite shared
+
+dim count%
+dim label$</code></pre>
+<p>The older filename-only form — no <code>suite</code> header, just one or more <code>common</code> declarations, with the suite name taken purely from the filename — still works and compiles to identical output; see <a href="#common-declaration">COMMON Declaration</a> below.</p>
 <p>Rules for suite files:</p>
 <ul>
-<li>Only <code>common</code> declarations, blank lines, and comments are allowed.</li>
+<li>Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed.</li>
 <li><code>require</code>, <code>function</code>, executable statements, and <code>program</code> declarations are all rejected with a diagnostic error.</li>
-<li>The suite file must contain at least one <code>common</code> declaration.</li>
+<li>The suite file must contain at least one <code>dim</code> or <code>common</code> declaration.</li>
+<li>A file may not have both a <code>program</code> header and a <code>suite</code> header — a file is either an ordinary program (optionally referencing a suite) or a suite definition, never both.</li>
 </ul>
+<h3 id="dim-declaration-recommended">DIM Declaration (recommended)</h3>
+<pre><code>suite shared
+
+dim count%
+dim label$
+dim scores%()</code></pre>
+<p>Inside a <code>suite &lt;name&gt;</code>-headed file, every top-level <code>dim</code> becomes one shared variable, in declaration order — exactly the <a href="#dim">DIM</a> statement used anywhere else in BASCAL, including its multi-name comma form (<code>dim count%, label$</code>) and array declarations (<code>dim scores%()</code>, empty-parens, same as a <code>COMMON</code> array). No bounds are stored either way — <code>common</code>/suite <code>dim</code> only ever declares <em>that</em> a name is an array, not its size.</p>
+<p>If present, the <code>suite &lt;name&gt;</code> header's name must match the filename the compiler resolved it as (<code>shared.bcl</code> → <code>suite shared</code>) — a mismatch is a compile-time error, catching a suite file copied to a new filename without updating its own header.</p>
 <h3 id="common-declaration">COMMON Declaration</h3>
 <pre><code>common var1%, var2$, arr%()</code></pre>
-<p>Lists the variables that participate in the <code>COMMON</code> block. Array names are written with empty parentheses <code>()</code>.</p>
+<p>The older, pre-<code>suite</code>-header spelling: lists the variables that participate in the <code>COMMON</code> block directly, without a <code>dim</code>. Array names are written with empty parentheses <code>()</code>. Still fully supported — a suite file needs <em>either</em> <code>dim</code> or <code>common</code> declarations (or both), not specifically one.</p>
 <p>Multiple <code>common</code> declarations are allowed; each generates a separate <code>COMMON</code> line in the output:</p>
 <pre><code>common score%, level%, playerName$
 common hiScore%</code></pre>
@@ -1448,7 +1462,10 @@ COMMON hiScore%</code></pre>
 <h3 id="using-the-suite">Using the Suite</h3>
 <p>From <code>tutorial/13_suite/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
 <p><strong><code>shared.bcl</code></strong> (suite file):</p>
-<pre><code>common count%, label$</code></pre>
+<pre><code>suite shared
+
+dim count%
+dim label$</code></pre>
 <p><strong><code>start.bcl</code></strong> (program 1):</p>
 <pre><code>program start suite shared
 
@@ -1475,7 +1492,9 @@ END</code></pre>
 <h3 id="restrictions-2">Restrictions</h3>
 <ul>
 <li><code>common</code> is illegal everywhere except in suite files. Using <code>common</code> in a regular program or library module is a compile error.</li>
+<li>A <code>suite &lt;name&gt;</code> header is illegal everywhere except in a suite file being loaded as a suite — a stray <code>suite</code> header in an ordinary program or library module is a compile error, same as <code>common</code>.</li>
 <li>A <code>program</code> declaration is illegal in library modules (files loaded via <code>require</code>).</li>
+<li>A file cannot have both a <code>program</code> header and a <code>suite</code> header.</li>
 <li>If the named suite file does not exist, the program compiles without a <code>COMMON</code> block (no error). This allows incremental development.</li>
 </ul>
 <hr />
@@ -1897,6 +1916,11 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td>Stop program execution</td>
 </tr>
 <tr class="odd">
+<td><code>SUITE</code></td>
+<td><code>suite name</code></td>
+<td>Declare this file as suite <code>name</code> (suite files only; shared vars listed via <code>dim</code>)</td>
+</tr>
+<tr class="even">
 <td><code>SWAP</code></td>
 <td><code>SWAP a, b</code></td>
 <td>Exchange two variable values</td>

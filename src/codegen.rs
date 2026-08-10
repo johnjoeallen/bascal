@@ -185,10 +185,14 @@ impl CodeGenerator {
 
     fn statement(&mut self, statement: &Statement, current_function: Option<&FunctionInfo>) {
         match statement {
-            Statement::Dim { name, sizes } => {
+            Statement::Dim { name, is_array, sizes } => {
                 let base = self.ident(name, current_function);
                 if sizes.is_empty() {
-                    self.line(&format!("DIM {base}"));
+                    if *is_array {
+                        self.line(&format!("DIM {base}()"));
+                    } else {
+                        self.line(&format!("DIM {base}"));
+                    }
                 } else {
                     let mut rendered = Vec::new();
                     for s in sizes {

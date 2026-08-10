@@ -76,7 +76,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         .map(str::to_string)
     {
         if let Some(suite_path) = resolve_suite_path(&suite_name, input, options) {
-            program.common = load_suite_file(&suite_path)?;
+            program.common = load_suite_file(&suite_path, &suite_name)?;
         }
         // Suite file not found → compile without COMMON (silent; suite may not exist yet).
     }
@@ -108,6 +108,7 @@ fn load_program_recursive(
     if !visited.insert(input.clone()) {
         return Ok(ast::Program {
             program_decl: None,
+            suite_decl: None,
             declarations: Vec::new(),
             common: Vec::new(),
             statements: Vec::new(),
@@ -146,12 +147,23 @@ fn load_program_recursive(
         ));
     }
 
+    if program.suite_decl.is_some() {
+        errors.push(Diagnostic::error(
+            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+            format!(
+                "`suite` declaration is only valid in suite files, not in `{}`",
+                input.display()
+            ),
+        ));
+    }
+
     if !errors.is_empty() {
         return Err(errors);
     }
 
     let mut merged = ast::Program {
         program_decl: program.program_decl,
+        suite_decl: None,
         declarations: Vec::new(),
         common: Vec::new(),
         statements: Vec::new(),
@@ -178,7 +190,7 @@ fn load_program_recursive(
     Ok(merged)
 }
 
-fn load_suite_file(path: &Path) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
+fn load_suite_file(path: &Path, suite_name: &str) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
     let source = fs::read_to_string(path).map_err(|err| {
         vec![Diagnostic::error(
             diagnostics::SourcePos::new(path.display().to_string(), 1, 1),
@@ -190,38 +202,77 @@ fn load_suite_file(path: &Path) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>
     let pos = diagnostics::SourcePos::new(path.display().to_string(), 1, 1);
     let mut errors = Vec::new();
 
+    // `dim` is allowed alongside (or instead of) `common` -- each DIM'd name
+    // becomes a CommonVar below, so a `suite <name>` header file can list its
+    // shared variables the same way any other BASCAL file declares them.
     if program.statements.iter().any(|s| match s {
-        ast::Statement::BlankLine | ast::Statement::BlockComment(_) => false,
+        ast::Statement::BlankLine | ast::Statement::BlockComment(_) | ast::Statement::Dim { .. } => false,
         ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
         _ => true,
     }) {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("suite file `{}` may only contain COMMON declarations (no statements)", path.display()),
+            format!("suite file `{}` may only contain COMMON declarations and DIM statements (no other statements)", path.display()),
         ));
     }
     if !program.functions.is_empty() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("suite file `{}` may only contain COMMON declarations (no functions)", path.display()),
+            format!("suite file `{}` may only contain COMMON declarations and DIM statements (no functions)", path.display()),
         ));
     }
     if !program.declarations.is_empty() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("suite file `{}` may only contain COMMON declarations (no require/import)", path.display()),
+            format!("suite file `{}` may only contain COMMON declarations and DIM statements (no require/import)", path.display()),
         ));
     }
     if program.program_decl.is_some() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("suite file `{}` may only contain COMMON declarations (no program declaration)", path.display()),
+            format!("suite file `{}` may only contain COMMON declarations and DIM statements (no program declaration)", path.display()),
         ));
     }
-    if program.common.is_empty() {
+    // A `suite <name>` header is optional (the older filename-only
+    // convention still works), but if present it must name the same suite
+    // this file was actually resolved as -- catches a copy-pasted header
+    // pointing at the wrong filename.
+    if let Some(declared) = &program.suite_decl {
+        if declared != suite_name {
+            errors.push(Diagnostic::error(
+                pos.clone(),
+                format!(
+                    "suite file `{}` declares `suite {declared}`, but was loaded as suite `{suite_name}` -- its filename must be `{declared}.bcl`",
+                    path.display()
+                ),
+            ));
+        }
+    }
+
+    // Every `dim name[()]` in the file becomes one more shared variable,
+    // collected into a single trailing COMMON block (order matters for
+    // CHAIN, not which statement -- common vs. dim -- declared it).
+    let dim_vars: Vec<ast::CommonVar> = program
+        .statements
+        .iter()
+        .filter_map(|s| match s {
+            ast::Statement::Dim { name, is_array, .. } => Some(ast::CommonVar {
+                name: name.clone(),
+                is_array: *is_array,
+            }),
+            _ => None,
+        })
+        .collect();
+
+    let mut common = program.common;
+    if !dim_vars.is_empty() {
+        common.push(ast::CommonBlock { vars: dim_vars });
+    }
+
+    if common.is_empty() {
         errors.push(Diagnostic::error(
             pos,
-            format!("suite file `{}` contains no COMMON declarations", path.display()),
+            format!("suite file `{}` contains no COMMON declarations or DIM statements", path.display()),
         ));
     }
 
@@ -229,7 +280,7 @@ fn load_suite_file(path: &Path) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>
         return Err(errors);
     }
 
-    Ok(program.common)
+    Ok(common)
 }
 
 fn resolve_suite_path(suite_name: &str, source_file: &Path, options: &CompileOptions) -> Option<PathBuf> {
@@ -475,6 +526,75 @@ END
         assert!(result.is_err());
         let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
         assert!(msg.contains("may only contain COMMON declarations"));
+    }
+
+    #[test]
+    fn suite_header_plus_dim_declares_common_vars() {
+        let dir = tempfile::tempdir().unwrap();
+        let prog_path = dir.path().join("show.bcl");
+        let suite_path = dir.path().join("shared.bcl");
+
+        std::fs::write(&prog_path, "program show suite shared\nprint count%\nend\n").unwrap();
+        std::fs::write(
+            &suite_path,
+            "suite shared\n\ndim count%\ndim label$\ndim scores%()\n",
+        )
+        .unwrap();
+
+        let output = compile_file(&prog_path, &CompileOptions::new())
+            .expect("suite header + dim should compile");
+        assert!(output.contains("COMMON count%, label$, scores%()"));
+    }
+
+    #[test]
+    fn suite_header_name_must_match_the_filename_it_was_loaded_as() {
+        let dir = tempfile::tempdir().unwrap();
+        let prog_path = dir.path().join("show.bcl");
+        let suite_path = dir.path().join("shared.bcl");
+
+        std::fs::write(&prog_path, "program show suite shared\nend\n").unwrap();
+        std::fs::write(&suite_path, "suite wrongname\n\ndim count%\n").unwrap();
+
+        let result = compile_file(&prog_path, &CompileOptions::new());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("declares `suite wrongname`"));
+    }
+
+    #[test]
+    fn a_file_cannot_have_both_program_and_suite_declarations() {
+        let source = "program foo\nsuite bar\nend\n";
+        let result = compile_source("both.bcl", source);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("cannot have both a `program` declaration and a `suite` declaration"));
+    }
+
+    #[test]
+    fn suite_declaration_is_rejected_outside_a_suite_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stray.bcl");
+        std::fs::write(&path, "suite lonely\n\ndim x%\n").unwrap();
+
+        let result = compile_file(&path, &CompileOptions::new());
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("`suite` declaration is only valid in suite files"));
+    }
+
+    #[test]
+    fn dim_with_empty_parens_stays_an_array_in_generated_output() {
+        // Regression test: `dim arr%()` used to collapse to the same
+        // `DIM arr%` as a plain scalar `dim arr%`, because Statement::Dim
+        // only tracked `sizes` (empty either way) with no separate signal
+        // for "parens were written at all". Surfaced by the suite/dim work
+        // above, since a suite file needs to tell scalar and unbounded-array
+        // dims apart to emit `arr%()` vs `arr%` in the COMMON line -- fixed
+        // by giving Statement::Dim its own `is_array` field.
+        let source = "dim x%\ndim arr%()\nend\n";
+        let output = compile_source("dimarr.bcl", source).expect("should compile");
+        assert!(output.contains("DIM x%\n"));
+        assert!(output.contains("DIM arr%()"));
     }
 
     #[test]

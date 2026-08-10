@@ -32,7 +32,7 @@
 <p>Classic multi-program BASIC systems pass shared variables across a
 <code>CHAIN</code> with <code>COMMON</code> — every chained program has to declare an
 <strong>identical</strong> <code>COMMON</code> list, or values land in the wrong slots. A
-BASCAL suite file contains only <code>common</code> declarations; any program that
+BASCAL suite file contains only variable declarations; any program that
 opens with <code>program name suite suitename</code> gets that suite's declarations
 emitted verbatim at the top of its generated output, so two programs can't
 drift out of sync by hand.</p>
@@ -40,8 +40,11 @@ drift out of sync by hand.</p>
 
     <div class="snippet">
       <h3>The suite file</h3>
-      <p class="note">Contains only common declarations -- no statements, no functions.</p>
-      <pre><code>common count%, label$</code></pre>
+      <p class="note"><code>suite &lt;name&gt;</code> declares this file as the suite itself (mirroring a regular file's <code>program &lt;name&gt;</code>), and each <code>dim</code> below becomes one shared variable -- no statements, no functions. The older headerless <code>common count%, label$</code> spelling still works too.</p>
+      <pre><code>suite shared
+
+dim count%
+dim label$</code></pre>
     </div>
     <div class="snippet">
       <h3>A program that joins the suite</h3>

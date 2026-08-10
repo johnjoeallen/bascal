@@ -140,9 +140,10 @@ fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
     let output = match bcc::compile_file(path, &options) {
         Ok(o) => o,
         Err(ref diagnostics)
-            if diagnostics
-                .iter()
-                .all(|d| d.message.contains("COMMON is only valid in suite files")) =>
+            if diagnostics.iter().all(|d| {
+                d.message.contains("COMMON is only valid in suite files")
+                    || d.message.contains("`suite` declaration is only valid in suite files")
+            }) =>
         {
             return; // suite definition file — not a standalone compilable program
         }

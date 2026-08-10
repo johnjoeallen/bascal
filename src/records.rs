@@ -30,6 +30,7 @@ pub fn lower(program: Program) -> Result<Program, Vec<Diagnostic>> {
 
     Ok(Program {
         program_decl: program.program_decl,
+        suite_decl: program.suite_decl,
         declarations: program.declarations,
         common: program.common,
         statements,
@@ -205,9 +206,9 @@ impl Lowerer {
     /// exhaustive over every remaining `Statement` variant.
     fn rewrite_statement_exprs(&mut self, stmt: Statement) -> Statement {
         match stmt {
-            Statement::Dim { name, sizes } => {
+            Statement::Dim { name, is_array, sizes } => {
                 let sizes = sizes.into_iter().map(|e| self.rewrite_expr(e).0).collect();
-                Statement::Dim { name, sizes }
+                Statement::Dim { name, is_array, sizes }
             }
             Statement::Open { mode, file, channel, len } => {
                 let file = self.rewrite_expr(file).0;

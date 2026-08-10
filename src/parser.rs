@@ -47,6 +47,7 @@ impl Parser {
 
     fn parse_program_inner(&mut self) -> ParseResult<Program> {
         let mut program_decl = None;
+        let mut suite_decl = None;
         let mut declarations = Vec::new();
         let mut common = Vec::new();
         let mut statements = Vec::new();
@@ -60,7 +61,21 @@ impl Parser {
                 if program_decl.is_some() {
                     return Err(self.error("only one `program` declaration is allowed per file"));
                 }
+                if suite_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
+                }
                 program_decl = Some(decl);
+            } else if self.check_keyword("suite") {
+                if suite_decl.is_some() {
+                    return Err(self.error("only one `suite` declaration is allowed per file"));
+                }
+                if program_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
+                }
+                self.expect_keyword("suite")?;
+                let name = self.expect_ident("expected suite name after `suite`")?;
+                self.consume_line_end()?;
+                suite_decl = Some(name);
             } else if self.check_keyword("common") {
                 common.push(self.parse_common_block()?);
             } else if self.check_keyword("require") {
@@ -86,6 +101,7 @@ impl Parser {
 
         Ok(Program {
             program_decl,
+            suite_decl,
             declarations,
             common,
             statements,
@@ -423,35 +439,35 @@ impl Parser {
 
     fn parse_dim(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("dim")?;
-        let (name, sizes) = self.parse_dim_one()?;
+        let (name, is_array, sizes) = self.parse_dim_one()?;
         // `dim a%, b%(10), c%` -- each comma-separated name is its own
         // declaration; queue the rest and return the first so every caller
         // that loops on `parse_statement()` sees them as separate statements.
         while self.eat(TokenKind::Comma) {
-            let (name, sizes) = self.parse_dim_one()?;
-            self.pending_statements.push_back(Statement::Dim { name, sizes });
+            let (name, is_array, sizes) = self.parse_dim_one()?;
+            self.pending_statements.push_back(Statement::Dim { name, is_array, sizes });
         }
         self.consume_line_end()?;
-        Ok(Statement::Dim { name, sizes })
+        Ok(Statement::Dim { name, is_array, sizes })
     }
 
-    fn parse_dim_one(&mut self) -> ParseResult<(BasicIdent, Vec<Expr>)> {
+    fn parse_dim_one(&mut self) -> ParseResult<(BasicIdent, bool, Vec<Expr>)> {
         let name = BasicIdent::parse(&self.expect_ident("expected DIM variable name")?);
-        let sizes = if self.eat(TokenKind::LParen) {
+        let (is_array, sizes) = if self.eat(TokenKind::LParen) {
             if self.eat(TokenKind::RParen) {
-                Vec::new() // dim arr%() — declare without bounds
+                (true, Vec::new()) // dim arr%() — declare without bounds
             } else {
                 let mut sizes = vec![self.parse_expr(0)?];
                 while self.eat(TokenKind::Comma) {
                     sizes.push(self.parse_expr(0)?);
                 }
                 self.expect(TokenKind::RParen, "expected `)` after DIM dimensions")?;
-                sizes
+                (true, sizes)
             }
         } else {
-            Vec::new()
+            (false, Vec::new())
         };
-        Ok((name, sizes))
+        Ok((name, is_array, sizes))
     }
 
     fn parse_block_comment(&mut self) -> ParseResult<Statement> {
