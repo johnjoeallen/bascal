@@ -901,24 +901,72 @@ end
 
     #[test]
     fn error_handling_statements() {
+        // `on error goto`/`resume` targets must be labels (not raw line
+        // numbers) — BASCAL manages line numbers itself. `on error goto 0`
+        // is the one numeric exception: the sentinel that disables the trap.
         let source = r#"' set and clear error trap
-on error goto 9000
+on error goto handler
 on error goto 0
 ' resume forms
 resume
 resume next
-resume 9000
+resume handler
 ' trigger a synthetic error
 error 53
 end
+
+handler:
+print "handled"
 "#;
         let output = compile_source("err.bcl", source).expect("should compile");
-        assert!(output.contains("ON ERROR GOTO 9000"));
+        let handler_line = output
+            .lines()
+            .find(|line| line.contains("PRINT \"handled\""))
+            .and_then(|line| line.split_whitespace().next())
+            .expect("handler line should be numbered");
+        assert!(output.contains(&format!("ON ERROR GOTO {handler_line}")));
+        assert!(output.contains(&format!("RESUME {handler_line}")));
         assert!(output.contains("ON ERROR GOTO 0"));
         assert!(output.contains("RESUME\n") || output.ends_with("RESUME"));
         assert!(output.contains("RESUME NEXT"));
-        assert!(output.contains("RESUME 9000"));
         assert!(output.contains("ERROR 53"));
+    }
+
+    #[test]
+    fn goto_label_resolves_to_a_real_line_number() {
+        let source = r#"print "before"
+goto skip
+print "should not print"
+skip:
+print "after"
+end
+"#;
+        let output = compile_source("label.bcl", source).expect("should compile");
+        assert!(!output.contains("skip"), "label text must not leak into generated output");
+        let skip_line = output
+            .lines()
+            .find(|line| line.contains("PRINT \"after\""))
+            .and_then(|line| line.split_whitespace().next())
+            .expect("skip target should be numbered");
+        assert!(output.contains(&format!("GOTO {skip_line}")));
+    }
+
+    #[test]
+    fn label_name_matching_string_literal_text_is_not_corrupted() {
+        // Regression test: label -> line-number substitution used to be a
+        // blind `str::replace` across the whole line, which was safe only
+        // because compiler-internal labels use distinctive prefixed names
+        // (WHILE_0001_TOP, ...). User labels are short, ordinary words, so
+        // a label named `done` must not corrupt `PRINT "...done..."` text
+        // on some unrelated line that just happens to contain that word.
+        let source = r#"goto done
+print "we are done, done, done!"
+done:
+print "finished"
+end
+"#;
+        let output = compile_source("collide.bcl", source).expect("should compile");
+        assert!(output.contains(r#"PRINT "we are done, done, done!""#));
     }
 
     #[test]

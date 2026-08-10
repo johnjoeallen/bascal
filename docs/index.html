@@ -87,6 +87,21 @@ end select</code></pre>
       </p>
     </div>
 
+    <p class="lede">
+      BASCAL is a strict superset of classic BASIC — bitwise
+      <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written
+      <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code>
+      still compile unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw
+      BASIC too, but with one difference from the pane on the left above:
+      BASCAL manages line numbering itself, so their targets are always a
+      <code>name:</code> label declared in source, never a raw line number
+      like <code>GOTO 140</code>. Beyond that, wherever BASCAL has its own
+      construct for something, that construct is the canonical way to write
+      it in <code>.bcl</code> source: treat the raw-BASIC spelling as legacy
+      syntax you're compiling <em>away from</em>, not an equally-good
+      alternative.
+    </p>
+
     <blockquote>
       Make BASIC more pleasant to write, without pretending it is a
       different runtime.
@@ -316,14 +331,16 @@ end if</code></pre>
   <section id="tutorial">
     <h2>Record files: BASCAL's record/file syntax vs generated BASIC</h2>
     <p class="lede">
-      BASCAL already supported classic random-access file I/O
+      BASCAL supports classic random-access file I/O directly
       (<code>OPEN ... FOR RANDOM</code>, <code>FIELD</code>,
       <code>GET</code>/<code>PUT</code>, <code>LSET</code>,
-      <code>MKx</code>/<code>CVx</code>) — writing it by hand is exactly the
-      kind of repetitive, error-prone bookkeeping a compiler should do
-      instead. Every pane on the right below is <strong>generated</strong>
-      by the pane on the left; this syntax doesn't change what runs, only how
-      much of it you have to type and keep in sync yourself. Full source:
+      <code>MKx</code>/<code>CVx</code> all still compile as-is), but writing
+      it by hand is exactly the kind of repetitive, error-prone bookkeeping a
+      compiler should do instead. The <code>record</code>/<code>file</code>
+      syntax below is the canonical way to do this in BASCAL: every pane on
+      the right is what you write, and it <strong>generates</strong> the pane
+      on the left — this syntax doesn't change what runs, only how much of it
+      you have to type and keep in sync yourself. Full source:
       <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl">tutorial/15_random_and_record_files.bcl</a>.
     </p>
 

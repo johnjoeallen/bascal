@@ -247,6 +247,10 @@ pub enum Statement {
         address: Expr,
         value: Expr,
     },
+    /// `name:` — a user-declared branch target. Participates in the same
+    /// label -> line-number resolution as compiler-internal labels; see
+    /// `is_label_line` in codegen.rs.
+    Label(String),
     Goto(Expr),
     Gosub(Expr),
     OnErrorGoto { target: Expr },

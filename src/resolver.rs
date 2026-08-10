@@ -240,6 +240,7 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         | Statement::GlobalDecl(_)
         | Statement::Raw(_)
         | Statement::BlockComment(_)
+        | Statement::Label(_)
         | Statement::BlankLine => false,
     }
 }

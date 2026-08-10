@@ -371,9 +371,28 @@ impl Parser {
             Err(self.error("`common` is only valid at program level in a suite file"))
         } else if self.check_keyword("program") {
             Err(self.error("`program` declaration must appear before any statements"))
+        } else if matches!(self.current().kind, TokenKind::Ident(_)) && self.check_next_is_colon() {
+            self.parse_label()
         } else {
             self.parse_assignment_or_expr()
         }
+    }
+
+    fn parse_label(&mut self) -> ParseResult<Statement> {
+        let name = self.expect_ident("expected label name")?;
+        self.eat(TokenKind::Colon); // guaranteed present by check_next_is_colon
+        // Unlike a genuine same-line separator (`x = 1: y = 2`), the label's
+        // own colon is part of `name:` itself — a newline immediately after
+        // it is this statement's normal end of line, not "blank line"
+        // padding, so it doesn't count toward `count_and_skip_newlines`'s
+        // extra-newline (pending_blank) detection below.
+        if matches!(self.current().kind, TokenKind::Newline) {
+            self.advance();
+        }
+        if self.count_and_skip_newlines() >= 1 {
+            self.pending_blank = true;
+        }
+        Ok(Statement::Label(name))
     }
 
     fn parse_dim(&mut self) -> ParseResult<Statement> {
@@ -912,16 +931,48 @@ impl Parser {
         }
     }
 
+    /// `goto`/`gosub`/`on ... goto`/`on ... gosub`/`resume` targets must
+    /// name a label — BASCAL owns line numbering, so raw line-number
+    /// literals aren't legal targets. `on error goto` has its own variant
+    /// below because `on error goto 0` (disable the trap) is a legal
+    /// numeric sentinel.
+    fn parse_label_target(&mut self, keyword: &str) -> ParseResult<Expr> {
+        let expr = self.parse_expr(0)?;
+        match &expr {
+            Expr::Ident(_) => Ok(expr),
+            Expr::Integer(_) => Err(self.error(format!(
+                "`{keyword}` target must be a label, not a line number — \
+                 BASCAL manages line numbers itself; declare a label with \
+                 `name:` and use `{keyword} name` instead"
+            ))),
+            _ => Err(self.error(format!("`{keyword}` target must be a label name"))),
+        }
+    }
+
+    fn parse_on_error_goto_target(&mut self) -> ParseResult<Expr> {
+        let expr = self.parse_expr(0)?;
+        match &expr {
+            Expr::Ident(_) => Ok(expr),
+            Expr::Integer(0) => Ok(expr),
+            Expr::Integer(_) => Err(self.error(
+                "`on error goto` target must be a label, not a line number \
+                 (except `on error goto 0` to disable the trap) — declare a \
+                 label with `name:` instead",
+            )),
+            _ => Err(self.error("`on error goto` target must be a label name or `0`")),
+        }
+    }
+
     fn parse_goto(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("goto")?;
-        let target = self.parse_expr(0)?;
+        let target = self.parse_label_target("goto")?;
         self.consume_line_end()?;
         Ok(Statement::Goto(target))
     }
 
     fn parse_gosub(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("gosub")?;
-        let target = self.parse_expr(0)?;
+        let target = self.parse_label_target("gosub")?;
         self.consume_line_end()?;
         Ok(Statement::Gosub(target))
     }
@@ -931,7 +982,7 @@ impl Parser {
         if self.check_keyword("error") {
             self.expect_keyword("error")?;
             self.expect_keyword("goto")?;
-            let target = self.parse_expr(0)?;
+            let target = self.parse_on_error_goto_target()?;
             self.consume_line_end()?;
             return Ok(Statement::OnErrorGoto { target });
         }
@@ -941,9 +992,10 @@ impl Parser {
         } else {
             self.expect_keyword("gosub")?; true
         };
+        let keyword = if is_gosub { "on ... gosub" } else { "on ... goto" };
         let mut targets = Vec::new();
         loop {
-            targets.push(self.parse_expr(0)?);
+            targets.push(self.parse_label_target(keyword)?);
             if !self.eat(TokenKind::Comma) { break; }
         }
         self.consume_line_end()?;
@@ -958,7 +1010,7 @@ impl Parser {
             self.advance();
             ResumeTarget::Next
         } else {
-            ResumeTarget::Line(self.parse_expr(0)?)
+            ResumeTarget::Line(self.parse_label_target("resume")?)
         };
         self.consume_line_end()?;
         Ok(Statement::Resume(target))
@@ -1137,7 +1189,7 @@ impl Parser {
     fn parse_restore(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("restore")?;
         let target = if !self.at_line_end() {
-            Some(self.parse_expr(0)?)
+            Some(self.parse_label_target("restore")?)
         } else {
             None
         };
@@ -1470,6 +1522,13 @@ impl Parser {
         matches!(
             self.tokens.get(self.pos + 1).map(|token| &token.kind),
             Some(TokenKind::Ident(value)) if keyword_eq(value, keyword)
+        )
+    }
+
+    fn check_next_is_colon(&self) -> bool {
+        matches!(
+            self.tokens.get(self.pos + 1).map(|token| &token.kind),
+            Some(TokenKind::Colon)
         )
     }
 
@@ -1856,5 +1915,69 @@ mod tests {
             }
             other => panic!("expected do statement with condition, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_label_declaration_and_following_statement() {
+        let program = parse("skip:\nprint \"after\"\nend\n");
+        assert!(matches!(&program.statements[0], Statement::Label(name) if name == "skip"));
+        assert!(matches!(program.statements[1], Statement::Print { .. }));
+    }
+
+    #[test]
+    fn parses_label_and_statement_sharing_one_colon() {
+        // The label's own `:` doubles as the statement separator, so
+        // `skip: print "hi"` puts both statements on one physical line.
+        let program = parse("skip: print \"hi\"\nend\n");
+        assert!(matches!(&program.statements[0], Statement::Label(name) if name == "skip"));
+        assert!(matches!(program.statements[1], Statement::Print { .. }));
+    }
+
+    #[test]
+    fn goto_and_gosub_accept_label_targets() {
+        let program = parse("goto there\ngosub there\nend\nthere:\nprint 1\n");
+        assert!(matches!(&program.statements[0], Statement::Goto(Expr::Ident(ident)) if ident.name == "there"));
+        assert!(matches!(&program.statements[1], Statement::Gosub(Expr::Ident(ident)) if ident.name == "there"));
+    }
+
+    #[test]
+    fn goto_rejects_numeric_line_number_target() {
+        let tokens = Lexer::new("test.bcl", "goto 100\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for a numeric goto target");
+        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+    }
+
+    #[test]
+    fn resume_rejects_numeric_line_number_target() {
+        let tokens = Lexer::new("test.bcl", "resume 100\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for a numeric resume target");
+        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+    }
+
+    #[test]
+    fn on_error_goto_zero_sentinel_is_still_allowed() {
+        let program = parse("on error goto 0\nend\n");
+        assert!(matches!(
+            &program.statements[0],
+            Statement::OnErrorGoto { target: Expr::Integer(0) }
+        ));
+    }
+
+    #[test]
+    fn on_error_goto_rejects_nonzero_numeric_target() {
+        let tokens = Lexer::new("test.bcl", "on error goto 9000\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for a numeric on-error-goto target");
+        assert!(errs.iter().any(|d| d.message.contains("except `on error goto 0`")));
+    }
+
+    #[test]
+    fn on_goto_rejects_numeric_targets_in_the_list() {
+        let tokens = Lexer::new("test.bcl", "on choice% goto 10, 20\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for numeric on...goto targets");
+        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
     }
 }

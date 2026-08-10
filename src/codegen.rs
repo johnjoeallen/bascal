@@ -444,28 +444,23 @@ impl CodeGenerator {
             Statement::Clear => {
                 self.line("CLEAR");
             }
+            Statement::Label(name) => {
+                self.line(&format!("{name}:"));
+            }
             Statement::Goto(target) => {
-                let (prelude, target) = self.expr(target, current_function);
-                self.lines(prelude);
-                self.line(&format!("GOTO {target}"));
+                self.line(&format!("GOTO {}", label_target_text(target)));
             }
             Statement::Gosub(target) => {
-                let (prelude, target) = self.expr(target, current_function);
-                self.lines(prelude);
-                self.line(&format!("GOSUB {target}"));
+                self.line(&format!("GOSUB {}", label_target_text(target)));
             }
             Statement::OnErrorGoto { target } => {
-                let (prelude, target) = self.expr(target, current_function);
-                self.lines(prelude);
-                self.line(&format!("ON ERROR GOTO {target}"));
+                self.line(&format!("ON ERROR GOTO {}", label_target_text(target)));
             }
             Statement::Resume(kind) => match kind {
                 ResumeTarget::Same => self.line("RESUME"),
                 ResumeTarget::Next => self.line("RESUME NEXT"),
                 ResumeTarget::Line(expr) => {
-                    let (prelude, target) = self.expr(expr, current_function);
-                    self.lines(prelude);
-                    self.line(&format!("RESUME {target}"));
+                    self.line(&format!("RESUME {}", label_target_text(expr)));
                 }
             },
             Statement::ErrorStmt { code } => {
@@ -517,9 +512,7 @@ impl CodeGenerator {
             }
             Statement::Restore(target) => {
                 if let Some(target) = target {
-                    let (prelude, target) = self.expr(target, current_function);
-                    self.lines(prelude);
-                    self.line(&format!("RESTORE {target}"));
+                    self.line(&format!("RESTORE {}", label_target_text(target)));
                 } else {
                     self.line("RESTORE");
                 }
@@ -677,12 +670,7 @@ impl CodeGenerator {
             Statement::OnBranch { expr, targets, is_gosub } => {
                 let (prelude, expr) = self.expr(expr, current_function);
                 self.lines(prelude);
-                let mut rendered = Vec::new();
-                for target in targets {
-                    let (t_prelude, t) = self.expr(target, current_function);
-                    self.lines(t_prelude);
-                    rendered.push(t);
-                }
+                let rendered: Vec<String> = targets.iter().map(label_target_text).collect();
                 let keyword = if *is_gosub { "GOSUB" } else { "GOTO" };
                 self.line(&format!("ON {expr} {keyword} {}", rendered.join(", ")));
             }
@@ -1504,6 +1492,7 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
         | Statement::ReturnVoid
         | Statement::Raw(_)
         | Statement::BlockComment(_)
+        | Statement::Label(_)
         | Statement::BlankLine => {}
     }
 }
@@ -1770,7 +1759,7 @@ fn number_basic_lines(source: &str, full: bool) -> String {
             raw.to_string()
         };
         for (label, number) in &label_numbers {
-            text = text.replace(label.as_str(), &number.to_string());
+            text = replace_label_word(&text, label, &number.to_string());
         }
         if let Some(&number) = index_to_number.get(&index) {
             output.push_str(&format!("{number} {text}\n"));
@@ -1817,20 +1806,78 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
     }
 }
 
+/// True for any generated line that is *only* a label declaration: either a
+/// compiler-internal control-flow label (`IF_0004_END:`, `WHILE_0002_TOP:`,
+/// ...) or a user-written `name:` label from BASCAL source (`Statement::Label`).
+/// Both kinds are resolved to real BASIC line numbers by `number_basic_lines`
+/// and then dropped from the output — codegen never emits any other line
+/// that is nothing but an identifier followed by a colon.
 fn is_label_line(line: &str) -> Option<&str> {
     let trimmed = line.trim();
     let label = trimmed.strip_suffix(':')?;
-    if label.starts_with("IF_")
-        || label.starts_with("FN_")
-        || label.starts_with("WHILE_")
-        || label.starts_with("DO_")
-        || label.starts_with("SEL_")
-        || label.starts_with("SC_")
-    {
+    if !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         Some(label)
     } else {
         None
     }
+}
+
+/// Renders a `goto`/`gosub`/`on error goto`/`resume`/`on ... goto`/
+/// `on ... gosub` target. The parser only ever produces a bare label
+/// identifier here, or (for `on error goto` only) the integer `0` sentinel
+/// that disables the error trap — never a general expression — so this
+/// renders the raw text directly instead of going through `self.expr()`,
+/// which would incorrectly apply variable scoping/local-mangling meant for
+/// actual variable reads.
+fn label_target_text(target: &Expr) -> String {
+    match target {
+        Expr::Ident(ident) => ident.as_basic(),
+        Expr::Integer(0) => "0".to_string(),
+        _ => unreachable!(
+            "goto/gosub/on/resume targets are label identifiers (or the `on error goto 0` sentinel), enforced at parse time"
+        ),
+    }
+}
+
+/// Replace whole-word occurrences of `label` in `text` with `replacement`,
+/// skipping anything inside a `"..."` string literal. A plain `str::replace`
+/// would also match `label` as a substring of an unrelated longer identifier,
+/// or inside program output text (e.g. a label named `done` corrupting
+/// `PRINT "done"`) — user-chosen label names are short, ordinary words, so
+/// that collision is a real risk in a way it never was for the compiler's
+/// own distinctively-prefixed internal labels.
+fn replace_label_word(text: &str, label: &str, replacement: &str) -> String {
+    if label.is_empty() {
+        return text.to_string();
+    }
+    let is_ident_char = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut out = String::with_capacity(text.len());
+    let mut in_string = false;
+    let mut i = 0;
+    while i < text.len() {
+        let ch = text[i..].chars().next().unwrap();
+        if ch == '"' {
+            in_string = !in_string;
+            out.push(ch);
+            i += 1;
+            continue;
+        }
+        if !in_string && text[i..].starts_with(label) {
+            let before_ok = i == 0 || !is_ident_char(text[..i].chars().next_back().unwrap());
+            let after_idx = i + label.len();
+            let after_ok = after_idx >= text.len()
+                || !is_ident_char(text[after_idx..].chars().next().unwrap());
+            if before_ok && after_ok {
+                out.push_str(replacement);
+                i = after_idx;
+                continue;
+            }
+        }
+        let ch_len = ch.len_utf8();
+        out.push_str(&text[i..i + ch_len]);
+        i += ch_len;
+    }
+    out
 }
 
 /// Pre-generation validation: report every global variable whose name matches

@@ -359,6 +359,7 @@ impl Lowerer {
             | Statement::GlobalDecl(_)
             | Statement::Raw(_)
             | Statement::BlockComment(_)
+            | Statement::Label(_)
             | Statement::BlankLine => stmt,
             Statement::FileDecl { .. }
             | Statement::Assignment { .. }

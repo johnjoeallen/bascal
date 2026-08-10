@@ -58,6 +58,19 @@ plain Microsoft BASIC. The structured constructs are transpiled by the compiler:
 functions become `GOSUB` subroutines, loops become `GOTO`-based constructs,
 and `if` chains become `IF ... THEN GOTO` sequences.
 
+**BASCAL is a strict superset of classic BASIC.** Raw statements from the
+target dialect — `OPEN`/`FIELD`/`GET`/`PUT` for random-access files, bitwise
+`AND`/`OR`/`NOT` — still compile unchanged. `GOTO`/`GOSUB`/`ON ERROR GOTO`/
+`RESUME`/`RESTORE` are raw BASIC too, but with one restriction: BASCAL
+manages line numbering itself, so their targets must be a `name:` label
+declared in source, never a raw line number — see [Labels](#labels). Beyond
+that, wherever this manual documents a BASCAL construct for something
+(`select case` instead of an `IF`/`GOTO` dispatch chain, `record`/`file`
+instead of hand-written `FIELD`/`GET`/`PUT`, `&&`/`||` instead of bitwise
+short-circuit workarounds), treat that construct as the canonical way to
+write it in `.bcl` source — the raw-BASIC spelling is legacy syntax the
+compiler exists to get you away from, not an equally good alternative.
+
 ---
 
 ## Getting Started
@@ -1304,6 +1317,15 @@ From Part 1 of `tutorial/15_random_and_record_files.bcl`:
 Random-access files store fixed-length records that can be read or written in
 any order, without scanning from the beginning.
 
+BASCAL supports the classic statements below directly — `OPEN ... FOR
+RANDOM`, `FIELD`, `LSET`/`RSET`, `PUT`/`GET`, `SEEK`, and the `MKx`/`CVx`
+packing helpers all compile as-is. But hand-summing field widths and
+hand-matching pack/unpack calls is exactly the bookkeeping a compiler should
+do for you: see [Record Files](#record-files) below for BASCAL's typed
+`record`/`file` syntax, the canonical way to do random-access I/O in BASCAL.
+This section stays useful for reading the code that syntax generates, or for
+files whose layout doesn't fit a fixed record type.
+
 ### OPEN FOR RANDOM
 
 ```
@@ -1605,11 +1627,11 @@ DATA "Egypt",   "Cairo"
 
 ### RESTORE
 
-Resets the `DATA` pointer to the beginning (or to a specific line number).
+Resets the `DATA` pointer to the beginning (or to a specific label).
 
 ```
-RESTORE         ' rewind to the first DATA
-RESTORE 1000    ' rewind to the DATA at line 1000
+RESTORE           ' rewind to the first DATA
+RESTORE fromHere  ' rewind to the DATA right after the `fromHere:` label
 ```
 
 ---
@@ -1672,31 +1694,59 @@ RANDOMIZE TIMER     ' time-based seed for different sequences each run
 RANDOMIZE 99        ' fixed seed for reproducible output
 ```
 
-### GOTO
-
-Transfers control to a line number. Prefer `if`, loops, and functions;
-`GOTO` is primarily useful for error handlers.
+### Labels
 
 ```
-GOTO 1000
+name:
+```
+
+Declares a branch target for `goto`/`gosub`/`on error goto`/`resume`/
+`on ... goto`/`on ... gosub` to jump to. **BASCAL manages line numbers
+itself — you cannot target a raw line number.** Every one of those
+statements requires a label name; the compiler assigns the actual BASIC
+line number when it renders output, exactly the way it already numbers the
+branch targets inside `if`/`while`/`do`/`select case`.
+
+```
+goto skip
+print "not reached"
+skip:
+print "reached"
+```
+
+A label can share its line with the statement that follows it — the `:`
+doubles as that statement's separator, same as anywhere else in BASCAL:
+
+```
+skip: print "reached"
+```
+
+### GOTO
+
+Transfers control to a label. Prefer `if`, loops, and functions; `GOTO` is
+primarily useful for error handlers.
+
+```
+GOTO doCleanup
 ```
 
 ### GOSUB / RETURN (BASIC-level)
 
-Calls a BASIC subroutine at a line number. Note this is the raw BASIC `GOSUB`,
+Calls a BASIC subroutine at a label. Note this is the raw BASIC `GOSUB`,
 distinct from the function-call mechanism BASCAL generates internally.
 
 ```
-GOSUB 2000
+GOSUB writeLog
 ```
 
 ### ON ... GOTO / ON ... GOSUB
 
 Computed branch: the integer expression selects the *n*th target (1-based).
+Each target is a label, not a line number.
 
 ```
-ON choice% GOTO 100, 200, 300
-ON mode%   GOSUB 500, 600, 700
+ON choice% GOTO firstCase, secondCase, thirdCase
+ON mode%   GOSUB modeIdle, modeRun, modeError
 ```
 
 If the expression evaluates to 0 or exceeds the number of targets, execution
@@ -1709,24 +1759,24 @@ resume execution.
 
 #### ON ERROR GOTO
 
-Installs an error handler at a given line number. Any subsequent runtime
-error causes execution to jump to that line.
+Installs an error handler at a given label. Any subsequent runtime error
+causes execution to jump there. `ON ERROR GOTO 0` is the one place a numeric
+argument is still legal — `0` isn't a line number, it's the sentinel that
+disables the trap.
 
 ```
-on error goto 9000   ' jump to line 9000 on any error
-on error goto 0      ' disable the error trap
+on error goto errHandler   ' jump to errHandler on any error
+on error goto 0            ' disable the error trap
 ```
-
-`ON ERROR GOTO 0` turns off trapping so errors propagate normally.
 
 #### RESUME
 
 Resumes execution after an error handler has run.
 
 ```
-resume          ' retry the statement that caused the error
-resume next     ' continue at the statement after the failing one
-resume 9999     ' jump to a specific line number
+resume             ' retry the statement that caused the error
+resume next         ' continue at the statement after the failing one
+resume afterError   ' jump to a specific label
 ```
 
 `RESUME` without an argument retries the failing statement (useful for
@@ -1750,16 +1800,17 @@ hold the error code and the BASIC line number where the error occurred.
 Write them without a type suffix; BASIC treats them as numeric:
 
 ```
-on error goto 9000
+on error goto handleErr
 ' ...
-goto 9999
-' 9000 is the error handler line (reached via ON ERROR GOTO)
+goto afterErr
+handleErr:
+' reached via ON ERROR GOTO
 if err = 53 then
     print "File not found"
     resume next
 end if
 error err   ' re-raise unhandled errors
-' 9999 continues here
+afterErr:
 end
 ```
 
@@ -1784,10 +1835,6 @@ end if
 done:
 end
 ```
-
-Note: error handler labels (`errHandler:`) are BASIC raw labels. Use
-`goto` with numeric line targets or embed the handler inline with a
-preceding `goto` that skips past it, as shown above.
 
 ### POKE
 
@@ -2301,8 +2348,9 @@ bcc main.bcl -L libs/sort -L libs/string
 | `EXIT WHILE` | `EXIT WHILE` | Exit enclosing WHILE loop |
 | `FOR` | `FOR v = start TO end [STEP s]` … `END FOR` | Counted loop |
 | `FUNCTION` | `FUNCTION name%(params)` … `END FUNCTION` | Define a function with a return value |
-| `GOSUB` | `GOSUB lineno` | Call BASIC subroutine |
-| `GOTO` | `GOTO lineno` | Unconditional branch |
+| Label | `name:` | Declare a branch target for GOTO/GOSUB/ON.../RESUME |
+| `GOSUB` | `GOSUB label` | Call BASIC subroutine |
+| `GOTO` | `GOTO label` | Unconditional branch |
 | `IF` | `IF cond THEN` … [`ELSEIF` …] [`ELSE` …] `END IF` | Conditional block |
 | `INPUT` | `INPUT [prompt;] var[, ...]` | Read from keyboard |
 | `KILL` | `KILL file$` | Delete a file |
@@ -2314,11 +2362,11 @@ bcc main.bcl -L libs/sort -L libs/string
 | `LPRINT` | `LPRINT expr[, ...]` | Print to printer |
 | `NAME` | `NAME old$ AS new$` | Rename a file |
 | `OPTION BASE` | `OPTION BASE 0\|1` | Set default array lower bound |
-| `ON...GOTO` | `ON expr GOTO n1, n2, ...` | Computed GOTO |
-| `ON...GOSUB` | `ON expr GOSUB n1, n2, ...` | Computed GOSUB |
-| `ON ERROR GOTO` | `ON ERROR GOTO n` | Install error handler at line *n* (`0` = disable) |
+| `ON...GOTO` | `ON expr GOTO label1, label2, ...` | Computed GOTO |
+| `ON...GOSUB` | `ON expr GOSUB label1, label2, ...` | Computed GOSUB |
+| `ON ERROR GOTO` | `ON ERROR GOTO label` | Install error handler (`ON ERROR GOTO 0` disables) |
 | `ERROR` | `ERROR n` | Trigger runtime error code *n* |
-| `RESUME` | `RESUME` / `RESUME NEXT` / `RESUME n` | Resume after error handler |
+| `RESUME` | `RESUME` / `RESUME NEXT` / `RESUME label` | Resume after error handler |
 | `OPEN` | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n` | Open file |
 | `OUT` | `OUT port, val` | Write byte to hardware I/O port |
 | `POKE` | `POKE address, val` | Write byte to memory address |
@@ -2329,7 +2377,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `RANDOMIZE` | `RANDOMIZE [seed]` | Seed random number generator |
 | `READ` | `READ var[, ...]` | Read from DATA stream |
 | `REQUIRE` | `require path.symbol` | Load dependency module |
-| `RESTORE` | `RESTORE [lineno]` | Reset DATA pointer |
+| `RESTORE` | `RESTORE [label]` | Reset DATA pointer |
 | `RETURN` | `RETURN expr` / `RETURN` | Return value from function; bare form exits a procedure early |
 | `SELECT CASE` | `SELECT CASE expr` … `END SELECT` | Multi-way branch |
 | `STOP` | `STOP` | Stop program execution |

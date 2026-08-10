@@ -35,6 +35,15 @@ larger programs practical:
 Everything is still global. Path-style names are linker selectors, not runtime
 namespaces.
 
+BASCAL is a strict superset of classic BASIC — bitwise `AND`/`OR`/`NOT` and
+hand-written `OPEN`/`FIELD`/`GET`/`PUT` all still compile unchanged.
+`GOTO`/`GOSUB`/`ON ERROR GOTO`/`RESUME`/`RESTORE` are raw BASIC too, but
+BASCAL manages line numbering itself, so their targets are always a `name:`
+label declared in source — never a raw line number. Beyond that, wherever
+BASCAL has its own construct for something above, treat that construct as
+canonical: it's the syntax the compiler exists to let you write instead of
+the raw-BASIC equivalent, not just another option.
+
 ## Build
 
 ```bash

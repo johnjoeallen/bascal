@@ -68,6 +68,7 @@
 <li>All classic BASCOM 1980s statements: <code>DATA</code>/<code>READ</code>/<code>RESTORE</code>, <code>LOCATE</code>, <code>COLOR</code>, <code>ON ... GOTO</code>, <code>SWAP</code>, <code>RANDOMIZE</code>, <code>CONST</code>, and more</li>
 </ul>
 <p><strong>BASCAL does not invent a new runtime.</strong> Every BASCAL program compiles to plain Microsoft BASIC. The structured constructs are transpiled by the compiler: functions become <code>GOSUB</code> subroutines, loops become <code>GOTO</code>-based constructs, and <code>if</code> chains become <code>IF ... THEN GOTO</code> sequences.</p>
+<p><strong>BASCAL is a strict superset of classic BASIC.</strong> Raw statements from the target dialect — <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> for random-access files, bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> — still compile unchanged. <code>GOTO</code>/<code>GOSUB</code>/<code>ON ERROR GOTO</code>/<code>RESUME</code>/<code>RESTORE</code> are raw BASIC too, but with one restriction: BASCAL manages line numbering itself, so their targets must be a <code>name:</code> label declared in source, never a raw line number — see <a href="#labels">Labels</a>. Beyond that, wherever this manual documents a BASCAL construct for something (<code>select case</code> instead of an <code>IF</code>/<code>GOTO</code> dispatch chain, <code>record</code>/<code>file</code> instead of hand-written <code>FIELD</code>/<code>GET</code>/<code>PUT</code>, <code>&amp;&amp;</code>/<code>||</code> instead of bitwise short-circuit workarounds), treat that construct as the canonical way to write it in <code>.bcl</code> source — the raw-BASIC spelling is legacy syntax the compiler exists to get you away from, not an equally good alternative.</p>
 <hr />
 <h2 id="getting-started">Getting Started</h2>
 <h3 id="building-the-compiler">Building the Compiler</h3>
@@ -1013,6 +1014,7 @@ print using fmt$; x!; y!; z!</code></pre>
 <h2 id="random-access-file-io">Random-Access File I/O</h2>
 <p>From Part 1 of <code>tutorial/15_random_and_record_files.bcl</code>:</p>
 <p>Random-access files store fixed-length records that can be read or written in any order, without scanning from the beginning.</p>
+<p>BASCAL supports the classic statements below directly — <code>OPEN ... FOR RANDOM</code>, <code>FIELD</code>, <code>LSET</code>/<code>RSET</code>, <code>PUT</code>/<code>GET</code>, <code>SEEK</code>, and the <code>MKx</code>/<code>CVx</code> packing helpers all compile as-is. But hand-summing field widths and hand-matching pack/unpack calls is exactly the bookkeeping a compiler should do for you: see <a href="#record-files">Record Files</a> below for BASCAL's typed <code>record</code>/<code>file</code> syntax, the canonical way to do random-access I/O in BASCAL. This section stays useful for reading the code that syntax generates, or for files whose layout doesn't fit a fixed record type.</p>
 <h3 id="open-for-random">OPEN FOR RANDOM</h3>
 <pre><code>open filename$ for random as #1 len = recLen%</code></pre>
 <p><code>len</code> sets the record size in bytes. Every record occupies exactly that many bytes on disk. Records are numbered from 1.</p>
@@ -1170,9 +1172,9 @@ DATA &quot;Japan&quot;,   &quot;Tokyo&quot;
 DATA &quot;Brazil&quot;,  &quot;Brasilia&quot;
 DATA &quot;Egypt&quot;,   &quot;Cairo&quot;</code></pre>
 <h3 id="restore">RESTORE</h3>
-<p>Resets the <code>DATA</code> pointer to the beginning (or to a specific line number).</p>
-<pre><code>RESTORE         &#39; rewind to the first DATA
-RESTORE 1000    &#39; rewind to the DATA at line 1000</code></pre>
+<p>Resets the <code>DATA</code> pointer to the beginning (or to a specific label).</p>
+<pre><code>RESTORE           &#39; rewind to the first DATA
+RESTORE fromHere  &#39; rewind to the DATA right after the fromHere: label</code></pre>
 <hr />
 <h2 id="miscellaneous-statements">Miscellaneous Statements</h2>
 <h3 id="mid-statement-form">MID$ (statement form)</h3>
@@ -1201,29 +1203,37 @@ SWAP country$(i%), country$(j%)  &#39; exchange array elements (used in bubble s
 <pre><code>RANDOMIZE           &#39; prompt or default
 RANDOMIZE TIMER     &#39; time-based seed for different sequences each run
 RANDOMIZE 99        &#39; fixed seed for reproducible output</code></pre>
+<h3 id="labels">Labels</h3>
+<pre><code>name:</code></pre>
+<p>Declares a branch target for <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code>/<code>on ... goto</code>/<code>on ... gosub</code> to jump to. <strong>BASCAL manages line numbers itself — you cannot target a raw line number.</strong> Every one of those statements requires a label name; the compiler assigns the actual BASIC line number when it renders output, exactly the way it already numbers the branch targets inside <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code>.</p>
+<pre><code>goto skip
+print &quot;not reached&quot;
+skip:
+print &quot;reached&quot;</code></pre>
+<p>A label can share its line with the statement that follows it — the <code>:</code> doubles as that statement's separator, same as anywhere else in BASCAL:</p>
+<pre><code>skip: print &quot;reached&quot;</code></pre>
 <h3 id="goto">GOTO</h3>
-<p>Transfers control to a line number. Prefer <code>if</code>, loops, and functions; <code>GOTO</code> is primarily useful for error handlers.</p>
-<pre><code>GOTO 1000</code></pre>
+<p>Transfers control to a label. Prefer <code>if</code>, loops, and functions; <code>GOTO</code> is primarily useful for error handlers.</p>
+<pre><code>GOTO doCleanup</code></pre>
 <h3 id="gosub--return-basic-level">GOSUB / RETURN (BASIC-level)</h3>
-<p>Calls a BASIC subroutine at a line number. Note this is the raw BASIC <code>GOSUB</code>, distinct from the function-call mechanism BASCAL generates internally.</p>
-<pre><code>GOSUB 2000</code></pre>
+<p>Calls a BASIC subroutine at a label. Note this is the raw BASIC <code>GOSUB</code>, distinct from the function-call mechanism BASCAL generates internally.</p>
+<pre><code>GOSUB writeLog</code></pre>
 <h3 id="on--goto--on--gosub">ON ... GOTO / ON ... GOSUB</h3>
-<p>Computed branch: the integer expression selects the <em>n</em>th target (1-based).</p>
-<pre><code>ON choice% GOTO 100, 200, 300
-ON mode%   GOSUB 500, 600, 700</code></pre>
+<p>Computed branch: the integer expression selects the <em>n</em>th target (1-based). Each target is a label, not a line number.</p>
+<pre><code>ON choice% GOTO firstCase, secondCase, thirdCase
+ON mode%   GOSUB modeIdle, modeRun, modeError</code></pre>
 <p>If the expression evaluates to 0 or exceeds the number of targets, execution continues with the next statement.</p>
 <h3 id="on-error-goto--resume--error">ON ERROR GOTO / RESUME / ERROR</h3>
 <p>MS-BASIC structured error handling: trap runtime errors, handle them, and resume execution.</p>
 <h4 id="on-error-goto">ON ERROR GOTO</h4>
-<p>Installs an error handler at a given line number. Any subsequent runtime error causes execution to jump to that line.</p>
-<pre><code>on error goto 9000   &#39; jump to line 9000 on any error
-on error goto 0      &#39; disable the error trap</code></pre>
-<p><code>ON ERROR GOTO 0</code> turns off trapping so errors propagate normally.</p>
+<p>Installs an error handler at a given label. Any subsequent runtime error causes execution to jump there. <code>ON ERROR GOTO 0</code> is the one place a numeric argument is still legal — <code>0</code> isn't a line number, it's the sentinel that disables the trap.</p>
+<pre><code>on error goto errHandler   &#39; jump to errHandler on any error
+on error goto 0            &#39; disable the error trap</code></pre>
 <h4 id="resume">RESUME</h4>
 <p>Resumes execution after an error handler has run.</p>
-<pre><code>resume          &#39; retry the statement that caused the error
-resume next     &#39; continue at the statement after the failing one
-resume 9999     &#39; jump to a specific line number</code></pre>
+<pre><code>resume             &#39; retry the statement that caused the error
+resume next         &#39; continue at the statement after the failing one
+resume afterError   &#39; jump to a specific label</code></pre>
 <p><code>RESUME</code> without an argument retries the failing statement (useful for recoverable errors like "disk full — retry after making space"). <code>RESUME NEXT</code> skips the failing statement.</p>
 <h4 id="error">ERROR</h4>
 <p>Triggers a runtime error with the given code, as if that error occurred naturally. Useful for re-raising an error in a handler or testing.</p>
@@ -1231,16 +1241,17 @@ resume 9999     &#39; jump to a specific line number</code></pre>
 error code%  &#39; variable error code</code></pre>
 <h4 id="err-and-erl">ERR and ERL</h4>
 <p>Inside an error handler, the system pseudo-variables <code>err</code> and <code>erl</code> hold the error code and the BASIC line number where the error occurred. Write them without a type suffix; BASIC treats them as numeric:</p>
-<pre><code>on error goto 9000
+<pre><code>on error goto handleErr
 &#39; ...
-goto 9999
-&#39; 9000 is the error handler line (reached via ON ERROR GOTO)
+goto afterErr
+handleErr:
+&#39; reached via ON ERROR GOTO
 if err = 53 then
     print &quot;File not found&quot;
     resume next
 end if
 error err   &#39; re-raise unhandled errors
-&#39; 9999 continues here
+afterErr:
 end</code></pre>
 <h4 id="typical-pattern">Typical pattern</h4>
 <pre><code>on error goto errHandler
@@ -1260,7 +1271,6 @@ end if
 
 done:
 end</code></pre>
-<p>Note: error handler labels (<code>errHandler:</code>) are BASIC raw labels. Use <code>goto</code> with numeric line targets or embed the handler inline with a preceding <code>goto</code> that skips past it, as shown above.</p>
 <h3 id="poke">POKE</h3>
 <p>Writes a byte value to a memory address. The address is an integer expression.</p>
 <pre><code>poke &amp;H0400, 3      &#39; write to segment-zero address using hex literal
@@ -1676,186 +1686,191 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td>Define a function with a return value</td>
 </tr>
 <tr class="even">
-<td><code>GOSUB</code></td>
-<td><code>GOSUB lineno</code></td>
-<td>Call BASIC subroutine</td>
+<td>Label</td>
+<td><code>name:</code></td>
+<td>Declare a branch target for GOTO/GOSUB/ON.../RESUME</td>
 </tr>
 <tr class="odd">
-<td><code>GOTO</code></td>
-<td><code>GOTO lineno</code></td>
-<td>Unconditional branch</td>
+<td><code>GOSUB</code></td>
+<td><code>GOSUB label</code></td>
+<td>Call BASIC subroutine</td>
 </tr>
 <tr class="even">
+<td><code>GOTO</code></td>
+<td><code>GOTO label</code></td>
+<td>Unconditional branch</td>
+</tr>
+<tr class="odd">
 <td><code>IF</code></td>
 <td><code>IF cond THEN</code> … [<code>ELSEIF</code> …] [<code>ELSE</code> …] <code>END IF</code></td>
 <td>Conditional block</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>INPUT</code></td>
 <td><code>INPUT [prompt;] var[, ...]</code></td>
 <td>Read from keyboard</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>KILL</code></td>
 <td><code>KILL file$</code></td>
 <td>Delete a file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>INPUT #</code></td>
 <td><code>INPUT #n, var[, ...]</code></td>
 <td>Read from file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LET</code></td>
 <td><code>LET var = expr</code></td>
 <td>Assignment (keyword optional)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>MID$</code> (stmt)</td>
 <td><code>MID$(str$, start[, len]) = repl$</code></td>
 <td>In-place substring replacement</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LINE INPUT</code></td>
 <td><code>LINE INPUT #n, var$</code></td>
 <td>Read full line from file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LOCATE</code></td>
 <td><code>LOCATE row, col</code></td>
 <td>Position cursor</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LPRINT</code></td>
 <td><code>LPRINT expr[, ...]</code></td>
 <td>Print to printer</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>NAME</code></td>
 <td><code>NAME old$ AS new$</code></td>
 <td>Rename a file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>OPTION BASE</code></td>
 <td><code>OPTION BASE 0|1</code></td>
 <td>Set default array lower bound</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ON...GOTO</code></td>
-<td><code>ON expr GOTO n1, n2, ...</code></td>
+<td><code>ON expr GOTO label1, label2, ...</code></td>
 <td>Computed GOTO</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ON...GOSUB</code></td>
-<td><code>ON expr GOSUB n1, n2, ...</code></td>
+<td><code>ON expr GOSUB label1, label2, ...</code></td>
 <td>Computed GOSUB</td>
 </tr>
-<tr class="odd">
-<td><code>ON ERROR GOTO</code></td>
-<td><code>ON ERROR GOTO n</code></td>
-<td>Install error handler at line <em>n</em> (<code>0</code> = disable)</td>
-</tr>
 <tr class="even">
+<td><code>ON ERROR GOTO</code></td>
+<td><code>ON ERROR GOTO label</code></td>
+<td>Install error handler (<code>ON ERROR GOTO 0</code> disables)</td>
+</tr>
+<tr class="odd">
 <td><code>ERROR</code></td>
 <td><code>ERROR n</code></td>
 <td>Trigger runtime error code <em>n</em></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RESUME</code></td>
-<td><code>RESUME</code> / <code>RESUME NEXT</code> / <code>RESUME n</code></td>
+<td><code>RESUME</code> / <code>RESUME NEXT</code> / <code>RESUME label</code></td>
 <td>Resume after error handler</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>OPEN</code></td>
 <td><code>OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n</code></td>
 <td>Open file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>OUT</code></td>
 <td><code>OUT port, val</code></td>
 <td>Write byte to hardware I/O port</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>POKE</code></td>
 <td><code>POKE address, val</code></td>
 <td>Write byte to memory address</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PRINT</code></td>
 <td><code>PRINT expr[, ...]</code></td>
 <td>Print to screen</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PROCEDURE</code></td>
 <td><code>PROCEDURE name(params)</code> … <code>END PROCEDURE</code></td>
 <td>Define a procedure (no return value)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PRINT #</code></td>
 <td><code>PRINT #n, expr[, ...]</code></td>
 <td>Print to file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PRINT USING</code></td>
 <td><code>PRINT USING fmt$; expr[; ...]</code></td>
 <td>Formatted print (also <code>LPRINT USING</code>, <code>PRINT #n, USING</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RANDOMIZE</code></td>
 <td><code>RANDOMIZE [seed]</code></td>
 <td>Seed random number generator</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>READ</code></td>
 <td><code>READ var[, ...]</code></td>
 <td>Read from DATA stream</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>REQUIRE</code></td>
 <td><code>require path.symbol</code></td>
 <td>Load dependency module</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>RESTORE</code></td>
-<td><code>RESTORE [lineno]</code></td>
+<td><code>RESTORE [label]</code></td>
 <td>Reset DATA pointer</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RETURN</code></td>
 <td><code>RETURN expr</code> / <code>RETURN</code></td>
 <td>Return value from function; bare form exits a procedure early</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SELECT CASE</code></td>
 <td><code>SELECT CASE expr</code> … <code>END SELECT</code></td>
 <td>Multi-way branch</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>STOP</code></td>
 <td><code>STOP</code></td>
 <td>Stop program execution</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SWAP</code></td>
 <td><code>SWAP a, b</code></td>
 <td>Exchange two variable values</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>SYSTEM</code></td>
 <td><code>SYSTEM</code></td>
 <td>Exit to operating system</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>WHILE</code></td>
 <td><code>WHILE cond</code> … <code>END WHILE</code></td>
 <td>Condition-at-top loop</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>WIDTH</code></td>
 <td><code>WIDTH [#n,] cols</code></td>
 <td>Set line width for console or file channel</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>WRITE #</code></td>
 <td><code>WRITE #n, expr[, ...]</code></td>
 <td>Write to file (quoted format)</td>
