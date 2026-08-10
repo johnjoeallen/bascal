@@ -1,0 +1,77 @@
+// Tutorial 17 — Labels and Error Handling
+//
+// BASCAL manages line numbers itself -- goto, gosub, on error goto, resume,
+// restore, and on ... goto / on ... gosub can never target a raw line
+// number in .bcl source. Every one of them requires a name: label instead;
+// the compiler assigns the real BASIC line number when it renders output,
+// the same way it already numbers the branch targets inside if/while/do/
+// select case.
+//
+// on error goto 0 is the one numeric exception -- 0 isn't a line number,
+// it's the sentinel that disables the error trap.
+
+/* ---- goto / label basics ---- */
+
+print "goto/label basics:"
+goto afterSkip
+print "  not reached"
+afterSkip:
+print "  reached via goto"
+
+/* ---- gosub / return (BASIC-level subroutine, distinct from BASCAL functions) ---- */
+
+print "gosub/return:"
+gosub printBanner
+print "  back after gosub"
+goto afterBanner
+
+printBanner:
+print "  inside the gosub'd subroutine"
+return
+
+afterBanner:
+
+/* ---- error handling: on error goto, resume to a label, err ---- */
+//
+// Opening a file that doesn't exist raises BASIC runtime error 53
+// ("file not found"). The handler below catches it, prints a message, and
+// then RESUMEs at a label -- not the failing statement or "next", but a
+// specific point past the whole try/handler region. RESUME (not a plain
+// GOTO) is what clears the runtime's "currently handling an error" state,
+// so a later error can still be trapped.
+
+print "error handling, missing file:"
+fileName$ = "does_not_exist.dat"
+on error goto handleOpenError
+open fileName$ for input as #1
+print "  file opened (unexpected)"
+close #1
+goto afterOpen
+
+handleOpenError:
+if err = 53 then
+    print "  caught error "; err; ": "; fileName$; " not found"
+    resume afterOpen
+else
+    print "  unexpected error "; err
+    error err
+end if
+
+afterOpen:
+on error goto 0
+
+/* ---- restore with a label: rewind the DATA pointer to a specific block ---- */
+
+print "restore to a label:"
+read firstCountry$
+print "  first read: "; firstCountry$
+restore secondBatch
+read secondCountry$
+print "  after restore secondBatch: "; secondCountry$
+
+end
+
+data "France"
+
+secondBatch:
+data "Japan"
