@@ -524,7 +524,11 @@ end while</code></pre>
 <pre><code>do [while/until condition]
     &#39; body
 end do</code></pre>
-<p><code>end do</code> closes the loop. Bare <code>end</code> also works. The optional <code>while</code> or <code>until</code> clause tests the condition before each iteration.</p>
+<p>or the post-check form:</p>
+<pre><code>do
+    &#39; body
+loop [while/until condition]</code></pre>
+<p><code>end do</code> (bare <code>end</code> also works) closes a <strong>pre-check</strong> loop: the optional <code>while</code>/<code>until</code> clause tests the condition <em>before</em> each iteration, so the body may run zero times. <code>loop [while/until condition]</code> closes a <strong>post-check</strong> loop instead: the condition is tested <em>after</em> the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages spell <code>repeat</code>/<code>until</code>. A bare <code>do ... loop</code> with no condition on either end is a plain infinite loop, same as bare <code>do ... end do</code>; both need <code>exit do</code> to terminate.</p>
 <p>From <code>tutorial/05_loops.bcl</code>:</p>
 <pre><code>&#39; DO WHILE — condition tested before body
 k% = 1
@@ -540,17 +544,14 @@ do until k% &gt; 3
     k% = k% + 1
 end do
 
-&#39; Run body at least once (post-check via EXIT DO)
+&#39; DO ... LOOP UNTIL — post-check, body runs at least once
 k% = 99
 do
     PRINT &quot;  &quot; + STR$(k%)    &#39; prints 99 even though k% &gt; 3
     k% = k% + 1
-    if k% &gt; 3 then
-        exit do
-    end if
-end do
+loop until k% &gt; 3
 
-&#39; EXIT DO
+&#39; EXIT DO — leave from the middle of the body, either form
 k% = 1
 do
     if k% = 3 then
@@ -559,7 +560,7 @@ do
     PRINT &quot;  &quot; + STR$(k%)
     k% = k% + 1
 end do</code></pre>
-<p><code>exit do</code> exits the enclosing <code>do</code> loop immediately.</p>
+<p><code>exit do</code> exits the enclosing <code>do</code> loop immediately, from either the pre-check or post-check form.</p>
 <h3 id="select-case">SELECT CASE</h3>
 <pre><code>select case expression
 case value
@@ -1482,6 +1483,16 @@ end do</code></pre>
     k% = k% + 1
     GOTO 10
 20 REM END DO</code></pre>
+<p>The post-check form skips the leading guard entirely, since the body always runs at least once:</p>
+<pre><code>do
+    PRINT STR$(k%)
+    k% = k% + 1
+loop until k% &gt; 3</code></pre>
+<p>Becomes:</p>
+<pre><code>10 PRINT STR$(k%)
+    k% = k% + 1
+    IF (k% &gt; 3) = 0 THEN GOTO 10
+20 REM END DO</code></pre>
 <h3 id="for-transpilation">For Transpilation</h3>
 <p>BASCAL emits native <code>FOR</code> / <code>NEXT</code>, which BASIC runtimes handle efficiently. The BASCAL <code>end for</code> (or bare <code>end</code>) is stripped; the BASIC <code>NEXT</code> is emitted by the compiler:</p>
 <pre><code>FOR i% = 1 TO 5
@@ -1652,8 +1663,8 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 </tr>
 <tr class="odd">
 <td><code>DO</code></td>
-<td><code>DO [WHILE/UNTIL cond]</code> … <code>END DO</code></td>
-<td>Conditional loop</td>
+<td><code>DO [WHILE/UNTIL cond]</code> … <code>END DO</code>, or <code>DO</code> … <code>LOOP [WHILE/UNTIL cond]</code></td>
+<td>Pre-check or post-check conditional loop</td>
 </tr>
 <tr class="even">
 <td><code>END</code></td>

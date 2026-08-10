@@ -830,13 +830,28 @@ impl Parser {
             None
         };
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::DoEnd, BlockEnd::BareEnd])?;
-        self.expect_keyword("end")?;
-        if self.check_keyword("do") {
-            self.expect_keyword("do")?;
-        }
-        self.consume_line_end()?;
-        Ok(Statement::Do { condition, body, post_condition: None })
+        let body = self.parse_block(&[BlockEnd::DoEnd, BlockEnd::BareEnd, BlockEnd::Loop])?;
+        // `loop [while/until cond]` is the post-check form -- the condition
+        // is tested after the body runs, so it always executes at least
+        // once. `end [do]` is the existing pre-check-or-bare form.
+        let post_condition = if self.check_keyword("loop") {
+            self.expect_keyword("loop")?;
+            let post = if self.check_keyword("while") || self.check_keyword("until") {
+                Some(self.parse_do_condition()?)
+            } else {
+                None
+            };
+            self.consume_line_end()?;
+            post
+        } else {
+            self.expect_keyword("end")?;
+            if self.check_keyword("do") {
+                self.expect_keyword("do")?;
+            }
+            self.consume_line_end()?;
+            None
+        };
+        Ok(Statement::Do { condition, body, post_condition })
     }
 
     fn parse_do_condition(&mut self) -> ParseResult<DoCondition> {
@@ -1500,6 +1515,7 @@ impl Parser {
             BlockEnd::WhileEnd => self.check_keyword("end") && self.check_next_keyword("while"),
             BlockEnd::DoEnd => self.check_keyword("end") && self.check_next_keyword("do"),
             BlockEnd::BareEnd => self.check_keyword("end") && self.check_next_is_line_end(),
+            BlockEnd::Loop => self.check_keyword("loop"),
             BlockEnd::Case => self.check_keyword("case"),
             BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),
         }
@@ -1637,6 +1653,7 @@ enum BlockEnd {
     WhileEnd,
     DoEnd,
     BareEnd,
+    Loop,
     Case,
     EndSelect,
 }
@@ -1979,5 +1996,55 @@ mod tests {
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for numeric on...goto targets");
         assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+    }
+
+    #[test]
+    fn parses_do_loop_until_as_post_condition() {
+        let program = parse("do\nprint 1\nloop until k% > 3\nend\n");
+        match &program.statements[0] {
+            Statement::Do { condition, post_condition: Some(cond), .. } => {
+                assert!(condition.is_none());
+                assert!(!cond.is_while);
+            }
+            other => panic!("expected do statement with a post-condition, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_do_loop_while_as_post_condition() {
+        let program = parse("do\nprint 1\nloop while j% <= 3\nend\n");
+        match &program.statements[0] {
+            Statement::Do { condition, post_condition: Some(cond), .. } => {
+                assert!(condition.is_none());
+                assert!(cond.is_while);
+            }
+            other => panic!("expected do statement with a post-condition, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_bare_do_loop_with_no_condition_at_all() {
+        let program = parse("do\nn% = n% + 1\nloop\nend\n");
+        match &program.statements[0] {
+            Statement::Do { condition, post_condition, .. } => {
+                assert!(condition.is_none());
+                assert!(post_condition.is_none());
+            }
+            other => panic!("expected bare do statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn do_end_do_still_works_alongside_loop_until() {
+        // The pre-existing `end`/`end do` terminator must keep working now
+        // that `loop [while/until]` is a second valid terminator.
+        let program = parse("do while k% <= 3\nprint k%\nend do\nend\n");
+        match &program.statements[0] {
+            Statement::Do { condition: Some(cond), post_condition, .. } => {
+                assert!(cond.is_while);
+                assert!(post_condition.is_none());
+            }
+            other => panic!("expected do-while statement, got {other:?}"),
+        }
     }
 }

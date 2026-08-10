@@ -30,10 +30,12 @@
 
   <div class="prose">
 <p>BASCAL has three loop constructs: counted <code>for ... to [step n] ... end for</code>,
-pre-check <code>while ... end while</code>, and <code>do [while/until cond] ...
-end do</code> (condition at the top, or a bare <code>do</code> with a manual
-<code>exit do</code> for a post-check loop). Each has a matching early-exit
-statement. See the
+pre-check <code>while ... end while</code>, and <code>do</code>, which comes in
+two forms — <code>do [while/until cond] ... end do</code> tests the condition
+at the top (may run zero times), and <code>do ... loop [while/until cond]</code>
+tests it at the bottom (always runs at least once — BASCAL's direct
+<code>repeat</code>/<code>until</code> equivalent). Each loop has a matching
+early-exit statement. See the
 <a href="../#control-flow">control-flow comparison</a> on the homepage for what
 each one compiles down to.</p>
   </div>
@@ -59,6 +61,15 @@ do until k% &gt; 3
     print &quot;  &quot;; k%
     k% = k% + 1
 end do</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>DO ... LOOP UNTIL — post-check, body runs at least once</h3>
+      <p class="note">The condition is tested after the body, not before, so this prints once even though k% starts already past the stopping value.</p>
+      <pre><code>k% = 99
+do
+    print &quot;  &quot;; k%
+    k% = k% + 1
+loop until k% &gt; 3</code></pre>
     </div>
 
 

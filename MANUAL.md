@@ -576,8 +576,22 @@ do [while/until condition]
 end do
 ```
 
-`end do` closes the loop. Bare `end` also works. The optional `while` or
-`until` clause tests the condition before each iteration.
+or the post-check form:
+
+```
+do
+    ' body
+loop [while/until condition]
+```
+
+`end do` (bare `end` also works) closes a **pre-check** loop: the optional
+`while`/`until` clause tests the condition *before* each iteration, so the
+body may run zero times. `loop [while/until condition]` closes a
+**post-check** loop instead: the condition is tested *after* the body runs,
+so the body always runs at least once — the direct BASCAL equivalent of
+what other languages spell `repeat`/`until`. A bare `do ... loop` with no
+condition on either end is a plain infinite loop, same as bare
+`do ... end do`; both need `exit do` to terminate.
 
 From `tutorial/05_loops.bcl`:
 
@@ -596,17 +610,14 @@ do until k% > 3
     k% = k% + 1
 end do
 
-' Run body at least once (post-check via EXIT DO)
+' DO ... LOOP UNTIL — post-check, body runs at least once
 k% = 99
 do
     PRINT "  " + STR$(k%)    ' prints 99 even though k% > 3
     k% = k% + 1
-    if k% > 3 then
-        exit do
-    end if
-end do
+loop until k% > 3
 
-' EXIT DO
+' EXIT DO — leave from the middle of the body, either form
 k% = 1
 do
     if k% = 3 then
@@ -617,7 +628,8 @@ do
 end do
 ```
 
-`exit do` exits the enclosing `do` loop immediately.
+`exit do` exits the enclosing `do` loop immediately, from either the
+pre-check or post-check form.
 
 ### SELECT CASE
 
@@ -2205,6 +2217,25 @@ Becomes:
 20 REM END DO
 ```
 
+The post-check form skips the leading guard entirely, since the body always
+runs at least once:
+
+```
+do
+    PRINT STR$(k%)
+    k% = k% + 1
+loop until k% > 3
+```
+
+Becomes:
+
+```
+10 PRINT STR$(k%)
+    k% = k% + 1
+    IF (k% > 3) = 0 THEN GOTO 10
+20 REM END DO
+```
+
 ### For Transpilation
 
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently.
@@ -2341,7 +2372,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
 | `DIM` | `DIM name[(d1[, d2, ...])]` | Declare a variable or 1-D/multi-D array |
 | `ERASE` | `ERASE arr[, ...]` | Free memory used by arrays |
-| `DO` | `DO [WHILE/UNTIL cond]` … `END DO` | Conditional loop |
+| `DO` | `DO [WHILE/UNTIL cond]` … `END DO`, or `DO` … `LOOP [WHILE/UNTIL cond]` | Pre-check or post-check conditional loop |
 | `END` | `END` | End of program |
 | `EXIT DO` | `EXIT DO` | Exit enclosing DO loop |
 | `EXIT FOR` | `EXIT FOR` | Exit enclosing FOR loop |

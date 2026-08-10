@@ -11,7 +11,9 @@ BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:
 
 - multiline `if` / `else if` / `else` / `end if`
-- `for` / `next`, `while` / `wend`, and `do` / `loop` loops with early exit
+- `for` / `next`, `while` / `wend`, and `do` loops with early exit — `do`
+  comes pre-check (`do [while/until cond] ... end do`) or post-check
+  (`do ... loop [while/until cond]`, BASCAL's `repeat`/`until` equivalent)
 - `function` declarations with explicit `return`
 - path-style `require` dependencies
 - `program name [suite suitename]` declaration with `COMMON` block coordination

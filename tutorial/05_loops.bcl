@@ -10,9 +10,12 @@
 //     Condition tested before each iteration.
 //     EXIT WHILE exits early.
 //
-//   DO [WHILE/UNTIL cond] ... DO END  (or bare END)
-//     Condition tested at the top; use EXIT DO to break out.
-//     EXIT DO exits early.
+//   DO [WHILE/UNTIL cond] ... END DO  (or bare END)
+//     Pre-check: condition tested at the top, before the body runs at all.
+//   DO ... LOOP [WHILE/UNTIL cond]
+//     Post-check: condition tested at the bottom, so the body always runs
+//     at least once.
+//   Either form: EXIT DO exits early, from anywhere in the body.
 
 /* --- for / NEXT --- */
 print "Squares 1..5:"
@@ -80,16 +83,13 @@ do until k% > 3
     k% = k% + 1
 end do
 
-// DO ... DO END with post-check — body runs at least once
-print "DO...DO END (body runs once even though false):"
+// DO ... LOOP UNTIL — post-check, body runs at least once
+print "DO...LOOP UNTIL (body runs once even though already false):"
 k% = 99
 do
     print "  "; k%
     k% = k% + 1
-    if k% > 3 then
-        exit do
-    end if
-end do
+loop until k% > 3
 
 // EXIT DO
 print "EXIT DO at 3:"

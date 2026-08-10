@@ -933,6 +933,45 @@ print "handled"
     }
 
     #[test]
+    fn do_loop_until_runs_body_before_testing_the_condition() {
+        // Post-check form: `loop until` tests after the body, so it must
+        // jump back to the top of the loop -- not skip the body the way a
+        // pre-check `do until` would for an already-true condition.
+        let source = r#"k% = 99
+do
+    print k%
+    k% = k% + 1
+loop until k% > 3
+end
+"#;
+        let output = compile_source("postcheck.bcl", source).expect("should compile");
+        // No pre-check guard before the body: the very first statement
+        // inside the loop is PRINT, not an IF testing the condition.
+        let print_idx = output.find("PRINT k%").expect("body should be present");
+        let first_if_idx = output.find("IF (");
+        assert!(
+            first_if_idx.is_none_or(|i| i > print_idx),
+            "post-check loop must not test the condition before running the body"
+        );
+        // The condition jump must loop back, i.e. target a label that
+        // resolves to a line number at or before PRINT k%'s own line.
+        assert!(output.contains("k% > 3"));
+    }
+
+    #[test]
+    fn do_loop_while_repeats_while_condition_holds() {
+        let source = r#"j% = 1
+do
+    print j%
+    j% = j% + 1
+loop while j% <= 3
+end
+"#;
+        let output = compile_source("postcheck_while.bcl", source).expect("should compile");
+        assert!(output.contains("<> 0 THEN GOTO"), "loop while repeats when the condition is still true");
+    }
+
+    #[test]
     fn goto_label_resolves_to_a_real_line_number() {
         let source = r#"print "before"
 goto skip
