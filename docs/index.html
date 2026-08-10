@@ -362,9 +362,17 @@ end</code></pre>
     </div>
 
     <p class="lede">
-      <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
+      <code>for</code>/<code>next</code> is the one exception to the GOTO-chain
+      shape above: it compiles straight to a native BASIC <code>FOR ... NEXT</code>
+      block, and <code>exit for</code> transpiles directly to BASIC's own
+      <code>EXIT FOR</code> — there's no guarded jump or local label involved,
+      since <code>FOR ... NEXT</code> already has everything it needs
+      built in to the target dialect. Multiline <code>if</code>/<code>else
+      if</code>/<code>else</code>, on the other hand, does compile to the
+      same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain as the loops
+      above — see the
       <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a>
-      note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows the same trade — it's just the newest place BASCAL makes it.
+      note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.
     </p>
   </section>
 
