@@ -538,7 +538,8 @@ while condition
 end while
 ```
 
-`end while` closes the loop. Bare `end` also works.
+`end while` closes the loop. Bare `end` also works, and so does classic
+BASIC's own `wend`.
 
 From `tutorial/05_loops.bcl`:
 
@@ -2445,7 +2446,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `STOP` | `STOP` | Stop program execution |
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
 | `SYSTEM` | `SYSTEM` | Exit to operating system |
-| `WHILE` | `WHILE cond` … `END WHILE` | Condition-at-top loop |
+| `WHILE` | `WHILE cond` … `END WHILE` (or `WEND`) | Condition-at-top loop |
 | `WIDTH` | `WIDTH [#n,] cols` | Set line width for console or file channel |
 | `WRITE #` | `WRITE #n, expr[, ...]` | Write to file (quoted format) |
 

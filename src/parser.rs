@@ -801,10 +801,19 @@ impl Parser {
         self.expect_keyword("while")?;
         let condition = self.parse_condition()?;
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::WhileEnd, BlockEnd::BareEnd])?;
-        self.expect_keyword("end")?;
-        if self.check_keyword("while") {
-            self.expect_keyword("while")?;
+        // `wend` is classic BASIC's own WHILE terminator, accepted alongside
+        // `end while`/bare `end` -- without this, `wend` isn't recognized at
+        // all, so it silently parses as a no-op statement and the block
+        // keeps consuming everything after it (including the program's own
+        // `end`) looking for a real terminator.
+        let body = self.parse_block(&[BlockEnd::WhileEnd, BlockEnd::BareEnd, BlockEnd::Wend])?;
+        if self.check_keyword("wend") {
+            self.expect_keyword("wend")?;
+        } else {
+            self.expect_keyword("end")?;
+            if self.check_keyword("while") {
+                self.expect_keyword("while")?;
+            }
         }
         self.consume_line_end()?;
         Ok(Statement::While { condition, body })
@@ -1512,6 +1521,7 @@ impl Parser {
             }
             BlockEnd::ForEnd => self.check_keyword("end") && self.check_next_keyword("for"),
             BlockEnd::WhileEnd => self.check_keyword("end") && self.check_next_keyword("while"),
+            BlockEnd::Wend => self.check_keyword("wend"),
             BlockEnd::DoEnd => self.check_keyword("end") && self.check_next_keyword("do"),
             BlockEnd::BareEnd => self.check_keyword("end") && self.check_next_is_line_end(),
             BlockEnd::Loop => self.check_keyword("loop"),
@@ -1650,6 +1660,7 @@ enum BlockEnd {
     EndProcedure,
     ForEnd,
     WhileEnd,
+    Wend,
     DoEnd,
     BareEnd,
     Loop,
@@ -2066,5 +2077,26 @@ mod tests {
             let errs = result.expect_err(&format!("expected a parse error for `exit {keyword}`"));
             assert!(errs.iter().any(|d| d.message.contains("no longer takes a loop-type keyword")));
         }
+    }
+
+    #[test]
+    fn wend_closes_a_while_loop() {
+        let program = parse("while p% < 10\nprint p%\nwend\nprint \"after\"\nend\n");
+        assert!(matches!(program.statements[0], Statement::While { .. }));
+        // The statement after `wend` must be a sibling of the while loop,
+        // not part of its body -- this is exactly the case that silently
+        // broke before `wend` was a recognized terminator.
+        assert!(matches!(program.statements[1], Statement::Print { .. }));
+        if let Statement::While { body, .. } = &program.statements[0] {
+            assert_eq!(body.len(), 1, "wend must not be absorbed into the loop body");
+        }
+    }
+
+    #[test]
+    fn end_while_and_bare_end_still_work_alongside_wend() {
+        let program = parse("while p% < 10\nprint p%\nend while\nend\n");
+        assert!(matches!(program.statements[0], Statement::While { .. }));
+        let program = parse("while p% < 10\nprint p%\nend\nend\n");
+        assert!(matches!(program.statements[0], Statement::While { .. }));
     }
 }

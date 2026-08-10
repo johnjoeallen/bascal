@@ -46,7 +46,7 @@ p% = 1
 while p% < 100
     print "  "; p%
     p% = p% * 2
-end while
+wend
 
 /* exit from a WHILE loop */
 print "Collatz from 27 (first 8 steps):"
