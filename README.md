@@ -1,5 +1,8 @@
 # BASCAL
 
+**[Browse the website](https://johnjoeallen.github.io/bascal/)** — tutorials,
+side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual.html).
+
 BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
 The compiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
 language reference.
