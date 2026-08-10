@@ -255,7 +255,7 @@ end do</code></pre>
 
     <div class="compare">
       <h3>4. Post-check loop ("repeat until") and a mid-loop exit</h3>
-      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's <code>do ... loop until/while</code> is the direct <code>REPEAT</code>/<code>UNTIL</code> equivalent for the first case — the condition lives at the bottom, tested after the body, so it always runs at least once. A true middle exit still needs <code>exit</code>, since no fixed top-or-bottom condition position can express "stop right here."</p>
+      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's <code>do ... loop until/while</code> is the direct <code>REPEAT</code>/<code>UNTIL</code> equivalent, in both polarities — same two spellings as <code>do while</code>/<code>do until</code> above, just tested at the bottom instead of the top, so the body always runs at least once. A true middle exit still needs <code>exit</code>, since no fixed top-or-bottom condition position can express "stop right here."</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -265,13 +265,18 @@ k% = 99
     k% = k% + 1
     IF k% &lt;= 3 THEN GOTO 810
 
+j% = 1
+910 PRINT "  "; j%
+    j% = j% + 1
+    IF j% &lt;= 3 THEN GOTO 910
+
 ' exit from the middle, at k% = 3
 k% = 1
-910 IF k% = 3 THEN GOTO 970
+1010 IF k% = 3 THEN GOTO 1070
     PRINT "  "; k%
     k% = k% + 1
-    GOTO 910
-970 REM ...</code></pre>
+    GOTO 1010
+1070 REM ...</code></pre>
         </div>
         <div class="pane new">
           <span class="tag">BASCAL</span>
@@ -281,6 +286,12 @@ do
     print "  "; k%
     k% = k% + 1
 loop until k% &gt; 3
+
+j% = 1
+do
+    print "  "; j%
+    j% = j% + 1
+loop while j% &lt;= 3
 
 ' exit from the middle, at k% = 3
 k% = 1
