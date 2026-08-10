@@ -175,11 +175,10 @@ end select</code></pre>
       <div class="snippet">
         <h3>Suite COMMON</h3>
         <p class="note">A suite file's <code>common</code> list is emitted identically into every <code>program ... suite ...</code> that references it, so a <code>CHAIN</code>ed program can't drift out of sync with the variable slots it's sharing.</p>
-        <pre><code>&#39; shared.bcl
-common count%, label$
-
-&#39; show.bcl
-program show suite shared
+        <p class="note"><code>shared.bcl</code> (suite file):</p>
+        <pre><code>common count%, label$</code></pre>
+        <p class="note"><code>show.bcl</code>:</p>
+        <pre><code>program show suite shared
 
 print &quot;Count: &quot; + STR$(count%)
 end</code></pre>
