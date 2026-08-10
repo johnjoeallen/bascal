@@ -33,9 +33,10 @@
 
 ## Introduction
 
-BASCAL is a compiler that translates structured `.bcl` source files into
-line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and
-FreeBASIC's QB compatibility mode.
+**BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer
+**A**pplication **L**anguage — is a compiler that translates structured
+`.bcl` source files into line-numbered Microsoft BASIC programs (`.bas`)
+compatible with BASCOM and FreeBASIC's QB compatibility mode.
 
 BASCAL adds structured programming constructs on top of BASIC's run-time
 semantics:
@@ -243,6 +244,17 @@ end for
 this when the array will be passed in from outside or when BASIC's default
 sizing is sufficient.
 
+A single `dim` may declare more than one name, comma-separated, mixing plain
+variables and arrays freely:
+
+```
+dim a%, b%(3), c$
+```
+
+This is exactly equivalent to writing three separate `dim` statements —
+`dim a%`, then `dim b%(3)`, then `dim c$` — and generates one `DIM` line per
+name in the output.
+
 ### OPTION BASE
 
 Sets the default lower bound for all subsequently declared arrays. Must be
@@ -338,6 +350,48 @@ print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))
 
 Comparison expressions evaluate to −1 (true) or 0 (false) at the BASIC
 runtime, consistent with Microsoft BASIC semantics.
+
+### TRUE and FALSE
+
+`TRUE` and `FALSE` are compile-time sugar for BASIC's own boolean
+convention — `-1` and `0` — so a programmer-boolean flag can be compared
+against a name instead of a magic number:
+
+```
+found% = TRUE
+done%  = FALSE
+
+if found% = TRUE then
+    print "found it"
+end if
+```
+
+They compile straight through to the literals themselves — `found% = TRUE`
+generates `found% = -1` — so they're valid anywhere an integer literal is,
+including `CONST` and array bounds. No boolean type is introduced anywhere
+else in the language; see the `NOT` caveat above for why explicit `= 0` /
+`<> 0` comparisons are still how you test a flag.
+
+### Compound Assignment
+
+```
+x% += n%    ' x% = x% + n%
+x% -= n%    ' x% = x% - n%
+x% *= n%    ' x% = x% * n%
+x% /= n%    ' x% = x% / n%
+```
+
+Shorthand for reassigning a variable in terms of itself — the common case in
+loop counters and accumulators. `total% += x%` is exactly equivalent to
+`total% = total% + x%`; it works on array elements and record fields too:
+
+```
+scores%(i%) += 1
+s.total# -= fee#
+```
+
+Only `+=`, `-=`, `*=`, `/=` are provided — there is no compound form of `\`,
+`MOD`, `^`, or the bitwise/logical operators.
 
 ### Logical Operators
 
@@ -2423,7 +2477,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `COMMON` | `common var[, ...]` | Declare suite COMMON variables (suite files only) |
 | `CONST` | `CONST name = expr` | Declare a named constant |
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
-| `DIM` | `DIM name[(d1[, d2, ...])]` | Declare a variable or 1-D/multi-D array |
+| `DIM` | `DIM name[(d1[, d2, ...])][, name2...]` | Declare one or more variables or 1-D/multi-D arrays |
 | `ERASE` | `ERASE arr[, ...]` | Free memory used by arrays |
 | `DO` | `DO [WHILE/UNTIL cond]` … `END DO`, or `DO` … `LOOP [WHILE/UNTIL cond]` | Pre-check or post-check conditional loop |
 | `END` | `END` | End of program |
@@ -2438,6 +2492,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `KILL` | `KILL file$` | Delete a file |
 | `INPUT #` | `INPUT #n, var[, ...]` | Read from file |
 | `LET` | `LET var = expr` | Assignment (keyword optional) |
+| Compound assign | `var += / -= / *= / /= expr` | Assignment shorthand for `var = var op expr` |
 | `MID$` (stmt) | `MID$(str$, start[, len]) = repl$` | In-place substring replacement |
 | `LINE INPUT` | `LINE INPUT #n, var$` | Read full line from file |
 | `LOCATE` | `LOCATE row, col` | Position cursor |
@@ -2476,3 +2531,10 @@ bcc main.bcl -L libs/sort -L libs/string
 | `DATE$` | String | Current date as `MM-DD-YYYY` |
 | `TIME$` | String | Current time as `HH:MM:SS` |
 | `TIMER` | Single | Seconds elapsed since midnight |
+
+### Boolean literals
+
+| Name | Compiles to |
+|------|-------------|
+| `TRUE` | `-1` |
+| `FALSE` | `0` |

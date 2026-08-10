@@ -1020,6 +1020,62 @@ end
     }
 
     #[test]
+    fn compound_assignment_desugars_to_binary_self_assignment() {
+        let source = "a% = 1\na% += 4\na% -= 1\na% *= 3\na% /= 2\nprint a%\nend\n";
+        let output = compile_source("compound.bcl", source).expect("should compile");
+        assert!(output.contains("a% = a% + 4"));
+        assert!(output.contains("a% = a% - 1"));
+        assert!(output.contains("a% = a% * 3"));
+        assert!(output.contains("a% = a% / 2"));
+    }
+
+    #[test]
+    fn compound_assignment_works_on_array_elements() {
+        let source = "dim scores%(10)\nscores%(2) = 5\nscores%(2) += 3\nend\n";
+        let output = compile_source("compound_arr.bcl", source).expect("should compile");
+        assert!(output.contains("scores%(2) = scores%(2) + 3"));
+    }
+
+    #[test]
+    fn true_and_false_are_sugar_for_minus_one_and_zero() {
+        let source = "found% = TRUE\ndone% = FALSE\nif found% = TRUE then\n    print \"yes\"\nend if\nend\n";
+        let output = compile_source("boolsugar.bcl", source).expect("should compile");
+        assert!(output.contains("found% = -1"));
+        assert!(output.contains("done% = 0"));
+        assert!(output.contains("(found% = -1)"));
+    }
+
+    #[test]
+    fn multi_name_dim_splits_into_separate_dim_statements() {
+        let source = "dim a%, b%(3), c$\na% = 1\nb%(0) = 2\nc$ = \"hi\"\nend\n";
+        let output = compile_source("multidim.bcl", source).expect("should compile");
+        assert!(output.contains("DIM a%"));
+        assert!(output.contains("DIM b%(3)"));
+        assert!(output.contains("DIM c$"));
+    }
+
+    #[test]
+    fn multi_name_dim_inside_single_line_if_stays_inside_the_if_body() {
+        // Regression test: multi-name DIM desugars into more than one
+        // Statement via the parser's pending-statement queue. A single-line
+        // `if`'s body loop only used to check its stopping condition right
+        // after the *first* dequeued statement, so a queued second/third
+        // DIM used to leak out and attach to the wrong (outer) block instead
+        // of staying inside the `if`.
+        let source =
+            "x% = 5\nif x% > 0 then dim p%, q% : p% = 1 : q% = 2 : print p% + q%\nprint \"after\"\nend\n";
+        let output = compile_source("dim_in_if.bcl", source).expect("should compile");
+        let if_line = output.lines().position(|l| l.contains("IF (")).expect("if line");
+        let end_if_line = output
+            .lines()
+            .position(|l| l.contains("REM END IF"))
+            .expect("end if line");
+        let body: Vec<&str> = output.lines().collect::<Vec<_>>()[if_line..end_if_line].to_vec();
+        assert!(body.iter().any(|l| l.contains("DIM p%")));
+        assert!(body.iter().any(|l| l.contains("DIM q%")));
+    }
+
+    #[test]
     fn goto_label_resolves_to_a_real_line_number() {
         let source = r#"print "before"
 goto skip

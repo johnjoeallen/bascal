@@ -17,6 +17,13 @@ pub struct Parser {
     // expression to print. A counter, not a bool, so a nested single-line
     // `if` inside this one's body doesn't clear the flag while unwinding.
     single_line_if_depth: usize,
+    // Extra statements produced by a single physical-line construct that
+    // desugars to more than one `Statement` -- currently just multi-name
+    // `dim a%, b%, c%`. `parse_statement` drains this before dispatching on
+    // the next token, so callers that loop on `parse_statement()` (parse_block,
+    // the top-level program loop, and a single-line `if`'s body) see the
+    // extra statements as if they'd been parsed individually.
+    pending_statements: std::collections::VecDeque<Statement>,
 }
 
 impl Parser {
@@ -27,6 +34,7 @@ impl Parser {
             pos: 0,
             pending_blank: false,
             single_line_if_depth: 0,
+            pending_statements: std::collections::VecDeque::new(),
         }
     }
 
@@ -67,6 +75,9 @@ impl Parser {
                 records.push(self.parse_record_def()?);
             } else {
                 statements.push(self.parse_statement()?);
+                while !self.pending_statements.is_empty() {
+                    statements.push(self.parse_statement()?);
+                }
             }
             if self.take_pending_blank() && !self.is_eof() {
                 statements.push(Statement::BlankLine);
@@ -262,6 +273,9 @@ impl Parser {
         self.skip_newlines();
         while !self.is_eof() && !self.at_any_block_end(ends) {
             body.push(self.parse_statement()?);
+            while !self.pending_statements.is_empty() {
+                body.push(self.parse_statement()?);
+            }
             if self.take_pending_blank() && !self.at_any_block_end(ends) && !self.is_eof() {
                 body.push(Statement::BlankLine);
             }
@@ -270,6 +284,9 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> ParseResult<Statement> {
+        if let Some(stmt) = self.pending_statements.pop_front() {
+            return Ok(stmt);
+        }
         if self.check_keyword("dim") {
             self.parse_dim()
         } else if self.check_keyword("file") {
@@ -406,6 +423,19 @@ impl Parser {
 
     fn parse_dim(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("dim")?;
+        let (name, sizes) = self.parse_dim_one()?;
+        // `dim a%, b%(10), c%` -- each comma-separated name is its own
+        // declaration; queue the rest and return the first so every caller
+        // that loops on `parse_statement()` sees them as separate statements.
+        while self.eat(TokenKind::Comma) {
+            let (name, sizes) = self.parse_dim_one()?;
+            self.pending_statements.push_back(Statement::Dim { name, sizes });
+        }
+        self.consume_line_end()?;
+        Ok(Statement::Dim { name, sizes })
+    }
+
+    fn parse_dim_one(&mut self) -> ParseResult<(BasicIdent, Vec<Expr>)> {
         let name = BasicIdent::parse(&self.expect_ident("expected DIM variable name")?);
         let sizes = if self.eat(TokenKind::LParen) {
             if self.eat(TokenKind::RParen) {
@@ -421,8 +451,7 @@ impl Parser {
         } else {
             Vec::new()
         };
-        self.consume_line_end()?;
-        Ok(Statement::Dim { name, sizes })
+        Ok((name, sizes))
     }
 
     fn parse_block_comment(&mut self) -> ParseResult<Statement> {
@@ -775,6 +804,9 @@ impl Parser {
             let mut body = Vec::new();
             loop {
                 body.push(self.parse_statement()?);
+                while !self.pending_statements.is_empty() {
+                    body.push(self.parse_statement()?);
+                }
                 if self.previous_was_newline() || self.is_eof() {
                     return Ok((body, false));
                 }
@@ -1320,10 +1352,35 @@ impl Parser {
                 target: normalize_assignment_target(expr),
                 value,
             })
+        } else if let Some(op) = self.eat_compound_assign_op() {
+            // `x% += e` desugars to `x% = x% + e` right here in the parser --
+            // codegen and every later pass see an ordinary Assignment, same
+            // as if the programmer had spelled the target out twice.
+            let target = normalize_assignment_target(expr);
+            let rhs = self.parse_expr(0)?;
+            self.consume_line_end()?;
+            let value = Expr::Binary {
+                left: Box::new(target.clone()),
+                op,
+                right: Box::new(rhs),
+            };
+            Ok(Statement::Assignment { target, value })
         } else {
             self.consume_line_end()?;
             Ok(Statement::ExprStmt(expr))
         }
+    }
+
+    fn eat_compound_assign_op(&mut self) -> Option<BinaryOp> {
+        let op = match self.current().kind {
+            TokenKind::PlusEq => BinaryOp::Add,
+            TokenKind::MinusEq => BinaryOp::Sub,
+            TokenKind::StarEq => BinaryOp::Mul,
+            TokenKind::SlashEq => BinaryOp::Div,
+            _ => return None,
+        };
+        self.advance();
+        Some(op)
     }
 
     fn parse_expr(&mut self, min_bp: u8) -> ParseResult<Expr> {
@@ -1355,6 +1412,18 @@ impl Parser {
                     op: UnaryOp::Not,
                     expr: Box::new(expr),
                 }
+            }
+            // MS-BASIC's own boolean convention (see Operators and
+            // Expressions in MANUAL.md): -1 is true, 0 is false. `TRUE`/
+            // `FALSE` are compile-time sugar for those literals, nothing more
+            // -- no boolean type is introduced anywhere else in the compiler.
+            TokenKind::Ident(value) if keyword_eq(value, "true") => {
+                self.advance();
+                Expr::Integer(-1)
+            }
+            TokenKind::Ident(value) if keyword_eq(value, "false") => {
+                self.advance();
+                Expr::Integer(0)
             }
             TokenKind::Minus => {
                 self.advance();

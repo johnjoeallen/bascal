@@ -156,6 +156,10 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
     Backslash,
     Caret,
     Eq,
@@ -235,9 +239,9 @@ impl<'a> Lexer<'a> {
                 '#' => tokens.push(self.single(TokenKind::Hash)),
                 '.' => tokens.push(self.single(TokenKind::Dot)),
                 '?' => tokens.push(self.single(TokenKind::Question)),
-                '+' => tokens.push(self.single(TokenKind::Plus)),
-                '-' => tokens.push(self.single(TokenKind::Minus)),
-                '*' => tokens.push(self.single(TokenKind::Star)),
+                '+' => tokens.push(self.single_or_eq(TokenKind::Plus, TokenKind::PlusEq)),
+                '-' => tokens.push(self.single_or_eq(TokenKind::Minus, TokenKind::MinusEq)),
+                '*' => tokens.push(self.single_or_eq(TokenKind::Star, TokenKind::StarEq)),
                 '^' => tokens.push(self.single(TokenKind::Caret)),
                 '\\' => tokens.push(self.single(TokenKind::Backslash)),
                 '/' => {
@@ -246,7 +250,7 @@ impl<'a> Lexer<'a> {
                     } else if self.peek_at(1) == Some('/') {
                         tokens.push(self.eol_comment());
                     } else {
-                        tokens.push(self.single(TokenKind::Slash));
+                        tokens.push(self.single_or_eq(TokenKind::Slash, TokenKind::SlashEq));
                     }
                 }
                 '=' => tokens.push(self.single(TokenKind::Eq)),
@@ -450,6 +454,19 @@ impl<'a> Lexer<'a> {
         let pos = self.pos();
         self.advance();
         Token { kind, pos }
+    }
+
+    /// Consumes one char as `plain`, or one char plus a following `=` as
+    /// `with_eq` (the compound-assignment spelling: `+=`, `-=`, `*=`, `/=`).
+    fn single_or_eq(&mut self, plain: TokenKind, with_eq: TokenKind) -> Token {
+        let pos = self.pos();
+        self.advance();
+        if self.peek() == Some('=') {
+            self.advance();
+            Token { kind: with_eq, pos }
+        } else {
+            Token { kind: plain, pos }
+        }
     }
 
     fn peek(&self) -> Option<char> {

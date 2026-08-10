@@ -1,5 +1,8 @@
 # BASCAL
 
+**B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication
+**L**anguage.
+
 **[Browse the website](https://johnjoeallen.github.io/bascal/)** — tutorials,
 side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual.html).
 
@@ -21,6 +24,8 @@ larger programs practical:
 - `&&` / `||` short-circuit operators for `if`/`elseif`/`while`/`do` conditions
   — unlike bitwise `AND`/`OR`, the second operand is only evaluated when it
   can still change the answer
+- `+=` / `-=` / `*=` / `/=` compound assignment, `TRUE` / `FALSE` literals
+  (`-1` / `0`), and comma-separated multi-name `dim a%, b%(3), c$`
 - `/* */` block comments flattened to `'` lines in generated output
 - `input`, `data` / `read` / `restore`, `const`, `locate`, `color`, `on ... goto`
 - BASIC type suffixes (`%` integer, `$` string, `!` single, `#` double, `&` long)
