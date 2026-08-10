@@ -321,6 +321,46 @@ end if</code></pre>
       <p class="note">A <code>||</code> chain (or an inverted <code>do until ... &amp;&amp; ...</code>) needs exactly one extra local label — the point where the chain can stop early once <em>any</em> operand has already decided the answer — worked out by the compiler per condition, not something to reason about by hand.</p>
     </div>
 
+    <div class="compare">
+      <h3>6. Labels instead of raw line numbers</h3>
+      <p class="note">Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by hand — renumber a block and every reference to it has to be found and fixed too. BASCAL doesn't let <code>.bcl</code> source target a line number at all: <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code> all require a <code>name:</code> label instead, and the compiler is the one that assigns the real number when it renders output — the same job it already does for every <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code> branch target above.</p>
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Generated BASIC</span>
+          <pre><code>ON ERROR GOTO 10
+OPEN filename$ FOR INPUT AS #1
+CLOSE #1
+ON ERROR GOTO 0
+GOTO 30
+
+10 IF (err = 53) = 0 THEN GOTO 20
+    PRINT "file not found"
+    RESUME NEXT
+20 REM END IF
+
+30 END</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL</span>
+          <pre><code>on error goto handleErr
+open fileName$ for input as #1
+close #1
+on error goto 0
+goto done
+
+handleErr:
+if err = 53 then
+    print "file not found"
+    resume next
+end if
+
+done:
+end</code></pre>
+        </div>
+      </div>
+      <p class="note"><code>on error goto 0</code> is the one numeric exception — it isn't a line number, it's the sentinel that disables the error trap. Everywhere else, a raw number in a branch-target position is a compile-time error.</p>
+    </div>
+
     <p class="lede">
       <code>for</code>/<code>next</code> gets the same treatment (<code>exit for</code> transpiles to the identical guarded-<code>GOTO</code> shape as <code>exit do</code> above), and multiline <code>if</code>/<code>else if</code>/<code>else</code> compiles to the same nested <code>IF (cond) = 0 THEN GOTO ...</code> chain — see the
       <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a>
