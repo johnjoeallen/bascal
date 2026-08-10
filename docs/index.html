@@ -46,7 +46,47 @@
       BASCAL keeps BASIC's global symbol model — variables and functions are
       still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> —
       while adding enough structure that larger programs stay maintainable.
+      In practice that means: write the pane on the right below, not the
+      pane on the left.
     </p>
+
+    <div class="compare">
+      <div class="compare-grid">
+        <div class="pane old">
+          <span class="tag">Classic MBASIC — avoid</span>
+          <pre><code>100 IF grade% &gt;= 90 THEN GOTO 140
+110 IF grade% &gt;= 80 THEN GOTO 160
+120 IF grade% &gt;= 70 THEN GOTO 180
+130 GOTO 200
+140 PRINT "A" : GOTO 210
+160 PRINT "B" : GOTO 210
+180 PRINT "C" : GOTO 210
+200 PRINT "F"
+210 REM ...</code></pre>
+        </div>
+        <div class="pane new">
+          <span class="tag">BASCAL — write this instead</span>
+          <pre><code>select case grade%
+case is &gt;= 90
+    print "A"
+case is &gt;= 80
+    print "B"
+case is &gt;= 70
+    print "C"
+case else
+    print "F"
+end select</code></pre>
+        </div>
+      </div>
+      <p class="note">
+        Both panes run on the same classic BASIC. <code>bcc</code> compiles
+        the pane on the right straight down to the pane on the left's shape
+        — you just never have to number the branches or wire the
+        <code>GOTO</code>s by hand. See <a href="#control-flow">more
+        comparisons below</a> for loops and short-circuit conditions.
+      </p>
+    </div>
+
     <blockquote>
       Make BASIC more pleasant to write, without pretending it is a
       different runtime.
