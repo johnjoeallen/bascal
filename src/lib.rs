@@ -972,6 +972,39 @@ end
     }
 
     #[test]
+    fn bare_exit_resolves_to_the_innermost_enclosing_loop_kind() {
+        // for/next is a native BASIC FOR...NEXT block, so `exit` inside it
+        // must become EXIT FOR; while/do are GOTO chains, so `exit` there
+        // must become a GOTO to the loop's own end label -- and a nested
+        // do inside a for must resolve to the do's GOTO, not the outer
+        // for's EXIT FOR, since exit always targets the innermost loop.
+        let source = r#"for i% = 1 to 5
+    do
+        print i%
+        exit
+    end do
+    if i% = 3 then
+        exit
+    end if
+end for
+end
+"#;
+        let output = compile_source("nested_exit.bcl", source).expect("should compile");
+        assert!(output.contains("EXIT FOR"), "exit directly inside for must become EXIT FOR");
+        // The exit inside the inner `do` must NOT have produced a second
+        // EXIT FOR -- only exactly one EXIT FOR should appear anywhere.
+        assert_eq!(output.matches("EXIT FOR").count(), 1);
+        assert!(output.contains("GOTO"), "exit inside the inner do must become a GOTO, not EXIT FOR");
+    }
+
+    #[test]
+    fn exit_outside_any_loop_is_a_soft_warning_not_a_hard_error() {
+        let source = "print \"before\"\nexit\nprint \"after\"\nend\n";
+        let output = compile_source("bad_exit.bcl", source).expect("should compile");
+        assert!(output.contains("warning: EXIT outside of a loop"));
+    }
+
+    #[test]
     fn goto_label_resolves_to_a_real_line_number() {
         let source = r#"print "before"
 goto skip

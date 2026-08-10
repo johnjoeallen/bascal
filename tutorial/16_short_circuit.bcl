@@ -65,7 +65,7 @@ end if
 
 /* ---- Retry loop: stop as soon as we succeed, or once out of attempts ---- */
 
-// Long way: a bare DO with a separate EXIT DO for each stopping condition.
+// Long way: a bare DO with a separate exit for each stopping condition.
 print "Long way (nested checks), retry loop:"
 attempts% = 0
 maxAttempts% = 3
@@ -77,16 +77,16 @@ do
         succeeded% = 1
     end if
     if succeeded% <> 0 then
-        exit do
+        exit
     end if
     if attempts% >= maxAttempts% then
-        exit do
+        exit
     end if
 end do
 print "  stopped after "; attempts%; " attempt(s), succeeded% = "; succeeded%
 
 // Short way: || short-circuits, so both stopping conditions live in the
-// loop's own until-clause -- no scattered EXIT DO checks needed.
+// loop's own until-clause -- no scattered exit checks needed.
 print "Short way (||), retry loop:"
 attempts% = 0
 succeeded% = 0

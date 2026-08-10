@@ -517,16 +517,18 @@ for n% = 3 to 1 step -1
 end for
 PRINT "  Go!"
 
-' EXIT FOR — stop at the first even number greater than 4
+' exit — stop at the first even number greater than 4
 for i% = 1 to 20
     if i% > 4 and (i% / 2) * 2 = i% then
         PRINT "First even > 4: " + STR$(i%)
-        exit for
+        exit
     end if
 end for
 ```
 
-`exit for` exits the enclosing `for` loop immediately.
+`exit` exits the enclosing loop immediately. It's unqualified — not
+`exit for`/`exit while`/`exit do` — the compiler already knows which loop
+it's inside; see [Exit](#exit) below.
 
 ### WHILE / END WHILE
 
@@ -548,13 +550,13 @@ while p% < 100
     p% = p% * 2
 end while
 
-' EXIT WHILE — stop after 8 Collatz steps
+' exit — stop after 8 Collatz steps
 n% = 27
 steps% = 0
 while n% <> 1
     if steps% = 8 then
         PRINT "  ..."
-        exit while
+        exit
     end if
     if (n% / 2) * 2 = n% then
         n% = n% / 2
@@ -566,7 +568,7 @@ while n% <> 1
 end while
 ```
 
-`exit while` exits the enclosing `while` loop immediately.
+`exit` exits the enclosing `while` loop immediately; see [Exit](#exit) below.
 
 ### DO / END DO
 
@@ -591,7 +593,7 @@ body may run zero times. `loop [while/until condition]` closes a
 so the body always runs at least once — the direct BASCAL equivalent of
 what other languages spell `repeat`/`until`. A bare `do ... loop` with no
 condition on either end is a plain infinite loop, same as bare
-`do ... end do`; both need `exit do` to terminate.
+`do ... end do`; both need `exit` to terminate.
 
 From `tutorial/05_loops.bcl`:
 
@@ -617,19 +619,47 @@ do
     k% = k% + 1
 loop until k% > 3
 
-' EXIT DO — leave from the middle of the body, either form
+' exit — leave from the middle of the body, either form
 k% = 1
 do
     if k% = 3 then
-        exit do
+        exit
     end if
     PRINT "  " + STR$(k%)
     k% = k% + 1
 end do
 ```
 
-`exit do` exits the enclosing `do` loop immediately, from either the
-pre-check or post-check form.
+`exit` exits the enclosing `do` loop immediately, from either the
+pre-check or post-check form; see [Exit](#exit) below.
+
+### Exit
+
+```
+exit
+```
+
+`for`, `while`, and `do` share one early-exit statement: unqualified
+`exit`, with no loop-type keyword after it. The compiler resolves which
+enclosing loop it leaves from context — the *innermost* one, if loops are
+nested — so `exit` inside a `do` loop transpiles to a `GOTO` past the
+loop's own end label, while `exit` inside a `for` loop transpiles to
+BASIC's native `EXIT FOR` instead, since `for`/`next` compiles to a real
+`FOR ... NEXT` block rather than a `GOTO` chain (see
+[For Transpilation](#for-transpilation)).
+
+```
+for i% = 1 to 5
+    do
+        if i% = 3 then
+            exit          ' leaves the do, not the for
+        end if
+    end do
+end for
+```
+
+`exit do`, `exit for`, and `exit while` are not valid — a loop-type
+keyword after `exit` is a compile-time error.
 
 ### SELECT CASE
 
@@ -2316,9 +2346,12 @@ re-evaluation.
 
 ### Exit Statements
 
-- `exit for` → `EXIT FOR` (native FreeBASIC / QB extension)
-- `exit while` → `GOTO end_label`
-- `exit do` → `GOTO end_label`
+`exit` is unqualified in BASCAL source; the compiler picks the shape below
+based on which loop it's innermost inside:
+
+- inside `for` → `EXIT FOR` (native FreeBASIC / QB extension)
+- inside `while` → `GOTO end_label`
+- inside `do` → `GOTO end_label`
 
 ---
 
@@ -2374,9 +2407,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `ERASE` | `ERASE arr[, ...]` | Free memory used by arrays |
 | `DO` | `DO [WHILE/UNTIL cond]` … `END DO`, or `DO` … `LOOP [WHILE/UNTIL cond]` | Pre-check or post-check conditional loop |
 | `END` | `END` | End of program |
-| `EXIT DO` | `EXIT DO` | Exit enclosing DO loop |
-| `EXIT FOR` | `EXIT FOR` | Exit enclosing FOR loop |
-| `EXIT WHILE` | `EXIT WHILE` | Exit enclosing WHILE loop |
+| `EXIT` | `exit` | Exit the innermost enclosing FOR/WHILE/DO loop |
 | `FOR` | `FOR v = start TO end [STEP s]` … `END FOR` | Counted loop |
 | `FUNCTION` | `FUNCTION name%(params)` … `END FUNCTION` | Define a function with a return value |
 | Label | `name:` | Declare a branch target for GOTO/GOSUB/ON.../RESUME |

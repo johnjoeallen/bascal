@@ -69,7 +69,7 @@
 
 630 ' ---- Retry loop: stop as soon as we succeed, or once out of attempts ----
 
-640 ' Long way: a bare DO with a separate EXIT DO for each stopping condition.
+640 ' Long way: a bare DO with a separate exit for each stopping condition.
 650 PRINT "Long way (nested checks), retry loop:"
 660 attempts% = 0
 670 maxattempts% = 3
@@ -90,7 +90,7 @@
 820 PRINT "  stopped after "; attempts%; " attempt(s), succeeded% = "; succeeded%
 
 830 ' Short way: || short-circuits, so both stopping conditions live in the
-840 ' loop's own until-clause -- no scattered EXIT DO checks needed.
+840 ' loop's own until-clause -- no scattered exit checks needed.
 850 PRINT "Short way (||), retry loop:"
 860 attempts% = 0
 870 succeeded% = 0

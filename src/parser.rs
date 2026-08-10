@@ -935,15 +935,14 @@ impl Parser {
 
     fn parse_exit(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("exit")?;
-        if self.check_keyword("for") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::ExitFor)
-        } else if self.check_keyword("while") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::ExitWhile)
-        } else if self.check_keyword("do") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::ExitDo)
-        } else {
-            Err(self.error("expected `for`, `while`, or `do` after `exit`"))
+        if self.check_keyword("for") || self.check_keyword("while") || self.check_keyword("do") {
+            return Err(self.error(
+                "`exit` no longer takes a loop-type keyword -- just write `exit`; \
+                 the compiler resolves which enclosing loop it leaves",
+            ));
         }
+        self.consume_line_end()?;
+        Ok(Statement::Exit)
     }
 
     /// `goto`/`gosub`/`on ... goto`/`on ... gosub`/`resume` targets must
@@ -2045,6 +2044,27 @@ mod tests {
                 assert!(post_condition.is_none());
             }
             other => panic!("expected do-while statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_bare_exit_inside_for_while_and_do() {
+        let program = parse(
+            "for i% = 1 to 5\nexit\nend for\nwhile 1\nexit\nend while\ndo\nexit\nend do\nend\n",
+        );
+        assert!(matches!(&program.statements[0], Statement::For { body, .. } if matches!(body[0], Statement::Exit)));
+        assert!(matches!(&program.statements[1], Statement::While { body, .. } if matches!(body[0], Statement::Exit)));
+        assert!(matches!(&program.statements[2], Statement::Do { body, .. } if matches!(body[0], Statement::Exit)));
+    }
+
+    #[test]
+    fn exit_rejects_the_old_qualified_forms() {
+        for keyword in ["for", "while", "do"] {
+            let source = format!("do\nexit {keyword}\nend do\nend\n");
+            let tokens = Lexer::new("test.bcl", &source).lex();
+            let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+            let errs = result.expect_err(&format!("expected a parse error for `exit {keyword}`"));
+            assert!(errs.iter().any(|d| d.message.contains("no longer takes a loop-type keyword")));
         }
     }
 }

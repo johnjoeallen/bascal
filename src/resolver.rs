@@ -232,9 +232,7 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         | Statement::Beep
         | Statement::Clear
         | Statement::System
-        | Statement::ExitFor
-        | Statement::ExitWhile
-        | Statement::ExitDo
+        | Statement::Exit
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)

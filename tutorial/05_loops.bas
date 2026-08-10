@@ -7,106 +7,107 @@
 60 ' 
 70 ' for var = start to end [STEP n] ... for END  (or bare END)
 80 ' Counted loop.  STEP defaults to 1; use negative STEP to count down.
-90 ' EXIT for exits early.
-100 ' 
-110 ' WHILE condition ... WHILE END  (or bare END)
-120 ' Condition tested before each iteration.
-130 ' EXIT WHILE exits early.
-140 ' 
-150 ' DO [WHILE/UNTIL cond] ... END DO  (or bare END)
-160 ' Pre-check: condition tested at the top, before the body runs at all.
-170 ' DO ... LOOP [WHILE/UNTIL cond]
-180 ' Post-check: condition tested at the bottom, so the body always runs
-190 ' at least once.
-200 ' Either form: EXIT DO exits early, from anywhere in the body.
+90 ' 
+100 ' WHILE condition ... WHILE END  (or bare END)
+110 ' Condition tested before each iteration.
+120 ' 
+130 ' DO [WHILE/UNTIL cond] ... END DO  (or bare END)
+140 ' Pre-check: condition tested at the top, before the body runs at all.
+150 ' DO ... LOOP [WHILE/UNTIL cond]
+160 ' Post-check: condition tested at the bottom, so the body always runs
+170 ' at least once.
+180 ' 
+190 ' All three loops share one early-exit statement: exit. It's unqualified --
+200 ' no "exit for"/"exit while"/"exit do" -- the compiler already knows which
+210 ' loop it's inside from context.
 
-210 ' --- for / NEXT ---
-220 PRINT "Squares 1..5:"
-230 FOR i% = 1 TO 5
-240     PRINT "  "; i%; "^2 = "; i% * i%
-250 NEXT i%
+220 ' --- for / NEXT ---
+230 PRINT "Squares 1..5:"
+240 FOR i% = 1 TO 5
+250     PRINT "  "; i%; "^2 = "; i% * i%
+260 NEXT i%
 
-260 ' Negative STEP — count down
-270 PRINT "Countdown:"
-280 FOR n% = 3 TO 1 STEP -1
-290     PRINT "  "; n%
-300 NEXT n%
-310 PRINT "  Go!"
+270 ' Negative STEP — count down
+280 PRINT "Countdown:"
+290 FOR n% = 3 TO 1 STEP -1
+300     PRINT "  "; n%
+310 NEXT n%
+320 PRINT "  Go!"
 
-320 ' EXIT for — stop early
-330 PRINT "First even > 4:"
-340 FOR i% = 1 TO 20
-350     IF ((i% > 4) AND (((i% / 2) * 2) = i%)) = 0 THEN GOTO 380
-360         PRINT "  "; i%
-370         EXIT FOR
-380     REM END IF
-390 NEXT i%
+330 ' exit — stop early
+340 PRINT "First even > 4:"
+350 FOR i% = 1 TO 20
+360     IF ((i% > 4) AND (((i% / 2) * 2) = i%)) = 0 THEN GOTO 390
+370         PRINT "  "; i%
+380         EXIT FOR
+390     REM END IF
+400 NEXT i%
 
-400 ' --- WHILE / WEND ---
-410 PRINT "Powers of 2 under 100:"
-420 p% = 1
-430 IF (p% < 100) = 0 THEN GOTO 470
-440     PRINT "  "; p%
-450     p% = p% * 2
-460     GOTO 430
-470 REM END WHILE
+410 ' --- WHILE / WEND ---
+420 PRINT "Powers of 2 under 100:"
+430 p% = 1
+440 IF (p% < 100) = 0 THEN GOTO 480
+450     PRINT "  "; p%
+460     p% = p% * 2
+470     GOTO 440
+480 REM END WHILE
 
-480 ' EXIT WHILE
-490 PRINT "Collatz from 27 (first 8 steps):"
-500 n% = 27
-510 steps% = 0
-520 IF (n% <> 1) = 0 THEN GOTO 650
-530     IF (steps% = 8) = 0 THEN GOTO 560
-540         PRINT "  ..."
-550         GOTO 650
-560     REM END IF
-570     IF (((n% / 2) * 2) = n%) = 0 THEN GOTO 600
-580         n% = n% / 2
-590         GOTO 610
-600         n% = (n% * 3) + 1
-610     REM END IF
-620     steps% = steps% + 1
-630     PRINT "  "; n%
-640     GOTO 520
-650 REM END WHILE
+490 ' exit from a WHILE loop
+500 PRINT "Collatz from 27 (first 8 steps):"
+510 n% = 27
+520 steps% = 0
+530 IF (n% <> 1) = 0 THEN GOTO 660
+540     IF (steps% = 8) = 0 THEN GOTO 570
+550         PRINT "  ..."
+560         GOTO 660
+570     REM END IF
+580     IF (((n% / 2) * 2) = n%) = 0 THEN GOTO 610
+590         n% = n% / 2
+600         GOTO 620
+610         n% = (n% * 3) + 1
+620     REM END IF
+630     steps% = steps% + 1
+640     PRINT "  "; n%
+650     GOTO 530
+660 REM END WHILE
 
-660 ' --- DO / LOOP variants ---
+670 ' --- DO / LOOP variants ---
 
-670 ' DO WHILE — test before body
-680 PRINT "DO WHILE:"
-690 k% = 1
-700 IF (k% <= 3) = 0 THEN GOTO 740
-710     PRINT "  "; k%
-720     k% = k% + 1
-730     GOTO 700
-740 REM END DO
+680 ' DO WHILE — test before body
+690 PRINT "DO WHILE:"
+700 k% = 1
+710 IF (k% <= 3) = 0 THEN GOTO 750
+720     PRINT "  "; k%
+730     k% = k% + 1
+740     GOTO 710
+750 REM END DO
 
-750 ' DO UNTIL — enter while condition is false
-760 PRINT "DO UNTIL:"
-770 k% = 1
-780 IF (k% > 3) <> 0 THEN GOTO 820
-790     PRINT "  "; k%
-800     k% = k% + 1
-810     GOTO 780
-820 REM END DO
+760 ' DO UNTIL — enter while condition is false
+770 PRINT "DO UNTIL:"
+780 k% = 1
+790 IF (k% > 3) <> 0 THEN GOTO 830
+800     PRINT "  "; k%
+810     k% = k% + 1
+820     GOTO 790
+830 REM END DO
 
-830 ' DO ... LOOP UNTIL — post-check, body runs at least once
-840 PRINT "DO...LOOP UNTIL (body runs once even though already false):"
-850 k% = 99
-860     PRINT "  "; k%
-870     k% = k% + 1
-880     IF (k% > 3) = 0 THEN GOTO 860
-890 REM END DO
+840 ' DO ... LOOP UNTIL — post-check, body runs at least once
+850 PRINT "DO...LOOP UNTIL (body runs once even though already false):"
+860 k% = 99
+870     PRINT "  "; k%
+880     k% = k% + 1
+890     IF (k% > 3) = 0 THEN GOTO 870
+900 REM END DO
 
-900 ' EXIT DO
-910 PRINT "EXIT DO at 3:"
-920 k% = 1
-930     IF (k% = 3) = 0 THEN GOTO 950
-940         GOTO 990
-950     REM END IF
-960     PRINT "  "; k%
-970     k% = k% + 1
-980     GOTO 930
-990 REM END DO
+910 ' exit from the middle of a DO loop
+920 PRINT "exit at k% = 3:"
+930 k% = 1
+940     IF (k% = 3) = 0 THEN GOTO 960
+950         GOTO 1000
+960     REM END IF
+970     PRINT "  "; k%
+980     k% = k% + 1
+990     GOTO 940
+1000 REM END DO
 
-1000 END
+1010 END

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loops — BASCAL Tutorials</title>
-<meta name="description" content="BASCAL's three loop constructs -- for, while, and do -- and their exit for/while/do statements.">
+<meta name="description" content="BASCAL's three loop constructs -- for, while, and do -- and the single unqualified exit statement shared by all of them.">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 <header class="hero compact">
   <div class="wrap">
     <h1>05. Loops</h1>
-    <p class="tagline">for/next, while/wend, and do/loop, each with an early-exit statement.</p>
+    <p class="tagline">for/next, while/wend, and do/loop, sharing one unqualified exit statement.</p>
   </div>
 </header>
 
@@ -34,8 +34,10 @@ pre-check <code>while ... end while</code>, and <code>do</code>, which comes in
 two forms — <code>do [while/until cond] ... end do</code> tests the condition
 at the top (may run zero times), and <code>do ... loop [while/until cond]</code>
 tests it at the bottom (always runs at least once — BASCAL's direct
-<code>repeat</code>/<code>until</code> equivalent). Each loop has a matching
-early-exit statement. See the
+<code>repeat</code>/<code>until</code> equivalent). All three loops share one
+early-exit statement, unqualified <code>exit</code> — not <code>exit for</code>/
+<code>exit while</code>/<code>exit do</code> — the compiler already knows
+which loop it's inside. See the
 <a href="../#control-flow">control-flow comparison</a> on the homepage for what
 each one compiles down to.</p>
   </div>
@@ -45,7 +47,7 @@ each one compiles down to.</p>
       <pre><code>for i% = 1 to 20
     if i% &gt; 4 and (i% / 2) * 2 = i% then
         print &quot;  &quot;; i%
-        exit for
+        exit
     end if
 end for</code></pre>
     </div>

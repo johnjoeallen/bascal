@@ -352,9 +352,7 @@ impl Lowerer {
             | Statement::Beep
             | Statement::Clear
             | Statement::System
-            | Statement::ExitFor
-            | Statement::ExitWhile
-            | Statement::ExitDo
+            | Statement::Exit
             | Statement::ReturnVoid
             | Statement::GlobalDecl(_)
             | Statement::Raw(_)

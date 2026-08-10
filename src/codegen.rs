@@ -25,6 +25,16 @@ const BASIC_BUILTINS: &[&str] = &[
     "cvi", "cvl", "cvs", "cvd",
 ];
 
+/// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
+/// compiles to a native BASIC `FOR ... NEXT` block, so leaving it is just
+/// BASIC's own `EXIT FOR` -- no label involved, unlike `while`/`do`, which
+/// transpile to a GOTO chain and so need a real jump target.
+#[derive(Debug, Clone)]
+enum LoopExit {
+    NativeFor,
+    Goto(String),
+}
+
 pub struct CodeGenerator {
     next_label: usize,
     indent: usize,
@@ -32,7 +42,7 @@ pub struct CodeGenerator {
     functions: Vec<FunctionInfo>,
     known_callables: HashSet<String>,
     line_numbers: bool,
-    loop_exit_stack: Vec<String>,
+    loop_exit_stack: Vec<LoopExit>,
     // All BASIC names already claimed: global vars + every allocated param/result/local name.
     // RefCell because ident() must read and extend this set through a shared &self reference.
     taken_names: RefCell<HashSet<String>>,
@@ -331,7 +341,9 @@ impl CodeGenerator {
                     self.ident(var, current_function)
                 ));
                 self.indent += 1;
+                self.loop_exit_stack.push(LoopExit::NativeFor);
                 self.statements(body, current_function);
+                self.loop_exit_stack.pop();
                 self.indent -= 1;
                 self.line(&format!("NEXT {}", self.ident(var, current_function)));
             }
@@ -343,7 +355,7 @@ impl CodeGenerator {
                 self.line(&format!("{top_label}:"));
                 self.condition_jump(condition, &end_label, false, current_function);
                 self.indent += 1;
-                self.loop_exit_stack.push(end_label.clone());
+                self.loop_exit_stack.push(LoopExit::Goto(end_label.clone()));
                 self.statements(body, current_function);
                 self.loop_exit_stack.pop();
                 self.line(&format!("GOTO {top_label}"));
@@ -362,7 +374,7 @@ impl CodeGenerator {
                     self.condition_jump(&cond.expr, &end_label, !cond.is_while, current_function);
                 }
                 self.indent += 1;
-                self.loop_exit_stack.push(end_label.clone());
+                self.loop_exit_stack.push(LoopExit::Goto(end_label.clone()));
                 self.statements(body, current_function);
                 self.loop_exit_stack.pop();
                 if let Some(cond) = post_condition {
@@ -631,21 +643,14 @@ impl CodeGenerator {
                     self.line(&format!("LPRINT USING {fmt_str}; {body}"));
                 }
             }
-            Statement::ExitFor => self.line("EXIT FOR"),
-            Statement::ExitWhile => {
-                if let Some(label) = self.loop_exit_stack.last().cloned() {
+            Statement::Exit => match self.loop_exit_stack.last() {
+                Some(LoopExit::NativeFor) => self.line("EXIT FOR"),
+                Some(LoopExit::Goto(label)) => {
+                    let label = label.clone();
                     self.line(&format!("GOTO {label}"));
-                } else {
-                    self.line("' warning: EXIT WHILE outside of WHILE loop");
                 }
-            }
-            Statement::ExitDo => {
-                if let Some(label) = self.loop_exit_stack.last().cloned() {
-                    self.line(&format!("GOTO {label}"));
-                } else {
-                    self.line("' warning: EXIT DO outside of DO loop");
-                }
-            }
+                None => self.line("' warning: EXIT outside of a loop"),
+            },
             Statement::SelectCase { expr, cases, else_body } => {
                 self.select_case(expr, cases, else_body, current_function);
             }
@@ -1485,9 +1490,7 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
         | Statement::Beep
         | Statement::Clear
         | Statement::System
-        | Statement::ExitFor
-        | Statement::ExitWhile
-        | Statement::ExitDo
+        | Statement::Exit
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::Raw(_)

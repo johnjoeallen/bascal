@@ -255,7 +255,7 @@ end do</code></pre>
 
     <div class="compare">
       <h3>4. Post-check loop ("repeat until") and a mid-loop exit</h3>
-      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's <code>do ... loop until/while</code> is the direct <code>REPEAT</code>/<code>UNTIL</code> equivalent for the first case — the condition lives at the bottom, tested after the body, so it always runs at least once. A true middle exit still needs <code>exit do</code>, since no fixed top-or-bottom condition position can express "stop right here."</p>
+      <p class="note">Classic BASIC has no <code>REPEAT</code>/<code>UNTIL</code> — a loop that must run its body at least once, or that needs to break out from the <em>middle</em> rather than the top, means the continuation test and the jump can't share one tidy spot the way <code>WHILE</code> can. BASCAL's <code>do ... loop until/while</code> is the direct <code>REPEAT</code>/<code>UNTIL</code> equivalent for the first case — the condition lives at the bottom, tested after the body, so it always runs at least once. A true middle exit still needs <code>exit</code>, since no fixed top-or-bottom condition position can express "stop right here."</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -286,7 +286,7 @@ loop until k% &gt; 3
 k% = 1
 do
     if k% = 3 then
-        exit do
+        exit
     end if
     print "  "; k%
     k% = k% + 1
@@ -360,14 +360,14 @@ end</code></pre>
 
     <div class="compare">
       <h3>The one exception: <code>for</code>/<code>next</code></h3>
-      <p class="note">Every loop above compiles to a guarded <code>GOTO</code> chain with a local label. <code>for</code>/<code>next</code> doesn't need that trick: BASIC already has a native counted loop, so BASCAL compiles straight to it, and <code>exit for</code> becomes BASIC's own <code>EXIT FOR</code> — no guard, no label.</p>
+      <p class="note">Every loop above compiles to a guarded <code>GOTO</code> chain with a local label. <code>for</code>/<code>next</code> doesn't need that trick: BASIC already has a native counted loop, so BASCAL compiles straight to it. <code>exit</code> is spelled the same everywhere in BASCAL source — no <code>exit for</code>, just <code>exit</code> — but here it becomes BASIC's own <code>EXIT FOR</code> instead of a <code>GOTO</code>, because the compiler knows this <code>exit</code> is inside a native <code>FOR</code>, not a GOTO-chain loop.</p>
       <div class="compare-grid">
         <div class="pane new">
           <span class="tag">BASCAL</span>
           <pre><code>for i% = 1 to 20
     if i% &gt; 4 then
         print i%
-        exit for
+        exit
     end if
 end for</code></pre>
         </div>
@@ -381,7 +381,7 @@ end for</code></pre>
 NEXT i%</code></pre>
         </div>
       </div>
-      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above (that's where <code>exit for</code> lives). See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.</p>
+      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.</p>
     </div>
   </section>
 

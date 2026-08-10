@@ -4,18 +4,19 @@
 //
 //   for var = start to end [STEP n] ... for END  (or bare END)
 //     Counted loop.  STEP defaults to 1; use negative STEP to count down.
-//     EXIT for exits early.
 //
 //   WHILE condition ... WHILE END  (or bare END)
 //     Condition tested before each iteration.
-//     EXIT WHILE exits early.
 //
 //   DO [WHILE/UNTIL cond] ... END DO  (or bare END)
 //     Pre-check: condition tested at the top, before the body runs at all.
 //   DO ... LOOP [WHILE/UNTIL cond]
 //     Post-check: condition tested at the bottom, so the body always runs
 //     at least once.
-//   Either form: EXIT DO exits early, from anywhere in the body.
+//
+// All three loops share one early-exit statement: exit. It's unqualified --
+// no "exit for"/"exit while"/"exit do" -- the compiler already knows which
+// loop it's inside from context.
 
 /* --- for / NEXT --- */
 print "Squares 1..5:"
@@ -30,12 +31,12 @@ for n% = 3 to 1 step -1
 end for
 print "  Go!"
 
-/* EXIT for — stop early */
+/* exit — stop early */
 print "First even > 4:"
 for i% = 1 to 20
     if i% > 4 and (i% / 2) * 2 = i% then
         print "  "; i%
-        exit for
+        exit
     end if
 end for
 
@@ -47,14 +48,14 @@ while p% < 100
     p% = p% * 2
 end while
 
-/* EXIT WHILE */
+/* exit from a WHILE loop */
 print "Collatz from 27 (first 8 steps):"
 n% = 27
 steps% = 0
 while n% <> 1
     if steps% = 8 then
         print "  ..."
-        exit while
+        exit
     end if
     if (n% / 2) * 2 = n% then  // even
         n% = n% / 2
@@ -91,12 +92,12 @@ do
     k% = k% + 1
 loop until k% > 3
 
-// EXIT DO
-print "EXIT DO at 3:"
+// exit from the middle of a DO loop
+print "exit at k% = 3:"
 k% = 1
 do
     if k% = 3 then
-        exit do
+        exit
     end if
     print "  "; k%
     k% = k% + 1

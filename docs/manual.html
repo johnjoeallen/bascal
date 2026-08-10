@@ -482,14 +482,14 @@ for n% = 3 to 1 step -1
 end for
 PRINT &quot;  Go!&quot;
 
-&#39; EXIT FOR — stop at the first even number greater than 4
+&#39; exit — stop at the first even number greater than 4
 for i% = 1 to 20
     if i% &gt; 4 and (i% / 2) * 2 = i% then
         PRINT &quot;First even &gt; 4: &quot; + STR$(i%)
-        exit for
+        exit
     end if
 end for</code></pre>
-<p><code>exit for</code> exits the enclosing <code>for</code> loop immediately.</p>
+<p><code>exit</code> exits the enclosing loop immediately. It's unqualified — not <code>exit for</code>/<code>exit while</code>/<code>exit do</code> — the compiler already knows which loop it's inside; see <a href="#exit">Exit</a> below.</p>
 <h3 id="while--end-while">WHILE / END WHILE</h3>
 <pre><code>while condition
     &#39; body
@@ -503,13 +503,13 @@ while p% &lt; 100
     p% = p% * 2
 end while
 
-&#39; EXIT WHILE — stop after 8 Collatz steps
+&#39; exit — stop after 8 Collatz steps
 n% = 27
 steps% = 0
 while n% &lt;&gt; 1
     if steps% = 8 then
         PRINT &quot;  ...&quot;
-        exit while
+        exit
     end if
     if (n% / 2) * 2 = n% then
         n% = n% / 2
@@ -519,7 +519,7 @@ while n% &lt;&gt; 1
     steps% = steps% + 1
     PRINT &quot;  &quot; + STR$(n%)
 end while</code></pre>
-<p><code>exit while</code> exits the enclosing <code>while</code> loop immediately.</p>
+<p><code>exit</code> exits the enclosing <code>while</code> loop immediately; see <a href="#exit">Exit</a> below.</p>
 <h3 id="do--end-do">DO / END DO</h3>
 <pre><code>do [while/until condition]
     &#39; body
@@ -528,7 +528,7 @@ end do</code></pre>
 <pre><code>do
     &#39; body
 loop [while/until condition]</code></pre>
-<p><code>end do</code> (bare <code>end</code> also works) closes a <strong>pre-check</strong> loop: the optional <code>while</code>/<code>until</code> clause tests the condition <em>before</em> each iteration, so the body may run zero times. <code>loop [while/until condition]</code> closes a <strong>post-check</strong> loop instead: the condition is tested <em>after</em> the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages spell <code>repeat</code>/<code>until</code>. A bare <code>do ... loop</code> with no condition on either end is a plain infinite loop, same as bare <code>do ... end do</code>; both need <code>exit do</code> to terminate.</p>
+<p><code>end do</code> (bare <code>end</code> also works) closes a <strong>pre-check</strong> loop: the optional <code>while</code>/<code>until</code> clause tests the condition <em>before</em> each iteration, so the body may run zero times. <code>loop [while/until condition]</code> closes a <strong>post-check</strong> loop instead: the condition is tested <em>after</em> the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages spell <code>repeat</code>/<code>until</code>. A bare <code>do ... loop</code> with no condition on either end is a plain infinite loop, same as bare <code>do ... end do</code>; both need <code>exit</code> to terminate.</p>
 <p>From <code>tutorial/05_loops.bcl</code>:</p>
 <pre><code>&#39; DO WHILE — condition tested before body
 k% = 1
@@ -551,16 +551,27 @@ do
     k% = k% + 1
 loop until k% &gt; 3
 
-&#39; EXIT DO — leave from the middle of the body, either form
+&#39; exit — leave from the middle of the body, either form
 k% = 1
 do
     if k% = 3 then
-        exit do
+        exit
     end if
     PRINT &quot;  &quot; + STR$(k%)
     k% = k% + 1
 end do</code></pre>
-<p><code>exit do</code> exits the enclosing <code>do</code> loop immediately, from either the pre-check or post-check form.</p>
+<p><code>exit</code> exits the enclosing <code>do</code> loop immediately, from either the pre-check or post-check form; see <a href="#exit">Exit</a> below.</p>
+<h3 id="exit">Exit</h3>
+<pre><code>exit</code></pre>
+<p><code>for</code>, <code>while</code>, and <code>do</code> share one early-exit statement: unqualified <code>exit</code>, with no loop-type keyword after it. The compiler resolves which enclosing loop it leaves from context — the <em>innermost</em> one, if loops are nested — so <code>exit</code> inside a <code>do</code> loop transpiles to a <code>GOTO</code> past the loop's own end label, while <code>exit</code> inside a <code>for</code> loop transpiles to BASIC's native <code>EXIT FOR</code> instead, since <code>for</code>/<code>next</code> compiles to a real <code>FOR ... NEXT</code> block rather than a <code>GOTO</code> chain (see <a href="#for-transpilation">For Transpilation</a>).</p>
+<pre><code>for i% = 1 to 5
+    do
+        if i% = 3 then
+            exit          &#39; leaves the do, not the for
+        end if
+    end do
+end for</code></pre>
+<p><code>exit do</code>, <code>exit for</code>, and <code>exit while</code> are not valid — a loop-type keyword after <code>exit</code> is a compile-time error.</p>
 <h3 id="select-case">SELECT CASE</h3>
 <pre><code>select case expression
 case value
@@ -1540,10 +1551,11 @@ END
 <h3 id="select-case-transpilation">Select Case Transpilation</h3>
 <p><code>SELECT CASE</code> is transpiled to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCC_T1%</code>) to avoid re-evaluation.</p>
 <h3 id="exit-statements">Exit Statements</h3>
+<p><code>exit</code> is unqualified in BASCAL source; the compiler picks the shape below based on which loop it's innermost inside:</p>
 <ul>
-<li><code>exit for</code> → <code>EXIT FOR</code> (native FreeBASIC / QB extension)</li>
-<li><code>exit while</code> → <code>GOTO end_label</code></li>
-<li><code>exit do</code> → <code>GOTO end_label</code></li>
+<li>inside <code>for</code> → <code>EXIT FOR</code> (native FreeBASIC / QB extension)</li>
+<li>inside <code>while</code> → <code>GOTO end_label</code></li>
+<li>inside <code>do</code> → <code>GOTO end_label</code></li>
 </ul>
 <hr />
 <h2 id="command-line-reference">Command-Line Reference</h2>
@@ -1672,19 +1684,9 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td>End of program</td>
 </tr>
 <tr class="odd">
-<td><code>EXIT DO</code></td>
-<td><code>EXIT DO</code></td>
-<td>Exit enclosing DO loop</td>
-</tr>
-<tr class="even">
-<td><code>EXIT FOR</code></td>
-<td><code>EXIT FOR</code></td>
-<td>Exit enclosing FOR loop</td>
-</tr>
-<tr class="odd">
-<td><code>EXIT WHILE</code></td>
-<td><code>EXIT WHILE</code></td>
-<td>Exit enclosing WHILE loop</td>
+<td><code>EXIT</code></td>
+<td><code>exit</code></td>
+<td>Exit the innermost enclosing FOR/WHILE/DO loop</td>
 </tr>
 <tr class="even">
 <td><code>FOR</code></td>

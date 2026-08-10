@@ -306,9 +306,9 @@ pub enum Statement {
         format: Expr,
         tokens: Vec<PrintToken>,
     },
-    ExitFor,
-    ExitWhile,
-    ExitDo,
+    /// `exit` — leaves the innermost enclosing `for`/`while`/`do` loop.
+    /// Unqualified: the compiler resolves which loop kind it's inside.
+    Exit,
     SelectCase {
         expr: Expr,
         cases: Vec<CaseClause>,
