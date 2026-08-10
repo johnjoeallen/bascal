@@ -180,6 +180,15 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 .snippet h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
 .snippet .note { color: var(--fg-dim); font-size: .9rem; margin: 0 0 .9rem; }
 
+/* grid of .snippet cards, used for the "What BASCAL adds" feature overview */
+.feature-examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+.feature-examples .snippet { margin-bottom: 0; }
+
 pre {
   margin: 0;
   background: var(--code-bg);
