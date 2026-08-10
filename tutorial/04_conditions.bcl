@@ -8,6 +8,13 @@
 //   if cond then ... end if
 //   if cond then ... else ... end if
 //   if cond then ... elseif cond then ... else ... end if
+//   if cond then statement                   (single-line, no end if)
+//   if cond then statement else statement     (single-line, no end if)
+//
+// A newline right after `then` selects the block form; a statement
+// directly after `then` on the same line selects the single-line form
+// instead -- that's the only difference. elseif isn't available
+// single-line, same as classic BASIC.
 
 /* Simple IF */
 temperature% = 23
@@ -51,6 +58,11 @@ if x% > 0 then
 else
     print x%; "is not positive"
 end if
+
+/* Single-line IF -- no end if needed */
+temperature% = 23
+if temperature% > 30 then print "Hot day (single-line)"
+if temperature% > 100 then print "Scorching" else print "Not scorching"
 
 /* Compound conditions */
 age%    = 25

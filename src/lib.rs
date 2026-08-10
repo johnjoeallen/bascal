@@ -1005,6 +1005,21 @@ end
     }
 
     #[test]
+    fn single_line_if_else_does_not_get_swallowed_by_a_greedy_print_statement() {
+        // Regression test: PRINT's own argument-list loop only used to stop
+        // at a real newline/colon/EOF, so `print "a" else print "b"` used
+        // to parse `else`, `print`, and `"b"` as three more PRINT
+        // arguments instead of recognizing `else` as the boundary --
+        // corrupting the output into one garbled PRINT with no real
+        // else-branch at all.
+        let source = "if x% > 100 then print \"big\" else print \"small\"\nend\n";
+        let output = compile_source("single_line_else.bcl", source).expect("should compile");
+        assert!(output.contains(r#"PRINT "big""#));
+        assert!(output.contains(r#"PRINT "small""#));
+        assert!(!output.contains("else"), "else must not leak into the generated output");
+    }
+
+    #[test]
     fn goto_label_resolves_to_a_real_line_number() {
         let source = r#"print "before"
 goto skip

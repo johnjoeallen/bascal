@@ -450,9 +450,6 @@ PRINT "  BASCAL DEMO  "
 
 ### IF / ELSEIF / ELSE / END IF
 
-BASCAL only supports block-style `if` statements. The body must be on a
-separate line; there is no single-line `IF … THEN stmt` form.
-
 ```
 if condition then
     ' then body
@@ -464,6 +461,28 @@ else
     ' else body
 end if
 ```
+
+BASCAL also supports classic BASIC's single-line form: a statement
+directly after `then`, on the same line, needs no `end if`.
+
+```
+if condition then statement
+if condition then statement else statement
+```
+
+A newline right after `then` is what selects the block form above instead
+— that's the only difference between the two. The single-line form may
+chain multiple statements with `:`, same as anywhere else in BASCAL, and
+its `else` (if any) must be on that same line too:
+
+```
+if x% > 0 then print "positive"
+if x% > 100 then print "big" else print "small"
+if x% > 0 then y% = 1: z% = 2
+```
+
+`elseif` isn't available in the single-line form — same as classic BASIC,
+it needs the block form above.
 
 From `tutorial/04_conditions.bcl` — a grade classification chain:
 

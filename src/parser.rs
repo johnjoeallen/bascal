@@ -9,6 +9,14 @@ pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     pending_blank: bool,
+    // >0 while parsing a single-line `if ... then stmt [else stmt]`'s
+    // then/else clause. Lets the shared end-of-line checks (`at_line_end`,
+    // `consume_line_end`) treat a same-line `else` as a stopping point too
+    // -- without this, a greedy multi-arg statement like PRINT's own
+    // token-list loop has no way to know "else" isn't just another
+    // expression to print. A counter, not a bool, so a nested single-line
+    // `if` inside this one's body doesn't clear the flag while unwinding.
+    single_line_if_depth: usize,
 }
 
 impl Parser {
@@ -18,6 +26,7 @@ impl Parser {
             tokens,
             pos: 0,
             pending_blank: false,
+            single_line_if_depth: 0,
         }
     }
 
@@ -714,6 +723,12 @@ impl Parser {
         self.expect_keyword("if")?;
         let condition = self.parse_condition()?;
         self.expect_keyword("then")?;
+        // Classic single-line form: a statement follows `then` directly on
+        // the same line, no `end if` needed. Block form needs a newline
+        // right after `then`; that's the only thing distinguishing the two.
+        if !self.at_line_end() {
+            return self.parse_single_line_if(condition);
+        }
         self.consume_line_end()?;
         let then_body = self.parse_block(&[BlockEnd::Else, BlockEnd::ElseIf, BlockEnd::EndIf])?;
         let else_body = if self.check_keyword("elseif") {
@@ -733,6 +748,47 @@ impl Parser {
             Vec::new()
         };
         Ok(Statement::If { condition, then_body, else_body })
+    }
+
+    /// `if cond then stmt [: stmt ...] [else stmt [: stmt ...]]` -- no
+    /// `end if`, terminated by the end of the physical line. `elseif` isn't
+    /// supported here, same as classic BASIC: it needs the block form.
+    fn parse_single_line_if(&mut self, condition: Expr) -> ParseResult<Statement> {
+        let (then_body, saw_else) = self.parse_single_line_if_body()?;
+        let else_body = if saw_else {
+            self.expect_keyword("else")?;
+            self.parse_single_line_if_body()?.0
+        } else {
+            Vec::new()
+        };
+        Ok(Statement::If { condition, then_body, else_body })
+    }
+
+    /// Parses statements up to the end of the physical line (each one's own
+    /// `consume_line_end` already accepts `:` as a same-line separator).
+    /// Returns whether the stop was caused by an `else` still on this same
+    /// line (vs. a real newline/EOF, where an `else` on the *next* line
+    /// must not be mistaken for this if's else-clause).
+    fn parse_single_line_if_body(&mut self) -> ParseResult<(Vec<Statement>, bool)> {
+        self.single_line_if_depth += 1;
+        let result = (|| {
+            let mut body = Vec::new();
+            loop {
+                body.push(self.parse_statement()?);
+                if self.previous_was_newline() || self.is_eof() {
+                    return Ok((body, false));
+                }
+                if self.check_keyword("else") {
+                    return Ok((body, true));
+                }
+            }
+        })();
+        self.single_line_if_depth -= 1;
+        result
+    }
+
+    fn previous_was_newline(&self) -> bool {
+        self.pos > 0 && matches!(self.tokens[self.pos - 1].kind, TokenKind::Newline)
     }
 
     fn parse_elseif(&mut self) -> ParseResult<Statement> {
@@ -1465,6 +1521,12 @@ impl Parser {
         if self.is_eof() {
             return Ok(());
         }
+        // Inside a single-line `if`'s then/else clause, a same-line `else`
+        // ends the current statement too -- don't consume it, the caller
+        // still needs to see it.
+        if self.single_line_if_depth > 0 && self.check_keyword("else") {
+            return Ok(());
+        }
         if self.eat(TokenKind::Colon) || self.eat(TokenKind::Newline) {
             let extra = self.count_and_skip_newlines();
             if extra >= 1 {
@@ -1501,7 +1563,7 @@ impl Parser {
                 | TokenKind::Eof
                 | TokenKind::Comment(_)
                 | TokenKind::BlockComment(_)
-        )
+        ) || (self.single_line_if_depth > 0 && self.check_keyword("else"))
     }
 
     fn at_any_block_end(&self, ends: &[BlockEnd]) -> bool {
@@ -2098,5 +2160,87 @@ mod tests {
         assert!(matches!(program.statements[0], Statement::While { .. }));
         let program = parse("while p% < 10\nprint p%\nend\nend\n");
         assert!(matches!(program.statements[0], Statement::While { .. }));
+    }
+
+    #[test]
+    fn single_line_if_needs_no_end_if() {
+        let program = parse("if x% > 0 then print \"positive\"\nprint \"after\"\nend\n");
+        match &program.statements[0] {
+            Statement::If { then_body, else_body, .. } => {
+                assert_eq!(then_body.len(), 1);
+                assert!(else_body.is_empty());
+            }
+            other => panic!("expected if statement, got {other:?}"),
+        }
+        // The statement after the single-line if must be its sibling, not
+        // absorbed into the then-body.
+        assert!(matches!(program.statements[1], Statement::Print { .. }));
+    }
+
+    #[test]
+    fn single_line_if_supports_else_on_the_same_line() {
+        let program = parse("if x% > 0 then print \"a\" else print \"b\"\nend\n");
+        match &program.statements[0] {
+            Statement::If { then_body, else_body, .. } => {
+                assert_eq!(then_body.len(), 1);
+                assert_eq!(else_body.len(), 1);
+            }
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_line_if_else_does_not_bleed_into_the_next_physical_line() {
+        // A bare `else` starting the *next* line, unattached to any `if`,
+        // is invalid -- proves the first if's then-clause really stopped
+        // at the newline instead of somehow reaching across it.
+        let tokens = Lexer::new("test.bcl", "if x% > 0 then print \"a\"\nelse print \"stray\"\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        assert!(result.is_err(), "a dangling `else` on its own line must not parse");
+
+        // A second line with its *own* legitimate if/else must not have
+        // that else misattributed to the first line's if.
+        let program = parse(
+            "if x% > 0 then print \"a\"\nif y% > 0 then print \"b\" else print \"c\"\nend\n",
+        );
+        match &program.statements[0] {
+            Statement::If { else_body, .. } => assert!(else_body.is_empty()),
+            other => panic!("expected if statement, got {other:?}"),
+        }
+        match &program.statements[1] {
+            Statement::If { else_body, .. } => assert_eq!(else_body.len(), 1),
+            other => panic!("expected second if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn single_line_if_supports_colon_chained_statements() {
+        let program = parse("if x% > 0 then y% = 1: z% = 2\nend\n");
+        match &program.statements[0] {
+            Statement::If { then_body, .. } => assert_eq!(then_body.len(), 2),
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nested_single_line_if_resolves_dangling_else_to_the_innermost_if() {
+        let program = parse("if a% = 1 then if b% = 2 then print \"both\" else print \"only a\"\nend\n");
+        match &program.statements[0] {
+            Statement::If { then_body, else_body: outer_else, .. } => {
+                assert!(outer_else.is_empty());
+                match &then_body[0] {
+                    Statement::If { else_body: inner_else, .. } => assert_eq!(inner_else.len(), 1),
+                    other => panic!("expected nested if, got {other:?}"),
+                }
+            }
+            other => panic!("expected if statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn multiline_if_still_requires_end_if() {
+        // A newline directly after `then` must still select the block form.
+        let program = parse("if x% > 0 then\nprint \"positive\"\nend if\nend\n");
+        assert!(matches!(program.statements[0], Statement::If { .. }));
     }
 }

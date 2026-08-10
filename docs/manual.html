@@ -433,7 +433,6 @@ PRINT &quot;  BASCAL DEMO  &quot;</code></pre>
 <hr />
 <h2 id="control-flow">Control Flow</h2>
 <h3 id="if--elseif--else--end-if">IF / ELSEIF / ELSE / END IF</h3>
-<p>BASCAL only supports block-style <code>if</code> statements. The body must be on a separate line; there is no single-line <code>IF … THEN stmt</code> form.</p>
 <pre><code>if condition then
     &#39; then body
 end if
@@ -443,6 +442,14 @@ if condition then
 else
     &#39; else body
 end if</code></pre>
+<p>BASCAL also supports classic BASIC's single-line form: a statement directly after <code>then</code>, on the same line, needs no <code>end if</code>.</p>
+<pre><code>if condition then statement
+if condition then statement else statement</code></pre>
+<p>A newline right after <code>then</code> is what selects the block form above instead — that's the only difference between the two. The single-line form may chain multiple statements with <code>:</code>, same as anywhere else in BASCAL, and its <code>else</code> (if any) must be on that same line too:</p>
+<pre><code>if x% &gt; 0 then print &quot;positive&quot;
+if x% &gt; 100 then print &quot;big&quot; else print &quot;small&quot;
+if x% &gt; 0 then y% = 1: z% = 2</code></pre>
+<p><code>elseif</code> isn't available in the single-line form — same as classic BASIC, it needs the block form above.</p>
 <p>From <code>tutorial/04_conditions.bcl</code> — a grade classification chain:</p>
 <pre><code>score% = 72
 if score% &gt;= 60 then

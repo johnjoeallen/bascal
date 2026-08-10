@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conditions — BASCAL Tutorials</title>
-<meta name="description" content="Multiline structured if/elseif/else in BASCAL, compiled to classic BASIC GOTO targets automatically.">
+<meta name="description" content="Multiline structured if/elseif/else, plus classic BASIC's single-line if...then form, both compiled to numbered GOTO targets automatically.">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 <header class="hero compact">
   <div class="wrap">
     <h1>04. Conditions</h1>
-    <p class="tagline">Multiline if / elseif / else / end if, transpiled to numbered GOTO targets for you.</p>
+    <p class="tagline">Multiline if / elseif / else / end if, plus single-line if...then, transpiled to numbered GOTO targets for you.</p>
   </div>
 </header>
 
@@ -31,8 +31,12 @@
   <div class="prose">
 <p>BASCAL supports multi-line block <code>if</code> statements: <code>if cond then
 ... end if</code>, with optional <code>else</code> and any number of
-<code>elseif</code> clauses. The compiler transpiles these to numeric GOTO targets in
-the generated BASIC — you never write a line number yourself.</p>
+<code>elseif</code> clauses. It also supports classic BASIC's single-line
+form — a statement directly after <code>then</code> on the same line needs
+no <code>end if</code> at all. A newline right after <code>then</code> is
+what selects the block form instead; that's the only difference. The
+compiler transpiles either form to numeric GOTO targets in the generated
+BASIC — you never write a line number yourself.</p>
   </div>
 
     <div class="snippet">
@@ -48,6 +52,12 @@ elseif points% &gt;= 60 then
 else
     grade$ = &quot;F&quot;
 end if</code></pre>
+    </div>
+    <div class="snippet">
+      <h3>Single-line if — no end if needed</h3>
+      <p class="note"><code>elseif</code> isn't available single-line, same as classic BASIC — it needs the block form above.</p>
+      <pre><code>if temperature% &gt; 30 then print &quot;Hot day (single-line)&quot;
+if temperature% &gt; 100 then print &quot;Scorching&quot; else print &quot;Not scorching&quot;</code></pre>
     </div>
 
 
