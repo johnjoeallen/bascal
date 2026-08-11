@@ -6,6 +6,7 @@
 <title>Conditions — BASCAL Tutorials</title>
 <meta name="description" content="Multiline structured if/elseif/else, plus classic BASIC's single-line if...then form, both compiled to numbered GOTO targets automatically.">
 <link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 </head>
 <body>
 
@@ -22,6 +23,7 @@
     <a href="../manual.html">Manual</a>
     <a href="./" class="current">Tutorials</a>
     <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
   </div>
 </nav>
 
@@ -80,5 +82,6 @@ if temperature% &gt; 100 then print &quot;Scorching&quot; else print &quot;Not s
 </footer>
 
 <script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
 </body>
 </html>

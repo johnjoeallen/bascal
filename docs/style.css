@@ -18,7 +18,7 @@
   --tok-com: #9d9382;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1a16;
     --bg-alt: #242019;
     --fg: #f1ede2;
@@ -33,6 +33,23 @@
     --old-tag: #e07a5f;
     --new-tag: #6fd8b8;
   }
+}
+/* Explicit override from the theme toggle wins in both directions,
+   regardless of system preference. */
+:root[data-theme="dark"] {
+  --bg: #1c1a16;
+  --bg-alt: #242019;
+  --fg: #f1ede2;
+  --fg-dim: #b8ae9a;
+  --accent: #e07a5f;
+  --accent-2: #6fd8b8;
+  --card-bg: #24211b;
+  --card-border: #3a3428;
+  --code-bg: #16140f;
+  --code-fg: #f1ede2;
+  --code-hi: #ffd479;
+  --old-tag: #e07a5f;
+  --new-tag: #6fd8b8;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -90,9 +107,23 @@ nav.subnav {
   top: 0;
   z-index: 10;
 }
-nav.subnav .wrap { display: flex; gap: 1.25rem; padding: .7rem 1.5rem; overflow-x: auto; }
+nav.subnav .wrap { display: flex; align-items: center; gap: 1.25rem; padding: .7rem 1.5rem; overflow-x: auto; }
 nav.subnav a { color: var(--fg-dim); text-decoration: none; font-size: .9rem; white-space: nowrap; }
 nav.subnav a:hover { color: var(--accent-2); }
+
+.theme-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid var(--card-border);
+  border-radius: .4rem;
+  color: var(--fg-dim);
+  font-size: 1rem;
+  line-height: 1;
+  padding: .35rem .55rem;
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--accent-2); border-color: var(--accent-2); }
 nav.subnav a.current { color: var(--accent); }
 
 .crumbs {

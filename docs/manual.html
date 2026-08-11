@@ -6,6 +6,7 @@
 <title>Language Manual — BASCAL</title>
 <meta name="description" content="The full BASCAL language reference manual: syntax, statements, and generated-BASIC semantics for every construct.">
 <link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 </head>
 <body>
 
@@ -22,6 +23,7 @@
     <a href="manual.html" class="current">Manual</a>
     <a href="tutorials/">Tutorials</a>
     <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
   </div>
 </nav>
 
@@ -2008,5 +2010,6 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 </footer>
 
 <script src="bcl-highlight.js"></script>
+<script src="theme-toggle.js"></script>
 </body>
 </html>
