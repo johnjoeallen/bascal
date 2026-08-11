@@ -291,14 +291,15 @@ record types (`Header`, `Entry`) sharing one random-access file, and five
 `procedure`s (`addItem`, `listAll`, `searchByAuthor`, `searchByAuthorTitle`,
 `deleteItem`) that each read and write those records from inside their own
 body — exercising record/file access from procedure scope, not just
-top-level code. It's adapted from `CLERK.BAS`, a 1983 card-catalog manager
-by Carlos A. Lujan S.; see the comment header in the source for the full
-attribution and porting notes.
+top-level code. A `mainMenu` procedure drives them from an interactive,
+`INPUT`-based menu loop. It's adapted from `CLERK.BAS`, a 1983 card-catalog
+manager by Carlos A. Lujan S.; see the comment header in the source for the
+full attribution and porting notes.
 
 ```bash
 cargo run -- tutorial/card_catalog.bcl
 fbc -lang qb tutorial/card_catalog.bas -x tmp/card_catalog
-./tmp/card_catalog
+./tmp/card_catalog   # interactive -- follow the on-screen menu
 ```
 
 ## Run With FreeBASIC

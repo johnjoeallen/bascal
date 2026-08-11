@@ -19,22 +19,20 @@
 ' - DELETE ITEM: linear-scan for the first author+title match, blank it.
 ' 
 ' What's adapted rather than ported line-for-line:
-' - CLERK.BAS is interactive (INKEY$/INPUT-driven menu, multi-diskette
-' file registry, HARD COPY prompts). This example drives the same
-' catalog operations with a fixed, deterministic call sequence instead,
-' matching this repo's other standalone examples (tutorial/14_procedures.bcl,
-' tutorial/sort_driver.bcl) so it compiles *and runs* without a keyboard.
-' - Each menu action (NEW ITEM, list, the two searches, DELETE ITEM) is
-' its own `procedure` — addItem, listAll, searchByAuthor,
-' searchByAuthorTitle, deleteItem — instead of CLERK.BAS's numbered
-' GOTO/GOSUB sections. This is the canonical BASCAL style (see
-' MANUAL.md's Procedures section), and specifically exercises record/file
-' access from inside a procedure body, not just top-level code.
-' - CLERK.BAS's original also supported search-by-subject and a
-' "another file"/multi-diskette workflow; this example keeps the two
-' named searches and the single-catalog-file shape and drops the rest,
-' to stay focused on what the record/file DSL and procedures are
-' actually demonstrating here.
+' - The menu is still interactive (INPUT-driven, like CLERK.BAS's own
+' INKEY$/ON CHOICE GOSUB loop), but each menu action (NEW ITEM, list,
+' the two searches, DELETE ITEM) is its own `procedure` — addItem,
+' listAll, searchByAuthor, searchByAuthorTitle, deleteItem — called
+' from a `mainMenu` dispatch procedure using `select case`, instead of
+' CLERK.BAS's numbered GOTO/GOSUB sections. This is the canonical
+' BASCAL style (see MANUAL.md's Procedures section), and specifically
+' exercises record/file access from inside a procedure body, not just
+' top-level code.
+' - CLERK.BAS's original also supported a multi-diskette/multi-file
+' registry (drive letter + FILEDAT), search-by-subject, and HARD COPY
+' (LPRINT) output. This example keeps one catalog file and the two
+' named searches, and drops the rest, to stay focused on what the
+' record/file DSL and procedures are actually demonstrating here.
 
 ' The header occupies slot 1 of the same file, sized to match Entry's
 ' width (20+20+20 = 60 bytes) so both record types agree on where every
@@ -62,50 +60,12 @@ FIELD #2, 20 AS catalog_authorbuf$, 20 AS catalog_titlebuf$, 20 AS catalog_subje
 
 ' ---- CHOICE=3 DELETE ITEM in CLERK.BAS: first author+title match ----
 
+' ---- CLERK.BAS's own MENU / ON CHOICE GOSUB dispatch loop ----
+
 ' --- Drive the catalog ---
 
 GOSUB 10
-
-additem_author_0$ = "Twain, Mark"
-additem_title_0$ = "Adventures of Huckleberry Finn"
-additem_subject_0$ = "Fiction"
-GOSUB 20
-additem_author_0$ = "Orwell, George"
-additem_title_0$ = "Nineteen Eighty-Four"
-additem_subject_0$ = "Fiction"
-GOSUB 20
-additem_author_0$ = "Fant, Alfred"
-additem_title_0$ = "LIBRARIAN"
-additem_subject_0$ = "Programming"
-GOSUB 20
-additem_author_0$ = "Lujan S., Carlos"
-additem_title_0$ = "CLERK"
-additem_subject_0$ = "Programming"
-GOSUB 20
-
-PRINT "-- Full catalog --"
-GOSUB 90
-
-PRINT ""
-PRINT "-- Search by author: Orwell, George --"
-searchbyauthor_author_0$ = "Orwell, George"
-GOSUB 110
-
-PRINT ""
-PRINT "-- Search by author + title: Twain, Mark / Adventures of Huckleberry Finn --"
-searchbyauthortitle_author_0$ = "Twain, Mark"
-searchbyauthortitle_title_0$ = "Adventures of Huckleberry Finn"
-GOSUB 130
-
-PRINT ""
-PRINT "-- Delete: Fant, Alfred / LIBRARIAN --"
-deleteitem_author_0$ = "Fant, Alfred"
-deleteitem_title_0$ = "LIBRARIAN"
-GOSUB 150
-
-PRINT ""
-PRINT "-- Full catalog after delete --"
-GOSUB 90
+GOSUB 230
 
 ' header.close()
 CLOSE #1
@@ -255,3 +215,59 @@ END
 220 REM END IF
     RETURN
 ' end procedure deleteitem
+
+' procedure mainmenu()
+230 mainmenu_running_0% = 1
+240 IF (mainmenu_running_0% = 1) = 0 THEN GOTO 330
+        PRINT ""
+        PRINT "MENU.          1 ) LIST ALL ITEMS"
+        PRINT "               2 ) NEW ITEM"
+        PRINT "               3 ) SEARCH BY AUTHOR"
+        PRINT "               4 ) SEARCH BY AUTHOR + TITLE"
+        PRINT "               5 ) DELETE ITEM"
+        PRINT "               6 ) STOP"
+        PRINT ""
+        INPUT "CHOICE: "; mainmenu_choice_0%
+
+        BCC_T15% = mainmenu_choice_0%
+        IF (BCC_T15% = 1) <> 0 THEN GOTO 250
+        IF (BCC_T15% = 2) <> 0 THEN GOTO 260
+        IF (BCC_T15% = 3) <> 0 THEN GOTO 270
+        IF (BCC_T15% = 4) <> 0 THEN GOTO 280
+        IF (BCC_T15% = 5) <> 0 THEN GOTO 290
+        IF (BCC_T15% = 6) <> 0 THEN GOTO 300
+        GOTO 310
+250 GOSUB 90
+            GOTO 320
+260 INPUT "AUTHOR  "; mainmenu_author_0$
+            INPUT "TITLE   "; mainmenu_title_0$
+            INPUT "SUBJECT "; mainmenu_subject_0$
+            additem_author_0$ = mainmenu_author_0$
+            additem_title_0$ = mainmenu_title_0$
+            additem_subject_0$ = mainmenu_subject_0$
+            GOSUB 20
+            GOTO 320
+270 INPUT "AUTHOR "; mainmenu_author_0$
+            searchbyauthor_author_0$ = mainmenu_author_0$
+            GOSUB 110
+            GOTO 320
+280 INPUT "AUTHOR "; mainmenu_author_0$
+            INPUT "TITLE  "; mainmenu_title_0$
+            searchbyauthortitle_author_0$ = mainmenu_author_0$
+            searchbyauthortitle_title_0$ = mainmenu_title_0$
+            GOSUB 130
+            GOTO 320
+290 INPUT "AUTHOR (to delete) "; mainmenu_author_0$
+            INPUT "TITLE  (to delete) "; mainmenu_title_0$
+            deleteitem_author_0$ = mainmenu_author_0$
+            deleteitem_title_0$ = mainmenu_title_0$
+            GOSUB 150
+            GOTO 320
+300 mainmenu_running_0% = 0
+            GOTO 320
+310 PRINT "Invalid choice"
+320 REM END SELECT
+        GOTO 240
+330 REM END DO
+    RETURN
+' end procedure mainmenu

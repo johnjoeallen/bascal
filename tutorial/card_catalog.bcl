@@ -16,22 +16,20 @@
 //   - DELETE ITEM: linear-scan for the first author+title match, blank it.
 //
 // What's adapted rather than ported line-for-line:
-//   - CLERK.BAS is interactive (INKEY$/INPUT-driven menu, multi-diskette
-//     file registry, HARD COPY prompts). This example drives the same
-//     catalog operations with a fixed, deterministic call sequence instead,
-//     matching this repo's other standalone examples (tutorial/14_procedures.bcl,
-//     tutorial/sort_driver.bcl) so it compiles *and runs* without a keyboard.
-//   - Each menu action (NEW ITEM, list, the two searches, DELETE ITEM) is
-//     its own `procedure` — addItem, listAll, searchByAuthor,
-//     searchByAuthorTitle, deleteItem — instead of CLERK.BAS's numbered
-//     GOTO/GOSUB sections. This is the canonical BASCAL style (see
-//     MANUAL.md's Procedures section), and specifically exercises record/file
-//     access from inside a procedure body, not just top-level code.
-//   - CLERK.BAS's original also supported search-by-subject and a
-//     "another file"/multi-diskette workflow; this example keeps the two
-//     named searches and the single-catalog-file shape and drops the rest,
-//     to stay focused on what the record/file DSL and procedures are
-//     actually demonstrating here.
+//   - The menu is still interactive (INPUT-driven, like CLERK.BAS's own
+//     INKEY$/ON CHOICE GOSUB loop), but each menu action (NEW ITEM, list,
+//     the two searches, DELETE ITEM) is its own `procedure` — addItem,
+//     listAll, searchByAuthor, searchByAuthorTitle, deleteItem — called
+//     from a `mainMenu` dispatch procedure using `select case`, instead of
+//     CLERK.BAS's numbered GOTO/GOSUB sections. This is the canonical
+//     BASCAL style (see MANUAL.md's Procedures section), and specifically
+//     exercises record/file access from inside a procedure body, not just
+//     top-level code.
+//   - CLERK.BAS's original also supported a multi-diskette/multi-file
+//     registry (drive letter + FILEDAT), search-by-subject, and HARD COPY
+//     (LPRINT) output. This example keeps one catalog file and the two
+//     named searches, and drops the rest, to stay focused on what the
+//     record/file DSL and procedures are actually demonstrating here.
 
 record Entry
     author:  string(20)
@@ -142,33 +140,51 @@ procedure deleteItem(author$, title$)
     end if
 end procedure
 
+/* ---- CLERK.BAS's own MENU / ON CHOICE GOSUB dispatch loop ---- */
+procedure mainMenu()
+    running% = 1
+    do while running% = 1
+        print ""
+        print "MENU.          1 ) LIST ALL ITEMS"
+        print "               2 ) NEW ITEM"
+        print "               3 ) SEARCH BY AUTHOR"
+        print "               4 ) SEARCH BY AUTHOR + TITLE"
+        print "               5 ) DELETE ITEM"
+        print "               6 ) STOP"
+        print ""
+        input "CHOICE: "; choice%
+
+        select case choice%
+        case 1
+            listAll()
+        case 2
+            input "AUTHOR  "; author$
+            input "TITLE   "; title$
+            input "SUBJECT "; subject$
+            addItem(author$, title$, subject$)
+        case 3
+            input "AUTHOR "; author$
+            searchByAuthor(author$)
+        case 4
+            input "AUTHOR "; author$
+            input "TITLE  "; title$
+            searchByAuthorTitle(author$, title$)
+        case 5
+            input "AUTHOR (to delete) "; author$
+            input "TITLE  (to delete) "; title$
+            deleteItem(author$, title$)
+        case 6
+            running% = 0
+        case else
+            print "Invalid choice"
+        end select
+    loop
+end procedure
+
 /* --- Drive the catalog --- */
 
 initCatalog()
-
-addItem("Twain, Mark",      "Adventures of Huckleberry Finn", "Fiction")
-addItem("Orwell, George",   "Nineteen Eighty-Four",           "Fiction")
-addItem("Fant, Alfred",     "LIBRARIAN",                      "Programming")
-addItem("Lujan S., Carlos", "CLERK",                          "Programming")
-
-print "-- Full catalog --"
-listAll()
-
-print ""
-print "-- Search by author: Orwell, George --"
-searchByAuthor("Orwell, George")
-
-print ""
-print "-- Search by author + title: Twain, Mark / Adventures of Huckleberry Finn --"
-searchByAuthorTitle("Twain, Mark", "Adventures of Huckleberry Finn")
-
-print ""
-print "-- Delete: Fant, Alfred / LIBRARIAN --"
-deleteItem("Fant, Alfred", "LIBRARIAN")
-
-print ""
-print "-- Full catalog after delete --"
-listAll()
+mainMenu()
 
 header.close()
 catalog.close()
