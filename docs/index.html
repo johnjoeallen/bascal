@@ -44,9 +44,48 @@
   <section id="why">
     <h2>Why BASCAL exists</h2>
     <p class="lede">
-      BASCAL keeps BASIC's global symbol model — variables and functions are
-      still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> —
-      while adding enough structure that larger programs stay maintainable.
+      BASCAL traces back to a preprocessor I wrote for a real BASIC shop in
+      1985, built to solve a real distribution problem: we had a shared set
+      of library routines, and every change had to be manually merged
+      between a distributed dev team, then merged into the full application
+      suite by hand. That preprocessor supported directives like
+      <code>@include</code>, <code>@if</code>, <code>@case</code>,
+      <code>@function</code>, and <code>@procedure</code>, plus
+      <code>{label}</code> in place of raw line numbers. I always wanted to
+      build a proper modern equivalent — the tool I wish I'd had the skills
+      and tools for back in 1985 — and that's exactly the kind of work
+      Claude and Codex excel at. BASCAL is that reconstruction in Rust, and
+      the language itself is significantly more advanced than the original:
+      more structured, easier to read, easier to write, modular. The idea
+      hasn't changed, though — a real compiler, not a text preprocessor,
+      that still respects the classic BASIC it targets. The goal has stayed
+      the same since 1985 — make BASIC more pleasant to write, without
+      pretending it is a different runtime. Read the
+      <a href="origin.html">full origin story</a>.
+    </p>
+
+    <p class="lede">
+      That means BASCAL keeps BASIC's global symbol model — variables and
+      functions are still global, still transpiled to
+      <code>GOTO</code>/<code>GOSUB</code>.
+    </p>
+
+    <p class="lede">
+      BASCAL is a strict superset of classic BASIC — bitwise
+      <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written
+      <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code>
+      still compile unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw
+      BASIC too, but with one difference: BASCAL manages line numbering
+      itself, so their targets are always a <code>name:</code> label
+      declared in source, never a raw line number like
+      <code>GOTO 140</code>. Beyond that, wherever BASCAL has its own
+      construct for something, that construct is the canonical way to write it in
+      <code>.bcl</code> source — treat the raw-BASIC spelling as legacy
+      syntax you're compiling <em>away from</em>, not an equally-good
+      alternative.
+    </p>
+
+    <p class="note">
       In practice that means: write the pane on the right below, not the
       pane on the left.
     </p>
@@ -87,43 +126,6 @@ end select</code></pre>
         comparisons below</a> for loops and short-circuit conditions.
       </p>
     </div>
-
-    <p class="lede">
-      BASCAL is a strict superset of classic BASIC — bitwise
-      <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written
-      <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code>
-      still compile unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw
-      BASIC too, but with one difference from the pane on the left above:
-      BASCAL manages line numbering itself, so their targets are always a
-      <code>name:</code> label declared in source, never a raw line number
-      like <code>GOTO 140</code>. Beyond that, wherever BASCAL has its own
-      construct for something, that construct is the canonical way to write
-      it in <code>.bcl</code> source: treat the raw-BASIC spelling as legacy
-      syntax you're compiling <em>away from</em>, not an equally-good
-      alternative.
-    </p>
-
-    <blockquote>
-      Make BASIC more pleasant to write, without pretending it is a
-      different runtime.
-    </blockquote>
-    <p>
-      It traces back to a preprocessor written for a real BASIC shop in
-      1985, built to solve a real distribution problem: a shared library of
-      BASIC routines that had to be merged by hand across a distributed dev
-      team, then merged again into the full application suite. That
-      preprocessor supported directives like <code>@include</code>,
-      <code>@if</code>, <code>@case</code>, <code>@function</code>, and
-      <code>@procedure</code>, plus <code>{label}</code> in place of raw
-      line numbers — the tool its author wished they'd had the skills and
-      tools to build properly back then, and exactly the kind of work
-      Claude and Codex excel at now. BASCAL is that reconstruction in Rust,
-      and the language itself is significantly more advanced than the
-      original: more structured, easier to read, easier to write, modular.
-      The idea hasn't changed, though — a real compiler, not a text
-      preprocessor, that still respects the classic BASIC it targets.
-      Read the <a href="origin.html">full origin story</a>.
-    </p>
   </section>
 
   <section id="features">
