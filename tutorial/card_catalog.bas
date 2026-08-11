@@ -65,7 +65,7 @@ FIELD #2, 20 AS catalog_authorbuf$, 20 AS catalog_titlebuf$, 20 AS catalog_subje
 ' --- Drive the catalog ---
 
 GOSUB 10
-GOSUB 230
+GOSUB 220
 
 ' header.close()
 CLOSE #1
@@ -185,40 +185,39 @@ END
     deleteitem_h_reserved_0$ = RTRIM$(header_reservedbuf$)
     deleteitem_i_0% = 1
     deleteitem_stop_0% = 0
-160 IF (deleteitem_stop_0% = 0) = 0 THEN GOTO 200
+160 IF (deleteitem_stop_0% = 0) = 0 THEN GOTO 190
         deleteitem_i_0% = deleteitem_i_0% + 1
         ' let e = catalog[...]  (whole-record read)
         GET #2, deleteitem_i_0%
         deleteitem_e_author_0$ = RTRIM$(catalog_authorbuf$)
         deleteitem_e_title_0$ = RTRIM$(catalog_titlebuf$)
         deleteitem_e_subject_0$ = RTRIM$(catalog_subjectbuf$)
-        IF (deleteitem_e_author_0$ = deleteitem_author_0$) = 0 THEN GOTO 180
-            IF (deleteitem_e_title_0$ = deleteitem_title_0$) = 0 THEN GOTO 170
-                deleteitem_stop_0% = 1
-170 REM END IF
-180 REM END IF
-        IF (deleteitem_i_0% = deleteitem_h_size_0%) = 0 THEN GOTO 190
+        IF (deleteitem_e_author_0$ = deleteitem_author_0$) = 0 THEN GOTO 170
+        IF (deleteitem_e_title_0$ = deleteitem_title_0$) = 0 THEN GOTO 170
             deleteitem_stop_0% = 1
-190 REM END IF
+170 REM END IF
+        IF (deleteitem_i_0% = deleteitem_h_size_0%) = 0 THEN GOTO 180
+            deleteitem_stop_0% = 1
+180 REM END IF
         GOTO 160
-200 REM END DO
-    IF (deleteitem_e_author_0$ = deleteitem_author_0$) = 0 THEN GOTO 210
-    IF (deleteitem_e_title_0$ = deleteitem_title_0$) = 0 THEN GOTO 210
+190 REM END DO
+    IF (deleteitem_e_author_0$ = deleteitem_author_0$) = 0 THEN GOTO 200
+    IF (deleteitem_e_title_0$ = deleteitem_title_0$) = 0 THEN GOTO 200
         PRINT (("Deleting: " + deleteitem_e_author_0$) + "  |  ") + deleteitem_e_title_0$
         ' catalog[...] = { ... }  (whole-record write)
         LSET catalog_authorbuf$ = ""
         LSET catalog_titlebuf$ = ""
         LSET catalog_subjectbuf$ = ""
         PUT #2, deleteitem_i_0%
-        GOTO 220
-210 PRINT (("Not found: " + deleteitem_author_0$) + "  |  ") + deleteitem_title_0$
-220 REM END IF
+        GOTO 210
+200 PRINT (("Not found: " + deleteitem_author_0$) + "  |  ") + deleteitem_title_0$
+210 REM END IF
     RETURN
 ' end procedure deleteitem
 
 ' procedure mainmenu()
-230 mainmenu_running_0% = 1
-240 IF (mainmenu_running_0% = 1) = 0 THEN GOTO 330
+220 mainmenu_running_0% = 1
+230 IF (mainmenu_running_0% = 1) = 0 THEN GOTO 320
         PRINT ""
         PRINT "MENU.          1 ) LIST ALL ITEMS"
         PRINT "               2 ) NEW ITEM"
@@ -229,45 +228,45 @@ END
         PRINT ""
         INPUT "CHOICE: "; mainmenu_choice_0%
 
-        BCC_T15% = mainmenu_choice_0%
-        IF (BCC_T15% = 1) <> 0 THEN GOTO 250
-        IF (BCC_T15% = 2) <> 0 THEN GOTO 260
-        IF (BCC_T15% = 3) <> 0 THEN GOTO 270
-        IF (BCC_T15% = 4) <> 0 THEN GOTO 280
-        IF (BCC_T15% = 5) <> 0 THEN GOTO 290
-        IF (BCC_T15% = 6) <> 0 THEN GOTO 300
-        GOTO 310
-250 GOSUB 90
-            GOTO 320
-260 INPUT "AUTHOR  "; mainmenu_author_0$
+        BCC_T14% = mainmenu_choice_0%
+        IF (BCC_T14% = 1) <> 0 THEN GOTO 240
+        IF (BCC_T14% = 2) <> 0 THEN GOTO 250
+        IF (BCC_T14% = 3) <> 0 THEN GOTO 260
+        IF (BCC_T14% = 4) <> 0 THEN GOTO 270
+        IF (BCC_T14% = 5) <> 0 THEN GOTO 280
+        IF (BCC_T14% = 6) <> 0 THEN GOTO 290
+        GOTO 300
+240 GOSUB 90
+            GOTO 310
+250 INPUT "AUTHOR  "; mainmenu_author_0$
             INPUT "TITLE   "; mainmenu_title_0$
             INPUT "SUBJECT "; mainmenu_subject_0$
             additem_author_0$ = mainmenu_author_0$
             additem_title_0$ = mainmenu_title_0$
             additem_subject_0$ = mainmenu_subject_0$
             GOSUB 20
-            GOTO 320
-270 INPUT "AUTHOR "; mainmenu_author_0$
+            GOTO 310
+260 INPUT "AUTHOR "; mainmenu_author_0$
             searchbyauthor_author_0$ = mainmenu_author_0$
             GOSUB 110
-            GOTO 320
-280 INPUT "AUTHOR "; mainmenu_author_0$
+            GOTO 310
+270 INPUT "AUTHOR "; mainmenu_author_0$
             INPUT "TITLE  "; mainmenu_title_0$
             searchbyauthortitle_author_0$ = mainmenu_author_0$
             searchbyauthortitle_title_0$ = mainmenu_title_0$
             GOSUB 130
-            GOTO 320
-290 INPUT "AUTHOR (to delete) "; mainmenu_author_0$
+            GOTO 310
+280 INPUT "AUTHOR (to delete) "; mainmenu_author_0$
             INPUT "TITLE  (to delete) "; mainmenu_title_0$
             deleteitem_author_0$ = mainmenu_author_0$
             deleteitem_title_0$ = mainmenu_title_0$
             GOSUB 150
-            GOTO 320
-300 mainmenu_running_0% = 0
-            GOTO 320
-310 PRINT "Invalid choice"
-320 REM END SELECT
-        GOTO 240
-330 REM END DO
+            GOTO 310
+290 mainmenu_running_0% = 0
+            GOTO 310
+300 PRINT "Invalid choice"
+310 REM END SELECT
+        GOTO 230
+320 REM END DO
     RETURN
 ' end procedure mainmenu

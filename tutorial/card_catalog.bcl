@@ -123,10 +123,8 @@ procedure deleteItem(author$, title$)
     do while stop% = 0
         i% = i% + 1
         let e = catalog[i%]
-        if e.author = author$ then
-            if e.title = title$ then
-                stop% = 1
-            end if
+        if e.author = author$ && e.title = title$ then
+            stop% = 1
         end if
         if i% = h.size then
             stop% = 1
