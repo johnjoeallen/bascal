@@ -16,11 +16,11 @@ There was also the practical problem of remembering what routine started at what
 
 Because I was working for Ramtech Ireland, I called it **Ramtech BASIC**.
 
-The first version was a weekend project, written in Pascal. I demoed it to my boss, and he liked the idea enough to give me a week to rewrite it in BASIC so it could live inside the same environment as the programs it was helping to build.
+The first version was a weekend project, written in Pascal, and it supported only two things: `{label}` and `@include`. I demoed it to my boss, and he liked the idea enough to give me a week to rewrite it in BASIC so it could live inside the same environment as the programs it was helping to build.
 
 The original tool was not a new runtime, and it was not a replacement for BASIC. It was a practical layer over the BASIC we had: a way to make the source more structured and then generate BASIC that could still be compiled and run in the existing environment.
 
-The original preprocessor was deliberately simple. It added things like `@include`, multiline `@IF` / `@ELSE`, `@CASE`, and `@FUNCTION` / `@PROCEDURE`. These constructs were all prefixed with `@` to make the source easy for the preprocessor to scan. The `@` prefix was not there because I wanted a strange-looking language; it was there because it made the implementation practical. The tool could quickly distinguish preprocessor constructs from ordinary BASIC text.
+That week is where the rest of the directive set came from. I added multiline `@IF` / `@ELSE`, `@CASE`, and `@FUNCTION` / `@PROCEDURE`, all prefixed with `@` to make the source easy for the preprocessor to scan. The `@` prefix was not there because I wanted a strange-looking language; it was there because it made the implementation practical. The tool could quickly distinguish preprocessor constructs from ordinary BASIC text.
 
 The original tool was much simpler than BASCAL. It was a product of its time, built to solve immediate problems with the machines, compilers, and constraints we had. But the motivation was already there: stop remembering magic line numbers, make shared code easier to reuse, reduce repetitive copying, add some structure, and make BASIC source feel less fragile.
 
