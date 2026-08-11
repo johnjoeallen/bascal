@@ -12,10 +12,10 @@
   --code-hi: #ffd479;
   --old-tag: #9a3324;
   --new-tag: #1f6f5c;
-  --tok-kw: #7dd3b0;
-  --tok-str: #ffd479;
-  --tok-num: #8ab4f8;
-  --tok-com: #948a76;
+  --tok-kw: #21a883;
+  --tok-str: #d9822b;
+  --tok-num: #6b98e0;
+  --tok-com: #9d9382;
 }
 @media (prefers-color-scheme: dark) {
   :root {
