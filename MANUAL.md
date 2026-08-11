@@ -69,7 +69,7 @@ that, wherever this manual documents a BASCAL construct for something
 (`select case` instead of an `IF`/`GOTO` dispatch chain, `record`/`file`
 instead of hand-written `FIELD`/`GET`/`PUT`, `&&`/`||` instead of bitwise
 short-circuit workarounds), treat that construct as the canonical way to
-write it in `.bcl` source — the raw-BASIC spelling is legacy syntax the
+write it in `.bcl` source — the original BASIC syntax is what the
 compiler exists to get you away from, not an equally good alternative.
 
 ---
