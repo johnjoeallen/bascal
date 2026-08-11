@@ -1,10 +1,10 @@
 ## Preface: Why BASCAL Exists
 
-My first professional programming job was at Ramtech, starting in May 1985.
+My first professional programming job was at Ramtech Ireland, starting in May 1985.
 
 By that point I had already spent time with Z80 assembly, 8086 assembly, C, and Pascal. I had been exposed to languages and environments that gave me a sense of structure, control, and abstraction. Then I found myself writing business software professionally in Microsoft BASIC.
 
-I had also become very enamoured with Turbo Pascal. The language itself was fantastic, but the Turbo Pascal environment was amazing: an integrated editor, compiler, and run loop that made development feel lightning fast. Nothing in BASCAL or Ramtech BASIC brought that same fast edit-compile cycle to classic BASIC, but that experience shaped what I wanted: more structure, less friction, and a development process that felt more flexible.
+I had also become very enamoured with Turbo Pascal. The language itself was fantastic, but the Turbo Pascal environment was amazing: an integrated editor, compiler, and run loop that made development feel lightning fast. Nothing in Ramtech BASIC brought that same fast edit-compile cycle to classic BASIC, but that experience shaped what I wanted: more structure, less friction, and a development process that felt more flexible.
 
 BASIC was approachable and productive, but compared with the tools and languages I had already used, the working environment felt very limited. The language encouraged large global programs, weak structure, remembered line numbers, and repetitive copying of shared code. I wanted a better way to work. I wanted some of the discipline and convenience I was used to from Pascal and C, but without abandoning the BASIC system we actually had to deliver software with.
 
@@ -14,7 +14,7 @@ We had what amounted to a standard library of BASIC routines, starting around li
 
 There was also the practical problem of remembering what routine started at what line number. Calling a shared routine meant knowing where it lived. My first attack on that problem was not a sophisticated compiler. It was a preprocessor that could provide labels — written as `{label}` in place of a raw line number — and `@include`: symbolic names instead of remembered line numbers, and a way to pull shared code into a program without manually copying it.
 
-Because I was working for Ramtech, I called it **Ramtech BASIC**.
+Because I was working for Ramtech Ireland, I called it **Ramtech BASIC**.
 
 The first version was a weekend project, written in Pascal. I demoed it to my boss, and he liked the idea enough to give me a week to rewrite it in BASIC so it could live inside the same environment as the programs it was helping to build.
 
