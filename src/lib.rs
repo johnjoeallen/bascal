@@ -433,6 +433,48 @@ END
     }
 
     #[test]
+    fn comment_text_matching_a_label_name_is_left_untouched() {
+        let source = r#"// jump to done when finished
+goto done
+
+print "before"
+
+done:
+print "after"
+end
+"#;
+        let output = compile_source("done.bcl", source).expect("sample should compile");
+        assert!(
+            output.contains("' jump to done when finished"),
+            "comment text must not be rewritten just because it contains a label's name:\n{output}"
+        );
+        assert!(output.contains("GOTO 10"), "goto should still resolve to the label's line number");
+    }
+
+    #[test]
+    fn function_local_const_declares_and_reads_the_same_lowered_name() {
+        // A `const` declared inside a function/procedure body must be
+        // renamed to its local BASIC name (like `dim`/assignment already
+        // are) so the CONST statement and every later read of it agree --
+        // otherwise the declaration binds one name while reads resolve to a
+        // fresh, never-assigned local of a different name.
+        let source = r#"procedure show()
+    const n% = 5
+    print n%
+end procedure
+
+show()
+end
+"#;
+        let output = compile_source("const_local.bcl", source).expect("should compile");
+        assert!(output.contains("CONST show_n_0% = 5"), "unexpected CONST line:\n{output}");
+        assert!(
+            output.contains("PRINT show_n_0%"),
+            "PRINT should read back the same local name the CONST line declared:\n{output}"
+        );
+    }
+
+    #[test]
     fn procedure_early_return_emits_bare_return() {
         let source = r#"procedure sayIfPositive(n%)
     if n% <= 0 then
@@ -711,6 +753,57 @@ end
     fn record_close_lowers_to_close_statement() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains("CLOSE #1"));
+    }
+
+    #[test]
+    fn record_field_buffers_stay_global_inside_procedures() {
+        // db[...]/let-bound record access used from inside a procedure body
+        // must LSET/GET the exact same FIELD-bound buffer names the
+        // top-level `file` declaration bound -- not per-procedure locals
+        // that were never FIELD-bound and so silently never touch the file.
+        let source = r#"record Item
+    name: string(10)
+    qty:  int16
+end record
+
+file items as Item = open("probe.dat")
+
+procedure addItem(n$, q%)
+    items[1] = { name: n$, qty: q% }
+end procedure
+
+procedure showItem()
+    let s = items[1]
+    print s.name + " " + str$(s.qty)
+end procedure
+
+addItem("widget", 5)
+showItem()
+items.close()
+end
+"#;
+        let output = compile_source("probe.bcl", source).expect("should compile");
+        assert!(
+            output.contains("FIELD #1, 10 AS items_namebuf$, 2 AS items_qtybuf$"),
+            "unexpected FIELD line:\n{output}"
+        );
+        assert!(
+            output.contains("LSET items_namebuf$ = "),
+            "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
+        );
+        assert!(
+            output.contains("LSET items_qtybuf$ = "),
+            "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
+        );
+        assert!(
+            output.contains("RTRIM$(items_namebuf$)") && output.contains("CVI%(items_qtybuf$)"),
+            "showItem should read back from the same top-level FIELD buffers:\n{output}"
+        );
+        assert!(
+            !output.contains("additem_items_namebuf")
+                && !output.contains("showitem_items_namebuf"),
+            "FIELD buffer names must never be re-namespaced per procedure:\n{output}"
+        );
     }
 
     #[test]

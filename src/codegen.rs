@@ -46,6 +46,13 @@ pub struct CodeGenerator {
     // All BASIC names already claimed: global vars + every allocated param/result/local name.
     // RefCell because ident() must read and extend this set through a shared &self reference.
     taken_names: RefCell<HashSet<String>>,
+    // Lowercase BASIC names of every record/file FIELD buffer variable
+    // (from `records::lower`'s `Statement::Field`). These are structurally
+    // global -- there is exactly one FIELD-bound buffer per record field,
+    // shared by every function/procedure that touches that file -- so
+    // ident() must never allocate a per-function local for one, regardless
+    // of which scope the LSET/GET/PUT referencing it appears in.
+    record_buffer_names: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +80,7 @@ impl CodeGenerator {
             line_numbers: false,
             loop_exit_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
+            record_buffer_names: HashSet::new(),
         }
     }
 
@@ -91,6 +99,7 @@ impl CodeGenerator {
             functions.push(FunctionInfo::from_def(f, &mut taken));
         }
         self.functions = functions;
+        self.record_buffer_names = collect_record_buffer_names(program);
         *self.taken_names.borrow_mut() = taken;
 
         self.known_callables = self
@@ -536,11 +545,7 @@ impl CodeGenerator {
             Statement::Const { name, value } => {
                 let (prelude, value) = self.expr(value, current_function);
                 self.lines(prelude);
-                self.line(&format!(
-                    "CONST {} = {value}",
-                    BasicIdent { name: name.name.to_ascii_lowercase(), suffix: name.suffix }
-                        .as_basic()
-                ));
+                self.line(&format!("CONST {} = {value}", self.ident(name, current_function)));
             }
             Statement::Write { channel, exprs } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -1093,7 +1098,7 @@ impl CodeGenerator {
                 return lowered.as_basic();
             }
             let source_key = ident.as_basic().to_ascii_lowercase();
-            if !info.globals.contains(&source_key) {
+            if !info.globals.contains(&source_key) && !self.record_buffer_names.contains(&source_key) {
                 // Check per-function cache first.
                 {
                     let cache = info.local_var_map.borrow();
@@ -1234,6 +1239,49 @@ fn collect_globals(body: &[Statement]) -> HashSet<String> {
         }
     }
     globals
+}
+
+/// Collect the lowercase BASIC name of every record/file FIELD buffer
+/// variable in the whole program (top-level statements and every function
+/// body). `records::lower` always names a given file/field pair's buffer
+/// identically everywhere it's referenced, so this set is exactly the set
+/// of names `ident()` must resolve to their bare global form, no matter
+/// which function/procedure body an LSET/GET/PUT referencing one appears in.
+fn collect_record_buffer_names(program: &Program) -> HashSet<String> {
+    let mut names = HashSet::new();
+    collect_record_buffer_names_in(&program.statements, &mut names);
+    for func in &program.functions {
+        collect_record_buffer_names_in(&func.body, &mut names);
+    }
+    names
+}
+
+fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<String>) {
+    for stmt in stmts {
+        match stmt {
+            Statement::Field { fields, .. } => {
+                for (_, var) in fields {
+                    names.insert(var.as_basic().to_ascii_lowercase());
+                }
+            }
+            Statement::If { then_body, else_body, .. } => {
+                collect_record_buffer_names_in(then_body, names);
+                collect_record_buffer_names_in(else_body, names);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
+                collect_record_buffer_names_in(body, names);
+            }
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_record_buffer_names_in(&case.body, names);
+                }
+                collect_record_buffer_names_in(else_body, names);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Returns a `BasicIdent` whose BASIC form is not present in `taken`.
@@ -1765,8 +1813,13 @@ fn number_basic_lines(source: &str, full: bool) -> String {
         } else {
             raw.to_string()
         };
-        for (label, number) in &label_numbers {
-            text = replace_label_word(&text, label, &number.to_string());
+        // Comment lines are user text, not code — never rewrite label words
+        // inside them, even if a label name happens to appear as an ordinary
+        // word in the comment.
+        if !text.trim_start().starts_with('\'') {
+            for (label, number) in &label_numbers {
+                text = replace_label_word(&text, label, &number.to_string());
+            }
         }
         if let Some(&number) = index_to_number.get(&index) {
             output.push_str(&format!("{number} {text}\n"));
