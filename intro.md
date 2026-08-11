@@ -32,13 +32,15 @@ It is not intended to be exactly what I built in the 1980s. It is closer to what
 
 BASCAL source uses `.bcl` files and is compiled by `bcc` into generated `.bas` output. It supports multiline `if` / `else` / `end if`, `for` / `next`, `while` / `wend`, `function` declarations with explicit `return`, BASIC type suffixes, comments preserved in generated output, and path-style `require` / `import` dependencies.
 
+BASCAL is also a strict superset of that classic BASIC: bitwise `AND`/`OR`/`NOT` and hand-written `OPEN`/`FIELD`/`GET`/`PUT` still compile unchanged. `GOTO`/`GOSUB` are raw BASIC too, but BASCAL manages line numbering itself, so their targets are always a `name:` label declared in source, never a raw line number. Beyond that, wherever BASCAL has its own construct for something, that construct is the canonical way to write it in `.bcl` source — the raw-BASIC spelling is legacy syntax you're compiling *away from*, not an equally-good alternative.
+
 One visible difference from the original Ramtech BASIC preprocessor is that BASCAL does not need the old `@` prefix. The original prefix made sense for a small preprocessor scanning BASIC text. BASCAL is being built as a proper compiler-style tool, so its structured constructs can be part of the language grammar rather than marked as special preprocessor commands.
 
 The core idea remains the same:
 
 > Make BASIC more pleasant to write, without pretending it is a different runtime.
 
-BASCAL deliberately preserves BASIC's global symbol model. Variables and functions are global. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus `GOSUB`. Array arguments use copy-in/copy-out around the call. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.
+BASCAL deliberately preserves BASIC's global symbol model — variables and functions are still global, still transpiled to `GOTO`/`GOSUB` — while adding enough structure that larger programs stay maintainable. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus `GOSUB`. Array arguments use copy-in/copy-out around the call. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.
 
 Generated BASIC is intentionally conservative. BASCAL transpiles structured source into line-numbered `GOTO` / `GOSUB` style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.
 
