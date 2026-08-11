@@ -1,0 +1,176 @@
+// Card Catalog — a flagship example for the record/file DSL + procedures
+//
+// Adapted from CLERK.BAS, a menu-driven card-catalog manager written by
+// Carlos A. Lujan S. in February 1983 as an improved version of Alfred
+// Fant's LIBRARIAN program (Microcomputing, December 1982). The original
+// source lives in the PeatSoft GW-FILES collection, in the
+// robhagemans/hoard-of-gwbasic archive on GitHub
+// (PeatSoft/GWFILES/CLERK.BAS).
+//
+// What's carried over from CLERK.BAS:
+//   - One random-access file holding a header record (the catalog's
+//     capacity) in slot 1, followed by author/title/subject entry records
+//     in the remaining slots.
+//   - NEW ITEM: linear-scan the entries for the first empty slot.
+//   - Searches by author, and by author + title together.
+//   - DELETE ITEM: linear-scan for the first author+title match, blank it.
+//
+// What's adapted rather than ported line-for-line:
+//   - CLERK.BAS is interactive (INKEY$/INPUT-driven menu, multi-diskette
+//     file registry, HARD COPY prompts). This example drives the same
+//     catalog operations with a fixed, deterministic call sequence instead,
+//     matching this repo's other standalone examples (tutorial/14_procedures.bcl,
+//     tutorial/sort_driver.bcl) so it compiles *and runs* without a keyboard.
+//   - Each menu action (NEW ITEM, list, the two searches, DELETE ITEM) is
+//     its own `procedure` — addItem, listAll, searchByAuthor,
+//     searchByAuthorTitle, deleteItem — instead of CLERK.BAS's numbered
+//     GOTO/GOSUB sections. This is the canonical BASCAL style (see
+//     MANUAL.md's Procedures section), and specifically exercises record/file
+//     access from inside a procedure body, not just top-level code.
+//   - CLERK.BAS's original also supported search-by-subject and a
+//     "another file"/multi-diskette workflow; this example keeps the two
+//     named searches and the single-catalog-file shape and drops the rest,
+//     to stay focused on what the record/file DSL and procedures are
+//     actually demonstrating here.
+
+record Entry
+    author:  string(20)
+    title:   string(20)
+    subject: string(20)
+end record
+
+// The header occupies slot 1 of the same file, sized to match Entry's
+// width (20+20+20 = 60 bytes) so both record types agree on where every
+// slot starts. size is the last valid entry slot number, mirroring
+// CLERK.BAS's own S = CVI(F$) header field.
+record Header
+    size:     int16
+    reserved: string(58)
+end record
+
+const lastSlot% = 11   // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries
+
+file header  as Header = open("catalog.dat")
+file catalog as Entry  = open("catalog.dat")
+
+/* ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ---- */
+procedure initCatalog()
+    global lastSlot%
+    header[1] = { size: lastSlot%, reserved: "" }
+    for i% = 2 to lastSlot%
+        catalog[i%] = { author: "", title: "", subject: "" }
+    end for
+end procedure
+
+/* ---- CHOICE=1 NEW ITEM in CLERK.BAS ---- */
+procedure addItem(author$, title$, subject$)
+    let h = header[1]
+    i% = 1
+    stop% = 0
+    do while stop% = 0
+        i% = i% + 1
+        let e = catalog[i%]
+        if e.author = "" then
+            stop% = 1
+        end if
+        if i% = h.size then
+            stop% = 1
+        end if
+    loop
+    if e.author = "" then
+        catalog[i%] = { author: author$, title: title$, subject: subject$ }
+    else
+        print "Catalog is full -- cannot add " + author$
+    end if
+end procedure
+
+/* ---- MENU=1 subroutine in CLERK.BAS: list every non-empty entry ---- */
+procedure listAll()
+    let h = header[1]
+    for i% = 2 to h.size
+        let e = catalog[i%]
+        if e.author <> "" then
+            print e.author + "  |  " + e.title + "  |  " + e.subject
+        end if
+    end for
+end procedure
+
+/* ---- MENU=2 subroutine in CLERK.BAS: filter by author ---- */
+procedure searchByAuthor(author$)
+    let h = header[1]
+    for i% = 2 to h.size
+        let e = catalog[i%]
+        if e.author = author$ then
+            print e.author + "  |  " + e.title + "  |  " + e.subject
+        end if
+    end for
+end procedure
+
+/* ---- MENU=3 subroutine in CLERK.BAS: filter by author AND title ---- */
+procedure searchByAuthorTitle(author$, title$)
+    let h = header[1]
+    for i% = 2 to h.size
+        let e = catalog[i%]
+        if e.author = author$ && e.title = title$ then
+            print e.author + "  |  " + e.title + "  |  " + e.subject
+        end if
+    end for
+end procedure
+
+/* ---- CHOICE=3 DELETE ITEM in CLERK.BAS: first author+title match ---- */
+procedure deleteItem(author$, title$)
+    let h = header[1]
+    i% = 1
+    stop% = 0
+    do while stop% = 0
+        i% = i% + 1
+        let e = catalog[i%]
+        if e.author = author$ then
+            if e.title = title$ then
+                stop% = 1
+            end if
+        end if
+        if i% = h.size then
+            stop% = 1
+        end if
+    loop
+    if e.author = author$ && e.title = title$ then
+        print "Deleting: " + e.author + "  |  " + e.title
+        catalog[i%] = { author: "", title: "", subject: "" }
+    else
+        print "Not found: " + author$ + "  |  " + title$
+    end if
+end procedure
+
+/* --- Drive the catalog --- */
+
+initCatalog()
+
+addItem("Twain, Mark",      "Adventures of Huckleberry Finn", "Fiction")
+addItem("Orwell, George",   "Nineteen Eighty-Four",           "Fiction")
+addItem("Fant, Alfred",     "LIBRARIAN",                      "Programming")
+addItem("Lujan S., Carlos", "CLERK",                          "Programming")
+
+print "-- Full catalog --"
+listAll()
+
+print ""
+print "-- Search by author: Orwell, George --"
+searchByAuthor("Orwell, George")
+
+print ""
+print "-- Search by author + title: Twain, Mark / Adventures of Huckleberry Finn --"
+searchByAuthorTitle("Twain, Mark", "Adventures of Huckleberry Finn")
+
+print ""
+print "-- Delete: Fant, Alfred / LIBRARIAN --"
+deleteItem("Fant, Alfred", "LIBRARIAN")
+
+print ""
+print "-- Full catalog after delete --"
+listAll()
+
+header.close()
+catalog.close()
+
+end
