@@ -109,11 +109,19 @@ end select</code></pre>
     </blockquote>
     <p>
       It traces back to a preprocessor written for a real BASIC shop in
-      1985, built to stop copying a shared routine library by hand into
-      every program and to stop remembering which line number a subroutine
-      lived at. BASCAL is a modern reconstruction of that idea in Rust: a
-      real compiler, not a text preprocessor, that still respects the
-      classic BASIC it targets.
+      1985, built to solve a real distribution problem: a shared library of
+      BASIC routines that had to be merged by hand across a distributed dev
+      team, then merged again into the full application suite. That
+      preprocessor supported directives like <code>@include</code>,
+      <code>@if</code>, <code>@case</code>, <code>@function</code>, and
+      <code>@procedure</code>, plus <code>{label}</code> in place of raw
+      line numbers — the tool its author wished they'd had the skills and
+      tools to build properly back then, and exactly the kind of work
+      Claude and Codex excel at now. BASCAL is that reconstruction in Rust,
+      and the language itself is significantly more advanced than the
+      original: more structured, easier to read, easier to write, modular.
+      The idea hasn't changed, though — a real compiler, not a text
+      preprocessor, that still respects the classic BASIC it targets.
     </p>
   </section>
 
