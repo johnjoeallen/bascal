@@ -45,3 +45,5 @@ BASCAL deliberately preserves BASIC's global symbol model — variables and func
 Generated BASIC is intentionally conservative. BASCAL transpiles structured source into line-numbered `GOTO` / `GOSUB` style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.
 
 In that sense, BASCAL is both a small compiler project and a personal historical exercise: a chance to revisit the frustration that led to Ramtech BASIC, and to build the version of the tool I would have loved to have had at the start of my career.
+
+I don't expect anyone to actually reach for BASCAL to ship a real application in 2026 — that was never really the point. It's a pet project: an excuse to relive an old frustration and finally build the tool the way I wish I could have back then.

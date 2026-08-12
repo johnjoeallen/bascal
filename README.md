@@ -5,6 +5,10 @@
 **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication
 **L**anguage.
 
+*A pet project, not a production tool — I don't expect anyone to build a real
+2026 application with this. It exists because I wanted to relive an old
+frustration from 1985 and finally fix it. See [the origin story](https://johnjoeallen.github.io/bascal/origin.html).*
+
 **[Browse the website](https://johnjoeallen.github.io/bascal/)** — tutorials,
 side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual.html).
 

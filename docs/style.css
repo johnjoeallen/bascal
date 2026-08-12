@@ -98,6 +98,9 @@ header.hero .cta-row { clear: both; }
   .hero-art { float: none; display: block; margin: 0 auto 1rem; }
 }
 .cta-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+.pet-note { margin: 1.2rem 0 0; font-size: .85rem; font-style: italic; color: var(--fg-dim); }
+.pet-note a { color: var(--fg-dim); text-decoration: underline; }
+.pet-note a:hover { color: var(--accent-2); }
 .btn {
   display: inline-block;
   padding: .55rem 1.1rem;
