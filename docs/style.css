@@ -87,17 +87,15 @@ header.hero .tagline {
   margin: 0 0 1.5rem;
   max-width: 46rem;
 }
-.hero-row {
-  display: flex;
-  align-items: center;
-  gap: 2.5rem;
+.hero-art {
+  float: right;
+  width: 170px;
+  height: auto;
+  margin: 0 0 1rem 2rem;
 }
-.hero-copy { flex: 1 1 380px; min-width: 280px; }
-.hero-art { flex: 0 0 auto; width: 220px; height: auto; }
-@media (max-width: 760px) {
-  .hero-row { flex-direction: column; text-align: center; }
-  .hero-row .cta-row { justify-content: center; }
-  .hero-art { width: 180px; }
+header.hero .cta-row { clear: both; }
+@media (max-width: 480px) {
+  .hero-art { float: none; display: block; margin: 0 auto 1rem; }
 }
 .cta-row { display: flex; gap: .75rem; flex-wrap: wrap; }
 .btn {
