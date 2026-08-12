@@ -169,7 +169,7 @@ function name carries its type in the final character:
 
 | Suffix | Type    | Range / Notes                            |
 |--------|---------|------------------------------------------|
-| `%`    | Integer | 16-bit signed, −32768 to 32767           |
+| `%`    | Integer | 16-bit signed, -32768 to 32767           |
 | `$`    | String  | Variable-length string                   |
 | `!`    | Single  | 32-bit IEEE 754 single-precision float   |
 | `#`    | Double  | 64-bit IEEE 754 double-precision float   |
@@ -192,9 +192,10 @@ Variables declared or assigned at the top level are **global** and visible
 throughout the entire program.
 
 Variables inside a `function` or `procedure` body are **local by default**: the
-compiler maps them to uniquely-generated BASIC names (e.g. `fname_var_0%`) that
-are guaranteed never to collide with global variables or with locals in other
-functions.  To read or write a global variable from inside a function or
+compiler maps them to uniquely-generated BASIC names (e.g. `fname_var_0%`),
+indexed against every name already in use at compile time so they're
+guaranteed never to collide with global variables or with locals in other
+functions. To read or write a global variable from inside a function or
 procedure, declare it at the top of the body with the `global` keyword:
 
 ```
@@ -348,7 +349,7 @@ print "2 ^ 3 ^ 2 ="; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))
 | `>`      | Greater than         |
 | `>=`     | Greater than or equal|
 
-Comparison expressions evaluate to −1 (true) or 0 (false) at the BASIC
+Comparison expressions evaluate to -1 (true) or 0 (false) at the BASIC
 runtime, consistent with Microsoft BASIC semantics.
 
 ### TRUE and FALSE
@@ -397,12 +398,12 @@ Only `+=`, `-=`, `*=`, `/=` are provided — there is no compound form of `\`,
 
 | Operator | Meaning |
 |----------|---------|
-| `AND`    | Bitwise AND (also serves as logical AND when operands are 0/−1) |
+| `AND`    | Bitwise AND (also serves as logical AND when operands are 0/-1) |
 | `OR`     | Bitwise OR  |
 | `NOT`    | Bitwise NOT |
 | `XOR`    | Bitwise XOR |
 
-**Important:** `NOT` is bitwise in Microsoft BASIC. `NOT 1` yields `−2`, not
+**Important:** `NOT` is bitwise in Microsoft BASIC. `NOT 1` yields `-2`, not
 `0`. BASCAL's compiler emits `(expr) = 0` instead of `NOT expr` in generated
 control-flow conditions so that programmer-boolean values like `found% = 1`
 behave as expected. Use explicit `= 0` or `<> 0` comparisons in your own code
@@ -435,7 +436,7 @@ print 6 xor 3   // 5  (110 XOR 011 = 101)
 | 2     | `NOT`            |
 | 1     | `AND`            |
 | 0     | `OR`             |
-| −1    | `XOR`            |
+| -1    | `XOR`            |
 
 Use parentheses to override precedence.
 
@@ -1005,7 +1006,7 @@ The compiler transpiles each function call to:
 3. Assign the result from the generated result variable (e.g. `fname_result_0%`)
 
 Local variables in the function body are emitted as uniquely-indexed BASIC
-globals (`fname_var_0%`, `fname_var_1%`, …).  The index is chosen so the name
+globals (`fname_var_0%`, `fname_var_1%`, …). The index is chosen so the name
 does not clash with any global variable or with any name allocated by an
 earlier function, making collisions impossible regardless of what names the
 developer uses at global scope.
@@ -1030,7 +1031,7 @@ end procedure
 ```
 
 The procedure name has **no type suffix** — the absence of a suffix signals that
-there is no return value.  Parameter names still carry their usual type suffixes.
+there is no return value. Parameter names still carry their usual type suffixes.
 
 From `tutorial/14_procedures.bcl`:
 
@@ -1401,7 +1402,7 @@ PRINT #2, count%, value!
 ### PRINT USING
 
 Formats output with a template string before printing to the screen, printer,
-or a file.  The format string uses MS-BASIC format characters (`#` for digit
+or a file. The format string uses MS-BASIC format characters (`#` for digit
 positions, `.` for the decimal point, `,` for thousands separator, `+`/`-` for
 sign, etc.).
 
@@ -1448,8 +1449,8 @@ files whose layout doesn't fit a fixed record type.
 open filename$ for random as #1 len = recLen%
 ```
 
-`len` sets the record size in bytes.  Every record occupies exactly that many
-bytes on disk.  Records are numbered from 1.
+`len` sets the record size in bytes. Every record occupies exactly that many
+bytes on disk. Records are numbered from 1.
 
 ### FIELD
 
@@ -1459,7 +1460,7 @@ Binds string variables to regions of the shared file buffer:
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 ```
 
-The widths must sum to the record length.  Only string variables may appear in
+The widths must sum to the record length. Only string variables may appear in
 a `FIELD` statement.
 
 ### LSET and RSET
@@ -1627,11 +1628,10 @@ one written into a scalar named `<var>_<field>` — e.g. `s_id%`, `s_name$`,
 resolve directly to those scalars; no `Ident` named literally `s.id` is ever
 emitted.
 
-Because BASIC has no user-visible string-concatenation type coercion,
-writing a numeric field next to a string with `+` (as in `print "[" + s.id
-+ "]"`) automatically wraps the numeric side in `STR$(...)` — but only where
-a record field is actually involved; ordinary BASCAL `+` expressions are
-untouched.
+Because BASIC doesn't auto-convert numbers to strings for concatenation,
+writing a numeric field next to a string with `+` (as in `print "[" + s.id + "]"`)
+automatically wraps the numeric side in `STR$(...)` — but only where a record
+field is actually involved; ordinary BASCAL `+` expressions are untouched.
 
 Once `s` exists, `s.field = value` reassigns only the in-memory scalar
 (`s_field`) — it does **not** touch the file. Assignment alone never causes
@@ -1773,7 +1773,7 @@ mid$(s$, 1)    = "Goodbye"  ' s$ → "GoodbyeBASIC" (no length cap)
 ```
 
 This is distinct from the `mid$()` *function*, which extracts a substring
-without modifying the original.  BASCAL handles the statement form as an
+without modifying the original. BASCAL handles the statement form as an
 ordinary assignment whose left-hand side is `mid$(...)`.
 
 ### SWAP
@@ -2458,7 +2458,7 @@ END
 ' end procedure printScore
 ```
 
-There is no `printscore_result` variable.  A bare `return` inside a procedure
+There is no `printscore_result` variable. A bare `return` inside a procedure
 compiles to plain `RETURN`.
 
 ### Select Case Transpilation

@@ -36,7 +36,10 @@
 indexed <code>0..size</code>; <code>dim name%(rows, cols)</code> declares a 2-D array, and
 more dimensions are allowed. To pass an array into a function, the parameter
 is just the plain variable name (<code>arr%</code>, not <code>arr%()</code>); at the call
-site you write <code>arr%()</code> to signal that an array is being passed.</p>
+site you write <code>arr%()</code> to signal that an array is being passed. This
+isn't a reference — BASCAL copies elements in before the call and back out
+after, using the very next parameter as the element count, so an array
+parameter must always be followed by one.</p>
   </div>
 
     <div class="snippet">

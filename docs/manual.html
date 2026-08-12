@@ -136,7 +136,7 @@ program name suite suitename</code></pre>
 <tr class="odd">
 <td><code>%</code></td>
 <td>Integer</td>
-<td>16-bit signed, −32768 to 32767</td>
+<td>16-bit signed, -32768 to 32767</td>
 </tr>
 <tr class="even">
 <td><code>$</code></td>
@@ -166,7 +166,7 @@ program name suite suitename</code></pre>
 <h2 id="variables-and-constants">Variables and Constants</h2>
 <h3 id="variables">Variables</h3>
 <p>Variables declared or assigned at the top level are <strong>global</strong> and visible throughout the entire program.</p>
-<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fname_var_0%</code>) that are guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
+<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fname_var_0%</code>), indexed against every name already in use at compile time so they're guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
 <pre><code>total% = 0
 
 function addToTotal%(x%)
@@ -310,7 +310,7 @@ print &quot;2 ^ 3 ^ 2 =&quot;; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))</c
 </tr>
 </tbody>
 </table>
-<p>Comparison expressions evaluate to −1 (true) or 0 (false) at the BASIC runtime, consistent with Microsoft BASIC semantics.</p>
+<p>Comparison expressions evaluate to -1 (true) or 0 (false) at the BASIC runtime, consistent with Microsoft BASIC semantics.</p>
 <h3 id="true-and-false">TRUE and FALSE</h3>
 <p><code>TRUE</code> and <code>FALSE</code> are compile-time sugar for BASIC's own boolean convention — <code>-1</code> and <code>0</code> — so a programmer-boolean flag can be compared against a name instead of a magic number:</p>
 <pre><code>found% = TRUE
@@ -340,7 +340,7 @@ s.total# -= fee#</code></pre>
 <tbody>
 <tr class="odd">
 <td><code>AND</code></td>
-<td>Bitwise AND (also serves as logical AND when operands are 0/−1)</td>
+<td>Bitwise AND (also serves as logical AND when operands are 0/-1)</td>
 </tr>
 <tr class="even">
 <td><code>OR</code></td>
@@ -356,7 +356,7 @@ s.total# -= fee#</code></pre>
 </tr>
 </tbody>
 </table>
-<p><strong>Important:</strong> <code>NOT</code> is bitwise in Microsoft BASIC. <code>NOT 1</code> yields <code>−2</code>, not <code>0</code>. BASCAL's compiler emits <code>(expr) = 0</code> instead of <code>NOT expr</code> in generated control-flow conditions so that programmer-boolean values like <code>found% = 1</code> behave as expected. Use explicit <code>= 0</code> or <code>&lt;&gt; 0</code> comparisons in your own code when testing boolean flags.</p>
+<p><strong>Important:</strong> <code>NOT</code> is bitwise in Microsoft BASIC. <code>NOT 1</code> yields <code>-2</code>, not <code>0</code>. BASCAL's compiler emits <code>(expr) = 0</code> instead of <code>NOT expr</code> in generated control-flow conditions so that programmer-boolean values like <code>found% = 1</code> behave as expected. Use explicit <code>= 0</code> or <code>&lt;&gt; 0</code> comparisons in your own code when testing boolean flags.</p>
 <p><code>AND</code>/<code>OR</code> always evaluate both sides — there's no short-circuit primitive in generated BASIC at all. See <a href="#short-circuit--and-">Short-Circuit <code>&amp;&amp;</code> and <code>||</code></a> for BASCAL's condition-only short-circuit operators.</p>
 <pre><code>age%    = 25
 income% = 45000
@@ -414,7 +414,7 @@ print 6 xor 3   // 5  (110 XOR 011 = 101)</code></pre>
 <td><code>OR</code></td>
 </tr>
 <tr class="odd">
-<td>−1</td>
+<td>-1</td>
 <td><code>XOR</code></td>
 </tr>
 </tbody>
@@ -1158,10 +1158,7 @@ end record</code></pre>
 <h3 id="whole-record-read">Whole-record read</h3>
 <pre><code>let s = db[i]</code></pre>
 <p>Transpiles to <code>GET #n, i</code> followed by one unpacking assignment per field (<code>CVI%</code>/<code>CVL&amp;</code>/<code>CVS!</code>/<code>CVD#</code> for numeric fields, <code>RTRIM$</code> for strings), each one written into a scalar named <code>&lt;var&gt;_&lt;field&gt;</code> — e.g. <code>s_id%</code>, <code>s_name$</code>, <code>s_score#</code>. Later references to <code>s.id</code>, <code>s.name</code>, <code>s.score</code> in the source resolve directly to those scalars; no <code>Ident</code> named literally <code>s.id</code> is ever emitted.</p>
-<p>Because BASIC has no user-visible string-concatenation type coercion, writing a numeric field next to a string with <code>+</code> (as in `print "[" + s.id</p>
-<ul>
-<li>"]"<code>) automatically wraps the numeric side in </code>STR$(...)<code>— but only where a record field is actually involved; ordinary BASCAL</code>+` expressions are untouched.</li>
-</ul>
+<p>Because BASIC doesn't auto-convert numbers to strings for concatenation, writing a numeric field next to a string with <code>+</code> (as in <code>print "[" + s.id + "]"</code>) automatically wraps the numeric side in <code>STR$(...)</code> — but only where a record field is actually involved; ordinary BASCAL <code>+</code> expressions are untouched.</p>
 <p>Once <code>s</code> exists, <code>s.field = value</code> reassigns only the in-memory scalar (<code>s_field</code>) — it does <strong>not</strong> touch the file. Assignment alone never causes disk I/O; see <a href="#writing-a-record-variable-back">Writing a record variable back</a> for the explicit commit step.</p>
 <h3 id="partial-field-update">Partial-field update</h3>
 <pre><code>db[i].field = value</code></pre>

@@ -35,8 +35,10 @@
 <p><code>cls</code> clears the screen, <code>locate row, col</code> moves the cursor
 (1-based, 80x25), <code>color fg[, bg]</code> sets CGA foreground/background colors,
 <code>beep</code> sounds the bell, and <code>lprint</code> sends output to the line
-printer. These map directly to the same-named BASCOM statements — BASCAL adds
-no abstraction here, just structure around them.</p>
+printer. <code>stop</code> halts execution for controlled debugging, and
+<code>system</code> exits straight to the operating system. These map directly
+to the same-named BASCOM statements — BASCAL adds no abstraction here, just
+structure around them.</p>
   </div>
 
     <div class="snippet">

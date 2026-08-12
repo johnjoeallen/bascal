@@ -51,17 +51,19 @@
     <p class="lede">
       BASCAL traces back to a preprocessor I wrote for a real BASIC shop in
       1985, built to solve a real distribution problem: we had a shared set
-      of library routines, and every change had to be manually merged
-      between a distributed dev team, then merged into the full application
-      suite by hand. That preprocessor supported directives like
+      of library routines, and every change had to be merged by hand across
+      a distributed dev team's copies, then merged again into the full
+      application suite. That preprocessor supported directives like
       <code>@include</code>, <code>@if</code>, <code>@case</code>,
       <code>@function</code>, and <code>@procedure</code>, plus
       <code>{label}</code> in place of raw line numbers. I always wanted to
       build a proper modern equivalent — the tool I wish I'd had the skills
-      and tools for back in 1985 — and that's exactly the kind of work
-      Claude and Codex excel at. BASCAL is that reconstruction in Rust, and
+      and tools for back in 1985 — and building a real compiler, rather than
+      another preprocessor, was finally within reach with Claude and Codex
+      doing the heavy lifting. BASCAL is that reconstruction in Rust, and
       the language itself is significantly more advanced than the original:
-      more structured, easier to read, easier to write, modular. The idea
+      more structured, easier to read, easier to write, and organized into
+      reusable files. The idea
       hasn't changed, though — a real compiler, not a text preprocessor,
       that still respects the classic BASIC it targets. The goal has stayed
       the same since 1985 — make BASIC more pleasant to write, without
@@ -251,7 +253,7 @@ IF (score% &gt; highScore%) = 0 THEN GOTO 10
     <p class="lede">
       The line-numbered dialects <code>bcc</code> targets have no
       <code>SELECT CASE</code>, no <code>DO</code>/<code>LOOP</code>, and no
-      multiline <code>IF</code> — every branch and loop is really just
+      multiline <code>IF</code> — every branch and loop is just
       <code>IF ... THEN GOTO</code> threaded by hand. The panes on the left
       below are what that threading looks like written directly; the panes
       on the right are what <code>bcc</code> lets you write instead.
@@ -265,7 +267,7 @@ IF (score% &gt; highScore%) = 0 THEN GOTO 10
 
     <div class="compare">
       <h3>1. SELECT CASE</h3>
-      <p class="note">Six clauses means six branch targets and a fall-through target to keep numbered and pointed at the right place by hand — miswire one <code>GOTO</code> and a case silently falls into the wrong branch.</p>
+      <p class="note">Six clauses mean six branch targets and a fall-through target to keep numbered and pointed at the right place by hand — miswire one <code>GOTO</code> and a case silently falls into the wrong branch.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -306,7 +308,7 @@ case else
 end select</code></pre>
         </div>
       </div>
-      <p class="note">This is genuinely what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is a compiler numbered and wired every jump, instead of you.</p>
+      <p class="note">This is what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is that a compiler numbered and wired every jump, instead of you.</p>
     </div>
 
     <div class="compare">
@@ -426,7 +428,7 @@ end do</code></pre>
 
     <div class="compare">
       <h3>5. Short-circuit <code>&amp;&amp;</code> / <code>||</code></h3>
-      <p class="note">Classic BASIC's <code>AND</code>/<code>OR</code> are bitwise and always evaluate both sides — there's no short-circuit primitive in the target language at all. Getting the same safety by hand means nesting an <code>IF</code> per operand, so the guarded call is textually inside the guard. BASCAL's <code>&amp;&amp;</code>/<code>||</code> are real short-circuit operators, restricted to <code>if</code>/<code>elseif</code>/<code>while</code>/<code>do</code> conditions, that transpile straight to that same nested-<code>IF</code> shape — one guarded jump per operand, in order, each operand's own setup code emitted right before its guard so a later operand's side effects genuinely don't run once an earlier one already decided the answer.</p>
+      <p class="note">Classic BASIC's <code>AND</code>/<code>OR</code> are bitwise and always evaluate both sides — there's no short-circuit primitive in the target language at all. Getting the same safety by hand means nesting an <code>IF</code> per operand, so the guarded call is textually inside the guard. BASCAL's <code>&amp;&amp;</code>/<code>||</code> are real short-circuit operators, restricted to <code>if</code>/<code>elseif</code>/<code>while</code>/<code>do</code> conditions, that transpile straight to that same nested-<code>IF</code> shape — one guarded jump per operand, in order, each operand's own setup code emitted right before its guard so a later operand's side effects don't run once an earlier one already decided the answer.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -510,7 +512,7 @@ end for</code></pre>
 NEXT i%</code></pre>
         </div>
       </div>
-      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade — it's just the newest place BASCAL makes it.</p>
+      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade-off — it's just the newest place BASCAL makes it.</p>
     </div>
   </section>
 
@@ -532,7 +534,7 @@ NEXT i%</code></pre>
 
     <div class="compare">
       <h3>1. Declare the record shape and open the file</h3>
-      <p class="note">BASCAL sums the field widths for you and generates the matching <code>FIELD</code> binding — get one field's width wrong by hand and every record after it reads/writes off by that many bytes.</p>
+      <p class="note">BASCAL sums the field widths for you and generates the matching <code>FIELD</code> binding — get one field's width wrong by hand and every record after it gets read or written off by that many bytes.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>

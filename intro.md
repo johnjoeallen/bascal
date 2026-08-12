@@ -12,7 +12,7 @@ One thing that especially bothered me was the way shared routines were handled.
 
 We had what amounted to a standard library of BASIC routines, starting around line 10000, which had to be copied into each program that needed them. We also had a distributed dev team, so every change to that shared library had to be merged by hand across each developer's copy, and then merged again into the full application suite. Even at the time, that felt prehistoric to me. It was not just inconvenient; it was a maintenance trap. Every copied routine was another chance for programs to drift out of sync.
 
-There was also the practical problem of remembering what routine started at what line number. Calling a shared routine meant knowing where it lived. My first attack on that problem was not a sophisticated compiler. It was a preprocessor that could provide labels — written as `{label}` in place of a raw line number — and `@include`: symbolic names instead of remembered line numbers, and a way to pull shared code into a program without manually copying it.
+There was also the practical problem of remembering what routine started at what line number. Calling a shared routine meant knowing where it lived. My first attack on that problem was not a sophisticated compiler. It was a preprocessor that could provide labels — written as `{label}` in place of a raw line number, giving routines symbolic names instead of remembered line numbers — and `@include`, a way to pull shared code into a program without manually copying it.
 
 Because I was working for Ramtech Ireland, I called it **Ramtech BASIC**.
 
@@ -28,7 +28,7 @@ Later versions of the original tooling became more capable, including separate c
 
 **BASCAL** is a modern reconstruction of that idea, written in Rust.
 
-It is not intended to be exactly what I built in the 1980s. It is closer to what I wish I could have built then — the tool I wish I'd had the skills and tools for back in 1985. Building a real compiler, rather than another preprocessor, is exactly the kind of work Claude and Codex excel at, and that's what finally made this reconstruction practical: a structured compiler for classic Microsoft BASIC that keeps the original global BASIC model, but adds a more disciplined source language and a more practical build workflow. The language itself is significantly more advanced than the original: more structured, easier to read, easier to write, and properly modular.
+It is not intended to be exactly what I built in the 1980s. It is closer to what I wish I could have built then — the tool I wish I'd had the skills and tools for back in 1985. Building a real compiler, rather than another preprocessor, was finally within reach with Claude and Codex doing the heavy lifting. The result is a structured compiler for classic Microsoft BASIC that keeps the original global BASIC model, but adds a more disciplined source language and a more practical build workflow. The language itself is significantly more advanced than the original: more structured, easier to read, easier to write, and organized into reusable files.
 
 BASCAL source uses `.bcl` files and is compiled by `bcc` into generated `.bas` output. It supports multiline `if` / `else` / `end if`, `for` / `next`, `while` / `wend`, `function` declarations with explicit `return`, BASIC type suffixes, comments preserved in generated output, and path-style `require` / `import` dependencies.
 

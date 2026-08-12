@@ -44,8 +44,8 @@ larger programs practical:
   [MANUAL.md](MANUAL.md#record-files) and
   [`tutorial/15_random_and_record_files.bcl`](tutorial/15_random_and_record_files.bcl)
 
-Everything is still global. Path-style names are linker selectors, not runtime
-namespaces.
+Everything is still global. Path-style names are dependency selectors, not
+runtime namespaces.
 
 BASCAL is a strict superset of classic BASIC — bitwise `AND`/`OR`/`NOT` and
 hand-written `OPEN`/`FIELD`/`GET`/`PUT` all still compile unchanged.
@@ -108,8 +108,8 @@ bcc input.bcl -L ./libs -L ./vendor
 
 ## Suite COMMON
 
-In 1980s BASIC, multi-program systems used `COMMON` to pass shared variables
-across a `CHAIN` statement into the next program. Every chained program had to
+In 1980s BASIC, multi-program systems used `COMMON` to declare shared variable
+slots that survive a `CHAIN` into the next program. Every chained program had to
 declare an **identical** `COMMON` list or variables would land in the wrong
 slots.
 
@@ -329,4 +329,6 @@ env -u RUSTC_WRAPPER cargo test
 ## Current Limits
 
 - No library archive format.
-- Array argument transpilation uses the next argument as the element count.
+- Array argument transpilation uses the parameter declared right after the
+  array as its element count for copy-in/copy-out — an array carries no
+  length of its own, so that ordering is required, not just conventional.
