@@ -87,6 +87,7 @@ header.hero .tagline {
   margin: 0 0 1.5rem;
   max-width: 46rem;
 }
+header.hero .wrap { display: flow-root; }
 .hero-art {
   float: right;
   width: 170px;
