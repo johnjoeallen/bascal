@@ -1,5 +1,7 @@
 # BASCAL
 
+<img src="docs/hero-computer.svg" width="220" align="right" alt="A retro all-in-one computer showing green phosphor BASIC code, with a violet cursor blinking at the prompt">
+
 **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication
 **L**anguage.
 
