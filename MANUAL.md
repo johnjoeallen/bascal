@@ -1188,11 +1188,35 @@ PRINT values%(i%)
 
 ### Passing Arrays to Functions
 
-Declare the parameter with the plain variable name — **no `()` in the
-declaration**. At the call site, write `arr%()` to signal that an array is
-being passed. `insertionSort%` mutates the array in place, so its `arr%`
-parameter needs `byref`; `indexOf%` only reads it, so the unmarked (`byval`)
-default is correct as-is:
+A parameter declaration is always just `[byref | byval] name` — there is no
+array syntax available there at all. Writing `arr%()` in a parameter list
+is a **compile-time error**, not a style choice to avoid. Whether a
+parameter is an array, and how many dimensions it has, is never declared —
+it's inferred from how it's used on both ends of the call, and the compiler
+checks the two sides agree:
+
+- **At the call site**, an empty-parens argument (`arr%()`) is what marks
+  that array as being passed — this is the only place array-ness is ever
+  written down.
+- **Inside the callee's own body**, however many subscripts the parameter
+  is actually indexed with decides its rank: `arr%(i%)` reads as 1-D,
+  `grid%(r%, c%)` as 2-D, and so on.
+- These two are cross-checked. Passing a 2-D array where the function only
+  ever indexes its parameter with one subscript (or vice versa) is a
+  compile-time error — see [Multi-Dimensional Array
+  Parameters](#multi-dimensional-array-parameters).
+
+And separately: `byref` does **not** give the function a real reference to
+the caller's array — BASIC has no pointers or aliasing at this level.
+`byref` copies the array's elements in before the call and copies them
+back out after; `byval` (the default) only does the copy-in half. Either
+way the function always works on its own private copy — `byref` just
+*simulates* "the caller sees the result" by copying twice instead of once.
+See [byref / byval](#byref--byval) for the full mechanism.
+
+`insertionSort%` mutates the array in place, so its `arr%` parameter needs
+`byref`; `indexOf%` only reads it, so the unmarked (`byval`) default is
+correct as-is:
 
 ```
 ' arr%   -- array to sort; byref because it's mutated in place
