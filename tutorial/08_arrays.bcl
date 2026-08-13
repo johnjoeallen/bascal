@@ -25,6 +25,8 @@ data%(4) =  3
 data%(5) = 11
 
 /* Insertion sort — sorts data%() in place */
+// arr%   -- array to sort; byref because it's mutated in place
+// count% -- number of elements in arr%
 function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
@@ -39,6 +41,9 @@ function insertionSort%(byref arr%, count%)
 end function
 
 /* Linear search — returns index or -1 */
+// arr%    -- array to search; byval, since indexOf% only reads it
+// count%  -- number of elements in arr%
+// target% -- value to search for
 function indexOf%(arr%, count%, target%)
     for i% = 0 to count% - 1
         if arr%(i%) = target% then
@@ -49,6 +54,8 @@ function indexOf%(arr%, count%, target%)
 end function
 
 /* Print the array on one line as  [ a b c ... ] */
+// arr%   -- array to print; byval, since printArray% only reads it
+// count% -- number of elements in arr%
 function printArray%(arr%, count%)
     line$ = "["
     for i% = 0 to count% - 1

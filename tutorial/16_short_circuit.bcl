@@ -18,6 +18,7 @@
 
 /* ---- Guard clause: only check an array element when the index is valid ---- */
 
+// n% -- value to test
 function isPositive%(n%)
     // A visible side effect, so the tutorial's own output proves whether
     // this actually got called.

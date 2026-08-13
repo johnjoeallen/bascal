@@ -1,5 +1,6 @@
 /* Shared string helpers for REMLINE. */
 
+// text$ -- string to trim
 function trimLeft$(text$)
     /* Walk from the left until the first non-space character appears. */
     i% = 1
@@ -13,10 +14,13 @@ function trimLeft$(text$)
     return ""
 end function
 
+// text$ -- string to uppercase
 function upper$(text$)
     return UCASE$(text$)
 end function
 
+// text$    -- string to test
+// keyword$ -- keyword to look for at the start of text$
 function startsWithKeyword%(text$, keyword$)
     t$  = trimLeft$(text$)
     kw$ = keyword$

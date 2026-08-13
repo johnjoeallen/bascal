@@ -120,6 +120,7 @@ bcc tutorial/01_hello.bcl --binary
 ### A Simple Function
 
 ```
+' name$ -- who to greet
 function greet$(name$)
     return "Hello, " + name$ + "!"
 end function
@@ -201,6 +202,7 @@ procedure, declare it at the top of the body with the `global` keyword:
 ```
 total% = 0
 
+' x% -- amount to add to the running total
 function addToTotal%(x%)
     global total%           ' access the global variable, not a local one
     total% = total% + x%
@@ -471,6 +473,8 @@ valid.
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
+' arr%   -- array to sort; byref because it's mutated in place
+' count% -- number of elements in arr%
 function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
@@ -901,6 +905,8 @@ type suffixes. Functions may have zero or more parameters.
 From `tutorial/07_functions.bcl`:
 
 ```
+' a% -- first value to compare
+' b% -- second value to compare
 function max%(a%, b%)
     if a% > b% then
         return a%
@@ -909,6 +915,8 @@ function max%(a%, b%)
     end if
 end function
 
+' a% -- first value to compare
+' b% -- second value to compare
 function min%(a%, b%)
     if a% < b% then
         return a%
@@ -917,11 +925,15 @@ function min%(a%, b%)
     end if
 end function
 
+' value% -- number to constrain
+' lo%    -- lower bound, inclusive
+' hi%    -- upper bound, inclusive
 function clamp%(value%, lo%, hi%)
     ' Constrain value to [lo, hi].
     return max%(lo%, min%(value%, hi%))
 end function
 
+' word$ -- string to title-case
 function titleCase$(word$)
     ' Capitalise first letter, lowercase remainder.
     if LEN(word$) = 0 then
@@ -973,6 +985,7 @@ can never accidentally shadow a global that happens to share the naive prefix.
 Use `global varname` to access a module-level variable:
 
 ```
+' n% -- upper bound of the sum, inclusive
 function sumTo%(n%)
     acc% = 0                ' local to sumTo%
     for i% = 1 to n%       ' local to sumTo%
@@ -983,6 +996,7 @@ end function
 
 runningTotal% = 0
 
+' x% -- amount to add to the running total
 function addToTotal%(x%)
     global runningTotal%    ' refers to the module-level variable
     runningTotal% = runningTotal% + x%
@@ -1045,10 +1059,14 @@ procedure printSeparator()
     PRINT "----------------------------"
 end procedure
 
+' label$ -- text shown before the score
+' score% -- value to print
 procedure printScore(label$, score%)
     PRINT label$ + ": " + STR$(score%)
 end procedure
 
+' name$  -- person's name
+' score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% < 60 then
         return          // early exit — nothing printed for failing scores
@@ -1056,6 +1074,9 @@ procedure printIfPass(name$, score%)
     PRINT name$ + " passed with " + STR$(score%)
 end procedure
 
+' arr%   -- array to fill; byref because it's mutated in place
+' count% -- number of elements in arr%
+' value% -- value written into every element
 procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
@@ -1081,6 +1102,8 @@ Falling through to `end procedure` is equally valid — the compiler emits an
 implicit `RETURN`.
 
 ```
+' name$  -- person's name
+' score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% < 60 then
         return      ' exit early; nothing is printed
@@ -1096,6 +1119,9 @@ functions. Declare the parameter without `()` in the procedure header; pass
 with `()` at the call site:
 
 ```
+' arr%   -- array to fill; byref because it's mutated in place
+' count% -- number of elements in arr%
+' value% -- value written into every element
 procedure fillRange(byref arr%, count%, value%)   ' arr% — no () in header
     ...
 end procedure
@@ -1169,6 +1195,8 @@ parameter needs `byref`; `indexOf%` only reads it, so the unmarked (`byval`)
 default is correct as-is:
 
 ```
+' arr%   -- array to sort; byref because it's mutated in place
+' count% -- number of elements in arr%
 function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
@@ -1182,6 +1210,9 @@ function insertionSort%(byref arr%, count%)
     return 0
 end function
 
+' arr%    -- array to search; byval, since indexOf% only reads it
+' count%  -- number of elements in arr%
+' target% -- value to search for
 function indexOf%(arr%, count%, target%)
     for i% = 0 to count% - 1
         if arr%(i%) = target% then
@@ -1239,6 +1270,7 @@ This applies uniformly to both parameter kinds:
   turns a scalar parameter into a true output parameter:
 
   ```
+  ' n% -- value to increment; byref so the caller sees the result
   procedure increment(byref n%)
       n% = n% + 1
   end procedure
@@ -1266,6 +1298,9 @@ call site — but needs one count argument per axis, not just one, in the
 same order as the array's own `DIM`:
 
 ```
+' grid% -- 2-D array to sum
+' rows% -- number of rows in grid%
+' cols% -- number of columns in grid%
 function sumGrid%(byref grid%, rows%, cols%)
     total% = 0
     for r% = 0 to rows% - 1
@@ -2492,6 +2527,9 @@ NEXT i%
 ### Function Transpilation
 
 ```
+' value% -- number to constrain
+' lo%    -- lower bound, inclusive
+' hi%    -- upper bound, inclusive
 function clamp%(value%, lo%, hi%)
     return max%(lo%, min%(value%, hi%))
 end function
@@ -2524,6 +2562,8 @@ Procedures follow the same GOSUB pattern as functions but have no result
 variable:
 
 ```
+' label$ -- text shown before the score
+' score% -- value to print
 procedure printScore(label$, score%)
     PRINT label$ + ": " + STR$(score%)
 end procedure

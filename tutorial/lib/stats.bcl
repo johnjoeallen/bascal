@@ -4,6 +4,8 @@
 //
 // Provides: mean!, maximum%, minimum%, rangeOf%
 
+// data%  -- array to average; byval, since mean! only reads it
+// count% -- number of elements in data%
 function mean!(data%, count%)
     // Arithmetic mean of data%(0..count%-1).
     sum% = 0
@@ -13,6 +15,8 @@ function mean!(data%, count%)
     return sum% / count%
 end function
 
+// data%  -- array to search; byval, since maximum% only reads it
+// count% -- number of elements in data%
 function maximum%(data%, count%)
     // Largest element in data%(0..count%-1).
     best% = data%(0)
@@ -24,6 +28,8 @@ function maximum%(data%, count%)
     return best%
 end function
 
+// data%  -- array to search; byval, since minimum% only reads it
+// count% -- number of elements in data%
 function minimum%(data%, count%)
     // Smallest element in data%(0..count%-1).
     best% = data%(0)
@@ -35,6 +41,8 @@ function minimum%(data%, count%)
     return best%
 end function
 
+// data%  -- array to measure; byval, since rangeOf% only reads it
+// count% -- number of elements in data%
 function rangeOf%(data%, count%)
     // Difference between maximum and minimum.
     return maximum%(data%(), count%) - minimum%(data%(), count%)

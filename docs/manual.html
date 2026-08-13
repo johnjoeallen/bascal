@@ -97,7 +97,8 @@ END</code></pre>
 <pre><code>bcc tutorial/01_hello.bcl --binary
 ./tmp/01_hello</code></pre>
 <h3 id="a-simple-function">A Simple Function</h3>
-<pre><code>function greet$(name$)
+<pre><code>&#39; name$ -- who to greet
+function greet$(name$)
     return &quot;Hello, &quot; + name$ + &quot;!&quot;
 end function
 
@@ -169,6 +170,7 @@ program name suite suitename</code></pre>
 <p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fname_var_0%</code>), indexed against every name already in use at compile time so they're guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
 <pre><code>total% = 0
 
+&#39; x% -- amount to add to the running total
 function addToTotal%(x%)
     global total%           &#39; access the global variable, not a local one
     total% = total% + x%
@@ -436,6 +438,8 @@ score% = 0  // also valid inline</code></pre>
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
+&#39; arr%   -- array to sort; byref because it's mutated in place
+&#39; count% -- number of elements in arr%
 function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
@@ -747,7 +751,9 @@ GOTO 20
 end function</code></pre>
 <p>The function name carries the return type suffix. Parameter names also carry type suffixes. Functions may have zero or more parameters.</p>
 <p>From <code>tutorial/07_functions.bcl</code>:</p>
-<pre><code>function max%(a%, b%)
+<pre><code>&#39; a% -- first value to compare
+&#39; b% -- second value to compare
+function max%(a%, b%)
     if a% &gt; b% then
         return a%
     else
@@ -755,6 +761,8 @@ end function</code></pre>
     end if
 end function
 
+&#39; a% -- first value to compare
+&#39; b% -- second value to compare
 function min%(a%, b%)
     if a% &lt; b% then
         return a%
@@ -763,11 +771,15 @@ function min%(a%, b%)
     end if
 end function
 
+&#39; value% -- number to constrain
+&#39; lo%    -- lower bound, inclusive
+&#39; hi%    -- upper bound, inclusive
 function clamp%(value%, lo%, hi%)
     &#39; Constrain value to [lo, hi].
     return max%(lo%, min%(value%, hi%))
 end function
 
+&#39; word$ -- string to title-case
 function titleCase$(word$)
     &#39; Capitalise first letter, lowercase remainder.
     if LEN(word$) = 0 then
@@ -791,7 +803,8 @@ b$ = repeat$(&quot;y&quot;, 2)   &#39; repeat_result$ = &quot;yy&quot;   →  b$
 PRINT a$ + &quot; &quot; + b$    &#39; xxx yy</code></pre>
 <h3 id="variable-scoping">Variable Scoping</h3>
 <p>Variables inside a function body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names of the form <code>stem_var_0%</code>, <code>_1%</code>, etc. Two functions can each have a variable named <code>i%</code> with no conflict, and a local can never accidentally shadow a global that happens to share the naive prefix. Use <code>global varname</code> to access a module-level variable:</p>
-<pre><code>function sumTo%(n%)
+<pre><code>&#39; n% -- upper bound of the sum, inclusive
+function sumTo%(n%)
     acc% = 0                &#39; local to sumTo%
     for i% = 1 to n%       &#39; local to sumTo%
         acc% = acc% + i%
@@ -801,6 +814,7 @@ end function
 
 runningTotal% = 0
 
+&#39; x% -- amount to add to the running total
 function addToTotal%(x%)
     global runningTotal%    &#39; refers to the module-level variable
     runningTotal% = runningTotal% + x%
@@ -834,10 +848,14 @@ end procedure</code></pre>
     PRINT &quot;----------------------------&quot;
 end procedure
 
+&#39; label$ -- text shown before the score
+&#39; score% -- value to print
 procedure printScore(label$, score%)
     PRINT label$ + &quot;: &quot; + STR$(score%)
 end procedure
 
+&#39; name$  -- person's name
+&#39; score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% &lt; 60 then
         return          // early exit — nothing printed for failing scores
@@ -845,6 +863,9 @@ procedure printIfPass(name$, score%)
     PRINT name$ + &quot; passed with &quot; + STR$(score%)
 end procedure
 
+&#39; arr%   -- array to fill; byref because it's mutated in place
+&#39; count% -- number of elements in arr%
+&#39; value% -- value written into every element
 procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
@@ -858,7 +879,9 @@ printIfPass(&quot;Bob&quot;, 54)
 fillRange(data%(), N%, 99)</code></pre>
 <h3 id="early-exit">Early Exit</h3>
 <p>A bare <code>return</code> (no expression) exits a procedure immediately. Falling through to <code>end procedure</code> is equally valid — the compiler emits an implicit <code>RETURN</code>.</p>
-<pre><code>procedure printIfPass(name$, score%)
+<pre><code>&#39; name$  -- person's name
+&#39; score% -- score to test against the passing threshold
+procedure printIfPass(name$, score%)
     if score% &lt; 60 then
         return      &#39; exit early; nothing is printed
     end if
@@ -866,7 +889,10 @@ fillRange(data%(), N%, 99)</code></pre>
 end procedure</code></pre>
 <h3 id="array-parameters">Array Parameters</h3>
 <p>Array parameters use the same <a href="#byref--byval">byref / byval</a> rules as functions. Declare the parameter without <code>()</code> in the procedure header; pass with <code>()</code> at the call site:</p>
-<pre><code>procedure fillRange(byref arr%, count%, value%)   &#39; arr% — no () in header
+<pre><code>&#39; arr%   -- array to fill; byref because it's mutated in place
+&#39; count% -- number of elements in arr%
+&#39; value% -- value written into every element
+procedure fillRange(byref arr%, count%, value%)   &#39; arr% — no () in header
     ...
 end procedure
 
@@ -904,7 +930,9 @@ DIM names$(50)</code></pre>
 PRINT values%(i%)</code></pre>
 <h3 id="passing-arrays-to-functions">Passing Arrays to Functions</h3>
 <p>Declare the parameter with the plain variable name — <strong>no <code>()</code> in the declaration</strong>. At the call site, write <code>arr%()</code> to signal that an array is being passed. <code>insertionSort%</code> mutates the array in place, so its <code>arr%</code> parameter needs <code>byref</code>; <code>indexOf%</code> only reads it, so the unmarked (<code>byval</code>) default is correct as-is:</p>
-<pre><code>function insertionSort%(byref arr%, count%)
+<pre><code>&#39; arr%   -- array to sort; byref because it's mutated in place
+&#39; count% -- number of elements in arr%
+function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -917,6 +945,9 @@ PRINT values%(i%)</code></pre>
     return 0
 end function
 
+&#39; arr%    -- array to search; byval, since indexOf% only reads it
+&#39; count%  -- number of elements in arr%
+&#39; target% -- value to search for
 function indexOf%(arr%, count%, target%)
     for i% = 0 to count% - 1
         if arr%(i%) = target% then
@@ -950,7 +981,8 @@ function indexOf%(arr%, count%, target%)      &#39; unmarked = byval: copied in 
 <ul>
 <li><strong>Array parameters</strong>: <code>byval</code> copies elements in; <code>byref</code> copies them in <em>and</em> back out. A function that only reads its array argument (like <code>indexOf%</code> above) should stay <code>byval</code> — a <code>byref</code> array with no writes is just a slower <code>byval</code>, since the compiler still generates the copy-out loop.</li>
 <li><strong>Scalar parameters</strong>: <code>byval</code> is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. <code>byref</code> turns a scalar parameter into a true output parameter:
-<pre><code>procedure increment(byref n%)
+<pre><code>&#39; n% -- value to increment; byref so the caller sees the result
+procedure increment(byref n%)
     n% = n% + 1
 end procedure
 
@@ -961,7 +993,10 @@ A <code>byref</code> argument must be a plain variable — <code>increment(x% + 
 <p>If you're coming from classic MBASIC/BASCOM: there's no local scope there at all, so a <code>GOSUB</code>-based &quot;subroutine&quot; touching an array was always touching the <em>one</em> array that exists — mutations were visible everywhere, instantly, because there was never more than one copy. BASCAL's parameters don't work that way by default. <code>byval</code> (the default) gives the function its own copy, and <code>byref</code> is what asks for the old always-visible, always-shared behavior back, deliberately, per parameter.</p>
 <h3 id="multi-dimensional-array-parameters">Multi-Dimensional Array Parameters</h3>
 <p>A 2-D (or higher) array passes the same way as 1-D — empty parens at the call site — but needs one count argument per axis, not just one, in the same order as the array's own <code>DIM</code>:</p>
-<pre><code>function sumGrid%(byref grid%, rows%, cols%)
+<pre><code>&#39; grid% -- 2-D array to sum
+&#39; rows% -- number of rows in grid%
+&#39; cols% -- number of columns in grid%
+function sumGrid%(byref grid%, rows%, cols%)
     total% = 0
     for r% = 0 to rows% - 1
         for c% = 0 to cols% - 1
@@ -1595,7 +1630,10 @@ loop until k% &gt; 3</code></pre>
     PRINT STR$(i%) + &quot;^2 = &quot; + STR$(i% * i%)
 NEXT i%</code></pre>
 <h3 id="function-transpilation">Function Transpilation</h3>
-<pre><code>function clamp%(value%, lo%, hi%)
+<pre><code>&#39; value% -- number to constrain
+&#39; lo%    -- lower bound, inclusive
+&#39; hi%    -- upper bound, inclusive
+function clamp%(value%, lo%, hi%)
     return max%(lo%, min%(value%, hi%))
 end function
 
@@ -1616,7 +1654,9 @@ END
 &#39; end function clamp%</code></pre>
 <h3 id="procedure-transpilation">Procedure Transpilation</h3>
 <p>Procedures follow the same GOSUB pattern as functions but have no result variable:</p>
-<pre><code>procedure printScore(label$, score%)
+<pre><code>&#39; label$ -- text shown before the score
+&#39; score% -- value to print
+procedure printScore(label$, score%)
     PRINT label$ + &quot;: &quot; + STR$(score%)
 end procedure
 

@@ -2,6 +2,7 @@ require com.bascal.examples.remline.strings
 
 /* Parse and strip leading decimal line numbers. */
 
+// text$ -- source line to read a leading line number from
 function parseLineNumber%(text$)
     text$ = trimLeft$(text$)
     digits$ = ""
@@ -22,6 +23,7 @@ function parseLineNumber%(text$)
     return val(digits$)
 end function
 
+// text$ -- source line to strip a leading line number from
 function stripLineNumber$(text$)
     text$ = trimLeft$(text$)
     i% = 1

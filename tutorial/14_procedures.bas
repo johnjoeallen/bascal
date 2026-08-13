@@ -19,11 +19,18 @@
 ' Procedure with no parameters
 
 ' Procedure that prints a labelled value
+' label$ -- text shown before the score
+' score% -- value to print
 
 ' Procedure with early exit
+' name$  -- person's name
+' score% -- score to test against the passing threshold
 
 ' Procedure that modifies an array in place -- byref copies the result
 ' back to the caller; the default byval would fill a private copy only.
+' arr%   -- array to fill; byref because it's mutated in place
+' count% -- number of elements in arr%
+' value% -- value written into every element
 
 ' Procedure that uses a global variable
 globalcount% = 0

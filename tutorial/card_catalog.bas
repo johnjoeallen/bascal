@@ -51,14 +51,22 @@ FIELD #2, 20 AS catalog_authorbuf$, 20 AS catalog_titlebuf$, 20 AS catalog_subje
 ' ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ----
 
 ' ---- CHOICE=1 NEW ITEM in CLERK.BAS ----
+' author$  -- new entry's author
+' title$   -- new entry's title
+' subject$ -- new entry's subject
 
 ' ---- MENU=1 subroutine in CLERK.BAS: list every non-empty entry ----
 
 ' ---- MENU=2 subroutine in CLERK.BAS: filter by author ----
+' author$ -- author name to match
 
 ' ---- MENU=3 subroutine in CLERK.BAS: filter by author AND title ----
+' author$ -- author name to match
+' title$  -- title to match
 
 ' ---- CHOICE=3 DELETE ITEM in CLERK.BAS: first author+title match ----
+' author$ -- author name to match
+' title$  -- title to match
 
 ' ---- CLERK.BAS's own MENU / ON CHOICE GOSUB dispatch loop ----
 

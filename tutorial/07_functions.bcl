@@ -12,6 +12,8 @@
 // overwritten).  Use an explicit stack array for recursive algorithms.
 
 /* Integer arithmetic functions */
+// a% -- first value to compare
+// b% -- second value to compare
 function max%(a%, b%)
     if a% > b% then
         return a%
@@ -20,6 +22,8 @@ function max%(a%, b%)
     end if
 end function
 
+// a% -- first value to compare
+// b% -- second value to compare
 function min%(a%, b%)
     if a% < b% then
         return a%
@@ -28,12 +32,17 @@ function min%(a%, b%)
     end if
 end function
 
+// value% -- number to constrain
+// lo%    -- lower bound, inclusive
+// hi%    -- upper bound, inclusive
 function clamp%(value%, lo%, hi%)
     // Constrain value to [lo, hi].
     return max%(lo%, min%(value%, hi%))
 end function
 
 /* String functions */
+// text$ -- string to repeat
+// n%    -- number of times to repeat it
 function repeat$(text$, n%)
     // Concatenate text$ with itself n times.
     acc$ = ""
@@ -43,6 +52,7 @@ function repeat$(text$, n%)
     return acc$
 end function
 
+// word$ -- string to title-case
 function titleCase$(word$)
     // Capitalise first letter, lowercase remainder.
     // Relies on the BASIC runtime's UCASE$/LCASE$ built-ins.
@@ -53,6 +63,7 @@ function titleCase$(word$)
 end function
 
 /* Local variable scoping — each function has its own i% and acc% */
+// n% -- upper bound of the sum, inclusive
 function sumTo%(n%)
     // i% and acc% are local to sumTo%.
     acc% = 0
@@ -62,6 +73,7 @@ function sumTo%(n%)
     return acc%
 end function
 
+// n% -- upper bound of the product, inclusive
 function productTo%(n%)
     // i% and acc% here are independent of sumTo%'s i% and acc%.
     acc% = 1
@@ -74,6 +86,7 @@ end function
 /* Global variable accessed inside a function with the global keyword */
 runningTotal% = 0
 
+// x% -- amount to add to the running total
 function addToTotal%(x%)
     global runningTotal%
     runningTotal% = runningTotal% + x%

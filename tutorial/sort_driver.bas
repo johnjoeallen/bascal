@@ -5,16 +5,25 @@
 ' data% is a byref array parameter, so bcc copies the sorted result back
 ' into the caller's array; byval (the default) would sort a private copy
 ' and discard it.
+' data%  -- array to sort, mutated in place
+' count% -- number of elements in data%
 ' In-place cocktail shaker sort.
 ' This is a bidirectional bubble sort over the active range. data% is
 ' byref so the sorted result is copied back to the caller.
+' data%  -- array to sort, mutated in place
+' count% -- number of elements in data%
 ' Tiny helper used to prove recursive require resolution.
+' value% -- number passed through unchanged
 ' Shell sort demonstrates a nested dependency. The helper is intentionally
 ' trivial; the point is to exercise recursive require resolution.
 
+' data%  -- array to sort, mutated in place
+' count% -- number of elements in data%
 ' Iterative quicksort using an explicit stack for partition bounds.
 ' Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input.
 ' data% is byref so the sorted result is copied back to the caller.
+' data%  -- array to sort, mutated in place
+' count% -- number of elements in data%
 ' Sort driver for the BASCAL example sort library.
 ' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
 

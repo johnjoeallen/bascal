@@ -3,6 +3,7 @@ require com.bascal.examples.remline.strings
 
 /* Fixed-size reference tracking for the example. */
 
+// lineNo% -- line number to record as referenced
 function addRef%(lineNo%)
     global refCount%
     global refNumber%
@@ -24,6 +25,7 @@ function addRef%(lineNo%)
     return 1
 end function
 
+// lineNo% -- line number to test
 function isReferenced%(lineNo%)
     global refCount%
     global refNumber%
@@ -37,6 +39,7 @@ function isReferenced%(lineNo%)
     return 0
 end function
 
+// line$ -- source line to scan for GOTO/GOSUB/THEN/... targets
 function collectRefs%(line$)
     found% = 0
     found% = found% or scanKeywordRefs%(line$, "GOTO")
@@ -49,6 +52,8 @@ function collectRefs%(line$)
     return found%
 end function
 
+// line$    -- source line to scan
+// keyword$ -- keyword to look for (e.g. "GOTO")
 function scanKeywordRefs%(line$, keyword$)
     ul$  = upper$(line$)
     uk$  = upper$(keyword$)

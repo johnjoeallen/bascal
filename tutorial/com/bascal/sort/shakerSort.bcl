@@ -1,6 +1,8 @@
 /* In-place cocktail shaker sort. */
 /* This is a bidirectional bubble sort over the active range. data% is */
 /* byref so the sorted result is copied back to the caller. */
+// data%  -- array to sort, mutated in place
+// count% -- number of elements in data%
 function shakerSort%(byref data%, count%)
     left% = 1
     right% = count% - 1

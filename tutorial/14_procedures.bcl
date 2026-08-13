@@ -19,11 +19,15 @@ procedure printSeparator()
 end procedure
 
 /* Procedure that prints a labelled value */
+// label$ -- text shown before the score
+// score% -- value to print
 procedure printScore(label$, score%)
     print label$ + ": " + str$(score%)
 end procedure
 
 /* Procedure with early exit */
+// name$  -- person's name
+// score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% < 60 then
         return          // early exit — nothing printed for failing scores
@@ -33,6 +37,9 @@ end procedure
 
 /* Procedure that modifies an array in place -- byref copies the result */
 /* back to the caller; the default byval would fill a private copy only. */
+// arr%   -- array to fill; byref because it's mutated in place
+// count% -- number of elements in arr%
+// value% -- value written into every element
 procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%

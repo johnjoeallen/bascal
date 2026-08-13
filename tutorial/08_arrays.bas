@@ -28,10 +28,17 @@ data%(4) = 3
 data%(5) = 11
 
 ' Insertion sort — sorts data%() in place
+' arr%   -- array to sort; byref because it's mutated in place
+' count% -- number of elements in arr%
 
 ' Linear search — returns index or -1
+' arr%    -- array to search; byval, since indexOf% only reads it
+' count%  -- number of elements in arr%
+' target% -- value to search for
 
 ' Print the array on one line as  [ a b c ... ]
+' arr%   -- array to print; byval, since printArray% only reads it
+' count% -- number of elements in arr%
 
 ' Before sort
 PRINT "Before: "
