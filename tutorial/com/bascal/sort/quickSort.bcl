@@ -1,6 +1,7 @@
 /* Iterative quicksort using an explicit stack for partition bounds. */
 /* Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input. */
-function quickSort%(data%, count%)
+/* data% is byref so the sorted result is copied back to the caller. */
+function quickSort%(byref data%, count%)
     DIM sLow%(64)
     DIM sHigh%(64)
 

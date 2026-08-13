@@ -36,15 +36,17 @@
 indexed <code>0..size</code>; <code>dim name%(rows, cols)</code> declares a 2-D array, and
 more dimensions are allowed. To pass an array into a function, the parameter
 is just the plain variable name (<code>arr%</code>, not <code>arr%()</code>); at the call
-site you write <code>arr%()</code> to signal that an array is being passed. This
-isn't a reference — BASCAL copies elements in before the call and back out
-after, using the very next parameter as the element count, so an array
-parameter must always be followed by one.</p>
+site you write <code>arr%()</code> to signal that an array is being passed, and the
+array must always be followed by its element count as the next argument.
+This isn't a reference — BASCAL copies elements in before the call, and
+copies them back out after only if the parameter is declared
+<code>byref</code>; unmarked (<code>byval</code>) is the default and leaves the
+caller's array untouched.</p>
   </div>
 
     <div class="snippet">
       <h3>Insertion sort, in place</h3>
-      <pre><code>function insertionSort%(arr%, count%)
+      <pre><code>function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -61,7 +63,7 @@ end function</code></pre>
       <h3>Calling it, and a 2-D array</h3>
       <pre><code>dim data%(N%)
 &#x27; ... populate data%(0..N%-1) ...
-dummy% = insertionSort%(data%(), N%)
+dummy% = insertionSort%(data%(), N%)   &#x27; arr% is byref, so data%() comes back sorted
 
 dim identity%(2, 2)
 identity%(1, 1) = 1</code></pre>

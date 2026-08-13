@@ -53,6 +53,14 @@ pub struct CodeGenerator {
     // ident() must never allocate a per-function local for one, regardless
     // of which scope the LSET/GET/PUT referencing it appears in.
     record_buffer_names: HashSet<String>,
+    // Errors found while generating (e.g. an invalid `byref` call argument).
+    // Collected rather than returned immediately since codegen methods are
+    // called deep inside statement/expression recursion.
+    diagnostics: Vec<Diagnostic>,
+    // Declared rank (number of DIM dimensions) of every top-level array,
+    // lowercase name -> rank. Used to check a call site's array argument
+    // against the callee's own inferred parameter rank.
+    top_level_array_ranks: HashMap<String, usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +69,15 @@ struct FunctionInfo {
     stem: String,
     label: String,
     result: BasicIdent,
-    params: Vec<(BasicIdent, BasicIdent)>,
+    /// (source parameter, allocated lowered BASIC name) pairs, in declared order.
+    params: Vec<(Param, BasicIdent)>,
+    /// Array rank inferred per parameter from how it's indexed inside this
+    /// function's own body (`None` if never directly indexed, or indexed
+    /// inconsistently). Parallel to `params`.
+    param_ranks: Vec<Option<usize>>,
+    /// Declared rank of every array this function DIMs locally, lowercase
+    /// name -> rank.
+    local_array_ranks: HashMap<String, usize>,
     is_procedure: bool,
     globals: HashSet<String>,
     // Cache of source-variable-key → allocated lowered BASIC name for locals in this function.
@@ -81,6 +97,8 @@ impl CodeGenerator {
             loop_exit_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
+            diagnostics: Vec::new(),
+            top_level_array_ranks: HashMap::new(),
         }
     }
 
@@ -89,16 +107,28 @@ impl CodeGenerator {
         self
     }
 
-    pub fn generate(mut self, program: &Program) -> String {
+    pub fn generate(mut self, program: &Program) -> Result<String, Vec<Diagnostic>> {
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
         // later functions cannot collide with earlier ones either.
         let mut taken = collect_program_names(program);
+        let known_callables: HashSet<String> = program
+            .functions
+            .iter()
+            .map(|f| f.name.name.to_ascii_lowercase())
+            .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
+            .collect();
         let mut functions = Vec::new();
         for f in &program.functions {
-            functions.push(FunctionInfo::from_def(f, &mut taken));
+            functions.push(FunctionInfo::from_def(
+                f,
+                &mut taken,
+                &known_callables,
+                &mut self.diagnostics,
+            ));
         }
         self.functions = functions;
+        self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
         self.record_buffer_names = collect_record_buffer_names(program);
         *self.taken_names.borrow_mut() = taken;
 
@@ -156,7 +186,11 @@ impl CodeGenerator {
             }
         }
 
-        number_basic_lines(&self.output, self.line_numbers)
+        if self.diagnostics.is_empty() {
+            Ok(number_basic_lines(&self.output, self.line_numbers))
+        } else {
+            Err(self.diagnostics)
+        }
     }
 
     fn function(&mut self, function: &FunctionDef) {
@@ -167,7 +201,13 @@ impl CodeGenerator {
         let params = function
             .params
             .iter()
-            .map(|p| BasicIdent { name: p.name.to_ascii_lowercase(), suffix: p.suffix }.as_basic())
+            .map(|p| {
+                BasicIdent {
+                    name: p.name.name.to_ascii_lowercase(),
+                    suffix: p.name.suffix,
+                }
+                .as_basic()
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let lowered_name =
@@ -912,7 +952,7 @@ impl CodeGenerator {
             Expr::String(value) => (Vec::new(), format!("\"{}\"", escape_string(value))),
             Expr::Ident(ident) => {
                 let is_param = current_function
-                    .is_some_and(|f| f.params.iter().any(|(src, _)| same_ident(src, ident)));
+                    .is_some_and(|f| f.params.iter().any(|(src, _)| same_ident(&src.name, ident)));
                 let emitted =
                     if !is_param && self.known_callables.contains(&ident.name.to_ascii_lowercase()) {
                         self.canonical_callable(ident)
@@ -959,7 +999,14 @@ impl CodeGenerator {
                     let emit_name = if self.known_callables.contains(&key) {
                         self.canonical_callable(name)
                     } else {
-                        BasicIdent { name: key, suffix: name.suffix }.as_basic()
+                        // Not a recognized callable, so this is really a
+                        // multi-index array element access parsed as a Call
+                        // (see make_paren_ident_expr in parser.rs) -- needs
+                        // the same param/local scope resolution as the
+                        // single-index ArrayRef case above, or a function
+                        // parameter's or local array's mangled storage name
+                        // would be silently skipped.
+                        self.ident(name, current_function)
                     };
                     (prelude, format!("{}({})", emit_name, rendered_args.join(", ")))
                 }
@@ -1025,18 +1072,67 @@ impl CodeGenerator {
             }
         }
 
+        // Resolve each array-shaped argument's rank once, up front, so a
+        // mismatch is reported exactly once and the copy-in/copy-out passes
+        // below agree on how many dimensions to generate. `None` means
+        // either "not an array argument" or "rank mismatch already
+        // reported -- don't emit array copy code for it".
+        let array_ranks: Vec<Option<usize>> = args
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| {
+                let Expr::ArrayRef { name: source_name, indices } = arg else {
+                    return None;
+                };
+                if !indices.is_empty() {
+                    return None;
+                }
+                let target_rank = info.param_ranks.get(index).copied().flatten();
+                let source_rank = self.resolve_array_rank(source_name, current_function);
+                match (target_rank, source_rank) {
+                    (Some(t), Some(s)) if t != s => {
+                        let param_name = info
+                            .params
+                            .get(index)
+                            .map(|(p, _)| p.name.as_basic())
+                            .unwrap_or_default();
+                        self.diagnostics.push(Diagnostic::error(
+                            SourcePos::new("<validation>", 1, 1),
+                            format!(
+                                "`{}` has {} dimension{} here, but parameter `{}` of `{}` is \
+                                 indexed with {} -- passing it would generate incorrect BASIC",
+                                source_name,
+                                s,
+                                if s == 1 { "" } else { "s" },
+                                param_name,
+                                info.source_name,
+                                t,
+                            ),
+                        ));
+                        None
+                    }
+                    _ => Some(target_rank.or(source_rank).unwrap_or(1)),
+                }
+            })
+            .collect();
+
         for (index, arg) in args.iter().enumerate() {
             if let Some((_, lowered)) = info.params.get(index) {
                 if let Some(actual_array) = empty_array_name(arg, current_function, self) {
-                    let bound = copy_bound(info, &rendered_args, index);
-                    let loop_var = self.next_temp_var();
-                    lines.push(format!("DIM {}({bound})", lowered.as_basic()));
+                    let Some(rank) = array_ranks[index] else {
+                        continue;
+                    };
+                    let bounds: Vec<String> = (0..rank)
+                        .map(|axis| copy_bound(info, &rendered_args, index, axis))
+                        .collect();
+                    let loop_vars: Vec<String> = (0..rank).map(|_| self.next_temp_var()).collect();
+                    lines.push(format!("DIM {}({})", lowered.as_basic(), bounds.join(", ")));
                     lines.extend(array_copy_lines(
                         &lowered.as_basic(),
                         &actual_array,
-                        &bound,
+                        &bounds,
                         "copy array argument into transpiled function storage",
-                        &loop_var,
+                        &loop_vars,
                     ));
                 }
             }
@@ -1045,16 +1141,37 @@ impl CodeGenerator {
         lines.push(format!("GOSUB {}", info.label));
 
         for (index, arg) in args.iter().enumerate() {
-            if let Some((_, lowered)) = info.params.get(index) {
+            if let Some((param, lowered)) = info.params.get(index) {
+                if param.mode != ParamMode::ByRef {
+                    continue;
+                }
                 if let Some(actual_array) = empty_array_name(arg, current_function, self) {
-                    let bound = copy_bound(info, &rendered_args, index);
-                    let loop_var = self.next_temp_var();
+                    let Some(rank) = array_ranks[index] else {
+                        continue;
+                    };
+                    let bounds: Vec<String> = (0..rank)
+                        .map(|axis| copy_bound(info, &rendered_args, index, axis))
+                        .collect();
+                    let loop_vars: Vec<String> = (0..rank).map(|_| self.next_temp_var()).collect();
                     lines.extend(array_copy_lines(
                         &actual_array,
                         &lowered.as_basic(),
-                        &bound,
+                        &bounds,
                         "copy mutated array argument back to caller storage",
-                        &loop_var,
+                        &loop_vars,
+                    ));
+                } else if let Expr::Ident(ident) = arg {
+                    let caller_name = self.ident(ident, current_function);
+                    lines.push(format!("{} = {}", caller_name, lowered.as_basic()));
+                } else {
+                    self.diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "`byref` parameter `{}` of `{}` was called with an argument that \
+                             isn't a plain variable -- byref requires somewhere to write the \
+                             result back to",
+                            param.name, info.source_name
+                        ),
                     ));
                 }
             }
@@ -1093,7 +1210,7 @@ impl CodeGenerator {
             if let Some((_, lowered)) = info
                 .params
                 .iter()
-                .find(|(source, _)| same_ident(source, ident))
+                .find(|(source, _)| same_ident(&source.name, ident))
             {
                 return lowered.as_basic();
             }
@@ -1130,6 +1247,28 @@ impl CodeGenerator {
         self.functions
             .iter()
             .find(|function| same_ident(&function.source_name, name))
+    }
+
+    /// Declared rank of the array named `name`, resolved in whatever scope
+    /// it's actually visible in: a local `dim` inside `current_function`, a
+    /// parameter of `current_function` being forwarded onward (using that
+    /// parameter's own inferred rank), or a top-level `dim`. `None` means
+    /// unknown -- nothing to check a call site's argument against.
+    fn resolve_array_rank(
+        &self,
+        name: &BasicIdent,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<usize> {
+        let key = name.as_basic().to_ascii_lowercase();
+        if let Some(info) = current_function {
+            if let Some(rank) = info.local_array_ranks.get(&key) {
+                return Some(*rank);
+            }
+            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
+                return info.param_ranks.get(index).copied().flatten();
+            }
+        }
+        self.top_level_array_ranks.get(&key).copied()
     }
 
     fn render_print_tokens(
@@ -1185,18 +1324,25 @@ impl CodeGenerator {
 }
 
 impl FunctionInfo {
-    fn from_def(function: &FunctionDef, taken: &mut HashSet<String>) -> Self {
+    fn from_def(
+        function: &FunctionDef,
+        taken: &mut HashSet<String>,
+        known_callables: &HashSet<String>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
         let params = function
             .params
             .iter()
             .map(|param| {
-                let preferred = format!("{}_{}", stem, sanitize_symbol(&param.name));
-                let lowered = allocate_unique(&preferred, param.suffix, taken);
+                let preferred = format!("{}_{}", stem, sanitize_symbol(&param.name.name));
+                let lowered = allocate_unique(&preferred, param.name.suffix, taken);
                 taken.insert(lowered.as_basic().to_ascii_lowercase());
                 (param.clone(), lowered)
             })
             .collect();
+        let param_ranks = infer_param_ranks(function, known_callables, diagnostics);
+        let local_array_ranks = dim_ranks_in_body(&function.body);
         let result = allocate_unique(&format!("{stem}_result"), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
         let globals = collect_globals(&function.body);
@@ -1206,9 +1352,362 @@ impl FunctionInfo {
             label: format!("FN_{stem}"),
             result,
             params,
+            param_ranks,
+            local_array_ranks,
             is_procedure: function.is_procedure,
             globals,
             local_var_map: RefCell::new(HashMap::new()),
+        }
+    }
+}
+
+/// Visits every `Expr` node (recursively, including sub-expressions) that
+/// appears anywhere in `body` -- every statement kind, every clause. Used to
+/// find every array-element access to a given parameter, wherever it
+/// appears in a function body, so its declared rank can be inferred from
+/// how many indices it's actually used with.
+fn visit_body_exprs<'a>(body: &'a [Statement], f: &mut impl FnMut(&'a Expr)) {
+    for stmt in body {
+        visit_statement_exprs(stmt, f);
+    }
+}
+
+fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) {
+    match stmt {
+        Statement::Dim { sizes, .. } => {
+            for e in sizes {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Open { file, channel, len, .. } => {
+            visit_expr(file, f);
+            visit_expr(channel, f);
+            if let Some(e) = len {
+                visit_expr(e, f);
+            }
+        }
+        Statement::FileDecl { path, .. } => visit_expr(path, f),
+        Statement::LineInput { channel, target } => {
+            visit_expr(channel, f);
+            visit_expr(target, f);
+        }
+        Statement::PrintFile { channel, tokens } => {
+            visit_expr(channel, f);
+            visit_print_tokens(tokens, f);
+        }
+        Statement::PrintUsing { format, tokens } => {
+            visit_expr(format, f);
+            visit_print_tokens(tokens, f);
+        }
+        Statement::PrintFileUsing { channel, format, tokens } => {
+            visit_expr(channel, f);
+            visit_expr(format, f);
+            visit_print_tokens(tokens, f);
+        }
+        Statement::Close { channel } => visit_expr(channel, f),
+        Statement::Kill { file } => visit_expr(file, f),
+        Statement::Name { from, to } => {
+            visit_expr(from, f);
+            visit_expr(to, f);
+        }
+        Statement::Assignment { target, value } => {
+            visit_expr(target, f);
+            visit_expr(value, f);
+        }
+        Statement::Print { tokens } => visit_print_tokens(tokens, f),
+        Statement::Return { value } => visit_expr(value, f),
+        Statement::If { condition, then_body, else_body } => {
+            visit_expr(condition, f);
+            visit_body_exprs(then_body, f);
+            visit_body_exprs(else_body, f);
+        }
+        Statement::For { start, end, step, body, .. } => {
+            visit_expr(start, f);
+            visit_expr(end, f);
+            if let Some(e) = step {
+                visit_expr(e, f);
+            }
+            visit_body_exprs(body, f);
+        }
+        Statement::While { condition, body } => {
+            visit_expr(condition, f);
+            visit_body_exprs(body, f);
+        }
+        Statement::Do { condition, body, post_condition } => {
+            if let Some(c) = condition {
+                visit_expr(&c.expr, f);
+            }
+            visit_body_exprs(body, f);
+            if let Some(c) = post_condition {
+                visit_expr(&c.expr, f);
+            }
+        }
+        Statement::ExprStmt(e) => visit_expr(e, f),
+        Statement::OptionBase(e) => visit_expr(e, f),
+        Statement::Erase(_) => {}
+        Statement::Randomize(e) => {
+            if let Some(e) = e {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Swap(a, b) => {
+            visit_expr(a, f);
+            visit_expr(b, f);
+        }
+        Statement::Poke { address, value } => {
+            visit_expr(address, f);
+            visit_expr(value, f);
+        }
+        Statement::Goto(e) | Statement::Gosub(e) => visit_expr(e, f),
+        Statement::OnErrorGoto { target } => visit_expr(target, f),
+        Statement::Resume(kind) => {
+            if let ResumeTarget::Line(e) = kind {
+                visit_expr(e, f);
+            }
+        }
+        Statement::ErrorStmt { code } => visit_expr(code, f),
+        Statement::Input { vars, .. } => {
+            for e in vars {
+                visit_expr(e, f);
+            }
+        }
+        Statement::InputFile { channel, vars } => {
+            visit_expr(channel, f);
+            for e in vars {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Data(values) | Statement::Read(values) => {
+            for e in values {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Restore(e) => {
+            if let Some(e) = e {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Const { value, .. } => visit_expr(value, f),
+        Statement::Write { channel, exprs } => {
+            visit_expr(channel, f);
+            for e in exprs {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Field { channel, fields } => {
+            visit_expr(channel, f);
+            for (w, _) in fields {
+                visit_expr(w, f);
+            }
+        }
+        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+            visit_expr(channel, f);
+            if let Some(e) = record {
+                visit_expr(e, f);
+            }
+            if let Some(e) = var {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Lset { value, .. } | Statement::Rset { value, .. } => visit_expr(value, f),
+        Statement::Seek { channel, position } => {
+            visit_expr(channel, f);
+            visit_expr(position, f);
+        }
+        Statement::Lprint(tokens) => visit_print_tokens(tokens, f),
+        Statement::LprintUsing { format, tokens } => {
+            visit_expr(format, f);
+            visit_print_tokens(tokens, f);
+        }
+        Statement::SelectCase { expr, cases, else_body } => {
+            visit_expr(expr, f);
+            for case in cases {
+                for v in &case.values {
+                    match v {
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => visit_expr(e, f),
+                        CaseValue::Range { from, to } => {
+                            visit_expr(from, f);
+                            visit_expr(to, f);
+                        }
+                    }
+                }
+                visit_body_exprs(&case.body, f);
+            }
+            visit_body_exprs(else_body, f);
+        }
+        Statement::Locate { row, col } => {
+            visit_expr(row, f);
+            visit_expr(col, f);
+        }
+        Statement::Color { fg, bg } => {
+            visit_expr(fg, f);
+            if let Some(e) = bg {
+                visit_expr(e, f);
+            }
+        }
+        Statement::OnBranch { expr, targets, .. } => {
+            visit_expr(expr, f);
+            for e in targets {
+                visit_expr(e, f);
+            }
+        }
+        Statement::Out { port, value } => {
+            visit_expr(port, f);
+            visit_expr(value, f);
+        }
+        Statement::Width { channel, cols } => {
+            if let Some(e) = channel {
+                visit_expr(e, f);
+            }
+            visit_expr(cols, f);
+        }
+        Statement::End
+        | Statement::Stop
+        | Statement::Cls
+        | Statement::Beep
+        | Statement::System
+        | Statement::Clear
+        | Statement::ReturnVoid
+        | Statement::GlobalDecl(_)
+        | Statement::Raw(_)
+        | Statement::BlockComment(_)
+        | Statement::Label(_)
+        | Statement::BlankLine
+        | Statement::Exit => {}
+    }
+}
+
+fn visit_print_tokens<'a>(tokens: &'a [PrintToken], f: &mut impl FnMut(&'a Expr)) {
+    for t in tokens {
+        if let PrintToken::Expr(e) = t {
+            visit_expr(e, f);
+        }
+    }
+}
+
+fn visit_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
+    f(expr);
+    match expr {
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {}
+        Expr::ArrayRef { indices, .. } => {
+            for e in indices {
+                visit_expr(e, f);
+            }
+        }
+        Expr::Call { args, .. } => {
+            for e in args {
+                visit_expr(e, f);
+            }
+        }
+        Expr::Unary { expr, .. } => visit_expr(expr, f),
+        Expr::Binary { left, right, .. } => {
+            visit_expr(left, f);
+            visit_expr(right, f);
+        }
+        Expr::FileIndex { index, .. } => visit_expr(index, f),
+        Expr::FieldAccess { base, .. } => visit_expr(base, f),
+        Expr::MethodCall { base, args, .. } => {
+            visit_expr(base, f);
+            for e in args {
+                visit_expr(e, f);
+            }
+        }
+        Expr::RecordLit { fields, .. } => {
+            for (_, e) in fields {
+                visit_expr(e, f);
+            }
+        }
+    }
+}
+
+/// Infers each parameter's array rank (number of subscripts) from how it's
+/// actually indexed inside the function's own body -- there's no type
+/// annotation to read it from directly. `None` means either the parameter
+/// is never directly indexed in this body (e.g. it's only ever forwarded
+/// on as a whole array to another call), or it's indexed inconsistently,
+/// which is reported as its own diagnostic.
+fn infer_param_ranks(
+    function: &FunctionDef,
+    known_callables: &HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<Option<usize>> {
+    function
+        .params
+        .iter()
+        .map(|param| {
+            let mut ranks: HashSet<usize> = HashSet::new();
+            visit_body_exprs(&function.body, &mut |e| {
+                // `make_paren_ident_expr` in parser.rs only produces
+                // ArrayRef for empty parens or exactly one index; anything
+                // else -- including every 2+ dimensional array access --
+                // parses as a Call, disambiguated from a real function call
+                // later by name. Both shapes need checking here.
+                let (name, count) = match e {
+                    Expr::ArrayRef { name, indices } if !indices.is_empty() => {
+                        (name, indices.len())
+                    }
+                    Expr::Call { name, args }
+                        if !known_callables.contains(&name.name.to_ascii_lowercase()) =>
+                    {
+                        (name, args.len())
+                    }
+                    _ => return,
+                };
+                if same_ident(name, &param.name) {
+                    ranks.insert(count);
+                }
+            });
+            match ranks.len() {
+                0 => None,
+                1 => ranks.into_iter().next(),
+                _ => {
+                    diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "parameter `{}` of `{}` is indexed with different numbers of \
+                             subscripts in different places -- BASCAL can't tell how many \
+                             dimensions it has",
+                            param.name, function.name
+                        ),
+                    ));
+                    None
+                }
+            }
+        })
+        .collect()
+}
+
+/// Declared rank (number of DIM dimensions) of every array DIMed anywhere
+/// in `body`, lowercase name -> rank. `dim arr%()` (no bounds written) has
+/// no rank recorded here -- there's nothing to check it against.
+fn dim_ranks_in_body(body: &[Statement]) -> HashMap<String, usize> {
+    let mut ranks = HashMap::new();
+    collect_dim_ranks(body, &mut ranks);
+    ranks
+}
+
+fn collect_dim_ranks(body: &[Statement], out: &mut HashMap<String, usize>) {
+    for stmt in body {
+        match stmt {
+            Statement::Dim { name, is_array, sizes } => {
+                if *is_array && !sizes.is_empty() {
+                    out.insert(name.as_basic().to_ascii_lowercase(), sizes.len());
+                }
+            }
+            Statement::If { then_body, else_body, .. } => {
+                collect_dim_ranks(then_body, out);
+                collect_dim_ranks(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_dim_ranks(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_dim_ranks(&case.body, out);
+                }
+                collect_dim_ranks(else_body, out);
+            }
+            _ => {}
         }
     }
 }
@@ -1642,33 +2141,56 @@ fn empty_array_name(
     }
 }
 
-fn copy_bound(info: &FunctionInfo, rendered_args: &[String], array_arg_index: usize) -> String {
+/// Bound for one axis of an array argument: the arguments immediately
+/// following the array argument are its per-axis element counts, in the
+/// same order as `DIM`'s own bounds -- `axis` 0 is the first of these.
+fn copy_bound(
+    info: &FunctionInfo,
+    rendered_args: &[String],
+    array_arg_index: usize,
+    axis: usize,
+) -> String {
+    let bound_index = array_arg_index + 1 + axis;
     rendered_args
-        .get(array_arg_index + 1)
+        .get(bound_index)
         .cloned()
         .or_else(|| {
             info.params
-                .get(array_arg_index + 1)
+                .get(bound_index)
                 .map(|(_, lowered)| lowered.as_basic())
         })
         .unwrap_or_else(|| "10".to_string())
 }
 
+/// Nested copy loop, one FOR per axis, innermost body doing the actual
+/// element assignment. `bounds` and `loop_vars` are parallel, one entry per
+/// dimension -- rank 1 (the common case) produces exactly the same output
+/// as the original single-loop version.
 fn array_copy_lines(
     destination: &str,
     source: &str,
-    bound: &str,
+    bounds: &[String],
     comment: &str,
-    loop_var: &str,
+    loop_vars: &[String],
 ) -> Vec<String> {
-    vec![
+    let rank = loop_vars.len();
+    let mut lines = vec![
         String::new(),
         format!("' {comment}: {source}() -> {destination}()"),
-        format!("FOR {loop_var} = 1 TO {bound}"),
-        format!("    {destination}({loop_var}) = {source}({loop_var})"),
-        format!("NEXT {loop_var}"),
-        String::new(),
-    ]
+    ];
+    for (level, (var, bound)) in loop_vars.iter().zip(bounds.iter()).enumerate() {
+        lines.push(format!("{}FOR {var} = 1 TO {bound}", "    ".repeat(level)));
+    }
+    let index_list = loop_vars.join(", ");
+    lines.push(format!(
+        "{}{destination}({index_list}) = {source}({index_list})",
+        "    ".repeat(rank)
+    ));
+    for (level, var) in loop_vars.iter().enumerate().rev() {
+        lines.push(format!("{}NEXT {var}", "    ".repeat(level)));
+    }
+    lines.push(String::new());
+    lines
 }
 
 pub(crate) fn sanitize_symbol(value: &str) -> String {
@@ -1961,8 +2483,11 @@ pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnosti
 
     for func in &program.functions {
         let stem = sanitize_symbol(&func.name.name);
-        let param_keys: HashSet<String> =
-            func.params.iter().map(|p| p.as_basic().to_ascii_lowercase()).collect();
+        let param_keys: HashSet<String> = func
+            .params
+            .iter()
+            .map(|p| p.name.as_basic().to_ascii_lowercase())
+            .collect();
         let global_decls = collect_globals(&func.body);
 
         // ── result variable ────────────────────────────────────────────────
@@ -1981,10 +2506,10 @@ pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnosti
             check_one_conflict(
                 &globals,
                 &stem,
-                &sanitize_symbol(&param.name),
-                param.suffix,
+                &sanitize_symbol(&param.name.name),
+                param.name.suffix,
                 &func.name,
-                &format!("parameter `{}` of `{}`", param.as_basic(), func.name.as_basic()),
+                &format!("parameter `{}` of `{}`", param.name.as_basic(), func.name.as_basic()),
                 &mut diagnostics,
             );
         }

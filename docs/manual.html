@@ -806,6 +806,7 @@ function addToTotal%(x%)
     runningTotal% = runningTotal% + x%
     return runningTotal%
 end function</code></pre>
+<p><code>global</code> must name a real module-level variable, not one of the function's own parameters — <code>function f%(x%) : global x% : ...</code> is a compile-time error, since the parameter always resolves first and the <code>global</code> declaration could never take effect.</p>
 <h3 id="restrictions">Restrictions</h3>
 <ul>
 <li><strong>No recursion.</strong> Functions are transpiled to <code>GOSUB</code> with global parameter variables. A recursive call would overwrite in-flight parameters. Use an explicit stack array to simulate recursion if needed.</li>
@@ -819,7 +820,7 @@ end function</code></pre>
 <li>Assign the result from the generated result variable (e.g. <code>fname_result_0%</code>)</li>
 </ol>
 <p>Local variables in the function body are emitted as uniquely-indexed BASIC globals (<code>fname_var_0%</code>, <code>fname_var_1%</code>, …). The index is chosen so the name does not clash with any global variable or with any name allocated by an earlier function, making collisions impossible regardless of what names the developer uses at global scope.</p>
-<p>Array parameters use copy-in / copy-out: elements are copied into the parameter's generated name before the call and back into the caller's array after.</p>
+<p>Every parameter is copied into its generated name before the call. Whether anything is copied back afterward depends on its passing mode — see <a href="#byref--byval">byref / byval</a>.</p>
 <hr />
 <h2 id="procedures">Procedures</h2>
 <p>A procedure is a named subroutine that performs an action but returns no value. It is declared with <code>procedure</code> … <code>end procedure</code>.</p>
@@ -844,7 +845,7 @@ procedure printIfPass(name$, score%)
     PRINT name$ + &quot; passed with &quot; + STR$(score%)
 end procedure
 
-procedure fillRange(arr%, count%, value%)
+procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
     end for
@@ -864,12 +865,13 @@ fillRange(data%(), N%, 99)</code></pre>
     PRINT name$ + &quot; passed with &quot; + STR$(score%)
 end procedure</code></pre>
 <h3 id="array-parameters">Array Parameters</h3>
-<p>Array parameters use the same copy-in / copy-out convention as functions. Declare the parameter without <code>()</code> in the procedure header; pass with <code>()</code> at the call site:</p>
-<pre><code>procedure fillRange(arr%, count%, value%)   &#39; arr% — no () in header
+<p>Array parameters use the same <a href="#byref--byval">byref / byval</a> rules as functions. Declare the parameter without <code>()</code> in the procedure header; pass with <code>()</code> at the call site:</p>
+<pre><code>procedure fillRange(byref arr%, count%, value%)   &#39; arr% — no () in header
     ...
 end procedure
 
-fillRange(data%(), N%, 99)                  &#39; data%() — () at call site</code></pre>
+fillRange(data%(), N%, 99)                        &#39; data%() — () at call site</code></pre>
+<p><code>fillRange</code> needs <code>byref</code> here because its entire job is to mutate the caller's array — without it, <code>fillRange</code> would fill its own private copy and the caller's array would be unchanged.</p>
 <h3 id="variable-scoping-1">Variable Scoping</h3>
 <p>Same rules as functions: variables in the body are local by default; use <code>global varname</code> to access a module-level variable.</p>
 <pre><code>globalCount% = 0
@@ -901,8 +903,8 @@ DIM names$(50)</code></pre>
 <pre><code>values%(0) = 42
 PRINT values%(i%)</code></pre>
 <h3 id="passing-arrays-to-functions">Passing Arrays to Functions</h3>
-<p>Declare the parameter with the plain variable name — <strong>no <code>()</code> in the declaration</strong>. At the call site, write <code>arr%()</code> to signal that an array is being passed:</p>
-<pre><code>function insertionSort%(arr%, count%)
+<p>Declare the parameter with the plain variable name — <strong>no <code>()</code> in the declaration</strong>. At the call site, write <code>arr%()</code> to signal that an array is being passed. <code>insertionSort%</code> mutates the array in place, so its <code>arr%</code> parameter needs <code>byref</code>; <code>indexOf%</code> only reads it, so the unmarked (<code>byval</code>) default is correct as-is:</p>
+<pre><code>function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -929,13 +931,49 @@ DIM data%(N%)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-dummy% = insertionSort%(data%(), N%)   &#39; sorts in place
+dummy% = insertionSort%(data%(), N%)   &#39; sorts in place -- arr% is byref
 
 idx% = indexOf%(data%(), N%, 22)
 if idx% &gt;= 0 then
     PRINT &quot;22 found at index &quot; + STR$(idx%)
 end if</code></pre>
-<p>Array arguments use copy-in / copy-out. The compiler generates loops that copy elements into the function's parameter array before the <code>GOSUB</code> and copy them back after the <code>RETURN</code>.</p>
+<p>See <a href="#byref--byval">byref / byval</a> for exactly what gets copied, and when.</p>
+<h3 id="byref--byval">byref / byval</h3>
+<p>Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:</p>
+<pre><code>function insertionSort%(byref arr%, count%)   &#39; byref: copied in, then back out
+function indexOf%(arr%, count%, target%)      &#39; unmarked = byval: copied in only</code></pre>
+<ul>
+<li><strong>byval</strong> (the default — an unmarked parameter is <code>byval</code>): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.</li>
+<li><strong>byref</strong>: copied in before the call, same as <code>byval</code> — but also copied back out to the caller after the call returns.</li>
+</ul>
+<p>This applies uniformly to both parameter kinds:</p>
+<ul>
+<li><strong>Array parameters</strong>: <code>byval</code> copies elements in; <code>byref</code> copies them in <em>and</em> back out. A function that only reads its array argument (like <code>indexOf%</code> above) should stay <code>byval</code> — a <code>byref</code> array with no writes is just a slower <code>byval</code>, since the compiler still generates the copy-out loop.</li>
+<li><strong>Scalar parameters</strong>: <code>byval</code> is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. <code>byref</code> turns a scalar parameter into a true output parameter:
+<pre><code>procedure increment(byref n%)
+    n% = n% + 1
+end procedure
+
+x% = 5
+increment(x%)   &#39; x% is now 6</code></pre>
+A <code>byref</code> argument must be a plain variable — <code>increment(x% + 1)</code> is a compile-time error, because there's nowhere for the result to be written back to.</li>
+</ul>
+<p>If you're coming from classic MBASIC/BASCOM: there's no local scope there at all, so a <code>GOSUB</code>-based &quot;subroutine&quot; touching an array was always touching the <em>one</em> array that exists — mutations were visible everywhere, instantly, because there was never more than one copy. BASCAL's parameters don't work that way by default. <code>byval</code> (the default) gives the function its own copy, and <code>byref</code> is what asks for the old always-visible, always-shared behavior back, deliberately, per parameter.</p>
+<h3 id="multi-dimensional-array-parameters">Multi-Dimensional Array Parameters</h3>
+<p>A 2-D (or higher) array passes the same way as 1-D — empty parens at the call site — but needs one count argument per axis, not just one, in the same order as the array's own <code>DIM</code>:</p>
+<pre><code>function sumGrid%(byref grid%, rows%, cols%)
+    total% = 0
+    for r% = 0 to rows% - 1
+        for c% = 0 to cols% - 1
+            total% = total% + grid%(r%, c%)
+        end for
+    end for
+    return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%(), 3, 3)</code></pre>
+<p>The compiler infers how many dimensions a parameter has from how the function's own body indexes it (<code>grid%(r%, c%)</code> above means two), then checks that against the array actually being passed at each call site. A mismatch — passing a 2-D array where a function indexes its parameter with one subscript, or vice versa — is a compile-time error, not a miscompile: the two shapes genuinely can't share one copy loop, so BASCAL refuses rather than generate a <code>DIM</code>/subscript mismatch that real BASIC would only catch at runtime.</p>
 <hr />
 <h2 id="input-and-output">Input and Output</h2>
 <h3 id="print">PRINT</h3>

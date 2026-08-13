@@ -71,9 +71,27 @@ pub struct PathSymbol {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDef {
     pub name: BasicIdent,
-    pub params: Vec<BasicIdent>,
+    pub params: Vec<Param>,
     pub body: Vec<Statement>,
     pub is_procedure: bool,
+}
+
+/// A declared parameter and its passing mode. Unmarked source (`arr%`)
+/// parses as `ByVal`; `byref arr%` / `byval arr%` parse explicitly.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Param {
+    pub name: BasicIdent,
+    pub mode: ParamMode,
+}
+
+/// `ByVal` copies the argument in before the call and never writes it back.
+/// `ByRef` copies in before the call *and* writes the result back to the
+/// caller's variable/array after — for both scalar and array parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ParamMode {
+    #[default]
+    ByVal,
+    ByRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

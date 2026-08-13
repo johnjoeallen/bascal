@@ -23,6 +23,11 @@ larger programs practical:
   comes pre-check (`do [while/until cond] ... end do`) or post-check
   (`do ... loop [while/until cond]`, BASCAL's `repeat`/`until` equivalent)
 - `function` declarations with explicit `return`
+- `byref` / `byval` parameter passing modes (`byval`, the default, copies a
+  parameter in only; `byref` copies the result back out too, for scalars
+  and arrays alike) with compile-time checks for both — a `byref` argument
+  must be a plain variable, and a passed array's dimensionality must match
+  how the callee indexes it
 - path-style `require` dependencies
 - `program name [suite suitename]` declaration with `COMMON` block coordination
 - `select case` with single values, ranges, and `is` comparisons
@@ -175,7 +180,10 @@ Rules:
 ## Generated BASIC Shape
 
 Functions are transpiled to global parameter/result variables plus `GOSUB`.
-Array arguments use copy-in/copy-out around the call.
+Every parameter is copied in before the call; `byref` copies the result back
+out afterward too (`byval`, the default, doesn't). Array parameters support
+any number of dimensions, matched against how the callee's body indexes
+them — a mismatch is a compile-time error.
 
 Only `GOTO` / `GOSUB` target lines receive line numbers (sparse mode). Use
 `--line-numbers` for every line.
@@ -329,6 +337,9 @@ env -u RUSTC_WRAPPER cargo test
 ## Current Limits
 
 - No library archive format.
-- Array argument transpilation uses the parameter declared right after the
-  array as its element count for copy-in/copy-out — an array carries no
-  length of its own, so that ordering is required, not just conventional.
+- Array argument transpilation uses the parameters declared right after the
+  array — one per dimension, in `DIM` order — as its element counts for
+  copy-in/copy-out; an array carries no length of its own, so that ordering
+  is required, not just conventional. The compiler does check that the
+  array's actual dimensionality matches how the callee indexes it, so a
+  mismatch is a compile-time error rather than a miscompile.

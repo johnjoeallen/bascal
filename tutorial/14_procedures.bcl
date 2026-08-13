@@ -31,8 +31,9 @@ procedure printIfPass(name$, score%)
     print name$ + " passed with " + str$(score%)
 end procedure
 
-/* Procedure that modifies an array in place (copy-in / copy-out) */
-procedure fillRange(arr%, count%, value%)
+/* Procedure that modifies an array in place -- byref copies the result */
+/* back to the caller; the default byval would fill a private copy only. */
+procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
     end for

@@ -990,6 +990,11 @@ function addToTotal%(x%)
 end function
 ```
 
+`global` must name a real module-level variable, not one of the function's
+own parameters — `function f%(x%) : global x% : ...` is a compile-time
+error, since the parameter always resolves first and the `global`
+declaration could never take effect.
+
 ### Restrictions
 
 - **No recursion.** Functions are transpiled to `GOSUB` with global parameter
@@ -1011,9 +1016,9 @@ does not clash with any global variable or with any name allocated by an
 earlier function, making collisions impossible regardless of what names the
 developer uses at global scope.
 
-Array parameters use copy-in / copy-out: elements are copied into the
-parameter's generated name before the call and back into the caller's array
-after.
+Every parameter is copied into its generated name before the call. Whether
+anything is copied back afterward depends on its passing mode — see
+[byref / byval](#byref--byval).
 
 ---
 
@@ -1086,17 +1091,21 @@ end procedure
 
 ### Array Parameters
 
-Array parameters use the same copy-in / copy-out convention as functions.
-Declare the parameter without `()` in the procedure header; pass with `()` at
-the call site:
+Array parameters use the same [byref / byval](#byref--byval) rules as
+functions. Declare the parameter without `()` in the procedure header; pass
+with `()` at the call site:
 
 ```
-procedure fillRange(arr%, count%, value%)   ' arr% — no () in header
+procedure fillRange(byref arr%, count%, value%)   ' arr% — no () in header
     ...
 end procedure
 
-fillRange(data%(), N%, 99)                  ' data%() — () at call site
+fillRange(data%(), N%, 99)                        ' data%() — () at call site
 ```
+
+`fillRange` needs `byref` here because its entire job is to mutate the
+caller's array — without it, `fillRange` would fill its own private copy
+and the caller's array would be unchanged.
 
 ### Variable Scoping
 
@@ -1155,10 +1164,12 @@ PRINT values%(i%)
 
 Declare the parameter with the plain variable name — **no `()` in the
 declaration**. At the call site, write `arr%()` to signal that an array is
-being passed:
+being passed. `insertionSort%` mutates the array in place, so its `arr%`
+parameter needs `byref`; `indexOf%` only reads it, so the unmarked (`byval`)
+default is correct as-is:
 
 ```
-function insertionSort%(arr%, count%)
+function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -1189,7 +1200,7 @@ DIM data%(N%)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-dummy% = insertionSort%(data%(), N%)   ' sorts in place
+dummy% = insertionSort%(data%(), N%)   ' sorts in place -- arr% is byref
 
 idx% = indexOf%(data%(), N%, 22)
 if idx% >= 0 then
@@ -1197,9 +1208,86 @@ if idx% >= 0 then
 end if
 ```
 
-Array arguments use copy-in / copy-out. The compiler generates loops that
-copy elements into the function's parameter array before the `GOSUB` and
-copy them back after the `RETURN`.
+See [byref / byval](#byref--byval) for exactly what gets copied, and when.
+
+### `byref` / `byval`
+
+Every parameter — scalar or array — is copied into its generated storage
+before the call. Whether that value is copied back to the caller afterward
+depends on how the parameter is declared:
+
+```
+function insertionSort%(byref arr%, count%)   ' byref: copied in, then back out
+function indexOf%(arr%, count%, target%)      ' unmarked = byval: copied in only
+```
+
+- **`byval`** (the default — an unmarked parameter is `byval`): the
+  function gets its own private copy. Nothing is written back when the call
+  returns, no matter what the function does to its copy internally.
+- **`byref`**: copied in before the call, same as `byval` — but also copied
+  back out to the caller after the call returns.
+
+This applies uniformly to both parameter kinds:
+
+- **Array parameters**: `byval` copies elements in; `byref` copies them in
+  *and* back out. A function that only reads its array argument (like
+  `indexOf%` above) should stay `byval` — a `byref` array with no writes is
+  just a slower `byval`, since the compiler still generates the copy-out
+  loop.
+- **Scalar parameters**: `byval` is the classic behavior scalar parameters
+  have always had — a plain assignment in, nothing written back. `byref`
+  turns a scalar parameter into a true output parameter:
+
+  ```
+  procedure increment(byref n%)
+      n% = n% + 1
+  end procedure
+
+  x% = 5
+  increment(x%)   ' x% is now 6
+  ```
+
+  A `byref` argument must be a plain variable — `increment(x% + 1)` is a
+  compile-time error, because there's nowhere for the result to be written
+  back to.
+
+If you're coming from classic MBASIC/BASCOM: there's no local scope there
+at all, so a `GOSUB`-based "subroutine" touching an array was always
+touching the *one* array that exists — mutations were visible everywhere,
+instantly, because there was never more than one copy. BASCAL's parameters
+don't work that way by default. `byval` (the default) gives the function
+its own copy, and `byref` is what asks for the old always-visible,
+always-shared behavior back, deliberately, per parameter.
+
+### Multi-Dimensional Array Parameters
+
+A 2-D (or higher) array passes the same way as 1-D — empty parens at the
+call site — but needs one count argument per axis, not just one, in the
+same order as the array's own `DIM`:
+
+```
+function sumGrid%(byref grid%, rows%, cols%)
+    total% = 0
+    for r% = 0 to rows% - 1
+        for c% = 0 to cols% - 1
+            total% = total% + grid%(r%, c%)
+        end for
+    end for
+    return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%(), 3, 3)
+```
+
+The compiler infers how many dimensions a parameter has from how the
+function's own body indexes it (`grid%(r%, c%)` above means two), then
+checks that against the array actually being passed at each call site. A
+mismatch — passing a 2-D array where a function indexes its parameter with
+one subscript, or vice versa — is a compile-time error, not a
+miscompile: the two shapes genuinely can't share one copy loop, so BASCAL
+refuses rather than generate a `DIM`/subscript mismatch that real BASIC
+would only catch at runtime.
 
 ---
 

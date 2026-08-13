@@ -8,11 +8,64 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_duplicate_functions(program, &mut diagnostics);
     reject_direct_recursion(program, &mut diagnostics);
     reject_missing_returns(program, &mut diagnostics);
+    reject_global_shadows_param(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
     } else {
         Err(diagnostics)
+    }
+}
+
+/// `global x` inside a function that also has a parameter named `x` is
+/// silently inert: the compiler always resolves a name to the parameter's
+/// storage first, so the `global` declaration never takes effect. That's
+/// never intentional, so reject it instead of leaving it a silent no-op.
+fn reject_global_shadows_param(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    for function in &program.functions {
+        let param_names: HashSet<String> = function
+            .params
+            .iter()
+            .map(|p| p.name.as_basic().to_ascii_lowercase())
+            .collect();
+
+        let mut globals = Vec::new();
+        collect_global_decls(&function.body, &mut globals);
+
+        for global in globals {
+            if param_names.contains(&global.as_basic().to_ascii_lowercase()) {
+                diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!(
+                        "`global {}` in `{}` names a parameter of the same function -- \
+                         the parameter always shadows it, so this declaration has no effect",
+                        global, function.name
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+fn collect_global_decls(body: &[Statement], out: &mut Vec<BasicIdent>) {
+    for stmt in body {
+        match stmt {
+            Statement::GlobalDecl(ident) => out.push(ident.clone()),
+            Statement::If { then_body, else_body, .. } => {
+                collect_global_decls(then_body, out);
+                collect_global_decls(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_global_decls(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_global_decls(&case.body, out);
+                }
+                collect_global_decls(else_body, out);
+            }
+            _ => {}
+        }
     }
 }
 

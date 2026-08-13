@@ -53,7 +53,7 @@ pub fn compile_source(
     if !conflicts.is_empty() {
         return Err(conflicts);
     }
-    Ok(CodeGenerator::new().generate(&program))
+    CodeGenerator::new().generate(&program)
 }
 
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
@@ -83,9 +83,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
 
     let program = records::lower(program)?;
     resolver::validate(&program)?;
-    Ok(CodeGenerator::new()
+    CodeGenerator::new()
         .with_line_numbers(options.line_numbers)
-        .generate(&program))
+        .generate(&program)
 }
 
 pub fn default_output_path(input: &Path) -> std::path::PathBuf {
@@ -1513,6 +1513,296 @@ end
         assert!(
             err.iter().any(|d| d.message.contains("foo_acc_0%")),
             "error must name the conflicting global: {:?}", err
+        );
+    }
+
+    // ── byref / byval parameters ────────────────────────────────────────
+
+    #[test]
+    fn byval_array_parameter_does_not_copy_result_back() {
+        // Unmarked (byval, the default) array parameter: copy-in only.
+        let source = r#"
+function zeroOut%(arr%, count%)
+  for i% = 0 to count% - 1
+    arr%(i%) = 0
+  end for
+  return 0
+end function
+
+dim data%(3)
+dummy% = zeroOut%(data%(), 4)
+end
+"#;
+        let output = compile_source("byval_array.bcl", source).expect("should compile");
+        assert!(
+            output.contains("zeroout_arr_0%(") && output.contains(") = data%("),
+            "byval should still copy the array in:\n{output}"
+        );
+        assert!(
+            !output.lines().any(|l| l.contains("data%(") && l.contains(") = zeroout_arr_0%(")),
+            "byval must not copy the array back out:\n{output}"
+        );
+    }
+
+    #[test]
+    fn byref_array_parameter_copies_result_back() {
+        let source = r#"
+function zeroOut%(byref arr%, count%)
+  for i% = 0 to count% - 1
+    arr%(i%) = 0
+  end for
+  return 0
+end function
+
+dim data%(3)
+dummy% = zeroOut%(data%(), 4)
+end
+"#;
+        let output = compile_source("byref_array.bcl", source).expect("should compile");
+        assert!(
+            output.contains("zeroout_arr_0%(") && output.contains(") = data%("),
+            "byref should still copy the array in:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| l.contains("data%(") && l.contains(") = zeroout_arr_0%(")),
+            "byref must copy the array back out:\n{output}"
+        );
+    }
+
+    #[test]
+    fn byref_scalar_parameter_writes_back_to_caller() {
+        let source = r#"
+procedure increment(byref n%)
+  n% = n% + 1
+end procedure
+
+x% = 5
+increment(x%)
+print x%
+end
+"#;
+        let output = compile_source("byref_scalar.bcl", source).expect("should compile");
+        assert!(
+            output.lines().any(|l| l.trim() == "x% = increment_n_0%"),
+            "byref scalar must write its result back to the caller's variable:\n{output}"
+        );
+    }
+
+    #[test]
+    fn byval_scalar_parameter_does_not_write_back() {
+        // Unmarked (byval) scalar parameter: today's existing, unchanged behavior.
+        let source = r#"
+procedure increment(n%)
+  n% = n% + 1
+end procedure
+
+x% = 5
+increment(x%)
+print x%
+end
+"#;
+        let output = compile_source("byval_scalar.bcl", source).expect("should compile");
+        assert!(
+            !output.lines().any(|l| l.trim() == "x% = increment_n_0%"),
+            "byval scalar must not write back to the caller's variable:\n{output}"
+        );
+    }
+
+    #[test]
+    fn byref_scalar_argument_must_be_a_plain_variable() {
+        let source = r#"
+procedure increment(byref n%)
+  n% = n% + 1
+end procedure
+
+x% = 5
+increment(x% + 1)
+end
+"#;
+        let err = compile_source("byref_non_lvalue.bcl", source)
+            .expect_err("byref argument that isn't a plain variable should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("byref") && d.message.contains("plain variable")),
+            "error must explain the byref/lvalue requirement: {:?}", err
+        );
+    }
+
+    #[test]
+    fn global_shadowed_by_same_named_parameter_is_rejected() {
+        let source = r#"
+function f%(arr%)
+  global arr%
+  return arr%
+end function
+
+print f%(0)
+end
+"#;
+        let err = compile_source("global_shadow.bcl", source)
+            .expect_err("global declaration matching a parameter name should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("global arr%") && d.message.contains("shadows")),
+            "error must explain the parameter shadows the global: {:?}", err
+        );
+    }
+
+    // ── multi-dimensional array parameters ──────────────────────────────
+
+    #[test]
+    fn two_dimensional_array_parameter_generates_nested_copy_loops() {
+        let source = r#"
+function sumGrid%(byref grid%, rows%, cols%)
+  total% = 0
+  for r% = 0 to rows% - 1
+    for c% = 0 to cols% - 1
+      total% = total% + grid%(r%, c%)
+    end for
+  end for
+  return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%(), 3, 3)
+end
+"#;
+        let output = compile_source("multidim_2d.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM sumgrid_grid_0%(3, 3)"),
+            "parameter storage should be DIMed with both axes:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| {
+                l.trim() == "sumgrid_grid_0%(BCC_T1%, BCC_T2%) = g%(BCC_T1%, BCC_T2%)"
+            }),
+            "copy-in should use two indices on both sides:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| {
+                l.trim() == "g%(BCC_T3%, BCC_T4%) = sumgrid_grid_0%(BCC_T3%, BCC_T4%)"
+            }),
+            "byref copy-out should use two indices on both sides:\n{output}"
+        );
+        // Regression test: a 2+-index array access (`grid%(r%, c%)`) parses
+        // as Expr::Call, not Expr::ArrayRef (see make_paren_ident_expr in
+        // parser.rs) -- codegen's Call-fallback branch used to render the
+        // raw source name instead of resolving it through the parameter's
+        // mangled storage name, so reads/writes inside the function body
+        // silently touched the wrong (nonexistent) variable.
+        assert!(
+            output.contains("sumgrid_grid_0%(sumgrid_r_0%, sumgrid_c_0%)"),
+            "reading the array parameter inside the body must use its mangled storage name, \
+             not the raw source name:\n{output}"
+        );
+    }
+
+    #[test]
+    fn two_dimensional_local_array_reads_and_writes_use_mangled_name() {
+        // Same underlying bug as the parameter case above, but for a local
+        // (non-parameter) multi-dimensional array declared with `dim`
+        // inside a function -- both the write and the read need to resolve
+        // through the function-local mangled name, not the raw source name.
+        let source = r#"
+function fillGrid%(n%)
+  dim grid%(2, 2)
+  grid%(1, 1) = n%
+  return grid%(1, 1)
+end function
+
+print fillGrid%(10)
+end
+"#;
+        let output = compile_source("multidim_local.bcl", source).expect("should compile");
+        assert!(
+            output.contains("fillgrid_grid_0%(1, 1) = fillgrid_n_0%"),
+            "writing a local 2-D array must use its mangled storage name:\n{output}"
+        );
+        assert!(
+            output.contains("fillgrid_result_0% = fillgrid_grid_0%(1, 1)"),
+            "reading a local 2-D array must use its mangled storage name:\n{output}"
+        );
+    }
+
+    #[test]
+    fn three_dimensional_array_parameter_generates_triple_nested_copy_loops() {
+        let source = r#"
+function sumCube%(byref cube%, a%, b%, c%)
+  total% = 0
+  for i% = 0 to a% - 1
+    for j% = 0 to b% - 1
+      for k% = 0 to c% - 1
+        total% = total% + cube%(i%, j%, k%)
+      end for
+    end for
+  end for
+  return total%
+end function
+
+dim cube%(1, 1, 1)
+print sumCube%(cube%(), 2, 2, 2)
+end
+"#;
+        let output = compile_source("multidim_3d.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM sumcube_cube_0%(2, 2, 2)"),
+            "parameter storage should be DIMed with all three axes:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| {
+                l.trim()
+                    == "sumcube_cube_0%(BCC_T1%, BCC_T2%, BCC_T3%) = cube%(BCC_T1%, BCC_T2%, BCC_T3%)"
+            }),
+            "copy-in should use three indices on both sides:\n{output}"
+        );
+    }
+
+    #[test]
+    fn array_rank_mismatch_at_call_site_is_rejected() {
+        // g% is DIMed 2-D, but sumRow%'s row% parameter is only ever indexed
+        // with one subscript in its own body -- passing g%() there would
+        // generate a `Wrong number of subscripts` BASIC program.
+        let source = r#"
+function sumRow%(byref row%, count%)
+  total% = 0
+  for i% = 0 to count% - 1
+    total% = total% + row%(i%)
+  end for
+  return total%
+end function
+
+dim g%(2, 2)
+print sumRow%(g%(), 9)
+end
+"#;
+        let err = compile_source("multidim_mismatch.bcl", source)
+            .expect_err("rank mismatch between the array and the parameter should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("2 dimensions")
+                    && d.message.contains("indexed with 1")
+                    && d.message.contains("row%")
+            }),
+            "error must name both ranks and the mismatched parameter: {:?}", err
+        );
+    }
+
+    #[test]
+    fn inconsistent_parameter_indexing_within_one_function_is_rejected() {
+        let source = r#"
+function bad%(arr%)
+  x% = arr%(0)
+  y% = arr%(0, 1)
+  return x% + y%
+end function
+
+dim g%(2, 2)
+print bad%(g%())
+end
+"#;
+        let err = compile_source("inconsistent_indexing.bcl", source)
+            .expect_err("indexing the same parameter with different subscript counts should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("different numbers of subscripts")),
+            "error must explain the inconsistent usage: {:?}", err
         );
     }
 

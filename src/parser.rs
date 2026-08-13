@@ -163,7 +163,7 @@ impl Parser {
         self.expect_keyword("function")?;
         let name = BasicIdent::parse(&self.expect_ident("expected function name")?);
         self.expect(TokenKind::LParen, "expected `(` after function name")?;
-        let params = self.parse_ident_list()?;
+        let params = self.parse_param_list()?;
         self.expect(TokenKind::RParen, "expected `)` after function parameters")?;
 
         if self.check_keyword("returns") {
@@ -186,7 +186,7 @@ impl Parser {
             return Err(self.error("procedure names must not carry a type suffix"));
         }
         self.expect(TokenKind::LParen, "expected `(` after procedure name")?;
-        let params = self.parse_ident_list()?;
+        let params = self.parse_param_list()?;
         self.expect(TokenKind::RParen, "expected `)` after procedure parameters")?;
         self.consume_line_end()?;
 
@@ -267,15 +267,23 @@ impl Parser {
         Ok(Statement::FileDecl { var, record_type, path })
     }
 
-    fn parse_ident_list(&mut self) -> ParseResult<Vec<BasicIdent>> {
+    fn parse_param_list(&mut self) -> ParseResult<Vec<Param>> {
         let mut items = Vec::new();
         if matches!(self.current().kind, TokenKind::RParen) {
             return Ok(items);
         }
         loop {
-            items.push(BasicIdent::parse(
-                &self.expect_ident("expected identifier")?,
-            ));
+            let mode = if self.check_keyword("byref") {
+                self.advance();
+                ParamMode::ByRef
+            } else if self.check_keyword("byval") {
+                self.advance();
+                ParamMode::ByVal
+            } else {
+                ParamMode::ByVal
+            };
+            let name = BasicIdent::parse(&self.expect_ident("expected identifier")?);
+            items.push(Param { name, mode });
             if !self.eat(TokenKind::Comma) {
                 break;
             }
