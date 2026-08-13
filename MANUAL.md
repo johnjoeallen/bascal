@@ -471,7 +471,7 @@ valid.
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
-function insertionSort%(arr%, count%)
+function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -1056,7 +1056,7 @@ procedure printIfPass(name$, score%)
     PRINT name$ + " passed with " + STR$(score%)
 end procedure
 
-procedure fillRange(arr%, count%, value%)
+procedure fillRange(byref arr%, count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
     end for

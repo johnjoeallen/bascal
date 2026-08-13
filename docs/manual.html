@@ -436,7 +436,7 @@ score% = 0  // also valid inline</code></pre>
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
-function insertionSort%(arr%, count%)
+function insertionSort%(byref arr%, count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1

@@ -76,7 +76,7 @@
   <p>Make BASIC more pleasant to write, without pretending it is a different runtime.</p>
 </blockquote>
 
-<p>BASCAL deliberately preserves BASIC's global symbol model — variables and functions are still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> — while adding enough structure that larger programs stay maintainable. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus <code>GOSUB</code>. Array arguments use copy-in/copy-out around the call. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.</p>
+<p>BASCAL deliberately preserves BASIC's global symbol model — variables and functions are still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> — while adding enough structure that larger programs stay maintainable. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus <code>GOSUB</code>. Every parameter is copied in before the call; <code>byref</code> copies the result back out afterward too (<code>byval</code>, the default, doesn't). Array parameters support any number of dimensions, matched against how the callee's body indexes them — a mismatch is a compile-time error. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.</p>
 
 <p>Generated BASIC is intentionally conservative. BASCAL transpiles structured source into line-numbered <code>GOTO</code> / <code>GOSUB</code> style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.</p>
 
