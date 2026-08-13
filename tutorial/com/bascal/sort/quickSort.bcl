@@ -3,7 +3,7 @@
 /* data% is byref so the sorted result is copied back to the caller. */
 // data%  -- array to sort, mutated in place
 // count% -- number of elements in data%
-function quickSort%(byref data%, count%)
+function quickSort%(byref data%(?), count%)
     DIM sLow%(64)
     DIM sHigh%(64)
 

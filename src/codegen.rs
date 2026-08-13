@@ -1058,36 +1058,31 @@ impl CodeGenerator {
             rendered_args.push(rendered_arg);
         }
 
-        for (index, rendered_arg) in rendered_args.iter().enumerate() {
-            if let Some((_, lowered)) = info.params.get(index) {
-                if !is_empty_array_arg(args.get(index)) {
-                    lines.push(format!("{} = {rendered_arg}", lowered.as_basic()));
-                }
-            } else {
-                lines.push(format!(
-                    "' warning: extra argument {} for {} ignored by current lowering",
-                    index + 1,
-                    info.source_name
-                ));
-            }
-        }
-
-        // Resolve each array-shaped argument's rank once, up front, so a
-        // mismatch is reported exactly once and the copy-in/copy-out passes
-        // below agree on how many dimensions to generate. `None` means
-        // either "not an array argument" or "rank mismatch already
-        // reported -- don't emit array copy code for it".
-        let array_ranks: Vec<Option<usize>> = args
+        // Resolve, once up front, which arguments are being passed as
+        // whole arrays -- either `arr%()` (empty parens; array-ness is
+        // explicit in the syntax) or a bare identifier that resolves to a
+        // declared array *and* whose corresponding parameter is itself
+        // declared as an array (array-ness is inferred purely from the
+        // callee's signature in that case, so a bare name only counts when
+        // the callee already expects an array there). `Some((resolved
+        // caller-side name, reconciled rank))` when so; `None` for a plain
+        // scalar argument, or an array-shaped argument whose rank didn't
+        // match (reported once, here).
+        let array_args: Vec<Option<(String, usize)>> = args
             .iter()
             .enumerate()
             .map(|(index, arg)| {
-                let Expr::ArrayRef { name: source_name, indices } = arg else {
-                    return None;
-                };
-                if !indices.is_empty() {
-                    return None;
-                }
                 let target_rank = info.param_ranks.get(index).copied().flatten();
+                let source_name: &BasicIdent = match arg {
+                    Expr::ArrayRef { name, indices } if indices.is_empty() => name,
+                    Expr::Ident(name)
+                        if target_rank.is_some()
+                            && self.resolve_array_rank(name, current_function).is_some() =>
+                    {
+                        name
+                    }
+                    _ => return None,
+                };
                 let source_rank = self.resolve_array_rank(source_name, current_function);
                 match (target_rank, source_rank) {
                     (Some(t), Some(s)) if t != s => {
@@ -1111,25 +1106,39 @@ impl CodeGenerator {
                         ));
                         None
                     }
-                    _ => Some(target_rank.or(source_rank).unwrap_or(1)),
+                    _ => {
+                        let rank = target_rank.or(source_rank).unwrap_or(1);
+                        Some((self.ident(source_name, current_function), rank))
+                    }
                 }
             })
             .collect();
 
-        for (index, arg) in args.iter().enumerate() {
+        for (index, rendered_arg) in rendered_args.iter().enumerate() {
             if let Some((_, lowered)) = info.params.get(index) {
-                if let Some(actual_array) = empty_array_name(arg, current_function, self) {
-                    let Some(rank) = array_ranks[index] else {
-                        continue;
-                    };
-                    let bounds: Vec<String> = (0..rank)
+                if array_args[index].is_none() {
+                    lines.push(format!("{} = {rendered_arg}", lowered.as_basic()));
+                }
+            } else {
+                lines.push(format!(
+                    "' warning: extra argument {} for {} ignored by current lowering",
+                    index + 1,
+                    info.source_name
+                ));
+            }
+        }
+
+        for (index, _arg) in args.iter().enumerate() {
+            if let Some((_, lowered)) = info.params.get(index) {
+                if let Some((actual_array, rank)) = &array_args[index] {
+                    let bounds: Vec<String> = (0..*rank)
                         .map(|axis| copy_bound(info, &rendered_args, index, axis))
                         .collect();
-                    let loop_vars: Vec<String> = (0..rank).map(|_| self.next_temp_var()).collect();
+                    let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
                     lines.push(format!("DIM {}({})", lowered.as_basic(), bounds.join(", ")));
                     lines.extend(array_copy_lines(
                         &lowered.as_basic(),
-                        &actual_array,
+                        actual_array,
                         &bounds,
                         "copy array argument into transpiled function storage",
                         &loop_vars,
@@ -1145,16 +1154,13 @@ impl CodeGenerator {
                 if param.mode != ParamMode::ByRef {
                     continue;
                 }
-                if let Some(actual_array) = empty_array_name(arg, current_function, self) {
-                    let Some(rank) = array_ranks[index] else {
-                        continue;
-                    };
-                    let bounds: Vec<String> = (0..rank)
+                if let Some((actual_array, rank)) = &array_args[index] {
+                    let bounds: Vec<String> = (0..*rank)
                         .map(|axis| copy_bound(info, &rendered_args, index, axis))
                         .collect();
-                    let loop_vars: Vec<String> = (0..rank).map(|_| self.next_temp_var()).collect();
+                    let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
                     lines.extend(array_copy_lines(
-                        &actual_array,
+                        actual_array,
                         &lowered.as_basic(),
                         &bounds,
                         "copy mutated array argument back to caller storage",
@@ -1657,7 +1663,7 @@ fn infer_param_ranks(
                     ranks.insert(count);
                 }
             });
-            match ranks.len() {
+            let usage_rank = match ranks.len() {
                 0 => None,
                 1 => ranks.into_iter().next(),
                 _ => {
@@ -1672,6 +1678,48 @@ fn infer_param_ranks(
                     ));
                     None
                 }
+            };
+
+            // The declaration (`arr%(?)`, `arr%(?, ?)`, ...) is the
+            // authoritative rank when present. Body usage is still checked
+            // against it -- an array parameter with no declared rank at
+            // all is rejected outright, since there's no other way to
+            // learn a parameter's rank from its declaration.
+            match (param.rank, usage_rank) {
+                (Some(declared), Some(used)) if declared != used => {
+                    diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "parameter `{}` of `{}` is declared with {} dimension{} but indexed \
+                             with {} subscript{} in the body",
+                            param.name,
+                            function.name,
+                            declared,
+                            if declared == 1 { "" } else { "s" },
+                            used,
+                            if used == 1 { "" } else { "s" },
+                        ),
+                    ));
+                    None
+                }
+                (Some(declared), _) => Some(declared),
+                (None, Some(used)) => {
+                    let placeholders = vec!["?"; used].join(", ");
+                    diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "parameter `{}` of `{}` is indexed as a {}-D array in the body, but \
+                             its declaration doesn't say so -- write `{}({})`",
+                            param.name,
+                            function.name,
+                            used,
+                            param.name.as_basic(),
+                            placeholders,
+                        ),
+                    ));
+                    None
+                }
+                (None, None) => None,
             }
         })
         .collect()
@@ -2120,23 +2168,6 @@ fn callable_expr(expr: &Expr) -> Option<(&BasicIdent, &[Expr])> {
     match expr {
         Expr::Call { name, args } => Some((name, args)),
         Expr::ArrayRef { name, indices } => Some((name, indices)),
-        _ => None,
-    }
-}
-
-fn is_empty_array_arg(expr: Option<&Expr>) -> bool {
-    matches!(expr, Some(Expr::ArrayRef { indices, .. }) if indices.is_empty())
-}
-
-fn empty_array_name(
-    expr: &Expr,
-    current_function: Option<&FunctionInfo>,
-    generator: &CodeGenerator,
-) -> Option<String> {
-    match expr {
-        Expr::ArrayRef { name, indices } if indices.is_empty() => {
-            Some(generator.ident(name, current_function))
-        }
         _ => None,
     }
 }

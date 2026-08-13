@@ -4,7 +4,7 @@
 /* and discard it. */
 // data%  -- array to sort, mutated in place
 // count% -- number of elements in data%
-function bubbleSort%(byref data%, count%)
+function bubbleSort%(byref data%(?), count%)
     /* After each outer pass, the largest remaining value has bubbled right. */
     FOR i% = 1 TO count% - 1
         FOR j% = 1 TO count% - i%

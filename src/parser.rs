@@ -283,7 +283,24 @@ impl Parser {
                 ParamMode::ByVal
             };
             let name = BasicIdent::parse(&self.expect_ident("expected identifier")?);
-            items.push(Param { name, mode });
+            let rank = if self.eat(TokenKind::LParen) {
+                let mut count = 0usize;
+                loop {
+                    self.expect(
+                        TokenKind::Question,
+                        "expected `?` in array parameter rank -- e.g. `arr%(?)` for 1-D, `arr%(?, ?)` for 2-D",
+                    )?;
+                    count += 1;
+                    if !self.eat(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::RParen, "expected `)` after array parameter rank")?;
+                Some(count)
+            } else {
+                None
+            };
+            items.push(Param { name, mode, rank });
             if !self.eat(TokenKind::Comma) {
                 break;
             }

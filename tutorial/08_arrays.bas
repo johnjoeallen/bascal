@@ -7,9 +7,10 @@
 ' dim name%(rows, cols) declares a 2-D array; more dimensions are allowed.
 ' Array elements are accessed with parentheses: arr%(i%) or grid%(r%, c%).
 ' 
-' To pass an array to a function, use the plain variable name as the
-' parameter (e.g. arr%, not arr%()).  At the call site, write arr%()
-' to signal that an array is being passed.
+' An array parameter must declare its rank with one ? per dimension:
+' arr%(?) for 1-D, grid%(?, ?) for 2-D, and so on. At the call site, just
+' write the plain array name -- no () needed; the compiler already knows
+' that parameter is an array from its declaration.
 ' 
 ' An array parameter defaults to byval: the function gets its own private
 ' copy, and changes never reach the caller.  Write byref to copy the

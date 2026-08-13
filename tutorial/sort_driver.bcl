@@ -24,7 +24,7 @@ for i% = 1 to 5000
 end for
 
 tStart# = timer
-bubbleSort%(bubbleData%(), 5000)
+bubbleSort%(bubbleData%, 5000)
 tElapsed# = timer - tStart#
 print "Bubble sort time (ms):", tElapsed# * 5000
 ok% = 1
@@ -40,7 +40,7 @@ else
 end if
 
 tStart# = timer
-shakerSort%(shakerData%(), 5000)
+shakerSort%(shakerData%, 5000)
 tElapsed# = timer - tStart#
 print "Shaker sort time (ms):", tElapsed# * 5000
 ok% = 1
@@ -56,7 +56,7 @@ else
 end if
 
 tStart# = timer
-shellSort%(shellData%(), 5000)
+shellSort%(shellData%, 5000)
 tElapsed# = timer - tStart#
 print "Shell sort time (ms):", tElapsed# * 5000
 ok% = 1
@@ -72,7 +72,7 @@ else
 end if
 
 tStart# = timer
-quickSort%(quickData%(), 5000)
+quickSort%(quickData%, 5000)
 tElapsed# = timer - tStart#
 print "Quick sort time (ms):", tElapsed# * 5000
 ok% = 1

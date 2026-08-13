@@ -347,7 +347,7 @@ mod tests {
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         // Without the sort library bubbleSort% is not in the symbol table;
         // it is emitted lowercase like any other user symbol, not uppercased.
-        assert!(output.contains("bubblesort%(bubbledata%(), 5000)"));
+        assert!(output.contains("bubblesort%(bubbledata%, 5000)"));
         assert!(output.contains("END"));
     }
 
@@ -1522,7 +1522,7 @@ end
     fn byval_array_parameter_does_not_copy_result_back() {
         // Unmarked (byval, the default) array parameter: copy-in only.
         let source = r#"
-function zeroOut%(arr%, count%)
+function zeroOut%(arr%(?), count%)
   for i% = 0 to count% - 1
     arr%(i%) = 0
   end for
@@ -1547,7 +1547,7 @@ end
     #[test]
     fn byref_array_parameter_copies_result_back() {
         let source = r#"
-function zeroOut%(byref arr%, count%)
+function zeroOut%(byref arr%(?), count%)
   for i% = 0 to count% - 1
     arr%(i%) = 0
   end for
@@ -1651,7 +1651,7 @@ end
     #[test]
     fn two_dimensional_array_parameter_generates_nested_copy_loops() {
         let source = r#"
-function sumGrid%(byref grid%, rows%, cols%)
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
   total% = 0
   for r% = 0 to rows% - 1
     for c% = 0 to cols% - 1
@@ -1725,7 +1725,7 @@ end
     #[test]
     fn three_dimensional_array_parameter_generates_triple_nested_copy_loops() {
         let source = r#"
-function sumCube%(byref cube%, a%, b%, c%)
+function sumCube%(byref cube%(?, ?, ?), a%, b%, c%)
   total% = 0
   for i% = 0 to a% - 1
     for j% = 0 to b% - 1
@@ -1761,7 +1761,7 @@ end
         // with one subscript in its own body -- passing g%() there would
         // generate a `Wrong number of subscripts` BASIC program.
         let source = r#"
-function sumRow%(byref row%, count%)
+function sumRow%(byref row%(?), count%)
   total% = 0
   for i% = 0 to count% - 1
     total% = total% + row%(i%)
@@ -1782,6 +1782,123 @@ end
                     && d.message.contains("row%")
             }),
             "error must name both ranks and the mismatched parameter: {:?}", err
+        );
+    }
+
+    #[test]
+    fn array_used_in_body_without_declared_rank_is_rejected() {
+        // arr% is indexed as a 1-D array in the body but the declaration
+        // never says so -- there's no other way to learn a parameter's
+        // rank, so this must be a compile-time error, not an inference.
+        let source = r#"
+function sumArr%(arr%, count%)
+  total% = 0
+  for i% = 0 to count% - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+end
+"#;
+        let err = compile_source("missing_rank.bcl", source)
+            .expect_err("an array parameter with no declared rank should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("arr%")
+                    && d.message.contains("sumArr%")
+                    && d.message.contains("doesn't say so")
+                    && d.message.contains("arr%(?)")
+            }),
+            "error must explain the missing declaration and suggest the fix: {:?}", err
+        );
+    }
+
+    #[test]
+    fn declared_rank_mismatched_with_body_usage_is_rejected() {
+        let source = r#"
+function bad%(arr%(?, ?))
+  return arr%(0)
+end function
+end
+"#;
+        let err = compile_source("declared_rank_mismatch.bcl", source)
+            .expect_err("a declared rank that disagrees with body usage should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("declared with 2 dimensions")
+                    && d.message.contains("indexed with 1 subscript")
+            }),
+            "error must name both the declared and used rank: {:?}", err
+        );
+    }
+
+    #[test]
+    fn bare_identifier_array_argument_is_accepted_without_parens() {
+        // Once a parameter's rank is declared, the call site no longer
+        // needs `()` to mark an argument as an array -- the compiler
+        // already knows from the callee's signature.
+        let source = r#"
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
+  total% = 0
+  for r% = 0 to rows% - 1
+    for c% = 0 to cols% - 1
+      total% = total% + grid%(r%, c%)
+    end for
+  end for
+  return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%, 3, 3)
+end
+"#;
+        let output = compile_source("bare_ident_call.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM sumgrid_grid_0%(3, 3)"),
+            "bare identifier array argument should still generate correct copy-in/copy-out:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| {
+                l.trim() == "sumgrid_grid_0%(BCC_T1%, BCC_T2%) = g%(BCC_T1%, BCC_T2%)"
+            }),
+            "copy-in should read from g%, the bare identifier, not require g%():\n{output}"
+        );
+    }
+
+    #[test]
+    fn bare_identifier_and_parens_call_syntax_generate_identical_output() {
+        let source_with_parens = r#"
+function sumArr%(arr%(?), count%)
+  total% = 0
+  for i% = 0 to count% - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+dim data%(4)
+print sumArr%(data%(), 5)
+end
+"#;
+        let source_bare = r#"
+function sumArr%(arr%(?), count%)
+  total% = 0
+  for i% = 0 to count% - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+dim data%(4)
+print sumArr%(data%, 5)
+end
+"#;
+        let with_parens = compile_source("bare_vs_parens_a.bcl", source_with_parens)
+            .expect("should compile");
+        let bare = compile_source("bare_vs_parens_b.bcl", source_bare).expect("should compile");
+        assert_eq!(
+            with_parens, bare,
+            "arr%() and bare arr% at the call site must generate identical output"
         );
     }
 

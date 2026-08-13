@@ -82,6 +82,12 @@ pub struct FunctionDef {
 pub struct Param {
     pub name: BasicIdent,
     pub mode: ParamMode,
+    /// Declared array rank: `None` for a scalar parameter (bare name, no
+    /// parens), `Some(n)` for an array parameter declared `name(?)` (n=1),
+    /// `name(?, ?)` (n=2), etc. -- one `?` per dimension. An array
+    /// parameter's rank must be declared this way; there is no way to
+    /// declare an array parameter without it.
+    pub rank: Option<usize>,
 }
 
 /// `ByVal` copies the argument in before the call and never writes it back.

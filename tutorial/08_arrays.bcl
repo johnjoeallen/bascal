@@ -4,9 +4,10 @@
 // dim name%(rows, cols) declares a 2-D array; more dimensions are allowed.
 // Array elements are accessed with parentheses: arr%(i%) or grid%(r%, c%).
 //
-// To pass an array to a function, use the plain variable name as the
-// parameter (e.g. arr%, not arr%()).  At the call site, write arr%()
-// to signal that an array is being passed.
+// An array parameter must declare its rank with one ? per dimension:
+// arr%(?) for 1-D, grid%(?, ?) for 2-D, and so on. At the call site, just
+// write the plain array name -- no () needed; the compiler already knows
+// that parameter is an array from its declaration.
 //
 // An array parameter defaults to byval: the function gets its own private
 // copy, and changes never reach the caller.  Write byref to copy the
@@ -27,7 +28,7 @@ data%(5) = 11
 /* Insertion sort — sorts data%() in place */
 // arr%   -- array to sort; byref because it's mutated in place
 // count% -- number of elements in arr%
-function insertionSort%(byref arr%, count%)
+function insertionSort%(byref arr%(?), count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -44,7 +45,7 @@ end function
 // arr%    -- array to search; byval, since indexOf% only reads it
 // count%  -- number of elements in arr%
 // target% -- value to search for
-function indexOf%(arr%, count%, target%)
+function indexOf%(arr%(?), count%, target%)
     for i% = 0 to count% - 1
         if arr%(i%) = target% then
             return i%
@@ -56,7 +57,7 @@ end function
 /* Print the array on one line as  [ a b c ... ] */
 // arr%   -- array to print; byval, since printArray% only reads it
 // count% -- number of elements in arr%
-function printArray%(arr%, count%)
+function printArray%(arr%(?), count%)
     line$ = "["
     for i% = 0 to count% - 1
         line$ = line$ + " " + str$(arr%(i%))
@@ -67,16 +68,16 @@ end function
 
 /* Before sort */
 print "Before: "
-dummy% = printArray%(data%(), N%)
+dummy% = printArray%(data%, N%)
 
 /* Sort and show */
-dummy% = insertionSort%(data%(), N%)
+dummy% = insertionSort%(data%, N%)
 print "After:  "
-dummy% = printArray%(data%(), N%)
+dummy% = printArray%(data%, N%)
 
 /* Search */
 target% = 22
-idx% = indexOf%(data%(), N%, target%)
+idx% = indexOf%(data%, N%, target%)
 if idx% >= 0 then
     print str$(target%) + " found at index " + str$(idx%)
 else

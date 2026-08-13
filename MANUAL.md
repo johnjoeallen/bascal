@@ -475,7 +475,7 @@ valid.
  */
 ' arr%   -- array to sort; byref because it's mutated in place
 ' count% -- number of elements in arr%
-function insertionSort%(byref arr%, count%)
+function insertionSort%(byref arr%(?), count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -957,7 +957,7 @@ are written as expression statements. The result variable is overwritten but
 not read:
 
 ```
-dummy% = sortArray%(data%(), N%)
+dummy% = sortArray%(data%, N%)
 ```
 
 ### Return
@@ -1077,7 +1077,7 @@ end procedure
 ' arr%   -- array to fill; byref because it's mutated in place
 ' count% -- number of elements in arr%
 ' value% -- value written into every element
-procedure fillRange(byref arr%, count%, value%)
+procedure fillRange(byref arr%(?), count%, value%)
     for i% = 0 to count% - 1
         arr%(i%) = value%
     end for
@@ -1092,7 +1092,7 @@ Procedures are called as statements (not inside expressions):
 printSeparator()
 printScore("Alice", 91)
 printIfPass("Bob", 54)
-fillRange(data%(), N%, 99)
+fillRange(data%, N%, 99)
 ```
 
 ### Early Exit
@@ -1114,19 +1114,19 @@ end procedure
 
 ### Array Parameters
 
-Array parameters use the same [byref / byval](#byref--byval) rules as
-functions. Declare the parameter without `()` in the procedure header; pass
-with `()` at the call site:
+Array parameters use the same [byref / byval](#byref--byval) rules and the
+same `(?, ?, ...)` rank declaration as functions. Pass the plain array name
+at the call site — no `()`:
 
 ```
 ' arr%   -- array to fill; byref because it's mutated in place
 ' count% -- number of elements in arr%
 ' value% -- value written into every element
-procedure fillRange(byref arr%, count%, value%)   ' arr% — no () in header
+procedure fillRange(byref arr%(?), count%, value%)   ' arr%(?) -- 1-D array
     ...
 end procedure
 
-fillRange(data%(), N%, 99)                        ' data%() — () at call site
+fillRange(data%, N%, 99)                             ' plain data%, no ()
 ```
 
 `fillRange` needs `byref` here because its entire job is to mutate the
@@ -1188,23 +1188,16 @@ PRINT values%(i%)
 
 ### Passing Arrays to Functions
 
-A parameter declaration is always just `[byref | byval] name` — there is no
-array syntax available there at all. Writing `arr%()` in a parameter list
-is a **compile-time error**, not a style choice to avoid. Whether a
-parameter is an array, and how many dimensions it has, is never declared —
-it's inferred from how it's used on both ends of the call, and the compiler
-checks the two sides agree:
+An array parameter must declare its rank right in the signature — one `?`
+per dimension, in parens after the name: `arr%(?)` for 1-D, `grid%(?, ?)`
+for 2-D, and so on. A scalar parameter stays a bare name. There's no way
+to declare an array parameter without stating its rank this way — a
+parameter that's indexed as an array in the function body but declared
+without one is a **compile-time error**, not a warning.
 
-- **At the call site**, an empty-parens argument (`arr%()`) is what marks
-  that array as being passed — this is the only place array-ness is ever
-  written down.
-- **Inside the callee's own body**, however many subscripts the parameter
-  is actually indexed with decides its rank: `arr%(i%)` reads as 1-D,
-  `grid%(r%, c%)` as 2-D, and so on.
-- These two are cross-checked. Passing a 2-D array where the function only
-  ever indexes its parameter with one subscript (or vice versa) is a
-  compile-time error — see [Multi-Dimensional Array
-  Parameters](#multi-dimensional-array-parameters).
+At the call site, just write the plain array name — **no `()` needed**.
+The compiler already knows that parameter is an array from its
+declaration, so there's nothing left for the call site to mark.
 
 And separately: `byref` does **not** give the function a real reference to
 the caller's array — BASIC has no pointers or aliasing at this level.
@@ -1221,7 +1214,7 @@ correct as-is:
 ```
 ' arr%   -- array to sort; byref because it's mutated in place
 ' count% -- number of elements in arr%
-function insertionSort%(byref arr%, count%)
+function insertionSort%(byref arr%(?), count%)
     for i% = 1 to count% - 1
         key% = arr%(i%)
         j%   = i% - 1
@@ -1237,7 +1230,7 @@ end function
 ' arr%    -- array to search; byval, since indexOf% only reads it
 ' count%  -- number of elements in arr%
 ' target% -- value to search for
-function indexOf%(arr%, count%, target%)
+function indexOf%(arr%(?), count%, target%)
     for i% = 0 to count% - 1
         if arr%(i%) = target% then
             return i%
@@ -1255,9 +1248,9 @@ DIM data%(N%)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-dummy% = insertionSort%(data%(), N%)   ' sorts in place -- arr% is byref
+dummy% = insertionSort%(data%, N%)   ' sorts in place -- arr% is byref
 
-idx% = indexOf%(data%(), N%, 22)
+idx% = indexOf%(data%, N%, 22)
 if idx% >= 0 then
     PRINT "22 found at index " + STR$(idx%)
 end if
@@ -1272,8 +1265,8 @@ before the call. Whether that value is copied back to the caller afterward
 depends on how the parameter is declared:
 
 ```
-function insertionSort%(byref arr%, count%)   ' byref: copied in, then back out
-function indexOf%(arr%, count%, target%)      ' unmarked = byval: copied in only
+function insertionSort%(byref arr%(?), count%)   ' byref: copied in, then back out
+function indexOf%(arr%(?), count%, target%)      ' unmarked = byval: copied in only
 ```
 
 - **`byval`** (the default — an unmarked parameter is `byval`): the
@@ -1317,15 +1310,16 @@ always-shared behavior back, deliberately, per parameter.
 
 ### Multi-Dimensional Array Parameters
 
-A 2-D (or higher) array passes the same way as 1-D — empty parens at the
-call site — but needs one count argument per axis, not just one, in the
-same order as the array's own `DIM`:
+A 2-D (or higher) array parameter declares its rank the same way as 1-D —
+one `?` per dimension — and passes the same way, too: just the plain array
+name, no `()`. What changes is the trailing count arguments: one per axis,
+in the same order as the array's own `DIM`.
 
 ```
 ' grid% -- 2-D array to sum
 ' rows% -- number of rows in grid%
 ' cols% -- number of columns in grid%
-function sumGrid%(byref grid%, rows%, cols%)
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
     total% = 0
     for r% = 0 to rows% - 1
         for c% = 0 to cols% - 1
@@ -1336,17 +1330,22 @@ function sumGrid%(byref grid%, rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%(), 3, 3)
+print sumGrid%(g%, 3, 3)
 ```
 
-The compiler infers how many dimensions a parameter has from how the
-function's own body indexes it (`grid%(r%, c%)` above means two), then
-checks that against the array actually being passed at each call site. A
-mismatch — passing a 2-D array where a function indexes its parameter with
-one subscript, or vice versa — is a compile-time error, not a
-miscompile: the two shapes genuinely can't share one copy loop, so BASCAL
-refuses rather than generate a `DIM`/subscript mismatch that real BASIC
-would only catch at runtime.
+`grid%(?, ?)` is cross-checked two ways, both at compile time:
+
+- Against the function's own body — `grid%(r%, c%)` above indexes with two
+  subscripts, matching the declared two `?`s. A declaration that disagrees
+  with how the body actually uses the parameter is an error.
+- Against whatever array is actually passed at each call site — passing a
+  1-D array where the parameter declares two dimensions (or vice versa) is
+  also an error.
+
+Either mismatch is caught before it ever reaches generated BASIC: the two
+shapes genuinely can't share one copy loop, so BASCAL refuses rather than
+emit a `DIM`/subscript mismatch that real BASIC would only catch at
+runtime.
 
 ---
 

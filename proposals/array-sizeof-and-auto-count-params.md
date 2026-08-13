@@ -1,13 +1,13 @@
 # Proposal: compiler-tracked array sizes, `sizeof()`, and auto-injected count parameters
 
 Status: the `sizeof()`/auto-injection sections below are still discussion
-only — not implemented, not committed to. The **`byref`/`byval`** and
-**`global` shadowing** sections are **implemented** (parser, resolver,
-codegen, tests, `MANUAL.md`/`docs/manual.html`, and the affected tutorial
-sources all updated — see `git log` for the commit). The **explicit
-array-parameter rank syntax** section near the end is decided design, not
-yet implemented. This file remains a write-up of a design conversation for
-the still-open pieces.
+only — not implemented, not committed to. Everything else in this file —
+**`byref`/`byval`**, **`global` shadowing**, and **explicit
+array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`, bare-identifier
+call sites) — is **implemented** (parser, resolver, codegen, tests,
+`MANUAL.md`/`docs/manual.html`, and every tutorial source updated — see
+`git log` for the commits). This file remains a write-up of a design
+conversation for the one still-open piece.
 
 ## Motivation
 
@@ -269,7 +269,7 @@ parameter names.
 
 ---
 
-## Decided (not yet implemented): explicit array-parameter rank syntax
+## Implemented: explicit array-parameter rank syntax
 
 Surfaced from a documentation complaint: today, nothing in a parameter
 declaration says a parameter is an array, let alone how many dimensions
