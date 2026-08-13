@@ -2,10 +2,12 @@
 
 Status: the `sizeof()`/auto-injection sections below are still discussion
 only — not implemented, not committed to. The **`byref`/`byval`** and
-**`global` shadowing** sections near the end are **implemented** (parser,
-resolver, codegen, tests, `MANUAL.md`/`docs/manual.html`, and the affected
-tutorial sources all updated — see `git log` for the commit). This file
-remains a write-up of a design conversation for the still-open pieces.
+**`global` shadowing** sections are **implemented** (parser, resolver,
+codegen, tests, `MANUAL.md`/`docs/manual.html`, and the affected tutorial
+sources all updated — see `git log` for the commit). The **explicit
+array-parameter rank syntax** section near the end is decided design, not
+yet implemented. This file remains a write-up of a design conversation for
+the still-open pieces.
 
 ## Motivation
 
@@ -264,3 +266,89 @@ Reject this at compile time. Same validation shape as the existing
 walk each function/procedure body's `GlobalDecl` statements and raise a
 diagnostic if the declared name matches one of that function's own
 parameter names.
+
+---
+
+## Decided (not yet implemented): explicit array-parameter rank syntax
+
+Surfaced from a documentation complaint: today, nothing in a parameter
+declaration says a parameter is an array, let alone how many dimensions
+it has — `arr%` in `function insertionSort%(byref arr%, count%)` looks
+identical whether the compiler will later infer it as a scalar or a 5-D
+array. Rank is entirely inferred from how the function's own body indexes
+the parameter (implemented earlier this session — `infer_param_ranks` in
+`codegen.rs`), which is invisible at the declaration itself and only
+surfaces as a compile error if a caller gets it wrong.
+
+### Decision: `(?, ?, ...)` — one `?` per dimension, in the declaration
+
+```bascal
+function insertionSort%(byref arr%(?), count%)
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumCube%(byref cube%(?, ?, ?), a%, b%, c%)
+```
+
+- A scalar parameter stays a bare name, unchanged.
+- An array parameter's rank is written directly at the declaration as a
+  parenthesized, comma-separated list of `?` — one per dimension. No
+  bounds go here (those still can't be known at the call site in general);
+  `?` marks "a dimension exists here, sized by whoever calls this."
+- `?` was picked over `*` (also considered) specifically because BASCAL
+  already uses `?` for "deliberately incomplete, filled in elsewhere" in
+  `?{ field: value }` partial record literals — same idea applied to a
+  parameter's shape instead of a record's fields, reusing an existing
+  convention instead of adding a second one. A bare rank count (`arr%(2)`)
+  was also considered and reads more compactly at high rank, but was
+  rejected because it makes a bare number mean two different things
+  depending on context (a bound in `dim`, a rank count in a parameter) --
+  `(?, ?)` stays visually self-counting, the same instinct as counting
+  commas in `dim grid%(9, 9)`.
+
+### Consequence: the call site no longer needs `()` for a known array
+
+Once the declaration states a parameter's rank, the compiler doesn't need
+a call-site marker to know argument position N expects an array — it can
+tell from what the identifier resolves to:
+
+```bascal
+dim g%(2, 2)
+print sumGrid%(g%, 3, 3)   ' g%, not g%() -- signature already says rank 2
+```
+
+`g%` already parses as plain `Expr::Ident` today; no parser change is
+needed for the call site, only a codegen change in argument
+classification (`call_lines` in `codegen.rs`): treat a bare `Expr::Ident`
+as an array-pass whenever it resolves to a declared array *and* the
+callee's corresponding parameter is declared with a matching rank, the
+same way an empty-parens `Expr::ArrayRef` is treated today.
+
+Edge case: classic BASIC allows a scalar and an array to share one name,
+disambiguated only by whether parens appear at each use site (this is why
+`Statement::Dim` tracks "were parens written at all" separately from its
+bound list already). A bare `g%` argument is ambiguous if `g%` is *both*
+a declared scalar and a declared array in the same scope. Rather than
+preserve `()` everywhere to cover that case, the better fix is probably to
+reject a name reused as both a scalar and an array in the same scope as
+its own error — that's a footgun worth flagging regardless of this
+change, not a legitimate pattern worth keeping `()` around to support.
+
+### Relationship to the already-implemented rank inference
+
+`infer_param_ranks` (rank inferred from body usage, built earlier this
+session) doesn't go away — it becomes a **cross-check** instead of the
+only source of truth: a parameter declared `arr%(?, ?)` but only ever
+indexed with one subscript in the body is now a *declaration-vs-usage*
+mismatch, catchable with the same kind of diagnostic already used for
+*caller-vs-parameter* rank mismatches (`call_lines`'s existing
+`array_ranks` check). Two independent signals agreeing is strictly safer
+than inferring from one.
+
+### Known cost: breaking change to every existing array-parameter example
+
+This changes required syntax for every array parameter that exists today.
+`tutorial/**/*.bcl`, `MANUAL.md`, and `docs/manual.html` all currently
+declare array parameters as a bare name (`byref arr%`, `byref data%`,
+`byref grid%`, …) — every one of those becomes `byref arr%(?)` /
+`byref data%(?)` / `byref grid%(?, ?)`, on top of the parameter-comment
+sweep already done for the same declarations. Not a reason not to do it,
+but real follow-up work, not just a codegen change.
