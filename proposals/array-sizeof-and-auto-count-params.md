@@ -3,10 +3,12 @@
 Status: everything in this file is **implemented** — `sizeof(x%)` /
 `sizeof(x%, axis)` (freeze-at-DIM-time, multi-axis, and the on-a-parameter
 resolution case), unconditional auto-injection of array bounds at call
-sites, **`byref`/`byval`**, **`global` shadowing**, and **explicit
-array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`, bare-identifier
-call sites). See `MANUAL.md`/`docs/manual.html` "sizeof()" and
-"Multi-Dimensional Array Parameters" for the shipped, documented form.
+sites, **array parameter storage capacity inference** (with a compile-time
+and a runtime backstop check), **`byref`/`byval`**, **`global` shadowing**,
+and **explicit array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`,
+bare-identifier call sites). See `MANUAL.md`/`docs/manual.html` "sizeof()",
+"Multi-Dimensional Array Parameters", and "Array Parameter Storage
+Capacity" for the shipped, documented form.
 
 The manual-count-parameter convention this whole proposal set out to
 replace is now gone entirely, not just optional: an array parameter's
@@ -188,6 +190,100 @@ exercised inside a function body at all before now.
   separate follow-up work — see
   [Resolved: multi-D array parameters](#resolved-multi-d-array-parameters-are-now-fully-wired-up)
   above.
+
+---
+
+## Implemented: array parameter storage capacity
+
+### The bug this closes
+
+Auto-injection (above) fixed *how big a copy loop should run* per call,
+but left a separate, more basic problem completely unaddressed: *how big
+the shared storage array itself is allowed to be*, for the whole life of
+the program. `call_lines` DIMed a parameter's storage at every call site
+that used it — meaning any function with an array parameter, called more
+than once anywhere (two different call sites, or one call site inside a
+loop), emitted the same `DIM` more than once. Classic BASIC has no
+`REDIM`; a second `DIM` on an already-`DIM`ed array is a fatal runtime
+"Duplicate Definition" error. This wasn't hypothetical — it was already
+present in the shipped tutorials before this fix, e.g.
+`tutorial/08_arrays.bcl` calling `printArray%` twice generated `DIM
+printarray_arr_0%(...)` twice.
+
+This predates `sizeof()` entirely — it was already true under the
+original manual-count-parameter convention, since the `DIM` was always
+emitted per call site regardless of where the bound came from.
+
+### Decision: capacity is inferred, decided once, `DIM`ed once
+
+An array parameter's storage now gets `DIM`ed exactly once, at the very
+top of the generated program, before any call happens. Its size is a
+fixed *capacity* — a new, separate number from the per-call *actual*
+size `sizeof()`/auto-injection already tracks — resolved one of two ways:
+
+- **Inferred** (`arr%(?)`, the default): the compiler scans every call
+  site of the function across the whole program and takes the largest
+  resolved size, *only* when every one of those sizes is itself resolvable
+  at compile time — a literal `DIM` bound, a `const` (recursively
+  evaluated through simple `+`/`-`/`*` arithmetic), or, when the array
+  being passed is itself another function's array parameter forwarded
+  onward, that parameter's own already-resolved capacity. Since BASCAL
+  rejects every call cycle (direct or indirect), that forwarding chain is
+  always finite, so resolving it is a straightforward fixed-point: repeat
+  scanning until nothing new resolves, same shape as any other
+  cycle-free dependency resolution.
+- **Explicit** (`arr%(100)`, a literal in place of `?`): required only
+  when inference genuinely can't produce a safe number — at least one
+  call site's array size is a real runtime value (e.g. `dim data%(n%)`
+  where `n%` came from `input`). There's no way to know that size ahead
+  of time, so there's no way to auto-size storage for it; the author has
+  to say how much to allow for.
+
+A capacity that's provably too small — a call site whose size *is*
+resolvable at compile time and exceeds the (inferred or explicit)
+capacity — is a compile-time error, not a wait-and-see runtime one.
+
+### Decision: a runtime check too, regardless
+
+Every call site also emits a runtime check comparing the argument's
+actual resolved size against the parameter's capacity, immediately after
+setting the auto-injected bound variable and before the copy-in loop:
+
+```basic
+IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
+```
+
+This is deliberately unconditional, not gated on "only when the compiler
+couldn't already prove it's safe." A call site the compiler *did* prove
+safe can never trip this check (it's dead code for that call), but
+emitting it anyway is cheap insurance against a mistake in the inference
+itself, and it's the only defense at all for the explicit-capacity case,
+where a compile-time-unprovable call is exactly the situation that led to
+writing an explicit capacity in the first place.
+
+### Implementation
+
+- `Param.rank: Option<usize>` became `Param.axes: Option<Vec<Option<i64>>>`
+  — `None` per axis is `?`, `Some(n)` is an explicit capacity written in
+  its place. `Param::rank()` derives the old dimension-count value from
+  `axes.len()` for the few call sites that only ever needed that.
+- `infer_array_param_capacities` (`codegen.rs`) is a standalone,
+  whole-program prepass over the parsed `Program` — it doesn't touch
+  `CodeGenerator` state, so it runs before any `FunctionInfo` exists and
+  its results (`HashMap<function name, Vec<Vec<i64>>>`) feed into
+  `FunctionInfo::from_def` as a new `param_capacities` field, parallel to
+  `params`.
+- `const_eval` folds a small constant-expression language (integer
+  literals, unambiguous `const` references, `+`/`-`/`*` between two
+  foldable operands) — deliberately narrow; a genuinely dynamic bound is
+  supposed to fall through to "unresolvable," not be guessed at.
+- `emit_array_param_storage_dims` (`CodeGenerator`) emits the hoisted,
+  one-time `DIM` block right after `COMMON`/dependency declarations and
+  before the program's own top-level statements run.
+- `call_lines` no longer DIMs a parameter's storage at all — it only sets
+  the auto-injected bound variable, emits the runtime check against
+  `info.param_capacities`, and runs the copy loop against storage that
+  was already DIMed once, up top.
 
 ---
 

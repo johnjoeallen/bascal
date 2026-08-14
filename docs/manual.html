@@ -1016,6 +1016,28 @@ print sumGrid%(g%)</code></pre>
 <li>Against whatever array is actually passed at each call site — passing a 1-D array where the parameter declares two dimensions (or vice versa) is also an error.</li>
 </ul>
 <p>Either mismatch is caught before it ever reaches generated BASIC: the two shapes genuinely can't share one copy loop, so BASCAL refuses rather than emit a <code>DIM</code>/subscript mismatch that real BASIC would only catch at runtime.</p>
+<h3 id="array-parameter-storage-capacity">Array Parameter Storage Capacity</h3>
+<p>An array parameter's storage is one shared, generated variable, reused by every call to that function — the same reason a scalar parameter's storage is shared. Arrays additionally need a fixed <em>size</em>, though, and classic BASIC has no <code>REDIM</code>: once an array is <code>DIM</code>ed, it can never be resized, and a second <code>DIM</code> on the same array is a fatal runtime error. So a parameter's storage is <code>DIM</code>ed exactly once, at the very top of the generated program — before any call happens — sized to the biggest array anything anywhere ever passes it.</p>
+<p>Normally this needs no attention at all. Write <code>?</code> for every axis, same as always; the compiler works out a safe capacity itself by scanning every call site in the program and taking the largest resolved size. Below, <code>sumArr%</code>'s storage ends up sized for 10 elements even though its first call only ever passes it 3:</p>
+<pre><code>function sumArr%(arr%(?))
+    &#39; ...
+end function
+
+dim small%(2)
+dim big%(9)
+dummy% = sumArr%(small%)
+dummy% = sumArr%(big%)</code></pre>
+<p>This works whenever every call site's array size is knowable at compile time — a literal <code>DIM</code> bound, a <code>const</code>, or (when the array being passed is itself another function's array parameter, forwarded onward) that parameter's own already-resolved capacity. It genuinely can't work when a call site's array size is a real runtime value:</p>
+<pre><code>input n%
+dim data%(n%)
+dummy% = sumArr%(data%)   &#39; error: arr%&#39;s capacity can&#39;t be inferred</code></pre>
+<p>There's no way to know at compile time how big <code>data%</code> will turn out to be, so there's no safe number to give its shared storage automatically. Write an explicit capacity instead of <code>?</code> for that axis — a literal integer, chosen to comfortably cover every use:</p>
+<pre><code>function sumArr%(arr%(100))
+    &#39; ...
+end function</code></pre>
+<p>Whichever way a capacity is decided — inferred or explicit — every call site still checks the array's <em>actual</em> size against it at runtime, right before copying in, and halts with a clear error if it doesn't fit:</p>
+<pre><code>IF sumarr_arr_dim0_0% &gt; 100 THEN PRINT &quot;runtime error: ...&quot; : STOP</code></pre>
+<p>This is a backstop, not the primary defense — a call site whose size <em>is</em> a compile-time constant and provably too big for its capacity is already rejected at compile time, before generated BASIC exists to run at all. The runtime check exists for the one case that's genuinely unprovable ahead of time: a capacity chosen to comfortably cover today's inputs that a later, larger runtime value turns out to exceed.</p>
 <h3 id="sizeof">sizeof()</h3>
 <p><code>sizeof(name)</code> returns a <code>dim</code>ed array's size, resolved entirely at compile time — it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:</p>
 <pre><code>dim data%(9)
@@ -1041,6 +1063,7 @@ print sizeof(data%)   &#39; 5 -- the value dim actually used, not the later 99</
     return total%
 end function</code></pre>
 <p>Nothing here is written by the <code>.bcl</code> author, at the call site or in the signature — the bound simply isn't a value you pass, it's a value you ask for with <code>sizeof()</code> wherever you need it.</p>
+<p><code>sizeof()</code> and <a href="#array-parameter-storage-capacity">storage capacity</a> are two different numbers that happen to often be equal. <code>sizeof(arr%)</code> is always the <em>actual</em> array this particular call passed — it can be smaller than capacity (e.g. <code>sumArr%</code> above sees <code>sizeof(arr%) = 3</code> on the call that passes <code>small%</code>, even though its storage was sized for 10 to also fit <code>big%</code>). Capacity is the fixed ceiling that storage was built for, decided once, up front, for every call the program will ever make.</p>
 <hr />
 <h2 id="input-and-output">Input and Output</h2>
 <h3 id="print">PRINT</h3>

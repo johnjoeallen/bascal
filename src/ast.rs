@@ -82,12 +82,29 @@ pub struct FunctionDef {
 pub struct Param {
     pub name: BasicIdent,
     pub mode: ParamMode,
-    /// Declared array rank: `None` for a scalar parameter (bare name, no
-    /// parens), `Some(n)` for an array parameter declared `name(?)` (n=1),
-    /// `name(?, ?)` (n=2), etc. -- one `?` per dimension. An array
-    /// parameter's rank must be declared this way; there is no way to
-    /// declare an array parameter without it.
-    pub rank: Option<usize>,
+    /// Declared array axes: `None` for a scalar parameter (bare name, no
+    /// parens). `Some(axes)` for an array parameter, one entry per
+    /// dimension -- `name(?)` is `Some(vec![None])`, `name(?, ?)` is
+    /// `Some(vec![None, None])`, etc. An array parameter's rank must be
+    /// declared this way; there is no way to declare an array parameter
+    /// without it.
+    ///
+    /// Each axis entry is itself `None` (`?`, meaning: infer this
+    /// parameter's storage capacity along this axis automatically, from
+    /// the largest array ever passed here across every call site) or
+    /// `Some(n)` (an explicit literal capacity, written because at least
+    /// one call site's array size isn't a compile-time constant, so
+    /// automatic inference can't produce a safe number).
+    pub axes: Option<Vec<Option<i64>>>,
+}
+
+impl Param {
+    /// Declared array rank -- `None` for a scalar, `Some(n)` for an
+    /// n-dimensional array parameter, regardless of whether each axis is
+    /// `?` (inferred) or an explicit literal.
+    pub fn rank(&self) -> Option<usize> {
+        self.axes.as_ref().map(|axes| axes.len())
+    }
 }
 
 /// `ByVal` copies the argument in before the call and never writes it back.

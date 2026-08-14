@@ -91,6 +91,18 @@ struct FunctionInfo {
     /// ordinary copy-in; the callee's body reads them back through
     /// `sizeof()`. Empty `Vec` for a scalar parameter. Parallel to `params`.
     param_bound_vars: Vec<Vec<String>>,
+    /// Fixed storage capacity per axis for each array parameter -- how big
+    /// the shared storage array named by `param_bound_vars`'s sibling
+    /// lowered name actually gets `DIM`ed, once, at top-level. Resolved by
+    /// `infer_array_param_capacities` before any `FunctionInfo` is built:
+    /// either the largest array ever passed to this parameter across every
+    /// call site in the program (when every axis is declared `?`), or an
+    /// explicit literal the author wrote instead. Distinct from
+    /// `param_bound_vars`, which tracks each individual call's *actual*
+    /// size -- capacity is the fixed ceiling that actual size is checked
+    /// against at runtime before every call. Empty `Vec` for a scalar
+    /// parameter. Parallel to `params`.
+    param_capacities: Vec<Vec<i64>>,
     /// Declared rank of every array this function DIMs locally, lowercase
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
@@ -140,13 +152,19 @@ impl CodeGenerator {
             .map(|f| f.name.name.to_ascii_lowercase())
             .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
             .collect();
+        let param_capacities = infer_array_param_capacities(program, &mut self.diagnostics);
         let mut functions = Vec::new();
         for f in &program.functions {
+            let capacities = param_capacities
+                .get(&f.name.name.to_ascii_lowercase())
+                .cloned()
+                .unwrap_or_default();
             functions.push(FunctionInfo::from_def(
                 f,
                 &mut taken,
                 &known_callables,
                 &mut self.diagnostics,
+                capacities,
             ));
         }
         self.functions = functions;
@@ -194,6 +212,8 @@ impl CodeGenerator {
             }
         }
 
+        self.emit_array_param_storage_dims();
+
         if !program.statements.is_empty() {
             self.blank();
             self.statements(&program.statements, None);
@@ -213,6 +233,37 @@ impl CodeGenerator {
         } else {
             Err(self.diagnostics)
         }
+    }
+
+    /// Emits the one-time, top-level `DIM` for every array parameter's
+    /// shared storage, sized to its resolved capacity (see
+    /// `infer_array_param_capacities`). Must run exactly once per program,
+    /// before any call -- classic BASIC has no `REDIM`, so this is the
+    /// only `DIM` these storage arrays ever get; `call_lines` no longer
+    /// DIMs them per call site.
+    fn emit_array_param_storage_dims(&mut self) {
+        let lines: Vec<String> = self
+            .functions
+            .iter()
+            .flat_map(|info| {
+                info.params.iter().enumerate().filter_map(move |(index, (param, lowered))| {
+                    param.axes.as_ref()?;
+                    let capacities = info.param_capacities.get(index)?;
+                    if capacities.is_empty() {
+                        return None;
+                    }
+                    let bounds =
+                        capacities.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
+                    Some(format!("DIM {}({bounds})", lowered.as_basic()))
+                })
+            })
+            .collect();
+        if lines.is_empty() {
+            return;
+        }
+        self.blank();
+        self.line("' Storage for array parameters, sized to fit every call site");
+        self.lines(lines);
     }
 
     fn function(&mut self, function: &FunctionDef) {
@@ -1204,6 +1255,7 @@ impl CodeGenerator {
             if let Some((_, lowered)) = info.params.get(index) {
                 if let Some((actual_array, source_name, rank)) = &array_args[index] {
                     let bound_vars = info.param_bound_vars.get(index).cloned().unwrap_or_default();
+                    let capacities = info.param_capacities.get(index).cloned().unwrap_or_default();
                     for (axis, bound_var) in bound_vars.iter().enumerate() {
                         let bound = self
                             .resolve_axis_bound(source_name, axis, current_function)
@@ -1219,9 +1271,25 @@ impl CodeGenerator {
                                 "1".to_string()
                             });
                         lines.push(format!("{bound_var} = {bound}"));
+                        // Parameter storage is DIMed once, at top-level, sized to fit
+                        // every call site the compiler could resolve at compile time
+                        // (see `infer_array_param_capacities`). This is the runtime
+                        // backstop for whatever that inference couldn't prove safe --
+                        // a call passing more elements than the storage was built for
+                        // would otherwise silently corrupt whatever memory follows it.
+                        if let Some(capacity) = capacities.get(axis) {
+                            let param_name = info
+                                .params
+                                .get(index)
+                                .map(|(p, _)| p.name.as_basic())
+                                .unwrap_or_default();
+                            lines.push(format!(
+                                "IF {bound_var} > {capacity} THEN PRINT \"runtime error: `{param_name}` of `{}` needs \"; {bound_var}; \" elements along axis {axis}, but its storage only holds {capacity}\" : STOP",
+                                info.source_name,
+                            ));
+                        }
                     }
                     let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
-                    lines.push(format!("DIM {}({})", lowered.as_basic(), bound_vars.join(", ")));
                     lines.extend(array_copy_lines(
                         &lowered.as_basic(),
                         actual_array,
@@ -1487,6 +1555,7 @@ impl FunctionInfo {
         taken: &mut HashSet<String>,
         known_callables: &HashSet<String>,
         diagnostics: &mut Vec<Diagnostic>,
+        param_capacities: Vec<Vec<i64>>,
     ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
         let params = function
@@ -1530,6 +1599,7 @@ impl FunctionInfo {
             params,
             param_ranks,
             param_bound_vars,
+            param_capacities,
             local_array_ranks,
             local_array_bounds: RefCell::new(HashMap::new()),
             is_procedure: function.is_procedure,
@@ -1857,7 +1927,7 @@ fn infer_param_ranks(
             // against it -- an array parameter with no declared rank at
             // all is rejected outright, since there's no other way to
             // learn a parameter's rank from its declaration.
-            match (param.rank, usage_rank) {
+            match (param.rank(), usage_rank) {
                 (Some(declared), Some(used)) if declared != used => {
                     diagnostics.push(Diagnostic::error(
                         SourcePos::new("<validation>", 1, 1),
@@ -1930,6 +2000,403 @@ fn collect_dim_ranks(body: &[Statement], out: &mut HashMap<String, usize>) {
             _ => {}
         }
     }
+}
+
+// ── array parameter storage capacity inference ──────────────────────────
+//
+// Every array parameter's shared storage array is DIMed exactly once, at
+// top-level, before any call happens (classic BASIC has no REDIM, so a
+// shared storage slot can never be resized once DIMed). Its size has to be
+// a fixed capacity, decided once, big enough for the largest thing any
+// call site ever passes it. This section computes that capacity: for a
+// `?` axis, the max of every call site's resolved bound, but only when
+// every one of those bounds is itself resolvable at compile time (a
+// literal, a `const`, or -- when the array being passed is itself another
+// function's array parameter being forwarded onward -- that parameter's
+// own already-resolved capacity). An axis that can't be resolved this way
+// needs an explicit literal capacity written in the declaration instead.
+
+/// One axis's resolved bound for a single call site's array argument.
+enum ArgBound {
+    /// This argument isn't array-shaped at all (a scalar, or a rank
+    /// mismatch that a later, more specific diagnostic will catch) --
+    /// contributes nothing, doesn't count as a data point either way.
+    NotAnArray,
+    /// It's an array, but this axis's bound can't be pinned to a concrete
+    /// integer -- a genuinely dynamic (runtime) value, or a forwarded
+    /// parameter whose own capacity hasn't resolved yet this round.
+    Unresolvable,
+    Resolved(i64),
+}
+
+/// Evaluates `expr` to a concrete integer if it's a compile-time constant:
+/// a literal, a reference to an unambiguous `const` (recursively), or
+/// +/-/*// on two such values. Anything else (a plain variable, a function
+/// call, an ambiguous multiply-defined `const` name) is `None` -- a
+/// genuine runtime value, not something this pass can reason about.
+fn const_eval(expr: &Expr, consts: &HashMap<String, Vec<Expr>>, depth: u32) -> Option<i64> {
+    if depth > 32 {
+        return None; // guards against a self-referential `const`
+    }
+    match expr {
+        Expr::Integer(n) => Some(*n),
+        Expr::Ident(name) => {
+            let key = name.as_basic().to_ascii_lowercase();
+            match consts.get(&key) {
+                Some(defs) if defs.len() == 1 => const_eval(&defs[0], consts, depth + 1),
+                _ => None,
+            }
+        }
+        Expr::Unary { op: UnaryOp::Neg, expr } => const_eval(expr, consts, depth + 1).map(|v| -v),
+        Expr::Binary { left, op, right } => {
+            let l = const_eval(left, consts, depth + 1)?;
+            let r = const_eval(right, consts, depth + 1)?;
+            match op {
+                BinaryOp::Add => Some(l.wrapping_add(r)),
+                BinaryOp::Sub => Some(l.wrapping_sub(r)),
+                BinaryOp::Mul => Some(l.wrapping_mul(r)),
+                BinaryOp::Div if r != 0 => Some(l / r),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Every `const` declaration anywhere in `body` (recursing into nested
+/// blocks), keyed by lowercase name. More than one definition under the
+/// same name is tracked (not merged) so `const_eval` can refuse to guess
+/// which one a reference means.
+fn collect_consts(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
+    for stmt in body {
+        match stmt {
+            Statement::Const { name, value } => {
+                out.entry(name.as_basic().to_ascii_lowercase()).or_default().push(value.clone());
+            }
+            Statement::If { then_body, else_body, .. } => {
+                collect_consts(then_body, out);
+                collect_consts(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_consts(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_consts(&case.body, out);
+                }
+                collect_consts(else_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every `dim`ed array's full size-expression list anywhere in `body`
+/// (recursing into nested blocks), keyed by lowercase name -- the same
+/// traversal as `collect_dim_ranks`, but keeping the bound expressions
+/// themselves instead of just their count.
+fn collect_dim_sizes(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
+    for stmt in body {
+        match stmt {
+            Statement::Dim { name, is_array, sizes } => {
+                if *is_array && !sizes.is_empty() {
+                    out.insert(name.as_basic().to_ascii_lowercase(), sizes.clone());
+                }
+            }
+            Statement::If { then_body, else_body, .. } => {
+                collect_dim_sizes(then_body, out);
+                collect_dim_sizes(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_dim_sizes(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_dim_sizes(&case.body, out);
+                }
+                collect_dim_sizes(else_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every call site anywhere in the program that calls one of the
+/// program's own functions: `(enclosing function name, lowercase -- None
+/// for top-level, callee name, argument list)`. A single-argument call
+/// (`f%(x%)`) parses as `Expr::ArrayRef`, not `Expr::Call` (see
+/// `make_paren_ident_expr` in `parser.rs`), so both shapes are checked.
+fn collect_call_sites(
+    program: &Program,
+    function_names: &HashSet<String>,
+) -> Vec<(Option<String>, BasicIdent, Vec<Expr>)> {
+    let mut sites = Vec::new();
+    let mut scan = |scope: Option<String>, body: &[Statement]| {
+        let mut visit = |e: &Expr| match e {
+            Expr::Call { name, args }
+                if function_names.contains(&name.name.to_ascii_lowercase()) =>
+            {
+                sites.push((scope.clone(), name.clone(), args.clone()));
+            }
+            Expr::ArrayRef { name, indices }
+                if function_names.contains(&name.name.to_ascii_lowercase()) =>
+            {
+                sites.push((scope.clone(), name.clone(), indices.clone()));
+            }
+            _ => {}
+        };
+        visit_body_exprs(body, &mut visit);
+    };
+    scan(None, &program.statements);
+    for f in &program.functions {
+        scan(Some(f.name.name.to_ascii_lowercase()), &f.body);
+    }
+    sites
+}
+
+/// Resolves one call site's argument to a concrete per-axis bound, if
+/// possible -- see `ArgBound`.
+fn resolve_call_arg_bound(
+    scope: &Option<String>,
+    arg: &Expr,
+    axis: usize,
+    resolved: &HashMap<String, Vec<Vec<Option<i64>>>>,
+    local_dim_sizes: &HashMap<String, HashMap<String, Vec<Expr>>>,
+    top_level_dim_sizes: &HashMap<String, Vec<Expr>>,
+    functions_by_name: &HashMap<String, &FunctionDef>,
+    consts: &HashMap<String, Vec<Expr>>,
+) -> ArgBound {
+    let source_name: &BasicIdent = match arg {
+        Expr::ArrayRef { name, indices } if indices.is_empty() => name,
+        Expr::Ident(name) => name,
+        _ => return ArgBound::NotAnArray,
+    };
+    let key = source_name.as_basic().to_ascii_lowercase();
+
+    if let Some(func) = scope {
+        if let Some(def) = functions_by_name.get(func) {
+            if let Some(idx) =
+                def.params.iter().position(|p| p.name.as_basic().to_ascii_lowercase() == key)
+            {
+                return if def.params[idx].axes.is_some() {
+                    match resolved.get(func).and_then(|v| v.get(idx)).and_then(|a| a.get(axis)) {
+                        Some(Some(v)) => ArgBound::Resolved(*v),
+                        _ => ArgBound::Unresolvable,
+                    }
+                } else {
+                    ArgBound::NotAnArray
+                };
+            }
+        }
+        if let Some(sizes) = local_dim_sizes.get(func).and_then(|m| m.get(&key)) {
+            return match sizes.get(axis).and_then(|e| const_eval(e, consts, 0)) {
+                Some(v) => ArgBound::Resolved(v),
+                None => ArgBound::Unresolvable,
+            };
+        }
+    }
+    if let Some(sizes) = top_level_dim_sizes.get(&key) {
+        return match sizes.get(axis).and_then(|e| const_eval(e, consts, 0)) {
+            Some(v) => ArgBound::Resolved(v),
+            None => ArgBound::Unresolvable,
+        };
+    }
+    ArgBound::NotAnArray
+}
+
+/// Resolves every array parameter's per-axis storage capacity across the
+/// whole program: lowercase function name -> per-parameter (empty for a
+/// scalar) -> per-axis capacity. An axis whose capacity couldn't be
+/// resolved (an unresolvable `?`, reported as a diagnostic) comes back as
+/// `0` -- codegen still runs to completion so every diagnostic in the
+/// program gets collected, but the result is discarded once any
+/// diagnostic exists.
+fn infer_array_param_capacities(
+    program: &Program,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> HashMap<String, Vec<Vec<i64>>> {
+    let function_names: HashSet<String> =
+        program.functions.iter().map(|f| f.name.name.to_ascii_lowercase()).collect();
+    let functions_by_name: HashMap<String, &FunctionDef> =
+        program.functions.iter().map(|f| (f.name.name.to_ascii_lowercase(), f)).collect();
+
+    let mut consts = HashMap::new();
+    collect_consts(&program.statements, &mut consts);
+    for f in &program.functions {
+        collect_consts(&f.body, &mut consts);
+    }
+
+    let mut top_level_dim_sizes = HashMap::new();
+    collect_dim_sizes(&program.statements, &mut top_level_dim_sizes);
+
+    let mut local_dim_sizes: HashMap<String, HashMap<String, Vec<Expr>>> = HashMap::new();
+    for f in &program.functions {
+        let mut sizes = HashMap::new();
+        collect_dim_sizes(&f.body, &mut sizes);
+        local_dim_sizes.insert(f.name.name.to_ascii_lowercase(), sizes);
+    }
+
+    let call_sites = collect_call_sites(program, &function_names);
+
+    let mut resolved: HashMap<String, Vec<Vec<Option<i64>>>> = program
+        .functions
+        .iter()
+        .map(|f| {
+            let per_param =
+                f.params.iter().map(|p| p.axes.clone().unwrap_or_default()).collect();
+            (f.name.name.to_ascii_lowercase(), per_param)
+        })
+        .collect();
+
+    // Fixed-point: each round resolves whatever `?` axes it can from
+    // already-known bounds (literals, consts, or another parameter's
+    // already-resolved capacity). Since BASCAL rejects every call cycle,
+    // direct or indirect, the dependency chain through forwarded array
+    // parameters is finite, so this always terminates.
+    loop {
+        let mut changed = false;
+        for f in &program.functions {
+            let fname = f.name.name.to_ascii_lowercase();
+            for (param_index, param) in f.params.iter().enumerate() {
+                let Some(declared_axes) = &param.axes else { continue };
+                for axis in 0..declared_axes.len() {
+                    if resolved[&fname][param_index][axis].is_some() {
+                        continue;
+                    }
+                    let mut max_value: Option<i64> = None;
+                    let mut all_resolved = true;
+                    let mut any_call_site = false;
+                    for (scope, callee, call_args) in &call_sites {
+                        if callee.name.to_ascii_lowercase() != fname {
+                            continue;
+                        }
+                        let Some(arg) = call_args.get(param_index) else { continue };
+                        match resolve_call_arg_bound(
+                            scope,
+                            arg,
+                            axis,
+                            &resolved,
+                            &local_dim_sizes,
+                            &top_level_dim_sizes,
+                            &functions_by_name,
+                            &consts,
+                        ) {
+                            ArgBound::NotAnArray => {}
+                            ArgBound::Unresolvable => {
+                                any_call_site = true;
+                                all_resolved = false;
+                            }
+                            ArgBound::Resolved(v) => {
+                                any_call_site = true;
+                                max_value = Some(max_value.map_or(v, |m: i64| m.max(v)));
+                            }
+                        }
+                    }
+                    if any_call_site && all_resolved {
+                        if let Some(v) = max_value {
+                            resolved.get_mut(&fname).unwrap()[param_index][axis] = Some(v);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    // Compile-time-provable overflow check: for every axis (inferred or
+    // explicit), any call site whose bound *does* resolve gets compared
+    // against the final capacity right now, instead of waiting to catch
+    // it with the runtime check `call_lines` emits for the general case.
+    for f in &program.functions {
+        let fname = f.name.name.to_ascii_lowercase();
+        for (param_index, param) in f.params.iter().enumerate() {
+            let Some(declared_axes) = &param.axes else { continue };
+            for axis in 0..declared_axes.len() {
+                let Some(capacity) = resolved[&fname][param_index][axis] else { continue };
+                for (scope, callee, call_args) in &call_sites {
+                    if callee.name.to_ascii_lowercase() != fname {
+                        continue;
+                    }
+                    let Some(arg) = call_args.get(param_index) else { continue };
+                    if let ArgBound::Resolved(actual) = resolve_call_arg_bound(
+                        scope,
+                        arg,
+                        axis,
+                        &resolved,
+                        &local_dim_sizes,
+                        &top_level_dim_sizes,
+                        &functions_by_name,
+                        &consts,
+                    ) {
+                        if actual > capacity {
+                            diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                format!(
+                                    "a call to `{}` passes {} elements along axis {} of `{}`, \
+                                     but its storage is only sized for {} -- give `{}` a \
+                                     bigger explicit capacity",
+                                    f.name,
+                                    actual,
+                                    axis,
+                                    param.name,
+                                    capacity,
+                                    param.name,
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Any `?` axis still unresolved at this point genuinely can't be
+    // inferred -- either no call site could be resolved, or the parameter
+    // is never called at all.
+    for f in &program.functions {
+        let fname = f.name.name.to_ascii_lowercase();
+        for (param_index, param) in f.params.iter().enumerate() {
+            let Some(declared_axes) = &param.axes else { continue };
+            for axis in 0..declared_axes.len() {
+                if resolved[&fname][param_index][axis].is_some() {
+                    continue;
+                }
+                let any_call_site = call_sites.iter().any(|(_, callee, call_args)| {
+                    callee.name.to_ascii_lowercase() == fname && call_args.get(param_index).is_some()
+                });
+                let message = if any_call_site {
+                    format!(
+                        "can't automatically size `{}`'s storage along axis {} of `{}` -- at \
+                         least one call site passes an array whose size isn't a compile-time \
+                         constant. Give it an explicit capacity instead of `?`, e.g. `{}(100)`",
+                        param.name, axis, f.name, param.name,
+                    )
+                } else {
+                    format!(
+                        "can't automatically size `{}`'s storage along axis {} of `{}` -- `{}` \
+                         is never called, so there's no call site to infer a capacity from. \
+                         Give it an explicit capacity instead of `?`, e.g. `{}(100)`",
+                        param.name, axis, f.name, f.name, param.name,
+                    )
+                };
+                diagnostics.push(Diagnostic::error(SourcePos::new("<validation>", 1, 1), message));
+            }
+        }
+    }
+
+    resolved
+        .into_iter()
+        .map(|(name, per_param)| {
+            let capacities = per_param
+                .into_iter()
+                .map(|axes| axes.into_iter().map(|axis| axis.unwrap_or(0)).collect())
+                .collect();
+            (name, capacities)
+        })
+        .collect()
 }
 
 fn collect_globals(body: &[Statement]) -> HashSet<String> {

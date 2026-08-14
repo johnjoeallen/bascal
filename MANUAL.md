@@ -1390,6 +1390,72 @@ shapes genuinely can't share one copy loop, so BASCAL refuses rather than
 emit a `DIM`/subscript mismatch that real BASIC would only catch at
 runtime.
 
+### Array Parameter Storage Capacity
+
+An array parameter's storage is one shared, generated variable, reused by
+every call to that function — the same reason a scalar parameter's
+storage is shared. Arrays additionally need a fixed *size*, though, and
+classic BASIC has no `REDIM`: once an array is `DIM`ed, it can never be
+resized, and a second `DIM` on the same array is a fatal runtime error.
+So a parameter's storage is `DIM`ed exactly once, at the very top of the
+generated program — before any call happens — sized to the biggest array
+anything anywhere ever passes it.
+
+Normally this needs no attention at all. Write `?` for every axis, same
+as always; the compiler works out a safe capacity itself by scanning
+every call site in the program and taking the largest resolved size.
+Below, `sumArr%`'s storage ends up sized for 10 elements even though its
+first call only ever passes it 3:
+
+```
+function sumArr%(arr%(?))
+    ' ...
+end function
+
+dim small%(2)
+dim big%(9)
+dummy% = sumArr%(small%)
+dummy% = sumArr%(big%)
+```
+
+This works whenever every call site's array size is knowable at compile
+time — a literal `DIM` bound, a `const`, or (when the array being passed
+is itself another function's array parameter, forwarded onward) that
+parameter's own already-resolved capacity. It genuinely can't work when a
+call site's array size is a real runtime value:
+
+```
+input n%
+dim data%(n%)
+dummy% = sumArr%(data%)   ' error: arr%'s capacity can't be inferred
+```
+
+There's no way to know at compile time how big `data%` will turn out to
+be, so there's no safe number to give its shared storage automatically.
+Write an explicit capacity instead of `?` for that axis — a literal
+integer, chosen to comfortably cover every use:
+
+```
+function sumArr%(arr%(100))
+    ' ...
+end function
+```
+
+Whichever way a capacity is decided — inferred or explicit — every call
+site still checks the array's *actual* size against it at runtime, right
+before copying in, and halts with a clear error if it doesn't fit:
+
+```
+IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
+```
+
+This is a backstop, not the primary defense — a call site whose size
+*is* a compile-time constant and provably too big for its capacity is
+already rejected at compile time, before generated BASIC exists to run
+at all. The runtime check exists for the one case that's genuinely
+unprovable ahead of time: a capacity chosen to comfortably cover today's
+inputs that a later, larger runtime value turns out to exceed.
+
 ### `sizeof()`
 
 `sizeof(name)` returns a `dim`ed array's size, resolved entirely at
@@ -1452,6 +1518,14 @@ end function
 Nothing here is written by the `.bcl` author, at the call site or in the
 signature — the bound simply isn't a value you pass, it's a value you ask
 for with `sizeof()` wherever you need it.
+
+`sizeof()` and [storage capacity](#array-parameter-storage-capacity) are
+two different numbers that happen to often be equal. `sizeof(arr%)` is
+always the *actual* array this particular call passed — it can be smaller
+than capacity (e.g. `sumArr%` above sees `sizeof(arr%) = 3` on the call
+that passes `small%`, even though its storage was sized for 10 to also
+fit `big%`). Capacity is the fixed ceiling that storage was built for,
+decided once, up front, for every call the program will ever make.
 
 ---
 

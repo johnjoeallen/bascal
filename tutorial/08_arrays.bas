@@ -1,6 +1,11 @@
 ' BASCAL generated BASIC
 ' Functions are transpiled to global variables, labels, and GOSUB
 
+' Storage for array parameters, sized to fit every call site
+DIM insertionsort_arr_0%(6)
+DIM indexof_arr_0%(6)
+DIM printarray_arr_0%(6)
+
 ' Tutorial 8 — Arrays
 ' 
 ' dim name%(size) declares a 1-D array of size+1 elements, indexed 0..size.
@@ -44,7 +49,7 @@ data%(5) = 11
 ' Before sort
 PRINT "Before: "
 printarray_arr_dim0_0% = BCC_T1%
-DIM printarray_arr_0%(printarray_arr_dim0_0%)
+IF printarray_arr_dim0_0% > 6 THEN PRINT "runtime error: `arr%` of `printArray%` needs "; printarray_arr_dim0_0%; " elements along axis 0, but its storage only holds 6" : STOP
 
 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
 FOR BCC_T2% = 1 TO printarray_arr_dim0_0%
@@ -56,7 +61,7 @@ dummy% = printarray_result_0%
 
 ' Sort and show
 insertionsort_arr_dim0_0% = BCC_T1%
-DIM insertionsort_arr_0%(insertionsort_arr_dim0_0%)
+IF insertionsort_arr_dim0_0% > 6 THEN PRINT "runtime error: `arr%` of `insertionSort%` needs "; insertionsort_arr_dim0_0%; " elements along axis 0, but its storage only holds 6" : STOP
 
 ' copy array argument into transpiled function storage: data%() -> insertionsort_arr_0%()
 FOR BCC_T3% = 1 TO insertionsort_arr_dim0_0%
@@ -73,7 +78,7 @@ NEXT BCC_T4%
 dummy% = insertionsort_result_0%
 PRINT "After:  "
 printarray_arr_dim0_0% = BCC_T1%
-DIM printarray_arr_0%(printarray_arr_dim0_0%)
+IF printarray_arr_dim0_0% > 6 THEN PRINT "runtime error: `arr%` of `printArray%` needs "; printarray_arr_dim0_0%; " elements along axis 0, but its storage only holds 6" : STOP
 
 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
 FOR BCC_T5% = 1 TO printarray_arr_dim0_0%
@@ -87,7 +92,7 @@ dummy% = printarray_result_0%
 target% = 22
 indexof_target_0% = target%
 indexof_arr_dim0_0% = BCC_T1%
-DIM indexof_arr_0%(indexof_arr_dim0_0%)
+IF indexof_arr_dim0_0% > 6 THEN PRINT "runtime error: `arr%` of `indexOf%` needs "; indexof_arr_dim0_0%; " elements along axis 0, but its storage only holds 6" : STOP
 
 ' copy array argument into transpiled function storage: data%() -> indexof_arr_0%()
 FOR BCC_T6% = 1 TO indexof_arr_dim0_0%

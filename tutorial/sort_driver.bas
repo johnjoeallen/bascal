@@ -1,6 +1,12 @@
 ' BASCAL generated BASIC
 ' Functions are transpiled to global variables, labels, and GOSUB
 
+' Storage for array parameters, sized to fit every call site
+DIM bubblesort_data_0%(5000)
+DIM shakersort_data_0%(5000)
+DIM shellsort_data_0%(5000)
+DIM quicksort_data_0%(5000)
+
 ' In-place bubble sort.
 ' data% is a byref array parameter, so bcc copies the sorted result back
 ' into the caller's array; byval (the default) would sort a private copy
@@ -43,7 +49,7 @@ NEXT i%
 
 tstart# = TIMER
 bubblesort_data_dim0_0% = 5000
-DIM bubblesort_data_0%(bubblesort_data_dim0_0%)
+IF bubblesort_data_dim0_0% > 5000 THEN PRINT "runtime error: `data%` of `bubbleSort%` needs "; bubblesort_data_dim0_0%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 ' copy array argument into transpiled function storage: bubbledata%() -> bubblesort_data_0%()
 FOR BCC_T1% = 1 TO bubblesort_data_dim0_0%
@@ -73,7 +79,7 @@ IF (ok% = 1) = 0 THEN GOTO 20
 
 tstart# = TIMER
 shakersort_data_dim0_0% = 5000
-DIM shakersort_data_0%(shakersort_data_dim0_0%)
+IF shakersort_data_dim0_0% > 5000 THEN PRINT "runtime error: `data%` of `shakerSort%` needs "; shakersort_data_dim0_0%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 ' copy array argument into transpiled function storage: shakerdata%() -> shakersort_data_0%()
 FOR BCC_T5% = 1 TO shakersort_data_dim0_0%
@@ -103,7 +109,7 @@ IF (ok% = 1) = 0 THEN GOTO 50
 
 tstart# = TIMER
 shellsort_data_dim0_0% = 5000
-DIM shellsort_data_0%(shellsort_data_dim0_0%)
+IF shellsort_data_dim0_0% > 5000 THEN PRINT "runtime error: `data%` of `shellSort%` needs "; shellsort_data_dim0_0%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 ' copy array argument into transpiled function storage: shelldata%() -> shellsort_data_0%()
 FOR BCC_T9% = 1 TO shellsort_data_dim0_0%
@@ -133,7 +139,7 @@ IF (ok% = 1) = 0 THEN GOTO 80
 
 tstart# = TIMER
 quicksort_data_dim0_0% = 5000
-DIM quicksort_data_0%(quicksort_data_dim0_0%)
+IF quicksort_data_dim0_0% > 5000 THEN PRINT "runtime error: `data%` of `quickSort%` needs "; quicksort_data_dim0_0%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 ' copy array argument into transpiled function storage: quickdata%() -> quicksort_data_0%()
 FOR BCC_T13% = 1 TO quicksort_data_dim0_0%

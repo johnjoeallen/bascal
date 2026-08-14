@@ -1,6 +1,9 @@
 ' BASCAL generated BASIC
 ' Functions are transpiled to global variables, labels, and GOSUB
 
+' Storage for array parameters, sized to fit every call site
+DIM fillrange_arr_0%(5)
+
 ' Tutorial 14 — Procedures
 ' 
 ' A procedure is like a function but returns no value.  Declare it with
@@ -64,7 +67,7 @@ DIM data%(n%)
 BCC_T1% = n%
 fillrange_value_0% = 99
 fillrange_arr_dim0_0% = BCC_T1%
-DIM fillrange_arr_0%(fillrange_arr_dim0_0%)
+IF fillrange_arr_dim0_0% > 5 THEN PRINT "runtime error: `arr%` of `fillRange` needs "; fillrange_arr_dim0_0%; " elements along axis 0, but its storage only holds 5" : STOP
 
 ' copy array argument into transpiled function storage: data%() -> fillrange_arr_0%()
 FOR BCC_T2% = 1 TO fillrange_arr_dim0_0%

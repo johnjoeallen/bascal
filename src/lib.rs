@@ -1671,8 +1671,9 @@ end
             "the caller should auto-inject g%'s real DIM bounds:\n{output}"
         );
         assert!(
-            output.contains("DIM sumgrid_grid_0%(sumgrid_grid_dim0_0%, sumgrid_grid_dim1_0%)"),
-            "parameter storage should be DIMed with both axes:\n{output}"
+            output.contains("DIM sumgrid_grid_0%(2, 2)"),
+            "parameter storage should be DIMed once, at top-level, with both axes' resolved \
+             capacity:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
@@ -1747,10 +1748,9 @@ end
 "#;
         let output = compile_source("multidim_3d.bcl", source).expect("should compile");
         assert!(
-            output.contains(
-                "DIM sumcube_cube_0%(sumcube_cube_dim0_0%, sumcube_cube_dim1_0%, sumcube_cube_dim2_0%)"
-            ),
-            "parameter storage should be DIMed with all three axes:\n{output}"
+            output.contains("DIM sumcube_cube_0%(1, 1, 1)"),
+            "parameter storage should be DIMed once, at top-level, with all three axes' \
+             resolved capacity:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
@@ -1860,7 +1860,7 @@ end
 "#;
         let output = compile_source("bare_ident_call.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumgrid_grid_0%(sumgrid_grid_dim0_0%, sumgrid_grid_dim1_0%)"),
+            output.contains("DIM sumgrid_grid_0%(2, 2)"),
             "bare identifier array argument should still generate correct copy-in/copy-out:\n{output}"
         );
         assert!(
@@ -2098,6 +2098,233 @@ end
             "a non-literal bound must be frozen into a temp at DIM time, unconditionally:\n{output}"
         );
         assert!(output.contains("DIM data%(n%)"));
+    }
+
+    // ── array parameter storage capacity ────────────────────────────────
+
+    #[test]
+    fn capacity_is_inferred_as_the_max_across_every_call_site() {
+        let source = r#"
+function sumArr%(arr%(?))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+dim small%(2)
+dim big%(9)
+dummy% = sumArr%(small%)
+dummy% = sumArr%(big%)
+end
+"#;
+        let output = compile_source("capacity_max.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM sumarr_arr_0%(9)"),
+            "storage should be sized to the largest array ever passed, not the first call \
+             site:\n{output}"
+        );
+    }
+
+    #[test]
+    fn capacity_is_inferred_through_a_const_reference() {
+        let source = r#"
+function sumArr%(arr%(?))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+const n% = 6
+dim data%(n%)
+dummy% = sumArr%(data%)
+end
+"#;
+        let output = compile_source("capacity_const.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM sumarr_arr_0%(6)"),
+            "a const-bounded DIM should still resolve to a concrete literal capacity, even \
+             though its own DIM statement isn't a bare literal:\n{output}"
+        );
+    }
+
+    #[test]
+    fn capacity_is_inferred_through_a_forwarded_array_parameter() {
+        // outer%'s own arr% parameter has its capacity inferred from its
+        // one call site (dim data%(7)); inner%'s capacity must then be
+        // inferred *through* outer%'s already-resolved capacity, not fail
+        // just because outer%'s arr% isn't a literal DIM itself.
+        let source = r#"
+function inner%(arr%(?))
+  return sizeof(arr%)
+end function
+
+function outer%(arr%(?))
+  return inner%(arr%)
+end function
+
+dim data%(7)
+print outer%(data%)
+end
+"#;
+        let output = compile_source("capacity_forward.bcl", source).expect("should compile");
+        assert!(
+            output.contains("DIM inner_arr_0%(7)") && output.contains("DIM outer_arr_0%(7)"),
+            "capacity should propagate through a forwarded array parameter:\n{output}"
+        );
+    }
+
+    #[test]
+    fn explicit_capacity_is_required_when_a_call_site_size_is_dynamic() {
+        let source = r#"
+function sumArr%(arr%(?))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+input n%
+dim data%(n%)
+dummy% = sumArr%(data%)
+end
+"#;
+        let err = compile_source("capacity_dynamic.bcl", source)
+            .expect_err("a call site with a non-constant array size should be rejected without \
+                          an explicit capacity");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("can't automatically size")
+                    && d.message.contains("arr%")
+                    && d.message.contains("compile-time constant")
+            }),
+            "error must explain automatic sizing failed and why: {:?}", err
+        );
+    }
+
+    #[test]
+    fn explicit_capacity_is_accepted_for_a_dynamically_sized_call_site() {
+        let source = r#"
+function sumArr%(arr%(100))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+input n%
+dim data%(n%)
+dummy% = sumArr%(data%)
+end
+"#;
+        let output =
+            compile_source("capacity_explicit.bcl", source).expect("explicit capacity should compile");
+        assert!(
+            output.contains("DIM sumarr_arr_0%(100)"),
+            "an explicit literal capacity should be used as-is, once, at top-level:\n{output}"
+        );
+    }
+
+    #[test]
+    fn explicit_capacity_too_small_for_a_literal_call_site_is_rejected() {
+        let source = r#"
+function sumArr%(arr%(4))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+dim data%(9)
+dummy% = sumArr%(data%)
+end
+"#;
+        let err = compile_source("capacity_too_small.bcl", source)
+            .expect_err("a literal call site provably bigger than the declared capacity should \
+                          be a compile error");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("9 elements")
+                    && d.message.contains("only sized for 4")
+            }),
+            "error must name both the offending size and the declared capacity: {:?}", err
+        );
+    }
+
+    #[test]
+    fn array_parameter_never_called_with_inferred_capacity_is_rejected() {
+        let source = r#"
+function sumArr%(arr%(?))
+  return sizeof(arr%)
+end function
+end
+"#;
+        let err = compile_source("capacity_never_called.bcl", source)
+            .expect_err("a `?` capacity with no call site to infer from should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("never called")),
+            "error must explain there's no call site to infer from: {:?}", err
+        );
+    }
+
+    #[test]
+    fn call_site_emits_a_runtime_capacity_check_before_copy_in() {
+        let source = r#"
+function sumArr%(arr%(?))
+  total% = 0
+  for i% = 0 to sizeof(arr%) - 1
+    total% = total% + arr%(i%)
+  end for
+  return total%
+end function
+
+dim data%(9)
+dummy% = sumArr%(data%)
+end
+"#;
+        let output = compile_source("capacity_runtime_check.bcl", source).expect("should compile");
+        assert!(
+            output.lines().any(|l| {
+                l.contains("IF sumarr_arr_dim0_0% > 9 THEN PRINT")
+                    && l.contains("STOP")
+            }),
+            "every call site should runtime-check the actual size against the resolved \
+             capacity, as a backstop regardless of compile-time inference:\n{output}"
+        );
+        let check_pos = output.find("IF sumarr_arr_dim0_0% > 9 THEN").unwrap();
+        let copy_pos = output.find("copy array argument into transpiled function storage").unwrap();
+        assert!(check_pos < copy_pos, "the runtime check must run before the copy-in loop:\n{output}");
+    }
+
+    #[test]
+    fn array_parameter_storage_is_dimed_exactly_once_even_when_called_repeatedly() {
+        // Regression test: classic BASIC has no REDIM, so DIMing the same
+        // shared storage array more than once at runtime is a fatal
+        // "Duplicate Definition" error. Storage must be DIMed exactly once,
+        // at top-level, no matter how many times the function is called.
+        let source = r#"
+function printArr%(arr%(?))
+  return 0
+end function
+
+dim data%(9)
+dummy% = printArr%(data%)
+dummy% = printArr%(data%)
+dummy% = printArr%(data%)
+end
+"#;
+        let output = compile_source("capacity_dim_once.bcl", source).expect("should compile");
+        let dim_count = output.lines().filter(|l| l.trim().starts_with("DIM printarr_arr_0%")).count();
+        assert_eq!(
+            dim_count, 1,
+            "storage must be DIMed exactly once regardless of call count:\n{output}"
+        );
     }
 
     // ── recursion (direct and indirect) ─────────────────────────────────

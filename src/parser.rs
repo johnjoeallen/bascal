@@ -283,24 +283,39 @@ impl Parser {
                 ParamMode::ByVal
             };
             let name = BasicIdent::parse(&self.expect_ident("expected identifier")?);
-            let rank = if self.eat(TokenKind::LParen) {
-                let mut count = 0usize;
+            let axes = if self.eat(TokenKind::LParen) {
+                let mut axes = Vec::new();
                 loop {
-                    self.expect(
-                        TokenKind::Question,
-                        "expected `?` in array parameter rank -- e.g. `arr%(?)` for 1-D, `arr%(?, ?)` for 2-D",
-                    )?;
-                    count += 1;
+                    if self.eat(TokenKind::Question) {
+                        axes.push(None);
+                    } else if let TokenKind::Number(value) = self.current().kind {
+                        self.advance();
+                        if value <= 0 {
+                            return Err(self.error(
+                                "array parameter capacity must be a positive integer -- e.g. \
+                                 `arr%(100)`"
+                                    .to_string(),
+                            ));
+                        }
+                        axes.push(Some(value));
+                    } else {
+                        return Err(self.error(
+                            "expected `?` or an integer capacity in array parameter \
+                             declaration -- e.g. `arr%(?)` for an inferred 1-D capacity, \
+                             `arr%(100)` for an explicit one"
+                                .to_string(),
+                        ));
+                    }
                     if !self.eat(TokenKind::Comma) {
                         break;
                     }
                 }
                 self.expect(TokenKind::RParen, "expected `)` after array parameter rank")?;
-                Some(count)
+                Some(axes)
             } else {
                 None
             };
-            items.push(Param { name, mode, rank });
+            items.push(Param { name, mode, axes });
             if !self.eat(TokenKind::Comma) {
                 break;
             }
