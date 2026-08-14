@@ -261,6 +261,52 @@ itself, and it's the only defense at all for the explicit-capacity case,
 where a compile-time-unprovable call is exactly the situation that led to
 writing an explicit capacity in the first place.
 
+### Considered and rejected: `ERASE`-then-`DIM` re-declaration
+
+Classic MBASIC/BASICA/GW-BASIC support resizing an array via `ERASE
+arrayname` followed by a new `DIM arrayname(...)`, even with a different
+size or a different rank -- `ERASE` deallocates the array from the
+symbol table, so the "already dimensioned" state that would otherwise
+trigger a `Duplicate Definition` error is gone. If BASCAL's target
+actually supported this, most of this section could disappear: each call
+site could just `ERASE`/`DIM` a parameter's storage to the exact size
+that call needs, with no capacity inference, no `const_eval`, no
+fixed-point pass, and no explicit-capacity fallback syntax at all.
+
+It doesn't work, and this was checked directly against two independent
+real targets rather than assumed from memory of the idiom:
+
+1. **`fbc -lang qb` (FreeBASIC 1.10.1)**: a minimal test program --
+   `DIM a%(3)` / `ERASE a%` / `DIM a%(9)` -- fails to compile with
+   `error 4: Duplicated definition, a`, on the *second* `DIM`, in every
+   variant tried (same size, different size, different rank, a variable
+   bound instead of a literal). Identical result under `-lang fblite`.
+2. **Genuine IBM/Microsoft BASIC Compiler 2.00** (1985), run in
+   DOSBox-X against a disk image sourced from a software-preservation
+   archive: the same test, and a plain double-`DIM`-with-no-`ERASE`
+   control case, both report `DD` (Duplicate Definition) as a *compile-time
+   severe error* on the redeclaring `DIM`. Despite that, BASCOM still
+   linked and produced a runnable `.exe` -- running it showed exactly the
+   silent-corruption failure mode this whole feature exists to prevent:
+   the first redim's value happened to print correctly (the original,
+   never-actually-resized allocation had enough incidental padding), but
+   the second redim (to a different rank) printed nothing at all for the
+   value that should have been there.
+
+The likely explanation for the gap between memory and both real results:
+`ERASE`-then-`DIM` resizing is a real MBASIC-family idiom, but it belongs
+to the *interactive interpreter* (`MBASIC.EXE`, `GW-BASIC`), which
+allocates each array's storage dynamically at the moment a `DIM`
+statement actually executes. BASCOM is a *compiler* -- by the time it's
+translating source, it has already committed each array to a fixed slot
+in the executable's data segment, so there's no allocation left for
+`ERASE` to hand back for a differently-shaped `DIM` to claim later. Since
+BASCAL targets exactly that compiled-output model (`bcc` generates code
+for `fbc`/BASCOM-style compilation, not for an interactive interpreter),
+the idiom was never actually available to it, regardless of period
+authenticity. This closes the question in favor of the capacity-inference
+design above -- there was no simpler alternative being left on the table.
+
 ### Implementation
 
 - `Param.rank: Option<usize>` became `Param.axes: Option<Vec<Option<i64>>>`

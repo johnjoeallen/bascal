@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASCAL: The Journey — BASCAL</title>
+<meta name="description" content="How BASCAL's array parameters and calling convention were built, including two full course reversals and a validation run against a real 1985 BASIC compiler.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>BASCAL: The Journey</h1>
+    <p class="tagline">How a hobby transpiler grew real parameters, a real cycle checker, and — twice — got its array handling rebuilt because the first answer wasn't the right one.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="./">Home</a>
+    <a href="origin.html">Why BASCAL</a>
+    <a href="manual.html">Manual</a>
+    <a href="tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="./">Home</a> / BASCAL: The Journey</p>
+
+  <div class="prose">
+
+<h2>Preface</h2>
+
+<p>BASCAL takes structured <code>.bcl</code> source and turns it into line-numbered Microsoft BASIC — the dialect a working MBASIC or BASCOM programmer in the 1980s would recognize, built to run on real vintage toolchains and on FreeBASIC's QB-compatibility mode. It exists, in the author's own words, as a fun project — built to see what's possible, not to solve a problem anyone actually has anymore.</p>
+
+<p>That framing matters for the story that follows, because most of the hardest work in this stretch of BASCAL's life wasn't inventing new language features. It was staying honest about a genuinely awkward constraint: the target language has no call stack, no heap, no <code>REDIM</code>, and (by design) no recursion. Every "modern" convenience BASCAL adds — real parameters, array passing, a <code>sizeof()</code> builtin — has to be <em>simulated</em> on top of <code>GOSUB</code>, <code>RETURN</code>, and global variables, and simulating something faithfully means the simple-looking answer is often wrong in a way that only shows up once you ask what the generated BASIC actually does at runtime, twice, in a loop, forever.</p>
+
+<p>This is the story of getting that simulation right — including the two times it had to be taken apart and rebuilt because the first version, while it compiled and passed its own tests, wasn't what was actually needed.</p>
+
+<p>Every claim below is checked against <code>git log</code> and the actual diffs, not against memory of how the work felt — commit hashes and dates are cited at the end of each chapter, and a full log appears as an appendix.</p>
+
+<h3>By the Numbers</h3>
+
+<p>This stretch of work spans <strong>22 commits</strong> across three calendar days — a trailing edit on 2026&#8209;08&#8209;11, a day of front-end work on 2026&#8209;08&#8209;12, and the bulk of the compiler work compressed into 2026&#8209;08&#8209;13 and 2026&#8209;08&#8209;14. It touches <strong>59 files</strong>, <strong>+5,170&nbsp;/&nbsp;&minus;1,595</strong> lines. <code>src/codegen.rs</code>, the compiler's code generator, grew from 2,045 lines to 3,222 — a 57% increase — and <code>src/lib.rs</code>'s test suite grew from 77 tests to 117, before counting the separate integration-test crate. One version tag was cut in the middle of it (<code>v0.99.9</code>, at <code>707730f</code>); three more feature commits landed after that tag and, per BASCAL's own release convention, none of them bumped the version on their own — a version bump happens only when someone actually asks for a release, not automatically per feature.</p>
+
+<hr>
+
+<h2>Chapter 1 — Face and Voice</h2>
+
+<p>The earliest work in this arc wasn't compiler work at all. BASCAL's GitHub Pages site got a proper identity: a violet block-cursor favicon, and a retro green-screen computer graphic for the docs index and README, sized and positioned through a few rounds of "not quite" — too big, wrong spot, competing with the hero paragraph instead of sitting beside it. The prose got a pass too. An early draft called BASCAL a "pet project"; that read as more dismissive than intended, and settled instead on describing it as a fun project built to see what's possible — confident about its scope without either apologizing for it or overselling it. The whole documentation set then got a straight read for grammar, tone, and engineering credibility, and the findings got fixed in one pass.</p>
+
+<p>None of this shows up in a diff of the compiler, but it set the register for everything after: BASCAL's docs were going to be treated as seriously as its code.</p>
+
+<blockquote><p><strong>Commits:</strong> <code>4005bbb</code> favicon, <code>d134912</code>/<code>8f0061e</code> hero graphic (added, then resized and repositioned), <code>5492960</code>/<code>d0444f9</code>/<code>eee0f90</code> tone pass, <code>a55da8d</code> grammar/tone/precision review — all 2026&#8209;08&#8209;12.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 2 — What Does Copy-In/Copy-Out Even Mean Here?</h2>
+
+<p>The compiler work starts with a question that sounds simple: <em>explain the array-size, count-variable convention.</em> Answering it honestly required actually reading <code>call_lines</code> in <code>codegen.rs</code>, and what came back wasn't simple at all.</p>
+
+<p>Passing an array into a function meant copying its elements into the function's own generated storage before the <code>GOSUB</code>, and copying them back out afterward — <em>unconditionally</em>, whether or not the function had any business mutating its argument. Scalars, by contrast, only ever copied in; there was no way for a function to hand a value back to its caller except through its single <code>return</code>. And underneath that asymmetry sat a real bug: <code>ident()</code> checked a function's own parameters <em>before</em> it checked <code>global</code> declarations, so</p>
+
+<pre><code>function f(arr%, count%)
+    global arr%   ' silently does nothing -- arr% already means the parameter
+    ...
+end function</code></pre>
+
+<p>quietly did nothing. The <code>global</code> declaration lost to the parameter with the same name, with no diagnostic at all.</p>
+
+<p>Two decisions came out of this. First, <code>global</code>'s shadowing was made a compile-time error — if a parameter and a <code>global</code> declaration inside the same function share a name, that's now rejected outright rather than silently favoring one over the other. Second, and bigger: arrays needed the same choice scalars never had — copy-in only, or copy-in-and-out — and scalars needed to gain the <em>option</em> of copy-out, which they'd never had at all. That became <code>byref</code> / <code>byval</code>, borrowed deliberately from Visual Basic/QBasic's own vocabulary, with <code>byval</code> as the default for both parameter kinds. <code>byref</code> copies in and back out; <code>byval</code> copies in only. Applied uniformly, not as an array-only feature — a <code>byref</code> scalar parameter became a genuine, new capability: a real output parameter, something MBASIC/BASCOM never had at all outside of a shared global.</p>
+
+<hr>
+
+<h2>Chapter 3 — The Bug Under the Bug</h2>
+
+<p>The natural next question — <em>do we handle multi-dimensional array params?</em> — turned out to have two answers, and the second one was worse than the first.</p>
+
+<p>The shallow answer was no: <code>call_lines</code> only ever emitted a single-bound <code>DIM</code> and a single-axis copy loop, regardless of how many dimensions the source array actually had. Fixing that meant inferring each array parameter's rank from how the function's own body indexed it, checking that rank against whatever the caller actually passed, and — when they agreed — emitting a proper <code>DIM</code> with one bound per axis and nested copy loops, one <code>FOR</code> per dimension.</p>
+
+<p>The deep answer was uglier. <code>grid%(r%, c%)</code> — any array access with two or more indices — doesn't parse as <code>Expr::ArrayRef</code> at all; BASCAL's parser only produces that node for an empty-parens or single-index access. Two or more indices parse as <code>Expr::Call</code>, disambiguated from an actual function call later, purely by name. And the <code>Expr::Call</code> fallback branch in codegen's <code>expr()</code> had never been taught to resolve a name through parameter or local scope the way the <code>Expr::ArrayRef</code> branch already did. The practical effect: reading or writing <em>any</em> two-dimensional-or-higher array, parameter or local, inside a function body silently touched the wrong, unmangled name — a bug that had simply never been exercised, because nothing had tried to use a multi-dimensional array inside a function body before. Fixing rank inference surfaced it; fixing the fallback branch closed it.</p>
+
+<p>The follow-up requirement — <em>compile-time error if the target doesn't match the source's dimensionality, but otherwise emit correct code</em> — became a permanent two-way cross-check that's still in the compiler today: declared rank against body usage, and declared rank against whatever's actually passed at each call site.</p>
+
+<p>Chapters 2 and 3 shipped together as one commit — <code>byref</code>/<code>byval</code>, the <code>global</code>-shadowing error, and multi-dimensional array parameters all landed in the same change, with 11 new unit tests covering both directions of copy semantics for scalars and arrays, the two new diagnostics, 2-D/3-D copy generation, and both <code>Expr::Call</code> fixes. It also tagged <strong>v0.99.8</strong>.</p>
+
+<blockquote><p><strong>Commit:</strong> <code>d96fe88</code> "Add byref/byval parameter passing and multi-dimensional array parameters", tagged <code>9c8e9b4</code> &rarr; v0.99.8 — 2026&#8209;08&#8209;13.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 4 — Comments, Everywhere</h2>
+
+<p>Once functions had a real calling convention worth explaining, every example in the documentation needed to explain it. A stale-reference pass first caught leftover <code>byref</code>/copy-out claims on GitHub Pages that no longer matched the new default. Then a full sweep added a trailing comment to every parameter in every function and procedure example across the tutorials and the manual — not because any one comment was hard, but because doing it <em>everywhere</em>, consistently, is its own kind of correctness work. A few instances were missed on the first pass (one hiding in a markdown-indented code block a naive regex skipped over) and caught on re-scan; the sweep alone touched 23 files.</p>
+
+<blockquote><p><strong>Commits:</strong> <code>0052246</code> stale-reference fixes, <code>966198b</code> "comment every parameter in every example, repo and GH Pages" — both 2026&#8209;08&#8209;13.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 5 — Saying What You Mean in the Declaration</h2>
+
+<p>The next complaint aimed at something structural: <em>why do we omit <code>()</code> from parameter declarations, and why can an array parameter get away without stating its own dimensionality?</em> Under the hood, rank was purely <em>inferred</em> from how a function's body indexed its own parameter — invisible at the declaration, surfacing only as a compile error if a caller eventually got it wrong. That's backwards for a signature: a reader shouldn't have to read the whole function body to know whether <code>arr%</code> is a scalar or a 5-D array.</p>
+
+<p>The design conversation that followed went through real dead ends before landing anywhere. A first pass at "state the rank in the declaration" produced <code>arr%(,,)</code> for a 3-D array — rejected on sight as awful. <code>*</code> was considered and dropped. A bare rank count (<code>arr%(3)</code>) read more compactly but overloaded a bare number to mean two different things depending on context — a bound in <code>dim</code>, a rank count in a parameter — which was worse than no syntax at all. The syntax that stuck, <code>(?, ?, ...)</code>, one <code>?</code> per dimension, won because it wasn't actually new: BASCAL already used <code>?</code> for "deliberately incomplete, filled in elsewhere" in <code>?{ field: value }</code> partial record literals, and applying the same mark to a parameter's shape reused an existing convention instead of inventing a second one.</p>
+
+<p>Then the scope widened again: <em>the call site shouldn't need <code>()</code> either — we already know it's an array.</em> Once a declaration states a parameter's rank, the compiler doesn't need a call-site marker to know that argument position expects an array; it can tell from what the identifier resolves to. <code>sumGrid%(g%(), 3, 3)</code> could become <code>sumGrid%(g%, 3, 3)</code>, with <code>g%</code> alone standing for the array — no parser change needed, since a bare identifier already parsed as <code>Expr::Ident</code>; only a codegen change in how call arguments get classified.</p>
+
+<p>With direction confirmed — <em>implement this, don't ask any further questions</em> — the rank syntax shipped as a genuine breaking change on one side only: every array-parameter <em>declaration</em> in the tutorials, the manual, and the GitHub Pages mirror had to move from a bare name to an explicit <code>arr%(?)</code> / <code>grid%(?, ?)</code>, since a parameter indexed as an array with no declared rank became a compile error. The <em>call site</em> half landed additively instead — the old <code>arr%()</code> syntax kept working, byte-for-byte identical output to the new bare-identifier form, so no caller was forced to change. A bulk <code>sed</code>-style edit was tried for the declaration migration and explicitly rejected mid-flight in favor of precise, per-file edits — worth doing right rather than doing fast. Along the way, regenerating one previously stale tutorial output (<code>tutorial/12_require.bas</code>, never rebuilt since the <code>byref</code>/<code>byval</code> change landed) turned up a genuine correctness regression sitting quietly in shipped output — the kind of thing that only surfaces when you actually regenerate every artifact instead of trusting that it's still current.</p>
+
+<blockquote><p><strong>Commits:</strong> <code>48a3866</code> clarified the old behavior first (no array syntax existed there at all), then <code>c7fce0e</code> recorded the decided design, then <code>fda32cd</code> "Add explicit array-parameter rank syntax: arr%(?), grid%(?, ?)" (5 new tests) shipped it — 2026&#8209;08&#8209;13 into 2026&#8209;08&#8209;14.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 6 — A Compiler That Refuses to Recurse</h2>
+
+<p>Mid-stream, a new, unrelated requirement arrived: <em>a compile-time check for recursion, and it's a fatal error.</em> BASCAL's whole calling convention depends on it — every function's storage is one shared, generated global, reused by every call, because there's no call stack to give each invocation its own frame. A function calling itself, directly or through a cycle of other functions, would have two active invocations racing to overwrite the same storage. That's not a style problem; it's silent data corruption.</p>
+
+<p>The fix reused machinery that already existed: <code>statements_call_function</code> and <code>expr_calls_function</code>, resolver-level walkers built to answer "does this code call that function anywhere," already exhaustive over every statement and expression shape, including nested conditionals and loops. On top of that, a proper DFS cycle detector — <code>reject_call_cycles</code>, white/gray/black coloring, the standard algorithm — was built over the whole program's call graph, catching not just direct self-recursion but any cycle at all: two functions calling each other, three functions in a ring, procedures and functions mixed together in the same cycle. A follow-up question — <em>does this still fire when the recursive call is buried inside an <code>if</code>, a <code>while</code>, a <code>for</code>, a <code>select case</code>?</em> — was answered by testing it directly: a call nested four levels deep, <code>for</code> &rarr; <code>select case</code> &rarr; <code>while</code> &rarr; <code>if</code>, between two mutually recursive functions, was still correctly rejected, precisely because the cycle detector was built on the same exhaustive walkers already used for other checks rather than a narrower, purpose-built scan.</p>
+
+<p>This work shipped as <strong>version 0.99.9</strong> — documented, committed, tagged, pushed, with GitHub release notes written to match.</p>
+
+<blockquote><p><strong>Commits:</strong> <code>e389d3e</code> "Reject indirect recursion at compile time, not just direct self-calls" (5 new tests), <code>306cd1d</code> the conditional-nesting regression test, <code>707730f</code> version bump, tag <code>v0.99.9</code> — 2026&#8209;08&#8209;14.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 7 — Justifying the Whole Approach</h2>
+
+<p>With <code>byref</code>/<code>byval</code> in place, an obvious challenge followed: <em>why copy in and out at all, instead of just having every routine work directly on globals — any remotely structured BASIC would do the same?</em> The first answer reached for QuickBASIC and Visual Basic as a counter-example — real structured BASIC dialects that already had genuine parameters. That was the wrong comparison, and got corrected on the spot: the actual target dialect, MBASIC/BASCOM, has no <code>SUB</code>, no <code>FUNCTION</code>, no parameter list of any kind. <code>GOSUB</code>/<code>RETURN</code> and a comment-enforced calling contract are the entire toolkit.</p>
+
+<p>Restated in those terms, the justification holds on its own: with only <code>GOSUB</code> and global variables as primitives, giving <code>.bcl</code> functions real parameters <em>means</em> simulating them out of exactly those two things, and copy-in/copy-out is what that simulation necessarily looks like. There's a structural reason underneath that, too — one function body, compiled once, shared by every call site; different callers pass different variables or whole expressions, none of which is a single fixed location the shared body could just operate on directly. The value has to land somewhere stable before the shared body runs. That argument became a permanent section in the manual: <em>Why Copy-In/Copy-Out, Not Just Globals?</em></p>
+
+<blockquote><p><strong>Commit:</strong> <code>99c1809</code> "docs: explain why parameters copy in/out instead of just using globals" — 2026&#8209;08&#8209;14.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 8 — The Bug That Started <code>sizeof()</code></h2>
+
+<p>The <code>sumGrid%</code> example in the manual — the flagship illustration of multi-dimensional array parameters — had a real, live bug: a 2&times;2 array, <code>dim g%(2, 2)</code>, called through <code>sumGrid%(g%, 3, 3)</code>. Valid indices on <code>g%</code> run <code>0..2</code>; the call claimed <code>3, 3</code>, and the generated copy loop would read one row and one column past the actual array, into whatever memory happened to follow it.</p>
+
+<p>The fix that was actually asked for was narrow and specific: <em>we should not pass the sizes — we should use <code>sizeof()</code>.</em> At the time, <code>sizeof()</code> didn't exist; only the array-rank-declaration syntax did, a materially smaller feature. Building it meant two distinct problems, not one. For a directly <code>dim</code>ed array, the bound just needs freezing at the moment <code>DIM</code> executes — a compile-time-constant bound re-emits as-is; a bound that's an expression (a variable, something computed) gets captured into a never-reassigned temp right at the <code>DIM</code> site, so a later <code>sizeof()</code> call always reads the value the array was actually allocated with, never whatever the source variable holds by then.</p>
+
+<p>The harder half was flagged directly by the person steering the work, mid-design: <em>the messy bit is passed parameters — <code>sizeof()</code> on those needs to use the source array's info, which needs to get magic'd into the real passed params in BASIC, so <code>sizeof()</code> behaves differently in that case.</em> That framing pointed straight at the right answer. <code>copy_bound</code>, the existing array-copy machinery, already required an explicit count parameter declared immediately after every array parameter — so <code>sizeof(param%, axis)</code> on a parameter could simply resolve to reading <em>that already-existing parameter's</em> storage, reusing state that was already there rather than inventing anything new. <code>sizeof()</code> shipped with both halves: the freeze-at-<code>DIM</code>-time path and the reuse-the-existing-parameter path, fully tested (9 new tests), and the buggy <code>sumGrid%</code> example got rewritten to call <code>sizeof(g%, 0)</code> / <code>sizeof(g%, 1)</code> instead of typing bounds by hand.</p>
+
+<blockquote><p><strong>Commit:</strong> <code>8478b0d</code> "feat: add sizeof() builtin for array bounds" — 2026&#8209;08&#8209;14.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 9 — The First Rebuild: "That's Not What I Wanted"</h2>
+
+<p>What shipped in Chapter 8 was real, tested, and documented — and it was the wrong design. The correction landed plainly: <em>the user would leave the <code>rows%</code>, <code>cols%</code> out; the compiler would push/pass the sizes with the array; the generated code would use the passed sizes for <code>sizeof()</code> in the function.</em> The intent had never been an explicit, caller-written <code>sizeof()</code> argument at every call site — it was for the caller to write nothing beyond the array itself, with the compiler carrying its size along invisibly.</p>
+
+<p>That was, in fact, the <em>original</em> idea sketched in the design proposal — and it had been talked out of unconditional auto-injection on its own reasoning, without confirming that reasoning against what was actually wanted. The self-authored justification for staying explicit — that a capacity number and a caller-tracked logical fill-count are two different things a program might need independently — wasn't wrong as an argument, but it had been used to reject the very design that was actually being asked for.</p>
+
+<p>The rebuild was substantial. The manual count-parameter convention disappeared entirely, not just from the call site but from the function signature too: <code>sumGrid%(byref grid%(?, ?), rows%, cols%)</code> became <code>sumGrid%(byref grid%(?, ?))</code>, full stop. In its place, every array parameter gained compiler-synthesized hidden variables — one per axis, never written by <code>.bcl</code> source, never appearing at a call site — set by the caller from the real argument array's own resolved bounds immediately before <code>GOSUB</code>. <code>sizeof()</code> inside the function body simply reads those hidden variables back. The freeze-at-<code>DIM</code>-time machinery, previously gated to only fire for arrays <code>sizeof()</code> was directly called on, became unconditional: any array might get passed into a function somewhere in the program, so every array's bounds now get frozen, at negligible cost (a literal bound still needs no extra line at all).</p>
+
+<p>Every array-parameter example across the manual, the GitHub Pages mirror, and the tutorial sort and statistics libraries got migrated to the new convention in the same pass — 18 files, +642/&minus;630 lines. Two of the GitHub Pages tutorial snippets were missed in that sweep — <code>08_arrays.html</code> and <code>12_require.html</code> still showed the old, manually-counted calling style — and got caught and fixed once specifically asked whether a <code>sizeof()</code> tutorial existed at all. The reversal is documented in the commit's own words, worth quoting rather than paraphrasing:</p>
+
+<blockquote><p>"This replaces the sizeof()-as-explicit-call-site-argument design from the previous commit, which asked the caller to write <code>sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))</code> by hand — the actual goal was for the caller to write nothing beyond the array itself (<code>sumGrid%(g%)</code>) and have the compiler carry the sizes automatically."</p></blockquote>
+
+<blockquote><p><strong>Commits:</strong> <code>afc6b46</code> "feat: auto-inject array bounds at call sites, remove manual count params", <code>548bf58</code> fixed the two missed GitHub Pages snippets — both 2026&#8209;08&#8209;14.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 10 — The Second Rebuild: Storage Has to Be Real</h2>
+
+<p>The correction that followed cut deeper than syntax. <em>Function params are really just normal vars, so they have to have a dimension — I'm not sure <code>?, ?</code> can work, since we need to copy into that array and it needs to be at least as big as the biggest arg we want to pass.</em></p>
+
+<p>Checking that claim against the actual generated output confirmed it immediately, and worse than expected: it wasn't a limitation of the new auto-injection design specifically — it was a bug that had been present since the very first array-copy-in/copy-out implementation, unnoticed the entire time. <code>call_lines</code> emitted a fresh <code>DIM</code> for a parameter's shared storage at <em>every call site</em>. A function's storage is one global, reused by every call — the same reason scalar parameters share storage — but arrays additionally need a fixed <em>size</em>, and classic BASIC has no <code>REDIM</code>: a second <code>DIM</code> on an already-<code>DIM</code>ed array is a fatal runtime "Duplicate Definition" error. Any function with an array parameter called more than once anywhere — two different call sites, or one call site inside a loop — was already generating BASIC that would crash the moment it actually ran. The proof was sitting in the shipped tutorials the whole time: <code>printArray%</code> in <code>tutorial/08_arrays.bcl</code> is called twice, and its storage was being <code>DIM</code>ed twice.</p>
+
+<p>The follow-up from the person who'd caught the bug went straight to the crux of the fix: <em>we parse all source for generation, so we can determine the max dimensions of any passed array — but for dynamically sized arrays, we need to know the value at compile time, and I don't think that's possible.</em> That's exactly right, and it shaped the design into two tiers rather than one. Storage now gets <code>DIM</code>ed exactly once, at the very top of the generated program, before any call happens. Its size — a <em>capacity</em>, a genuinely new and separate number from <code>sizeof()</code>'s per-call actual size — comes from whichever tier applies:</p>
+
+<ul>
+<li><strong>Inferred</strong>, the default (<code>arr%(?)</code>): the compiler scans every call site of a function across the whole program and takes the largest resolved size — but only when every one of those sizes is itself a compile-time constant. That covers a literal <code>DIM</code> bound, a <code>const</code> (evaluated recursively through simple arithmetic), and — the case that needed real machinery — an array that's itself another function's array parameter, forwarded onward, resolved through that parameter's own already-settled capacity. Because BASCAL rejects every call cycle, direct or indirect, that forwarding chain is always finite, so resolving it is a straightforward fixed-point pass: keep scanning until nothing new resolves.</li>
+<li><strong>Explicit</strong>, the fallback (<code>arr%(100)</code>, a literal written in place of <code>?</code>): required only when inference genuinely can't produce a safe number — some call site's array size is a real runtime value, with no way to know it ahead of time. There, the author has to say how much to allow for.</li>
+</ul>
+
+<p>The last piece came as direct confirmation with one more requirement attached: <em>yes, and we still check the actual array capacity before calling, at runtime, and emit a runtime error.</em> So every call site now carries both defenses. A call whose size is provably too big for its capacity, and <em>is</em> resolvable at compile time, is rejected before any BASIC exists to run at all. Every other call — resolved or not — also gets an unconditional runtime guard immediately before its copy-in loop:</p>
+
+<pre><code>IF sumarr_arr_dim0_0% &gt; 100 THEN PRINT "runtime error: ..." : STOP</code></pre>
+
+<p>harmless dead code on a call the compiler already proved safe, and the only defense at all for the one case that's genuinely unprovable ahead of time.</p>
+
+<p>Implementing this meant <code>Param</code>'s declared rank — previously just a dimension count, <code>Option&lt;usize&gt;</code> — became a full per-axis structure, <code>Option&lt;Vec&lt;Option&lt;i64&gt;&gt;&gt;</code>, <code>?</code> recorded as <code>None</code> and an explicit literal as <code>Some(n)</code>. A new whole-program pass, <code>infer_array_param_capacities</code>, independent of the rest of code generation, walks every <code>const</code> declaration, every array's <code>DIM</code> bounds, and every call site in the program to build the capacity table before a single function's generated storage name even exists. Nine new tests covered the inference itself, the const-folding path, capacity forwarded through a chain of parameters, the explicit-capacity fallback, both the compile-time and runtime overflow checks, and — directly — the original bug: a function called three times still gets exactly one <code>DIM</code>. Regenerating the affected tutorial outputs confirmed the fix concretely: <code>tutorial/08_arrays.bas</code>, where <code>printArray%</code> is called twice, now emits <code>DIM printarray_arr_0%(6)</code> exactly once, at the top of the file, instead of twice at each call site.</p>
+
+<blockquote><p><strong>Commit:</strong> <code>763eecf</code> "fix: array parameter storage is DIMed once, sized to a resolved capacity" — 11 files, +1,122/&minus;183 — 2026&#8209;08&#8209;14. No version bump; <code>Cargo.toml</code> still reads <code>0.99.9</code>, the tag cut back in Chapter 6.</p></blockquote>
+
+<hr>
+
+<h2>Chapter 11 — Checking It Against the Real Thing</h2>
+
+<p>The capacity design closed the bug, but it also raised an obvious question, worth asking before treating the fix as final: did BASCAL actually need to build this at all? Classic MBASIC-family BASIC has a documented idiom for resizing an array — <code>ERASE arrayname</code> followed by a fresh <code>DIM</code>, even with a different size or rank, since <code>ERASE</code> deallocates the array and clears the "already dimensioned" state a plain re-<code>DIM</code> would trip over. If that idiom held for BASCAL's actual target, a much simpler design was on the table: <code>DIM</code>, call, copy out if <code>byref</code>, <code>ERASE</code> — scoped tightly around each call, with no capacity inference, no <code>const_eval</code>, no fixed-point pass, and no explicit-capacity fallback syntax needed anywhere.</p>
+
+<p>It was checked directly, against two independent real targets, rather than assumed from memory of the idiom.</p>
+
+<p>First, <code>fbc</code>'s QB-compatibility mode — the actual dialect the existing FreeBASIC execution tests run generated output through. <code>DIM a%(3)</code> / <code>ERASE a%</code> / <code>DIM a%(9)</code> fails to compile: <code>error 4: Duplicated definition, a</code>, on the second <code>DIM</code>, in every variant tried — same size, different size, different rank, a variable bound instead of a literal. Identical under <code>-lang fblite</code> too.</p>
+
+<p>That result alone was enough to keep the shipped design, but it left open whether this was some FreeBASIC-specific gap in its QB emulation rather than a real limit of the target dialect. So the second check went further: a genuine copy of IBM/Microsoft BASIC Compiler 2.00 — the actual 1985 compiler, not an emulation of its dialect — sourced as a disk image from a software-preservation archive and run in DOSBox-X, freshly installed for exactly this purpose. Extracting the floppy image meant a small chain of its own: the archive stores disks in a structured JSON format, not a raw image, so a shallow clone of the archive's own conversion tooling (<code>diskimage.js</code>, a Node utility) turned the JSON back into a genuine 368,640-byte 360K floppy image, <code>mtools</code> pulled <code>BASCOM.EXE</code>, <code>LINK.EXE</code>, and the runtime library out of it, and a headless DOSBox-X batch — <code>MOUNT</code>, compile, link, run, each step's output redirected to a file DOSBox-X's own host-directory mount made instantly readable outside the emulator — closed the loop from "download a 1985 compiler" to "read its stdout" without a single interactive keystroke.</p>
+
+<p>The result was more decisive than the FreeBASIC check, and came with a genuine surprise attached. A plain double-<code>DIM</code>-with-no-<code>ERASE</code> control case reported <code>DD</code> — Duplicate Definition — exactly as expected. But so did the <code>ERASE</code>-then-<code>DIM</code> case: real BASCOM 2.00 rejects the redeclaration too, as a compile-time severe error, on both the same-rank resize and the rank-changing one. And despite reporting those as severe errors, the compiler still linked and produced a runnable <code>.exe</code> — running it showed precisely the silent-corruption failure mode the whole capacity feature exists to prevent: the first resize's value happened to print correctly (the original, never-actually-resized allocation had enough incidental data-segment padding to absorb it by luck), but the rank-changing resize printed nothing at all for a value that should have been there.</p>
+
+<p>The likely explanation reconciles the memory of the idiom with both results without either being wrong: <code>ERASE</code>-then-<code>DIM</code> resizing is real, but it belongs to the <em>interactive interpreter</em> — <code>MBASIC.EXE</code>, <code>GW-BASIC</code> — which allocates each array's storage at the moment a <code>DIM</code> statement actually executes. BASCOM is a <em>compiler</em>; by the time it's translating source, every array is already committed to a fixed slot in the executable's data segment, so there's no allocation left for <code>ERASE</code> to hand back later. BASCAL targets exactly that compiled-output model, so the idiom was never actually available to it — not a FreeBASIC emulation gap, a genuine property of the target. The capacity-inference design stayed exactly as shipped, now with real evidence behind the decision instead of an assumption about a forty-year-old dialect quirk.</p>
+
+<hr>
+
+<h2>Retrospective</h2>
+
+<p>Two things run through this whole stretch of work, and they're worth naming plainly rather than leaving implicit.</p>
+
+<p>The first is that the two real reversals — explicit <code>sizeof()</code> at the call site, and per-call-site <code>DIM</code> — both compiled cleanly, passed their own tests, and were still wrong. Neither failure was a syntax error or a type error; both were failures to check the actual generated BASIC against what the target dialect can genuinely do at runtime, under repetition. A design that looks complete because it type-checks and has green tests is not the same claim as a design that's correct for a language with no call stack, no heap, and no <code>REDIM</code>. The second time, the fix came from being asked to verify a claim (<em>I don't think that's possible</em>) against real behavior, not from being told the fix outright — and confirming it by actually reading the doubled <code>DIM</code> in already-shipped tutorial output made the bug undeniable before a single line of the fix was written.</p>
+
+<p>The second is more of a throughline than a lesson: almost everything in this document is one recurring shape. BASCAL's target dialect gives you exactly two primitives — <code>GOSUB</code>/<code>RETURN</code> and global variables — and every feature here is an argument about how to simulate something richer out of only those two, faithfully, without pretending the simulation is something it isn't. <code>byref</code> doesn't create a real reference; it copies twice instead of once. <code>sizeof()</code> doesn't inspect an array at runtime; it resolves to a value fixed at compile time, sometimes literally, sometimes through a hidden variable set moments before the call that reads it. Storage capacity isn't dynamic; it's a ceiling chosen once, as high as the whole program will ever need, because the alternative — pretending an array could just get bigger — was never actually available. Chapter 11 is the same throughline from the opposite direction: rather than assume the honest shape of the simulation from memory of a forty-year-old idiom, it went and asked the actual 1985 compiler, and got a real answer instead of a plausible one.</p>
+
+<hr>
+
+<h2>Appendix — Commit Log</h2>
+
+<p>Every commit cited above, in order, exactly as <code>git log</code> records it. Chapter 11 is investigation, not a code change — no commit corresponds to it; the finding is recorded in <a href="https://github.com/johnjoeallen/bascal/blob/main/proposals/array-sizeof-and-auto-count-params.md">proposals/array-sizeof-and-auto-count-params.md</a> under "Considered and rejected: ERASE-then-DIM re-declaration" instead.</p>
+
+<table>
+<thead>
+<tr><th>Commit</th><th>Date</th><th>Message</th></tr>
+</thead>
+<tbody>
+<tr><td><code>4005bbb</code></td><td>08&#8209;12</td><td>docs: add violet cursor favicon across the site</td></tr>
+<tr><td><code>d134912</code></td><td>08&#8209;12</td><td>docs: add retro all-in-one computer hero graphic</td></tr>
+<tr><td><code>8f0061e</code></td><td>08&#8209;12</td><td>docs: shrink hero graphic and float it beside the opening paragraph</td></tr>
+<tr><td><code>5492960</code></td><td>08&#8209;12</td><td>docs: note that BASCAL is a pet project, not a production tool</td></tr>
+<tr><td><code>d0444f9</code></td><td>08&#8209;12</td><td>docs: contain the hero float and soften the pet-project note</td></tr>
+<tr><td><code>eee0f90</code></td><td>08&#8209;12</td><td>docs: swap "old frustration" for "old itch" in the origin story</td></tr>
+<tr><td><code>a55da8d</code></td><td>08&#8209;12</td><td>docs: fix grammar, tone, and precision issues found in review</td></tr>
+<tr><td><code>d96fe88</code></td><td>08&#8209;13</td><td>Add byref/byval parameter passing and multi-dimensional array parameters</td></tr>
+<tr><td><code>9c8e9b4</code></td><td>08&#8209;13</td><td>chore: bump version to 0.99.8 — tagged <strong>v0.99.8</strong></td></tr>
+<tr><td><code>0052246</code></td><td>08&#8209;13</td><td>docs: fix remaining stale byref/copy-out references on GH Pages</td></tr>
+<tr><td><code>966198b</code></td><td>08&#8209;13</td><td>docs: comment every parameter in every example, repo and GH Pages</td></tr>
+<tr><td><code>48a3866</code></td><td>08&#8209;13</td><td>docs: clarify byref simulation and why parameters have no array syntax</td></tr>
+<tr><td><code>c7fce0e</code></td><td>08&#8209;13</td><td>docs: record the decided (?, ?) array-parameter rank syntax design</td></tr>
+<tr><td><code>fda32cd</code></td><td>08&#8209;14</td><td>Add explicit array-parameter rank syntax: arr%(?), grid%(?, ?)</td></tr>
+<tr><td><code>e389d3e</code></td><td>08&#8209;14</td><td>Reject indirect recursion at compile time, not just direct self-calls</td></tr>
+<tr><td><code>306cd1d</code></td><td>08&#8209;14</td><td>test: confirm indirect recursion detection sees conditional calls</td></tr>
+<tr><td><code>707730f</code></td><td>08&#8209;14</td><td>chore: bump version to 0.99.9 — tagged <strong>v0.99.9</strong></td></tr>
+<tr><td><code>99c1809</code></td><td>08&#8209;14</td><td>docs: explain why parameters copy in/out instead of just using globals</td></tr>
+<tr><td><code>8478b0d</code></td><td>08&#8209;14</td><td>feat: add sizeof() builtin for array bounds</td></tr>
+<tr><td><code>afc6b46</code></td><td>08&#8209;14</td><td>feat: auto-inject array bounds at call sites, remove manual count params</td></tr>
+<tr><td><code>548bf58</code></td><td>08&#8209;14</td><td>docs: fix GH Pages tutorial snippets left stale by the sizeof() redesign</td></tr>
+<tr><td><code>763eecf</code></td><td>08&#8209;14</td><td>fix: array parameter storage is DIMed once, sized to a resolved capacity</td></tr>
+</tbody>
+</table>
+
+<p>All dates 2026. Verify any of this directly: <code>git log --oneline 3de2e8c..763eecf</code>.</p>
+
+  </div>
+
+  <p class="crumbs"><a href="./">&larr; Back to Home</a></p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+<script src="bcl-highlight.js"></script>
+<script src="theme-toggle.js"></script>
+</body>
+</html>
