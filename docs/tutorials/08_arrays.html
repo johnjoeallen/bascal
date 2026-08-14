@@ -37,17 +37,19 @@ indexed <code>0..size</code>; <code>dim name%(rows, cols)</code> declares a 2-D 
 more dimensions are allowed. An array parameter must declare its rank with
 one <code>?</code> per dimension — <code>arr%(?)</code> for 1-D, <code>grid%(?, ?)</code> for
 2-D — and at the call site you just write the plain array name, no <code>()</code>
-needed; the array must always be followed by its element count as the next
-argument (one per dimension). This isn't a reference — BASCAL copies
-elements in before the call, and copies them back out after only if the
-parameter is declared <code>byref</code>; unmarked (<code>byval</code>) is the default
-and leaves the caller's array untouched.</p>
+and no size argument needed: the compiler already knows the parameter is
+an array from its declaration, and carries its size alongside it
+automatically. Use <code>sizeof(arr%)</code> inside the function body wherever
+the size is needed. This isn't a reference — BASCAL copies elements in
+before the call, and copies them back out after only if the parameter is
+declared <code>byref</code>; unmarked (<code>byval</code>) is the default and leaves
+the caller's array untouched.</p>
   </div>
 
     <div class="snippet">
       <h3>Insertion sort, in place</h3>
-      <pre><code>function insertionSort%(byref arr%(?), count%)
-    for i% = 1 to count% - 1
+      <pre><code>function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
         while j% &gt;= 0 and arr%(j%) &gt; key%
@@ -63,7 +65,7 @@ end function</code></pre>
       <h3>Calling it, and a 2-D array</h3>
       <pre><code>dim data%(N%)
 &#x27; ... populate data%(0..N%-1) ...
-dummy% = insertionSort%(data%, N%)   &#x27; arr% is byref, so data% comes back sorted
+dummy% = insertionSort%(data%)   &#x27; arr% is byref, so data% comes back sorted
 
 dim identity%(2, 2)
 identity%(1, 1) = 1</code></pre>
