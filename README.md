@@ -231,9 +231,13 @@ any non-zero as truthy, matching expected semantics.
 
 ## Recursive Functions
 
-BASCAL does not support recursive functions. Functions are transpiled to `GOSUB`
-with global parameter variables; a recursive call would overwrite its own
-parameters. Use an explicit stack array to simulate recursion.
+BASCAL does not support recursion, direct or indirect. Functions and
+procedures are transpiled to `GOSUB` against shared global parameter
+storage, not a real call stack, so any cycle in the call graph — a
+function calling itself, or a longer chain that eventually calls back into
+where it started — overwrites in-flight parameters. The compiler checks
+the whole call graph and rejects any cycle at compile time. Use an
+explicit stack array to simulate recursion.
 
 ## Repository Layout
 

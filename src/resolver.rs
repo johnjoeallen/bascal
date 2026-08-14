@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::ast::*;
 use crate::diagnostics::{Diagnostic, SourcePos};
@@ -6,7 +6,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     reject_duplicate_functions(program, &mut diagnostics);
-    reject_direct_recursion(program, &mut diagnostics);
+    reject_call_cycles(program, &mut diagnostics);
     reject_missing_returns(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
 
@@ -82,13 +82,91 @@ fn reject_duplicate_functions(program: &Program, diagnostics: &mut Vec<Diagnosti
     }
 }
 
-fn reject_direct_recursion(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
-    for function in &program.functions {
-        if statements_call_function(&function.body, &function.name) {
-            diagnostics.push(Diagnostic::error(
-                generated_pos(),
-                format!("direct recursion is not supported for `{}`", function.name),
-            ));
+/// Rejects any recursive call cycle -- direct (a function calling itself)
+/// or indirect (`f%` calls `g%` calls `f%`, or a longer chain). Functions
+/// and procedures transpile to `GOSUB` against shared global parameter
+/// storage, not a real call stack, so *any* cycle in the call graph means
+/// a second entry overwrites the first call's still-in-flight parameters
+/// -- there's no depth at which that becomes safe.
+fn reject_call_cycles(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let n = program.functions.len();
+    // adjacency[i] = indices of functions/procedures directly called from
+    // function i's body.
+    let adjacency: Vec<Vec<usize>> = program
+        .functions
+        .iter()
+        .map(|caller| {
+            program
+                .functions
+                .iter()
+                .enumerate()
+                .filter(|(_, callee)| statements_call_function(&caller.body, &callee.name))
+                .map(|(j, _)| j)
+                .collect()
+        })
+        .collect();
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum Color {
+        White,
+        Gray,
+        Black,
+    }
+
+    fn visit(
+        node: usize,
+        adjacency: &[Vec<usize>],
+        color: &mut [Color],
+        path: &mut Vec<usize>,
+        program: &Program,
+        reported: &mut HashSet<BTreeSet<usize>>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        color[node] = Color::Gray;
+        path.push(node);
+        for &next in &adjacency[node] {
+            match color[next] {
+                Color::White => visit(next, adjacency, color, path, program, reported, diagnostics),
+                Color::Gray => {
+                    let start = path.iter().position(|&x| x == next).unwrap();
+                    let cycle_indices: BTreeSet<usize> = path[start..].iter().copied().collect();
+                    if reported.insert(cycle_indices) {
+                        let names: Vec<String> = path[start..]
+                            .iter()
+                            .map(|&idx| program.functions[idx].name.as_basic())
+                            .collect();
+                        let chain = if names.len() == 1 {
+                            format!("`{}` calls itself", names[0])
+                        } else {
+                            let mut labeled: Vec<String> =
+                                names.iter().map(|n| format!("`{n}`")).collect();
+                            labeled.push(format!("`{}`", names[0]));
+                            labeled.join(" -> ")
+                        };
+                        diagnostics.push(Diagnostic::error(
+                            generated_pos(),
+                            format!(
+                                "recursion is not supported: {chain} -- functions and \
+                                 procedures transpile to shared global parameter storage, not \
+                                 a real call stack, so a recursive call overwrites its own \
+                                 in-flight parameters"
+                            ),
+                        ));
+                    }
+                }
+                Color::Black => {}
+            }
+        }
+        path.pop();
+        color[node] = Color::Black;
+    }
+
+    let mut color = vec![Color::White; n];
+    let mut path = Vec::new();
+    let mut reported = HashSet::new();
+    for i in 0..n {
+        if color[i] == Color::White {
+            visit(i, &adjacency, &mut color, &mut path, program, &mut reported, diagnostics);
         }
     }
 }

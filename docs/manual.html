@@ -823,7 +823,7 @@ end function</code></pre>
 <p><code>global</code> must name a real module-level variable, not one of the function's own parameters — <code>function f%(x%) : global x% : ...</code> is a compile-time error, since the parameter always resolves first and the <code>global</code> declaration could never take effect.</p>
 <h3 id="restrictions">Restrictions</h3>
 <ul>
-<li><strong>No recursion.</strong> Functions are transpiled to <code>GOSUB</code> with global parameter variables. A recursive call would overwrite in-flight parameters. Use an explicit stack array to simulate recursion if needed.</li>
+<li><strong>No recursion, direct or indirect.</strong> Functions and procedures are transpiled to <code>GOSUB</code> against shared global parameter storage, not a real call stack, so any call cycle — <code>f%</code> calling itself, or <code>f%</code> calling <code>g%</code> calling back into <code>f%</code>, however many hops apart — overwrites in-flight parameters. The compiler checks the whole call graph and rejects <strong>any</strong> cycle at compile time, not just direct self-calls. Use an explicit stack array to simulate recursion if needed.</li>
 <li><strong>No return value from a procedure.</strong> Functions must <code>return</code> a value; for side-effect-only subroutines use <code>procedure</code> instead.</li>
 </ul>
 <h3 id="how-functions-are-transpiled">How Functions Are Transpiled</h3>
@@ -908,7 +908,7 @@ procedure increment()
 end procedure</code></pre>
 <h3 id="restrictions-1">Restrictions</h3>
 <ul>
-<li><strong>No recursion.</strong> Same GOSUB transpilation as functions — a recursive call would overwrite in-flight parameters.</li>
+<li><strong>No recursion, direct or indirect.</strong> Same GOSUB transpilation as functions — the compile-time cycle check covers procedures too, including a cycle that passes through both functions and procedures.</li>
 <li><strong>No return value.</strong> Do not use a procedure where an expression is expected.</li>
 </ul>
 <h3 id="how-procedures-are-transpiled">How Procedures Are Transpiled</h3>

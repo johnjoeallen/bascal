@@ -1923,6 +1923,147 @@ end
         );
     }
 
+    // ── recursion (direct and indirect) ─────────────────────────────────
+
+    #[test]
+    fn direct_recursion_is_rejected() {
+        let source = r#"
+function fact%(n%)
+  if n% <= 1 then
+    return 1
+  end if
+  return n% * fact%(n% - 1)
+end function
+end
+"#;
+        let err = compile_source("direct_recursion.bcl", source)
+            .expect_err("a function calling itself should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("recursion is not supported")
+                    && d.message.contains("`fact%` calls itself")
+            }),
+            "error must name the self-recursive function: {:?}", err
+        );
+    }
+
+    #[test]
+    fn two_hop_indirect_recursion_is_rejected() {
+        let source = r#"
+function isEven%(n%)
+  if n% = 0 then
+    return 1
+  end if
+  return isOdd%(n% - 1)
+end function
+
+function isOdd%(n%)
+  if n% = 0 then
+    return 0
+  end if
+  return isEven%(n% - 1)
+end function
+
+print isEven%(4)
+end
+"#;
+        let err = compile_source("two_hop_recursion.bcl", source)
+            .expect_err("mutual recursion between two functions should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("recursion is not supported")
+                    && d.message.contains("`isEven%`")
+                    && d.message.contains("`isOdd%`")
+                    && d.message.contains("->")
+            }),
+            "error must show the call cycle: {:?}", err
+        );
+    }
+
+    #[test]
+    fn three_hop_indirect_recursion_is_rejected() {
+        let source = r#"
+function a%(n%)
+  return b%(n%)
+end function
+
+function b%(n%)
+  return c%(n%)
+end function
+
+function c%(n%)
+  return a%(n%)
+end function
+
+print a%(1)
+end
+"#;
+        let err = compile_source("three_hop_recursion.bcl", source)
+            .expect_err("a three-function call cycle should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`a%`") && d.message.contains("`b%`") && d.message.contains("`c%`")
+            }),
+            "error must show the full cycle: {:?}", err
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_procedure_is_rejected() {
+        // A function calling a procedure that calls back into the function
+        // is just as broken as two functions calling each other -- both
+        // still transpile to shared global storage with no call stack.
+        let source = r#"
+function f%(n%)
+  p(n%)
+  return n%
+end function
+
+procedure p(n%)
+  dummy% = f%(n%)
+end procedure
+
+print f%(1)
+end
+"#;
+        let err = compile_source("recursion_via_procedure.bcl", source)
+            .expect_err("a cycle through a procedure should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`f%`") && d.message.contains("`p`")
+            }),
+            "error must name both the function and the procedure in the cycle: {:?}", err
+        );
+    }
+
+    #[test]
+    fn non_cyclic_shared_helper_calls_are_not_rejected() {
+        // A calls both B and C; B and C both call D. A diamond-shaped call
+        // graph, not a cycle -- must compile cleanly.
+        let source = r#"
+function d%(n%)
+  return n% + 1
+end function
+
+function b%(n%)
+  return d%(n%)
+end function
+
+function c%(n%)
+  return d%(n%) * 2
+end function
+
+function a%(n%)
+  return b%(n%) + c%(n%)
+end function
+
+print a%(1)
+end
+"#;
+        compile_source("diamond_calls.bcl", source)
+            .expect("a non-cyclic call graph, even with a shared helper, should compile");
+    }
+
     // ── short-circuit && / || ──────────────────────────────────────────
 
     /// Returns the label named by the first `THEN GOTO <label>` in `output`.

@@ -1011,9 +1011,13 @@ declaration could never take effect.
 
 ### Restrictions
 
-- **No recursion.** Functions are transpiled to `GOSUB` with global parameter
-  variables. A recursive call would overwrite in-flight parameters. Use an
-  explicit stack array to simulate recursion if needed.
+- **No recursion, direct or indirect.** Functions and procedures are
+  transpiled to `GOSUB` against shared global parameter storage, not a real
+  call stack, so any call cycle — `f%` calling itself, or `f%` calling `g%`
+  calling back into `f%`, however many hops apart — overwrites in-flight
+  parameters. The compiler checks the whole call graph and rejects **any**
+  cycle at compile time, not just direct self-calls. Use an explicit stack
+  array to simulate recursion if needed.
 - **No return value from a procedure.** Functions must `return` a value;
   for side-effect-only subroutines use `procedure` instead.
 
@@ -1149,8 +1153,9 @@ end procedure
 
 ### Restrictions
 
-- **No recursion.**  Same GOSUB transpilation as functions — a recursive call would
-  overwrite in-flight parameters.
+- **No recursion, direct or indirect.**  Same GOSUB transpilation as
+  functions — the compile-time cycle check covers procedures too, including
+  a cycle that passes through both functions and procedures.
 - **No return value.**  Do not use a procedure where an expression is expected.
 
 ### How Procedures Are Transpiled

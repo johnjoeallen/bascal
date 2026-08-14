@@ -37,8 +37,11 @@ carries the return-type suffix and every path must reach a <code>return</code>.
 Variables declared inside a function are local by default — the compiler
 prefixes them with the function name — so two functions can each use <code>i%</code>
 without conflict. To touch a global from inside a function, declare it with
-<code>global varname</code>. Functions can't call themselves recursively, since a
-recursive call would overwrite its own parameter variables.</p>
+<code>global varname</code>. Functions can't recurse — directly (calling
+themselves) or indirectly (two or more functions calling each other in a
+cycle) — since any recursive call would overwrite its own parameter
+variables; the compiler checks the whole call graph and rejects any
+cycle.</p>
   </div>
 
     <div class="snippet">

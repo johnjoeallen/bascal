@@ -11,8 +11,9 @@
 ' prefixes them with the function name.  To access a global variable from
 ' inside a function, declare it with:  global varname
 ' 
-' Functions cannot call themselves recursively (parameters would be
-' overwritten).  Use an explicit stack array for recursive algorithms.
+' Functions cannot recurse, directly or indirectly (parameters would be
+' overwritten) -- the compiler checks the whole call graph and rejects
+' any cycle.  Use an explicit stack array for recursive algorithms.
 
 ' Integer arithmetic functions
 ' a% -- first value to compare
