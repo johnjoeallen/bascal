@@ -38,10 +38,9 @@ end procedure
 /* Procedure that modifies an array in place -- byref copies the result */
 /* back to the caller; the default byval would fill a private copy only. */
 // arr%   -- array to fill; byref because it's mutated in place
-// count% -- number of elements in arr%
 // value% -- value written into every element
-procedure fillRange(byref arr%(?), count%, value%)
-    for i% = 0 to count% - 1
+procedure fillRange(byref arr%(?), value%)
+    for i% = 0 to sizeof(arr%) - 1
         arr%(i%) = value%
     end for
 end procedure
@@ -69,7 +68,7 @@ printIfPass("Carol", 78)   // printed
 
 const N% = 5
 dim data%(N%)
-fillRange(data%, N%, 99)
+fillRange(data%, 99)
 print "Filled array:"
 for i% = 0 to N% - 1
     print "  data%(" + str$(i%) + ") = " + str$(data%(i%))

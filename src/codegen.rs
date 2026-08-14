@@ -61,17 +61,14 @@ pub struct CodeGenerator {
     // lowercase name -> rank. Used to check a call site's array argument
     // against the callee's own inferred parameter rank.
     top_level_array_ranks: HashMap<String, usize>,
-    // Frozen per-axis bound text for every top-level array that `sizeof()`
-    // is ever called on somewhere in the program -- a literal directly, or
-    // a generated temp's name if the bound wasn't already a compile-time
-    // constant. Populated as each DIM is actually generated; see
-    // `sizeof_targets`.
+    // Frozen per-axis bound text for every top-level array -- a literal
+    // directly, or a generated temp's name if the bound wasn't already a
+    // compile-time constant. Populated as each DIM is actually generated.
+    // Every array needs this available, not just ones `sizeof()` is called
+    // on directly: any array can be passed to a function, and the compiler
+    // auto-injects its bounds at the call site so the callee's own
+    // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
-    // Lowercase names of every array `sizeof()` is called on anywhere in
-    // the program (computed once, up front). Only arrays in this set get
-    // their bounds frozen at DIM time -- programs that never call
-    // `sizeof()` see no generated output change at all.
-    sizeof_targets: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -86,13 +83,21 @@ struct FunctionInfo {
     /// function's own body (`None` if never directly indexed, or indexed
     /// inconsistently). Parallel to `params`.
     param_ranks: Vec<Option<usize>>,
+    /// For each array parameter (rank `Some(n)` in `param_ranks`), the `n`
+    /// compiler-synthesized BASIC variable names that carry its per-axis
+    /// bounds -- never written by the `.bcl` author, never appearing at a
+    /// call site. The caller sets them (from the actual argument array's
+    /// own resolved bounds) immediately before `GOSUB`, alongside the
+    /// ordinary copy-in; the callee's body reads them back through
+    /// `sizeof()`. Empty `Vec` for a scalar parameter. Parallel to `params`.
+    param_bound_vars: Vec<Vec<String>>,
     /// Declared rank of every array this function DIMs locally, lowercase
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
-    /// Frozen per-axis bound text for every local array `sizeof()` is
-    /// called on within this function. RefCell because it's populated
-    /// lazily as DIM statements are generated, through a shared
-    /// `&FunctionInfo` reference -- same pattern as `local_var_map`.
+    /// Frozen per-axis bound text for every array DIMed locally within this
+    /// function. RefCell because it's populated lazily as DIM statements
+    /// are generated, through a shared `&FunctionInfo` reference -- same
+    /// pattern as `local_var_map`.
     local_array_bounds: RefCell<HashMap<String, Vec<String>>>,
     is_procedure: bool,
     globals: HashSet<String>,
@@ -116,7 +121,6 @@ impl CodeGenerator {
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
-            sizeof_targets: HashSet::new(),
         }
     }
 
@@ -147,7 +151,6 @@ impl CodeGenerator {
         }
         self.functions = functions;
         self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
-        self.sizeof_targets = collect_sizeof_targets(program);
         self.record_buffer_names = collect_record_buffer_names(program);
         *self.taken_names.borrow_mut() = taken;
 
@@ -270,29 +273,29 @@ impl CodeGenerator {
                     }
                     self.line(&format!("DIM {base}({})", rendered.join(", ")));
 
-                    // Only arrays sizeof() is actually called on anywhere
-                    // get their bounds frozen -- everything else generates
-                    // byte-identical output to before sizeof() existed.
+                    // Every DIMed array's bounds get frozen here -- a
+                    // literal bound needs no extra line, but a non-literal
+                    // one is captured into a temp so it's still readable
+                    // later (by `sizeof()`, or by the auto-injected bound
+                    // passed to a function this array gets passed into).
                     let key = name.as_basic().to_ascii_lowercase();
-                    if self.sizeof_targets.contains(&key) {
-                        let frozen: Vec<String> = sizes
-                            .iter()
-                            .zip(rendered.iter())
-                            .map(|(s, val)| {
-                                if matches!(s, Expr::Integer(_)) {
-                                    val.clone()
-                                } else {
-                                    let temp = self.next_temp_var();
-                                    self.line(&format!("{temp} = {val}"));
-                                    temp
-                                }
-                            })
-                            .collect();
-                        if let Some(info) = current_function {
-                            info.local_array_bounds.borrow_mut().insert(key, frozen);
-                        } else {
-                            self.top_level_array_bounds.insert(key, frozen);
-                        }
+                    let frozen: Vec<String> = sizes
+                        .iter()
+                        .zip(rendered.iter())
+                        .map(|(s, val)| {
+                            if matches!(s, Expr::Integer(_)) {
+                                val.clone()
+                            } else {
+                                let temp = self.next_temp_var();
+                                self.line(&format!("{temp} = {val}"));
+                                temp
+                            }
+                        })
+                        .collect();
+                    if let Some(info) = current_function {
+                        info.local_array_bounds.borrow_mut().insert(key, frozen);
+                    } else {
+                        self.top_level_array_bounds.insert(key, frozen);
                     }
                 }
             }
@@ -1131,10 +1134,13 @@ impl CodeGenerator {
         // declared as an array (array-ness is inferred purely from the
         // callee's signature in that case, so a bare name only counts when
         // the callee already expects an array there). `Some((resolved
-        // caller-side name, reconciled rank))` when so; `None` for a plain
-        // scalar argument, or an array-shaped argument whose rank didn't
-        // match (reported once, here).
-        let array_args: Vec<Option<(String, usize)>> = args
+        // caller-side mangled name, original source identifier, reconciled
+        // rank))` when so -- the original identifier is kept alongside the
+        // mangled one because resolving its bounds (below) has to look it
+        // up by its *source* name, not the per-function generated one.
+        // `None` for a plain scalar argument, or an array-shaped argument
+        // whose rank didn't match (reported once, here).
+        let array_args: Vec<Option<(String, BasicIdent, usize)>> = args
             .iter()
             .enumerate()
             .map(|(index, arg)| {
@@ -1174,7 +1180,7 @@ impl CodeGenerator {
                     }
                     _ => {
                         let rank = target_rank.or(source_rank).unwrap_or(1);
-                        Some((self.ident(source_name, current_function), rank))
+                        Some((self.ident(source_name, current_function), source_name.clone(), rank))
                     }
                 }
             })
@@ -1196,16 +1202,30 @@ impl CodeGenerator {
 
         for (index, _arg) in args.iter().enumerate() {
             if let Some((_, lowered)) = info.params.get(index) {
-                if let Some((actual_array, rank)) = &array_args[index] {
-                    let bounds: Vec<String> = (0..*rank)
-                        .map(|axis| copy_bound(info, &rendered_args, index, axis))
-                        .collect();
+                if let Some((actual_array, source_name, rank)) = &array_args[index] {
+                    let bound_vars = info.param_bound_vars.get(index).cloned().unwrap_or_default();
+                    for (axis, bound_var) in bound_vars.iter().enumerate() {
+                        let bound = self
+                            .resolve_axis_bound(source_name, axis, current_function)
+                            .unwrap_or_else(|| {
+                                self.diagnostics.push(Diagnostic::error(
+                                    SourcePos::new("<validation>", 1, 1),
+                                    format!(
+                                        "could not determine the size of `{}` along axis {} \
+                                         to pass to `{}`",
+                                        source_name, axis, info.source_name,
+                                    ),
+                                ));
+                                "1".to_string()
+                            });
+                        lines.push(format!("{bound_var} = {bound}"));
+                    }
                     let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
-                    lines.push(format!("DIM {}({})", lowered.as_basic(), bounds.join(", ")));
+                    lines.push(format!("DIM {}({})", lowered.as_basic(), bound_vars.join(", ")));
                     lines.extend(array_copy_lines(
                         &lowered.as_basic(),
                         actual_array,
-                        &bounds,
+                        &bound_vars,
                         "copy array argument into transpiled function storage",
                         &loop_vars,
                     ));
@@ -1220,15 +1240,13 @@ impl CodeGenerator {
                 if param.mode != ParamMode::ByRef {
                     continue;
                 }
-                if let Some((actual_array, rank)) = &array_args[index] {
-                    let bounds: Vec<String> = (0..*rank)
-                        .map(|axis| copy_bound(info, &rendered_args, index, axis))
-                        .collect();
+                if let Some((actual_array, _source_name, rank)) = &array_args[index] {
+                    let bound_vars = info.param_bound_vars.get(index).cloned().unwrap_or_default();
                     let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
                     lines.extend(array_copy_lines(
                         actual_array,
                         &lowered.as_basic(),
-                        &bounds,
+                        &bound_vars,
                         "copy mutated array argument back to caller storage",
                         &loop_vars,
                     ));
@@ -1343,12 +1361,38 @@ impl CodeGenerator {
         self.top_level_array_ranks.get(&key).copied()
     }
 
+    /// Bound text for one axis of a known array: a frozen DIM-time bound
+    /// for a directly-`dim`ed array (local or top-level), or -- for an
+    /// array *parameter* -- the compiler-synthesized hidden variable that
+    /// the caller sets (from the actual argument's own resolved bound)
+    /// immediately before `GOSUB`. `None` means the axis genuinely can't
+    /// be resolved (unknown array, or an unsized `dim arr%()` with no
+    /// bounds to freeze).
+    fn resolve_axis_bound(
+        &self,
+        name: &BasicIdent,
+        axis: usize,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<String> {
+        if let Some(info) = current_function {
+            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
+                return info
+                    .param_bound_vars
+                    .get(index)
+                    .and_then(|bounds| bounds.get(axis))
+                    .cloned();
+            }
+            let key = name.as_basic().to_ascii_lowercase();
+            if let Some(bound) = info.local_array_bounds.borrow().get(&key).and_then(|b| b.get(axis)) {
+                return Some(bound.clone());
+            }
+        }
+        let key = name.as_basic().to_ascii_lowercase();
+        self.top_level_array_bounds.get(&key).and_then(|b| b.get(axis)).cloned()
+    }
+
     /// Resolves `sizeof(name)` / `sizeof(name, axis)` to the text that
-    /// should replace the call in generated code: a frozen DIM-time bound
-    /// for a directly-`dim`ed array, or -- for an array *parameter* --
-    /// the existing count parameter that `copy_bound` already requires to
-    /// immediately follow it, one per axis. Neither case needs any new
-    /// runtime state; both just read something that's already there.
+    /// should replace the call in generated code.
     fn resolve_sizeof(
         &self,
         name: &BasicIdent,
@@ -1381,30 +1425,7 @@ impl CodeGenerator {
             ));
         }
 
-        if let Some(info) = current_function {
-            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
-                let bound_index = index + 1 + axis;
-                return info
-                    .params
-                    .get(bound_index)
-                    .map(|(_, lowered)| lowered.as_basic())
-                    .ok_or_else(|| {
-                        format!(
-                            "`{name}` needs a count parameter for axis {axis} declared \
-                             immediately after it"
-                        )
-                    });
-            }
-            let key = name.as_basic().to_ascii_lowercase();
-            if let Some(bound) = info.local_array_bounds.borrow().get(&key).and_then(|b| b.get(axis)) {
-                return Ok(bound.clone());
-            }
-        }
-        let key = name.as_basic().to_ascii_lowercase();
-        self.top_level_array_bounds
-            .get(&key)
-            .and_then(|b| b.get(axis))
-            .cloned()
+        self.resolve_axis_bound(name, axis, current_function)
             .ok_or_else(|| format!("could not determine the size of `{name}`"))
     }
 
@@ -1479,6 +1500,24 @@ impl FunctionInfo {
             })
             .collect();
         let param_ranks = infer_param_ranks(function, known_callables, diagnostics);
+        let param_bound_vars: Vec<Vec<String>> = function
+            .params
+            .iter()
+            .zip(param_ranks.iter())
+            .map(|(param, rank)| match rank {
+                Some(rank) => (0..*rank)
+                    .map(|axis| {
+                        let preferred =
+                            format!("{}_{}_dim{}", stem, sanitize_symbol(&param.name.name), axis);
+                        let lowered =
+                            allocate_unique(&preferred, Some(TypeSuffix::Integer), taken);
+                        taken.insert(lowered.as_basic().to_ascii_lowercase());
+                        lowered.as_basic()
+                    })
+                    .collect(),
+                None => Vec::new(),
+            })
+            .collect();
         let local_array_ranks = dim_ranks_in_body(&function.body);
         let result = allocate_unique(&format!("{stem}_result"), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
@@ -1490,6 +1529,7 @@ impl FunctionInfo {
             result,
             params,
             param_ranks,
+            param_bound_vars,
             local_array_ranks,
             local_array_bounds: RefCell::new(HashMap::new()),
             is_procedure: function.is_procedure,
@@ -1855,32 +1895,6 @@ fn infer_param_ranks(
             }
         })
         .collect()
-}
-
-/// Lowercase names of every array `sizeof()` is called on anywhere in the
-/// program -- top-level statements and every function body. Only arrays in
-/// this set have their DIM bounds frozen into a sizeof-readable temp; a
-/// program that never calls `sizeof()` sees no generated-output change at
-/// all. Deliberately over-inclusive: a name that turns out to be a
-/// parameter (not a DIMed array) is harmless here, since the DIM-freezing
-/// logic only ever fires for names that actually have a matching
-/// `Statement::Dim` -- a parameter never does.
-fn collect_sizeof_targets(program: &Program) -> HashSet<String> {
-    let mut targets = HashSet::new();
-    let mut collect = |e: &Expr| {
-        if let Expr::Call { name, args } = e {
-            if name.name.eq_ignore_ascii_case("sizeof") {
-                if let Some(Expr::Ident(array_name)) = args.first() {
-                    targets.insert(array_name.as_basic().to_ascii_lowercase());
-                }
-            }
-        }
-    };
-    visit_body_exprs(&program.statements, &mut collect);
-    for function in &program.functions {
-        visit_body_exprs(&function.body, &mut collect);
-    }
-    targets
 }
 
 /// Declared rank (number of DIM dimensions) of every array DIMed anywhere
@@ -2333,24 +2347,6 @@ fn callable_expr(expr: &Expr) -> Option<(&BasicIdent, &[Expr])> {
 /// Bound for one axis of an array argument: the arguments immediately
 /// following the array argument are its per-axis element counts, in the
 /// same order as `DIM`'s own bounds -- `axis` 0 is the first of these.
-fn copy_bound(
-    info: &FunctionInfo,
-    rendered_args: &[String],
-    array_arg_index: usize,
-    axis: usize,
-) -> String {
-    let bound_index = array_arg_index + 1 + axis;
-    rendered_args
-        .get(bound_index)
-        .cloned()
-        .or_else(|| {
-            info.params
-                .get(bound_index)
-                .map(|(_, lowered)| lowered.as_basic())
-        })
-        .unwrap_or_else(|| "10".to_string())
-}
-
 /// Nested copy loop, one FOR per axis, innermost body doing the actual
 /// element assignment. `bounds` and `loop_vars` are parallel, one entry per
 /// dimension -- rank 1 (the common case) produces exactly the same output

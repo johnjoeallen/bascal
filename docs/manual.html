@@ -434,14 +434,13 @@ score% = 0  // also valid inline</code></pre>
 <h3 id="block-comments">Block Comments</h3>
 <p>Block comments span multiple lines. The opening delimiter is <code>/*</code> and the closing delimiter is <code>*/</code>. Block comments may appear anywhere a statement is valid.</p>
 <pre><code>/*
- * Insertion sort — sorts arr%(0..count%-1) in ascending order.
+ * Insertion sort — sorts arr%(0..sizeof(arr%)-1) in ascending order.
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
-&#39; arr%   -- array to sort; byref because it's mutated in place
-&#39; count% -- number of elements in arr%
-function insertionSort%(byref arr%(?), count%)
-    for i% = 1 to count% - 1
+&#39; arr% -- array to sort; byref because it's mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
         while j% &gt;= 0 and arr%(j%) &gt; key%
@@ -793,7 +792,7 @@ PRINT &quot;clamp(15,1,10) = &quot; + STR$(clamp%(15, 1, 10))  &#39; 10
 PRINT &quot;clamp(-3,1,10) = &quot; + STR$(clamp%(-3, 1, 10))  &#39; 1
 PRINT titleCase$(&quot;bASCAL&quot;)                            &#39; Bascal</code></pre>
 <p>Functions called only for their side effects (discarding the return value) are written as expression statements. The result variable is overwritten but not read:</p>
-<pre><code>dummy% = sortArray%(data%, N%)</code></pre>
+<pre><code>dummy% = sortArray%(data%)</code></pre>
 <h3 id="return">Return</h3>
 <p>Every function must contain at least one <code>return</code> statement. Implicit returns at end-of-body are not supported.</p>
 <h3 id="calling-the-same-function-twice">Calling the Same Function Twice</h3>
@@ -864,10 +863,9 @@ procedure printIfPass(name$, score%)
 end procedure
 
 &#39; arr%   -- array to fill; byref because it's mutated in place
-&#39; count% -- number of elements in arr%
 &#39; value% -- value written into every element
-procedure fillRange(byref arr%(?), count%, value%)
-    for i% = 0 to count% - 1
+procedure fillRange(byref arr%(?), value%)
+    for i% = 0 to sizeof(arr%) - 1
         arr%(i%) = value%
     end for
 end procedure</code></pre>
@@ -876,7 +874,7 @@ end procedure</code></pre>
 <pre><code>printSeparator()
 printScore(&quot;Alice&quot;, 91)
 printIfPass(&quot;Bob&quot;, 54)
-fillRange(data%, N%, 99)</code></pre>
+fillRange(data%, 99)</code></pre>
 <h3 id="early-exit">Early Exit</h3>
 <p>A bare <code>return</code> (no expression) exits a procedure immediately. Falling through to <code>end procedure</code> is equally valid — the compiler emits an implicit <code>RETURN</code>.</p>
 <pre><code>&#39; name$  -- person's name
@@ -890,13 +888,12 @@ end procedure</code></pre>
 <h3 id="array-parameters">Array Parameters</h3>
 <p>Array parameters use the same <a href="#byref--byval">byref / byval</a> rules and the same <code>(?, ?, ...)</code> rank declaration as functions. Pass the plain array name at the call site — no <code>()</code>:</p>
 <pre><code>&#39; arr%   -- array to fill; byref because it's mutated in place
-&#39; count% -- number of elements in arr%
 &#39; value% -- value written into every element
-procedure fillRange(byref arr%(?), count%, value%)   &#39; arr%(?) -- 1-D array
+procedure fillRange(byref arr%(?), value%)   &#39; arr%(?) -- 1-D array
     ...
 end procedure
 
-fillRange(data%, N%, 99)                             &#39; plain data%, no ()</code></pre>
+fillRange(data%, 99)                         &#39; plain data%, no ()</code></pre>
 <p><code>fillRange</code> needs <code>byref</code> here because its entire job is to mutate the caller's array — without it, <code>fillRange</code> would fill its own private copy and the caller's array would be unchanged.</p>
 <h3 id="variable-scoping-1">Variable Scoping</h3>
 <p>Same rules as functions: variables in the body are local by default; use <code>global varname</code> to access a module-level variable.</p>
@@ -933,10 +930,9 @@ PRINT values%(i%)</code></pre>
 <p>At the call site, just write the plain array name — <strong>no <code>()</code> needed</strong>. The compiler already knows that parameter is an array from its declaration, so there's nothing left for the call site to mark.</p>
 <p>And separately: <code>byref</code> does <strong>not</strong> give the function a real reference to the caller's array — BASIC has no pointers or aliasing at this level. <code>byref</code> copies the array's elements in before the call and copies them back out after; <code>byval</code> (the default) only does the copy-in half. Either way the function always works on its own private copy — <code>byref</code> just <em>simulates</em> "the caller sees the result" by copying twice instead of once. See <a href="#byref--byval">byref / byval</a> for the full mechanism.</p>
 <p><code>insertionSort%</code> mutates the array in place, so its <code>arr%</code> parameter needs <code>byref</code>; <code>indexOf%</code> only reads it, so the unmarked (<code>byval</code>) default is correct as-is:</p>
-<pre><code>&#39; arr%   -- array to sort; byref because it's mutated in place
-&#39; count% -- number of elements in arr%
-function insertionSort%(byref arr%(?), count%)
-    for i% = 1 to count% - 1
+<pre><code>&#39; arr% -- array to sort; byref because it's mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
         while j% &gt;= 0 and arr%(j%) &gt; key%
@@ -949,10 +945,9 @@ function insertionSort%(byref arr%(?), count%)
 end function
 
 &#39; arr%    -- array to search; byval, since indexOf% only reads it
-&#39; count%  -- number of elements in arr%
 &#39; target% -- value to search for
-function indexOf%(arr%(?), count%, target%)
-    for i% = 0 to count% - 1
+function indexOf%(arr%(?), target%)
+    for i% = 0 to sizeof(arr%) - 1
         if arr%(i%) = target% then
             return i%
         end if
@@ -965,17 +960,17 @@ DIM data%(N%)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-dummy% = insertionSort%(data%, N%)   &#39; sorts in place -- arr% is byref
+dummy% = insertionSort%(data%)   &#39; sorts in place -- arr% is byref
 
-idx% = indexOf%(data%, N%, 22)
+idx% = indexOf%(data%, 22)
 if idx% &gt;= 0 then
     PRINT &quot;22 found at index &quot; + STR$(idx%)
 end if</code></pre>
 <p>See <a href="#byref--byval">byref / byval</a> for exactly what gets copied, and when.</p>
 <h3 id="byref--byval">byref / byval</h3>
 <p>Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:</p>
-<pre><code>function insertionSort%(byref arr%(?), count%)   &#39; byref: copied in, then back out
-function indexOf%(arr%(?), count%, target%)      &#39; unmarked = byval: copied in only</code></pre>
+<pre><code>function insertionSort%(byref arr%(?))   &#39; byref: copied in, then back out
+function indexOf%(arr%(?), target%)      &#39; unmarked = byval: copied in only</code></pre>
 <ul>
 <li><strong>byval</strong> (the default — an unmarked parameter is <code>byval</code>): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.</li>
 <li><strong>byref</strong>: copied in before the call, same as <code>byval</code> — but also copied back out to the caller after the call returns.</li>
@@ -1000,14 +995,12 @@ A <code>byref</code> argument must be a plain variable — <code>increment(x% + 
 <p>There's also a structural reason it has to work this way, independent of the target dialect. Each function body is compiled exactly once, and every call site <code>GOSUB</code>s to that same shared label. A shared body needs one stable name for &quot;its first parameter&quot; — but different call sites pass different things: different variable names, or a whole expression (<code>f(a% + b%)</code>, <code>f(5)</code>) that isn't a variable at all. There's no single caller-side location to just operate on directly in the general case, so the value has to land somewhere fixed before the shared body runs.</p>
 <p><code>global</code> is the escape hatch for when you deliberately want the old always-shared, no-copy behavior back for one specific variable — see <a href="#variable-scoping">Variable Scoping</a>. It works precisely because it commits to one hardcoded name forever, which is exactly what makes it not a reusable, callable-with-different-data routine anymore.</p>
 <h3 id="multi-dimensional-array-parameters">Multi-Dimensional Array Parameters</h3>
-<p>A 2-D (or higher) array parameter declares its rank the same way as 1-D — one <code>?</code> per dimension — and passes the same way, too: just the plain array name, no <code>()</code>. What changes is the trailing count arguments: one per axis, in the same order as the array's own <code>DIM</code>.</p>
+<p>A 2-D (or higher) array parameter declares its rank the same way as 1-D — one <code>?</code> per dimension — and passes the same way, too: just the plain array name, no <code>()</code> and no count arguments of any kind. The compiler already knows the real array's bounds (from its <code>DIM</code>, or — if it's itself a parameter being forwarded onward — from what <em>its</em> caller passed), and carries them alongside the array automatically. Nothing about that is visible in <code>.bcl</code> source; use <a href="#sizeof">sizeof()</a> inside the function body wherever the bound is needed.</p>
 <pre><code>&#39; grid% -- 2-D array to sum
-&#39; rows% -- number of rows in grid%
-&#39; cols% -- number of columns in grid%
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
     total% = 0
-    for r% = 0 to rows% - 1
-        for c% = 0 to cols% - 1
+    for r% = 0 to sizeof(grid%, 0) - 1
+        for c% = 0 to sizeof(grid%, 1) - 1
             total% = total% + grid%(r%, c%)
         end for
     end for
@@ -1015,8 +1008,8 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))</code></pre>
-<p>Prefer <code>sizeof(g%, 0)</code> / <code>sizeof(g%, 1)</code> over hand-typing the counts — see <a href="#sizeof">sizeof()</a> below. Passing the wrong numbers by hand (say, <code>3, 3</code> for an array actually <code>dim</code>ed <code>(2, 2)</code>) reads through <code>grid%(r%, c%)</code> fine at the type level but reads one row and one column past the end of the real array at runtime — <code>sizeof</code> reads the counts from the array's own <code>DIM</code> instead, so they can't drift out of sync.</p>
+print sumGrid%(g%)</code></pre>
+<p>There's no way to pass the wrong bounds by hand here — unlike a manually typed count argument, which could silently drift out of sync with the array's real <code>DIM</code> (say, <code>3, 3</code> for an array actually <code>dim</code>ed <code>(2, 2)</code>, reading one row and one column past the end of the real array at runtime), the compiler reads <code>grid%</code>'s bounds directly from <code>g%</code>'s own <code>DIM</code> and there's no hand-typed number in the picture to get wrong.</p>
 <p><code>grid%(?, ?)</code> is cross-checked two ways, both at compile time:</p>
 <ul>
 <li>Against the function's own body — <code>grid%(r%, c%)</code> above indexes with two subscripts, matching the declared two <code>?</code>s. A declaration that disagrees with how the body actually uses the parameter is an error.</li>
@@ -1037,17 +1030,17 @@ print sizeof(grid%, 1)   &#39; 2 -- second DIM bound</code></pre>
 dim data%(n%)
 n% = 99
 print sizeof(data%)   &#39; 5 -- the value dim actually used, not the later 99</code></pre>
-<p><strong>Inside a function, <code>sizeof</code> on one of the function's own array parameters works differently</strong> — there's no local <code>dim</code> to freeze a value from, since the array parameter's real size depends on whatever the caller happens to pass. Every array parameter already requires a count parameter immediately after it for each axis (the <code>rows%</code>, <code>cols%</code> in <code>sumGrid%</code> above) — <code>sizeof(grid%, 0)</code> inside <code>sumGrid%</code>'s own body is just a self-documenting way to read that existing parameter back, not a new value:</p>
-<pre><code>function sumGrid%(byref grid%(?, ?), rows%, cols%)
+<p><strong>Inside a function, <code>sizeof</code> on one of the function's own array parameters works differently</strong> — there's no local <code>dim</code> to freeze a value from, since the array parameter's real size depends on whatever the caller happens to pass. There's no manually declared count parameter to read either: every array parameter's bounds are carried automatically, one hidden compiler-generated variable per axis, set by the caller (from the real argument array's own resolved bounds) immediately before the call. <code>sizeof(grid%, 0)</code> inside <code>sumGrid%</code>'s own body just reads that hidden variable back:</p>
+<pre><code>function sumGrid%(byref grid%(?, ?))
     total% = 0
-    for r% = 0 to sizeof(grid%, 0) - 1     &#39; reads the rows% parameter
-        for c% = 0 to sizeof(grid%, 1) - 1 &#39; reads the cols% parameter
+    for r% = 0 to sizeof(grid%, 0) - 1     &#39; reads the auto-passed row count
+        for c% = 0 to sizeof(grid%, 1) - 1 &#39; reads the auto-passed column count
             total% = total% + grid%(r%, c%)
         end for
     end for
     return total%
 end function</code></pre>
-<p><code>rows%</code> and <code>cols%</code> still have to be declared, in that position, exactly as before — <code>sizeof</code> doesn't remove the requirement to pass counts into a function, it only removes the need to compute or hand-type them at the <em>call site</em>, by reading them back out of the array actually being passed.</p>
+<p>Nothing here is written by the <code>.bcl</code> author, at the call site or in the signature — the bound simply isn't a value you pass, it's a value you ask for with <code>sizeof()</code> wherever you need it.</p>
 <hr />
 <h2 id="input-and-output">Input and Output</h2>
 <h3 id="print">PRINT</h3>
@@ -1492,10 +1485,10 @@ DIM scores%(N%)
 scores%(0) = 74 : scores%(1) = 91 : scores%(2) = 63 : scores%(3) = 88
 scores%(4) = 55 : scores%(5) = 97 : scores%(6) = 72 : scores%(7) = 84
 
-PRINT &quot;Mean:   &quot; + STR$(mean!(scores%(), N%))
-PRINT &quot;Max:    &quot; + STR$(maximum%(scores%(), N%))
-PRINT &quot;Min:    &quot; + STR$(minimum%(scores%(), N%))
-PRINT &quot;Range:  &quot; + STR$(rangeOf%(scores%(), N%))
+PRINT &quot;Mean:   &quot; + STR$(mean!(scores%()))
+PRINT &quot;Max:    &quot; + STR$(maximum%(scores%()))
+PRINT &quot;Min:    &quot; + STR$(minimum%(scores%()))
+PRINT &quot;Range:  &quot; + STR$(rangeOf%(scores%()))
 END</code></pre>
 <p>Compile with <code>-L tutorial/lib</code> so that <code>require stats</code> resolves to <code>tutorial/lib/stats.bcl</code>:</p>
 <pre><code>bcc tutorial/12_require.bcl -L tutorial/lib</code></pre>

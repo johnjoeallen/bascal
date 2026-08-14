@@ -1,35 +1,49 @@
 # Proposal: compiler-tracked array sizes, `sizeof()`, and auto-injected count parameters
 
-Status: `sizeof(x%)` / `sizeof(x%, axis)` is **implemented** — freeze-at-DIM-time,
-multi-axis, and the on-a-parameter resolution case are all shipped and
-documented (`MANUAL.md`/`docs/manual.html` "sizeof()"). Everything else in
-this file — **`byref`/`byval`**, **`global` shadowing**, and **explicit
+Status: everything in this file is **implemented** — `sizeof(x%)` /
+`sizeof(x%, axis)` (freeze-at-DIM-time, multi-axis, and the on-a-parameter
+resolution case), unconditional auto-injection of array bounds at call
+sites, **`byref`/`byval`**, **`global` shadowing**, and **explicit
 array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`, bare-identifier
-call sites) — is also **implemented**. The one piece that shipped
-*differently* than originally designed below is auto-injection: BASCAL
-never silently fills in a count argument the caller didn't write — see
-[Decided against: unconditional auto-injection](#decided-against-unconditional-auto-injection)
-near the end for why, and what shipped instead (explicit `sizeof()` calls,
-the caller writes them, same as any other argument).
+call sites). See `MANUAL.md`/`docs/manual.html` "sizeof()" and
+"Multi-Dimensional Array Parameters" for the shipped, documented form.
+
+The manual-count-parameter convention this whole proposal set out to
+replace is now gone entirely, not just optional: an array parameter's
+signature carries no trailing count parameter, and a call site passes
+nothing but the array itself. The compiler carries the array's bounds
+alongside it automatically, in a hidden variable per axis that the
+caller sets immediately before the call and the callee's own `sizeof()`
+reads back. An earlier draft of this document briefly proposed shipping
+`sizeof()` as an explicit, caller-written call-site argument instead
+(`sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))`) and framed unconditional
+auto-injection as rejected -- that was a wrong turn, corrected before
+release; see [Auto-injection at call sites](#auto-injection-at-call-sites)
+below for the shipped design and why it doesn't reintroduce the
+capacity-vs-fill-count problem it might look like at first.
 
 ## Motivation
 
-Today, passing an array into a function/procedure requires the caller to
-manually pass an element count as the very next argument after the array,
-because classic BASIC has no way to ask an array its own length at runtime.
-See `src/codegen.rs` — `call_lines`, `copy_bound` (~line 1645),
-`array_copy_lines` (~line 1657) — for the current mechanism: the compiler
-takes whatever argument comes immediately after the array argument at the
-call site and uses its *rendered text* as the bound for the generated
-`DIM`/copy-in/copy-out loops.
+*(Historical — describes the pre-`sizeof()` state of the compiler. `copy_bound`
+no longer exists; see [Auto-injection at call sites](#auto-injection-at-call-sites)
+for what replaced it.)*
 
-Two problems with the current convention:
+Before this proposal, passing an array into a function/procedure required
+the caller to manually pass an element count as the very next argument
+after the array, because classic BASIC has no way to ask an array its own
+length at runtime. The old mechanism (`call_lines`, `copy_bound`,
+`array_copy_lines` in `src/codegen.rs`) took whatever argument came
+immediately after the array argument at the call site and used its
+*rendered text* as the bound for the generated `DIM`/copy-in/copy-out
+loops.
 
-1. It's entirely manual and undocumented as a hard requirement — nothing
-   stops a caller from forgetting the count argument.
-2. The fallback chain in `copy_bound` silently defaults to the literal `10`
-   if there's no argument in that slot and no matching parameter either —
-   a silent-wrong-size footgun, not a compile error.
+Two problems with that old convention:
+
+1. It was entirely manual and undocumented as a hard requirement — nothing
+   stopped a caller from forgetting the count argument.
+2. The fallback chain in `copy_bound` silently defaulted to the literal
+   `10` if there was no argument in that slot and no matching parameter
+   either — a silent-wrong-size footgun, not a compile error.
 
 ## Proposed direction
 
@@ -106,32 +120,35 @@ integer (it selects *which frozen temp* to substitute, not a runtime
 lookup), and the symbol-table entry per array becomes a small array of
 per-axis frozen temps rather than a single value.
 
-### Decided against: unconditional auto-injection
+### Auto-injection at call sites
 
-The original idea here was to auto-inject unconditionally: whenever an
-array is passed at a call site, the compiler supplies the frozen size
-(one hidden argument per axis) itself, with nothing written at the call
-site at all. That's not what shipped.
+Shipped as originally scoped: auto-inject unconditionally. Whenever an
+array is passed at a call site, the compiler resolves its bounds (from
+its own frozen `DIM`, or — if it's itself a parameter being forwarded
+onward — from what *its own* caller already carries for it) and assigns
+them into one compiler-synthesized hidden variable per axis, immediately
+before the `GOSUB`. Nothing about this is written by the `.bcl` author,
+at the call site or in the callee's signature — `sumGrid%(g%)`, not
+`sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))` and not
+`sumGrid%(g%, rows%, cols%)`. Inside the callee, `sizeof(grid%, 0)` on
+one of its own array parameters just reads the hidden variable its
+caller set.
 
-What shipped instead: `sizeof(x%)` / `sizeof(x%, axis)` as an ordinary,
-explicit builtin the caller writes themselves —
-`sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))`, not `sumGrid%(g%)` with the
-counts appearing from nowhere. The reasoning for staying explicit: a
-BASCAL function's array-parameter contract already has two independent
-numbers in play in real programs — the array's declared *capacity*
-(what `sizeof` reads) and, separately, a caller's own tracked *logical
-fill count* (e.g. records actually loaded from a file into a
-fixed-capacity buffer, which is very often smaller than the array's
-`DIM`). Those two aren't the same number, and a caller has to be able to
-pass either one. Auto-injection would have hard-coded "always pass
-capacity" into every call, silently overriding a caller who actually
-meant to pass their own smaller fill count. `sizeof()` as an ordinary,
-visible argument — pass it when you want capacity, pass something else
-when you don't — keeps that choice with the caller instead of taking it
-away. See [`sizeof()`](../MANUAL.md#sizeof) in the manual for the shipped
-form, including the separate resolution rule for `sizeof` used *inside* a
-function on one of its own array parameters (reads the existing count
-parameter `copy_bound` already requires, no new state).
+This does **not** reintroduce the capacity-vs-logical-count problem it
+might look like at first: the injected value only answers a mechanical
+question — how many slots to copy in `DIM`/copy-in/copy-out so nothing
+is truncated or reads garbage. A program that tracks its own "how much
+of this buffer is actually filled" count (e.g. records loaded from a
+file into a fixed-capacity array) keeps that as its own ordinary,
+explicit, developer-owned parameter, same as today — it's answering a
+different question than the injected capacity value, so the two coexist
+without conflict. The old single `count%` convention conflated these two
+numbers into one manually-passed value, which was arguably the worse
+design; decoupling them, with capacity handled automatically and a
+logical fill count (when a program even needs one) passed as its own
+plain parameter, is what shipped. See [`sizeof()`](../MANUAL.md#sizeof)
+and [Multi-Dimensional Array Parameters](../MANUAL.md#multi-dimensional-array-parameters)
+in the manual for the shipped form.
 
 ### Resolved: multi-D array parameters are now fully wired up
 
@@ -139,9 +156,11 @@ This gap is closed — `call_lines` now infers each array parameter's rank
 from how the callee's own body indexes it, resolves the caller's array's
 declared rank, rejects a mismatch as a compile error, and (when they agree)
 emits a proper `DIM` with one bound per axis and nested copy loops (one
-`FOR` per dimension) for both copy-in and `byref` copy-out. One argument
-per axis is required after the array at the call site, in `DIM` order —
-still fully manual, same as the 1-D convention.
+`FOR` per dimension) for both copy-in and `byref` copy-out. No argument is
+required at the call site beyond the array itself, at any rank — see
+[Auto-injection at call sites](#auto-injection-at-call-sites) above; the
+per-axis bounds are resolved and carried automatically, the same
+mechanism regardless of rank.
 
 Fixed alongside it: a pre-existing, unrelated codegen bug where any
 2+-index array access (`grid%(r%, c%)`) parses as `Expr::Call`, not
@@ -153,30 +172,22 @@ function body silently used the wrong, unmangled name. This wasn't a
 multi-D-specific limitation so much as multi-D arrays never having been
 exercised inside a function body at all before now.
 
-`sizeof(x%, axis)` is now implemented and is the recommended way to supply
-these per-axis bounds at a call site (`sumGrid%(g%, sizeof(g%, 0),
-sizeof(g%, 1))`) instead of writing the literal bounds out by hand — see
-[Decided against: unconditional auto-injection](#decided-against-unconditional-auto-injection)
-above. The per-axis arguments themselves are still required at the call
-site; `sizeof()` only saves the caller from having to know or restate the
-array's bounds.
+## Resolved questions (kept for history)
 
-## Open questions / risks
-
-- Does `sizeof` need to be usable as a general source-level expression
-  (any `.bcl` code can call it), or only as an internal mechanism driving
-  auto-injection? The write-up above assumes both, but that's not settled.
-- Scoping: is a bound expression like `rows% - 1` always resolvable
-  wherever a later `sizeof`/auto-injection call needs it? In practice bound
-  expressions are almost always globals/consts/params, but a bound that
-  referenced a function-local temp could be a problem — worth checking
-  whether that's possible in valid BASCAL source at all.
-- Whether auto-injection should still allow an explicit override at the
-  call site for advanced cases, or whether it's unconditional as scoped
-  above.
+- `sizeof()` is usable as a general source-level expression, not just an
+  internal mechanism — any `.bcl` code can call it on a known array.
+- Scoping turned out not to be a problem in practice: a frozen bound is
+  always either a top-level global, a function-local temp visible for the
+  rest of that function, or (for a forwarded array parameter) the hidden
+  bound variable set by that function's own caller — all cases the
+  existing `ident()`/scope-resolution machinery already handled.
+- Auto-injection is unconditional, with no call-site override — see
+  [Auto-injection at call sites](#auto-injection-at-call-sites) above.
 - Full multi-D array parameter passing (nested copy loops, `DIM` with
-  multiple dynamic bounds) is a separate, larger piece of work than
-  `sizeof` itself.
+  multiple dynamic bounds) shipped alongside `sizeof()` rather than as
+  separate follow-up work — see
+  [Resolved: multi-D array parameters](#resolved-multi-d-array-parameters-are-now-fully-wired-up)
+  above.
 
 ---
 

@@ -469,14 +469,13 @@ valid.
 
 ```
 /*
- * Insertion sort — sorts arr%(0..count%-1) in ascending order.
+ * Insertion sort — sorts arr%(0..sizeof(arr%)-1) in ascending order.
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
-' arr%   -- array to sort; byref because it's mutated in place
-' count% -- number of elements in arr%
-function insertionSort%(byref arr%(?), count%)
-    for i% = 1 to count% - 1
+' arr% -- array to sort; byref because it's mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
         while j% >= 0 and arr%(j%) > key%
@@ -957,7 +956,7 @@ are written as expression statements. The result variable is overwritten but
 not read:
 
 ```
-dummy% = sortArray%(data%, N%)
+dummy% = sortArray%(data%)
 ```
 
 ### Return
@@ -1079,10 +1078,9 @@ procedure printIfPass(name$, score%)
 end procedure
 
 ' arr%   -- array to fill; byref because it's mutated in place
-' count% -- number of elements in arr%
 ' value% -- value written into every element
-procedure fillRange(byref arr%(?), count%, value%)
-    for i% = 0 to count% - 1
+procedure fillRange(byref arr%(?), value%)
+    for i% = 0 to sizeof(arr%) - 1
         arr%(i%) = value%
     end for
 end procedure
@@ -1096,7 +1094,7 @@ Procedures are called as statements (not inside expressions):
 printSeparator()
 printScore("Alice", 91)
 printIfPass("Bob", 54)
-fillRange(data%, N%, 99)
+fillRange(data%, 99)
 ```
 
 ### Early Exit
@@ -1124,13 +1122,12 @@ at the call site — no `()`:
 
 ```
 ' arr%   -- array to fill; byref because it's mutated in place
-' count% -- number of elements in arr%
 ' value% -- value written into every element
-procedure fillRange(byref arr%(?), count%, value%)   ' arr%(?) -- 1-D array
+procedure fillRange(byref arr%(?), value%)   ' arr%(?) -- 1-D array
     ...
 end procedure
 
-fillRange(data%, N%, 99)                             ' plain data%, no ()
+fillRange(data%, 99)                         ' plain data%, no ()
 ```
 
 `fillRange` needs `byref` here because its entire job is to mutate the
@@ -1217,10 +1214,9 @@ See [byref / byval](#byref--byval) for the full mechanism.
 correct as-is:
 
 ```
-' arr%   -- array to sort; byref because it's mutated in place
-' count% -- number of elements in arr%
-function insertionSort%(byref arr%(?), count%)
-    for i% = 1 to count% - 1
+' arr% -- array to sort; byref because it's mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
         while j% >= 0 and arr%(j%) > key%
@@ -1233,10 +1229,9 @@ function insertionSort%(byref arr%(?), count%)
 end function
 
 ' arr%    -- array to search; byval, since indexOf% only reads it
-' count%  -- number of elements in arr%
 ' target% -- value to search for
-function indexOf%(arr%(?), count%, target%)
-    for i% = 0 to count% - 1
+function indexOf%(arr%(?), target%)
+    for i% = 0 to sizeof(arr%) - 1
         if arr%(i%) = target% then
             return i%
         end if
@@ -1253,9 +1248,9 @@ DIM data%(N%)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-dummy% = insertionSort%(data%, N%)   ' sorts in place -- arr% is byref
+dummy% = insertionSort%(data%)   ' sorts in place -- arr% is byref
 
-idx% = indexOf%(data%, N%, 22)
+idx% = indexOf%(data%, 22)
 if idx% >= 0 then
     PRINT "22 found at index " + STR$(idx%)
 end if
@@ -1270,8 +1265,8 @@ before the call. Whether that value is copied back to the caller afterward
 depends on how the parameter is declared:
 
 ```
-function insertionSort%(byref arr%(?), count%)   ' byref: copied in, then back out
-function indexOf%(arr%(?), count%, target%)      ' unmarked = byval: copied in only
+function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
+function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
 ```
 
 - **`byval`** (the default — an unmarked parameter is `byval`): the
@@ -1351,17 +1346,19 @@ a reusable, callable-with-different-data routine anymore.
 
 A 2-D (or higher) array parameter declares its rank the same way as 1-D —
 one `?` per dimension — and passes the same way, too: just the plain array
-name, no `()`. What changes is the trailing count arguments: one per axis,
-in the same order as the array's own `DIM`.
+name, no `()` and no count arguments of any kind. The compiler already
+knows the real array's bounds (from its `DIM`, or — if it's itself a
+parameter being forwarded onward — from what *its* caller passed), and
+carries them alongside the array automatically. Nothing about that is
+visible in `.bcl` source; use [`sizeof()`](#sizeof) inside the function
+body wherever the bound is needed.
 
 ```
 ' grid% -- 2-D array to sum
-' rows% -- number of rows in grid%
-' cols% -- number of columns in grid%
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
     total% = 0
-    for r% = 0 to rows% - 1
-        for c% = 0 to cols% - 1
+    for r% = 0 to sizeof(grid%, 0) - 1
+        for c% = 0 to sizeof(grid%, 1) - 1
             total% = total% + grid%(r%, c%)
         end for
     end for
@@ -1369,15 +1366,15 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))
+print sumGrid%(g%)
 ```
 
-Prefer `sizeof(g%, 0)` / `sizeof(g%, 1)` over hand-typing the counts — see
-[`sizeof()`](#sizeof) below. Passing the wrong numbers by hand (say, `3, 3`
-for an array actually `dim`ed `(2, 2)`) reads through `grid%(r%, c%)` fine
-at the type level but reads one row and one column past the end of the
-real array at runtime — `sizeof` reads the counts from the array's own
-`DIM` instead, so they can't drift out of sync.
+There's no way to pass the wrong bounds by hand here — unlike a manually
+typed count argument, which could silently drift out of sync with the
+array's real `DIM` (say, `3, 3` for an array actually `dim`ed `(2, 2)`,
+reading one row and one column past the end of the real array at
+runtime), the compiler reads `grid%`'s bounds directly from `g%`'s own
+`DIM` and there's no hand-typed number in the picture to get wrong.
 
 `grid%(?, ?)` is cross-checked two ways, both at compile time:
 
@@ -1433,17 +1430,18 @@ print sizeof(data%)   ' 5 -- the value dim actually used, not the later 99
 **Inside a function, `sizeof` on one of the function's own array
 parameters works differently** — there's no local `dim` to freeze a value
 from, since the array parameter's real size depends on whatever the
-caller happens to pass. Every array parameter already requires a count
-parameter immediately after it for each axis (the `rows%`, `cols%` in
-`sumGrid%` above) — `sizeof(grid%, 0)` inside `sumGrid%`'s own body is
-just a self-documenting way to read that existing parameter back, not a
-new value:
+caller happens to pass. There's no manually declared count parameter to
+read either: every array parameter's bounds are carried automatically,
+one hidden compiler-generated variable per axis, set by the caller (from
+the real argument array's own resolved bounds) immediately before the
+call. `sizeof(grid%, 0)` inside `sumGrid%`'s own body just reads that
+hidden variable back:
 
 ```
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
     total% = 0
-    for r% = 0 to sizeof(grid%, 0) - 1     ' reads the rows% parameter
-        for c% = 0 to sizeof(grid%, 1) - 1 ' reads the cols% parameter
+    for r% = 0 to sizeof(grid%, 0) - 1     ' reads the auto-passed row count
+        for c% = 0 to sizeof(grid%, 1) - 1 ' reads the auto-passed column count
             total% = total% + grid%(r%, c%)
         end for
     end for
@@ -1451,10 +1449,9 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 ```
 
-`rows%` and `cols%` still have to be declared, in that position, exactly
-as before — `sizeof` doesn't remove the requirement to pass counts into a
-function, it only removes the need to compute or hand-type them at the
-*call site*, by reading them back out of the array actually being passed.
+Nothing here is written by the `.bcl` author, at the call site or in the
+signature — the bound simply isn't a value you pass, it's a value you ask
+for with `sizeof()` wherever you need it.
 
 ---
 
@@ -2319,10 +2316,10 @@ DIM scores%(N%)
 scores%(0) = 74 : scores%(1) = 91 : scores%(2) = 63 : scores%(3) = 88
 scores%(4) = 55 : scores%(5) = 97 : scores%(6) = 72 : scores%(7) = 84
 
-PRINT "Mean:   " + STR$(mean!(scores%(), N%))
-PRINT "Max:    " + STR$(maximum%(scores%(), N%))
-PRINT "Min:    " + STR$(minimum%(scores%(), N%))
-PRINT "Range:  " + STR$(rangeOf%(scores%(), N%))
+PRINT "Mean:   " + STR$(mean!(scores%()))
+PRINT "Max:    " + STR$(maximum%(scores%()))
+PRINT "Min:    " + STR$(minimum%(scores%()))
+PRINT "Range:  " + STR$(rangeOf%(scores%()))
 END
 ```
 

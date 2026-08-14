@@ -31,9 +31,9 @@ scores%(6) = 72
 scores%(7) = 84
 
 print "Scores: 74 91 63 88 55 97 72 84"
-print "Mean:   "  + str$(mean!(scores%, N%))
-print "Max:    "  + str$(maximum%(scores%, N%))
-print "Min:    "  + str$(minimum%(scores%, N%))
-print "Range:  "  + str$(rangeOf%(scores%, N%))
+print "Mean:   "  + str$(mean!(scores%))
+print "Max:    "  + str$(maximum%(scores%))
+print "Min:    "  + str$(minimum%(scores%))
+print "Range:  "  + str$(rangeOf%(scores%))
 
 end

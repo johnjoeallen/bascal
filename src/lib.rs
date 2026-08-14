@@ -347,7 +347,7 @@ mod tests {
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         // Without the sort library bubbleSort% is not in the symbol table;
         // it is emitted lowercase like any other user symbol, not uppercased.
-        assert!(output.contains("bubblesort%(bubbledata%, 5000)"));
+        assert!(output.contains("bubblesort%(bubbledata%)"));
         assert!(output.contains("END"));
     }
 
@@ -513,8 +513,8 @@ END
         assert!(output.contains("' Sort driver for the BASCAL example sort library."));
         assert!(output.contains("' In-place bubble sort."));
         // Mixed-case source names are normalised to lowercase in comments.
-        assert!(output.contains("' function bubblesort%(data%, count%)"));
-        assert!(output.contains("' function shellsort%(data%, count%)"));
+        assert!(output.contains("' function bubblesort%(data%)"));
+        assert!(output.contains("' function shellsort%(data%)"));
         assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
         assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
@@ -1522,15 +1522,15 @@ end
     fn byval_array_parameter_does_not_copy_result_back() {
         // Unmarked (byval, the default) array parameter: copy-in only.
         let source = r#"
-function zeroOut%(arr%(?), count%)
-  for i% = 0 to count% - 1
+function zeroOut%(arr%(?))
+  for i% = 0 to sizeof(arr%) - 1
     arr%(i%) = 0
   end for
   return 0
 end function
 
 dim data%(3)
-dummy% = zeroOut%(data%(), 4)
+dummy% = zeroOut%(data%())
 end
 "#;
         let output = compile_source("byval_array.bcl", source).expect("should compile");
@@ -1547,15 +1547,15 @@ end
     #[test]
     fn byref_array_parameter_copies_result_back() {
         let source = r#"
-function zeroOut%(byref arr%(?), count%)
-  for i% = 0 to count% - 1
+function zeroOut%(byref arr%(?))
+  for i% = 0 to sizeof(arr%) - 1
     arr%(i%) = 0
   end for
   return 0
 end function
 
 dim data%(3)
-dummy% = zeroOut%(data%(), 4)
+dummy% = zeroOut%(data%())
 end
 "#;
         let output = compile_source("byref_array.bcl", source).expect("should compile");
@@ -1651,10 +1651,10 @@ end
     #[test]
     fn two_dimensional_array_parameter_generates_nested_copy_loops() {
         let source = r#"
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
   total% = 0
-  for r% = 0 to rows% - 1
-    for c% = 0 to cols% - 1
+  for r% = 0 to sizeof(grid%, 0) - 1
+    for c% = 0 to sizeof(grid%, 1) - 1
       total% = total% + grid%(r%, c%)
     end for
   end for
@@ -1662,12 +1662,16 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%(), 3, 3)
+print sumGrid%(g%())
 end
 "#;
         let output = compile_source("multidim_2d.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumgrid_grid_0%(3, 3)"),
+            output.contains("sumgrid_grid_dim0_0% = 2") && output.contains("sumgrid_grid_dim1_0% = 2"),
+            "the caller should auto-inject g%'s real DIM bounds:\n{output}"
+        );
+        assert!(
+            output.contains("DIM sumgrid_grid_0%(sumgrid_grid_dim0_0%, sumgrid_grid_dim1_0%)"),
             "parameter storage should be DIMed with both axes:\n{output}"
         );
         assert!(
@@ -1725,11 +1729,11 @@ end
     #[test]
     fn three_dimensional_array_parameter_generates_triple_nested_copy_loops() {
         let source = r#"
-function sumCube%(byref cube%(?, ?, ?), a%, b%, c%)
+function sumCube%(byref cube%(?, ?, ?))
   total% = 0
-  for i% = 0 to a% - 1
-    for j% = 0 to b% - 1
-      for k% = 0 to c% - 1
+  for i% = 0 to sizeof(cube%, 0) - 1
+    for j% = 0 to sizeof(cube%, 1) - 1
+      for k% = 0 to sizeof(cube%, 2) - 1
         total% = total% + cube%(i%, j%, k%)
       end for
     end for
@@ -1738,12 +1742,14 @@ function sumCube%(byref cube%(?, ?, ?), a%, b%, c%)
 end function
 
 dim cube%(1, 1, 1)
-print sumCube%(cube%(), 2, 2, 2)
+print sumCube%(cube%())
 end
 "#;
         let output = compile_source("multidim_3d.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumcube_cube_0%(2, 2, 2)"),
+            output.contains(
+                "DIM sumcube_cube_0%(sumcube_cube_dim0_0%, sumcube_cube_dim1_0%, sumcube_cube_dim2_0%)"
+            ),
             "parameter storage should be DIMed with all three axes:\n{output}"
         );
         assert!(
@@ -1761,16 +1767,16 @@ end
         // with one subscript in its own body -- passing g%() there would
         // generate a `Wrong number of subscripts` BASIC program.
         let source = r#"
-function sumRow%(byref row%(?), count%)
+function sumRow%(byref row%(?))
   total% = 0
-  for i% = 0 to count% - 1
+  for i% = 0 to sizeof(row%) - 1
     total% = total% + row%(i%)
   end for
   return total%
 end function
 
 dim g%(2, 2)
-print sumRow%(g%(), 9)
+print sumRow%(g%())
 end
 "#;
         let err = compile_source("multidim_mismatch.bcl", source)
@@ -1838,10 +1844,10 @@ end
         // needs `()` to mark an argument as an array -- the compiler
         // already knows from the callee's signature.
         let source = r#"
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
   total% = 0
-  for r% = 0 to rows% - 1
-    for c% = 0 to cols% - 1
+  for r% = 0 to sizeof(grid%, 0) - 1
+    for c% = 0 to sizeof(grid%, 1) - 1
       total% = total% + grid%(r%, c%)
     end for
   end for
@@ -1849,12 +1855,12 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%, 3, 3)
+print sumGrid%(g%)
 end
 "#;
         let output = compile_source("bare_ident_call.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumgrid_grid_0%(3, 3)"),
+            output.contains("DIM sumgrid_grid_0%(sumgrid_grid_dim0_0%, sumgrid_grid_dim1_0%)"),
             "bare identifier array argument should still generate correct copy-in/copy-out:\n{output}"
         );
         assert!(
@@ -1868,29 +1874,29 @@ end
     #[test]
     fn bare_identifier_and_parens_call_syntax_generate_identical_output() {
         let source_with_parens = r#"
-function sumArr%(arr%(?), count%)
+function sumArr%(arr%(?))
   total% = 0
-  for i% = 0 to count% - 1
+  for i% = 0 to sizeof(arr%) - 1
     total% = total% + arr%(i%)
   end for
   return total%
 end function
 
 dim data%(4)
-print sumArr%(data%(), 5)
+print sumArr%(data%())
 end
 "#;
         let source_bare = r#"
-function sumArr%(arr%(?), count%)
+function sumArr%(arr%(?))
   total% = 0
-  for i% = 0 to count% - 1
+  for i% = 0 to sizeof(arr%) - 1
     total% = total% + arr%(i%)
   end for
   return total%
 end function
 
 dim data%(4)
-print sumArr%(data%, 5)
+print sumArr%(data%)
 end
 "#;
         let with_parens = compile_source("bare_vs_parens_a.bcl", source_with_parens)
@@ -1981,13 +1987,14 @@ end
     }
 
     #[test]
-    fn sizeof_on_own_array_parameter_reads_the_existing_count_parameter() {
-        // No DIM to freeze from inside the function -- sizeof on a
-        // parameter must resolve to the count parameter that copy_bound
-        // already requires to immediately follow the array, not introduce
-        // any new state.
+    fn sizeof_on_own_array_parameter_reads_the_auto_injected_bound() {
+        // No DIM to freeze from inside the function, and no manually
+        // written count parameter either -- sizeof on a parameter must
+        // resolve to the hidden bound variable the *caller* sets, from the
+        // real argument array's own resolved size, immediately before
+        // GOSUB.
         let source = r#"
-function sumGrid%(byref grid%(?, ?), rows%, cols%)
+function sumGrid%(byref grid%(?, ?))
   total% = 0
   for r% = 0 to sizeof(grid%, 0) - 1
     for c% = 0 to sizeof(grid%, 1) - 1
@@ -1998,21 +2005,24 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))
+print sumGrid%(g%)
 end
 "#;
         let output = compile_source("sizeof_param.bcl", source).expect("should compile");
         assert!(
-            output.contains("TO sumgrid_rows_0% - 1"),
-            "sizeof(grid%, 0) inside the body should read the rows% parameter directly:\n{output}"
+            output.contains("TO sumgrid_grid_dim0_0% - 1"),
+            "sizeof(grid%, 0) inside the body should read the auto-injected bound variable \
+             directly:\n{output}"
         );
         assert!(
-            output.contains("TO sumgrid_cols_0% - 1"),
-            "sizeof(grid%, 1) inside the body should read the cols% parameter directly:\n{output}"
+            output.contains("TO sumgrid_grid_dim1_0% - 1"),
+            "sizeof(grid%, 1) inside the body should read the auto-injected bound variable \
+             directly:\n{output}"
         );
         assert!(
-            output.contains("sumgrid_rows_0% = 2") && output.contains("sumgrid_cols_0% = 2"),
-            "sizeof(g%, ...) at the call site should resolve to g%'s real DIM bounds:\n{output}"
+            output.contains("sumgrid_grid_dim0_0% = 2") && output.contains("sumgrid_grid_dim1_0% = 2"),
+            "the call site should auto-inject g%'s real DIM bounds, with no manually written \
+             count argument:\n{output}"
         );
     }
 
@@ -2061,15 +2071,31 @@ end
     }
 
     #[test]
-    fn programs_without_sizeof_are_unaffected_by_the_feature() {
-        // An array that's never passed to sizeof() must not get any frozen
-        // temp or tracking overhead -- byte-identical to before sizeof()
-        // existed.
-        let source = "n% = 5\ndim data%(n%)\nprint data%(0)\nend\n";
-        let output = compile_source("no_sizeof.bcl", source).expect("should compile");
+    fn arrays_with_literal_bounds_generate_no_freeze_overhead() {
+        // A literal DIM bound is already usable as-is -- freezing it into a
+        // temp would just be a needless extra line, sizeof() or auto-
+        // injection or not.
+        let source = "dim data%(9)\nprint data%(0)\nend\n";
+        let output = compile_source("literal_bound.bcl", source).expect("should compile");
         assert!(
             !output.contains("BCC_T"),
-            "an array never passed to sizeof() must not generate a frozen temp:\n{output}"
+            "a literal-bounded array must not generate a frozen temp:\n{output}"
+        );
+        assert!(output.contains("DIM data%(9)"));
+    }
+
+    #[test]
+    fn arrays_with_non_literal_bounds_are_always_frozen_even_without_sizeof() {
+        // Every array's bounds are frozen at DIM time unconditionally, not
+        // just when sizeof() is actually called on it -- any array might
+        // get passed to a function later, and the compiler auto-injects
+        // its bounds at that call site whether or not the source ever
+        // calls sizeof() explicitly.
+        let source = "n% = 5\ndim data%(n%)\nprint data%(0)\nend\n";
+        let output = compile_source("non_literal_bound.bcl", source).expect("should compile");
+        assert!(
+            output.lines().any(|l| l.trim() == "BCC_T1% = n%"),
+            "a non-literal bound must be frozen into a temp at DIM time, unconditionally:\n{output}"
         );
         assert!(output.contains("DIM data%(n%)"));
     }

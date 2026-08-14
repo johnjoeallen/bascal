@@ -2,12 +2,11 @@
 /* trivial; the point is to exercise recursive require resolution. */
 require com.bascal.sort.helpers.touch
 
-// data%  -- array to sort, mutated in place
-// count% -- number of elements in data%
-function shellSort%(byref data%(?), count%)
+// data% -- array to sort, mutated in place
+function shellSort%(byref data%(?))
     /* Normalize the count through a required helper so this file has its own */
     /* dependency chain. */
-    count% = touch%(count%)
+    count% = touch%(sizeof(data%))
     gap% = count% / 2
 
     /* Repeatedly insertion-sort elements that are gap positions apart. */

@@ -29,7 +29,6 @@
 ' Procedure that modifies an array in place -- byref copies the result
 ' back to the caller; the default byval would fill a private copy only.
 ' arr%   -- array to fill; byref because it's mutated in place
-' count% -- number of elements in arr%
 ' value% -- value written into every element
 
 ' Procedure that uses a global variable
@@ -62,21 +61,22 @@ GOSUB 30
 
 CONST n% = 5
 DIM data%(n%)
-fillrange_count_0% = n%
+BCC_T1% = n%
 fillrange_value_0% = 99
-DIM fillrange_arr_0%(n%)
+fillrange_arr_dim0_0% = BCC_T1%
+DIM fillrange_arr_0%(fillrange_arr_dim0_0%)
 
 ' copy array argument into transpiled function storage: data%() -> fillrange_arr_0%()
-FOR BCC_T1% = 1 TO n%
-    fillrange_arr_0%(BCC_T1%) = data%(BCC_T1%)
-NEXT BCC_T1%
+FOR BCC_T2% = 1 TO fillrange_arr_dim0_0%
+    fillrange_arr_0%(BCC_T2%) = data%(BCC_T2%)
+NEXT BCC_T2%
 
 GOSUB 50
 
 ' copy mutated array argument back to caller storage: fillrange_arr_0%() -> data%()
-FOR BCC_T2% = 1 TO n%
-    data%(BCC_T2%) = fillrange_arr_0%(BCC_T2%)
-NEXT BCC_T2%
+FOR BCC_T3% = 1 TO fillrange_arr_dim0_0%
+    data%(BCC_T3%) = fillrange_arr_0%(BCC_T3%)
+NEXT BCC_T3%
 
 PRINT "Filled array:"
 FOR i% = 0 TO n% - 1
@@ -108,8 +108,8 @@ END
     RETURN
 ' end procedure printifpass
 
-' procedure fillrange(arr%, count%, value%)
-50 FOR fillrange_i_0% = 0 TO fillrange_count_0% - 1
+' procedure fillrange(arr%, value%)
+50 FOR fillrange_i_0% = 0 TO fillrange_arr_dim0_0% - 1
         fillrange_arr_0%(fillrange_i_0%) = fillrange_value_0%
     NEXT fillrange_i_0%
     RETURN

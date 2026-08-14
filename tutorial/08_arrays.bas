@@ -9,8 +9,10 @@
 ' 
 ' An array parameter must declare its rank with one ? per dimension:
 ' arr%(?) for 1-D, grid%(?, ?) for 2-D, and so on. At the call site, just
-' write the plain array name -- no () needed; the compiler already knows
-' that parameter is an array from its declaration.
+' write the plain array name -- no () and no size argument needed; the
+' compiler already knows that parameter is an array from its declaration,
+' and carries its size alongside it automatically. Use sizeof(arr%) inside
+' the function body wherever the size is needed.
 ' 
 ' An array parameter defaults to byval: the function gets its own private
 ' copy, and changes never reach the caller.  Write byref to copy the
@@ -20,6 +22,7 @@
 ' Declare and populate
 CONST n% = 6
 DIM data%(n%)
+BCC_T1% = n%
 
 data%(0) = 64
 data%(1) = 25
@@ -29,70 +32,67 @@ data%(4) = 3
 data%(5) = 11
 
 ' Insertion sort — sorts data%() in place
-' arr%   -- array to sort; byref because it's mutated in place
-' count% -- number of elements in arr%
+' arr% -- array to sort; byref because it's mutated in place
 
 ' Linear search — returns index or -1
 ' arr%    -- array to search; byval, since indexOf% only reads it
-' count%  -- number of elements in arr%
 ' target% -- value to search for
 
 ' Print the array on one line as  [ a b c ... ]
-' arr%   -- array to print; byval, since printArray% only reads it
-' count% -- number of elements in arr%
+' arr% -- array to print; byval, since printArray% only reads it
 
 ' Before sort
 PRINT "Before: "
-printarray_count_0% = n%
-DIM printarray_arr_0%(n%)
+printarray_arr_dim0_0% = BCC_T1%
+DIM printarray_arr_0%(printarray_arr_dim0_0%)
 
 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
-FOR BCC_T1% = 1 TO n%
-    printarray_arr_0%(BCC_T1%) = data%(BCC_T1%)
-NEXT BCC_T1%
+FOR BCC_T2% = 1 TO printarray_arr_dim0_0%
+    printarray_arr_0%(BCC_T2%) = data%(BCC_T2%)
+NEXT BCC_T2%
 
 GOSUB 100
 dummy% = printarray_result_0%
 
 ' Sort and show
-insertionsort_count_0% = n%
-DIM insertionsort_arr_0%(n%)
+insertionsort_arr_dim0_0% = BCC_T1%
+DIM insertionsort_arr_0%(insertionsort_arr_dim0_0%)
 
 ' copy array argument into transpiled function storage: data%() -> insertionsort_arr_0%()
-FOR BCC_T2% = 1 TO n%
-    insertionsort_arr_0%(BCC_T2%) = data%(BCC_T2%)
-NEXT BCC_T2%
+FOR BCC_T3% = 1 TO insertionsort_arr_dim0_0%
+    insertionsort_arr_0%(BCC_T3%) = data%(BCC_T3%)
+NEXT BCC_T3%
 
 GOSUB 50
 
 ' copy mutated array argument back to caller storage: insertionsort_arr_0%() -> data%()
-FOR BCC_T3% = 1 TO n%
-    data%(BCC_T3%) = insertionsort_arr_0%(BCC_T3%)
-NEXT BCC_T3%
+FOR BCC_T4% = 1 TO insertionsort_arr_dim0_0%
+    data%(BCC_T4%) = insertionsort_arr_0%(BCC_T4%)
+NEXT BCC_T4%
 
 dummy% = insertionsort_result_0%
 PRINT "After:  "
-printarray_count_0% = n%
-DIM printarray_arr_0%(n%)
+printarray_arr_dim0_0% = BCC_T1%
+DIM printarray_arr_0%(printarray_arr_dim0_0%)
 
 ' copy array argument into transpiled function storage: data%() -> printarray_arr_0%()
-FOR BCC_T4% = 1 TO n%
-    printarray_arr_0%(BCC_T4%) = data%(BCC_T4%)
-NEXT BCC_T4%
+FOR BCC_T5% = 1 TO printarray_arr_dim0_0%
+    printarray_arr_0%(BCC_T5%) = data%(BCC_T5%)
+NEXT BCC_T5%
 
 GOSUB 100
 dummy% = printarray_result_0%
 
 ' Search
 target% = 22
-indexof_count_0% = n%
 indexof_target_0% = target%
-DIM indexof_arr_0%(n%)
+indexof_arr_dim0_0% = BCC_T1%
+DIM indexof_arr_0%(indexof_arr_dim0_0%)
 
 ' copy array argument into transpiled function storage: data%() -> indexof_arr_0%()
-FOR BCC_T5% = 1 TO n%
-    indexof_arr_0%(BCC_T5%) = data%(BCC_T5%)
-NEXT BCC_T5%
+FOR BCC_T6% = 1 TO indexof_arr_dim0_0%
+    indexof_arr_0%(BCC_T6%) = data%(BCC_T6%)
+NEXT BCC_T6%
 
 GOSUB 80
 idx% = indexof_result_0%
@@ -121,8 +121,8 @@ NEXT r%
 
 END
 
-' function insertionsort%(arr%, count%)
-50 FOR insertionsort_i_0% = 1 TO insertionsort_count_0% - 1
+' function insertionsort%(arr%)
+50 FOR insertionsort_i_0% = 1 TO insertionsort_arr_dim0_0% - 1
         insertionsort_key_0% = insertionsort_arr_0%(insertionsort_i_0%)
         insertionsort_j_0% = insertionsort_i_0% - 1
 60 IF ((insertionsort_j_0% >= 0) AND (insertionsort_arr_0%(insertionsort_j_0%) > insertionsort_key_0%)) = 0 THEN GOTO 70
@@ -136,8 +136,8 @@ END
     RETURN
 ' end function insertionsort%
 
-' function indexof%(arr%, count%, target%)
-80 FOR indexof_i_0% = 0 TO indexof_count_0% - 1
+' function indexof%(arr%, target%)
+80 FOR indexof_i_0% = 0 TO indexof_arr_dim0_0% - 1
         IF (indexof_arr_0%(indexof_i_0%) = indexof_target_0%) = 0 THEN GOTO 90
             indexof_result_0% = indexof_i_0%
             RETURN
@@ -147,9 +147,9 @@ END
     RETURN
 ' end function indexof%
 
-' function printarray%(arr%, count%)
+' function printarray%(arr%)
 100 printarray_line_0$ = "["
-    FOR printarray_i_0% = 0 TO printarray_count_0% - 1
+    FOR printarray_i_0% = 0 TO printarray_arr_dim0_0% - 1
         printarray_line_0$ = (printarray_line_0$ + " ") + STR$(printarray_arr_0%(printarray_i_0%))
     NEXT printarray_i_0%
     PRINT printarray_line_0$ + " ]"

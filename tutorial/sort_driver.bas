@@ -5,25 +5,21 @@
 ' data% is a byref array parameter, so bcc copies the sorted result back
 ' into the caller's array; byval (the default) would sort a private copy
 ' and discard it.
-' data%  -- array to sort, mutated in place
-' count% -- number of elements in data%
+' data% -- array to sort, mutated in place
 ' In-place cocktail shaker sort.
 ' This is a bidirectional bubble sort over the active range. data% is
 ' byref so the sorted result is copied back to the caller.
-' data%  -- array to sort, mutated in place
-' count% -- number of elements in data%
+' data% -- array to sort, mutated in place
 ' Tiny helper used to prove recursive require resolution.
 ' value% -- number passed through unchanged
 ' Shell sort demonstrates a nested dependency. The helper is intentionally
 ' trivial; the point is to exercise recursive require resolution.
 
-' data%  -- array to sort, mutated in place
-' count% -- number of elements in data%
+' data% -- array to sort, mutated in place
 ' Iterative quicksort using an explicit stack for partition bounds.
 ' Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input.
 ' data% is byref so the sorted result is copied back to the caller.
-' data%  -- array to sort, mutated in place
-' count% -- number of elements in data%
+' data% -- array to sort, mutated in place
 ' Sort driver for the BASCAL example sort library.
 ' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
 
@@ -46,18 +42,18 @@ FOR i% = 1 TO 5000
 NEXT i%
 
 tstart# = TIMER
-bubblesort_count_0% = 5000
-DIM bubblesort_data_0%(5000)
+bubblesort_data_dim0_0% = 5000
+DIM bubblesort_data_0%(bubblesort_data_dim0_0%)
 
 ' copy array argument into transpiled function storage: bubbledata%() -> bubblesort_data_0%()
-FOR BCC_T1% = 1 TO 5000
+FOR BCC_T1% = 1 TO bubblesort_data_dim0_0%
     bubblesort_data_0%(BCC_T1%) = bubbledata%(BCC_T1%)
 NEXT BCC_T1%
 
 GOSUB 130
 
 ' copy mutated array argument back to caller storage: bubblesort_data_0%() -> bubbledata%()
-FOR BCC_T2% = 1 TO 5000
+FOR BCC_T2% = 1 TO bubblesort_data_dim0_0%
     bubbledata%(BCC_T2%) = bubblesort_data_0%(BCC_T2%)
 NEXT BCC_T2%
 
@@ -76,18 +72,18 @@ IF (ok% = 1) = 0 THEN GOTO 20
 30 REM END IF
 
 tstart# = TIMER
-shakersort_count_0% = 5000
-DIM shakersort_data_0%(5000)
+shakersort_data_dim0_0% = 5000
+DIM shakersort_data_0%(shakersort_data_dim0_0%)
 
 ' copy array argument into transpiled function storage: shakerdata%() -> shakersort_data_0%()
-FOR BCC_T5% = 1 TO 5000
+FOR BCC_T5% = 1 TO shakersort_data_dim0_0%
     shakersort_data_0%(BCC_T5%) = shakerdata%(BCC_T5%)
 NEXT BCC_T5%
 
 GOSUB 150
 
 ' copy mutated array argument back to caller storage: shakersort_data_0%() -> shakerdata%()
-FOR BCC_T6% = 1 TO 5000
+FOR BCC_T6% = 1 TO shakersort_data_dim0_0%
     shakerdata%(BCC_T6%) = shakersort_data_0%(BCC_T6%)
 NEXT BCC_T6%
 
@@ -106,18 +102,18 @@ IF (ok% = 1) = 0 THEN GOTO 50
 60 REM END IF
 
 tstart# = TIMER
-shellsort_count_0% = 5000
-DIM shellsort_data_0%(5000)
+shellsort_data_dim0_0% = 5000
+DIM shellsort_data_0%(shellsort_data_dim0_0%)
 
 ' copy array argument into transpiled function storage: shelldata%() -> shellsort_data_0%()
-FOR BCC_T9% = 1 TO 5000
+FOR BCC_T9% = 1 TO shellsort_data_dim0_0%
     shellsort_data_0%(BCC_T9%) = shelldata%(BCC_T9%)
 NEXT BCC_T9%
 
 GOSUB 210
 
 ' copy mutated array argument back to caller storage: shellsort_data_0%() -> shelldata%()
-FOR BCC_T10% = 1 TO 5000
+FOR BCC_T10% = 1 TO shellsort_data_dim0_0%
     shelldata%(BCC_T10%) = shellsort_data_0%(BCC_T10%)
 NEXT BCC_T10%
 
@@ -136,18 +132,18 @@ IF (ok% = 1) = 0 THEN GOTO 80
 90 REM END IF
 
 tstart# = TIMER
-quicksort_count_0% = 5000
-DIM quicksort_data_0%(5000)
+quicksort_data_dim0_0% = 5000
+DIM quicksort_data_0%(quicksort_data_dim0_0%)
 
 ' copy array argument into transpiled function storage: quickdata%() -> quicksort_data_0%()
-FOR BCC_T13% = 1 TO 5000
+FOR BCC_T13% = 1 TO quicksort_data_dim0_0%
     quicksort_data_0%(BCC_T13%) = quickdata%(BCC_T13%)
 NEXT BCC_T13%
 
 GOSUB 280
 
 ' copy mutated array argument back to caller storage: quicksort_data_0%() -> quickdata%()
-FOR BCC_T14% = 1 TO 5000
+FOR BCC_T14% = 1 TO quicksort_data_dim0_0%
     quickdata%(BCC_T14%) = quicksort_data_0%(BCC_T14%)
 NEXT BCC_T14%
 
@@ -167,8 +163,9 @@ IF (ok% = 1) = 0 THEN GOTO 110
 
 END
 
-' function bubblesort%(data%, count%)
-130 ' After each outer pass, the largest remaining value has bubbled right.
+' function bubblesort%(data%)
+130 bubblesort_count_0% = bubblesort_data_dim0_0%
+    ' After each outer pass, the largest remaining value has bubbled right.
     FOR bubblesort_i_0% = 1 TO bubblesort_count_0% - 1
         FOR bubblesort_j_0% = 1 TO bubblesort_count_0% - bubblesort_i_0%
             IF (bubblesort_data_0%(bubblesort_j_0%) > bubblesort_data_0%(bubblesort_j_0% + 1)) = 0 THEN GOTO 140
@@ -183,8 +180,9 @@ END
     RETURN
 ' end function bubblesort%
 
-' function shakersort%(data%, count%)
-150 LEFT% = 1
+' function shakersort%(data%)
+150 shakersort_count_0% = shakersort_data_dim0_0%
+    LEFT% = 1
     RIGHT% = shakersort_count_0% - 1
     shakersort_swapped_0% = 1
 
@@ -228,10 +226,10 @@ END
     RETURN
 ' end function touch%
 
-' function shellsort%(data%, count%)
+' function shellsort%(data%)
 210 ' Normalize the count through a required helper so this file has its own
     ' dependency chain.
-    touch_value_0% = shellsort_count_0%
+    touch_value_0% = shellsort_data_dim0_0%
     GOSUB 200
     shellsort_count_0% = touch_result_0%
     shellsort_gap_0% = shellsort_count_0% / 2
@@ -263,13 +261,13 @@ END
     RETURN
 ' end function shellsort%
 
-' function quicksort%(data%, count%)
+' function quicksort%(data%)
 280 DIM quicksort_slow_0%(64)
     DIM quicksort_shigh_0%(64)
 
     quicksort_stop_0% = 1
     quicksort_slow_0%(1) = 1
-    quicksort_shigh_0%(1) = quicksort_count_0%
+    quicksort_shigh_0%(1) = quicksort_data_dim0_0%
 
 290 IF (quicksort_stop_0% > 0) = 0 THEN GOTO 340
         quicksort_qhigh_0% = quicksort_shigh_0%(quicksort_stop_0%)
