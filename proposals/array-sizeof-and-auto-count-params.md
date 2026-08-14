@@ -1,13 +1,16 @@
 # Proposal: compiler-tracked array sizes, `sizeof()`, and auto-injected count parameters
 
-Status: the `sizeof()`/auto-injection sections below are still discussion
-only — not implemented, not committed to. Everything else in this file —
-**`byref`/`byval`**, **`global` shadowing**, and **explicit
+Status: `sizeof(x%)` / `sizeof(x%, axis)` is **implemented** — freeze-at-DIM-time,
+multi-axis, and the on-a-parameter resolution case are all shipped and
+documented (`MANUAL.md`/`docs/manual.html` "sizeof()"). Everything else in
+this file — **`byref`/`byval`**, **`global` shadowing**, and **explicit
 array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`, bare-identifier
-call sites) — is **implemented** (parser, resolver, codegen, tests,
-`MANUAL.md`/`docs/manual.html`, and every tutorial source updated — see
-`git log` for the commits). This file remains a write-up of a design
-conversation for the one still-open piece.
+call sites) — is also **implemented**. The one piece that shipped
+*differently* than originally designed below is auto-injection: BASCAL
+never silently fills in a count argument the caller didn't write — see
+[Decided against: unconditional auto-injection](#decided-against-unconditional-auto-injection)
+near the end for why, and what shipped instead (explicit `sizeof()` calls,
+the caller writes them, same as any other argument).
 
 ## Motivation
 
@@ -103,23 +106,32 @@ integer (it selects *which frozen temp* to substitute, not a runtime
 lookup), and the symbol-table entry per array becomes a small array of
 per-axis frozen temps rather than a single value.
 
-### Auto-injection at call sites
+### Decided against: unconditional auto-injection
 
-Auto-inject unconditionally: whenever an array is passed at a call site
-(`arr%()`), the compiler supplies the frozen size (one hidden argument per
-axis) itself, rather than requiring the caller to pass it.
+The original idea here was to auto-inject unconditionally: whenever an
+array is passed at a call site, the compiler supplies the frozen size
+(one hidden argument per axis) itself, with nothing written at the call
+site at all. That's not what shipped.
 
-This does **not** reintroduce the capacity-vs-logical-count problem it might
-look like at first: the injected value only answers a mechanical question —
-how many slots to copy in `DIM`/copy-in/copy-out so nothing is truncated or
-reads garbage. A program that tracks its own "how much of this buffer is
-actually filled" count (e.g. records loaded from a file into a
-fixed-capacity array) keeps that as its own ordinary, explicit,
-developer-owned parameter, same as today — it's answering a different
-question than the injected capacity value, so the two coexist without
-conflict. Today's single `count%` convention conflates these two numbers
-into one manually-passed value; decoupling them is arguably cleaner than
-what exists now.
+What shipped instead: `sizeof(x%)` / `sizeof(x%, axis)` as an ordinary,
+explicit builtin the caller writes themselves —
+`sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))`, not `sumGrid%(g%)` with the
+counts appearing from nowhere. The reasoning for staying explicit: a
+BASCAL function's array-parameter contract already has two independent
+numbers in play in real programs — the array's declared *capacity*
+(what `sizeof` reads) and, separately, a caller's own tracked *logical
+fill count* (e.g. records actually loaded from a file into a
+fixed-capacity buffer, which is very often smaller than the array's
+`DIM`). Those two aren't the same number, and a caller has to be able to
+pass either one. Auto-injection would have hard-coded "always pass
+capacity" into every call, silently overriding a caller who actually
+meant to pass their own smaller fill count. `sizeof()` as an ordinary,
+visible argument — pass it when you want capacity, pass something else
+when you don't — keeps that choice with the caller instead of taking it
+away. See [`sizeof()`](../MANUAL.md#sizeof) in the manual for the shipped
+form, including the separate resolution rule for `sizeof` used *inside* a
+function on one of its own array parameters (reads the existing count
+parameter `copy_bound` already requires, no new state).
 
 ### Resolved: multi-D array parameters are now fully wired up
 
@@ -141,9 +153,13 @@ function body silently used the wrong, unmangled name. This wasn't a
 multi-D-specific limitation so much as multi-D arrays never having been
 exercised inside a function body at all before now.
 
-`sizeof(x%, axis)` (still proposed, not implemented) would now have real
-codegen to plug into for auto-injecting the per-axis bounds this section
-still requires manually.
+`sizeof(x%, axis)` is now implemented and is the recommended way to supply
+these per-axis bounds at a call site (`sumGrid%(g%, sizeof(g%, 0),
+sizeof(g%, 1))`) instead of writing the literal bounds out by hand — see
+[Decided against: unconditional auto-injection](#decided-against-unconditional-auto-injection)
+above. The per-axis arguments themselves are still required at the call
+site; `sizeof()` only saves the caller from having to know or restate the
+array's bounds.
 
 ## Open questions / risks
 

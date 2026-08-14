@@ -1369,8 +1369,15 @@ function sumGrid%(byref grid%(?, ?), rows%, cols%)
 end function
 
 dim g%(2, 2)
-print sumGrid%(g%, 3, 3)
+print sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))
 ```
+
+Prefer `sizeof(g%, 0)` / `sizeof(g%, 1)` over hand-typing the counts — see
+[`sizeof()`](#sizeof) below. Passing the wrong numbers by hand (say, `3, 3`
+for an array actually `dim`ed `(2, 2)`) reads through `grid%(r%, c%)` fine
+at the type level but reads one row and one column past the end of the
+real array at runtime — `sizeof` reads the counts from the array's own
+`DIM` instead, so they can't drift out of sync.
 
 `grid%(?, ?)` is cross-checked two ways, both at compile time:
 
@@ -1385,6 +1392,69 @@ Either mismatch is caught before it ever reaches generated BASIC: the two
 shapes genuinely can't share one copy loop, so BASCAL refuses rather than
 emit a `DIM`/subscript mismatch that real BASIC would only catch at
 runtime.
+
+### `sizeof()`
+
+`sizeof(name)` returns a `dim`ed array's size, resolved entirely at
+compile time — it never appears in generated BASIC, only whatever value or
+name it resolves to. For a 1-D array the axis is implicit:
+
+```
+dim data%(9)
+print sizeof(data%)   ' 9 -- same value used in the dim
+```
+
+For 2-D or higher, the axis is required — `sizeof(name, axis)`, zero-based
+in the same order as the array's own `DIM`:
+
+```
+dim grid%(2, 2)
+print sizeof(grid%, 0)   ' 2 -- first DIM bound
+print sizeof(grid%, 1)   ' 2 -- second DIM bound
+```
+
+The axis must be a literal integer — it selects which frozen value to
+substitute at compile time, not something computed at runtime.
+
+**What "resolved at compile time" means in practice:** if the bound is a
+literal, `sizeof` just re-emits that literal. If it's an expression
+(a variable, a `const`, anything not a bare number), the compiler captures
+its value into a hidden variable right at the `dim` site, and `sizeof`
+always reads that captured value — never the live variable, which might
+change afterward:
+
+```
+n% = 5
+dim data%(n%)
+n% = 99
+print sizeof(data%)   ' 5 -- the value dim actually used, not the later 99
+```
+
+**Inside a function, `sizeof` on one of the function's own array
+parameters works differently** — there's no local `dim` to freeze a value
+from, since the array parameter's real size depends on whatever the
+caller happens to pass. Every array parameter already requires a count
+parameter immediately after it for each axis (the `rows%`, `cols%` in
+`sumGrid%` above) — `sizeof(grid%, 0)` inside `sumGrid%`'s own body is
+just a self-documenting way to read that existing parameter back, not a
+new value:
+
+```
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1     ' reads the rows% parameter
+        for c% = 0 to sizeof(grid%, 1) - 1 ' reads the cols% parameter
+            total% = total% + grid%(r%, c%)
+        end for
+    end for
+    return total%
+end function
+```
+
+`rows%` and `cols%` still have to be declared, in that position, exactly
+as before — `sizeof` doesn't remove the requirement to pass counts into a
+function, it only removes the need to compute or hand-type them at the
+*call site*, by reading them back out of the array actually being passed.
 
 ---
 

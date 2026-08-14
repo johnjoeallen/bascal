@@ -61,6 +61,17 @@ pub struct CodeGenerator {
     // lowercase name -> rank. Used to check a call site's array argument
     // against the callee's own inferred parameter rank.
     top_level_array_ranks: HashMap<String, usize>,
+    // Frozen per-axis bound text for every top-level array that `sizeof()`
+    // is ever called on somewhere in the program -- a literal directly, or
+    // a generated temp's name if the bound wasn't already a compile-time
+    // constant. Populated as each DIM is actually generated; see
+    // `sizeof_targets`.
+    top_level_array_bounds: HashMap<String, Vec<String>>,
+    // Lowercase names of every array `sizeof()` is called on anywhere in
+    // the program (computed once, up front). Only arrays in this set get
+    // their bounds frozen at DIM time -- programs that never call
+    // `sizeof()` see no generated output change at all.
+    sizeof_targets: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +89,11 @@ struct FunctionInfo {
     /// Declared rank of every array this function DIMs locally, lowercase
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
+    /// Frozen per-axis bound text for every local array `sizeof()` is
+    /// called on within this function. RefCell because it's populated
+    /// lazily as DIM statements are generated, through a shared
+    /// `&FunctionInfo` reference -- same pattern as `local_var_map`.
+    local_array_bounds: RefCell<HashMap<String, Vec<String>>>,
     is_procedure: bool,
     globals: HashSet<String>,
     // Cache of source-variable-key → allocated lowered BASIC name for locals in this function.
@@ -99,6 +115,8 @@ impl CodeGenerator {
             record_buffer_names: HashSet::new(),
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
+            top_level_array_bounds: HashMap::new(),
+            sizeof_targets: HashSet::new(),
         }
     }
 
@@ -129,6 +147,7 @@ impl CodeGenerator {
         }
         self.functions = functions;
         self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
+        self.sizeof_targets = collect_sizeof_targets(program);
         self.record_buffer_names = collect_record_buffer_names(program);
         *self.taken_names.borrow_mut() = taken;
 
@@ -250,6 +269,31 @@ impl CodeGenerator {
                         rendered.push(val);
                     }
                     self.line(&format!("DIM {base}({})", rendered.join(", ")));
+
+                    // Only arrays sizeof() is actually called on anywhere
+                    // get their bounds frozen -- everything else generates
+                    // byte-identical output to before sizeof() existed.
+                    let key = name.as_basic().to_ascii_lowercase();
+                    if self.sizeof_targets.contains(&key) {
+                        let frozen: Vec<String> = sizes
+                            .iter()
+                            .zip(rendered.iter())
+                            .map(|(s, val)| {
+                                if matches!(s, Expr::Integer(_)) {
+                                    val.clone()
+                                } else {
+                                    let temp = self.next_temp_var();
+                                    self.line(&format!("{temp} = {val}"));
+                                    temp
+                                }
+                            })
+                            .collect();
+                        if let Some(info) = current_function {
+                            info.local_array_bounds.borrow_mut().insert(key, frozen);
+                        } else {
+                            self.top_level_array_bounds.insert(key, frozen);
+                        }
+                    }
                 }
             }
             Statement::Open { mode, file, channel, len } => {
@@ -982,6 +1026,28 @@ impl CodeGenerator {
                 (prelude, format!("{}({})", base, rendered_indices.join(", ")))
             }
             Expr::Call { name, args } => {
+                if name.name.eq_ignore_ascii_case("sizeof") {
+                    let resolved = match args.first() {
+                        Some(Expr::Ident(array_name)) if args.len() <= 2 => {
+                            self.resolve_sizeof(array_name, args.get(1), current_function)
+                        }
+                        _ => Err(
+                            "sizeof expects an array name, e.g. `sizeof(arr%)` or \
+                             `sizeof(grid%, 1)`"
+                                .to_string(),
+                        ),
+                    };
+                    return match resolved {
+                        Ok(text) => (Vec::new(), text),
+                        Err(message) => {
+                            self.diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                message,
+                            ));
+                            (Vec::new(), "1".to_string())
+                        }
+                    };
+                }
                 if let Some(info) = self.function_info(name).cloned() {
                     (
                         self.call_lines(&info, args, current_function),
@@ -1277,6 +1343,71 @@ impl CodeGenerator {
         self.top_level_array_ranks.get(&key).copied()
     }
 
+    /// Resolves `sizeof(name)` / `sizeof(name, axis)` to the text that
+    /// should replace the call in generated code: a frozen DIM-time bound
+    /// for a directly-`dim`ed array, or -- for an array *parameter* --
+    /// the existing count parameter that `copy_bound` already requires to
+    /// immediately follow it, one per axis. Neither case needs any new
+    /// runtime state; both just read something that's already there.
+    fn resolve_sizeof(
+        &self,
+        name: &BasicIdent,
+        axis_expr: Option<&Expr>,
+        current_function: Option<&FunctionInfo>,
+    ) -> Result<String, String> {
+        let rank = self.resolve_array_rank(name, current_function).ok_or_else(|| {
+            format!("`{name}` isn't a known array, so `sizeof` can't determine its size")
+        })?;
+
+        let axis = match axis_expr {
+            Some(Expr::Integer(n)) => *n as usize,
+            Some(_) => {
+                return Err(
+                    "the axis argument to `sizeof` must be a literal integer".to_string(),
+                )
+            }
+            None if rank == 1 => 0,
+            None => {
+                return Err(format!(
+                    "`{name}` has {rank} dimensions -- sizeof needs an axis argument, e.g. \
+                     `sizeof({name}, 0)`"
+                ))
+            }
+        };
+        if axis >= rank {
+            return Err(format!(
+                "`{name}` only has {rank} dimension{} -- axis {axis} doesn't exist",
+                if rank == 1 { "" } else { "s" }
+            ));
+        }
+
+        if let Some(info) = current_function {
+            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
+                let bound_index = index + 1 + axis;
+                return info
+                    .params
+                    .get(bound_index)
+                    .map(|(_, lowered)| lowered.as_basic())
+                    .ok_or_else(|| {
+                        format!(
+                            "`{name}` needs a count parameter for axis {axis} declared \
+                             immediately after it"
+                        )
+                    });
+            }
+            let key = name.as_basic().to_ascii_lowercase();
+            if let Some(bound) = info.local_array_bounds.borrow().get(&key).and_then(|b| b.get(axis)) {
+                return Ok(bound.clone());
+            }
+        }
+        let key = name.as_basic().to_ascii_lowercase();
+        self.top_level_array_bounds
+            .get(&key)
+            .and_then(|b| b.get(axis))
+            .cloned()
+            .ok_or_else(|| format!("could not determine the size of `{name}`"))
+    }
+
     fn render_print_tokens(
         &mut self,
         tokens: &[PrintToken],
@@ -1360,6 +1491,7 @@ impl FunctionInfo {
             params,
             param_ranks,
             local_array_ranks,
+            local_array_bounds: RefCell::new(HashMap::new()),
             is_procedure: function.is_procedure,
             globals,
             local_var_map: RefCell::new(HashMap::new()),
@@ -1723,6 +1855,32 @@ fn infer_param_ranks(
             }
         })
         .collect()
+}
+
+/// Lowercase names of every array `sizeof()` is called on anywhere in the
+/// program -- top-level statements and every function body. Only arrays in
+/// this set have their DIM bounds frozen into a sizeof-readable temp; a
+/// program that never calls `sizeof()` sees no generated-output change at
+/// all. Deliberately over-inclusive: a name that turns out to be a
+/// parameter (not a DIMed array) is harmless here, since the DIM-freezing
+/// logic only ever fires for names that actually have a matching
+/// `Statement::Dim` -- a parameter never does.
+fn collect_sizeof_targets(program: &Program) -> HashSet<String> {
+    let mut targets = HashSet::new();
+    let mut collect = |e: &Expr| {
+        if let Expr::Call { name, args } = e {
+            if name.name.eq_ignore_ascii_case("sizeof") {
+                if let Some(Expr::Ident(array_name)) = args.first() {
+                    targets.insert(array_name.as_basic().to_ascii_lowercase());
+                }
+            }
+        }
+    };
+    visit_body_exprs(&program.statements, &mut collect);
+    for function in &program.functions {
+        visit_body_exprs(&function.body, &mut collect);
+    }
+    targets
 }
 
 /// Declared rank (number of DIM dimensions) of every array DIMed anywhere

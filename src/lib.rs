@@ -1923,6 +1923,157 @@ end
         );
     }
 
+    // ── sizeof() ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn sizeof_one_dimensional_literal_bound_resolves_without_an_axis() {
+        let source = r#"
+dim data%(9)
+print sizeof(data%)
+end
+"#;
+        let output = compile_source("sizeof_1d.bcl", source).expect("should compile");
+        assert!(output.contains("PRINT 9"), "sizeof should resolve to the literal bound:\n{output}");
+        assert!(
+            !output.to_ascii_lowercase().contains("sizeof"),
+            "sizeof must never appear literally in generated BASIC:\n{output}"
+        );
+    }
+
+    #[test]
+    fn sizeof_multi_dimensional_requires_and_uses_the_axis() {
+        let source = r#"
+dim grid%(2, 3)
+print sizeof(grid%, 0)
+print sizeof(grid%, 1)
+end
+"#;
+        let output = compile_source("sizeof_2d.bcl", source).expect("should compile");
+        assert!(output.contains("PRINT 2"), "axis 0 should resolve to the first DIM bound:\n{output}");
+        assert!(output.contains("PRINT 3"), "axis 1 should resolve to the second DIM bound:\n{output}");
+    }
+
+    #[test]
+    fn sizeof_freezes_a_non_literal_bound_at_dim_time() {
+        // The bound isn't a literal, so sizeof must capture its value right
+        // at the DIM site -- reading the variable again later must not
+        // change what sizeof already resolved to.
+        let source = r#"
+n% = 5
+dim data%(n%)
+n% = 99
+print sizeof(data%)
+end
+"#;
+        let output = compile_source("sizeof_frozen.bcl", source).expect("should compile");
+        assert!(
+            output.lines().any(|l| l.trim().starts_with("BCC_T") && l.contains("= n%")),
+            "a non-literal bound should be captured into a temp right at DIM time:\n{output}"
+        );
+        assert!(
+            output.contains("PRINT BCC_T1%"),
+            "sizeof should read back the frozen temp, not the live variable:\n{output}"
+        );
+        // The frozen capture must appear before the later reassignment.
+        let capture_pos = output.find("BCC_T1% = n%").unwrap();
+        let reassign_pos = output.find("n% = 99").unwrap();
+        assert!(capture_pos < reassign_pos, "must freeze before n% is reassigned:\n{output}");
+    }
+
+    #[test]
+    fn sizeof_on_own_array_parameter_reads_the_existing_count_parameter() {
+        // No DIM to freeze from inside the function -- sizeof on a
+        // parameter must resolve to the count parameter that copy_bound
+        // already requires to immediately follow the array, not introduce
+        // any new state.
+        let source = r#"
+function sumGrid%(byref grid%(?, ?), rows%, cols%)
+  total% = 0
+  for r% = 0 to sizeof(grid%, 0) - 1
+    for c% = 0 to sizeof(grid%, 1) - 1
+      total% = total% + grid%(r%, c%)
+    end for
+  end for
+  return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))
+end
+"#;
+        let output = compile_source("sizeof_param.bcl", source).expect("should compile");
+        assert!(
+            output.contains("TO sumgrid_rows_0% - 1"),
+            "sizeof(grid%, 0) inside the body should read the rows% parameter directly:\n{output}"
+        );
+        assert!(
+            output.contains("TO sumgrid_cols_0% - 1"),
+            "sizeof(grid%, 1) inside the body should read the cols% parameter directly:\n{output}"
+        );
+        assert!(
+            output.contains("sumgrid_rows_0% = 2") && output.contains("sumgrid_cols_0% = 2"),
+            "sizeof(g%, ...) at the call site should resolve to g%'s real DIM bounds:\n{output}"
+        );
+    }
+
+    #[test]
+    fn sizeof_on_unknown_array_is_rejected() {
+        let source = "print sizeof(nope%)\nend\n";
+        let err = compile_source("sizeof_unknown.bcl", source)
+            .expect_err("sizeof on an unrecognized array should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
+            "error must name the unresolvable array: {:?}", err
+        );
+    }
+
+    #[test]
+    fn sizeof_axis_out_of_range_is_rejected() {
+        let source = "dim g%(2, 2)\nprint sizeof(g%, 2)\nend\n";
+        let err = compile_source("sizeof_bad_axis.bcl", source)
+            .expect_err("an axis beyond the array's rank should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("only has 2 dimensions") && d.message.contains("axis 2")),
+            "error must explain the axis is out of range: {:?}", err
+        );
+    }
+
+    #[test]
+    fn sizeof_missing_axis_on_multi_dimensional_array_is_rejected() {
+        let source = "dim g%(2, 2)\nprint sizeof(g%)\nend\n";
+        let err = compile_source("sizeof_missing_axis.bcl", source)
+            .expect_err("sizeof on a multi-D array with no axis argument should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("needs an axis argument")),
+            "error must explain an axis is required: {:?}", err
+        );
+    }
+
+    #[test]
+    fn sizeof_non_literal_axis_is_rejected() {
+        let source = "dim g%(2, 2)\nn% = 1\nprint sizeof(g%, n%)\nend\n";
+        let err = compile_source("sizeof_non_literal_axis.bcl", source)
+            .expect_err("a non-literal axis argument should be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("must be a literal integer")),
+            "error must explain the axis must be a literal: {:?}", err
+        );
+    }
+
+    #[test]
+    fn programs_without_sizeof_are_unaffected_by_the_feature() {
+        // An array that's never passed to sizeof() must not get any frozen
+        // temp or tracking overhead -- byte-identical to before sizeof()
+        // existed.
+        let source = "n% = 5\ndim data%(n%)\nprint data%(0)\nend\n";
+        let output = compile_source("no_sizeof.bcl", source).expect("should compile");
+        assert!(
+            !output.contains("BCC_T"),
+            "an array never passed to sizeof() must not generate a frozen temp:\n{output}"
+        );
+        assert!(output.contains("DIM data%(n%)"));
+    }
+
     // ── recursion (direct and indirect) ─────────────────────────────────
 
     #[test]
