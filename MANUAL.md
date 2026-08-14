@@ -1313,6 +1313,40 @@ don't work that way by default. `byval` (the default) gives the function
 its own copy, and `byref` is what asks for the old always-visible,
 always-shared behavior back, deliberately, per parameter.
 
+### Why Copy-In/Copy-Out, Not Just Globals?
+
+MBASIC/BASCOM has exactly one subroutine primitive: `GOSUB`/`RETURN`. There
+is no `SUB`, no `FUNCTION`, no parameter list of any kind — the most
+disciplined code the raw dialect allows is a `GOSUB` target with a contract
+enforced only by comments (*"expects `A$` and `B%` set, leaves the result in
+`C%`"*). That convention-only discipline, and the maintenance burden of
+getting it wrong across a team and a growing codebase, is exactly what
+BASCAL exists to replace.
+
+So the choice was never "copy-in/copy-out versus some simpler globals-based
+way to pass parameters" — MBASIC/BASCOM has no other mechanism to build
+parameters out of at all. `GOSUB` and global variables are the only two
+primitives available. Giving `.bcl` functions real parameters means
+simulating them using only those two primitives, and copy-in/copy-out is
+what that simulation necessarily looks like: assign the argument into the
+parameter's own storage before the `GOSUB`, and — for `byref` — copy the
+result back out after.
+
+There's also a structural reason it has to work this way, independent of
+the target dialect. Each function body is compiled exactly once, and every
+call site `GOSUB`s to that same shared label. A shared body needs one
+stable name for "its first parameter" — but different call sites pass
+different things: different variable names, or a whole expression
+(`f(a% + b%)`, `f(5)`) that isn't a variable at all. There's no single
+caller-side location to just operate on directly in the general case, so
+the value has to land somewhere fixed before the shared body runs.
+
+`global` is the escape hatch for when you deliberately want the old
+always-shared, no-copy behavior back for one specific variable — see
+[Variable Scoping](#variable-scoping). It works precisely because it
+commits to one hardcoded name forever, which is exactly what makes it not
+a reusable, callable-with-different-data routine anymore.
+
 ### Multi-Dimensional Array Parameters
 
 A 2-D (or higher) array parameter declares its rank the same way as 1-D —
