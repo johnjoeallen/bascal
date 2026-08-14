@@ -2064,6 +2064,48 @@ end
             .expect("a non-cyclic call graph, even with a shared helper, should compile");
     }
 
+    #[test]
+    fn indirect_recursion_nested_inside_conditionals_is_still_rejected() {
+        // The recursive call graph is built from every call reachable
+        // anywhere in the AST, not just top-level statements -- a call
+        // guarded by if/while/select case/for still counts as a real edge,
+        // since the compiler can't prove at compile time whether that
+        // branch runs. This is also the realistic case: virtually all
+        // correct recursion is conditional (an unconditional recursive
+        // call would just infinite-loop at runtime with no base case).
+        let source = r#"
+function f%(n%)
+  for i% = 1 to 3
+    select case n%
+    case 1
+      while n% > 0
+        if n% = 2 then
+          return g%(n%)
+        end if
+        n% = n% - 1
+      end while
+    end select
+  end for
+  return 0
+end function
+
+function g%(n%)
+  return f%(n% - 1)
+end function
+
+print f%(2)
+end
+"#;
+        let err = compile_source("nested_conditional_recursion.bcl", source)
+            .expect_err("a recursive call buried inside for/select/while/if should still be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`f%`") && d.message.contains("`g%`")
+            }),
+            "error must still show the cycle even though the call is deeply nested: {:?}", err
+        );
+    }
+
     // ── short-circuit && / || ──────────────────────────────────────────
 
     /// Returns the label named by the first `THEN GOTO <label>` in `output`.
