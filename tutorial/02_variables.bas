@@ -18,10 +18,10 @@
 170 ' const names a value that cannot change.  Use it for magic numbers
 180 ' so the intent is clear and the value lives in one place.
 
-190 CONST max_score% = 100
-200 CONST pass_mark% = 60
-210 CONST app_name$ = "Grade Checker"
-220 CONST tax_rate! = 0.2
+190 maxscore% = 100
+200 passmark% = 60
+210 appname$ = "Grade Checker"
+220 taxrate! = 0.2
 
 230 ' Variable assignment uses =
 240 playername$ = "Alice"
@@ -29,12 +29,12 @@
 260 temperature! = 36.6
 
 270 ' print mixes strings and numbers directly with ; (no str$() needed)
-280 PRINT app_name$
+280 PRINT appname$
 290 PRINT "Player:      "; playername$
-300 PRINT "Score:       "; score%; "/ "; max_score%
-310 PRINT "Pass mark:   "; pass_mark%
+300 PRINT "Score:       "; score%; "/ "; maxscore%
+310 PRINT "Pass mark:   "; passmark%
 320 PRINT "Temperature: "; temperature!
-330 PRINT "Tax rate:    "; tax_rate!
+330 PRINT "Tax rate:    "; taxrate!
 
 340 ' str$() is still available when you need to build a string value
 350 greeting$ = "Score is " + STR$(score%)

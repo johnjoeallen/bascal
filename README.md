@@ -337,13 +337,20 @@ env -u RUSTC_WRAPPER cargo test
   dependency trees) and writes `.bas` output alongside the source
 - If `fbc` is installed, compiles and runs `sort_driver` and `remline`
   end-to-end
+- If `dosbox-x` is installed *and* `test-fixtures/ibm-basic-compiler/` has
+  been populated (see [CONTRIBUTING.md](CONTRIBUTING.md)), compiles
+  conformance fixtures against the real IBM BASIC Compiler 2.00 and diffs
+  its output against checked-in golden expectations. Opt-in and local by
+  default -- skipped cleanly otherwise.
 
 ## Current Limits
 
 - No library archive format.
-- Array argument transpilation uses the parameters declared right after the
-  array — one per dimension, in `DIM` order — as its element counts for
-  copy-in/copy-out; an array carries no length of its own, so that ordering
-  is required, not just conventional. The compiler does check that the
-  array's actual dimensionality matches how the callee indexes it, so a
-  mismatch is a compile-time error rather than a miscompile.
+- An array parameter's shared storage is `DIM`ed once, sized to the largest
+  array any call site ever passes it. The compiler infers that size itself
+  from every call site's `DIM` bounds (literal, `const`, or another
+  function's already-resolved array parameter); a call site whose size is a
+  genuine runtime value (e.g. `DIM data%(n%)` where `n%` came from `INPUT`)
+  needs an explicit capacity written on the parameter instead of `?`. See
+  [Array Parameter Storage Capacity](MANUAL.md#array-parameter-storage-capacity)
+  in the manual.

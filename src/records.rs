@@ -8,9 +8,16 @@
 use std::collections::HashMap;
 
 use crate::ast::*;
+use crate::codegen::camel_join;
 use crate::diagnostics::{Diagnostic, SourcePos};
 
-pub fn lower(program: Program) -> Result<Program, Vec<Diagnostic>> {
+/// Lowers the DSL and returns the rewritten program alongside the
+/// lowercase BASIC names of every buffer variable this pass invented
+/// (see `Lowerer::synthesized_buffer_names`) -- `codegen.rs` needs that
+/// set to know which `FIELD` buffer names are compiler-built camelCase
+/// (case preserved) versus author-typed raw BASIC (still normalized to
+/// lowercase, same as every other identifier).
+pub fn lower(program: Program) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
     let mut lowerer = Lowerer::new();
     lowerer.build_record_table(&program.records);
 
@@ -28,15 +35,18 @@ pub fn lower(program: Program) -> Result<Program, Vec<Diagnostic>> {
         return Err(lowerer.diagnostics);
     }
 
-    Ok(Program {
-        program_decl: program.program_decl,
-        suite_decl: program.suite_decl,
-        declarations: program.declarations,
-        common: program.common,
-        statements,
-        functions,
-        records: Vec::new(),
-    })
+    Ok((
+        Program {
+            program_decl: program.program_decl,
+            suite_decl: program.suite_decl,
+            declarations: program.declarations,
+            common: program.common,
+            statements,
+            functions,
+            records: Vec::new(),
+        },
+        lowerer.synthesized_buffer_names,
+    ))
 }
 
 #[derive(Clone)]
@@ -73,6 +83,14 @@ struct Lowerer {
     record_vars: HashMap<String, String>,
     next_channel: i64,
     diagnostics: Vec<Diagnostic>,
+    /// Lowercase BASIC names of every buffer variable this pass invented
+    /// via `buffer_ident` -- as opposed to a `FIELD` buffer name the
+    /// author typed directly in raw-BASIC-passthrough source. Threaded
+    /// back to `codegen.rs` so it can tell the two apart: a
+    /// compiler-synthesized buffer name is already deliberately
+    /// camelCased and should keep that case, while a user-typed one still
+    /// gets BASCAL's normal lowercase normalization.
+    synthesized_buffer_names: std::collections::HashSet<String>,
 }
 
 impl Lowerer {
@@ -83,6 +101,7 @@ impl Lowerer {
             record_vars: HashMap::new(),
             next_channel: 1,
             diagnostics: Vec::new(),
+            synthesized_buffer_names: std::collections::HashSet::new(),
         }
     }
 
@@ -575,8 +594,7 @@ impl Lowerer {
         )));
 
         for f in &rec.fields {
-            let scalar_name =
-                format!("{}_{}", record_var.name.to_ascii_lowercase(), f.name.to_ascii_lowercase());
+            let scalar_name = camel_join(&[&record_var.name, &f.name]);
             let scalar_ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&f.ty)) };
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, Expr::Ident(scalar_ident));
@@ -598,14 +616,25 @@ impl Lowerer {
 
         for f in &rec.fields {
             let buf_ident = self.buffer_ident(&var.name, &f.name);
-            let unpacked = Expr::Call {
-                name: BasicIdent::parse(unpack_fn_name(&f.ty)),
-                args: vec![Expr::Ident(buf_ident)],
-            };
-            let scalar_name =
-                format!("{}_{}", target.name.to_ascii_lowercase(), f.name.to_ascii_lowercase());
+            let scalar_name = camel_join(&[&target.name, &f.name]);
             let scalar_ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&f.ty)) };
-            out.push(Statement::Assignment { target: Expr::Ident(scalar_ident), value: unpacked });
+            if field_is_numeric(&f.ty) {
+                let unpacked = Expr::Call {
+                    name: BasicIdent::parse(unpack_fn_name(&f.ty)),
+                    args: vec![Expr::Ident(buf_ident)],
+                };
+                out.push(Statement::Assignment { target: Expr::Ident(scalar_ident), value: unpacked });
+            } else {
+                // Real MBASIC/BASCOM has no RTRIM$ builtin -- strip the
+                // trailing space padding LSET left in the fixed-width
+                // buffer with an inline scan instead, built directly out
+                // of LEN/MID$/LEFT$, which every target actually has.
+                let counter_ident = BasicIdent {
+                    name: camel_join(&[&target.name, &f.name, "trimI"]),
+                    suffix: Some(TypeSuffix::Integer),
+                };
+                out.extend(trim_statements(&buf_ident, &counter_ident, &scalar_ident));
+            }
         }
 
         self.record_vars.insert(target.name.to_ascii_lowercase(), type_name);
@@ -682,11 +711,16 @@ impl Lowerer {
         Some((info.channel, rec, info.record_type))
     }
 
-    fn buffer_ident(&self, file_var: &str, field_name: &str) -> BasicIdent {
-        BasicIdent {
-            name: format!("{}_{}buf", file_var.to_ascii_lowercase(), field_name.to_ascii_lowercase()),
+    fn buffer_ident(&mut self, file_var: &str, field_name: &str) -> BasicIdent {
+        let name = camel_join(&[file_var, field_name, "buf"]);
+        let ident = BasicIdent {
+            name,
             suffix: Some(TypeSuffix::String),
-        }
+        };
+        // Keyed on the full `as_basic()` form (including the `$` suffix) to
+        // match how `codegen.rs`'s `ident()` builds its lookup key.
+        self.synthesized_buffer_names.insert(ident.as_basic().to_ascii_lowercase());
+        ident
     }
 
     fn check_field_value_type(&mut self, value: &Expr, ty: &RecordFieldType, field_name: &str, type_name: &str) {
@@ -837,8 +871,7 @@ impl Lowerer {
             ));
             return (Expr::Integer(0), None);
         };
-        let scalar_name =
-            format!("{}_{}", base_ident.name.to_ascii_lowercase(), field_spec.name.to_ascii_lowercase());
+        let scalar_name = camel_join(&[&base_ident.name, &field_spec.name]);
         let ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&field_spec.ty)) };
         let kind = if field_is_numeric(&field_spec.ty) { FieldKind::Numeric } else { FieldKind::Stringy };
         (Expr::Ident(ident), Some(kind))
@@ -859,6 +892,53 @@ fn pack_expr(ty: &RecordFieldType, value: Expr) -> Expr {
     } else {
         value
     }
+}
+
+/// Builds `i% = LEN(buf$) : WHILE i% > 0 AND MID$(buf$,i%,1) = " " : i% = i%
+/// - 1 : WEND : target$ = LEFT$(buf$, i%)` -- a right-trim, done inline
+/// with LEN/MID$/LEFT$, since real MBASIC/BASCOM has no RTRIM$ builtin.
+/// The `AND` here has to be the short-circuit `AndAnd` form: once `i% =
+/// 0`, evaluating `MID$(buf$, 0, 1)` is itself a runtime error, so the
+/// second operand must never be reached once the first is false.
+fn trim_statements(buf_ident: &BasicIdent, counter_ident: &BasicIdent, target_ident: &BasicIdent) -> Vec<Statement> {
+    let buf = || Expr::Ident(buf_ident.clone());
+    let counter = || Expr::Ident(counter_ident.clone());
+
+    let init = Statement::Assignment {
+        target: counter(),
+        value: Expr::Call { name: BasicIdent::parse("len"), args: vec![buf()] },
+    };
+
+    let condition = Expr::Binary {
+        left: Box::new(Expr::Binary {
+            left: Box::new(counter()),
+            op: BinaryOp::Gt,
+            right: Box::new(Expr::Integer(0)),
+        }),
+        op: BinaryOp::AndAnd,
+        right: Box::new(Expr::Binary {
+            left: Box::new(Expr::Call {
+                name: BasicIdent::parse("mid$"),
+                args: vec![buf(), counter(), Expr::Integer(1)],
+            }),
+            op: BinaryOp::Eq,
+            right: Box::new(Expr::String(" ".to_string())),
+        }),
+    };
+
+    let decrement = Statement::Assignment {
+        target: counter(),
+        value: Expr::Binary { left: Box::new(counter()), op: BinaryOp::Sub, right: Box::new(Expr::Integer(1)) },
+    };
+
+    let while_loop = Statement::While { condition, body: vec![decrement] };
+
+    let finalize = Statement::Assignment {
+        target: Expr::Ident(target_ident.clone()),
+        value: Expr::Call { name: BasicIdent::parse("left$"), args: vec![buf(), counter()] },
+    };
+
+    vec![init, while_loop, finalize]
 }
 
 fn field_width(ty: &RecordFieldType) -> u32 {
@@ -885,22 +965,29 @@ fn field_suffix(ty: &RecordFieldType) -> TypeSuffix {
     }
 }
 
+/// `MKI$`/`MKL$`/`MKS$`/`MKD$` always return a string -- packing an integer
+/// field with a `%` suffix (etc.) generates code real MBASIC/BASCOM rejects
+/// outright, since those functions don't exist under that name.
 fn pack_fn_name(ty: &RecordFieldType) -> &'static str {
     match ty {
-        RecordFieldType::Int16 => "mki%",
-        RecordFieldType::Int32 => "mkl&",
-        RecordFieldType::Float32 => "mks!",
-        RecordFieldType::Float64 => "mkd#",
+        RecordFieldType::Int16 => "mki$",
+        RecordFieldType::Int32 => "mkl$",
+        RecordFieldType::Float32 => "mks$",
+        RecordFieldType::Float64 => "mkd$",
         RecordFieldType::Str(_) => unreachable!("string fields are not packed"),
     }
 }
 
+/// `CVI`/`CVL`/`CVS`/`CVD` take no suffix at all -- each already returns its
+/// one unambiguous numeric type. `RTRIM$` isn't a real MBASIC/BASCOM builtin
+/// either; string fields are unpacked through the compiler-generated trim
+/// routine instead (see `emit_trim_helper` in `codegen.rs`), not this name.
 fn unpack_fn_name(ty: &RecordFieldType) -> &'static str {
     match ty {
-        RecordFieldType::Int16 => "cvi%",
-        RecordFieldType::Int32 => "cvl&",
-        RecordFieldType::Float32 => "cvs!",
-        RecordFieldType::Float64 => "cvd#",
-        RecordFieldType::Str(_) => "rtrim$",
+        RecordFieldType::Int16 => "cvi",
+        RecordFieldType::Int32 => "cvl",
+        RecordFieldType::Float32 => "cvs",
+        RecordFieldType::Float64 => "cvd",
+        RecordFieldType::Str(_) => unreachable!("string fields are trimmed, not unpacked via a function call"),
     }
 }

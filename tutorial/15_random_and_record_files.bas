@@ -28,309 +28,354 @@
 270 ' get #n, recordNumber%   — read record n into the buffer variables
 280 ' 
 290 ' Packing helpers (BASIC builtins):
-300 ' mki%(n%)  — pack a 2-byte integer into a 2-character string
-310 ' mkl&(n&)  — pack a 4-byte long
-320 ' mks!(n!)  — pack a 4-byte single
-330 ' mkd#(n#)  — pack an 8-byte double
-340 ' cvi%(s$)  — unpack a 2-byte integer from a string
-350 ' cvl&(s$)  — unpack a 4-byte long
-360 ' cvs!(s$)  — unpack a 4-byte single
-370 ' cvd#(s$)  — unpack an 8-byte double
+300 ' mki$(n%)  — pack a 2-byte integer into a 2-character string
+310 ' mkl$(n&)  — pack a 4-byte long
+320 ' mks$(n!)  — pack a 4-byte single
+330 ' mkd$(n#)  — pack an 8-byte double
+340 ' cvi(s$)   — unpack a 2-byte integer from a string
+350 ' cvl(s$)   — unpack a 4-byte long
+360 ' cvs(s$)   — unpack a 4-byte single
+370 ' cvd(s$)   — unpack an 8-byte double
+380 ' 
+390 ' Every MKx$ always returns a string (never a type-suffixed MKI%/MKD#/etc —
+400 ' those aren't real MBASIC/BASCOM functions), and every CVx takes no suffix
+410 ' at all. There's also no RTRIM$ builtin on real MBASIC/BASCOM -- trimming a
+420 ' fixed-width, space-padded FIELD buffer back down to its real length needs
+430 ' a hand-rolled loop, like trimmed$ below.
 
-380 CONST rec_len% = 30
-390 CONST num_recs% = 3
-400 CONST db_file$ = "tutorial_students.dat"
+440 ' trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 
-410 ' ============================================================
-420 ' Part 1 — random-access files, written by hand
-430 ' ============================================================
+450 reclen% = 30
+460 numrecs% = 3
+470 dbfile$ = "tutorial_students.dat"
 
-440 ' ---- Write three records ----
+480 ' ============================================================
+490 ' Part 1 — random-access files, written by hand
+500 ' ============================================================
 
-450 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-460 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+510 ' ---- Write three records ----
 
-470 ' Record 1: Alice, 95
-480 LSET idbuf$ = MKI%(1)
-490 LSET namebuf$ = "Alice"
-500 LSET scorebuf$ = MKD#(95)
-510 PUT #1, 1
+520 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+530 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
 
-520 ' Record 2: Bob, 54
-530 LSET idbuf$ = MKI%(2)
-540 LSET namebuf$ = "Bob"
-550 LSET scorebuf$ = MKD#(54)
-560 PUT #1, 2
+540 ' Record 1: Alice, 95
+550 LSET idbuf$ = MKI$(1)
+560 LSET namebuf$ = "Alice"
+570 LSET scorebuf$ = MKD$(95)
+580 PUT #1, 1
 
-570 ' Record 3: Carol, 78
-580 LSET idbuf$ = MKI%(3)
-590 LSET namebuf$ = "Carol"
-600 LSET scorebuf$ = MKD#(78)
-610 PUT #1, 3
+590 ' Record 2: Bob, 54
+600 LSET idbuf$ = MKI$(2)
+610 LSET namebuf$ = "Bob"
+620 LSET scorebuf$ = MKD$(54)
+630 PUT #1, 2
 
-620 CLOSE #1
+640 ' Record 3: Carol, 78
+650 LSET idbuf$ = MKI$(3)
+660 LSET namebuf$ = "Carol"
+670 LSET scorebuf$ = MKD$(78)
+680 PUT #1, 3
 
-630 ' ---- Read records in reverse order ----
+690 CLOSE #1
 
-640 PRINT "Part 1 (hand-written) -- reading records in reverse order:"
-650 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-660 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+700 ' ---- Read records in reverse order ----
 
-670 FOR i% = num_recs% TO 1 STEP -1
-680     GET #1, i%
-690     id% = CVI%(idbuf$)
-700     score# = CVD#(scorebuf$)
-710     PRINT (((("  [" + STR$(id%)) + "] ") + RTRIM$(namebuf$)) + " -- ") + STR$(score#)
-720 NEXT i%
+710 PRINT "Part 1 (hand-written) -- reading records in reverse order:"
+720 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+730 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
 
-730 CLOSE #1
+740 FOR i% = numrecs% TO 1 STEP -1
+750     GET #1, i%
+760     id% = CVI(idbuf$)
+770     score# = CVD(scorebuf$)
+780     trimmedS0$ = namebuf$
+790     GOSUB 3200
+800     PRINT (((("  [" + STR$(id%)) + "] ") + trimmedResult0$) + " -- ") + STR$(score#)
+810 NEXT i%
 
-740 ' ---- Update one field in place ----
+820 CLOSE #1
 
-750 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-760 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+830 ' ---- Update one field in place ----
 
-770 ' Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
-780 ' always writes the whole 30-byte buffer, so GET has to load the record
-790 ' first even though idBuf$/nameBuf$ are just being written straight back
-800 ' unchanged.
-810 GET #1, 2
-820 LSET scorebuf$ = MKD#(61.5)
-830 PUT #1, 2
+840 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+850 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
 
-840 CLOSE #1
+860 ' Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
+870 ' always writes the whole 30-byte buffer, so GET has to load the record
+880 ' first even though idBuf$/nameBuf$ are just being written straight back
+890 ' unchanged.
+900 GET #1, 2
+910 LSET scorebuf$ = MKD$(61.5)
+920 PUT #1, 2
 
-850 ' ---- Update two fields at once ----
+930 CLOSE #1
 
-860 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-870 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+940 ' ---- Update two fields at once ----
 
-880 ' Alice got married and re-sat the exam — `name` and `score` both change,
-890 ' `id` doesn't. Same problem as Bob's update, just with two fields instead
-900 ' of one: GET first (this is what preserves idBuf$), LSET the two fields
-910 ' that actually changed, then PUT the whole buffer back. Nothing here is
-920 ' specific to "two" fields — five changed fields would look identical,
-930 ' just with five LSET lines between the GET and the PUT.
-940 GET #1, 1
-950 LSET namebuf$ = "Alice Smith"
-960 LSET scorebuf$ = MKD#(91)
-970 PUT #1, 1
+950 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+960 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
 
-980 CLOSE #1
+970 ' Alice got married and re-sat the exam — `name` and `score` both change,
+980 ' `id` doesn't. Same problem as Bob's update, just with two fields instead
+990 ' of one: GET first (this is what preserves idBuf$), LSET the two fields
+1000 ' that actually changed, then PUT the whole buffer back. Nothing here is
+1010 ' specific to "two" fields — five changed fields would look identical,
+1020 ' just with five LSET lines between the GET and the PUT.
+1030 GET #1, 1
+1040 LSET namebuf$ = "Alice Smith"
+1050 LSET scorebuf$ = MKD$(91)
+1060 PUT #1, 1
 
-990 ' ---- Same shape again ----
+1070 CLOSE #1
 
-1000 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-1010 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+1080 ' ---- Same shape again ----
 
-1020 ' Carol changed her name and improved her score: the exact same
-1030 ' GET / LSET / LSET / PUT shape as Alice's update above, just retyped by
-1040 ' hand with Carol's record number and values.
-1050 GET #1, 3
-1060 LSET namebuf$ = "Carol Jones"
-1070 LSET scorebuf$ = MKD#(88)
-1080 PUT #1, 3
+1090 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+1100 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
 
-1090 CLOSE #1
-
-1100 ' ---- Verify the updates ----
-
-1110 PRINT "Part 1 (hand-written) -- after updates:"
-1120 OPEN db_file$ FOR RANDOM AS #1 LEN = rec_len%
-1130 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
-
-1140 FOR i% = 1 TO num_recs%
-1150     GET #1, i%
-1160     PRINT (("  " + RTRIM$(namebuf$)) + ": ") + STR$(CVD#(scorebuf$))
-1170 NEXT i%
+1110 ' Carol changed her name and improved her score: the exact same
+1120 ' GET / LSET / LSET / PUT shape as Alice's update above, just retyped by
+1130 ' hand with Carol's record number and values.
+1140 GET #1, 3
+1150 LSET namebuf$ = "Carol Jones"
+1160 LSET scorebuf$ = MKD$(88)
+1170 PUT #1, 3
 
 1180 CLOSE #1
 
-1190 ' ------------------------------------------------------------------------
-1200 ' What Part 1 actually cost:
-1210 ' 
-1220 ' - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
-1230 ' be repeated, identically, in every OPEN block — get it wrong in one
-1240 ' of the five and you're reading or writing the wrong bytes.
-1250 ' - rec_len% (30) is 2+20+8 computed by hand; add a field to the record
-1260 ' and every one of those numbers has to be updated together, or the
-1270 ' file silently gets corrupted.
-1280 ' - Each field's pack/unpack call (mki%/cvi%, mkd#/cvd#, or nothing for
-1290 ' strings) has to be matched to that field's type by hand, every time
-1300 ' it's touched — nothing stops mkd#() being used on the id field.
-1310 ' - Alice's and Carol's updates are the identical GET/LSET/LSET/PUT
-1320 ' pattern, typed out twice, with every buffer/field name repeated.
-1330 ' 
-1340 ' None of this is hard, exactly — it's just bookkeeping a compiler should
-1350 ' be doing for you. Part 2 is the same program again, with BASCAL's
-1360 ' record/file DSL doing that bookkeeping.
-1370 ' ------------------------------------------------------------------------
+1190 ' ---- Verify the updates ----
 
-1380 ' ============================================================
-1390 ' Part 2 — the same program with the record / file DSL
-1400 ' ============================================================
-1410 ' 
-1420 ' record <Name> ... end record
-1430 ' Declares a fixed-layout record type. Supported field types: int16,
-1440 ' int32, float32, float64, and string(N). The record's total byte width
-1450 ' (used as Part 1's rec_len%) is the sum of its field widths, computed
-1460 ' automatically.
+1200 PRINT "Part 1 (hand-written) -- after updates:"
+1210 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+1220 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$
+
+1230 FOR i% = 1 TO numrecs%
+1240     GET #1, i%
+1250     trimmedS0$ = namebuf$
+1260     GOSUB 3200
+1270     PRINT (("  " + trimmedResult0$) + ": ") + STR$(CVD(scorebuf$))
+1280 NEXT i%
+
+1290 CLOSE #1
+
+1300 ' ------------------------------------------------------------------------
+1310 ' What Part 1 actually cost:
+1320 ' 
+1330 ' - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
+1340 ' be repeated, identically, in every OPEN block — get it wrong in one
+1350 ' of the five and you're reading or writing the wrong bytes.
+1360 ' - recLen% (30) is 2+20+8 computed by hand; add a field to the record
+1370 ' and every one of those numbers has to be updated together, or the
+1380 ' file silently gets corrupted.
+1390 ' - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
+1400 ' strings) has to be matched to that field's type by hand, every time
+1410 ' it's touched — nothing stops mkd$() being used on the id field.
+1420 ' - There's no RTRIM$ builtin on real MBASIC/BASCOM, so reading a string
+1430 ' field back means hand-rolling a trim loop (trimmed$, above) and
+1440 ' remembering to call it, every time.
+1450 ' - Alice's and Carol's updates are the identical GET/LSET/LSET/PUT
+1460 ' pattern, typed out twice, with every buffer/field name repeated.
 1470 ' 
-1480 ' file <var> as <RecordType> = open(<path>)
-1490 ' Opens (or creates) a random-access file sized for one record, and binds
-1500 ' FIELD buffer variables for every field. File numbers are allocated
-1510 ' automatically, starting at #1, in the order `file` declarations appear.
-1520 ' This one line replaces Part 1's rec_len% constant, OPEN, and FIELD.
-1530 ' 
-1540 ' <file>[<n>] = { field: value, ... }
-1550 ' Whole-record write: packs every field (LSET, MKx% for numeric fields)
-1560 ' and writes record n. Every declared field must be given — a missing one
-1570 ' is a compile-time error.
-1580 ' 
-1590 ' let <var> = <file>[<n>]
-1600 ' Whole-record read: reads record n and unpacks every field (CVx$,
-1610 ' RTRIM$ for strings) into `<var>.<field>`.
-1620 ' 
-1630 ' <file>[<n>].<field> = value
-1640 ' Partial update: GET, LSET just that one field, PUT. The one-field
-1650 ' version of Part 1's Bob update, with no buffer names to get wrong.
-1660 ' 
-1670 ' <file>[<n>] = ?{ field: value, ... }
-1680 ' Partial-record write: any subset of fields; unlisted ones are left
-1690 ' untouched on disk. Whether a GET is needed is decided at *compile
-1700 ' time* by comparing the given field names against the record's declared
-1710 ' fields: some fields missing -> GET first, LSET just those fields, then
-1720 ' PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
-1730 ' spelled out by hand); every field given anyway -> no GET, same as a
-1740 ' plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
-1750 ' compile-time error — only *missing* fields are allowed, not misspelled
-1760 ' ones.
+1480 ' None of this is hard, exactly — it's just bookkeeping a compiler should
+1490 ' be doing for you. Part 2 is the same program again, with BASCAL's
+1500 ' record/file DSL doing that bookkeeping.
+1510 ' ------------------------------------------------------------------------
+
+1520 ' ============================================================
+1530 ' Part 2 — the same program with the record / file DSL
+1540 ' ============================================================
+1550 ' 
+1560 ' record <Name> ... end record
+1570 ' Declares a fixed-layout record type. Supported field types: int16,
+1580 ' int32, float32, float64, and string(N). The record's total byte width
+1590 ' (used as Part 1's recLen%) is the sum of its field widths, computed
+1600 ' automatically.
+1610 ' 
+1620 ' file <var> as <RecordType> = open(<path>)
+1630 ' Opens (or creates) a random-access file sized for one record, and binds
+1640 ' FIELD buffer variables for every field. File numbers are allocated
+1650 ' automatically, starting at #1, in the order `file` declarations appear.
+1660 ' This one line replaces Part 1's recLen% constant, OPEN, and FIELD.
+1670 ' 
+1680 ' <file>[<n>] = { field: value, ... }
+1690 ' Whole-record write: packs every field (LSET, MKx$ for numeric fields)
+1700 ' and writes record n. Every declared field must be given — a missing one
+1710 ' is a compile-time error.
+1720 ' 
+1730 ' let <var> = <file>[<n>]
+1740 ' Whole-record read: reads record n and unpacks every field (CVx for
+1750 ' numeric fields, an inline trim loop like Part 1's trimmed$ for strings)
+1760 ' into `<var>.<field>`.
 1770 ' 
-1780 ' let <var> = <file>[<n>]
-1790 ' <var>.<field> = value  (any number of times)
-1800 ' <file>[<n>] = <var>
-1810 ' Batched update: the `let` does one GET; each `<var>.<field> = value` is
-1820 ' a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
-1830 ' packs every field from `<var>` and does one PUT. This is Carol's update
-1840 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
-1850 ' read-mutate-write instead of a single literal, useful when the new
-1860 ' values come from more than a one-line expression.
-1870 ' 
-1880 ' for <var> = <A> downto <B> ... end for
-1890 ' Sugar for `for <var> = <A> to <B> step -1`.
-1900 ' 
-1910 ' <file>.close()
-1920 ' Closes the file.
+1780 ' <file>[<n>].<field> = value
+1790 ' Partial update: GET, LSET just that one field, PUT. The one-field
+1800 ' version of Part 1's Bob update, with no buffer names to get wrong.
+1810 ' 
+1820 ' <file>[<n>] = ?{ field: value, ... }
+1830 ' Partial-record write: any subset of fields; unlisted ones are left
+1840 ' untouched on disk. Whether a GET is needed is decided at *compile
+1850 ' time* by comparing the given field names against the record's declared
+1860 ' fields: some fields missing -> GET first, LSET just those fields, then
+1870 ' PUT (this is Alice's update from Part 1, minus the GET/LSET/LSET/PUT
+1880 ' spelled out by hand); every field given anyway -> no GET, same as a
+1890 ' plain `{...}`. Unlike `{...}`, an *unknown* field name is still a
+1900 ' compile-time error — only *missing* fields are allowed, not misspelled
+1910 ' ones.
+1920 ' 
+1930 ' let <var> = <file>[<n>]
+1940 ' <var>.<field> = value  (any number of times)
+1950 ' <file>[<n>] = <var>
+1960 ' Batched update: the `let` does one GET; each `<var>.<field> = value` is
+1970 ' a pure in-memory assignment (no I/O); the final `<file>[<n>] = <var>`
+1980 ' packs every field from `<var>` and does one PUT. This is Carol's update
+1990 ' from Part 1 — same GET/LSET/LSET/PUT shape as `?{...}`, just spelled as
+2000 ' read-mutate-write instead of a single literal, useful when the new
+2010 ' values come from more than a one-line expression.
+2020 ' 
+2030 ' for <var> = <A> downto <B> ... end for
+2040 ' Sugar for `for <var> = <A> to <B> step -1`.
+2050 ' 
+2060 ' <file>.close()
+2070 ' Closes the file.
 
-1930 ' file db as Student = open(...)  [30 bytes/record]
-1940 OPEN "tutorial_records.dat" FOR RANDOM AS #1 LEN = 30
-1950 FIELD #1, 2 AS db_idbuf$, 20 AS db_namebuf$, 8 AS db_scorebuf$
+2080 ' file db as Student = open(...)  [30 bytes/record]
+2090 OPEN "tutorial_records.dat" FOR RANDOM AS #1 LEN = 30
+2100 FIELD #1, 2 AS dbIdBuf$, 20 AS dbNameBuf$, 8 AS dbScoreBuf$
 
-1960 ' ---- Write three records ----
+2110 ' ---- Write three records ----
 
-1970 ' Record 1: Alice, 95
-1980 ' db[...] = { ... }  (whole-record write)
-1990 LSET db_idbuf$ = MKI%(1)
-2000 LSET db_namebuf$ = "Alice"
-2010 LSET db_scorebuf$ = MKD#(95)
-2020 PUT #1, 1
+2120 ' Record 1: Alice, 95
+2130 ' db[...] = { ... }  (whole-record write)
+2140 LSET dbIdBuf$ = MKI$(1)
+2150 LSET dbNameBuf$ = "Alice"
+2160 LSET dbScoreBuf$ = MKD$(95)
+2170 PUT #1, 1
 
-2030 ' Record 2: Bob, 54
-2040 ' db[...] = { ... }  (whole-record write)
-2050 LSET db_idbuf$ = MKI%(2)
-2060 LSET db_namebuf$ = "Bob"
-2070 LSET db_scorebuf$ = MKD#(54)
-2080 PUT #1, 2
+2180 ' Record 2: Bob, 54
+2190 ' db[...] = { ... }  (whole-record write)
+2200 LSET dbIdBuf$ = MKI$(2)
+2210 LSET dbNameBuf$ = "Bob"
+2220 LSET dbScoreBuf$ = MKD$(54)
+2230 PUT #1, 2
 
-2090 ' Record 3: Carol, 78
-2100 ' db[...] = { ... }  (whole-record write)
-2110 LSET db_idbuf$ = MKI%(3)
-2120 LSET db_namebuf$ = "Carol"
-2130 LSET db_scorebuf$ = MKD#(78)
-2140 PUT #1, 3
+2240 ' Record 3: Carol, 78
+2250 ' db[...] = { ... }  (whole-record write)
+2260 LSET dbIdBuf$ = MKI$(3)
+2270 LSET dbNameBuf$ = "Carol"
+2280 LSET dbScoreBuf$ = MKD$(78)
+2290 PUT #1, 3
 
-2150 ' ---- Read records in reverse order ----
+2300 ' ---- Read records in reverse order ----
 
-2160 PRINT "Part 2 (record/file DSL) -- reading records in reverse order:"
+2310 PRINT "Part 2 (record/file DSL) -- reading records in reverse order:"
 
-2170 FOR i = 3 TO 1 STEP -1
-2180     ' let s = db[...]  (whole-record read)
-2190     GET #1, i
-2200     s_id% = CVI%(db_idbuf$)
-2210     s_name$ = RTRIM$(db_namebuf$)
-2220     s_score# = CVD#(db_scorebuf$)
-2230     PRINT (((("  [" + STR$(s_id%)) + "] ") + s_name$) + " -- ") + STR$(s_score#)
-2240 NEXT i
+2320 FOR i = 3 TO 1 STEP -1
+2330     ' let s = db[...]  (whole-record read)
+2340     GET #1, i
+2350     sid% = CVI(dbIdBuf$)
+2360     snametrimi% = LEN(dbNameBuf$)
+2370     IF (snametrimi% > 0) = 0 THEN GOTO 2410
+2380     IF (MID$(dbNameBuf$, snametrimi%, 1) = " ") = 0 THEN GOTO 2410
+2390         snametrimi% = snametrimi% - 1
+2400         GOTO 2370
+2410     REM END WHILE
+2420     sname$ = LEFT$(dbNameBuf$, snametrimi%)
+2430     sscore# = CVD(dbScoreBuf$)
+2440     PRINT (((("  [" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
+2450 NEXT i
 
-2250 ' ---- Update one field in place ----
+2460 ' ---- Update one field in place ----
 
-2260 ' Bob just scraped a pass on re-mark. Compare to Part 1: no rec_len%, no
-2270 ' idBuf$/nameBuf$/scoreBuf$, no mkd#() — just the field that's changing.
-2280 ' db[...].score = ...  (partial-field update)
-2290 GET #1, 2
-2300 LSET db_scorebuf$ = MKD#(61.5)
-2310 PUT #1, 2
+2470 ' Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
+2480 ' idBuf$/nameBuf$/scoreBuf$, no mkd$() — just the field that's changing.
+2490 ' db[...].score = ...  (partial-field update)
+2500 GET #1, 2
+2510 LSET dbScoreBuf$ = MKD$(61.5)
+2520 PUT #1, 2
 
-2320 ' ---- Update two fields at once, still one GET and one PUT ----
+2530 ' ---- Update two fields at once, still one GET and one PUT ----
 
-2330 ' Alice got married and re-sat the exam. `name` and `score` don't cover
-2340 ' every field of Student, so this needs an implicit GET first (id is
-2350 ' preserved from the existing record) -- exactly Part 1's GET / LSET /
-2360 ' LSET / PUT for Alice, minus having to write out the GET, the buffer
-2370 ' names, or the packing calls. Which fields need a GET is worked out by
-2380 ' the compiler by comparing `name`/`score` against Student's declared
-2390 ' fields — not decided at runtime.
-2400 ' db[...] = ?{ ... }  (partial-record write)
-2410 GET #1, 1
-2420 LSET db_namebuf$ = "Alice Smith"
-2430 LSET db_scorebuf$ = MKD#(91)
-2440 PUT #1, 1
+2540 ' Alice got married and re-sat the exam. `name` and `score` don't cover
+2550 ' every field of Student, so this needs an implicit GET first (id is
+2560 ' preserved from the existing record) -- exactly Part 1's GET / LSET /
+2570 ' LSET / PUT for Alice, minus having to write out the GET, the buffer
+2580 ' names, or the packing calls. Which fields need a GET is worked out by
+2590 ' the compiler by comparing `name`/`score` against Student's declared
+2600 ' fields — not decided at runtime.
+2610 ' db[...] = ?{ ... }  (partial-record write)
+2620 GET #1, 1
+2630 LSET dbNameBuf$ = "Alice Smith"
+2640 LSET dbScoreBuf$ = MKD$(91)
+2650 PUT #1, 1
 
-2450 ' ---- Batched update: read once, mutate twice, write back once ----
+2660 ' ---- Batched update: read once, mutate twice, write back once ----
 
-2460 ' Carol changed her name and improved her score — the read-mutate-write
-2470 ' spelling of the same one-GET-one-PUT update, useful when the new values
-2480 ' aren't just a couple of literals.
-2490 ' let carol = db[...]  (whole-record read)
-2500 GET #1, 3
-2510 carol_id% = CVI%(db_idbuf$)
-2520 carol_name$ = RTRIM$(db_namebuf$)
-2530 carol_score# = CVD#(db_scorebuf$)
-2540 carol_name$ = "Carol Jones"
-2550 carol_score# = 88
-2560 ' db[...] = carol  (write back a let-bound record)
-2570 LSET db_idbuf$ = MKI%(carol_id%)
-2580 LSET db_namebuf$ = carol_name$
-2590 LSET db_scorebuf$ = MKD#(carol_score#)
-2600 PUT #1, 3
+2670 ' Carol changed her name and improved her score — the read-mutate-write
+2680 ' spelling of the same one-GET-one-PUT update, useful when the new values
+2690 ' aren't just a couple of literals.
+2700 ' let carol = db[...]  (whole-record read)
+2710 GET #1, 3
+2720 carolid% = CVI(dbIdBuf$)
+2730 carolnametrimi% = LEN(dbNameBuf$)
+2740 IF (carolnametrimi% > 0) = 0 THEN GOTO 2780
+2750 IF (MID$(dbNameBuf$, carolnametrimi%, 1) = " ") = 0 THEN GOTO 2780
+2760     carolnametrimi% = carolnametrimi% - 1
+2770     GOTO 2740
+2780 REM END WHILE
+2790 carolname$ = LEFT$(dbNameBuf$, carolnametrimi%)
+2800 carolscore# = CVD(dbScoreBuf$)
+2810 carolname$ = "Carol Jones"
+2820 carolscore# = 88
+2830 ' db[...] = carol  (write back a let-bound record)
+2840 LSET dbIdBuf$ = MKI$(carolid%)
+2850 LSET dbNameBuf$ = carolname$
+2860 LSET dbScoreBuf$ = MKD$(carolscore#)
+2870 PUT #1, 3
 
-2610 ' ---- Verify the updates ----
+2880 ' ---- Verify the updates ----
 
-2620 PRINT "Part 2 (record/file DSL) -- after updates:"
+2890 PRINT "Part 2 (record/file DSL) -- after updates:"
 
-2630 FOR i = 1 TO 3
-2640     ' let s = db[...]  (whole-record read)
-2650     GET #1, i
-2660     s_id% = CVI%(db_idbuf$)
-2670     s_name$ = RTRIM$(db_namebuf$)
-2680     s_score# = CVD#(db_scorebuf$)
-2690     PRINT (("  " + s_name$) + ": ") + STR$(s_score#)
-2700 NEXT i
+2900 FOR i = 1 TO 3
+2910     ' let s = db[...]  (whole-record read)
+2920     GET #1, i
+2930     sid% = CVI(dbIdBuf$)
+2940     snametrimi% = LEN(dbNameBuf$)
+2950     IF (snametrimi% > 0) = 0 THEN GOTO 2990
+2960     IF (MID$(dbNameBuf$, snametrimi%, 1) = " ") = 0 THEN GOTO 2990
+2970         snametrimi% = snametrimi% - 1
+2980         GOTO 2950
+2990     REM END WHILE
+3000     sname$ = LEFT$(dbNameBuf$, snametrimi%)
+3010     sscore# = CVD(dbScoreBuf$)
+3020     PRINT (("  " + sname$) + ": ") + STR$(sscore#)
+3030 NEXT i
 
-2710 ' db.close()
-2720 CLOSE #1
+3040 ' db.close()
+3050 CLOSE #1
 
-2730 ' ------------------------------------------------------------------------
-2740 ' Part 2 is the same three writes, the same reverse-order read, and the
-2750 ' same three updates as Part 1 — Alice's and Bob's and Carol's updates
-2760 ' still transpile to exactly one GET and one PUT each, nothing runs slower.
-2770 ' What's gone is everything that was bookkeeping rather than logic: the
-2780 ' hand-computed record width, the repeated buffer-variable/FIELD
-2790 ' boilerplate in every block, the pack/unpack call picked by hand per
-2800 ' field, and the GET-or-not decision for a partial write, which the
-2810 ' compiler now makes for you at compile time by simply comparing field
-2820 ' names -- get a field name wrong (`db[1] = ?{ nmae: ... }`) and it's a
-2830 ' compile error instead of a silently corrupted record.
-2840 ' ------------------------------------------------------------------------
+3060 ' ------------------------------------------------------------------------
+3070 ' Part 2 is the same three writes, the same reverse-order read, and the
+3080 ' same three updates as Part 1 — Alice's and Bob's and Carol's updates
+3090 ' still transpile to exactly one GET and one PUT each, nothing runs slower.
+3100 ' What's gone is everything that was bookkeeping rather than logic: the
+3110 ' hand-computed record width, the repeated buffer-variable/FIELD
+3120 ' boilerplate in every block, the pack/unpack call picked by hand per
+3130 ' field, and the GET-or-not decision for a partial write, which the
+3140 ' compiler now makes for you at compile time by simply comparing field
+3150 ' names -- get a field name wrong (`db[1] = ?{ nmae: ... }`) and it's a
+3160 ' compile error instead of a silently corrupted record.
+3170 ' ------------------------------------------------------------------------
 
-2850 END
+3180 END
+
+3190 ' function trimmed$(s$)
+3200     trimmedI0% = LEN(trimmedS0$)
+3210     IF (trimmedI0% > 0) = 0 THEN GOTO 3250
+3220     IF (MID$(trimmedS0$, trimmedI0%, 1) = " ") = 0 THEN GOTO 3250
+3230         trimmedI0% = trimmedI0% - 1
+3240         GOTO 3210
+3250     REM END WHILE
+3260     trimmedResult0$ = LEFT$(trimmedS0$, trimmedI0%)
+3270     RETURN
+3280 ' end function trimmed$

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use codegen::CodeGenerator;
 use diagnostics::Diagnostic;
-use lexer::Lexer;
+use lexer::{Lexer, TokenKind};
 use parser::Parser;
 
 #[derive(Debug, Clone)]
@@ -47,13 +47,15 @@ pub fn compile_source(
 ) -> Result<String, Vec<Diagnostic>> {
     let filename = filename.into();
     let program = parse_source(filename, source)?;
-    let program = records::lower(program)?;
+    let (program, synthesized_buffer_names) = records::lower(program)?;
     resolver::validate(&program)?;
     let conflicts = codegen::check_generated_name_conflicts(&program);
     if !conflicts.is_empty() {
         return Err(conflicts);
     }
-    CodeGenerator::new().generate(&program)
+    CodeGenerator::new()
+        .with_synthesized_buffer_names(synthesized_buffer_names)
+        .generate(&program)
 }
 
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
@@ -81,10 +83,11 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         // Suite file not found → compile without COMMON (silent; suite may not exist yet).
     }
 
-    let program = records::lower(program)?;
+    let (program, synthesized_buffer_names) = records::lower(program)?;
     resolver::validate(&program)?;
     CodeGenerator::new()
         .with_line_numbers(options.line_numbers)
+        .with_synthesized_buffer_names(synthesized_buffer_names)
         .generate(&program)
 }
 
@@ -94,8 +97,55 @@ pub fn default_output_path(input: &Path) -> std::path::PathBuf {
 
 fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diagnostic>> {
     let tokens = Lexer::new(&filename, source).lex();
+    reject_underscored_identifiers(&tokens)?;
     let mut parser = Parser::new(filename, tokens);
     parser.parse_program()
+}
+
+/// An identifier with an underscore is a syntax error on real MBASIC/BASCOM
+/// whenever it's read as an expression operand (it's only tolerated as an
+/// assignment target) -- discovered by compiling against a real BASCOM 2.00
+/// compiler. Since almost every variable gets read somewhere, and BASCAL
+/// can't safely rewrite a user's own chosen name, the underscore is rejected
+/// outright at parse time, with camelCase suggested as the fix -- matching
+/// the convention the compiler's own generated names already use.
+fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Diagnostic>> {
+    let diagnostics: Vec<Diagnostic> = tokens
+        .iter()
+        .filter_map(|token| match &token.kind {
+            TokenKind::Ident(name) if name.contains('_') => Some(Diagnostic::error(
+                token.pos.clone(),
+                format!(
+                    "identifier `{name}` contains an underscore, which real MBASIC/BASCOM \
+                     rejects as a syntax error wherever the name is read (not just assigned) -- \
+                     use camelCase instead (e.g. `{}`)",
+                    to_suggested_camel_case(name)
+                ),
+            )),
+            _ => None,
+        })
+        .collect();
+    if diagnostics.is_empty() {
+        Ok(())
+    } else {
+        Err(diagnostics)
+    }
+}
+
+fn to_suggested_camel_case(name: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = false;
+    for ch in name.chars() {
+        if ch == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.extend(ch.to_uppercase());
+            capitalize_next = false;
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 fn load_program_recursive(
@@ -378,12 +428,12 @@ END
                 .trim_start();
             !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
         }), "should not emit BASCOM end function declarations");
-        assert!(output.contains("add_left_0% = 10"));
-        assert!(output.contains("add_right_0% = 20"));
+        assert!(output.contains("addLeft0% = 10"));
+        assert!(output.contains("addRight0% = 20"));
         assert!(output.contains("GOSUB "));
-        assert!(output.contains("total% = add_result_0%"));
+        assert!(output.contains("total% = addResult0%"));
         assert!(!output.contains("FN_add"));
-        assert!(output.contains("add_result_0% = add_left_0% + add_right_0%"));
+        assert!(output.contains("addResult0% = addLeft0% + addRight0%"));
     }
 
     #[test]
@@ -397,11 +447,11 @@ END
 "#;
 
         let output = compile_source("double.bcl", source).expect("sample should compile");
-        assert!(output.contains("double_value_0% = 21"));
+        assert!(output.contains("doubleValue0% = 21"));
         assert!(output.contains("GOSUB "));
         assert!(!output.contains("FN_double"));
-        assert!(output.contains("answer% = double_result_0%"));
-        assert!(output.contains("double_result_0% = double_value_0% * 2"));
+        assert!(output.contains("answer% = doubleResult0%"));
+        assert!(output.contains("doubleResult0% = doubleValue0% * 2"));
     }
 
     #[test]
@@ -412,8 +462,8 @@ END
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));
-        assert!(output.contains("a$ = repeat_result_0$"));
-        assert!(output.contains("b$ = repeat_result_0$"));
+        assert!(output.contains("a$ = repeatResult0$"));
+        assert!(output.contains("b$ = repeatResult0$"));
     }
 
     #[test]
@@ -455,9 +505,11 @@ end
     fn function_local_const_declares_and_reads_the_same_lowered_name() {
         // A `const` declared inside a function/procedure body must be
         // renamed to its local BASIC name (like `dim`/assignment already
-        // are) so the CONST statement and every later read of it agree --
+        // are) so the assignment and every later read of it agree --
         // otherwise the declaration binds one name while reads resolve to a
-        // fresh, never-assigned local of a different name.
+        // fresh, never-assigned local of a different name. Real MBASIC/
+        // BASCOM has no CONST statement at all, so `const` always lowers to
+        // a plain assignment, never a CONST line.
         let source = r#"procedure show()
     const n% = 5
     print n%
@@ -467,10 +519,11 @@ show()
 end
 "#;
         let output = compile_source("const_local.bcl", source).expect("should compile");
-        assert!(output.contains("CONST show_n_0% = 5"), "unexpected CONST line:\n{output}");
+        assert!(!output.contains("CONST "), "CONST isn't valid on real MBASIC/BASCOM:\n{output}");
+        assert!(output.contains("showN0% = 5"), "unexpected const line:\n{output}");
         assert!(
-            output.contains("PRINT show_n_0%"),
-            "PRINT should read back the same local name the CONST line declared:\n{output}"
+            output.contains("PRINT showN0%"),
+            "PRINT should read back the same local name the const line declared:\n{output}"
         );
     }
 
@@ -519,10 +572,10 @@ END
         assert!(!output.contains("placeholder"));
         assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
         // sort_driver.bcl uses mixed-case `bubbleData%`; output normalises to lowercase.
-        assert!(output.lines().any(|l| l.contains("bubblesort_data_0%(") && l.contains(") = bubbledata%(")));
-        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesort_data_0%(")));
-        assert!(output.contains("bubblesort_data_0%(bubblesort_j_0%) = bubblesort_data_0%(bubblesort_j_0% + 1)"));
-        assert!(output.contains("quicksort_data_0%(quicksort_wall_0%) = quicksort_data_0%(quicksort_qhigh_0%)"));
+        assert!(output.lines().any(|l| l.contains("bubblesortData0%(") && l.contains(") = bubbledata%(")));
+        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesortData0%(")));
+        assert!(output.contains("bubblesortData0%(bubblesortJ0%) = bubblesortData0%(bubblesortJ0% + 1)"));
+        assert!(output.contains("quicksortData0%(quicksortWall0%) = quicksortData0%(quicksortQHigh0%)"));
         assert!(output.contains("GOSUB "));
     }
 
@@ -709,15 +762,17 @@ end
     fn record_file_declares_open_and_field() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains(r#"OPEN "tutorial_students.dat" FOR RANDOM AS #1 LEN = 30"#));
-        assert!(output.contains("FIELD #1, 2 AS db_idbuf$, 20 AS db_namebuf$, 8 AS db_scorebuf$"));
+        assert!(output.contains("FIELD #1, 2 AS dbIdBuf$, 20 AS dbNameBuf$, 8 AS dbScoreBuf$"));
     }
 
     #[test]
     fn record_whole_write_lowers_to_lset_and_put() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
-        assert!(output.contains("LSET db_idbuf$ = MKI%(1)"));
-        assert!(output.contains(r#"LSET db_namebuf$ = "Alice""#));
-        assert!(output.contains("LSET db_scorebuf$ = MKD#(95)"));
+        // MKI$/MKL$/MKS$/MKD$ always return a string -- a destination-type
+        // suffix like MKI% or MKD# isn't a real MBASIC/BASCOM function.
+        assert!(output.contains("LSET dbIdBuf$ = MKI$(1)"));
+        assert!(output.contains(r#"LSET dbNameBuf$ = "Alice""#));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(95)"));
         assert!(output.contains("PUT #1, 1"));
     }
 
@@ -725,27 +780,35 @@ end
     fn record_whole_read_lowers_to_get_and_unpack() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains("GET #1, i"));
-        assert!(output.contains("s_id% = CVI%(db_idbuf$)"));
-        assert!(output.contains("s_name$ = RTRIM$(db_namebuf$)"));
-        assert!(output.contains("s_score# = CVD#(db_scorebuf$)"));
+        // CVI/CVL/CVS/CVD take no suffix at all on real MBASIC/BASCOM.
+        assert!(output.contains("sid% = CVI(dbIdBuf$)"));
+        // RTRIM$ isn't a real MBASIC/BASCOM builtin either -- string fields
+        // are unpacked through an inline LEN/MID$/LEFT$ trim loop instead.
+        assert!(
+            output.contains("snametrimi% = LEN(dbNameBuf$)"),
+            "string field unpacking should trim inline, not call RTRIM$:\n{output}"
+        );
+        assert!(!output.to_ascii_uppercase().contains("RTRIM$"), "RTRIM$ isn't valid on real MBASIC/BASCOM:\n{output}");
+        assert!(output.contains("sname$ = LEFT$(dbNameBuf$, snametrimi%)"));
+        assert!(output.contains("sscore# = CVD(dbScoreBuf$)"));
     }
 
     #[test]
     fn record_dotted_field_access_resolves_to_unpacked_scalar() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         // s.name is already a string — must not be STR$()-wrapped.
-        assert!(output.contains("+ s_name$"));
-        assert!(!output.contains("STR$(s_name$)"));
+        assert!(output.contains("+ sname$"));
+        assert!(!output.contains("STR$(sname$)"));
         // s.id / s.score are numeric and combined with strings via `+` — must be wrapped.
-        assert!(output.contains("STR$(s_id%)"));
-        assert!(output.contains("STR$(s_score#)"));
+        assert!(output.contains("STR$(sid%)"));
+        assert!(output.contains("STR$(sscore#)"));
     }
 
     #[test]
     fn record_partial_update_lowers_to_get_lset_put() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains("GET #1, 2"));
-        assert!(output.contains("LSET db_scorebuf$ = MKD#(61.5)"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(61.5)"));
         assert!(output.contains("PUT #1, 2"));
     }
 
@@ -784,24 +847,27 @@ end
 "#;
         let output = compile_source("probe.bcl", source).expect("should compile");
         assert!(
-            output.contains("FIELD #1, 10 AS items_namebuf$, 2 AS items_qtybuf$"),
+            output.contains("FIELD #1, 10 AS itemsNameBuf$, 2 AS itemsQtyBuf$"),
             "unexpected FIELD line:\n{output}"
         );
         assert!(
-            output.contains("LSET items_namebuf$ = "),
+            output.contains("LSET itemsNameBuf$ = "),
             "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
         );
         assert!(
-            output.contains("LSET items_qtybuf$ = "),
+            output.contains("LSET itemsQtyBuf$ = "),
             "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
         );
         assert!(
-            output.contains("RTRIM$(items_namebuf$)") && output.contains("CVI%(items_qtybuf$)"),
+            // RTRIM$ isn't a real MBASIC/BASCOM builtin -- string fields are
+            // unpacked through an inline LEN/MID$/LEFT$ trim loop instead,
+            // and CVI/CVL/CVS/CVD take no suffix at all.
+            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(
-            !output.contains("additem_items_namebuf")
-                && !output.contains("showitem_items_namebuf"),
+            !output.contains("additemItemsNameBuf")
+                && !output.contains("showitemItemsNameBuf"),
             "FIELD buffer names must never be re-namespaced per procedure:\n{output}"
         );
     }
@@ -859,11 +925,11 @@ end
         let output = compile_source("batch.bcl", source).expect("should compile");
         assert_eq!(output.matches("GET #1").count(), 1, "exactly one GET for the whole batch");
         assert_eq!(output.matches("PUT #1").count(), 1, "exactly one PUT for the whole batch");
-        assert!(output.contains(r#"s_name$ = "Alicia""#), "field mutation is a plain in-memory assignment");
-        assert!(output.contains("s_score# = 99"), "field mutation is a plain in-memory assignment");
-        assert!(output.contains("LSET db_idbuf$ = MKI%(s_id%)"));
-        assert!(output.contains("LSET db_namebuf$ = s_name$"));
-        assert!(output.contains("LSET db_scorebuf$ = MKD#(s_score#)"));
+        assert!(output.contains(r#"sname$ = "Alicia""#), "field mutation is a plain in-memory assignment");
+        assert!(output.contains("sscore# = 99"), "field mutation is a plain in-memory assignment");
+        assert!(output.contains("LSET dbIdBuf$ = MKI$(sid%)"));
+        assert!(output.contains("LSET dbNameBuf$ = sname$"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(sscore#)"));
     }
 
     #[test]
@@ -900,9 +966,9 @@ end
 "#;
         let output = compile_source("partial.bcl", source).expect("should compile");
         assert!(output.contains("GET #1, 2"), "partial write covering only some fields needs a GET");
-        assert!(output.contains("LSET db_scorebuf$ = MKD#(61.5)"));
-        assert!(!output.contains("LSET db_idbuf$"), "unmentioned fields must not be LSET");
-        assert!(!output.contains("LSET db_namebuf$"), "unmentioned fields must not be LSET");
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(61.5)"));
+        assert!(!output.contains("LSET dbIdBuf$"), "unmentioned fields must not be LSET");
+        assert!(!output.contains("LSET dbNameBuf$"), "unmentioned fields must not be LSET");
         assert!(output.contains("PUT #1, 2"));
     }
 
@@ -921,9 +987,9 @@ end
 "#;
         let output = compile_source("partial_full.bcl", source).expect("should compile");
         assert!(!output.contains("GET #1"), "covering every field needs no GET");
-        assert!(output.contains("LSET db_idbuf$ = MKI%(3)"));
-        assert!(output.contains("LSET db_namebuf$ = \"Carol\""));
-        assert!(output.contains("LSET db_scorebuf$ = MKD#(78)"));
+        assert!(output.contains("LSET dbIdBuf$ = MKI$(3)"));
+        assert!(output.contains("LSET dbNameBuf$ = \"Carol\""));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(78)"));
         assert!(output.contains("PUT #1, 3"));
     }
 
@@ -1433,35 +1499,35 @@ end
 
     #[test]
     fn local_names_always_use_indexed_scheme() {
-        // All params, results, and locals always get an indexed suffix (_0, _1, …)
+        // All params, results, and locals always get an indexed suffix (0, 1, …)
         // so they can never silently collide with a bare global name.
-        // Global `foo_x%` must be distinct from parameter `x%` in function `foo%`.
+        // Global `fooX%` must be distinct from parameter `x%` in function `foo%`.
         let source = r#"
-foo_x% = 99
+fooX% = 99
 function foo%(x%)
-  global foo_x%
-  return x% + foo_x%
+  global fooX%
+  return x% + fooX%
 end function
 print foo%(1)
 end
 "#;
         let output = compile_source("collision.bcl", source).expect("should compile");
-        // Global must appear as-is.
-        assert!(output.contains("foo_x%"), "global foo_x% must be present");
-        // Parameter x% must be lowered to an indexed name, never the bare foo_x%.
-        assert!(output.contains("foo_x_0%"), "param x% must use indexed name foo_x_0%");
-        // The two names must be distinct — no line should assign foo_x% from foo_x%.
-        assert!(!output.contains("foo_x% = foo_x%"), "names must not collide");
+        // Global is normalized to lowercase, as usual for top-level names.
+        assert!(output.contains("foox%"), "global fooX% must be present (lowercased)");
+        // Parameter x% must be lowered to an indexed name, never the bare foox%.
+        assert!(output.contains("fooX0%"), "param x% must use indexed name fooX0%");
+        // The two names must be distinct — no line should assign foox% from foox%.
+        assert!(!output.contains("foox% = foox%"), "names must not collide");
     }
 
     // ── generated-name conflict detection ─────────────────────────────────
 
     #[test]
     fn global_matching_generated_param_name_is_an_error() {
-        // foo_x_0% is exactly what the compiler would generate for param x% in foo%.
+        // fooX0% is exactly what the compiler would generate for param x% in foo%.
         // Declaring it as a global must be rejected.
         let source = r#"
-foo_x_0% = 99
+fooX0% = 99
 function foo%(x%)
   return x% + 1
 end function
@@ -1471,16 +1537,16 @@ end
         let err = compile_source("conflict_param.bcl", source)
             .expect_err("should reject global that conflicts with generated param name");
         assert!(
-            err.iter().any(|d| d.message.contains("foo_x_0%")),
+            err.iter().any(|d| d.message.contains("fooX0%")),
             "error must name the conflicting global: {:?}", err
         );
     }
 
     #[test]
     fn global_matching_generated_result_name_is_an_error() {
-        // foo_result_0% is what the compiler generates for the result variable of foo%.
+        // fooResult0% is what the compiler generates for the result variable of foo%.
         let source = r#"
-foo_result_0% = 0
+fooResult0% = 0
 function foo%(n%)
   return n% * 2
 end function
@@ -1490,16 +1556,16 @@ end
         let err = compile_source("conflict_result.bcl", source)
             .expect_err("should reject global that conflicts with generated result name");
         assert!(
-            err.iter().any(|d| d.message.contains("foo_result_0%")),
+            err.iter().any(|d| d.message.contains("fooResult0%")),
             "error must name the conflicting global: {:?}", err
         );
     }
 
     #[test]
     fn global_matching_generated_local_name_is_an_error() {
-        // foo_acc_0% is what the compiler would generate for local acc% inside foo%.
+        // fooAcc0% is what the compiler would generate for local acc% inside foo%.
         let source = r#"
-foo_acc_0% = 0
+fooAcc0% = 0
 function foo%(n%)
   acc% = 0
   acc% = acc% + n%
@@ -1511,7 +1577,7 @@ end
         let err = compile_source("conflict_local.bcl", source)
             .expect_err("should reject global that conflicts with generated local name");
         assert!(
-            err.iter().any(|d| d.message.contains("foo_acc_0%")),
+            err.iter().any(|d| d.message.contains("fooAcc0%")),
             "error must name the conflicting global: {:?}", err
         );
     }
@@ -1535,11 +1601,11 @@ end
 "#;
         let output = compile_source("byval_array.bcl", source).expect("should compile");
         assert!(
-            output.contains("zeroout_arr_0%(") && output.contains(") = data%("),
+            output.contains("zerooutArr0%(") && output.contains(") = data%("),
             "byval should still copy the array in:\n{output}"
         );
         assert!(
-            !output.lines().any(|l| l.contains("data%(") && l.contains(") = zeroout_arr_0%(")),
+            !output.lines().any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
             "byval must not copy the array back out:\n{output}"
         );
     }
@@ -1560,11 +1626,11 @@ end
 "#;
         let output = compile_source("byref_array.bcl", source).expect("should compile");
         assert!(
-            output.contains("zeroout_arr_0%(") && output.contains(") = data%("),
+            output.contains("zerooutArr0%(") && output.contains(") = data%("),
             "byref should still copy the array in:\n{output}"
         );
         assert!(
-            output.lines().any(|l| l.contains("data%(") && l.contains(") = zeroout_arr_0%(")),
+            output.lines().any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
             "byref must copy the array back out:\n{output}"
         );
     }
@@ -1583,7 +1649,7 @@ end
 "#;
         let output = compile_source("byref_scalar.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| l.trim() == "x% = increment_n_0%"),
+            output.lines().any(|l| l.trim() == "x% = incrementN0%"),
             "byref scalar must write its result back to the caller's variable:\n{output}"
         );
     }
@@ -1603,7 +1669,7 @@ end
 "#;
         let output = compile_source("byval_scalar.bcl", source).expect("should compile");
         assert!(
-            !output.lines().any(|l| l.trim() == "x% = increment_n_0%"),
+            !output.lines().any(|l| l.trim() == "x% = incrementN0%"),
             "byval scalar must not write back to the caller's variable:\n{output}"
         );
     }
@@ -1667,23 +1733,23 @@ end
 "#;
         let output = compile_source("multidim_2d.bcl", source).expect("should compile");
         assert!(
-            output.contains("sumgrid_grid_dim0_0% = 2") && output.contains("sumgrid_grid_dim1_0% = 2"),
+            output.contains("sumgridGridDim00% = 2") && output.contains("sumgridGridDim10% = 2"),
             "the caller should auto-inject g%'s real DIM bounds:\n{output}"
         );
         assert!(
-            output.contains("DIM sumgrid_grid_0%(2, 2)"),
+            output.contains("DIM sumgridGrid0%(2, 2)"),
             "parameter storage should be DIMed once, at top-level, with both axes' resolved \
              capacity:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
-                l.trim() == "sumgrid_grid_0%(BCC_T1%, BCC_T2%) = g%(BCC_T1%, BCC_T2%)"
+                l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)"
             }),
             "copy-in should use two indices on both sides:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
-                l.trim() == "g%(BCC_T3%, BCC_T4%) = sumgrid_grid_0%(BCC_T3%, BCC_T4%)"
+                l.trim() == "g%(BCCT3%, BCCT4%) = sumgridGrid0%(BCCT3%, BCCT4%)"
             }),
             "byref copy-out should use two indices on both sides:\n{output}"
         );
@@ -1694,7 +1760,7 @@ end
         // mangled storage name, so reads/writes inside the function body
         // silently touched the wrong (nonexistent) variable.
         assert!(
-            output.contains("sumgrid_grid_0%(sumgrid_r_0%, sumgrid_c_0%)"),
+            output.contains("sumgridGrid0%(sumgridR0%, sumgridC0%)"),
             "reading the array parameter inside the body must use its mangled storage name, \
              not the raw source name:\n{output}"
         );
@@ -1718,11 +1784,11 @@ end
 "#;
         let output = compile_source("multidim_local.bcl", source).expect("should compile");
         assert!(
-            output.contains("fillgrid_grid_0%(1, 1) = fillgrid_n_0%"),
+            output.contains("fillgridGrid0%(1, 1) = fillgridN0%"),
             "writing a local 2-D array must use its mangled storage name:\n{output}"
         );
         assert!(
-            output.contains("fillgrid_result_0% = fillgrid_grid_0%(1, 1)"),
+            output.contains("fillgridResult0% = fillgridGrid0%(1, 1)"),
             "reading a local 2-D array must use its mangled storage name:\n{output}"
         );
     }
@@ -1748,14 +1814,14 @@ end
 "#;
         let output = compile_source("multidim_3d.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumcube_cube_0%(1, 1, 1)"),
+            output.contains("DIM sumcubeCube0%(1, 1, 1)"),
             "parameter storage should be DIMed once, at top-level, with all three axes' \
              resolved capacity:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
                 l.trim()
-                    == "sumcube_cube_0%(BCC_T1%, BCC_T2%, BCC_T3%) = cube%(BCC_T1%, BCC_T2%, BCC_T3%)"
+                    == "sumcubeCube0%(BCCT1%, BCCT2%, BCCT3%) = cube%(BCCT1%, BCCT2%, BCCT3%)"
             }),
             "copy-in should use three indices on both sides:\n{output}"
         );
@@ -1860,12 +1926,12 @@ end
 "#;
         let output = compile_source("bare_ident_call.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumgrid_grid_0%(2, 2)"),
+            output.contains("DIM sumgridGrid0%(2, 2)"),
             "bare identifier array argument should still generate correct copy-in/copy-out:\n{output}"
         );
         assert!(
             output.lines().any(|l| {
-                l.trim() == "sumgrid_grid_0%(BCC_T1%, BCC_T2%) = g%(BCC_T1%, BCC_T2%)"
+                l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)"
             }),
             "copy-in should read from g%, the bare identifier, not require g%():\n{output}"
         );
@@ -1973,15 +2039,15 @@ end
 "#;
         let output = compile_source("sizeof_frozen.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| l.trim().starts_with("BCC_T") && l.contains("= n%")),
+            output.lines().any(|l| l.trim().starts_with("BCCT") && l.contains("= n%")),
             "a non-literal bound should be captured into a temp right at DIM time:\n{output}"
         );
         assert!(
-            output.contains("PRINT BCC_T1%"),
+            output.contains("PRINT BCCT1%"),
             "sizeof should read back the frozen temp, not the live variable:\n{output}"
         );
         // The frozen capture must appear before the later reassignment.
-        let capture_pos = output.find("BCC_T1% = n%").unwrap();
+        let capture_pos = output.find("BCCT1% = n%").unwrap();
         let reassign_pos = output.find("n% = 99").unwrap();
         assert!(capture_pos < reassign_pos, "must freeze before n% is reassigned:\n{output}");
     }
@@ -2010,17 +2076,17 @@ end
 "#;
         let output = compile_source("sizeof_param.bcl", source).expect("should compile");
         assert!(
-            output.contains("TO sumgrid_grid_dim0_0% - 1"),
+            output.contains("TO sumgridGridDim00% - 1"),
             "sizeof(grid%, 0) inside the body should read the auto-injected bound variable \
              directly:\n{output}"
         );
         assert!(
-            output.contains("TO sumgrid_grid_dim1_0% - 1"),
+            output.contains("TO sumgridGridDim10% - 1"),
             "sizeof(grid%, 1) inside the body should read the auto-injected bound variable \
              directly:\n{output}"
         );
         assert!(
-            output.contains("sumgrid_grid_dim0_0% = 2") && output.contains("sumgrid_grid_dim1_0% = 2"),
+            output.contains("sumgridGridDim00% = 2") && output.contains("sumgridGridDim10% = 2"),
             "the call site should auto-inject g%'s real DIM bounds, with no manually written \
              count argument:\n{output}"
         );
@@ -2078,7 +2144,7 @@ end
         let source = "dim data%(9)\nprint data%(0)\nend\n";
         let output = compile_source("literal_bound.bcl", source).expect("should compile");
         assert!(
-            !output.contains("BCC_T"),
+            !output.contains("BCCT"),
             "a literal-bounded array must not generate a frozen temp:\n{output}"
         );
         assert!(output.contains("DIM data%(9)"));
@@ -2094,7 +2160,7 @@ end
         let source = "n% = 5\ndim data%(n%)\nprint data%(0)\nend\n";
         let output = compile_source("non_literal_bound.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| l.trim() == "BCC_T1% = n%"),
+            output.lines().any(|l| l.trim() == "BCCT1% = n%"),
             "a non-literal bound must be frozen into a temp at DIM time, unconditionally:\n{output}"
         );
         assert!(output.contains("DIM data%(n%)"));
@@ -2121,7 +2187,7 @@ end
 "#;
         let output = compile_source("capacity_max.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumarr_arr_0%(9)"),
+            output.contains("DIM sumarrArr0%(9)"),
             "storage should be sized to the largest array ever passed, not the first call \
              site:\n{output}"
         );
@@ -2145,7 +2211,7 @@ end
 "#;
         let output = compile_source("capacity_const.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM sumarr_arr_0%(6)"),
+            output.contains("DIM sumarrArr0%(6)"),
             "a const-bounded DIM should still resolve to a concrete literal capacity, even \
              though its own DIM statement isn't a bare literal:\n{output}"
         );
@@ -2172,7 +2238,7 @@ end
 "#;
         let output = compile_source("capacity_forward.bcl", source).expect("should compile");
         assert!(
-            output.contains("DIM inner_arr_0%(7)") && output.contains("DIM outer_arr_0%(7)"),
+            output.contains("DIM innerArr0%(7)") && output.contains("DIM outerArr0%(7)"),
             "capacity should propagate through a forwarded array parameter:\n{output}"
         );
     }
@@ -2225,7 +2291,7 @@ end
         let output =
             compile_source("capacity_explicit.bcl", source).expect("explicit capacity should compile");
         assert!(
-            output.contains("DIM sumarr_arr_0%(100)"),
+            output.contains("DIM sumarrArr0%(100)"),
             "an explicit literal capacity should be used as-is, once, at top-level:\n{output}"
         );
     }
@@ -2291,13 +2357,13 @@ end
         let output = compile_source("capacity_runtime_check.bcl", source).expect("should compile");
         assert!(
             output.lines().any(|l| {
-                l.contains("IF sumarr_arr_dim0_0% > 9 THEN PRINT")
+                l.contains("IF sumarrArrDim00% > 9 THEN PRINT")
                     && l.contains("STOP")
             }),
             "every call site should runtime-check the actual size against the resolved \
              capacity, as a backstop regardless of compile-time inference:\n{output}"
         );
-        let check_pos = output.find("IF sumarr_arr_dim0_0% > 9 THEN").unwrap();
+        let check_pos = output.find("IF sumarrArrDim00% > 9 THEN").unwrap();
         let copy_pos = output.find("copy array argument into transpiled function storage").unwrap();
         assert!(check_pos < copy_pos, "the runtime check must run before the copy-in loop:\n{output}");
     }
@@ -2320,7 +2386,7 @@ dummy% = printArr%(data%)
 end
 "#;
         let output = compile_source("capacity_dim_once.bcl", source).expect("should compile");
-        let dim_count = output.lines().filter(|l| l.trim().starts_with("DIM printarr_arr_0%")).count();
+        let dim_count = output.lines().filter(|l| l.trim().starts_with("DIM printarrArr0%")).count();
         assert_eq!(
             dim_count, 1,
             "storage must be DIMed exactly once regardless of call count:\n{output}"

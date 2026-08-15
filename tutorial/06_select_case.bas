@@ -17,13 +17,13 @@
 150 ' Integer select: convert numeric score to letter grade
 160 score% = 85
 
-170 BCC_T2% = score%
-180 IF (BCC_T2% = 100) <> 0 THEN GOTO 250
-190 IF (BCC_T2% >= 90 AND BCC_T2% <= 99) <> 0 THEN GOTO 270
-200 IF (BCC_T2% >= 80 AND BCC_T2% <= 89) <> 0 THEN GOTO 290
-210 IF (BCC_T2% >= 70 AND BCC_T2% <= 79) <> 0 THEN GOTO 310
-220 IF (BCC_T2% >= 60 AND BCC_T2% <= 69) <> 0 THEN GOTO 330
-230 IF (BCC_T2% >= 0) <> 0 THEN GOTO 350
+170 BCCT2% = score%
+180 IF (BCCT2% = 100) <> 0 THEN GOTO 250
+190 IF (BCCT2% >= 90 AND BCCT2% <= 99) <> 0 THEN GOTO 270
+200 IF (BCCT2% >= 80 AND BCCT2% <= 89) <> 0 THEN GOTO 290
+210 IF (BCCT2% >= 70 AND BCCT2% <= 79) <> 0 THEN GOTO 310
+220 IF (BCCT2% >= 60 AND BCCT2% <= 69) <> 0 THEN GOTO 330
+230 IF (BCCT2% >= 0) <> 0 THEN GOTO 350
 240 GOTO 370
 250     PRINT "Perfect!"
 260     GOTO 380
@@ -43,9 +43,9 @@
 390 ' String select: day-of-week classification
 400 day$ = "Saturday"
 
-410 BCC_T4$ = day$
-420 IF (BCC_T4$ = "Monday" OR BCC_T4$ = "Tuesday" OR BCC_T4$ = "Wednesday" OR BCC_T4$ = "Thursday" OR BCC_T4$ = "Friday") <> 0 THEN GOTO 450
-430 IF (BCC_T4$ = "Saturday" OR BCC_T4$ = "Sunday") <> 0 THEN GOTO 470
+410 BCCT4$ = day$
+420 IF (BCCT4$ = "Monday" OR BCCT4$ = "Tuesday" OR BCCT4$ = "Wednesday" OR BCCT4$ = "Thursday" OR BCCT4$ = "Friday") <> 0 THEN GOTO 450
+430 IF (BCCT4$ = "Saturday" OR BCCT4$ = "Sunday") <> 0 THEN GOTO 470
 440 GOTO 490
 450     PRINT day$ + " is a weekday"
 460     GOTO 500
@@ -57,11 +57,11 @@
 510 ' IS comparisons on temperature
 520 temp% = -3
 
-530 BCC_T6% = temp%
-540 IF (BCC_T6% < 0) <> 0 THEN GOTO 590
-550 IF (BCC_T6% < 10) <> 0 THEN GOTO 610
-560 IF (BCC_T6% < 20) <> 0 THEN GOTO 630
-570 IF (BCC_T6% < 30) <> 0 THEN GOTO 650
+530 BCCT6% = temp%
+540 IF (BCCT6% < 0) <> 0 THEN GOTO 590
+550 IF (BCCT6% < 10) <> 0 THEN GOTO 610
+560 IF (BCCT6% < 20) <> 0 THEN GOTO 630
+570 IF (BCCT6% < 30) <> 0 THEN GOTO 650
 580 GOTO 670
 590     PRINT "Below freezing ("; temp%; "°)"
 600     GOTO 680
@@ -77,10 +77,10 @@
 690 ' Multi-value list on a menu choice
 700 choice% = 2
 
-710 BCC_T8% = choice%
-720 IF (BCC_T8% = 1) <> 0 THEN GOTO 760
-730 IF (BCC_T8% = 2 OR BCC_T8% = 3) <> 0 THEN GOTO 780
-740 IF (BCC_T8% = 4) <> 0 THEN GOTO 800
+710 BCCT8% = choice%
+720 IF (BCCT8% = 1) <> 0 THEN GOTO 760
+730 IF (BCCT8% = 2 OR BCCT8% = 3) <> 0 THEN GOTO 780
+740 IF (BCCT8% = 4) <> 0 THEN GOTO 800
 750 GOTO 820
 760     PRINT "New game"
 770     GOTO 830

@@ -2,10 +2,10 @@
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Storage for array parameters, sized to fit every call site
-40 DIM mean_data_0%(8)
-50 DIM maximum_data_0%(8)
-60 DIM minimum_data_0%(8)
-70 DIM rangeof_data_0%(8)
+40 DIM meanData0%(8)
+50 DIM maximumData0%(8)
+60 DIM minimumData0%(8)
+70 DIM rangeofData0%(8)
 
 80 ' stats.bcl — basic statistics library for the BASCAL tutorial.
 90 ' Loaded by tutorial/12_require.bcl via:
@@ -38,9 +38,9 @@
 320 ' The -L flag adds tutorial/lib/ to the search path so that
 330 ' require stats   resolves to  tutorial/lib/stats.bcl
 
-340 CONST n% = 8
+340 n% = 8
 350 DIM scores%(n%)
-360 BCC_T1% = n%
+360 BCCT1% = n%
 
 370 scores%(0) = 74
 380 scores%(1) = 91
@@ -52,104 +52,104 @@
 440 scores%(7) = 84
 
 450 PRINT "Scores: 74 91 63 88 55 97 72 84"
-460 mean_data_dim0_0% = BCC_T1%
-470 IF mean_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `mean!` needs "; mean_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+460 meanDataDim00% = BCCT1%
+470 IF meanDataDim00% > 8 THEN PRINT "runtime error: `data%` of `mean!` needs "; meanDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-480 ' copy array argument into transpiled function storage: scores%() -> mean_data_0%()
-490 FOR BCC_T2% = 1 TO mean_data_dim0_0%
-500     mean_data_0%(BCC_T2%) = scores%(BCC_T2%)
-510 NEXT BCC_T2%
+480 ' copy array argument into transpiled function storage: scores%() -> meanData0%()
+490 FOR BCCT2% = 1 TO meanDataDim00%
+500     meanData0%(BCCT2%) = scores%(BCCT2%)
+510 NEXT BCCT2%
 
 520 GOSUB 800
-530 PRINT "Mean:   " + STR$(mean_result_0!)
-540 maximum_data_dim0_0% = BCC_T1%
-550 IF maximum_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `maximum%` needs "; maximum_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+530 PRINT "Mean:   " + STR$(meanResult0!)
+540 maximumDataDim00% = BCCT1%
+550 IF maximumDataDim00% > 8 THEN PRINT "runtime error: `data%` of `maximum%` needs "; maximumDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-560 ' copy array argument into transpiled function storage: scores%() -> maximum_data_0%()
-570 FOR BCC_T3% = 1 TO maximum_data_dim0_0%
-580     maximum_data_0%(BCC_T3%) = scores%(BCC_T3%)
-590 NEXT BCC_T3%
+560 ' copy array argument into transpiled function storage: scores%() -> maximumData0%()
+570 FOR BCCT3% = 1 TO maximumDataDim00%
+580     maximumData0%(BCCT3%) = scores%(BCCT3%)
+590 NEXT BCCT3%
 
 600 GOSUB 900
-610 PRINT "Max:    " + STR$(maximum_result_0%)
-620 minimum_data_dim0_0% = BCC_T1%
-630 IF minimum_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `minimum%` needs "; minimum_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+610 PRINT "Max:    " + STR$(maximumResult0%)
+620 minimumDataDim00% = BCCT1%
+630 IF minimumDataDim00% > 8 THEN PRINT "runtime error: `data%` of `minimum%` needs "; minimumDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-640 ' copy array argument into transpiled function storage: scores%() -> minimum_data_0%()
-650 FOR BCC_T4% = 1 TO minimum_data_dim0_0%
-660     minimum_data_0%(BCC_T4%) = scores%(BCC_T4%)
-670 NEXT BCC_T4%
+640 ' copy array argument into transpiled function storage: scores%() -> minimumData0%()
+650 FOR BCCT4% = 1 TO minimumDataDim00%
+660     minimumData0%(BCCT4%) = scores%(BCCT4%)
+670 NEXT BCCT4%
 
 680 GOSUB 1010
-690 PRINT "Min:    " + STR$(minimum_result_0%)
-700 rangeof_data_dim0_0% = BCC_T1%
-710 IF rangeof_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `rangeOf%` needs "; rangeof_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+690 PRINT "Min:    " + STR$(minimumResult0%)
+700 rangeofDataDim00% = BCCT1%
+710 IF rangeofDataDim00% > 8 THEN PRINT "runtime error: `data%` of `rangeOf%` needs "; rangeofDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-720 ' copy array argument into transpiled function storage: scores%() -> rangeof_data_0%()
-730 FOR BCC_T5% = 1 TO rangeof_data_dim0_0%
-740     rangeof_data_0%(BCC_T5%) = scores%(BCC_T5%)
-750 NEXT BCC_T5%
+720 ' copy array argument into transpiled function storage: scores%() -> rangeofData0%()
+730 FOR BCCT5% = 1 TO rangeofDataDim00%
+740     rangeofData0%(BCCT5%) = scores%(BCCT5%)
+750 NEXT BCCT5%
 
 760 GOSUB 1120
-770 PRINT "Range:  " + STR$(rangeof_result_0%)
+770 PRINT "Range:  " + STR$(rangeofResult0%)
 
 780 END
 
 790 ' function mean!(data%)
 800     ' Arithmetic mean of data%(0..sizeof(data%)-1).
-810     mean_sum_0% = 0
-820     mean_count_0% = mean_data_dim0_0%
-830     FOR mean_i_0% = 0 TO mean_count_0% - 1
-840         mean_sum_0% = mean_sum_0% + mean_data_0%(mean_i_0%)
-850     NEXT mean_i_0%
-860     mean_result_0! = mean_sum_0% / mean_count_0%
+810     meanSum0% = 0
+820     meanCount0% = meanDataDim00%
+830     FOR meanI0% = 0 TO meanCount0% - 1
+840         meanSum0% = meanSum0% + meanData0%(meanI0%)
+850     NEXT meanI0%
+860     meanResult0! = meanSum0% / meanCount0%
 870     RETURN
 880 ' end function mean!
 
 890 ' function maximum%(data%)
 900     ' Largest element in data%(0..sizeof(data%)-1).
-910     maximum_best_0% = maximum_data_0%(0)
-920     FOR maximum_i_0% = 1 TO maximum_data_dim0_0% - 1
-930         IF (maximum_data_0%(maximum_i_0%) > maximum_best_0%) = 0 THEN GOTO 950
-940             maximum_best_0% = maximum_data_0%(maximum_i_0%)
+910     maximumBest0% = maximumData0%(0)
+920     FOR maximumI0% = 1 TO maximumDataDim00% - 1
+930         IF (maximumData0%(maximumI0%) > maximumBest0%) = 0 THEN GOTO 950
+940             maximumBest0% = maximumData0%(maximumI0%)
 950         REM END IF
-960     NEXT maximum_i_0%
-970     maximum_result_0% = maximum_best_0%
+960     NEXT maximumI0%
+970     maximumResult0% = maximumBest0%
 980     RETURN
 990 ' end function maximum%
 
 1000 ' function minimum%(data%)
 1010     ' Smallest element in data%(0..sizeof(data%)-1).
-1020     minimum_best_0% = minimum_data_0%(0)
-1030     FOR minimum_i_0% = 1 TO minimum_data_dim0_0% - 1
-1040         IF (minimum_data_0%(minimum_i_0%) < minimum_best_0%) = 0 THEN GOTO 1060
-1050             minimum_best_0% = minimum_data_0%(minimum_i_0%)
+1020     minimumBest0% = minimumData0%(0)
+1030     FOR minimumI0% = 1 TO minimumDataDim00% - 1
+1040         IF (minimumData0%(minimumI0%) < minimumBest0%) = 0 THEN GOTO 1060
+1050             minimumBest0% = minimumData0%(minimumI0%)
 1060         REM END IF
-1070     NEXT minimum_i_0%
-1080     minimum_result_0% = minimum_best_0%
+1070     NEXT minimumI0%
+1080     minimumResult0% = minimumBest0%
 1090     RETURN
 1100 ' end function minimum%
 
 1110 ' function rangeof%(data%)
 1120     ' Difference between maximum and minimum.
-1130     maximum_data_dim0_0% = rangeof_data_dim0_0%
-1140     IF maximum_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `maximum%` needs "; maximum_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+1130     maximumDataDim00% = rangeofDataDim00%
+1140     IF maximumDataDim00% > 8 THEN PRINT "runtime error: `data%` of `maximum%` needs "; maximumDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-1150     ' copy array argument into transpiled function storage: rangeof_data_0%() -> maximum_data_0%()
-1160     FOR BCC_T8% = 1 TO maximum_data_dim0_0%
-1170         maximum_data_0%(BCC_T8%) = rangeof_data_0%(BCC_T8%)
-1180     NEXT BCC_T8%
+1150     ' copy array argument into transpiled function storage: rangeofData0%() -> maximumData0%()
+1160     FOR BCCT8% = 1 TO maximumDataDim00%
+1170         maximumData0%(BCCT8%) = rangeofData0%(BCCT8%)
+1180     NEXT BCCT8%
 
 1190     GOSUB 900
-1200     minimum_data_dim0_0% = rangeof_data_dim0_0%
-1210     IF minimum_data_dim0_0% > 8 THEN PRINT "runtime error: `data%` of `minimum%` needs "; minimum_data_dim0_0%; " elements along axis 0, but its storage only holds 8" : STOP
+1200     minimumDataDim00% = rangeofDataDim00%
+1210     IF minimumDataDim00% > 8 THEN PRINT "runtime error: `data%` of `minimum%` needs "; minimumDataDim00%; " elements along axis 0, but its storage only holds 8" : STOP
 
-1220     ' copy array argument into transpiled function storage: rangeof_data_0%() -> minimum_data_0%()
-1230     FOR BCC_T9% = 1 TO minimum_data_dim0_0%
-1240         minimum_data_0%(BCC_T9%) = rangeof_data_0%(BCC_T9%)
-1250     NEXT BCC_T9%
+1220     ' copy array argument into transpiled function storage: rangeofData0%() -> minimumData0%()
+1230     FOR BCCT9% = 1 TO minimumDataDim00%
+1240         minimumData0%(BCCT9%) = rangeofData0%(BCCT9%)
+1250     NEXT BCCT9%
 
 1260     GOSUB 1010
-1270     rangeof_result_0% = maximum_result_0% - minimum_result_0%
+1270     rangeofResult0% = maximumResult0% - minimumResult0%
 1280     RETURN
 1290 ' end function rangeof%

@@ -193,7 +193,7 @@ Variables declared or assigned at the top level are **global** and visible
 throughout the entire program.
 
 Variables inside a `function` or `procedure` body are **local by default**: the
-compiler maps them to uniquely-generated BASIC names (e.g. `fname_var_0%`),
+compiler maps them to uniquely-generated BASIC names (e.g. `fnameVar0%`),
 indexed against every name already in use at compile time so they're
 guaranteed never to collide with global variables or with locals in other
 functions. To read or write a global variable from inside a function or
@@ -856,9 +856,9 @@ end if
 ```
 ```
 IF (ptr% >= 0) = 0 THEN GOTO 10
-ispositive_n_0% = scores%(ptr%)
+ispositiveN0% = scores%(ptr%)
 GOSUB 20
-IF (ispositive_result_0% > 0) = 0 THEN GOTO 10
+IF (ispositiveResult0% > 0) = 0 THEN GOTO 10
     PRINT "safe to read"
 10 REM END IF
 ```
@@ -966,19 +966,19 @@ at end-of-body are not supported.
 
 ### Calling the Same Function Twice
 
-Each call writes the shared `fname_result_0` variable, so assignments must be
+Each call writes the shared `fnameResult0` variable, so assignments must be
 made before the next call overwrites it. BASCAL handles this automatically:
 
 ```
-a$ = repeat$("x", 3)   ' repeat_result$ = "xxx"  →  a$ = "xxx"
-b$ = repeat$("y", 2)   ' repeat_result$ = "yy"   →  b$ = "yy"
+a$ = repeat$("x", 3)   ' repeatResult0$ = "xxx"  →  a$ = "xxx"
+b$ = repeat$("y", 2)   ' repeatResult0$ = "yy"   →  b$ = "yy"
 PRINT a$ + " " + b$    ' xxx yy
 ```
 
 ### Variable Scoping
 
 Variables inside a function body are **local by default**: the compiler maps
-them to uniquely-generated BASIC names of the form `stem_var_0%`, `_1%`, etc.
+them to uniquely-generated BASIC names of the form `stemVar0%`, `stemVar1%`, etc.
 Two functions can each have a variable named `i%` with no conflict, and a local
 can never accidentally shadow a global that happens to share the naive prefix.
 Use `global varname` to access a module-level variable:
@@ -1023,12 +1023,12 @@ declaration could never take effect.
 ### How Functions Are Transpiled
 
 The compiler transpiles each function call to:
-1. Assign each argument to a generated global variable (e.g. `fname_param_0%`)
+1. Assign each argument to a generated global variable (e.g. `fnameParam0%`)
 2. `GOSUB` to the function's generated label
-3. Assign the result from the generated result variable (e.g. `fname_result_0%`)
+3. Assign the result from the generated result variable (e.g. `fnameResult0%`)
 
 Local variables in the function body are emitted as uniquely-indexed BASIC
-globals (`fname_var_0%`, `fname_var_1%`, …). The index is chosen so the name
+globals (`fnameVar0%`, `fnameVar1%`, …). The index is chosen so the name
 does not clash with any global variable or with any name allocated by an
 earlier function, making collisions impossible regardless of what names the
 developer uses at global scope.
@@ -1159,12 +1159,12 @@ end procedure
 
 Procedures use the same GOSUB mechanism as functions:
 
-1. Assign each argument to a generated global variable (e.g. `pname_param_0%`)
+1. Assign each argument to a generated global variable (e.g. `pnameParam0%`)
 2. `GOSUB` to the procedure's generated label
 3. No result variable is read back
 
 Local variables in the body are emitted as uniquely-indexed BASIC globals
-(`pname_var_0%`, `pname_var_1%`, …) using the same collision-free scheme as
+(`pnameVar0%`, `pnameVar1%`, …) using the same collision-free scheme as
 functions.
 
 ---
@@ -1446,7 +1446,7 @@ site still checks the array's *actual* size against it at runtime, right
 before copying in, and halts with a clear error if it doesn't fit:
 
 ```
-IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
+IF sumarrArrDim00% > 100 THEN PRINT "runtime error: ..." : STOP
 ```
 
 This is a backstop, not the primary defense — a call site whose size
@@ -1899,11 +1899,16 @@ db[1] = { id: 1, name: "Alice", score: 95.0 }
 ```
 
 Every declared field must be supplied exactly once. Transpiles to one `LSET`
-per field — numeric fields are packed first (`MKI%`/`MKL&`/`MKS!`/`MKD#`),
+per field — numeric fields are packed first (`MKI$`/`MKL$`/`MKS$`/`MKD$`),
 string fields are assigned directly — followed by a single `PUT #n, 1`.
 `LSET` is used for every field, numeric or string: once a numeric value is
 packed, the result is exact-width binary, so left/right justification makes
 no difference (this matches real BASCOM practice).
+
+Note `MKx$` always carries a `$` suffix, never a type suffix matching the
+value being packed (`MKI%`, `MKD#`, etc. are not real MBASIC/BASCOM
+functions) — every `MKx$` variant returns a string, which is what `LSET`
+requires.
 
 A record literal missing a declared field is a **compile-time error** — this
 is a safety net that real BASIC's raw `FIELD`/`LSET`/`PUT` gives you no
@@ -1948,11 +1953,16 @@ let s = db[i]
 ```
 
 Transpiles to `GET #n, i` followed by one unpacking assignment per field
-(`CVI%`/`CVL&`/`CVS!`/`CVD#` for numeric fields, `RTRIM$` for strings), each
-one written into a scalar named `<var>_<field>` — e.g. `s_id%`, `s_name$`,
-`s_score#`. Later references to `s.id`, `s.name`, `s.score` in the source
-resolve directly to those scalars; no `Ident` named literally `s.id` is ever
-emitted.
+(`CVI`/`CVL`/`CVS`/`CVD` for numeric fields, taking no suffix at all on real
+MBASIC/BASCOM), each one written into a scalar named `<var><Field>` — e.g.
+`sId%`, `sName$`, `sScore#`. Later references to `s.id`, `s.name`, `s.score`
+in the source resolve directly to those scalars; no `Ident` named literally
+`s.id` is ever emitted.
+
+String fields aren't unpacked with `RTRIM$` — it isn't a real MBASIC/BASCOM
+builtin. Instead, the compiler builds an inline right-trim loop directly
+from `LEN`/`MID$`/`LEFT$`, walking back from the end of the fixed-width
+buffer past trailing spaces.
 
 Because BASIC doesn't auto-convert numbers to strings for concatenation,
 writing a numeric field next to a string with `+` (as in `print "[" + s.id + "]"`)
@@ -2633,9 +2643,17 @@ If a suite is declared, `COMMON` lines appear before the header comment.
 
 ### Line Numbers
 
-By default, only lines that are branch targets (destinations of `GOTO` or
-`GOSUB`) receive line numbers. All other lines are unnumbered. Use
-`--line-numbers` to number every line.
+By default, `bcc` numbers every emitted line, not just branch targets. Real
+MBASIC/BASCOM has no notion of an unnumbered statement line -- classic BASIC
+source is a sequence of numbered lines, full stop -- so this is what real
+compilers and interpreters expect. Numbered comment-only lines are harmless
+on real BASCOM, but an unnumbered *statement* line is a syntax error.
+
+Pass `--sparse-line-numbers` to fall back to the old behavior, numbering
+only lines that are branch targets (destinations of `GOTO` or `GOSUB`) and
+leaving everything else unnumbered. This is more readable, but only safe
+with more lenient dialects (e.g. FreeBASIC's `-lang qb`) -- not real
+MBASIC/BASCOM.
 
 ### If Transpilation
 
@@ -2795,7 +2813,7 @@ compiles to plain `RETURN`.
 ### Select Case Transpilation
 
 `SELECT CASE` is transpiled to an `IF`/`GOTO` dispatch chain. The select
-expression is stored in a temporary variable (e.g., `BCC_T1%`) to avoid
+expression is stored in a temporary variable (e.g., `BCCT1%`) to avoid
 re-evaluation.
 
 ### Exit Statements

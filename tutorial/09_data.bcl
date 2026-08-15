@@ -10,20 +10,20 @@
 // randomize seeds the BASIC RND function.  Pass timer for a
 // time-based seed; pass a literal for reproducible results.
 
-const num_capitals% = 5
+const numCapitals% = 5
 
-dim country$(num_capitals%)
-dim capital$(num_capitals%)
+dim country$(numCapitals%)
+dim capital$(numCapitals%)
 
 /* Load the lookup table */
-for i% = 1 to num_capitals%
+for i% = 1 to numCapitals%
     read country$(i%), capital$(i%)
 end for
 
 /* Print the table */
 print "Country         Capital"
 print "--------------- ---------------"
-for i% = 1 to num_capitals%
+for i% = 1 to numCapitals%
     print country$(i%) + "        " + capital$(i%)
 end for
 
@@ -40,8 +40,8 @@ swap a%, b%
 print "After swap:  a=" + str$(a%) + " b=" + str$(b%)
 
 /* Bubble-sort the country array using swap */
-for pass% = 1 to num_capitals% - 1
-    for i% = 1 to num_capitals% - pass%
+for pass% = 1 to numCapitals% - 1
+    for i% = 1 to numCapitals% - pass%
         if country$(i%) > country$(i% + 1) then
             swap country$(i%), country$(i% + 1)
             swap capital$(i%), capital$(i% + 1)
@@ -49,7 +49,7 @@ for pass% = 1 to num_capitals% - 1
     end for
 end for
 print "Sorted by country:"
-for i% = 1 to num_capitals%
+for i% = 1 to numCapitals%
     print "  " + country$(i%) + " -> " + capital$(i%)
 end for
 

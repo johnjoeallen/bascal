@@ -1,124 +1,124 @@
-' BASCAL generated BASIC
-' Functions are transpiled to global variables, labels, and GOSUB
+10 ' BASCAL generated BASIC
+20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-' Storage for array parameters, sized to fit every call site
-DIM fillrange_arr_0%(5)
+30 ' Storage for array parameters, sized to fit every call site
+40 DIM fillrangeArr0%(5)
 
-' Tutorial 14 — Procedures
-' 
-' A procedure is like a function but returns no value.  Declare it with
-' PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.
-' 
-' Variables inside a procedure are LOCAL by default: the compiler prefixes
-' them with the procedure name.  To access a global variable, declare it
-' inside the body with:  global varname
-' 
-' Use procedures for actions that produce side effects (output, file I/O,
-' modifying arrays) rather than for computing a value.
-' 
-' A bare RETURN exits a procedure early.  Falling through to END PROCEDURE
-' is also valid — an implicit RETURN is emitted.
+50 ' Tutorial 14 — Procedures
+60 ' 
+70 ' A procedure is like a function but returns no value.  Declare it with
+80 ' PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.
+90 ' 
+100 ' Variables inside a procedure are LOCAL by default: the compiler prefixes
+110 ' them with the procedure name.  To access a global variable, declare it
+120 ' inside the body with:  global varname
+130 ' 
+140 ' Use procedures for actions that produce side effects (output, file I/O,
+150 ' modifying arrays) rather than for computing a value.
+160 ' 
+170 ' A bare RETURN exits a procedure early.  Falling through to END PROCEDURE
+180 ' is also valid — an implicit RETURN is emitted.
 
-' Procedure with no parameters
+190 ' Procedure with no parameters
 
-' Procedure that prints a labelled value
-' label$ -- text shown before the score
-' score% -- value to print
+200 ' Procedure that prints a labelled value
+210 ' label$ -- text shown before the score
+220 ' score% -- value to print
 
-' Procedure with early exit
-' name$  -- person's name
-' score% -- score to test against the passing threshold
+230 ' Procedure with early exit
+240 ' name$  -- person's name
+250 ' score% -- score to test against the passing threshold
 
-' Procedure that modifies an array in place -- byref copies the result
-' back to the caller; the default byval would fill a private copy only.
-' arr%   -- array to fill; byref because it's mutated in place
-' value% -- value written into every element
+260 ' Procedure that modifies an array in place -- byref copies the result
+270 ' back to the caller; the default byval would fill a private copy only.
+280 ' arr%   -- array to fill; byref because it's mutated in place
+290 ' value% -- value written into every element
 
-' Procedure that uses a global variable
-globalcount% = 0
+300 ' Procedure that uses a global variable
+310 globalcount% = 0
 
-' --- Drive the procedures ---
+320 ' --- Drive the procedures ---
 
-GOSUB 10
-printscore_label_0$ = "Alice"
-printscore_score_0% = 91
-GOSUB 20
-printscore_label_0$ = "Bob"
-printscore_score_0% = 54
-GOSUB 20
-printscore_label_0$ = "Carol"
-printscore_score_0% = 78
-GOSUB 20
-GOSUB 10
+330 GOSUB 790
+340 printscoreLabel0$ = "Alice"
+350 printscoreScore0% = 91
+360 GOSUB 830
+370 printscoreLabel0$ = "Bob"
+380 printscoreScore0% = 54
+390 GOSUB 830
+400 printscoreLabel0$ = "Carol"
+410 printscoreScore0% = 78
+420 GOSUB 830
+430 GOSUB 790
 
-PRINT "Passes only:"
-printifpass_name_0$ = "Alice"
-printifpass_score_0% = 91
-GOSUB 30
-printifpass_name_0$ = "Bob"
-printifpass_score_0% = 54
-GOSUB 30
-printifpass_name_0$ = "Carol"
-printifpass_score_0% = 78
-GOSUB 30
+440 PRINT "Passes only:"
+450 printifpassName0$ = "Alice"
+460 printifpassScore0% = 91
+470 GOSUB 870
+480 printifpassName0$ = "Bob"
+490 printifpassScore0% = 54
+500 GOSUB 870
+510 printifpassName0$ = "Carol"
+520 printifpassScore0% = 78
+530 GOSUB 870
 
-CONST n% = 5
-DIM data%(n%)
-BCC_T1% = n%
-fillrange_value_0% = 99
-fillrange_arr_dim0_0% = BCC_T1%
-IF fillrange_arr_dim0_0% > 5 THEN PRINT "runtime error: `arr%` of `fillRange` needs "; fillrange_arr_dim0_0%; " elements along axis 0, but its storage only holds 5" : STOP
+540 n% = 5
+550 DIM data%(n%)
+560 BCCT1% = n%
+570 fillrangeValue0% = 99
+580 fillrangeArrDim00% = BCCT1%
+590 IF fillrangeArrDim00% > 5 THEN PRINT "runtime error: `arr%` of `fillRange` needs "; fillrangeArrDim00%; " elements along axis 0, but its storage only holds 5" : STOP
 
-' copy array argument into transpiled function storage: data%() -> fillrange_arr_0%()
-FOR BCC_T2% = 1 TO fillrange_arr_dim0_0%
-    fillrange_arr_0%(BCC_T2%) = data%(BCC_T2%)
-NEXT BCC_T2%
+600 ' copy array argument into transpiled function storage: data%() -> fillrangeArr0%()
+610 FOR BCCT2% = 1 TO fillrangeArrDim00%
+620     fillrangeArr0%(BCCT2%) = data%(BCCT2%)
+630 NEXT BCCT2%
 
-GOSUB 50
+640 GOSUB 940
 
-' copy mutated array argument back to caller storage: fillrange_arr_0%() -> data%()
-FOR BCC_T3% = 1 TO fillrange_arr_dim0_0%
-    data%(BCC_T3%) = fillrange_arr_0%(BCC_T3%)
-NEXT BCC_T3%
+650 ' copy mutated array argument back to caller storage: fillrangeArr0%() -> data%()
+660 FOR BCCT3% = 1 TO fillrangeArrDim00%
+670     data%(BCCT3%) = fillrangeArr0%(BCCT3%)
+680 NEXT BCCT3%
 
-PRINT "Filled array:"
-FOR i% = 0 TO n% - 1
-    PRINT (("  data%(" + STR$(i%)) + ") = ") + STR$(data%(i%))
-NEXT i%
+690 PRINT "Filled array:"
+700 FOR i% = 0 TO n% - 1
+710     PRINT (("  data%(" + STR$(i%)) + ") = ") + STR$(data%(i%))
+720 NEXT i%
 
-GOSUB 60
-GOSUB 60
-GOSUB 60
-PRINT "globalCount = " + STR$(globalcount%)
+730 GOSUB 1000
+740 GOSUB 1000
+750 GOSUB 1000
+760 PRINT "globalCount = " + STR$(globalcount%)
 
-END
+770 END
 
-' procedure printseparator()
-10 PRINT "----------------------------"
-    RETURN
-' end procedure printseparator
+780 ' procedure printseparator()
+790     PRINT "----------------------------"
+800     RETURN
+810 ' end procedure printseparator
 
-' procedure printscore(label$, score%)
-20 PRINT (printscore_label_0$ + ": ") + STR$(printscore_score_0%)
-    RETURN
-' end procedure printscore
+820 ' procedure printscore(label$, score%)
+830     PRINT (printscoreLabel0$ + ": ") + STR$(printscoreScore0%)
+840     RETURN
+850 ' end procedure printscore
 
-' procedure printifpass(name$, score%)
-30 IF (printifpass_score_0% < 60) = 0 THEN GOTO 40
-        RETURN
-40 REM END IF
-    PRINT (printifpass_name_0$ + " passed with ") + STR$(printifpass_score_0%)
-    RETURN
-' end procedure printifpass
+860 ' procedure printifpass(name$, score%)
+870     IF (printifpassScore0% < 60) = 0 THEN GOTO 890
+880         RETURN
+890     REM END IF
+900     PRINT (printifpassName0$ + " passed with ") + STR$(printifpassScore0%)
+910     RETURN
+920 ' end procedure printifpass
 
-' procedure fillrange(arr%, value%)
-50 FOR fillrange_i_0% = 0 TO fillrange_arr_dim0_0% - 1
-        fillrange_arr_0%(fillrange_i_0%) = fillrange_value_0%
-    NEXT fillrange_i_0%
-    RETURN
-' end procedure fillrange
+930 ' procedure fillrange(arr%, value%)
+940     FOR fillrangeI0% = 0 TO fillrangeArrDim00% - 1
+950         fillrangeArr0%(fillrangeI0%) = fillrangeValue0%
+960     NEXT fillrangeI0%
+970     RETURN
+980 ' end procedure fillrange
 
-' procedure increment()
-60 globalcount% = globalcount% + 1
-    RETURN
-' end procedure increment
+990 ' procedure increment()
+1000     globalcount% = globalcount% + 1
+1010     RETURN
+1020 ' end procedure increment

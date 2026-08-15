@@ -53,6 +53,14 @@ pub struct CodeGenerator {
     // ident() must never allocate a per-function local for one, regardless
     // of which scope the LSET/GET/PUT referencing it appears in.
     record_buffer_names: HashSet<String>,
+    // Lowercase BASIC names of the *subset* of `record_buffer_names` that
+    // `records::lower` invented itself (via `buffer_ident`), as opposed to
+    // a `FIELD` buffer name the author typed directly in raw-BASIC-
+    // passthrough source. A synthesized name is already deliberately
+    // camelCased and keeps that case in `ident()`; an author-typed one
+    // still gets BASCAL's normal lowercase normalization, same as any
+    // other identifier.
+    synthesized_buffer_names: HashSet<String>,
     // Errors found while generating (e.g. an invalid `byref` call argument).
     // Collected rather than returned immediately since codegen methods are
     // called deep inside statement/expression recursion.
@@ -130,10 +138,16 @@ impl CodeGenerator {
             loop_exit_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
+            synthesized_buffer_names: HashSet::new(),
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
         }
+    }
+
+    pub fn with_synthesized_buffer_names(mut self, value: HashSet<String>) -> Self {
+        self.synthesized_buffer_names = value;
+        self
     }
 
     pub fn with_line_numbers(mut self, value: bool) -> Self {
@@ -681,9 +695,15 @@ impl CodeGenerator {
                 }
             }
             Statement::Const { name, value } => {
+                // Real MBASIC/BASCOM has no CONST statement at all (a
+                // QuickBASIC-era addition) -- a plain assignment is the
+                // only thing that compiles there. `const` in .bcl source
+                // is purely a naming/intent signal to the reader; nothing
+                // in generated BASIC needs to express "this shouldn't be
+                // reassigned" for it to behave correctly.
                 let (prelude, value) = self.expr(value, current_function);
                 self.lines(prelude);
-                self.line(&format!("CONST {} = {value}", self.ident(name, current_function)));
+                self.line(&format!("{} = {value}", self.ident(name, current_function)));
             }
             Statement::Write { channel, exprs } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -973,7 +993,7 @@ impl CodeGenerator {
         let temp = {
             let id = self.next_label;
             self.next_label += 1;
-            format!("BCC_T{id}{suffix}")
+            format!("BCCT{id}{suffix}")
         };
         self.line(&format!("{temp} = {expr_str}"));
 
@@ -1351,7 +1371,7 @@ impl CodeGenerator {
     fn next_temp_var(&mut self) -> String {
         let id = self.next_label;
         self.next_label += 1;
-        format!("BCC_T{id}%")
+        format!("BCCT{id}%")
     }
 
     fn canonical_callable(&self, name: &BasicIdent) -> String {
@@ -1363,6 +1383,25 @@ impl CodeGenerator {
     }
 
     fn ident(&self, ident: &BasicIdent, current_function: Option<&FunctionInfo>) -> String {
+        let source_key = ident.as_basic().to_ascii_lowercase();
+        if self.record_buffer_names.contains(&source_key) {
+            // FIELD buffers are structurally global -- there is exactly
+            // one FIELD-bound buffer per record field, shared by every
+            // function/procedure that touches that file -- so this must
+            // be checked before, and instead of, per-function allocation,
+            // regardless of scope.
+            return if self.synthesized_buffer_names.contains(&source_key) {
+                // Compiler-built (via `buffer_ident`): already
+                // deliberately camelCased, so its case is preserved
+                // rather than flattened by the normalization below.
+                ident.as_basic()
+            } else {
+                // Author-typed in raw-BASIC-passthrough source: still
+                // gets BASCAL's normal lowercase normalization, same as
+                // any other identifier.
+                BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
+            };
+        }
         if let Some(info) = current_function {
             // Params have already-allocated lowered names.
             if let Some((_, lowered)) = info
@@ -1372,8 +1411,7 @@ impl CodeGenerator {
             {
                 return lowered.as_basic();
             }
-            let source_key = ident.as_basic().to_ascii_lowercase();
-            if !info.globals.contains(&source_key) && !self.record_buffer_names.contains(&source_key) {
+            if !info.globals.contains(&source_key) {
                 // Check per-function cache first.
                 {
                     let cache = info.local_var_map.borrow();
@@ -1382,8 +1420,7 @@ impl CodeGenerator {
                     }
                 }
                 // Allocate a name that doesn't clash with any already-claimed BASIC name.
-                let preferred_stem =
-                    format!("{}_{}", info.stem, sanitize_symbol(&ident.name));
+                let preferred_stem = camel_join(&[&info.stem, &ident.name]);
                 let lowered = {
                     let taken = self.taken_names.borrow();
                     allocate_unique(&preferred_stem, ident.suffix, &taken)
@@ -1562,7 +1599,7 @@ impl FunctionInfo {
             .params
             .iter()
             .map(|param| {
-                let preferred = format!("{}_{}", stem, sanitize_symbol(&param.name.name));
+                let preferred = camel_join(&[&stem, &param.name.name]);
                 let lowered = allocate_unique(&preferred, param.name.suffix, taken);
                 taken.insert(lowered.as_basic().to_ascii_lowercase());
                 (param.clone(), lowered)
@@ -1577,7 +1614,7 @@ impl FunctionInfo {
                 Some(rank) => (0..*rank)
                     .map(|axis| {
                         let preferred =
-                            format!("{}_{}_dim{}", stem, sanitize_symbol(&param.name.name), axis);
+                            camel_join(&[&stem, &param.name.name, &format!("dim{axis}")]);
                         let lowered =
                             allocate_unique(&preferred, Some(TypeSuffix::Integer), taken);
                         taken.insert(lowered.as_basic().to_ascii_lowercase());
@@ -1588,7 +1625,7 @@ impl FunctionInfo {
             })
             .collect();
         let local_array_ranks = dim_ranks_in_body(&function.body);
-        let result = allocate_unique(&format!("{stem}_result"), function.name.suffix, taken);
+        let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
         let globals = collect_globals(&function.body);
         Self {
@@ -2471,7 +2508,7 @@ fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<Strin
 }
 
 /// Returns a `BasicIdent` whose BASIC form is not present in `taken`.
-/// Always uses the indexed form `preferred_stem_0`, `_1`, … so that allocated
+/// Always uses the indexed form `preferredStem0`, `1`, … so that allocated
 /// names are visually distinct from bare global names and can never coincide
 /// with an unindexed global even if no collision exists today.
 fn allocate_unique(
@@ -2480,7 +2517,7 @@ fn allocate_unique(
     taken: &HashSet<String>,
 ) -> BasicIdent {
     for i in 0u32.. {
-        let candidate = BasicIdent { name: format!("{}_{}", preferred_stem, i), suffix };
+        let candidate = BasicIdent { name: format!("{preferred_stem}{i}"), suffix };
         if !taken.contains(&candidate.as_basic().to_ascii_lowercase()) {
             return candidate;
         }
@@ -2858,6 +2895,43 @@ pub(crate) fn sanitize_symbol(value: &str) -> String {
         .collect()
 }
 
+/// Joins identifier fragments into one camelCase symbol, with no separator
+/// -- BASIC is case-insensitive, but camelCase reads far better in generated
+/// output than an underscore chain, and (for real MBASIC/BASCOM targets)
+/// underscores in an identifier that's read as an expression operand are a
+/// hard compile error, not just a style choice. The first non-empty
+/// fragment is lowercased in full; every fragment after that only has its
+/// own first character forced to uppercase, with the rest left exactly as
+/// given -- never force-lowercased. That matters because a later fragment
+/// is sometimes itself an already-camelCased compound built by an earlier
+/// `camel_join` call (e.g. records.rs building `sName` before handing it
+/// to codegen's own `ident()`, which joins it onto a function stem); force-
+/// lowercasing the remainder would flatten `sName` into `Sname`, silently
+/// erasing the word boundary it already carried. Non-alphanumeric
+/// characters are dropped, since BASIC identifiers are letters and digits
+/// only. Collision-freedom is still guaranteed the same way it always was
+/// -- by `allocate_unique` checking the result against `taken`, not by
+/// this function.
+pub(crate) fn camel_join(parts: &[&str]) -> String {
+    let mut out = String::new();
+    for part in parts {
+        let clean: String = part.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+        if clean.is_empty() {
+            continue;
+        }
+        if out.is_empty() {
+            out.push_str(&clean.to_ascii_lowercase());
+        } else {
+            let mut chars = clean.chars();
+            if let Some(first) = chars.next() {
+                out.push(first.to_ascii_uppercase());
+                out.push_str(chars.as_str());
+            }
+        }
+    }
+    out
+}
+
 /// Flattens a left-associated `&&`/`||` chain (as built by
 /// `Parser::parse_condition`) into its operands, left to right.
 fn flatten_chain<'a>(expr: &'a Expr, op: BinaryOp, out: &mut Vec<&'a Expr>) {
@@ -3204,7 +3278,7 @@ fn check_one_conflict(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let candidate = BasicIdent {
-        name: format!("{}_{}_0", stem, var_stem),
+        name: format!("{}0", camel_join(&[stem, var_stem])),
         suffix,
     };
     if globals.contains(&candidate.as_basic().to_ascii_lowercase()) {

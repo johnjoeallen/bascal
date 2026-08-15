@@ -12,6 +12,7 @@ struct Cli {
     library_dirs: Vec<PathBuf>,
     libraries: Vec<String>,
     line_numbers: bool,
+    sparse_line_numbers: bool,
     clean: bool,
     binary: bool,
 }
@@ -57,7 +58,7 @@ fn run() -> Result<(), String> {
     let options = CompileOptions {
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
-        line_numbers: cli.line_numbers,
+        line_numbers: cli.line_numbers && !cli.sparse_line_numbers,
     };
     let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
@@ -124,7 +125,12 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut output = None;
     let mut library_dirs = Vec::new();
     let mut libraries = Vec::new();
-    let mut line_numbers = false;
+    // Full line numbering (every emitted line, not just branch targets) is
+    // the default: real MBASIC/BASCOM has no notion of an unnumbered
+    // statement line, so sparse numbering only works on more lenient
+    // dialects (e.g. FreeBASIC's `-lang qb`).
+    let mut line_numbers = true;
+    let mut sparse_line_numbers = false;
     let mut clean = false;
     let mut binary = false;
     let mut i = 0;
@@ -154,6 +160,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
                 );
             }
             "--line-numbers" => line_numbers = true,
+            "--sparse-line-numbers" => sparse_line_numbers = true,
             "--clean" | "-c" => clean = true,
             "--binary" | "-b" => binary = true,
             "-h" | "--help" => return Err(usage()),
@@ -173,6 +180,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         library_dirs,
         libraries,
         line_numbers,
+        sparse_line_numbers,
         clean,
         binary,
     })
@@ -181,14 +189,16 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
 fn usage() -> String {
     [
         "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
-        "              [--line-numbers] [--clean | -c] [--binary | -b]",
+        "              [--sparse-line-numbers] [--clean | -c] [--binary | -b]",
         "",
         "Options:",
-        "  -o output.bas        Output path (default: input with .bas extension)",
-        "  -L dir               Add a library search directory for require resolution",
-        "  --line-numbers       Number every output line, not just branch targets",
-        "  --clean, -c          Recompile even if the output is already up to date",
-        "  --binary, -b         Invoke fbc to compile the generated .bas to tmp/<stem>",
+        "  -o output.bas          Output path (default: input with .bas extension)",
+        "  -L dir                 Add a library search directory for require resolution",
+        "  --sparse-line-numbers  Number only branch targets, not every line (invalid on",
+        "                         real MBASIC/BASCOM; only safe with lenient dialects like",
+        "                         FreeBASIC's -lang qb)",
+        "  --clean, -c            Recompile even if the output is already up to date",
+        "  --binary, -b           Invoke fbc to compile the generated .bas to tmp/<stem>",
     ]
     .join("\n")
 }
