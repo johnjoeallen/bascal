@@ -1,7 +1,7 @@
-// In-place, same-length splice into target$ -- the shared implementation
-// behind MID$ statement-form assignment (`MID$(target$, start[, len]) =
-// value`). Not meant to be called directly: bcc lowers that syntax into a
-// call to this function and auto-adds it to the program whenever the
+// Same-length splice into target$ -- the shared implementation behind
+// MID$ statement-form assignment (`MID$(target$, start[, len]) =
+// value`). Not meant to be called directly: bcc transpiles that syntax
+// into a call to this function and auto-adds it to the program whenever the
 // syntax is used, resolved the same way any other com.bascal.stdlib
 // require is, just without a `require` line for the user to write --
 // nobody ever spells this function's name themselves, since the compiler

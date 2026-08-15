@@ -463,7 +463,7 @@ impl CodeGenerator {
                 };
                 self.lines(value_prelude);
 
-                // Lowered into an ordinary call to com.bascal.stdlib.
+                // Transpiled into an ordinary call to com.bascal.stdlib.
                 // midAssign, auto-injected into the program (see
                 // `lib::inject_mid_assign_helper_if_used`) whenever this
                 // statement is used anywhere -- the same GOSUB-based
@@ -2601,9 +2601,9 @@ fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<Strin
 }
 
 /// Name (sans type suffix) of the require-able `com.bascal.stdlib.
-/// midAssign` helper function `Statement::MidAssign` lowers into a call to
-/// -- shared with `lib::inject_mid_assign_helper_if_used`, which resolves
-/// and auto-injects it, so the two can't drift out of sync.
+/// midAssign` helper function `Statement::MidAssign` transpiles into a call
+/// to -- shared with `lib::inject_mid_assign_helper_if_used`, which
+/// resolves and auto-injects it, so the two can't drift out of sync.
 pub(crate) const MID_ASSIGN_HELPER_NAME: &str = "midAssign";
 
 /// `BasicIdent` for `com.bascal.stdlib.midAssign`. Case-insensitive lookup

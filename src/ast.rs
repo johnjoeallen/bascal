@@ -259,7 +259,7 @@ pub enum Statement {
     },
     /// `MID$(<target>, <start>[, <len>]) = <value>` — statement-form MID$
     /// assignment: overwrites a run of characters inside `target` with a
-    /// same-length replacement (lowered to a call that rebuilds and
+    /// same-length replacement (transpiled to a call that rebuilds and
     /// reassigns `target`, not a byte-level in-place mutation), and is not
     /// itself a value-producing expression. `target` is always `Expr::Ident` or
     /// `Expr::ArrayRef` (a plain string variable or string array element),

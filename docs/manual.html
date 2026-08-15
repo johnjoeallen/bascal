@@ -1348,7 +1348,7 @@ RESTORE fromHere  &#39; rewind to the DATA right after the `fromHere:` label</co
 <hr />
 <h2 id="miscellaneous-statements">Miscellaneous Statements</h2>
 <h3 id="mid-statement-form">MID$ (statement form)</h3>
-<p>Overwrites a run of characters inside a string with a same-length replacement — <code>target$</code> keeps its original length; see <a href="#mid-assignment">MID$ assignment</a> for how this actually gets lowered.</p>
+<p>Overwrites a run of characters inside a string with a same-length replacement — <code>target$</code> keeps its original length; see <a href="#mid-assignment">MID$ assignment</a> for how this actually gets transpiled.</p>
 <pre><code>mid$(target$, start[, length]) = replacement$</code></pre>
 <p><code>start</code> is 1-based. The optional <code>length</code> caps how many characters are replaced; if omitted, replacement continues to the end of <code>target$</code> or until <code>replacement$</code> runs out of characters, whichever comes first.</p>
 <pre><code>s$ = &quot;Hello World&quot;
@@ -2124,7 +2124,7 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <h3 id="mid-assignment">MID$ assignment</h3>
 <pre><code>MID$(target$, start[, len]) = replacement$</code></pre>
 <p>A same-length splice into <code>target$</code>, which keeps its original length — not a value-producing expression, and not the same thing as <code>MID$(...)</code> used to <em>read</em> a substring. <code>target$</code> must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).</p>
-<p>Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's lowered into a call to <code>com.bascal.stdlib.midAssign</code> — an ordinary BASCAL function, auto-added to the program (like any other <code>com.bascal.stdlib</code> symbol; see <a href="#string-and-error-message-functions">String and error-message functions</a> below) the moment <code>MID$</code> assignment syntax appears anywhere, with no <code>require</code> line needed since nothing in your own source ever spells the function's name:</p>
+<p>Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to <code>com.bascal.stdlib.midAssign</code> — an ordinary BASCAL function, auto-added to the program (like any other <code>com.bascal.stdlib</code> symbol; see <a href="#string-and-error-message-functions">String and error-message functions</a> below) the moment <code>MID$</code> assignment syntax appears anywhere, with no <code>require</code> line needed since nothing in your own source ever spells the function's name:</p>
 <pre><code>function midAssign$(target$, start%, len%, value$)
     t$ = value$
     if LEN(t$) &gt; len% then

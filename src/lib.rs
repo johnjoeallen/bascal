@@ -1497,10 +1497,10 @@ end
 
     #[test]
     fn mid_statement_form() {
-        // MID$(str$, start[, length]) = replacement$ -- in-place substring
+        // MID$(str$, start[, length]) = replacement$ -- same-length substring
         // replace. Real MBASIC/BASCOM 2.00 has no MID$ assignment statement
         // at all (it's a later QuickBASIC-era addition), so this must not
-        // pass through as raw `MID$(...) = ...` -- it needs to lower to a
+        // pass through as raw `MID$(...) = ...` -- it needs to transpile to a
         // call to BASCAL's own com.bascal.stdlib.midAssign helper, same as
         // every other real-BASCOM incompatibility this compiler works
         // around.
@@ -1545,7 +1545,7 @@ end
     fn mid_assign_target_index_is_evaluated_only_once() {
         // `target` may be an array element whose index has a side effect
         // (here, `nextIndex%()` advances a global counter each time it's
-        // called). MID$ assignment lowering must evaluate that index
+        // called). MID$ assignment transpilation must evaluate that index
         // exactly once -- reusing the already-rendered target text for
         // both the helper call and the write-back -- not once per use.
         let source = r#"dim names$(3)

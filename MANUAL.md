@@ -2095,7 +2095,7 @@ RESTORE fromHere  ' rewind to the DATA right after the `fromHere:` label
 
 Overwrites a run of characters inside a string with a same-length
 replacement — `target$` keeps its original length; see [MID$
-assignment](#mid-assignment) for how this actually gets lowered.
+assignment](#mid-assignment) for how this actually gets transpiled.
 
 ```
 mid$(target$, start[, length]) = replacement$
@@ -2958,7 +2958,7 @@ string array element (not, for example, a record/file DSL field or a
 nested call).
 
 Despite compiling cleanly, this statement isn't reliable across every real
-MBASIC/BASCOM dialect BASCAL targets, so it's lowered into a call to
+MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to
 `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to
 the program (like any other `com.bascal.stdlib` symbol; see [String and
 error-message functions](#string-and-error-message-functions) below) the
