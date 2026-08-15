@@ -1,0 +1,32 @@
+// Tutorial 18 — Standard library functions
+//
+// com.bascal.stdlib is an ordinary require-able library, resolved the same
+// way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
+// directory to the search path automatically, so no -L flag is needed to
+// reach it. It exists because LTRIM$, RTRIM$, UCASE$, LCASE$, and ERROR$
+// either aren't real MBASIC/BASCOM 2.00 builtins or don't work at runtime
+// (verified against a real IBM Personal Computer BASIC Compiler 2.00 under
+// dosbox-x) -- see MANUAL.md's "String and error-message functions"
+// section for the full story.
+//
+// Run with:
+//   bcc tutorial/18_stdlib.bcl
+
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+
+print "[" + ltrim$("   padded left") + "]"
+print "[" + rtrim$("padded right   ") + "]"
+print ucase$("shout this")
+print lcase$("QUIET THIS DOWN")
+
+/* ERROR$ maps a classic MBASIC/GW-BASIC/BASCOM error code to a message;
+   pair it with ERR inside an ON ERROR GOTO handler in real code. */
+print error$(53)
+print error$(11)
+print error$(9999)
+
+end

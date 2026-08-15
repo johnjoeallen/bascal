@@ -1402,6 +1402,16 @@ impl Parser {
     fn parse_assignment_or_expr(&mut self) -> ParseResult<Statement> {
         let expr = self.parse_expr(8)?;
         if self.eat(TokenKind::Eq) {
+            if let Some((target, start, len)) = self.try_mid_assign_call(&expr)? {
+                let value = self.parse_expr(0)?;
+                self.consume_line_end()?;
+                return Ok(Statement::MidAssign {
+                    target: Box::new(target),
+                    start: Box::new(start),
+                    len: len.map(Box::new),
+                    value: Box::new(value),
+                });
+            }
             let value = self.parse_expr(0)?;
             self.consume_line_end()?;
             Ok(Statement::Assignment {
@@ -1425,6 +1435,37 @@ impl Parser {
             self.consume_line_end()?;
             Ok(Statement::ExprStmt(expr))
         }
+    }
+
+    /// If `expr` is a `MID$(<target>, <start>[, <len>])` call shape (as an
+    /// assignment target, not a value read), returns its decomposed parts.
+    /// Returns `Ok(None)` for anything else -- including a *value-position*
+    /// `MID$(...)` read, which never reaches this method since it's only
+    /// called on the parsed left-hand side of `=`. Rejects a target that
+    /// isn't a plain string variable or string array element (record/file
+    /// DSL sugar, a nested call, etc. can't be spliced into in place).
+    fn try_mid_assign_call(
+        &self,
+        expr: &Expr,
+    ) -> ParseResult<Option<(Expr, Expr, Option<Expr>)>> {
+        let Expr::Call { name, args } = expr else {
+            return Ok(None);
+        };
+        if !name.name.eq_ignore_ascii_case("mid") || name.suffix != Some(TypeSuffix::String) {
+            return Ok(None);
+        }
+        if args.len() != 2 && args.len() != 3 {
+            return Ok(None);
+        }
+        let target = &args[0];
+        if !matches!(target, Expr::Ident(_) | Expr::ArrayRef { .. }) {
+            return Err(self.error(
+                "MID$ assignment target must be a plain string variable or string array element",
+            ));
+        }
+        let start = args[1].clone();
+        let len = args.get(2).cloned();
+        Ok(Some((target.clone(), start, len)))
     }
 
     fn eat_compound_assign_op(&mut self) -> Option<BinaryOp> {

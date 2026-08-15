@@ -1,0 +1,10 @@
+// Strips trailing spaces from s$. Not a real MBASIC/BASCOM 2.00 builtin --
+// verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+// BASCAL ships its own.
+function rtrim$(s$)
+    i% = LEN(s$)
+    while i% > 0 && MID$(s$, i%, 1) = " "
+        i% = i% - 1
+    end while
+    return LEFT$(s$, i%)
+end function

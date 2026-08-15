@@ -257,6 +257,19 @@ pub enum Statement {
         target: Expr,
         value: Expr,
     },
+    /// `MID$(<target>, <start>[, <len>]) = <value>` — statement-form MID$
+    /// assignment: an in-place, same-length splice into `target`, not a
+    /// value-producing expression. `target` is always `Expr::Ident` or
+    /// `Expr::ArrayRef` (a plain string variable or string array element),
+    /// enforced at parse time. `len` is `None` for the two-argument form
+    /// (`MID$(a$, start) = value`), which real MBASIC/BASCOM treats as if
+    /// `len` were `LEN(value)`.
+    MidAssign {
+        target: Box<Expr>,
+        start: Box<Expr>,
+        len: Option<Box<Expr>>,
+        value: Box<Expr>,
+    },
     Print {
         tokens: Vec<PrintToken>,
     },

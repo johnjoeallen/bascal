@@ -265,6 +265,13 @@ impl Lowerer {
             }
             Statement::Print { tokens } => Statement::Print { tokens: self.rewrite_print_tokens(tokens) },
             Statement::Return { value } => Statement::Return { value: self.rewrite_expr(value).0 },
+            Statement::MidAssign { target, start, len, value } => {
+                let target = Box::new(self.rewrite_expr(*target).0);
+                let start = Box::new(self.rewrite_expr(*start).0);
+                let len = len.map(|e| Box::new(self.rewrite_expr(*e).0));
+                let value = Box::new(self.rewrite_expr(*value).0);
+                Statement::MidAssign { target, start, len, value }
+            }
             Statement::OptionBase(e) => Statement::OptionBase(self.rewrite_expr(e).0),
             Statement::Randomize(e) => Statement::Randomize(e.map(|e| self.rewrite_expr(e).0)),
             Statement::Swap(a, b) => Statement::Swap(self.rewrite_expr(a).0, self.rewrite_expr(b).0),

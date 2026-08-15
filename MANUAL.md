@@ -28,6 +28,7 @@
 20. [Generated BASIC Shape](#generated-basic-shape)
 21. [Command-Line Reference](#command-line-reference)
 22. [Statement Quick Reference](#statement-quick-reference)
+23. [Standard Library Functions](#standard-library-functions)
 
 ---
 
@@ -2937,3 +2938,87 @@ bcc main.bcl -L libs/sort -L libs/string
 |------|-------------|
 | `TRUE` | `-1` |
 | `FALSE` | `0` |
+
+---
+
+## Standard Library Functions
+
+### MID$ assignment
+
+```
+MID$(target$, start[, len]) = replacement$
+```
+
+An in-place, same-length splice into `target$` — not a value-producing
+expression, and not the same thing as `MID$(...)` used to *read* a
+substring. `target$` must be a plain string variable or string array
+element (not, for example, a record/file DSL field or a nested call).
+
+Despite compiling cleanly, this statement isn't reliable across every real
+MBASIC/BASCOM dialect BASCAL targets, so it's lowered to an equivalent
+`LEFT$`/`MID$` splice rather than passed through as a literal `MID$(...) =`
+statement:
+
+```
+LET t$ = replacement$
+IF LEN(t$) > len THEN t$ = LEFT$(t$, len)
+LET target$ = LEFT$(target$, start - 1) + t$ + MID$(target$, start + LEN(t$))
+```
+
+The two-argument form (`MID$(target$, start) = replacement$`) behaves as if
+`len` were `LEN(replacement$)`. Total `LEN(target$)` never changes — this is
+always a same-length overwrite, never a grow/shrink — and if `replacement$`
+is shorter than `len`, only that many characters are overwritten; the rest
+of `target$` past that point is left untouched, not padded.
+
+A program with more than a handful of `MID$` assignment call sites has them
+share one GOSUB subroutine instead of repeating the splice at every site
+(the cutoff is an internal compiler constant, not something `.bcl` source
+controls). That subroutine is not reentrancy-safe — classic BASIC's flat
+global `GOSUB` has no call stack for locals — which is fine for BASCAL's
+straight-line call sites.
+
+### String and error-message functions
+
+`LTRIM$`, `RTRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00
+builtins, and `ERROR$` compiles and links but silently returns an empty
+string at runtime instead of a real message (all verified against a real
+IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL
+ships its own implementations, built from genuinely portable primitives
+(`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`),
+as an ordinary `require`-able library under `com.bascal.stdlib` — the same
+mechanism as any other BASCAL library (see [Dependencies — REQUIRE and
+IMPORT](#dependencies--require-and-import)), not something auto-injected
+by call-site detection:
+
+```
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+```
+
+| Symbol | Signature | Behavior |
+|----------|-----------|----------|
+| `com.bascal.stdlib.ltrim` | `LTRIM$(s$)` | Strip leading spaces |
+| `com.bascal.stdlib.rtrim` | `RTRIM$(s$)` | Strip trailing spaces |
+| `com.bascal.stdlib.ucase` | `UCASE$(s$)` | Uppercase `a`-`z` only; other characters pass through unchanged |
+| `com.bascal.stdlib.lcase` | `LCASE$(s$)` | Lowercase `A`-`Z` only; other characters pass through unchanged |
+| `com.bascal.stdlib.error` | `ERROR$(code%)` | Human-readable message for a classic MBASIC/GW-BASIC/BASCOM error code (e.g. `ERROR$(53)` → `"File not found"`); falls back to `"Error " + STR$(code%)` for a code outside its lookup table |
+
+Each `.bcl` source file lives under `com/bascal/stdlib/` in the BASCAL
+distribution, and `bcc` always adds that directory to its library search
+path automatically — a release package ships it next to the `bcc` binary
+(or, for a `.deb`/`.rpm` install, under `.../share/bascal/`), so no `-L` is
+needed to reach it. `-L` and a same-named file next to your own source both
+still take priority, so you can shadow a stdlib module with your own if you
+ever need to.
+
+Requiring one of these and also defining a function under the same name is
+a duplicate-function error, same as any other name collision between a
+required library and your own code — pick one.
+
+`STRING$`, `FIX`, `HEX$`, and `OCT$` were checked the same way against real
+BASCOM 2.00 and *are* genuine builtins, so BASCAL passes calls to them
+straight through rather than reimplementing them.

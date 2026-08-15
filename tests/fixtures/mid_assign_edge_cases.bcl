@@ -1,0 +1,22 @@
+// MID$ statement-form assignment: edge cases exercising real QuickBASIC/
+// MBASIC in-place-splice semantics -- see tests::mid_assign_edge_cases in
+// tests/examples.rs, which runs this under FreeBASIC and checks the exact
+// printed output.
+
+a$ = "0123456789"
+mid$(a$, 3, 4) = "XY"
+print a$
+
+a$ = "0123456789"
+mid$(a$, 1, 3) = "ABCDEF"
+print a$
+
+a$ = "0123456789"
+mid$(a$, 10, 1) = ""
+print a$
+
+a$ = "0123456789"
+mid$(a$, 10) = "Z"
+print a$
+
+end

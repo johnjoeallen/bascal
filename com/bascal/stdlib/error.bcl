@@ -1,0 +1,81 @@
+// Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
+// and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
+// returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
+// ships a working implementation.
+//
+// Covers the classic error codes an ON ERROR GOTO + ERR handler is
+// realistically going to hit -- not the full table, but every code common
+// enough to be worth a real message instead of falling through to the
+// generic one.
+function error$(code%)
+    select case code%
+        case 2
+            return "Syntax error"
+        case 3
+            return "RETURN without GOSUB"
+        case 4
+            return "Out of DATA"
+        case 5
+            return "Illegal function call"
+        case 6
+            return "Overflow"
+        case 7
+            return "Out of memory"
+        case 9
+            return "Subscript out of range"
+        case 10
+            return "Duplicate Definition"
+        case 11
+            return "Division by zero"
+        case 13
+            return "Type mismatch"
+        case 14
+            return "Out of string space"
+        case 19
+            return "No RESUME"
+        case 20
+            return "RESUME without error"
+        case 24
+            return "Device timeout"
+        case 25
+            return "Device fault"
+        case 27
+            return "Out of paper"
+        case 52
+            return "Bad file number"
+        case 53
+            return "File not found"
+        case 54
+            return "Bad file mode"
+        case 55
+            return "File already open"
+        case 57
+            return "Device I/O error"
+        case 58
+            return "File already exists"
+        case 61
+            return "Disk full"
+        case 62
+            return "Input past end"
+        case 63
+            return "Bad record number"
+        case 64
+            return "Bad file name"
+        case 67
+            return "Too many files"
+        case 68
+            return "Device unavailable"
+        case 70
+            return "Disk write protected"
+        case 71
+            return "Disk not ready"
+        case 72
+            return "Disk media error"
+        case 75
+            return "Path/File access error"
+        case 76
+            return "Path not found"
+        case else
+            return "Error " + STR$(code%)
+    end select
+end function

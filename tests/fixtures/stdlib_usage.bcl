@@ -1,0 +1,12 @@
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+
+print ltrim$("  hi")
+print rtrim$("hi  ")
+print ucase$("hi")
+print lcase$("HI")
+print error$(5)
+end

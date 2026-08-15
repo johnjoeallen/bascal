@@ -63,7 +63,7 @@ jobs:
           package_dir="dist/${package_name}"
           mkdir -p "$package_dir"
           cp target/release/bcc "$package_dir/"
-          for file in README.md MANUAL.md intro.md LICENSE $(git ls-files tutorial); do
+          for file in README.md MANUAL.md intro.md LICENSE $(git ls-files tutorial com); do
             mkdir -p "$package_dir/$(dirname "$file")"
             cp "$file" "$package_dir/$file"
           done
@@ -75,13 +75,17 @@ jobs:
           topdir="$PWD/target/rpmbuild"
           root="$topdir/SOURCES/bascal-${version}"
           rm -rf "$topdir"
-          mkdir -p "$root/usr/bin" "$root/usr/share/doc/bascal" "$root/usr/share/licenses/bascal"
+          mkdir -p "$root/usr/bin" "$root/usr/share/doc/bascal" "$root/usr/share/licenses/bascal" "$root/usr/share/bascal"
           cp target/release/bcc "$root/usr/bin/bcc"
           cp README.md MANUAL.md intro.md "$root/usr/share/doc/bascal/"
           cp LICENSE "$root/usr/share/licenses/bascal/LICENSE"
           for file in $(git ls-files tutorial); do
             mkdir -p "$root/usr/share/doc/bascal/$(dirname "$file")"
             cp "$file" "$root/usr/share/doc/bascal/$file"
+          done
+          for file in $(git ls-files com); do
+            mkdir -p "$root/usr/share/bascal/$(dirname "$file")"
+            cp "$file" "$root/usr/share/bascal/$file"
           done
           tar -C "$topdir/SOURCES" -czf "$topdir/SOURCES/bascal-${version}.tar.gz" "bascal-${version}"
           mkdir -p "$topdir/SPECS"
@@ -107,6 +111,7 @@ jobs:
 
           %files
           /usr/bin/bcc
+          /usr/share/bascal
           %doc /usr/share/doc/bascal
           %license /usr/share/licenses/bascal/LICENSE
 
@@ -155,7 +160,7 @@ jobs:
           $packageDir = Join-Path "dist" $packageName
           New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
           Copy-Item "target/release/bcc.exe" $packageDir
-          $files = @("README.md", "MANUAL.md", "intro.md", "LICENSE") + (git ls-files tutorial)
+          $files = @("README.md", "MANUAL.md", "intro.md", "LICENSE") + (git ls-files tutorial com)
           foreach ($file in $files) {
             $destination = Join-Path $packageDir $file
             New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null

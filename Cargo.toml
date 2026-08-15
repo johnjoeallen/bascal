@@ -27,6 +27,7 @@ assets = [
     ["tutorial/remline/remline.bas", "usr/share/doc/bascal/tutorial/remline/remline.bas", "644"],
     ["tutorial/remline/sample/expected.bas", "usr/share/doc/bascal/tutorial/remline/sample/expected.bas", "644"],
     ["tutorial/remline/sample/input.bas", "usr/share/doc/bascal/tutorial/remline/sample/input.bas", "644"],
+    ["com/**/*.bcl", "usr/share/bascal/com/", "644"],
 ]
 
 [dependencies]

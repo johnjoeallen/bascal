@@ -1,0 +1,13 @@
+// Lower-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
+// a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+function lcase$(s$)
+    out$ = ""
+    for i% = 1 to LEN(s$)
+        c% = ASC(MID$(s$, i%, 1))
+        if c% >= 65 && c% <= 90 then
+            c% = c% + 32
+        end if
+        out$ = out$ + CHR$(c%)
+    end for
+    return out$
+end function

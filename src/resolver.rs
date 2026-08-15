@@ -200,6 +200,12 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Assignment { target: lhs, value } => {
             expr_calls_function(lhs, target) || expr_calls_function(value, target)
         }
+        Statement::MidAssign { target: lhs, start, len, value } => {
+            expr_calls_function(lhs, target)
+                || expr_calls_function(start, target)
+                || len.as_ref().is_some_and(|e| expr_calls_function(e, target))
+                || expr_calls_function(value, target)
+        }
         Statement::Print { tokens } => tokens.iter().any(|t| match t {
             PrintToken::Expr(e) => expr_calls_function(e, target),
             _ => false,

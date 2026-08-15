@@ -58,6 +58,29 @@ pub fn compile_source(
         .generate(&program)
 }
 
+/// Test-only: same pipeline as `compile_source`, with the `MID$`-assignment
+/// inline-vs-subroutine cutoff overridden so the GOSUB-subroutine backpatch
+/// path can be exercised without a fixture with dozens of call sites.
+#[cfg(test)]
+fn compile_source_with_mid_assign_threshold(
+    filename: impl Into<String>,
+    source: &str,
+    threshold: usize,
+) -> Result<String, Vec<Diagnostic>> {
+    let filename = filename.into();
+    let program = parse_source(filename, source)?;
+    let (program, synthesized_buffer_names) = records::lower(program)?;
+    resolver::validate(&program)?;
+    let conflicts = codegen::check_generated_name_conflicts(&program);
+    if !conflicts.is_empty() {
+        return Err(conflicts);
+    }
+    CodeGenerator::new()
+        .with_synthesized_buffer_names(synthesized_buffer_names)
+        .with_mid_assign_inline_threshold(threshold)
+        .generate(&program)
+}
+
 pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
     let mut options = options.clone();
     if let Some(parent) = input.parent() {
@@ -378,6 +401,30 @@ fn search_roots(source_file: &Path, options: &CompileOptions) -> Vec<PathBuf> {
         roots.push(parent.to_path_buf());
     }
     roots.extend(options.library_dirs.iter().cloned());
+    roots.extend(stdlib_search_roots());
+    roots
+}
+
+/// Where the bundled `com.bascal.stdlib.*` library lives, checked last so an
+/// explicit `-L` (or a same-named file next to the source) can still shadow
+/// it. Two on-disk layouts are supported, since release packages don't all
+/// place the binary and its data the same way:
+///   - portable (zip/tarball): `com/` sits right next to `bcc`.
+///   - FHS (deb/rpm): `bcc` installs to `.../bin/bcc` and `com/` installs to
+///     `.../share/bascal/com/`, the standard split those packages expect --
+///     reached from the binary via `../share/bascal`, the same relative hop
+///     tools like `git` and `gcc` use to find their own bundled data.
+/// `CARGO_MANIFEST_DIR` covers `cargo build`/`cargo test`, since it's baked
+/// in at compile time from wherever this crate was built.
+fn stdlib_search_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            roots.push(dir.to_path_buf());
+            roots.push(dir.join("../share/bascal"));
+        }
+    }
+    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
     roots
 }
 
@@ -1393,7 +1440,12 @@ end
 
     #[test]
     fn mid_statement_form() {
-        // MID$(str$, start[, length]) = replacement$ — in-place substring replace
+        // MID$(str$, start[, length]) = replacement$ -- in-place substring
+        // replace. Real MBASIC/BASCOM 2.00 has no MID$ assignment statement
+        // at all (it's a later QuickBASIC-era addition), so this must not
+        // pass through as raw `MID$(...) = ...` -- it needs to lower to a
+        // same-length LEFT$/MID$ splice, same as every other real-BASCOM
+        // incompatibility this compiler works around.
         let source = r#"s$ = "Hello World"
 mid$(s$, 7, 5) = "BASIC"
 mid$(s$, 1) = "Goodbye"
@@ -1401,8 +1453,140 @@ print s$
 end
 "#;
         let output = compile_source("mid.bcl", source).expect("should compile");
-        assert!(output.contains(r#"MID$(s$, 7, 5) = "BASIC""#));
-        assert!(output.contains(r#"MID$(s$, 1) = "Goodbye""#));
+        assert!(
+            !output.to_ascii_uppercase().contains("MID$(S$, 7, 5) ="),
+            "MID$ assignment must not pass through as a raw statement -- real \
+             MBASIC/BASCOM has no such statement:\n{output}"
+        );
+        // Three-argument form: LEN(...) compared against the literal length.
+        assert!(output.contains(r#"IF LEN(BCCT1$) > 5 THEN BCCT1$ = LEFT$(BCCT1$, 5)"#));
+        assert!(
+            output.contains("LET s$ = LEFT$(s$, 7 - 1) + BCCT1$ + MID$(s$, 7 + LEN(BCCT1$))")
+        );
+        // Two-argument form: omitted length behaves as LEN(replacement$).
+        assert!(output.contains(
+            r#"IF LEN(BCCT2$) > LEN("Goodbye") THEN BCCT2$ = LEFT$(BCCT2$, LEN("Goodbye"))"#
+        ));
+        assert!(
+            output.contains("LET s$ = LEFT$(s$, 1 - 1) + BCCT2$ + MID$(s$, 1 + LEN(BCCT2$))")
+        );
+    }
+
+    #[test]
+    fn mid_assign_many_call_sites_share_one_subroutine() {
+        // Above the inline-vs-subroutine threshold, every MID$ assignment
+        // call site must route through one shared GOSUB subroutine instead
+        // of repeating the splice logic at each site.
+        let source = r#"a$ = "aaa"
+b$ = "bbb"
+c$ = "ccc"
+mid$(a$, 1, 1) = "X"
+mid$(b$, 1, 1) = "Y"
+mid$(c$, 1, 1) = "Z"
+print a$; b$; c$
+end
+"#;
+        let output = compile_source_with_mid_assign_threshold("mid_many.bcl", source, 2)
+            .expect("should compile");
+
+        // Exactly one subroutine body (its internal label is resolved away
+        // to a bare line number by the final numbering pass, same as every
+        // other compiler-internal label -- see `is_label_line`), and every
+        // call site GOSUBs the very same line number.
+        assert_eq!(
+            output.matches("RETURN").count(),
+            1,
+            "expected exactly one shared subroutine body, not one per call site:\n{output}"
+        );
+        let gosub_targets: std::collections::HashSet<&str> = output
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("GOSUB "))
+            .collect();
+        assert_eq!(
+            gosub_targets.len(),
+            1,
+            "expected every call site to GOSUB the same shared subroutine:\n{output}"
+        );
+        assert_eq!(
+            output.matches(&format!("GOSUB {}", gosub_targets.iter().next().unwrap())).count(),
+            3,
+            "expected all three call sites to GOSUB the shared subroutine:\n{output}"
+        );
+        // No inline splice formula anywhere -- that's the subroutine's job now.
+        assert!(
+            !output.contains("LEFT$(a$,"),
+            "call sites must not inline the splice formula above the threshold:\n{output}"
+        );
+        assert!(output.contains("LET bccMidAssignPos0% = 1"));
+        assert!(output.contains("LET bccMidAssignRepl0$ = \"X\""));
+        assert!(output.contains("LET bccMidAssignTarget0$ = a$"));
+        assert!(output.contains("LET a$ = bccMidAssignTarget0$"));
+    }
+
+    // ── stdlib functions ────────────────────────────────────────────────
+    //
+    // LTRIM$, RTRIM$, UCASE$, and LCASE$ aren't real MBASIC/BASCOM 2.00
+    // builtins (verified against a real IBM BASIC Compiler 2.00 under
+    // dosbox-x -- see com/bascal/stdlib/*.bcl's header comments), so BASCAL
+    // ships its own implementations as an ordinary require-able library
+    // under com.bascal.stdlib, resolved the same way as any other `require`
+    // (see `stdlib_search_roots`) -- not auto-injected by call-site
+    // detection, so a program must `require` a stdlib symbol to use it,
+    // exactly like `com.bascal.sort.bubbleSort` in the tutorial.
+
+    #[test]
+    fn stdlib_functions_are_resolved_via_require() {
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/stdlib_usage.bcl");
+        let output = compile_file(&input, &CompileOptions::new()).expect("should compile");
+        for marker in [
+            "function ltrim$",
+            "function rtrim$",
+            "function ucase$",
+            "function lcase$",
+            "function error$",
+        ] {
+            assert!(output.contains(marker), "expected {marker} to be required in:\n{output}");
+        }
+        assert!(!output.contains("' require com.bascal.stdlib.ltrim"));
+    }
+
+    #[test]
+    fn stdlib_functions_are_absent_when_not_required() {
+        let source = r#"print "hello"
+end
+"#;
+        let output = compile_source("stdlib_unused.bcl", source).expect("should compile");
+        for marker in [
+            "function ltrim$",
+            "function rtrim$",
+            "function ucase$",
+            "function lcase$",
+            "function error$",
+        ] {
+            assert!(
+                !output.contains(marker),
+                "unrequired stdlib function {marker} must not appear in output:\n{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn stdlib_native_builtins_still_pass_through_unchanged() {
+        // STRING$, FIX, HEX$, and OCT$ *are* real BASCOM 2.00 builtins
+        // (also verified against a real IBM BASIC Compiler 2.00), so
+        // BASCAL must keep passing them straight through, not reimplement
+        // them.
+        let source = r#"print string$(3, "*")
+print fix(-3.7)
+print hex$(255)
+print oct$(8)
+end
+"#;
+        let output = compile_source("native_builtins.bcl", source).expect("should compile");
+        assert!(output.contains("STRING$(3, \"*\")"));
+        assert!(output.contains("FIX(-3.7)"));
+        assert!(output.contains("HEX$(255)"));
+        assert!(output.contains("OCT$(8)"));
     }
 
     #[test]

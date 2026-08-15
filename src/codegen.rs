@@ -4,10 +4,16 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::diagnostics::{Diagnostic, SourcePos};
 
+// "ucase", "lcase", "ltrim", and "rtrim" are deliberately absent here: real
+// MBASIC/BASCOM 2.00 has none of them (verified against a real IBM BASIC
+// Compiler 2.00 under dosbox-x -- see src/stdlib.rs), so treating them as
+// safe passthrough builtins the target dialect provides would be wrong.
+// BASCAL provides its own implementations instead; see
+// `stdlib::inject_used_stdlib_functions`.
 const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
-    "ucase", "lcase", "str", "chr", "hex", "oct", "space", "environ",
-    "command", "ltrim", "rtrim", "trim",
+    "str", "chr", "hex", "oct", "space", "environ",
+    "command", "trim",
     // Multi-arg string (Expr::Call, but include for completeness)
     "left", "right", "mid", "instr", "format", "string",
     // Single-arg numeric (no suffix → Expr::Call already, but included for safety)
@@ -77,7 +83,39 @@ pub struct CodeGenerator {
     // auto-injects its bounds at the call site so the callee's own
     // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
+    // Every `MID$(...) = ...` statement encountered during the single-pass
+    // codegen walk, in encounter order. Each site is recorded as already-
+    // rendered expression text (any side-effecting sub-expression has
+    // already had its prelude flushed to `output` at the call site, exactly
+    // like every other statement) plus the indent level the placeholder
+    // line was emitted at. `generate()` decides how to replace every
+    // placeholder -- inline or via one shared subroutine -- only once the
+    // final count is known; see `backpatch_mid_assign_sites`.
+    mid_assign_sites: Vec<MidAssignSite>,
+    // Number of `MID$` assignment sites at or below which each is expanded
+    // inline; above it, every site shares one GOSUB subroutine instead.
+    // Overridable (test-only) via `with_mid_assign_inline_threshold`.
+    mid_assign_inline_threshold: usize,
 }
+
+/// One `MID$(target, start[, len]) = value` call site, captured with its
+/// operands already rendered to final expression text -- see
+/// `mid_assign_sites`.
+#[derive(Debug, Clone)]
+struct MidAssignSite {
+    target_text: String,
+    start_text: String,
+    len_text: String,
+    value_text: String,
+    indent: usize,
+}
+
+/// Default `MID$`-assignment inline-vs-subroutine cutoff -- see
+/// `mid_assign_inline_threshold`. Small enough that a handful of one-off
+/// splices stay inline and readable; a program with more than this many
+/// call sites shares one subroutine instead of repeating the splice logic
+/// at every one.
+const DEFAULT_MID_ASSIGN_INLINE_THRESHOLD: usize = 4;
 
 #[derive(Debug, Clone)]
 struct FunctionInfo {
@@ -142,6 +180,8 @@ impl CodeGenerator {
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
+            mid_assign_sites: Vec::new(),
+            mid_assign_inline_threshold: DEFAULT_MID_ASSIGN_INLINE_THRESHOLD,
         }
     }
 
@@ -152,6 +192,15 @@ impl CodeGenerator {
 
     pub fn with_line_numbers(mut self, value: bool) -> Self {
         self.line_numbers = value;
+        self
+    }
+
+    /// Test-only override of `mid_assign_inline_threshold`, so the
+    /// GOSUB-subroutine backpatch path can be exercised without writing a
+    /// fixture with dozens of `MID$` assignment call sites.
+    #[cfg(test)]
+    pub fn with_mid_assign_inline_threshold(mut self, value: usize) -> Self {
+        self.mid_assign_inline_threshold = value;
         self
     }
 
@@ -241,6 +290,12 @@ impl CodeGenerator {
                 self.function(function);
             }
         }
+        // A shared MID$-assignment subroutine (see `backpatch_mid_assign_sites`)
+        // is appended exactly like a function body, so it needs the same
+        // trailing `END` barrier -- already guaranteed above whenever the
+        // program has functions of its own, or already ends with `END`.
+        let has_end_barrier = !program.functions.is_empty() || ends_with_end(&program.statements);
+        self.backpatch_mid_assign_sites(!has_end_barrier);
 
         if self.diagnostics.is_empty() {
             Ok(number_basic_lines(&self.output, self.line_numbers))
@@ -278,6 +333,139 @@ impl CodeGenerator {
         self.blank();
         self.line("' Storage for array parameters, sized to fit every call site");
         self.lines(lines);
+    }
+
+    /// Replaces every `MID$` assignment placeholder line left by the main
+    /// codegen walk (see `mid_assign_placeholder`) with either an inline
+    /// splice block or a call into one shared subroutine, decided once
+    /// here from the final call-site count -- never during the walk
+    /// itself, which stays a single pass over the AST. `needs_end_barrier`
+    /// is true when the caller hasn't already emitted a trailing `END`
+    /// (i.e. the program has no functions of its own), so the shared
+    /// subroutine -- appended after everything else, exactly like a
+    /// function body -- doesn't get fallen into by accident.
+    fn backpatch_mid_assign_sites(&mut self, needs_end_barrier: bool) {
+        if self.mid_assign_sites.is_empty() {
+            return;
+        }
+
+        let sites = std::mem::take(&mut self.mid_assign_sites);
+        let inline = sites.len() <= self.mid_assign_inline_threshold;
+
+        let mut replacements: HashMap<String, Vec<String>> = HashMap::new();
+        let mut subroutine_block: Option<Vec<String>> = None;
+
+        if inline {
+            for (id, site) in sites.iter().enumerate() {
+                let pad = "    ".repeat(site.indent);
+                let t = self.next_temp_var_suffixed("$");
+                let lines = vec![
+                    format!("{pad}LET {t} = {}", site.value_text),
+                    format!(
+                        "{pad}IF LEN({t}) > {} THEN {t} = LEFT$({t}, {})",
+                        site.len_text, site.len_text
+                    ),
+                    format!(
+                        "{pad}LET {} = LEFT$({}, {} - 1) + {t} + MID$({}, {} + LEN({t}))",
+                        site.target_text,
+                        site.target_text,
+                        site.start_text,
+                        site.target_text,
+                        site.start_text
+                    ),
+                ];
+                replacements.insert(mid_assign_placeholder(id), lines);
+            }
+        } else {
+            // Shared, GOSUB-only subroutine: classic BASIC's GOSUB has no
+            // parameters, so args and the result are routed through
+            // reserved global temps, allocated once here (never per call
+            // site) and registered so nothing else in the program can
+            // collide with them.
+            let mut taken = self.taken_names.borrow_mut();
+            let pos_var = allocate_unique("bccMidAssignPos", Some(TypeSuffix::Integer), &taken);
+            taken.insert(pos_var.as_basic().to_ascii_lowercase());
+            let len_var = allocate_unique("bccMidAssignLen", Some(TypeSuffix::Integer), &taken);
+            taken.insert(len_var.as_basic().to_ascii_lowercase());
+            let repl_var = allocate_unique("bccMidAssignRepl", Some(TypeSuffix::String), &taken);
+            taken.insert(repl_var.as_basic().to_ascii_lowercase());
+            let target_var =
+                allocate_unique("bccMidAssignTarget", Some(TypeSuffix::String), &taken);
+            taken.insert(target_var.as_basic().to_ascii_lowercase());
+            let t_var = allocate_unique("bccMidAssignT", Some(TypeSuffix::String), &taken);
+            taken.insert(t_var.as_basic().to_ascii_lowercase());
+            drop(taken);
+
+            let label = format!("MID_ASSIGN_SUB_{}", self.next_label);
+            self.next_label += 1;
+
+            let pos_var = pos_var.as_basic();
+            let len_var = len_var.as_basic();
+            let repl_var = repl_var.as_basic();
+            let target_var = target_var.as_basic();
+            let t_var = t_var.as_basic();
+
+            for (id, site) in sites.iter().enumerate() {
+                let pad = "    ".repeat(site.indent);
+                let lines = vec![
+                    format!("{pad}LET {pos_var} = {}", site.start_text),
+                    format!("{pad}LET {len_var} = {}", site.len_text),
+                    format!("{pad}LET {repl_var} = {}", site.value_text),
+                    format!("{pad}LET {target_var} = {}", site.target_text),
+                    format!("{pad}GOSUB {label}"),
+                    format!("{pad}LET {} = {target_var}", site.target_text),
+                ];
+                replacements.insert(mid_assign_placeholder(id), lines);
+            }
+
+            // Not reentrancy-safe: a flat global GOSUB has no call stack
+            // for locals, so a MID$ assignment that (indirectly) triggers
+            // another MID$ assignment before this one returns would
+            // clobber these shared temps mid-splice. Fine for BASCAL's
+            // straight-line call sites; this should not be "fixed" into
+            // something reentrant-looking later without an actual stack.
+            subroutine_block = Some(vec![
+                String::new(),
+                "' shared subroutine for every MID$ assignment in this program".to_string(),
+                format!("{label}:"),
+                format!("    LET {t_var} = {repl_var}"),
+                format!(
+                    "    IF LEN({t_var}) > {len_var} THEN {t_var} = LEFT$({t_var}, {len_var})"
+                ),
+                format!(
+                    "    LET {target_var} = LEFT$({target_var}, {pos_var} - 1) + {t_var} + \
+                     MID$({target_var}, {pos_var} + LEN({t_var}))"
+                ),
+                "    RETURN".to_string(),
+            ]);
+        }
+
+        let mut rebuilt = String::with_capacity(self.output.len());
+        for line in self.output.lines() {
+            match replacements.get(line.trim()) {
+                Some(replacement) => {
+                    for replacement_line in replacement {
+                        rebuilt.push_str(replacement_line);
+                        rebuilt.push('\n');
+                    }
+                }
+                None => {
+                    rebuilt.push_str(line);
+                    rebuilt.push('\n');
+                }
+            }
+        }
+        self.output = rebuilt;
+
+        if let Some(block) = subroutine_block {
+            if needs_end_barrier {
+                self.line("END");
+            }
+            for line in block {
+                self.output.push_str(&line);
+                self.output.push('\n');
+            }
+        }
     }
 
     fn function(&mut self, function: &FunctionDef) {
@@ -428,6 +616,39 @@ impl CodeGenerator {
                 self.lines(target_prelude);
                 self.lines(value_prelude);
                 self.line(&format!("{target} = {value}"));
+            }
+            Statement::MidAssign { target, start, len, value } => {
+                // Left-to-right evaluation order, matching how the
+                // statement reads: target, then start, then len (if
+                // written), then value last -- same order `Statement::
+                // Assignment` flushes target before value.
+                let (target_prelude, target_text) = self.expr(target, current_function);
+                let (start_prelude, start_text) = self.expr(start, current_function);
+                let len_rendered = len
+                    .as_ref()
+                    .map(|e| self.expr(e, current_function));
+                let (value_prelude, value_text) = self.expr(value, current_function);
+                self.lines(target_prelude);
+                self.lines(start_prelude);
+                let len_text = match len_rendered {
+                    Some((len_prelude, len_text)) => {
+                        self.lines(len_prelude);
+                        len_text
+                    }
+                    // Two-argument form (`MID$(a$, start) = value`): real
+                    // MBASIC/BASCOM behaves as if `len` were `LEN(value)`.
+                    None => format!("LEN({value_text})"),
+                };
+                self.lines(value_prelude);
+                let id = self.mid_assign_sites.len();
+                self.mid_assign_sites.push(MidAssignSite {
+                    target_text,
+                    start_text,
+                    len_text,
+                    value_text,
+                    indent: self.indent,
+                });
+                self.line(&mid_assign_placeholder(id));
             }
             Statement::Print { tokens } => {
                 let body = self.render_print_tokens(tokens, current_function);
@@ -1369,9 +1590,13 @@ impl CodeGenerator {
     }
 
     fn next_temp_var(&mut self) -> String {
+        self.next_temp_var_suffixed("%")
+    }
+
+    fn next_temp_var_suffixed(&mut self, suffix: &str) -> String {
         let id = self.next_label;
         self.next_label += 1;
-        format!("BCCT{id}%")
+        format!("BCCT{id}{suffix}")
     }
 
     fn canonical_callable(&self, name: &BasicIdent) -> String {
@@ -1697,6 +1922,14 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
         }
         Statement::Assignment { target, value } => {
             visit_expr(target, f);
+            visit_expr(value, f);
+        }
+        Statement::MidAssign { target, start, len, value } => {
+            visit_expr(target, f);
+            visit_expr(start, f);
+            if let Some(e) = len {
+                visit_expr(e, f);
+            }
             visit_expr(value, f);
         }
         Statement::Print { tokens } => visit_print_tokens(tokens, f),
@@ -2507,6 +2740,14 @@ fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<Strin
     }
 }
 
+/// Sentinel text for a `MID$` assignment placeholder line -- see
+/// `CodeGenerator::backpatch_mid_assign_sites`. Not a legal BASIC identifier
+/// (`@` never appears in one), so it can't collide with anything real
+/// either as emitted or when matched back out of `output` during backpatch.
+fn mid_assign_placeholder(id: usize) -> String {
+    format!("@@BASCAL_MID_ASSIGN_{id}@@")
+}
+
 /// Returns a `BasicIdent` whose BASIC form is not present in `taken`.
 /// Always uses the indexed form `preferredStem0`, `1`, … so that allocated
 /// names are visually distinct from bare global names and can never coincide
@@ -2553,6 +2794,14 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
     match stmt {
         Statement::Assignment { target, value } => {
             collect_names_from_expr(target, names);
+            collect_names_from_expr(value, names);
+        }
+        Statement::MidAssign { target, start, len, value } => {
+            collect_names_from_expr(target, names);
+            collect_names_from_expr(start, names);
+            if let Some(e) = len {
+                collect_names_from_expr(e, names);
+            }
             collect_names_from_expr(value, names);
         }
         Statement::Dim { name, .. } => {

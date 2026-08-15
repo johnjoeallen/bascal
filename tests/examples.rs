@@ -61,6 +61,43 @@ fn freebasic_runs_sort_driver_when_available() {
 }
 
 #[test]
+fn freebasic_runs_mid_assign_edge_cases_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/mid_assign_edge_cases.bcl");
+    let output_path = repo_root.join("output/mid_assign_edge_cases.bas");
+
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/mid_assign_edge_cases");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled mid_assign_edge_cases");
+    assert!(
+        run.status.success(),
+        "compiled mid_assign_edge_cases failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(
+        lines,
+        vec![
+            "01XY456789",   // repl$ shorter than len: only LEN(repl$) chars overwritten
+            "ABC3456789",   // repl$ longer than len: truncated to len
+            "0123456789",   // repl$ empty: no-op, length preserved
+            "012345678Z",   // 2-arg form, pos at the very end of the string
+        ],
+        "MID$ assignment edge cases produced unexpected output:\n{stdout}"
+    );
+}
+
+#[test]
 fn freebasic_runs_remline_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
         return;
