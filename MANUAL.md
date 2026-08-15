@@ -2093,7 +2093,9 @@ RESTORE fromHere  ' rewind to the DATA right after the `fromHere:` label
 
 ### MID$ (statement form)
 
-Replaces characters inside a string in place, without allocating a new string.
+Overwrites a run of characters inside a string with a same-length
+replacement — `target$` keeps its original length; see [MID$
+assignment](#mid-assignment) for how this actually gets lowered.
 
 ```
 mid$(target$, start[, length]) = replacement$
@@ -2949,10 +2951,11 @@ bcc main.bcl -L libs/sort -L libs/string
 MID$(target$, start[, len]) = replacement$
 ```
 
-An in-place, same-length splice into `target$` — not a value-producing
-expression, and not the same thing as `MID$(...)` used to *read* a
-substring. `target$` must be a plain string variable or string array
-element (not, for example, a record/file DSL field or a nested call).
+A same-length splice into `target$`, which keeps its original length —
+not a value-producing expression, and not the same thing as `MID$(...)`
+used to *read* a substring. `target$` must be a plain string variable or
+string array element (not, for example, a record/file DSL field or a
+nested call).
 
 Despite compiling cleanly, this statement isn't reliable across every real
 MBASIC/BASCOM dialect BASCAL targets, so it's lowered into a call to

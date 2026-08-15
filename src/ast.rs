@@ -258,8 +258,10 @@ pub enum Statement {
         value: Expr,
     },
     /// `MID$(<target>, <start>[, <len>]) = <value>` — statement-form MID$
-    /// assignment: an in-place, same-length splice into `target`, not a
-    /// value-producing expression. `target` is always `Expr::Ident` or
+    /// assignment: overwrites a run of characters inside `target` with a
+    /// same-length replacement (lowered to a call that rebuilds and
+    /// reassigns `target`, not a byte-level in-place mutation), and is not
+    /// itself a value-producing expression. `target` is always `Expr::Ident` or
     /// `Expr::ArrayRef` (a plain string variable or string array element),
     /// enforced at parse time. `len` is `None` for the two-argument form
     /// (`MID$(a$, start) = value`), which real MBASIC/BASCOM treats as if
