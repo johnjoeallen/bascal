@@ -55,6 +55,7 @@
 <li><a href="#generated-basic-shape">Generated BASIC Shape</a></li>
 <li><a href="#command-line-reference">Command-Line Reference</a></li>
 <li><a href="#statement-quick-reference">Statement Quick Reference</a></li>
+<li><a href="#standard-library-functions">Standard Library Functions</a></li>
 </ol></div>
 <h2 id="introduction">Introduction</h2>
 <p><strong>BASCAL</strong> — <strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage — is a compiler that translates structured <code>.bcl</code> source files into line-numbered Microsoft BASIC programs (<code>.bas</code>) compatible with BASCOM and FreeBASIC's QB compatibility mode.</p>
@@ -71,7 +72,7 @@
 <li>All classic BASCOM 1980s statements: <code>DATA</code>/<code>READ</code>/<code>RESTORE</code>, <code>LOCATE</code>, <code>COLOR</code>, <code>ON ... GOTO</code>, <code>SWAP</code>, <code>RANDOMIZE</code>, <code>CONST</code>, and more</li>
 </ul>
 <p><strong>BASCAL does not invent a new runtime.</strong> Every BASCAL program compiles to plain Microsoft BASIC. The structured constructs are transpiled by the compiler: functions become <code>GOSUB</code> subroutines, loops become <code>GOTO</code>-based constructs, and <code>if</code> chains become <code>IF ... THEN GOTO</code> sequences.</p>
-<p><strong>BASCAL is a strict superset of classic BASIC.</strong> Raw statements from the target dialect — <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> for random-access files, bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> — still compile unchanged. <code>GOTO</code>/<code>GOSUB</code>/<code>ON ERROR GOTO</code>/<code>RESUME</code>/<code>RESTORE</code> are raw BASIC too, but with one restriction: BASCAL manages line numbering itself, so their targets must be a <code>name:</code> label declared in source, never a raw line number — see <a href="#labels">Labels</a>. Beyond that, wherever this manual documents a BASCAL construct for something (<code>select case</code> instead of an <code>IF</code>/<code>GOTO</code> dispatch chain, <code>record</code>/<code>file</code> instead of hand-written <code>FIELD</code>/<code>GET</code>/<code>PUT</code>, <code>&amp;&amp;</code>/<code>||</code> instead of bitwise short-circuit workarounds), treat that construct as the canonical way to write it in <code>.bcl</code> source — the original BASIC syntax is what the compiler exists to get you away from, not an equally good alternative.</p>
+<p><strong>BASCAL is a strict superset of classic BASIC.</strong> Raw statements from the target dialect — <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> for random-access files, bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> — still compile unchanged. <code>GOTO</code>/<code>GOSUB</code>/<code>ON ERROR GOTO</code>/ <code>RESUME</code>/<code>RESTORE</code> are raw BASIC too, but with one restriction: BASCAL manages line numbering itself, so their targets must be a <code>name:</code> label declared in source, never a raw line number — see <a href="#labels">Labels</a>. Beyond that, wherever this manual documents a BASCAL construct for something (<code>select case</code> instead of an <code>IF</code>/<code>GOTO</code> dispatch chain, <code>record</code>/<code>file</code> instead of hand-written <code>FIELD</code>/<code>GET</code>/<code>PUT</code>, <code>&amp;&amp;</code>/<code>||</code> instead of bitwise short-circuit workarounds), treat that construct as the canonical way to write it in <code>.bcl</code> source — the original BASIC syntax is what the compiler exists to get you away from, not an equally good alternative.</p>
 <hr />
 <h2 id="getting-started">Getting Started</h2>
 <h3 id="building-the-compiler">Building the Compiler</h3>
@@ -167,7 +168,7 @@ program name suite suitename</code></pre>
 <h2 id="variables-and-constants">Variables and Constants</h2>
 <h3 id="variables">Variables</h3>
 <p>Variables declared or assigned at the top level are <strong>global</strong> and visible throughout the entire program.</p>
-<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fname_var_0%</code>), indexed against every name already in use at compile time so they're guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
+<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names (e.g. <code>fnameVar0%</code>), indexed against every name already in use at compile time so they're guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
 <pre><code>total% = 0
 
 &#39; x% -- amount to add to the running total
@@ -321,7 +322,7 @@ done%  = FALSE
 if found% = TRUE then
     print &quot;found it&quot;
 end if</code></pre>
-<p>They compile straight through to the literals themselves — <code>found% = TRUE</code> generates <code>found% = -1</code> — so they're valid anywhere an integer literal is, including <code>CONST</code> and array bounds. No boolean type is introduced anywhere else in the language; see the <code>NOT</code> caveat below for why explicit <code>= 0</code> / <code>&lt;&gt; 0</code> comparisons are still how you test a flag.</p>
+<p>They compile straight through to the literals themselves — <code>found% = TRUE</code> generates <code>found% = -1</code> — so they're valid anywhere an integer literal is, including <code>CONST</code> and array bounds. No boolean type is introduced anywhere else in the language; see the <code>NOT</code> caveat above for why explicit <code>= 0</code> / <code>&lt;&gt; 0</code> comparisons are still how you test a flag.</p>
 <h3 id="compound-assignment">Compound Assignment</h3>
 <pre><code>x% += n%    &#39; x% = x% + n%
 x% -= n%    &#39; x% = x% - n%
@@ -333,6 +334,10 @@ s.total# -= fee#</code></pre>
 <p>Only <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code> are provided — there is no compound form of <code>\</code>, <code>MOD</code>, <code>^</code>, or the bitwise/logical operators.</p>
 <h3 id="logical-operators">Logical Operators</h3>
 <table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th>Operator</th>
@@ -438,7 +443,7 @@ score% = 0  // also valid inline</code></pre>
  * Time complexity: O(n^2) average and worst case.
  * Space complexity: O(1) — sorts in place.
  */
-&#39; arr% -- array to sort; byref because it's mutated in place
+&#39; arr% -- array to sort; byref because it&#39;s mutated in place
 function insertionSort%(byref arr%(?))
     for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
@@ -459,7 +464,7 @@ LOCATE 1, 30
 PRINT &quot;  BASCAL DEMO  &quot;</code></pre>
 <hr />
 <h2 id="control-flow">Control Flow</h2>
-<h3 id="if--elseif--else--end-if">IF / ELSEIF / ELSE / END IF</h3>
+<h3 id="if-elseif-else-end-if">IF / ELSEIF / ELSE / END IF</h3>
 <pre><code>if condition then
     &#39; then body
 end if
@@ -499,7 +504,7 @@ else
 end if
 PRINT &quot;Grade: &quot; + grade$</code></pre>
 <p><code>elseif</code> chains may be arbitrarily deep.</p>
-<h3 id="for--end-for">FOR / END FOR</h3>
+<h3 id="for-end-for">FOR / END FOR</h3>
 <pre><code>for var = start to end [step n]
     &#39; body
 end for</code></pre>
@@ -524,7 +529,7 @@ for i% = 1 to 20
     end if
 end for</code></pre>
 <p><code>exit</code> exits the enclosing loop immediately. It's unqualified — not <code>exit for</code>/<code>exit while</code>/<code>exit do</code> — the compiler already knows which loop it's inside; see <a href="#exit">Exit</a> below.</p>
-<h3 id="while--end-while">WHILE / END WHILE</h3>
+<h3 id="while-end-while">WHILE / END WHILE</h3>
 <pre><code>while condition
     &#39; body
 end while</code></pre>
@@ -554,7 +559,7 @@ while n% &lt;&gt; 1
     PRINT &quot;  &quot; + STR$(n%)
 end while</code></pre>
 <p><code>exit</code> exits the enclosing <code>while</code> loop immediately; see <a href="#exit">Exit</a> below.</p>
-<h3 id="do--end-do">DO / END DO</h3>
+<h3 id="do-end-do">DO / END DO</h3>
 <pre><code>do [while/until condition]
     &#39; body
 end do</code></pre>
@@ -710,7 +715,7 @@ end select</code></pre>
 </tr>
 </tbody>
 </table>
-<h3 id="short-circuit--and-">Short-Circuit &amp;&amp; and ||</h3>
+<h3 id="short-circuit-and">Short-Circuit &amp;&amp; and ||</h3>
 <pre><code>if a% &gt; 0 &amp;&amp; b% &gt; 0 then
     &#39; body only runs if BOTH are true -- b% &gt; 0 is never evaluated
     &#39; unless a% &gt; 0 already passed
@@ -726,9 +731,9 @@ end do</code></pre>
     print &quot;safe to read&quot;
 end if</code></pre>
 <pre><code>IF (ptr% &gt;= 0) = 0 THEN GOTO 10
-ispositive_n_0% = scores%(ptr%)
+ispositiveN0% = scores%(ptr%)
 GOSUB 20
-IF (ispositive_result_0% &gt; 0) = 0 THEN GOTO 10
+IF (ispositiveResult0% &gt; 0) = 0 THEN GOTO 10
     PRINT &quot;safe to read&quot;
 10 REM END IF</code></pre>
 <p><code>||</code> needs one extra label, since a <em>chain</em> has to keep checking until either an operand proves it true or every operand has been tried:</p>
@@ -796,12 +801,12 @@ PRINT titleCase$(&quot;bASCAL&quot;)                            &#39; Bascal</co
 <h3 id="return">Return</h3>
 <p>Every function must contain at least one <code>return</code> statement. Implicit returns at end-of-body are not supported.</p>
 <h3 id="calling-the-same-function-twice">Calling the Same Function Twice</h3>
-<p>Each call writes the shared <code>fname_result_0</code> variable, so assignments must be made before the next call overwrites it. BASCAL handles this automatically:</p>
-<pre><code>a$ = repeat$(&quot;x&quot;, 3)   &#39; repeat_result$ = &quot;xxx&quot;  →  a$ = &quot;xxx&quot;
-b$ = repeat$(&quot;y&quot;, 2)   &#39; repeat_result$ = &quot;yy&quot;   →  b$ = &quot;yy&quot;
+<p>Each call writes the shared <code>fnameResult0</code> variable, so assignments must be made before the next call overwrites it. BASCAL handles this automatically:</p>
+<pre><code>a$ = repeat$(&quot;x&quot;, 3)   &#39; repeatResult0$ = &quot;xxx&quot;  →  a$ = &quot;xxx&quot;
+b$ = repeat$(&quot;y&quot;, 2)   &#39; repeatResult0$ = &quot;yy&quot;   →  b$ = &quot;yy&quot;
 PRINT a$ + &quot; &quot; + b$    &#39; xxx yy</code></pre>
 <h3 id="variable-scoping">Variable Scoping</h3>
-<p>Variables inside a function body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names of the form <code>stem_var_0%</code>, <code>_1%</code>, etc. Two functions can each have a variable named <code>i%</code> with no conflict, and a local can never accidentally shadow a global that happens to share the naive prefix. Use <code>global varname</code> to access a module-level variable:</p>
+<p>Variables inside a function body are <strong>local by default</strong>: the compiler maps them to uniquely-generated BASIC names of the form <code>stemVar0%</code>, <code>stemVar1%</code>, etc. Two functions can each have a variable named <code>i%</code> with no conflict, and a local can never accidentally shadow a global that happens to share the naive prefix. Use <code>global varname</code> to access a module-level variable:</p>
 <pre><code>&#39; n% -- upper bound of the sum, inclusive
 function sumTo%(n%)
     acc% = 0                &#39; local to sumTo%
@@ -826,13 +831,8 @@ end function</code></pre>
 <li><strong>No return value from a procedure.</strong> Functions must <code>return</code> a value; for side-effect-only subroutines use <code>procedure</code> instead.</li>
 </ul>
 <h3 id="how-functions-are-transpiled">How Functions Are Transpiled</h3>
-<p>The compiler transpiles each function call to:</p>
-<ol type="1">
-<li>Assign each argument to a generated global variable (e.g. <code>fname_param_0%</code>)</li>
-<li><code>GOSUB</code> to the function's generated label</li>
-<li>Assign the result from the generated result variable (e.g. <code>fname_result_0%</code>)</li>
-</ol>
-<p>Local variables in the function body are emitted as uniquely-indexed BASIC globals (<code>fname_var_0%</code>, <code>fname_var_1%</code>, …). The index is chosen so the name does not clash with any global variable or with any name allocated by an earlier function, making collisions impossible regardless of what names the developer uses at global scope.</p>
+<p>The compiler transpiles each function call to: 1. Assign each argument to a generated global variable (e.g. <code>fnameParam0%</code>) 2. <code>GOSUB</code> to the function's generated label 3. Assign the result from the generated result variable (e.g. <code>fnameResult0%</code>)</p>
+<p>Local variables in the function body are emitted as uniquely-indexed BASIC globals (<code>fnameVar0%</code>, <code>fnameVar1%</code>, …). The index is chosen so the name does not clash with any global variable or with any name allocated by an earlier function, making collisions impossible regardless of what names the developer uses at global scope.</p>
 <p>Every parameter is copied into its generated name before the call. Whether anything is copied back afterward depends on its passing mode — see <a href="#byref--byval">byref / byval</a>.</p>
 <hr />
 <h2 id="procedures">Procedures</h2>
@@ -853,7 +853,7 @@ procedure printScore(label$, score%)
     PRINT label$ + &quot;: &quot; + STR$(score%)
 end procedure
 
-&#39; name$  -- person's name
+&#39; name$  -- person&#39;s name
 &#39; score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% &lt; 60 then
@@ -862,7 +862,7 @@ procedure printIfPass(name$, score%)
     PRINT name$ + &quot; passed with &quot; + STR$(score%)
 end procedure
 
-&#39; arr%   -- array to fill; byref because it's mutated in place
+&#39; arr%   -- array to fill; byref because it&#39;s mutated in place
 &#39; value% -- value written into every element
 procedure fillRange(byref arr%(?), value%)
     for i% = 0 to sizeof(arr%) - 1
@@ -877,7 +877,7 @@ printIfPass(&quot;Bob&quot;, 54)
 fillRange(data%, 99)</code></pre>
 <h3 id="early-exit">Early Exit</h3>
 <p>A bare <code>return</code> (no expression) exits a procedure immediately. Falling through to <code>end procedure</code> is equally valid — the compiler emits an implicit <code>RETURN</code>.</p>
-<pre><code>&#39; name$  -- person's name
+<pre><code>&#39; name$  -- person&#39;s name
 &#39; score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% &lt; 60 then
@@ -887,7 +887,7 @@ procedure printIfPass(name$, score%)
 end procedure</code></pre>
 <h3 id="array-parameters">Array Parameters</h3>
 <p>Array parameters use the same <a href="#byref--byval">byref / byval</a> rules and the same <code>(?, ?, ...)</code> rank declaration as functions. Pass the plain array name at the call site — no <code>()</code>:</p>
-<pre><code>&#39; arr%   -- array to fill; byref because it's mutated in place
+<pre><code>&#39; arr%   -- array to fill; byref because it&#39;s mutated in place
 &#39; value% -- value written into every element
 procedure fillRange(byref arr%(?), value%)   &#39; arr%(?) -- 1-D array
     ...
@@ -911,11 +911,11 @@ end procedure</code></pre>
 <h3 id="how-procedures-are-transpiled">How Procedures Are Transpiled</h3>
 <p>Procedures use the same GOSUB mechanism as functions:</p>
 <ol type="1">
-<li>Assign each argument to a generated global variable (e.g. <code>pname_param_0%</code>)</li>
+<li>Assign each argument to a generated global variable (e.g. <code>pnameParam0%</code>)</li>
 <li><code>GOSUB</code> to the procedure's generated label</li>
 <li>No result variable is read back</li>
 </ol>
-<p>Local variables in the body are emitted as uniquely-indexed BASIC globals (<code>pname_var_0%</code>, <code>pname_var_1%</code>, …) using the same collision-free scheme as functions.</p>
+<p>Local variables in the body are emitted as uniquely-indexed BASIC globals (<code>pnameVar0%</code>, <code>pnameVar1%</code>, …) using the same collision-free scheme as functions.</p>
 <hr />
 <h2 id="arrays">Arrays</h2>
 <h3 id="declaration-2">Declaration</h3>
@@ -930,7 +930,7 @@ PRINT values%(i%)</code></pre>
 <p>At the call site, just write the plain array name — <strong>no <code>()</code> needed</strong>. The compiler already knows that parameter is an array from its declaration, so there's nothing left for the call site to mark.</p>
 <p>And separately: <code>byref</code> does <strong>not</strong> give the function a real reference to the caller's array — BASIC has no pointers or aliasing at this level. <code>byref</code> copies the array's elements in before the call and copies them back out after; <code>byval</code> (the default) only does the copy-in half. Either way the function always works on its own private copy — <code>byref</code> just <em>simulates</em> "the caller sees the result" by copying twice instead of once. See <a href="#byref--byval">byref / byval</a> for the full mechanism.</p>
 <p><code>insertionSort%</code> mutates the array in place, so its <code>arr%</code> parameter needs <code>byref</code>; <code>indexOf%</code> only reads it, so the unmarked (<code>byval</code>) default is correct as-is:</p>
-<pre><code>&#39; arr% -- array to sort; byref because it's mutated in place
+<pre><code>&#39; arr% -- array to sort; byref because it&#39;s mutated in place
 function insertionSort%(byref arr%(?))
     for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
@@ -967,18 +967,18 @@ if idx% &gt;= 0 then
     PRINT &quot;22 found at index &quot; + STR$(idx%)
 end if</code></pre>
 <p>See <a href="#byref--byval">byref / byval</a> for exactly what gets copied, and when.</p>
-<h3 id="byref--byval">byref / byval</h3>
+<h3 id="byref-byval"><code>byref</code> / <code>byval</code></h3>
 <p>Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:</p>
 <pre><code>function insertionSort%(byref arr%(?))   &#39; byref: copied in, then back out
 function indexOf%(arr%(?), target%)      &#39; unmarked = byval: copied in only</code></pre>
 <ul>
-<li><strong>byval</strong> (the default — an unmarked parameter is <code>byval</code>): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.</li>
-<li><strong>byref</strong>: copied in before the call, same as <code>byval</code> — but also copied back out to the caller after the call returns.</li>
+<li><strong><code>byval</code></strong> (the default — an unmarked parameter is <code>byval</code>): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.</li>
+<li><strong><code>byref</code></strong>: copied in before the call, same as <code>byval</code> — but also copied back out to the caller after the call returns.</li>
 </ul>
 <p>This applies uniformly to both parameter kinds:</p>
 <ul>
-<li><strong>Array parameters</strong>: <code>byval</code> copies elements in; <code>byref</code> copies them in <em>and</em> back out. A function that only reads its array argument (like <code>indexOf%</code> above) should stay <code>byval</code> — a <code>byref</code> array with no writes is just a slower <code>byval</code>, since the compiler still generates the copy-out loop.</li>
-<li><strong>Scalar parameters</strong>: <code>byval</code> is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. <code>byref</code> turns a scalar parameter into a true output parameter:
+<li><p><strong>Array parameters</strong>: <code>byval</code> copies elements in; <code>byref</code> copies them in <em>and</em> back out. A function that only reads its array argument (like <code>indexOf%</code> above) should stay <code>byval</code> — a <code>byref</code> array with no writes is just a slower <code>byval</code>, since the compiler still generates the copy-out loop.</p></li>
+<li><p><strong>Scalar parameters</strong>: <code>byval</code> is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. <code>byref</code> turns a scalar parameter into a true output parameter:</p>
 <pre><code>&#39; n% -- value to increment; byref so the caller sees the result
 procedure increment(byref n%)
     n% = n% + 1
@@ -986,16 +986,16 @@ end procedure
 
 x% = 5
 increment(x%)   &#39; x% is now 6</code></pre>
-A <code>byref</code> argument must be a plain variable — <code>increment(x% + 1)</code> is a compile-time error, because there's nowhere for the result to be written back to.</li>
+<p>A <code>byref</code> argument must be a plain variable — <code>increment(x% + 1)</code> is a compile-time error, because there's nowhere for the result to be written back to.</p></li>
 </ul>
-<p>If you're coming from classic MBASIC/BASCOM: there's no local scope there at all, so a <code>GOSUB</code>-based &quot;subroutine&quot; touching an array was always touching the <em>one</em> array that exists — mutations were visible everywhere, instantly, because there was never more than one copy. BASCAL's parameters don't work that way by default. <code>byval</code> (the default) gives the function its own copy, and <code>byref</code> is what asks for the old always-visible, always-shared behavior back, deliberately, per parameter.</p>
+<p>If you're coming from classic MBASIC/BASCOM: there's no local scope there at all, so a <code>GOSUB</code>-based "subroutine" touching an array was always touching the <em>one</em> array that exists — mutations were visible everywhere, instantly, because there was never more than one copy. BASCAL's parameters don't work that way by default. <code>byval</code> (the default) gives the function its own copy, and <code>byref</code> is what asks for the old always-visible, always-shared behavior back, deliberately, per parameter.</p>
 <h3 id="why-copy-incopy-out-not-just-globals">Why Copy-In/Copy-Out, Not Just Globals?</h3>
-<p>MBASIC/BASCOM has exactly one subroutine primitive: <code>GOSUB</code>/<code>RETURN</code>. There is no <code>SUB</code>, no <code>FUNCTION</code>, no parameter list of any kind — the most disciplined code the raw dialect allows is a <code>GOSUB</code> target with a contract enforced only by comments (<em>&quot;expects <code>A$</code> and <code>B%</code> set, leaves the result in <code>C%</code>&quot;</em>). That convention-only discipline, and the maintenance burden of getting it wrong across a team and a growing codebase, is exactly what BASCAL exists to replace.</p>
-<p>So the choice was never &quot;copy-in/copy-out versus some simpler globals-based way to pass parameters&quot; — MBASIC/BASCOM has no other mechanism to build parameters out of at all. <code>GOSUB</code> and global variables are the only two primitives available. Giving <code>.bcl</code> functions real parameters means simulating them using only those two primitives, and copy-in/copy-out is what that simulation necessarily looks like: assign the argument into the parameter's own storage before the <code>GOSUB</code>, and — for <code>byref</code> — copy the result back out after.</p>
-<p>There's also a structural reason it has to work this way, independent of the target dialect. Each function body is compiled exactly once, and every call site <code>GOSUB</code>s to that same shared label. A shared body needs one stable name for &quot;its first parameter&quot; — but different call sites pass different things: different variable names, or a whole expression (<code>f(a% + b%)</code>, <code>f(5)</code>) that isn't a variable at all. There's no single caller-side location to just operate on directly in the general case, so the value has to land somewhere fixed before the shared body runs.</p>
+<p>MBASIC/BASCOM has exactly one subroutine primitive: <code>GOSUB</code>/<code>RETURN</code>. There is no <code>SUB</code>, no <code>FUNCTION</code>, no parameter list of any kind — the most disciplined code the raw dialect allows is a <code>GOSUB</code> target with a contract enforced only by comments (<em>"expects <code>A$</code> and <code>B%</code> set, leaves the result in <code>C%</code>"</em>). That convention-only discipline, and the maintenance burden of getting it wrong across a team and a growing codebase, is exactly what BASCAL exists to replace.</p>
+<p>So the choice was never "copy-in/copy-out versus some simpler globals-based way to pass parameters" — MBASIC/BASCOM has no other mechanism to build parameters out of at all. <code>GOSUB</code> and global variables are the only two primitives available. Giving <code>.bcl</code> functions real parameters means simulating them using only those two primitives, and copy-in/copy-out is what that simulation necessarily looks like: assign the argument into the parameter's own storage before the <code>GOSUB</code>, and — for <code>byref</code> — copy the result back out after.</p>
+<p>There's also a structural reason it has to work this way, independent of the target dialect. Each function body is compiled exactly once, and every call site <code>GOSUB</code>s to that same shared label. A shared body needs one stable name for "its first parameter" — but different call sites pass different things: different variable names, or a whole expression (<code>f(a% + b%)</code>, <code>f(5)</code>) that isn't a variable at all. There's no single caller-side location to just operate on directly in the general case, so the value has to land somewhere fixed before the shared body runs.</p>
 <p><code>global</code> is the escape hatch for when you deliberately want the old always-shared, no-copy behavior back for one specific variable — see <a href="#variable-scoping">Variable Scoping</a>. It works precisely because it commits to one hardcoded name forever, which is exactly what makes it not a reusable, callable-with-different-data routine anymore.</p>
 <h3 id="multi-dimensional-array-parameters">Multi-Dimensional Array Parameters</h3>
-<p>A 2-D (or higher) array parameter declares its rank the same way as 1-D — one <code>?</code> per dimension — and passes the same way, too: just the plain array name, no <code>()</code> and no count arguments of any kind. The compiler already knows the real array's bounds (from its <code>DIM</code>, or — if it's itself a parameter being forwarded onward — from what <em>its</em> caller passed), and carries them alongside the array automatically. Nothing about that is visible in <code>.bcl</code> source; use <a href="#sizeof">sizeof()</a> inside the function body wherever the bound is needed.</p>
+<p>A 2-D (or higher) array parameter declares its rank the same way as 1-D — one <code>?</code> per dimension — and passes the same way, too: just the plain array name, no <code>()</code> and no count arguments of any kind. The compiler already knows the real array's bounds (from its <code>DIM</code>, or — if it's itself a parameter being forwarded onward — from what <em>its</em> caller passed), and carries them alongside the array automatically. Nothing about that is visible in <code>.bcl</code> source; use <a href="#sizeof"><code>sizeof()</code></a> inside the function body wherever the bound is needed.</p>
 <pre><code>&#39; grid% -- 2-D array to sum
 function sumGrid%(byref grid%(?, ?))
     total% = 0
@@ -1036,9 +1036,9 @@ dummy% = sumArr%(data%)   &#39; error: arr%&#39;s capacity can&#39;t be inferred
     &#39; ...
 end function</code></pre>
 <p>Whichever way a capacity is decided — inferred or explicit — every call site still checks the array's <em>actual</em> size against it at runtime, right before copying in, and halts with a clear error if it doesn't fit:</p>
-<pre><code>IF sumarr_arr_dim0_0% &gt; 100 THEN PRINT &quot;runtime error: ...&quot; : STOP</code></pre>
+<pre><code>IF sumarrArrDim00% &gt; 100 THEN PRINT &quot;runtime error: ...&quot; : STOP</code></pre>
 <p>This is a backstop, not the primary defense — a call site whose size <em>is</em> a compile-time constant and provably too big for its capacity is already rejected at compile time, before generated BASIC exists to run at all. The runtime check exists for the one case that's genuinely unprovable ahead of time: a capacity chosen to comfortably cover today's inputs that a later, larger runtime value turns out to exceed.</p>
-<h3 id="sizeof">sizeof()</h3>
+<h3 id="sizeof"><code>sizeof()</code></h3>
 <p><code>sizeof(name)</code> returns a <code>dim</code>ed array's size, resolved entirely at compile time — it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:</p>
 <pre><code>dim data%(9)
 print sizeof(data%)   &#39; 9 -- same value used in the dim</code></pre>
@@ -1127,12 +1127,12 @@ OPEN filename$ FOR APPEND AS #3</code></pre>
 <pre><code>kill &quot;temp.dat&quot;
 kill tempFile$</code></pre>
 <p>Generates <code>KILL filename$</code>. The file must exist or a runtime error occurs.</p>
-<h3 id="name--as">NAME ... AS</h3>
+<h3 id="name-...-as">NAME ... AS</h3>
 <p>Renames (or moves) a file.</p>
 <pre><code>name &quot;old.dat&quot; as &quot;new.dat&quot;
 name srcFile$ as destFile$</code></pre>
 <p>Generates <code>NAME old AS new</code>. Both arguments are expressions; string variables or literals work equally well.</p>
-<h3 id="write--and-input">WRITE # and INPUT</h3>
+<h3 id="write-and-input">WRITE # and INPUT</h3>
 <p><code>WRITE #</code> stores values in a quoted, comma-separated format that <code>INPUT #</code> can read back reliably:</p>
 <pre><code>csvFile$ = &quot;tutorial_scores.csv&quot;
 
@@ -1167,7 +1167,7 @@ while EOF(1) = 0
     PRINT &quot;  &quot; + line$
 end while
 CLOSE #1</code></pre>
-<h3 id="print--file-print">PRINT # (File Print)</h3>
+<h3 id="print-file-print">PRINT # (File Print)</h3>
 <p>Writes expressions to a file without the quoting that <code>WRITE #</code> adds:</p>
 <pre><code>PRINT #2, &quot;Header line&quot;
 PRINT #2, count%, value!</code></pre>
@@ -1258,20 +1258,21 @@ close #1</code></pre>
 <h2 id="record-files">Record Files</h2>
 <p>From Part 2 of <code>tutorial/15_random_and_record_files.bcl</code>:</p>
 <p>The <code>record</code> / <code>file</code> DSL is sugar over everything in <a href="#random-access-file-io">Random-Access File I/O</a> above. It computes the record's byte width, allocates the file number, and generates the <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>RSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code> calls for you — nothing about the <em>generated</em> BASIC changes; only the BASCAL source you write does.</p>
-<h3 id="record--end-record">record ... end record</h3>
+<h3 id="record-...-end-record">record ... end record</h3>
 <p>Declares a fixed-layout record type:</p>
 <pre><code>record Student
     id:    int16
     name:  string(20)
     score: float64
 end record</code></pre>
-<p>Supported field types and their packed width: <code>int16</code> (2 bytes), <code>int32</code> (4 bytes), <code>float32</code> (4 bytes), <code>float64</code> (8 bytes), <code>string(N)</code> (N bytes). The record's total width — used as the <code>OPEN ... LEN = </code> value — is the sum of its field widths, in declaration order.</p>
-<h3 id="file--as---open">file ... as ... = open(...)</h3>
+<p>Supported field types and their packed width: <code>int16</code> (2 bytes), <code>int32</code> (4 bytes), <code>float32</code> (4 bytes), <code>float64</code> (8 bytes), <code>string(N)</code> (N bytes). The record's total width — used as the <code>OPEN ... LEN =</code> value — is the sum of its field widths, in declaration order.</p>
+<h3 id="file-...-as-...-open...">file ... as ... = open(...)</h3>
 <pre><code>file db as Student = open(&quot;students.dat&quot;)</code></pre>
 <p>Transpiles to one <code>OPEN ... FOR RANDOM AS #n LEN = &lt;width&gt;</code> plus one matching <code>FIELD #n, ...</code> statement, binding one string buffer variable per field. File numbers are allocated automatically, starting at <code>#1</code>, in the order <code>file</code> declarations appear in the source.</p>
 <h3 id="whole-record-write">Whole-record write</h3>
 <pre><code>db[1] = { id: 1, name: &quot;Alice&quot;, score: 95.0 }</code></pre>
-<p>Every declared field must be supplied exactly once. Transpiles to one <code>LSET</code> per field — numeric fields are packed first (<code>MKI%</code>/<code>MKL&amp;</code>/<code>MKS!</code>/<code>MKD#</code>), string fields are assigned directly — followed by a single <code>PUT #n, 1</code>. <code>LSET</code> is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).</p>
+<p>Every declared field must be supplied exactly once. Transpiles to one <code>LSET</code> per field — numeric fields are packed first (<code>MKI$</code>/<code>MKL$</code>/<code>MKS$</code>/<code>MKD$</code>), string fields are assigned directly — followed by a single <code>PUT #n, 1</code>. <code>LSET</code> is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).</p>
+<p>Note <code>MKx$</code> always carries a <code>$</code> suffix, never a type suffix matching the value being packed (<code>MKI%</code>, <code>MKD#</code>, etc. are not real MBASIC/BASCOM functions) — every <code>MKx$</code> variant returns a string, which is what <code>LSET</code> requires.</p>
 <p>A record literal missing a declared field is a <strong>compile-time error</strong> — this is a safety net that real BASIC's raw <code>FIELD</code>/<code>LSET</code>/<code>PUT</code> gives you no equivalent of (see <a href="#partial-record-write">Partial-record write</a> for the deliberately-incomplete form).</p>
 <h3 id="partial-record-write">Partial-record write</h3>
 <pre><code>db[2] = ?{ score: 61.5 }</code></pre>
@@ -1285,7 +1286,8 @@ end record</code></pre>
 <p>Note: <code>GET</code>ing a record number past the current end of a random-access file doesn't error in real BASIC (records can be sparse), but the fields you meant to "preserve" will simply read back as zero/blank the first time a given record number is touched, since there was nothing on disk yet to preserve.</p>
 <h3 id="whole-record-read">Whole-record read</h3>
 <pre><code>let s = db[i]</code></pre>
-<p>Transpiles to <code>GET #n, i</code> followed by one unpacking assignment per field (<code>CVI%</code>/<code>CVL&amp;</code>/<code>CVS!</code>/<code>CVD#</code> for numeric fields, <code>RTRIM$</code> for strings), each one written into a scalar named <code>&lt;var&gt;_&lt;field&gt;</code> — e.g. <code>s_id%</code>, <code>s_name$</code>, <code>s_score#</code>. Later references to <code>s.id</code>, <code>s.name</code>, <code>s.score</code> in the source resolve directly to those scalars; no <code>Ident</code> named literally <code>s.id</code> is ever emitted.</p>
+<p>Transpiles to <code>GET #n, i</code> followed by one unpacking assignment per field (<code>CVI</code>/<code>CVL</code>/<code>CVS</code>/<code>CVD</code> for numeric fields, taking no suffix at all on real MBASIC/BASCOM), each one written into a scalar named <code>&lt;var&gt;&lt;Field&gt;</code> — e.g. <code>sId%</code>, <code>sName$</code>, <code>sScore#</code>. Later references to <code>s.id</code>, <code>s.name</code>, <code>s.score</code> in the source resolve directly to those scalars; no <code>Ident</code> named literally <code>s.id</code> is ever emitted.</p>
+<p>String fields aren't unpacked with <code>RTRIM$</code> — it isn't a real MBASIC/BASCOM builtin. Instead, the compiler builds an inline right-trim loop directly from <code>LEN</code>/<code>MID$</code>/<code>LEFT$</code>, walking back from the end of the fixed-width buffer past trailing spaces.</p>
 <p>Because BASIC doesn't auto-convert numbers to strings for concatenation, writing a numeric field next to a string with <code>+</code> (as in <code>print "[" + s.id + "]"</code>) automatically wraps the numeric side in <code>STR$(...)</code> — but only where a record field is actually involved; ordinary BASCAL <code>+</code> expressions are untouched.</p>
 <p>Once <code>s</code> exists, <code>s.field = value</code> reassigns only the in-memory scalar (<code>s_field</code>) — it does <strong>not</strong> touch the file. Assignment alone never causes disk I/O; see <a href="#writing-a-record-variable-back">Writing a record variable back</a> for the explicit commit step.</p>
 <h3 id="partial-field-update">Partial-field update</h3>
@@ -1298,7 +1300,7 @@ s.name  = &quot;Alicia&quot;
 s.score = 99.0
 db[i] = s</code></pre>
 <p><code>db[i] = s</code> — where <code>s</code> was bound by an earlier <code>let s = db[...]</code> — packs every field straight from <code>s</code>'s scalars and issues a single <code>PUT #n, i</code>, regardless of how many of <code>s</code>'s fields were reassigned first. Combined with the fact that <code>s.field = value</code> is pure in-memory assignment, this is the one-<code>GET</code>-one-<code>PUT</code> way to change multiple fields: exactly one <code>GET</code> (from the <code>let</code>) and one <code>PUT</code> (from the write-back) no matter how many fields in between were changed. <code>s</code> must have been read from a <code>file</code> of the same record type as the target; writing an <code>A</code> into a <code>file</code> of <code>B</code>s is a compile-time error.</p>
-<h3 id="fileclose">file.close()</h3>
+<h3 id="file.close">file.close()</h3>
 <pre><code>db.close()</code></pre>
 <p>Transpiles to <code>CLOSE #n</code>.</p>
 <h3 id="downto">downto</h3>
@@ -1342,7 +1344,7 @@ DATA &quot;Egypt&quot;,   &quot;Cairo&quot;</code></pre>
 <h3 id="restore">RESTORE</h3>
 <p>Resets the <code>DATA</code> pointer to the beginning (or to a specific label).</p>
 <pre><code>RESTORE           &#39; rewind to the first DATA
-RESTORE fromHere  &#39; rewind to the DATA right after the fromHere: label</code></pre>
+RESTORE fromHere  &#39; rewind to the DATA right after the `fromHere:` label</code></pre>
 <hr />
 <h2 id="miscellaneous-statements">Miscellaneous Statements</h2>
 <h3 id="mid-statement-form">MID$ (statement form)</h3>
@@ -1373,7 +1375,7 @@ RANDOMIZE TIMER     &#39; time-based seed for different sequences each run
 RANDOMIZE 99        &#39; fixed seed for reproducible output</code></pre>
 <h3 id="labels">Labels</h3>
 <pre><code>name:</code></pre>
-<p>Declares a branch target for <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code>/<code>on ... goto</code>/<code>on ... gosub</code> to jump to. <strong>BASCAL manages line numbers itself — you cannot target a raw line number.</strong> Every one of those statements requires a label name; the compiler assigns the actual BASIC line number when it renders output, exactly the way it already numbers the branch targets inside <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code>.</p>
+<p>Declares a branch target for <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code>/ <code>on ... goto</code>/<code>on ... gosub</code> to jump to. <strong>BASCAL manages line numbers itself — you cannot target a raw line number.</strong> Every one of those statements requires a label name; the compiler assigns the actual BASIC line number when it renders output, exactly the way it already numbers the branch targets inside <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code>.</p>
 <pre><code>goto skip
 print &quot;not reached&quot;
 skip:
@@ -1383,15 +1385,15 @@ print &quot;reached&quot;</code></pre>
 <h3 id="goto">GOTO</h3>
 <p>Transfers control to a label. Prefer <code>if</code>, loops, and functions; <code>GOTO</code> is primarily useful for error handlers.</p>
 <pre><code>GOTO doCleanup</code></pre>
-<h3 id="gosub--return-basic-level">GOSUB / RETURN (BASIC-level)</h3>
+<h3 id="gosub-return-basic-level">GOSUB / RETURN (BASIC-level)</h3>
 <p>Calls a BASIC subroutine at a label. Note this is the raw BASIC <code>GOSUB</code>, distinct from the function-call mechanism BASCAL generates internally.</p>
 <pre><code>GOSUB writeLog</code></pre>
-<h3 id="on--goto--on--gosub">ON ... GOTO / ON ... GOSUB</h3>
+<h3 id="on-...-goto-on-...-gosub">ON ... GOTO / ON ... GOSUB</h3>
 <p>Computed branch: the integer expression selects the <em>n</em>th target (1-based). Each target is a label, not a line number.</p>
 <pre><code>ON choice% GOTO firstCase, secondCase, thirdCase
 ON mode%   GOSUB modeIdle, modeRun, modeError</code></pre>
 <p>If the expression evaluates to 0 or exceeds the number of targets, execution continues with the next statement.</p>
-<h3 id="on-error-goto--resume--error">ON ERROR GOTO / RESUME / ERROR</h3>
+<h3 id="on-error-goto-resume-error">ON ERROR GOTO / RESUME / ERROR</h3>
 <p>MS-BASIC structured error handling: trap runtime errors, handle them, and resume execution.</p>
 <h4 id="on-error-goto">ON ERROR GOTO</h4>
 <p>Installs an error handler at a given label. Any subsequent runtime error causes execution to jump there. <code>ON ERROR GOTO 0</code> is the one place a numeric argument is still legal — <code>0</code> isn't a line number, it's the sentinel that disables the trap.</p>
@@ -1454,7 +1456,7 @@ out port%, val%</code></pre>
 <pre><code>width 80            &#39; set console line width to 80 characters
 width 40            &#39; narrow console mode
 width #1, 132       &#39; set line width for file channel #1</code></pre>
-<p>The optional <code>#n, </code> prefix targets a file channel; without it, the console width is set. Generates <code>WIDTH cols</code> or <code>WIDTH #n, cols</code>.</p>
+<p>The optional <code>#n,</code> prefix targets a file channel; without it, the console width is set. Generates <code>WIDTH cols</code> or <code>WIDTH #n, cols</code>.</p>
 <h3 id="clear">CLEAR</h3>
 <p>Resets all program variables to their zero/empty defaults and closes all open files. Useful at the start of a program or before reinitialising state.</p>
 <pre><code>clear</code></pre>
@@ -1497,7 +1499,7 @@ randomize timer                  &#39; time-based RNG seed</code></pre>
 <p>Signals the end of the main program body. Functions are emitted after <code>END</code> in the generated output.</p>
 <pre><code>END</code></pre>
 <hr />
-<h2 id="dependencies--require-and-import">Dependencies — REQUIRE and IMPORT</h2>
+<h2 id="dependencies-require-and-import">Dependencies — REQUIRE and IMPORT</h2>
 <p>BASCAL supports multi-file projects through <code>require</code> (and its alias <code>import</code>). Dependencies are declared at the top of the file, before any statements.</p>
 <p>From <code>tutorial/12_require.bcl</code> — a program that uses a statistics library:</p>
 <pre><code>require stats
@@ -1520,21 +1522,12 @@ END</code></pre>
 <p>The dot-separated path is converted to a file path by replacing each <code>.</code> with a directory separator and appending <code>.bcl</code>:</p>
 <pre><code>require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
 require stats                       →  stats.bcl</code></pre>
-<p>The compiler searches for the file in:</p>
-<ol type="1">
-<li>The directory containing the current source file</li>
-<li>Additional directories supplied with <code>-L</code> flags (in order)</li>
-</ol>
+<p>The compiler searches for the file in: 1. The directory containing the current source file 2. Additional directories supplied with <code>-L</code> flags (in order)</p>
 <p>Dependencies are resolved recursively. A file is loaded at most once per compilation (circular dependencies are silently ignored after the first load).</p>
 <h3 id="function-merging">Function Merging</h3>
 <p>All functions from a required file (and its transitive dependencies) are merged into the generated output. Duplicate function names are rejected with a diagnostic error.</p>
 <h3 id="module-conventions">Module Conventions</h3>
-<p>By convention, library modules (files loaded via <code>require</code>) should:</p>
-<ul>
-<li>Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements</li>
-<li>Not contain a <code>program</code> declaration</li>
-<li>Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></li>
-</ul>
+<p>By convention, library modules (files loaded via <code>require</code>) should: - Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements - Not contain a <code>program</code> declaration - Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></p>
 <hr />
 <h2 id="suite-common">Suite COMMON</h2>
 <p>In classic BASCOM programs, multiple programs chained together with <code>CHAIN</code> share variables through <code>COMMON</code> declarations. For this to work correctly, every program in the chain must declare <strong>identical</strong> <code>COMMON</code> lists — the variable positions in the <code>COMMON</code> block must match exactly.</p>
@@ -1555,13 +1548,7 @@ suite shared
 dim count%
 dim label$</code></pre>
 <p>The older filename-only form — no <code>suite</code> header, just one or more <code>common</code> declarations, with the suite name taken purely from the filename — still works and compiles to identical output; see <a href="#common-declaration">COMMON Declaration</a> below.</p>
-<p>Rules for suite files:</p>
-<ul>
-<li>Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed.</li>
-<li><code>require</code>, <code>function</code>, executable statements, and <code>program</code> declarations are all rejected with a diagnostic error.</li>
-<li>The suite file must contain at least one <code>dim</code> or <code>common</code> declaration.</li>
-<li>A file may not have both a <code>program</code> header and a <code>suite</code> header — a file is either an ordinary program (optionally referencing a suite) or a suite definition, never both.</li>
-</ul>
+<p>Rules for suite files: - Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code> declarations are all rejected with a diagnostic error. - The suite file must contain at least one <code>dim</code> or <code>common</code> declaration. - A file may not have both a <code>program</code> header and a <code>suite</code> header — a file is either an ordinary program (optionally referencing a suite) or a suite definition, never both.</p>
 <h3 id="dim-declaration-recommended">DIM Declaration (recommended)</h3>
 <pre><code>suite shared
 
@@ -1581,12 +1568,7 @@ common hiScore%</code></pre>
 COMMON hiScore%</code></pre>
 <h3 id="program-declaration-with-suite">Program Declaration with Suite</h3>
 <pre><code>program start suite shared</code></pre>
-<p>When a suite name is present, the compiler:</p>
-<ol type="1">
-<li>Searches for <code>shared.bcl</code> in the source file's directory (then <code>-L</code> paths).</li>
-<li>Validates that the suite file contains only <code>common</code> declarations.</li>
-<li>Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</li>
-</ol>
+<p>When a suite name is present, the compiler: 1. Searches for <code>shared.bcl</code> in the source file's directory (then <code>-L</code> paths). 2. Validates that the suite file contains only <code>common</code> declarations. 3. Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</p>
 <h3 id="using-the-suite">Using the Suite</h3>
 <p>From <code>tutorial/13_suite/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
 <p><strong><code>shared.bcl</code></strong> (suite file):</p>
@@ -1635,7 +1617,8 @@ END</code></pre>
 <h3 id="common-block">COMMON Block</h3>
 <p>If a suite is declared, <code>COMMON</code> lines appear before the header comment.</p>
 <h3 id="line-numbers">Line Numbers</h3>
-<p>By default, only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) receive line numbers. All other lines are unnumbered. Use <code>--line-numbers</code> to number every line.</p>
+<p>By default, <code>bcc</code> numbers every emitted line, not just branch targets. Real MBASIC/BASCOM has no notion of an unnumbered statement line -- classic BASIC source is a sequence of numbered lines, full stop -- so this is what real compilers and interpreters expect. Numbered comment-only lines are harmless on real BASCOM, but an unnumbered <em>statement</em> line is a syntax error.</p>
+<p>Pass <code>--sparse-line-numbers</code> to fall back to the old behavior, numbering only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) and leaving everything else unnumbered. This is more readable, but only safe with more lenient dialects (e.g. FreeBASIC's <code>-lang qb</code>) -- not real MBASIC/BASCOM.</p>
 <h3 id="if-transpilation">If Transpilation</h3>
 <pre><code>if x% &gt; 0 then
     PRINT &quot;positive&quot;
@@ -1729,7 +1712,7 @@ END
 &#39; end procedure printScore</code></pre>
 <p>There is no <code>printscore_result</code> variable. A bare <code>return</code> inside a procedure compiles to plain <code>RETURN</code>.</p>
 <h3 id="select-case-transpilation">Select Case Transpilation</h3>
-<p><code>SELECT CASE</code> is transpiled to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCC_T1%</code>) to avoid re-evaluation.</p>
+<p><code>SELECT CASE</code> is transpiled to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCCT1%</code>) to avoid re-evaluation.</p>
 <h3 id="exit-statements">Exit Statements</h3>
 <p><code>exit</code> is unqualified in BASCAL source; the compiler picks the shape below based on which loop it's innermost inside:</p>
 <ul>
@@ -1742,6 +1725,11 @@ END
 <pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
               [--line-numbers] [--clean | -c] [--binary | -b]</code></pre>
 <table>
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 26%" />
+<col style="width: 50%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th>Flag</th>
@@ -1795,6 +1783,11 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <hr />
 <h2 id="statement-quick-reference">Statement Quick Reference</h2>
 <table>
+<colgroup>
+<col style="width: 34%" />
+<col style="width: 25%" />
+<col style="width: 40%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th>Statement</th>
@@ -1928,132 +1921,132 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td><code>MID$(str$, start[, len]) = repl$</code></td>
 <td>In-place substring replacement</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LINE INPUT</code></td>
 <td><code>LINE INPUT #n, var$</code></td>
 <td>Read full line from file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LOCATE</code></td>
 <td><code>LOCATE row, col</code></td>
 <td>Position cursor</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LPRINT</code></td>
 <td><code>LPRINT expr[, ...]</code></td>
 <td>Print to printer</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>NAME</code></td>
 <td><code>NAME old$ AS new$</code></td>
 <td>Rename a file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>OPTION BASE</code></td>
-<td><code>OPTION BASE 0|1</code></td>
+<td><code>OPTION BASE 0\|1</code></td>
 <td>Set default array lower bound</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ON...GOTO</code></td>
 <td><code>ON expr GOTO label1, label2, ...</code></td>
 <td>Computed GOTO</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ON...GOSUB</code></td>
 <td><code>ON expr GOSUB label1, label2, ...</code></td>
 <td>Computed GOSUB</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ON ERROR GOTO</code></td>
 <td><code>ON ERROR GOTO label</code></td>
 <td>Install error handler (<code>ON ERROR GOTO 0</code> disables)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ERROR</code></td>
 <td><code>ERROR n</code></td>
 <td>Trigger runtime error code <em>n</em></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>RESUME</code></td>
 <td><code>RESUME</code> / <code>RESUME NEXT</code> / <code>RESUME label</code></td>
 <td>Resume after error handler</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>OPEN</code></td>
 <td><code>OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n</code></td>
 <td>Open file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>OUT</code></td>
 <td><code>OUT port, val</code></td>
 <td>Write byte to hardware I/O port</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>POKE</code></td>
 <td><code>POKE address, val</code></td>
 <td>Write byte to memory address</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PRINT</code></td>
 <td><code>PRINT expr[, ...]</code></td>
 <td>Print to screen</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PROCEDURE</code></td>
 <td><code>PROCEDURE name(params)</code> … <code>END PROCEDURE</code></td>
 <td>Define a procedure (no return value)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PRINT #</code></td>
 <td><code>PRINT #n, expr[, ...]</code></td>
 <td>Print to file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PRINT USING</code></td>
 <td><code>PRINT USING fmt$; expr[; ...]</code></td>
 <td>Formatted print (also <code>LPRINT USING</code>, <code>PRINT #n, USING</code>)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>RANDOMIZE</code></td>
 <td><code>RANDOMIZE [seed]</code></td>
 <td>Seed random number generator</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>READ</code></td>
 <td><code>READ var[, ...]</code></td>
 <td>Read from DATA stream</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>REQUIRE</code></td>
 <td><code>require path.symbol</code></td>
 <td>Load dependency module</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RESTORE</code></td>
 <td><code>RESTORE [label]</code></td>
 <td>Reset DATA pointer</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>RETURN</code></td>
 <td><code>RETURN expr</code> / <code>RETURN</code></td>
 <td>Return value from function; bare form exits a procedure early</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>SELECT CASE</code></td>
 <td><code>SELECT CASE expr</code> … <code>END SELECT</code></td>
 <td>Multi-way branch</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>STOP</code></td>
 <td><code>STOP</code></td>
 <td>Stop program execution</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>SUITE</code></td>
 <td><code>suite name</code></td>
 <td>Declare this file as suite <code>name</code> (suite files only; shared vars listed via <code>dim</code>)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SWAP</code></td>
 <td><code>SWAP a, b</code></td>
 <td>Exchange two variable values</td>
@@ -2126,6 +2119,72 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="standard-library-functions">Standard Library Functions</h2>
+<h3 id="mid-assignment">MID$ assignment</h3>
+<pre><code>MID$(target$, start[, len]) = replacement$</code></pre>
+<p>An in-place, same-length splice into <code>target$</code> — not a value-producing expression, and not the same thing as <code>MID$(...)</code> used to <em>read</em> a substring. <code>target$</code> must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).</p>
+<p>Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's lowered into a call to <code>com.bascal.stdlib.midAssign</code> — an ordinary BASCAL function, auto-added to the program (like any other <code>com.bascal.stdlib</code> symbol; see <a href="#string-and-error-message-functions">String and error-message functions</a> below) the moment <code>MID$</code> assignment syntax appears anywhere, with no <code>require</code> line needed since nothing in your own source ever spells the function's name:</p>
+<pre><code>function midAssign$(target$, start%, len%, value$)
+    t$ = value$
+    if LEN(t$) &gt; len% then
+        t$ = LEFT$(t$, len%)
+    end if
+    return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
+end function</code></pre>
+<p>Every call site becomes an ordinary function call (<code>GOSUB</code>, in the generated BASIC) into that one shared body — the same call/return machinery every other BASCAL function goes through, so there's no separate inline-vs-shared-subroutine cutoff to reason about.</p>
+<p>The two-argument form (<code>MID$(target$, start) = replacement$</code>) behaves as if <code>len</code> were <code>LEN(replacement$)</code>. Total <code>LEN(target$)</code> never changes — this is always a same-length overwrite, never a grow/shrink — and if <code>replacement$</code> is shorter than <code>len</code>, only that many characters are overwritten; the rest of <code>target$</code> past that point is left untouched, not padded.</p>
+<h3 id="string-and-error-message-functions">String and error-message functions</h3>
+<p><code>LTRIM$</code>, <code>RTRIM$</code>, <code>UCASE$</code>, and <code>LCASE$</code> are not real MBASIC/BASCOM 2.00 builtins, and <code>ERROR$</code> compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (<code>LEFT$</code>/<code>MID$</code>/<code>LEN</code>/<code>ASC</code>/<code>CHR$</code>, loops — no <code>PEEK</code>/<code>POKE</code>, no <code>VARPTR</code>), as an ordinary <code>require</code>-able library under <code>com.bascal.stdlib</code> — the same mechanism as any other BASCAL library (see <a href="#dependencies--require-and-import">Dependencies — REQUIRE and IMPORT</a>), not something auto-injected by call-site detection:</p>
+<pre><code>require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error</code></pre>
+<table>
+<colgroup>
+<col style="width: 32%" />
+<col style="width: 35%" />
+<col style="width: 32%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Symbol</th>
+<th>Signature</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>com.bascal.stdlib.ltrim</code></td>
+<td><code>LTRIM$(s$)</code></td>
+<td>Strip leading spaces</td>
+</tr>
+<tr class="even">
+<td><code>com.bascal.stdlib.rtrim</code></td>
+<td><code>RTRIM$(s$)</code></td>
+<td>Strip trailing spaces</td>
+</tr>
+<tr class="odd">
+<td><code>com.bascal.stdlib.ucase</code></td>
+<td><code>UCASE$(s$)</code></td>
+<td>Uppercase <code>a</code>-<code>z</code> only; other characters pass through unchanged</td>
+</tr>
+<tr class="even">
+<td><code>com.bascal.stdlib.lcase</code></td>
+<td><code>LCASE$(s$)</code></td>
+<td>Lowercase <code>A</code>-<code>Z</code> only; other characters pass through unchanged</td>
+</tr>
+<tr class="odd">
+<td><code>com.bascal.stdlib.error</code></td>
+<td><code>ERROR$(code%)</code></td>
+<td>Human-readable message for a classic MBASIC/GW-BASIC/BASCOM error code (e.g. <code>ERROR$(53)</code> → <code>"File not found"</code>); falls back to <code>"Error " + STR$(code%)</code> for a code outside its lookup table</td>
+</tr>
+</tbody>
+</table>
+<p>Each <code>.bcl</code> source file lives under <code>com/bascal/stdlib/</code> in the BASCAL distribution, and <code>bcc</code> always adds that directory to its library search path automatically — a release package ships it next to the <code>bcc</code> binary (or, for a <code>.deb</code>/<code>.rpm</code> install, under <code>.../share/bascal/</code>), so no <code>-L</code> is needed to reach it. <code>-L</code> and a same-named file next to your own source both still take priority, so you can shadow a stdlib module with your own if you ever need to.</p>
+<p>Requiring one of these and also defining a function under the same name is a duplicate-function error, same as any other name collision between a required library and your own code — pick one.</p>
+<p><code>STRING$</code>, <code>FIX</code>, <code>HEX$</code>, and <code>OCT$</code> were checked the same way against real BASCOM 2.00 and <em>are</em> genuine builtins, so BASCAL passes calls to them straight through rather than reimplementing them.</p>
 
   </div>
 </main>

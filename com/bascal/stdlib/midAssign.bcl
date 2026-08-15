@@ -1,0 +1,15 @@
+// In-place, same-length splice into target$ -- the shared implementation
+// behind MID$ statement-form assignment (`MID$(target$, start[, len]) =
+// value`). Not meant to be called directly: bcc lowers that syntax into a
+// call to this function and auto-adds it to the program whenever the
+// syntax is used, resolved the same way any other com.bascal.stdlib
+// require is, just without a `require` line for the user to write --
+// nobody ever spells this function's name themselves, since the compiler
+// synthesizes the call.
+function midAssign$(target$, start%, len%, value$)
+    t$ = value$
+    if LEN(t$) > len% then
+        t$ = LEFT$(t$, len%)
+    end if
+    return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
+end function

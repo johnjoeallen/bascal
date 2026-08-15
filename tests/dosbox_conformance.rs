@@ -206,3 +206,43 @@ fn const_and_print_matches_real_bascom() {
         expected_path.display()
     );
 }
+
+#[test]
+fn mid_assign_matches_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("mid_assign");
+
+    let expected_path = repo_root().join("tests/fixtures/conformance/mid_assign.expected.txt");
+    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
+        panic!("failed to read {}: {err}", expected_path.display())
+    });
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's output for MID$ statement-form assignment no longer \
+         matches the golden expectation at {}",
+        expected_path.display()
+    );
+}
+
+#[test]
+fn stdlib_functions_match_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("stdlib_functions");
+
+    let expected_path = repo_root().join("tests/fixtures/conformance/stdlib_functions.expected.txt");
+    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
+        panic!("failed to read {}: {err}", expected_path.display())
+    });
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's output for com.bascal.stdlib no longer matches the \
+         golden expectation at {}",
+        expected_path.display()
+    );
+}

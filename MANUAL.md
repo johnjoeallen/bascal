@@ -2955,28 +2955,33 @@ substring. `target$` must be a plain string variable or string array
 element (not, for example, a record/file DSL field or a nested call).
 
 Despite compiling cleanly, this statement isn't reliable across every real
-MBASIC/BASCOM dialect BASCAL targets, so it's lowered to an equivalent
-`LEFT$`/`MID$` splice rather than passed through as a literal `MID$(...) =`
-statement:
+MBASIC/BASCOM dialect BASCAL targets, so it's lowered into a call to
+`com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to
+the program (like any other `com.bascal.stdlib` symbol; see [String and
+error-message functions](#string-and-error-message-functions) below) the
+moment `MID$` assignment syntax appears anywhere, with no `require` line
+needed since nothing in your own source ever spells the function's name:
 
 ```
-LET t$ = replacement$
-IF LEN(t$) > len THEN t$ = LEFT$(t$, len)
-LET target$ = LEFT$(target$, start - 1) + t$ + MID$(target$, start + LEN(t$))
+function midAssign$(target$, start%, len%, value$)
+    t$ = value$
+    if LEN(t$) > len% then
+        t$ = LEFT$(t$, len%)
+    end if
+    return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
+end function
 ```
+
+Every call site becomes an ordinary function call (`GOSUB`, in the
+generated BASIC) into that one shared body — the same call/return machinery
+every other BASCAL function goes through, so there's no separate
+inline-vs-shared-subroutine cutoff to reason about.
 
 The two-argument form (`MID$(target$, start) = replacement$`) behaves as if
 `len` were `LEN(replacement$)`. Total `LEN(target$)` never changes — this is
 always a same-length overwrite, never a grow/shrink — and if `replacement$`
 is shorter than `len`, only that many characters are overwritten; the rest
 of `target$` past that point is left untouched, not padded.
-
-A program with more than a handful of `MID$` assignment call sites has them
-share one GOSUB subroutine instead of repeating the splice at every site
-(the cutoff is an internal compiler constant, not something `.bcl` source
-controls). That subroutine is not reentrancy-safe — classic BASIC's flat
-global `GOSUB` has no call stack for locals — which is fine for BASCAL's
-straight-line call sites.
 
 ### String and error-message functions
 

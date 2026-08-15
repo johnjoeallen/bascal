@@ -1,0 +1,13 @@
+[hi]
+[hi]
+[]
+[]
+[hi]
+[hi]
+[]
+[]
+ABCXYZ123!
+abcxyz123!
+File not found
+Division by zero
+Error  9999

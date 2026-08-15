@@ -47,7 +47,8 @@ pub fn compile_source(
 ) -> Result<String, Vec<Diagnostic>> {
     let filename = filename.into();
     let program = parse_source(filename, source)?;
-    let (program, synthesized_buffer_names) = records::lower(program)?;
+    let (mut program, synthesized_buffer_names) = records::lower(program)?;
+    inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
     let conflicts = codegen::check_generated_name_conflicts(&program);
     if !conflicts.is_empty() {
@@ -55,29 +56,6 @@ pub fn compile_source(
     }
     CodeGenerator::new()
         .with_synthesized_buffer_names(synthesized_buffer_names)
-        .generate(&program)
-}
-
-/// Test-only: same pipeline as `compile_source`, with the `MID$`-assignment
-/// inline-vs-subroutine cutoff overridden so the GOSUB-subroutine backpatch
-/// path can be exercised without a fixture with dozens of call sites.
-#[cfg(test)]
-fn compile_source_with_mid_assign_threshold(
-    filename: impl Into<String>,
-    source: &str,
-    threshold: usize,
-) -> Result<String, Vec<Diagnostic>> {
-    let filename = filename.into();
-    let program = parse_source(filename, source)?;
-    let (program, synthesized_buffer_names) = records::lower(program)?;
-    resolver::validate(&program)?;
-    let conflicts = codegen::check_generated_name_conflicts(&program);
-    if !conflicts.is_empty() {
-        return Err(conflicts);
-    }
-    CodeGenerator::new()
-        .with_synthesized_buffer_names(synthesized_buffer_names)
-        .with_mid_assign_inline_threshold(threshold)
         .generate(&program)
 }
 
@@ -106,12 +84,91 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         // Suite file not found → compile without COMMON (silent; suite may not exist yet).
     }
 
-    let (program, synthesized_buffer_names) = records::lower(program)?;
+    let (mut program, synthesized_buffer_names) = records::lower(program)?;
+    inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
     CodeGenerator::new()
         .with_line_numbers(options.line_numbers)
         .with_synthesized_buffer_names(synthesized_buffer_names)
         .generate(&program)
+}
+
+/// If `program` uses `MID$` statement-form assignment anywhere (top-level
+/// or inside any function body) and hasn't already defined or required its
+/// own `midAssign$`, splices in `com.bascal.stdlib.midAssign` -- resolved
+/// via `stdlib_search_roots()`, the same on-disk library `require
+/// com.bascal.stdlib.*` resolves against, just triggered by the AST shape
+/// instead of an explicit `require` line, since nothing in the user's own
+/// source ever names this function -- the compiler synthesizes the call
+/// (see `codegen::MID_ASSIGN_HELPER_NAME`).
+fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Vec<Diagnostic>> {
+    let already_defined = program
+        .functions
+        .iter()
+        .any(|f| f.name.name.eq_ignore_ascii_case(codegen::MID_ASSIGN_HELPER_NAME));
+    if already_defined || !program_uses_mid_assign(program) {
+        return Ok(());
+    }
+
+    let symbol = format!("com.bascal.stdlib.{}", codegen::MID_ASSIGN_HELPER_NAME);
+    let relative = required_symbol_to_path(&symbol);
+    let path = stdlib_search_roots()
+        .into_iter()
+        .map(|root| root.join(&relative))
+        .find(|candidate| candidate.exists())
+        .ok_or_else(|| {
+            vec![Diagnostic::error(
+                diagnostics::SourcePos::new("<compiler-internal>", 1, 1),
+                format!(
+                    "internal error: this program uses MID$ statement-form assignment, which \
+                     needs BASCAL's own {symbol} helper, but {} could not be found -- this \
+                     looks like a broken install; check that `com/` shipped alongside `bcc`",
+                    relative.display()
+                ),
+            )]
+        })?;
+
+    let source = fs::read_to_string(&path).map_err(|err| {
+        vec![Diagnostic::error(
+            diagnostics::SourcePos::new("<compiler-internal>", 1, 1),
+            format!("internal error: failed to read {}: {err}", path.display()),
+        )]
+    })?;
+    let filename = path.display().to_string();
+    let helper_program = parse_source(filename.clone(), &source)?;
+    let [function]: [ast::FunctionDef; 1] = helper_program.functions.try_into().unwrap_or_else(|functions: Vec<ast::FunctionDef>| {
+        panic!(
+            "BASCAL bug: {filename} must declare exactly one function, found {}",
+            functions.len()
+        )
+    });
+    program.functions.push(function);
+    Ok(())
+}
+
+fn program_uses_mid_assign(program: &ast::Program) -> bool {
+    statements_use_mid_assign(&program.statements)
+        || program.functions.iter().any(|f| statements_use_mid_assign(&f.body))
+}
+
+fn statements_use_mid_assign(statements: &[ast::Statement]) -> bool {
+    statements.iter().any(statement_uses_mid_assign)
+}
+
+fn statement_uses_mid_assign(statement: &ast::Statement) -> bool {
+    use ast::Statement::*;
+    match statement {
+        MidAssign { .. } => true,
+        If { then_body, else_body, .. } => {
+            statements_use_mid_assign(then_body) || statements_use_mid_assign(else_body)
+        }
+        For { body, .. } | While { body, .. } | Do { body, .. } => statements_use_mid_assign(body),
+        SelectCase { cases, else_body, .. } => {
+            cases.iter().any(|c| statements_use_mid_assign(&c.body))
+                || statements_use_mid_assign(else_body)
+        }
+        _ => false,
+    }
 }
 
 pub fn default_output_path(input: &Path) -> std::path::PathBuf {
@@ -1444,8 +1501,9 @@ end
         // replace. Real MBASIC/BASCOM 2.00 has no MID$ assignment statement
         // at all (it's a later QuickBASIC-era addition), so this must not
         // pass through as raw `MID$(...) = ...` -- it needs to lower to a
-        // same-length LEFT$/MID$ splice, same as every other real-BASCOM
-        // incompatibility this compiler works around.
+        // call to BASCAL's own com.bascal.stdlib.midAssign helper, same as
+        // every other real-BASCOM incompatibility this compiler works
+        // around.
         let source = r#"s$ = "Hello World"
 mid$(s$, 7, 5) = "BASIC"
 mid$(s$, 1) = "Goodbye"
@@ -1458,69 +1516,86 @@ end
             "MID$ assignment must not pass through as a raw statement -- real \
              MBASIC/BASCOM has no such statement:\n{output}"
         );
-        // Three-argument form: LEN(...) compared against the literal length.
-        assert!(output.contains(r#"IF LEN(BCCT1$) > 5 THEN BCCT1$ = LEFT$(BCCT1$, 5)"#));
         assert!(
-            output.contains("LET s$ = LEFT$(s$, 7 - 1) + BCCT1$ + MID$(s$, 7 + LEN(BCCT1$))")
+            output.contains("' function midassign$"),
+            "expected the com.bascal.stdlib.midAssign helper to be auto-injected:\n{output}"
         );
+        // Three-argument form.
+        assert!(output.contains("midassignTarget0$ = s$"));
+        assert!(output.contains("midassignStart0% = 7"));
+        assert!(output.contains("midassignLen0% = 5"));
+        assert!(output.contains(r#"midassignValue0$ = "BASIC""#));
+        assert!(output.contains("s$ = midassignResult0$"));
         // Two-argument form: omitted length behaves as LEN(replacement$).
-        assert!(output.contains(
-            r#"IF LEN(BCCT2$) > LEN("Goodbye") THEN BCCT2$ = LEFT$(BCCT2$, LEN("Goodbye"))"#
-        ));
-        assert!(
-            output.contains("LET s$ = LEFT$(s$, 1 - 1) + BCCT2$ + MID$(s$, 1 + LEN(BCCT2$))")
-        );
-    }
-
-    #[test]
-    fn mid_assign_many_call_sites_share_one_subroutine() {
-        // Above the inline-vs-subroutine threshold, every MID$ assignment
-        // call site must route through one shared GOSUB subroutine instead
-        // of repeating the splice logic at each site.
-        let source = r#"a$ = "aaa"
-b$ = "bbb"
-c$ = "ccc"
-mid$(a$, 1, 1) = "X"
-mid$(b$, 1, 1) = "Y"
-mid$(c$, 1, 1) = "Z"
-print a$; b$; c$
-end
-"#;
-        let output = compile_source_with_mid_assign_threshold("mid_many.bcl", source, 2)
-            .expect("should compile");
-
-        // Exactly one subroutine body (its internal label is resolved away
-        // to a bare line number by the final numbering pass, same as every
-        // other compiler-internal label -- see `is_label_line`), and every
-        // call site GOSUBs the very same line number.
-        assert_eq!(
-            output.matches("RETURN").count(),
-            1,
-            "expected exactly one shared subroutine body, not one per call site:\n{output}"
-        );
+        assert!(output.contains(r#"midassignLen0% = LEN("Goodbye")"#));
+        // Both call sites share the same GOSUB target -- one subroutine body.
         let gosub_targets: std::collections::HashSet<&str> = output
             .lines()
             .filter_map(|l| l.trim().strip_prefix("GOSUB "))
             .collect();
-        assert_eq!(
-            gosub_targets.len(),
-            1,
-            "expected every call site to GOSUB the same shared subroutine:\n{output}"
-        );
+        assert_eq!(gosub_targets.len(), 1, "expected one shared subroutine:\n{output}");
         assert_eq!(
             output.matches(&format!("GOSUB {}", gosub_targets.iter().next().unwrap())).count(),
-            3,
-            "expected all three call sites to GOSUB the shared subroutine:\n{output}"
+            2,
+            "expected both call sites to GOSUB the shared subroutine:\n{output}"
         );
-        // No inline splice formula anywhere -- that's the subroutine's job now.
+    }
+
+    #[test]
+    fn mid_assign_target_index_is_evaluated_only_once() {
+        // `target` may be an array element whose index has a side effect
+        // (here, `nextIndex%()` advances a global counter each time it's
+        // called). MID$ assignment lowering must evaluate that index
+        // exactly once -- reusing the already-rendered target text for
+        // both the helper call and the write-back -- not once per use.
+        let source = r#"dim names$(3)
+names$(0) = "aaaaa"
+i% = 0
+
+function nextIndex%()
+    global i%
+    result% = i%
+    i% = i% + 1
+    return result%
+end function
+
+mid$(names$(nextIndex%()), 1, 3) = "XYZ"
+print names$(0)
+print i%
+end
+"#;
+        let output = compile_source("mid_index_side_effect.bcl", source).expect("should compile");
+
+        // Exactly one call into nextIndex%'s own subroutine label.
+        let nextindex_label = output
+            .lines()
+            .find(|l| l.trim_end() == "' function nextindex%()")
+            .and_then(|_| {
+                output
+                    .lines()
+                    .skip_while(|l| l.trim_end() != "' function nextindex%()")
+                    .nth(1)
+                    .and_then(|l| l.trim().split_whitespace().next())
+            })
+            .expect("nextindex%'s label line should be the line right after its comment");
+        assert_eq!(
+            output.matches(&format!("GOSUB {nextindex_label}")).count(),
+            1,
+            "target's array index must be evaluated exactly once:\n{output}"
+        );
+
+        // The same rendered index expression is reused verbatim for the
+        // write-back, not re-evaluated.
+        let target_text = "names$(nextindexResult0%)";
         assert!(
-            !output.contains("LEFT$(a$,"),
-            "call sites must not inline the splice formula above the threshold:\n{output}"
+            output.contains(&format!("midassignTarget0$ = {target_text}")),
+            "expected the call argument to reuse the already-evaluated index:\n{output}"
         );
-        assert!(output.contains("LET bccMidAssignPos0% = 1"));
-        assert!(output.contains("LET bccMidAssignRepl0$ = \"X\""));
-        assert!(output.contains("LET bccMidAssignTarget0$ = a$"));
-        assert!(output.contains("LET a$ = bccMidAssignTarget0$"));
+        assert!(
+            output.contains(&format!("{target_text} = midassignResult0$")),
+            "expected the write-back to reuse the already-evaluated index, not call \
+             nextIndex%() again:\n{output}"
+        );
     }
 
     // ── stdlib functions ────────────────────────────────────────────────

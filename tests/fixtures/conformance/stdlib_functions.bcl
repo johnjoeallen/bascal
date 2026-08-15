@@ -1,0 +1,24 @@
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+
+print "[" + ltrim$("   hi") + "]"
+print "[" + ltrim$("hi") + "]"
+print "[" + ltrim$("   ") + "]"
+print "[" + ltrim$("") + "]"
+
+print "[" + rtrim$("hi   ") + "]"
+print "[" + rtrim$("hi") + "]"
+print "[" + rtrim$("   ") + "]"
+print "[" + rtrim$("") + "]"
+
+print ucase$("abcXYZ123!")
+print lcase$("abcXYZ123!")
+
+print error$(53)
+print error$(11)
+print error$(9999)
+
+end
