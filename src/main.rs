@@ -197,7 +197,7 @@ fn usage() -> String {
         "  --sparse-line-numbers  Number only branch targets, not every line (invalid on",
         "                         real MBASIC/BASCOM; only safe with lenient dialects like",
         "                         FreeBASIC's -lang qb)",
-        "  --clean, -c            Recompile even if the output is already up to date",
+        "  --clean, -c            Re-transpile even if the output is already up to date",
         "  --binary, -b           Invoke fbc to compile the generated .bas to tmp/<stem>",
     ]
     .join("\n")

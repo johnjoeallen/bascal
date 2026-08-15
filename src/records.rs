@@ -14,7 +14,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// Lowers the DSL and returns the rewritten program alongside the
 /// lowercase BASIC names of every buffer variable this pass invented
 /// (see `Lowerer::synthesized_buffer_names`) -- `codegen.rs` needs that
-/// set to know which `FIELD` buffer names are compiler-built camelCase
+/// set to know which `FIELD` buffer names are transpiler-built camelCase
 /// (case preserved) versus author-typed raw BASIC (still normalized to
 /// lowercase, same as every other identifier).
 pub fn lower(program: Program) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
@@ -87,7 +87,7 @@ struct Lowerer {
     /// via `buffer_ident` -- as opposed to a `FIELD` buffer name the
     /// author typed directly in raw-BASIC-passthrough source. Threaded
     /// back to `codegen.rs` so it can tell the two apart: a
-    /// compiler-synthesized buffer name is already deliberately
+    /// transpiler-synthesized buffer name is already deliberately
     /// camelCased and should keep that case, while a user-typed one still
     /// gets BASCAL's normal lowercase normalization.
     synthesized_buffer_names: std::collections::HashSet<String>,
@@ -987,7 +987,7 @@ fn pack_fn_name(ty: &RecordFieldType) -> &'static str {
 
 /// `CVI`/`CVL`/`CVS`/`CVD` take no suffix at all -- each already returns its
 /// one unambiguous numeric type. `RTRIM$` isn't a real MBASIC/BASCOM builtin
-/// either; string fields are unpacked through the compiler-generated trim
+/// either; string fields are unpacked through the transpiler-generated trim
 /// routine instead (see `emit_trim_helper` in `codegen.rs`), not this name.
 fn unpack_fn_name(ty: &RecordFieldType) -> &'static str {
     match ty {

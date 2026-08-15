@@ -12,7 +12,7 @@ building a real 2026 application. See [the origin story](https://johnjoeallen.gi
 side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual.html).
 
 BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
-The compiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
+The transpiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
 language reference.
 
 BASCAL keeps BASIC's global symbol model while adding enough structure to make
@@ -25,7 +25,7 @@ larger programs practical:
 - `function` declarations with explicit `return`
 - `byref` / `byval` parameter passing modes (`byval`, the default, copies a
   parameter in only; `byref` copies the result back out too, for scalars
-  and arrays alike) with compile-time checks for both — a `byref` argument
+  and arrays alike) with transpile-time checks for both — a `byref` argument
   must be a plain variable, and a passed array's dimensionality must match
   how the callee indexes it
 - path-style `require` dependencies
@@ -53,12 +53,12 @@ Everything is still global. Path-style names are dependency selectors, not
 runtime namespaces.
 
 BASCAL is a strict superset of classic BASIC — bitwise `AND`/`OR`/`NOT` and
-hand-written `OPEN`/`FIELD`/`GET`/`PUT` all still compile unchanged.
+hand-written `OPEN`/`FIELD`/`GET`/`PUT` all still pass through unchanged.
 `GOTO`/`GOSUB`/`ON ERROR GOTO`/`RESUME`/`RESTORE` are raw BASIC too, but
 BASCAL manages line numbering itself, so their targets are always a `name:`
 label declared in source — never a raw line number. Beyond that, wherever
 BASCAL has its own construct for something above, treat that construct as
-canonical: it's the syntax the compiler exists to let you write instead of
+canonical: it's the syntax the transpiler exists to let you write instead of
 the raw-BASIC equivalent, not just another option.
 
 ## Build
@@ -87,7 +87,7 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets |
-| `--clean`, `-c` | Recompile even if output is already up to date |
+| `--clean`, `-c` | Re-transpile even if output is already up to date |
 | `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary in `tmp/` |
 
 The input file's directory is always the first implicit search root. `-L` adds
@@ -137,7 +137,7 @@ dim hiScore%
 The `suite <name>` header (mirroring a regular file's `program <name>`) plus
 plain `dim` declarations is the recommended form. The older spelling — no
 header, just `common score%, level%, playerName$` / `common hiScore%`, with
-the suite name taken from the filename alone — still works and compiles to
+the suite name taken from the filename alone — still works and transpiles to
 identical output.
 
 **Program files:**
@@ -161,7 +161,7 @@ PRINT "Score: " + STR$(score%)
 END
 ```
 
-Both compile to `.bas` files that open with the same block:
+Both transpile to `.bas` files that open with the same block:
 
 ```
 COMMON score%, level%, playerName$
@@ -183,7 +183,7 @@ Functions are transpiled to global parameter/result variables plus `GOSUB`.
 Every parameter is copied in before the call; `byref` copies the result back
 out afterward too (`byval`, the default, doesn't). Array parameters support
 any number of dimensions, matched against how the callee's body indexes
-them — a mismatch is a compile-time error.
+them — a mismatch is a transpile-time error.
 
 Only `GOTO` / `GOSUB` target lines receive line numbers (sparse mode). Use
 `--line-numbers` for every line.
@@ -235,14 +235,14 @@ BASCAL does not support recursion, direct or indirect. Functions and
 procedures are transpiled to `GOSUB` against shared global parameter
 storage, not a real call stack, so any cycle in the call graph — a
 function calling itself, or a longer chain that eventually calls back into
-where it started — overwrites in-flight parameters. The compiler checks
-the whole call graph and rejects any cycle at compile time. Use an
+where it started — overwrites in-flight parameters. The transpiler checks
+the whole call graph and rejects any cycle at transpile time. Use an
 explicit stack array to simulate recursion.
 
 ## Repository Layout
 
 ```
-src/        Rust compiler source
+src/        Rust transpiler source
 examples/   BASCAL source examples (.bas generated alongside each .bcl)
 tmp/        temporary compiled binaries (git-ignored)
 ```
@@ -333,7 +333,7 @@ env -u RUSTC_WRAPPER cargo test
 ```
 
 - Unit-tests for lexer, parser, validation, and function transpilation
-- Compiles every driver-style `examples/**/*.bcl` file (excluding `com/`
+- Transpiles every driver-style `examples/**/*.bcl` file (excluding `com/`
   dependency trees) and writes `.bas` output alongside the source
 - If `fbc` is installed, compiles and runs `sort_driver` and `remline`
   end-to-end
@@ -347,7 +347,7 @@ env -u RUSTC_WRAPPER cargo test
 
 - No library archive format.
 - An array parameter's shared storage is `DIM`ed once, sized to the largest
-  array any call site ever passes it. The compiler infers that size itself
+  array any call site ever passes it. The transpiler infers that size itself
   from every call site's `DIM` bounds (literal, `const`, or another
   function's already-resolved array parameter); a call site whose size is a
   genuine runtime value (e.g. `DIM data%(n%)` where `n%` came from `INPUT`)

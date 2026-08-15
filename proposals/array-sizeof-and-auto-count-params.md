@@ -1,9 +1,9 @@
-# Proposal: compiler-tracked array sizes, `sizeof()`, and auto-injected count parameters
+# Proposal: transpiler-tracked array sizes, `sizeof()`, and auto-injected count parameters
 
 Status: everything in this file is **implemented** — `sizeof(x%)` /
 `sizeof(x%, axis)` (freeze-at-DIM-time, multi-axis, and the on-a-parameter
 resolution case), unconditional auto-injection of array bounds at call
-sites, **array parameter storage capacity inference** (with a compile-time
+sites, **array parameter storage capacity inference** (with a transpile-time
 and a runtime backstop check), **`byref`/`byval`**, **`global` shadowing**,
 and **explicit array-parameter rank syntax** (`arr%(?)`, `grid%(?, ?)`,
 bare-identifier call sites). See `MANUAL.md`/`docs/manual.html` "sizeof()",
@@ -13,7 +13,7 @@ Capacity" for the shipped, documented form.
 The manual-count-parameter convention this whole proposal set out to
 replace is now gone entirely, not just optional: an array parameter's
 signature carries no trailing count parameter, and a call site passes
-nothing but the array itself. The compiler carries the array's bounds
+nothing but the array itself. The transpiler carries the array's bounds
 alongside it automatically, in a hidden variable per axis that the
 caller sets immediately before the call and the callee's own `sizeof()`
 reads back. An earlier draft of this document briefly proposed shipping
@@ -26,7 +26,7 @@ capacity-vs-fill-count problem it might look like at first.
 
 ## Motivation
 
-*(Historical — describes the pre-`sizeof()` state of the compiler. `copy_bound`
+*(Historical — describes the pre-`sizeof()` state of the transpiler. `copy_bound`
 no longer exists; see [Auto-injection at call sites](#auto-injection-at-call-sites)
 for what replaced it.)*
 
@@ -45,12 +45,12 @@ Two problems with that old convention:
    stopped a caller from forgetting the count argument.
 2. The fallback chain in `copy_bound` silently defaulted to the literal
    `10` if there was no argument in that slot and no matching parameter
-   either — a silent-wrong-size footgun, not a compile error.
+   either — a silent-wrong-size footgun, not a transpile error.
 
 ## Proposed direction
 
-Track array bounds in the compiler's own symbol table at parse/codegen time,
-so the compiler always knows an array's declared size and can:
+Track array bounds in the transpiler's own symbol table at parse/codegen time,
+so the transpiler always knows an array's declared size and can:
 
 - Expose it to source via a `sizeof(x%)` builtin.
 - Auto-inject it as a hidden count argument at call sites, removing the
@@ -66,27 +66,27 @@ dim scores%(100)                  ' literal
 dim matrix%(rows% - 1, cols% - 1) ' expression, up to 8 dimensions
 ```
 
-So the size to track isn't always a compile-time constant — sometimes it's
+So the size to track isn't always a transpile-time constant — sometimes it's
 an expression involving a variable.
 
 ### Freezing the size at DIM time
 
 If the bound expression involves a mutable variable (`dim x%(a%)`), the
-compiler cannot just re-emit `a%` later wherever a size is needed — `a%`
+transpiler cannot just re-emit `a%` later wherever a size is needed — `a%`
 might be reassigned after the `DIM`, and BASIC's `DIM` fixes the array's
 size at the moment it executes, not as a live binding. Re-emitting the bare
 variable name later would silently return the *current* value of `a%`, not
 the value the array was actually allocated with.
 
-Fix: capture the bound expression's value into a compiler-generated,
+Fix: capture the bound expression's value into a transpiler-generated,
 never-reassigned temp variable right at the `DIM` site (e.g.
 `BCC_DIM_x_0% = a%`), and have the symbol table point at that temp instead
 of the original expression. Every later `sizeof(x%)` — and every
 auto-injected call-site argument — resolves through the frozen temp, so it
 can never drift from the size the array actually got.
 
-This capture step is only needed when the bound isn't already a compile-time
-constant. A literal or `const` bound needs no temp; the compiler can just
+This capture step is only needed when the bound isn't already a transpile-time
+constant. A literal or `const` bound needs no temp; the transpiler can just
 re-emit it directly forever.
 
 The capture point is unambiguous because classic BASIC does not allow
@@ -117,7 +117,7 @@ sizeof(grid%, 1)   ' cols% - 1, frozen at DIM time
 
 This mirrors how `DIM` itself already takes bounds as a positional,
 comma-separated list — `sizeof(x%, axis)` just indexes into the same
-per-axis structure `DIM` established. `axis` must be a compile-time-constant
+per-axis structure `DIM` established. `axis` must be a transpile-time-constant
 integer (it selects *which frozen temp* to substitute, not a runtime
 lookup), and the symbol-table entry per array becomes a small array of
 per-axis frozen temps rather than a single value.
@@ -125,10 +125,10 @@ per-axis frozen temps rather than a single value.
 ### Auto-injection at call sites
 
 Shipped as originally scoped: auto-inject unconditionally. Whenever an
-array is passed at a call site, the compiler resolves its bounds (from
+array is passed at a call site, the transpiler resolves its bounds (from
 its own frozen `DIM`, or — if it's itself a parameter being forwarded
 onward — from what *its own* caller already carries for it) and assigns
-them into one compiler-synthesized hidden variable per axis, immediately
+them into one transpiler-synthesized hidden variable per axis, immediately
 before the `GOSUB`. Nothing about this is written by the `.bcl` author,
 at the call site or in the callee's signature — `sumGrid%(g%)`, not
 `sumGrid%(g%, sizeof(g%, 0), sizeof(g%, 1))` and not
@@ -156,7 +156,7 @@ in the manual for the shipped form.
 
 This gap is closed — `call_lines` now infers each array parameter's rank
 from how the callee's own body indexes it, resolves the caller's array's
-declared rank, rejects a mismatch as a compile error, and (when they agree)
+declared rank, rejects a mismatch as a transpile error, and (when they agree)
 emits a proper `DIM` with one bound per axis and nested copy loops (one
 `FOR` per dimension) for both copy-in and `byref` copy-out. No argument is
 required at the call site beyond the array itself, at any rank — see
@@ -221,10 +221,10 @@ top of the generated program, before any call happens. Its size is a
 fixed *capacity* — a new, separate number from the per-call *actual*
 size `sizeof()`/auto-injection already tracks — resolved one of two ways:
 
-- **Inferred** (`arr%(?)`, the default): the compiler scans every call
+- **Inferred** (`arr%(?)`, the default): the transpiler scans every call
   site of the function across the whole program and takes the largest
   resolved size, *only* when every one of those sizes is itself resolvable
-  at compile time — a literal `DIM` bound, a `const` (recursively
+  at transpile time — a literal `DIM` bound, a `const` (recursively
   evaluated through simple `+`/`-`/`*` arithmetic), or, when the array
   being passed is itself another function's array parameter forwarded
   onward, that parameter's own already-resolved capacity. Since BASCAL
@@ -240,8 +240,8 @@ size `sizeof()`/auto-injection already tracks — resolved one of two ways:
   to say how much to allow for.
 
 A capacity that's provably too small — a call site whose size *is*
-resolvable at compile time and exceeds the (inferred or explicit)
-capacity — is a compile-time error, not a wait-and-see runtime one.
+resolvable at transpile time and exceeds the (inferred or explicit)
+capacity — is a transpile-time error, not a wait-and-see runtime one.
 
 ### Decision: a runtime check too, regardless
 
@@ -253,12 +253,12 @@ setting the auto-injected bound variable and before the copy-in loop:
 IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
 ```
 
-This is deliberately unconditional, not gated on "only when the compiler
-couldn't already prove it's safe." A call site the compiler *did* prove
+This is deliberately unconditional, not gated on "only when the transpiler
+couldn't already prove it's safe." A call site the transpiler *did* prove
 safe can never trip this check (it's dead code for that call), but
 emitting it anyway is cheap insurance against a mistake in the inference
 itself, and it's the only defense at all for the explicit-capacity case,
-where a compile-time-unprovable call is exactly the situation that led to
+where a transpile-time-unprovable call is exactly the situation that led to
 writing an explicit capacity in the first place.
 
 ### Considered and rejected: `ERASE`-then-`DIM` re-declaration
@@ -400,7 +400,7 @@ BASIC-flavored declaration syntax).
   instead of doing it unconditionally.
 - For a `byref` scalar, the call-site argument must be a plain assignable
   variable (an lvalue) — `f(byref x%)` is fine, `f(byref x% + 1)` is not,
-  and should be a compile-time error, same restriction every other
+  and should be a transpile-time error, same restriction every other
   language with ref/out parameters imposes.
 - `FunctionDef.params` (`ast.rs:74`, currently `Vec<BasicIdent>`) needs to
   carry a mode per parameter, which then threads through
@@ -425,12 +425,12 @@ end function
 
 The parameter check wins first — every `arr%` inside `f` resolves to the
 parameter's mangled storage, and the `global arr%` line is silently inert.
-No validation pass catches this today; it's not a compile error, just a
+No validation pass catches this today; it's not a transpile error, just a
 no-op that looks like it should do something.
 
 ### Decision
 
-Reject this at compile time. Same validation shape as the existing
+Reject this at transpile time. Same validation shape as the existing
 `reject_duplicate_functions` check (`resolver.rs:8`, `resolver.rs:19`) —
 walk each function/procedure body's `GlobalDecl` statements and raise a
 diagnostic if the declared name matches one of that function's own
@@ -443,11 +443,11 @@ parameter names.
 Surfaced from a documentation complaint: today, nothing in a parameter
 declaration says a parameter is an array, let alone how many dimensions
 it has — `arr%` in `function insertionSort%(byref arr%, count%)` looks
-identical whether the compiler will later infer it as a scalar or a 5-D
+identical whether the transpiler will later infer it as a scalar or a 5-D
 array. Rank is entirely inferred from how the function's own body indexes
 the parameter (implemented earlier this session — `infer_param_ranks` in
 `codegen.rs`), which is invisible at the declaration itself and only
-surfaces as a compile error if a caller gets it wrong.
+surfaces as a transpile error if a caller gets it wrong.
 
 ### Decision: `(?, ?, ...)` — one `?` per dimension, in the declaration
 
@@ -475,7 +475,7 @@ function sumCube%(byref cube%(?, ?, ?), a%, b%, c%)
 
 ### Consequence: the call site no longer needs `()` for a known array
 
-Once the declaration states a parameter's rank, the compiler doesn't need
+Once the declaration states a parameter's rank, the transpiler doesn't need
 a call-site marker to know argument position N expects an array — it can
 tell from what the identifier resolves to:
 

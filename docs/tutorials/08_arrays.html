@@ -37,7 +37,7 @@ indexed <code>0..size</code>; <code>dim name%(rows, cols)</code> declares a 2-D 
 more dimensions are allowed. An array parameter must declare its rank with
 one <code>?</code> per dimension — <code>arr%(?)</code> for 1-D, <code>grid%(?, ?)</code> for
 2-D — and at the call site you just write the plain array name, no <code>()</code>
-and no size argument needed: the compiler already knows the parameter is
+and no size argument needed: the transpiler already knows the parameter is
 an array from its declaration, and carries its size alongside it
 automatically. Use <code>sizeof(arr%)</code> inside the function body wherever
 the size is needed. This isn't a reference — BASCAL copies elements in
@@ -73,7 +73,7 @@ identity%(1, 1) = 1</code></pre>
 
 
   <p class="lede">
-    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bcl">tutorial/08_arrays.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bas">tutorial/08_arrays.bas</a>.
+    Full, real, transpiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bcl">tutorial/08_arrays.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/08_arrays.bas">tutorial/08_arrays.bas</a>.
   </p>
 
   <p class="crumbs">

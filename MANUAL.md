@@ -1,6 +1,6 @@
 # BASCAL Language Reference Manual
 
-**BASCAL Compiler (bcc) — Version 0.1**
+**BASCAL Transpiler (bcc) — Version 0.1**
 
 ---
 
@@ -35,7 +35,7 @@
 ## Introduction
 
 **BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer
-**A**pplication **L**anguage — is a compiler that translates structured
+**A**pplication **L**anguage — is a transpiler that translates structured
 `.bcl` source files into line-numbered Microsoft BASIC programs (`.bas`)
 compatible with BASCOM and FreeBASIC's QB compatibility mode.
 
@@ -55,14 +55,14 @@ semantics:
 - All classic BASCOM 1980s statements: `DATA`/`READ`/`RESTORE`, `LOCATE`,
   `COLOR`, `ON ... GOTO`, `SWAP`, `RANDOMIZE`, `CONST`, and more
 
-**BASCAL does not invent a new runtime.** Every BASCAL program compiles to
-plain Microsoft BASIC. The structured constructs are transpiled by the compiler:
+**BASCAL does not invent a new runtime.** Every BASCAL program transpiles to
+plain Microsoft BASIC. The structured constructs are transpiled as follows:
 functions become `GOSUB` subroutines, loops become `GOTO`-based constructs,
 and `if` chains become `IF ... THEN GOTO` sequences.
 
 **BASCAL is a strict superset of classic BASIC.** Raw statements from the
 target dialect — `OPEN`/`FIELD`/`GET`/`PUT` for random-access files, bitwise
-`AND`/`OR`/`NOT` — still compile unchanged. `GOTO`/`GOSUB`/`ON ERROR GOTO`/
+`AND`/`OR`/`NOT` — still pass through unchanged. `GOTO`/`GOSUB`/`ON ERROR GOTO`/
 `RESUME`/`RESTORE` are raw BASIC too, but with one restriction: BASCAL
 manages line numbering itself, so their targets must be a `name:` label
 declared in source, never a raw line number — see [Labels](#labels). Beyond
@@ -71,13 +71,13 @@ that, wherever this manual documents a BASCAL construct for something
 instead of hand-written `FIELD`/`GET`/`PUT`, `&&`/`||` instead of bitwise
 short-circuit workarounds), treat that construct as the canonical way to
 write it in `.bcl` source — the original BASIC syntax is what the
-compiler exists to get you away from, not an equally good alternative.
+transpiler exists to get you away from, not an equally good alternative.
 
 ---
 
 ## Getting Started
 
-### Building the Compiler
+### Building bcc
 
 ```
 env -u RUSTC_WRAPPER cargo build --release
@@ -105,7 +105,7 @@ PRINT "Welcome to BASCAL."
 END
 ```
 
-Compile it:
+Transpile it:
 
 ```
 bcc tutorial/01_hello.bcl
@@ -181,7 +181,7 @@ Variables without a suffix follow the DEFtype settings of the BASIC runtime
 (default: single precision). In BASCAL source it is strongly recommended to
 always use explicit suffixes.
 
-All type checking is deferred to the BASIC runtime. The BASCAL compiler does
+All type checking is deferred to the BASIC runtime. The BASCAL transpiler does
 not perform static type inference.
 
 ---
@@ -194,8 +194,8 @@ Variables declared or assigned at the top level are **global** and visible
 throughout the entire program.
 
 Variables inside a `function` or `procedure` body are **local by default**: the
-compiler maps them to uniquely-generated BASIC names (e.g. `fnameVar0%`),
-indexed against every name already in use at compile time so they're
+transpiler maps them to uniquely-generated BASIC names (e.g. `fnameVar0%`),
+indexed against every name already in use at transpile time so they're
 guaranteed never to collide with global variables or with locals in other
 functions. To read or write a global variable from inside a function or
 procedure, declare it at the top of the body with the `global` keyword:
@@ -357,7 +357,7 @@ runtime, consistent with Microsoft BASIC semantics.
 
 ### TRUE and FALSE
 
-`TRUE` and `FALSE` are compile-time sugar for BASIC's own boolean
+`TRUE` and `FALSE` are transpile-time sugar for BASIC's own boolean
 convention — `-1` and `0` — so a programmer-boolean flag can be compared
 against a name instead of a magic number:
 
@@ -370,7 +370,7 @@ if found% = TRUE then
 end if
 ```
 
-They compile straight through to the literals themselves — `found% = TRUE`
+They transpile straight through to the literals themselves — `found% = TRUE`
 generates `found% = -1` — so they're valid anywhere an integer literal is,
 including `CONST` and array bounds. No boolean type is introduced anywhere
 else in the language; see the `NOT` caveat above for why explicit `= 0` /
@@ -407,7 +407,7 @@ Only `+=`, `-=`, `*=`, `/=` are provided — there is no compound form of `\`,
 | `XOR`    | Bitwise XOR |
 
 **Important:** `NOT` is bitwise in Microsoft BASIC. `NOT 1` yields `-2`, not
-`0`. BASCAL's compiler emits `(expr) = 0` instead of `NOT expr` in generated
+`0`. BASCAL's transpiler emits `(expr) = 0` instead of `NOT expr` in generated
 control-flow conditions so that programmer-boolean values like `found% = 1`
 behave as expected. Use explicit `= 0` or `<> 0` comparisons in your own code
 when testing boolean flags.
@@ -605,7 +605,7 @@ end for
 ```
 
 `exit` exits the enclosing loop immediately. It's unqualified — not
-`exit for`/`exit while`/`exit do` — the compiler already knows which loop
+`exit for`/`exit while`/`exit do` — the transpiler already knows which loop
 it's inside; see [Exit](#exit) below.
 
 ### WHILE / END WHILE
@@ -719,11 +719,11 @@ exit
 ```
 
 `for`, `while`, and `do` share one early-exit statement: unqualified
-`exit`, with no loop-type keyword after it. The compiler resolves which
+`exit`, with no loop-type keyword after it. The transpiler resolves which
 enclosing loop it leaves from context — the *innermost* one, if loops are
 nested — so `exit` inside a `do` loop transpiles to a `GOTO` past the
 loop's own end label, while `exit` inside a `for` loop transpiles to
-BASIC's native `EXIT FOR` instead, since `for`/`next` compiles to a real
+BASIC's native `EXIT FOR` instead, since `for`/`next` transpiles to a real
 `FOR ... NEXT` block rather than a `GOTO` chain (see
 [For Transpilation](#for-transpilation)).
 
@@ -738,7 +738,7 @@ end for
 ```
 
 `exit do`, `exit for`, and `exit while` are not valid — a loop-type
-keyword after `exit` is a compile-time error.
+keyword after `exit` is a transpile-time error.
 
 ### SELECT CASE
 
@@ -844,7 +844,7 @@ already true.
 `while`/`do [while/until]` — not as a general expression (can't be assigned
 to a variable, passed as a function argument, etc.). A condition may chain
 any number of the *same* operator (`a && b && c`); mixing `&&` and `||` in
-one condition is a compile-time error — split into nested `if` statements
+one condition is a transpile-time error — split into nested `if` statements
 instead.
 
 From `tutorial/16_short_circuit.bcl`, an `&&` guard transpiles to one
@@ -882,7 +882,7 @@ GOTO 20
 
 `do until`/`do while`'s inverted polarity applies the same duality: a
 `do until a% && b%` needs the extra label (mirroring a plain `||`), while
-a `do until a% || b%` doesn't (mirroring a plain `&&`) — the compiler
+a `do until a% || b%` doesn't (mirroring a plain `&&`) — the transpiler
 works this out per condition; it isn't something you need to reason about
 yourself.
 
@@ -978,7 +978,7 @@ PRINT a$ + " " + b$    ' xxx yy
 
 ### Variable Scoping
 
-Variables inside a function body are **local by default**: the compiler maps
+Variables inside a function body are **local by default**: the transpiler maps
 them to uniquely-generated BASIC names of the form `stemVar0%`, `stemVar1%`, etc.
 Two functions can each have a variable named `i%` with no conflict, and a local
 can never accidentally shadow a global that happens to share the naive prefix.
@@ -1005,7 +1005,7 @@ end function
 ```
 
 `global` must name a real module-level variable, not one of the function's
-own parameters — `function f%(x%) : global x% : ...` is a compile-time
+own parameters — `function f%(x%) : global x% : ...` is a transpile-time
 error, since the parameter always resolves first and the `global`
 declaration could never take effect.
 
@@ -1015,15 +1015,15 @@ declaration could never take effect.
   transpiled to `GOSUB` against shared global parameter storage, not a real
   call stack, so any call cycle — `f%` calling itself, or `f%` calling `g%`
   calling back into `f%`, however many hops apart — overwrites in-flight
-  parameters. The compiler checks the whole call graph and rejects **any**
-  cycle at compile time, not just direct self-calls. Use an explicit stack
+  parameters. The transpiler checks the whole call graph and rejects **any**
+  cycle at transpile time, not just direct self-calls. Use an explicit stack
   array to simulate recursion if needed.
 - **No return value from a procedure.** Functions must `return` a value;
   for side-effect-only subroutines use `procedure` instead.
 
 ### How Functions Are Transpiled
 
-The compiler transpiles each function call to:
+Each function call transpiles to:
 1. Assign each argument to a generated global variable (e.g. `fnameParam0%`)
 2. `GOSUB` to the function's generated label
 3. Assign the result from the generated result variable (e.g. `fnameResult0%`)
@@ -1101,7 +1101,7 @@ fillRange(data%, 99)
 ### Early Exit
 
 A bare `return` (no expression) exits a procedure immediately.
-Falling through to `end procedure` is equally valid — the compiler emits an
+Falling through to `end procedure` is equally valid — the transpiler emits an
 implicit `RETURN`.
 
 ```
@@ -1152,7 +1152,7 @@ end procedure
 ### Restrictions
 
 - **No recursion, direct or indirect.**  Same GOSUB transpilation as
-  functions — the compile-time cycle check covers procedures too, including
+  functions — the transpile-time cycle check covers procedures too, including
   a cycle that passes through both functions and procedures.
 - **No return value.**  Do not use a procedure where an expression is expected.
 
@@ -1196,10 +1196,10 @@ per dimension, in parens after the name: `arr%(?)` for 1-D, `grid%(?, ?)`
 for 2-D, and so on. A scalar parameter stays a bare name. There's no way
 to declare an array parameter without stating its rank this way — a
 parameter that's indexed as an array in the function body but declared
-without one is a **compile-time error**, not a warning.
+without one is a **transpile-time error**, not a warning.
 
 At the call site, just write the plain array name — **no `()` needed**.
-The compiler already knows that parameter is an array from its
+The transpiler already knows that parameter is an array from its
 declaration, so there's nothing left for the call site to mark.
 
 And separately: `byref` does **not** give the function a real reference to
@@ -1281,7 +1281,7 @@ This applies uniformly to both parameter kinds:
 - **Array parameters**: `byval` copies elements in; `byref` copies them in
   *and* back out. A function that only reads its array argument (like
   `indexOf%` above) should stay `byval` — a `byref` array with no writes is
-  just a slower `byval`, since the compiler still generates the copy-out
+  just a slower `byval`, since the transpiler still generates the copy-out
   loop.
 - **Scalar parameters**: `byval` is the classic behavior scalar parameters
   have always had — a plain assignment in, nothing written back. `byref`
@@ -1298,7 +1298,7 @@ This applies uniformly to both parameter kinds:
   ```
 
   A `byref` argument must be a plain variable — `increment(x% + 1)` is a
-  compile-time error, because there's nowhere for the result to be written
+  transpile-time error, because there's nowhere for the result to be written
   back to.
 
 If you're coming from classic MBASIC/BASCOM: there's no local scope there
@@ -1329,7 +1329,7 @@ parameter's own storage before the `GOSUB`, and — for `byref` — copy the
 result back out after.
 
 There's also a structural reason it has to work this way, independent of
-the target dialect. Each function body is compiled exactly once, and every
+the target dialect. Each function body is transpiled exactly once, and every
 call site `GOSUB`s to that same shared label. A shared body needs one
 stable name for "its first parameter" — but different call sites pass
 different things: different variable names, or a whole expression
@@ -1347,7 +1347,7 @@ a reusable, callable-with-different-data routine anymore.
 
 A 2-D (or higher) array parameter declares its rank the same way as 1-D —
 one `?` per dimension — and passes the same way, too: just the plain array
-name, no `()` and no count arguments of any kind. The compiler already
+name, no `()` and no count arguments of any kind. The transpiler already
 knows the real array's bounds (from its `DIM`, or — if it's itself a
 parameter being forwarded onward — from what *its* caller passed), and
 carries them alongside the array automatically. Nothing about that is
@@ -1374,10 +1374,10 @@ There's no way to pass the wrong bounds by hand here — unlike a manually
 typed count argument, which could silently drift out of sync with the
 array's real `DIM` (say, `3, 3` for an array actually `dim`ed `(2, 2)`,
 reading one row and one column past the end of the real array at
-runtime), the compiler reads `grid%`'s bounds directly from `g%`'s own
+runtime), the transpiler reads `grid%`'s bounds directly from `g%`'s own
 `DIM` and there's no hand-typed number in the picture to get wrong.
 
-`grid%(?, ?)` is cross-checked two ways, both at compile time:
+`grid%(?, ?)` is cross-checked two ways, both at transpile time:
 
 - Against the function's own body — `grid%(r%, c%)` above indexes with two
   subscripts, matching the declared two `?`s. A declaration that disagrees
@@ -1403,7 +1403,7 @@ generated program — before any call happens — sized to the biggest array
 anything anywhere ever passes it.
 
 Normally this needs no attention at all. Write `?` for every axis, same
-as always; the compiler works out a safe capacity itself by scanning
+as always; the transpiler works out a safe capacity itself by scanning
 every call site in the program and taking the largest resolved size.
 Below, `sumArr%`'s storage ends up sized for 10 elements even though its
 first call only ever passes it 3:
@@ -1419,7 +1419,7 @@ dummy% = sumArr%(small%)
 dummy% = sumArr%(big%)
 ```
 
-This works whenever every call site's array size is knowable at compile
+This works whenever every call site's array size is knowable at transpile
 time — a literal `DIM` bound, a `const`, or (when the array being passed
 is itself another function's array parameter, forwarded onward) that
 parameter's own already-resolved capacity. It genuinely can't work when a
@@ -1431,7 +1431,7 @@ dim data%(n%)
 dummy% = sumArr%(data%)   ' error: arr%'s capacity can't be inferred
 ```
 
-There's no way to know at compile time how big `data%` will turn out to
+There's no way to know at transpile time how big `data%` will turn out to
 be, so there's no safe number to give its shared storage automatically.
 Write an explicit capacity instead of `?` for that axis — a literal
 integer, chosen to comfortably cover every use:
@@ -1451,8 +1451,8 @@ IF sumarrArrDim00% > 100 THEN PRINT "runtime error: ..." : STOP
 ```
 
 This is a backstop, not the primary defense — a call site whose size
-*is* a compile-time constant and provably too big for its capacity is
-already rejected at compile time, before generated BASIC exists to run
+*is* a transpile-time constant and provably too big for its capacity is
+already rejected at transpile time, before generated BASIC exists to run
 at all. The runtime check exists for the one case that's genuinely
 unprovable ahead of time: a capacity chosen to comfortably cover today's
 inputs that a later, larger runtime value turns out to exceed.
@@ -1460,7 +1460,7 @@ inputs that a later, larger runtime value turns out to exceed.
 ### `sizeof()`
 
 `sizeof(name)` returns a `dim`ed array's size, resolved entirely at
-compile time — it never appears in generated BASIC, only whatever value or
+transpile time — it never appears in generated BASIC, only whatever value or
 name it resolves to. For a 1-D array the axis is implicit:
 
 ```
@@ -1478,11 +1478,11 @@ print sizeof(grid%, 1)   ' 2 -- second DIM bound
 ```
 
 The axis must be a literal integer — it selects which frozen value to
-substitute at compile time, not something computed at runtime.
+substitute at transpile time, not something computed at runtime.
 
-**What "resolved at compile time" means in practice:** if the bound is a
+**What "resolved at transpile time" means in practice:** if the bound is a
 literal, `sizeof` just re-emits that literal. If it's an expression
-(a variable, a `const`, anything not a bare number), the compiler captures
+(a variable, a `const`, anything not a bare number), the transpiler captures
 its value into a hidden variable right at the `dim` site, and `sizeof`
 always reads that captured value — never the live variable, which might
 change afterward:
@@ -1499,7 +1499,7 @@ parameters works differently** — there's no local `dim` to freeze a value
 from, since the array parameter's real size depends on whatever the
 caller happens to pass. There's no manually declared count parameter to
 read either: every array parameter's bounds are carried automatically,
-one hidden compiler-generated variable per axis, set by the caller (from
+one hidden transpiler-generated variable per axis, set by the caller (from
 the real argument array's own resolved bounds) immediately before the
 call. `sizeof(grid%, 0)` inside `sumGrid%`'s own body just reads that
 hidden variable back:
@@ -1763,8 +1763,8 @@ any order, without scanning from the beginning.
 
 BASCAL supports the classic statements below directly — `OPEN ... FOR
 RANDOM`, `FIELD`, `LSET`/`RSET`, `PUT`/`GET`, `SEEK`, and the `MKx`/`CVx`
-packing helpers all compile as-is. But hand-summing field widths and
-hand-matching pack/unpack calls is exactly the bookkeeping a compiler should
+packing helpers all pass through as-is. But hand-summing field widths and
+hand-matching pack/unpack calls is exactly the bookkeeping a transpiler should
 do for you: see [Record Files](#record-files) below for BASCAL's typed
 `record`/`file` syntax, the canonical way to do random-access I/O in BASCAL.
 This section stays useful for reading the code that syntax generates, or for
@@ -1911,7 +1911,7 @@ value being packed (`MKI%`, `MKD#`, etc. are not real MBASIC/BASCOM
 functions) — every `MKx$` variant returns a string, which is what `LSET`
 requires.
 
-A record literal missing a declared field is a **compile-time error** — this
+A record literal missing a declared field is a **transpile-time error** — this
 is a safety net that real BASIC's raw `FIELD`/`LSET`/`PUT` gives you no
 equivalent of (see [Partial-record write](#partial-record-write) for the
 deliberately-incomplete form).
@@ -1928,7 +1928,7 @@ than erroring. `?` doesn't collide with anything — it isn't tokenized at
 all outside this position.
 
 Whether the fields you *didn't* mention need preserving is fully decided at
-compile time, by comparing the field names you gave against the record's
+transpile time, by comparing the field names you gave against the record's
 declared fields — there's no runtime check:
 
 - If the listed fields don't cover every declared field, an implicit
@@ -1938,7 +1938,7 @@ declared fields — there's no runtime check:
   `GET` is emitted — it transpiles exactly like a plain `{ ... }` literal.
 
 Unlike `{ ... }`, an unknown field name inside `?{ ... }` is still a
-compile-time error — only *missing* fields are permitted, not *misspelled*
+transpile-time error — only *missing* fields are permitted, not *misspelled*
 ones.
 
 Note: `GET`ing a record number past the current end of a random-access file
@@ -1961,7 +1961,7 @@ in the source resolve directly to those scalars; no `Ident` named literally
 `s.id` is ever emitted.
 
 String fields aren't unpacked with `RTRIM$` — it isn't a real MBASIC/BASCOM
-builtin. Instead, the compiler builds an inline right-trim loop directly
+builtin. Instead, the transpiler builds an inline right-trim loop directly
 from `LEN`/`MID$`/`LEFT$`, walking back from the end of the fixed-width
 buffer past trailing spaces.
 
@@ -2008,7 +2008,7 @@ one-`GET`-one-`PUT` way to change multiple fields: exactly one `GET` (from
 the `let`) and one `PUT` (from the write-back) no matter how many fields
 in between were changed. `s` must have been read from a `file` of the same
 record type as the target; writing an `A` into a `file` of `B`s is a
-compile-time error.
+transpile-time error.
 
 ### file.close()
 
@@ -2030,7 +2030,7 @@ Sugar for `for i = 3 to 1 step -1`; ascending `for i = A to B` is unchanged.
 
 ### Type checking
 
-The transpilation pass rejects, at compile time: field names not declared on the
+The transpilation pass rejects, at transpile time: field names not declared on the
 record (in a record literal or a `.field` access), a record literal that is
 missing a declared field or repeats one, a string literal that is wider
 than its `string(N)` field, a string literal assigned to a numeric field (or
@@ -2158,7 +2158,7 @@ name:
 Declares a branch target for `goto`/`gosub`/`on error goto`/`resume`/
 `on ... goto`/`on ... gosub` to jump to. **BASCAL manages line numbers
 itself — you cannot target a raw line number.** Every one of those
-statements requires a label name; the compiler assigns the actual BASIC
+statements requires a label name; the transpiler assigns the actual BASIC
 line number when it renders output, exactly the way it already numbers the
 branch targets inside `if`/`while`/`do`/`select case`.
 
@@ -2410,7 +2410,7 @@ PRINT "Range:  " + STR$(rangeOf%(scores%()))
 END
 ```
 
-Compile with `-L tutorial/lib` so that `require stats` resolves to
+Transpile with `-L tutorial/lib` so that `require stats` resolves to
 `tutorial/lib/stats.bcl`:
 
 ```
@@ -2430,7 +2430,7 @@ require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
 require stats                       →  stats.bcl
 ```
 
-The compiler searches for the file in:
+The transpiler searches for the file in:
 1. The directory containing the current source file
 2. Additional directories supplied with `-L` flags (in order)
 
@@ -2492,7 +2492,7 @@ dim label$
 
 The older filename-only form — no `suite` header, just one or more `common`
 declarations, with the suite name taken purely from the filename — still
-works and compiles to identical output; see
+works and transpiles to identical output; see
 [COMMON Declaration](#common-declaration) below.
 
 Rules for suite files:
@@ -2523,8 +2523,8 @@ empty-parens, same as a `COMMON` array). No bounds are stored either way —
 size.
 
 If present, the `suite <name>` header's name must match the filename the
-compiler resolved it as (`shared.bcl` → `suite shared`) — a mismatch is a
-compile-time error, catching a suite file copied to a new filename without
+transpiler resolved it as (`shared.bcl` → `suite shared`) — a mismatch is a
+transpile-time error, catching a suite file copied to a new filename without
 updating its own header.
 
 ### COMMON Declaration
@@ -2559,7 +2559,7 @@ COMMON hiScore%
 program start suite shared
 ```
 
-When a suite name is present, the compiler:
+When a suite name is present, the transpiler:
 1. Searches for `shared.bcl` in the source file's directory (then `-L` paths).
 2. Validates that the suite file contains only `common` declarations.
 3. Emits the `COMMON` lines at the very top of the generated `.bas` file,
@@ -2615,14 +2615,14 @@ correct slots.
 ### Restrictions
 
 - `common` is illegal everywhere except in suite files. Using `common` in a
-  regular program or library module is a compile error.
+  regular program or library module is a transpile error.
 - A `suite <name>` header is illegal everywhere except in a suite file being
   loaded as a suite — a stray `suite` header in an ordinary program or
-  library module is a compile error, same as `common`.
+  library module is a transpile error, same as `common`.
 - A `program` declaration is illegal in library modules (files loaded via
   `require`).
 - A file cannot have both a `program` header and a `suite` header.
-- If the named suite file does not exist, the program compiles without a
+- If the named suite file does not exist, the program transpiles without a
   `COMMON` block (no error). This allows incremental development.
 
 ---
@@ -2740,7 +2740,7 @@ Becomes:
 
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently.
 The BASCAL `end for` (or bare `end`) is stripped; the BASIC `NEXT` is emitted
-by the compiler:
+by the transpiler:
 
 ```
 FOR i% = 1 TO 5
@@ -2811,7 +2811,7 @@ END
 ```
 
 There is no `printscore_result` variable. A bare `return` inside a procedure
-compiles to plain `RETURN`.
+transpiles to plain `RETURN`.
 
 ### Select Case Transpilation
 
@@ -2821,7 +2821,7 @@ re-evaluation.
 
 ### Exit Statements
 
-`exit` is unqualified in BASCAL source; the compiler picks the shape below
+`exit` is unqualified in BASCAL source; the transpiler picks the shape below
 based on which loop it's innermost inside:
 
 - inside `for` → `EXIT FOR` (native FreeBASIC / QB extension)
@@ -2843,12 +2843,12 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 | `-L dir` | | Add a directory to the library search path. Repeatable. |
 | `-l name` | | Name a library (reserved). |
 | `--line-numbers` | | Number every output line, not just branch targets. |
-| `--clean` | `-c` | Recompile even if the output is already up to date. |
-| `--binary` | `-b` | Invoke `fbc` after compilation to produce a binary. The binary is placed in `tmp/`. |
+| `--clean` | `-c` | Re-transpile even if the output is already up to date. |
+| `--binary` | `-b` | Invoke `fbc` after transpilation to produce a binary. The binary is placed in `tmp/`. |
 
 ### Up-to-Date Check
 
-Without `--clean`, the compiler skips recompilation if the output `.bas` file
+Without `--clean`, `bcc` skips re-transpiling if the output `.bas` file
 is newer than all input `.bcl` files. With `--binary`, a second up-to-date
 check covers the compiled binary.
 
@@ -2936,7 +2936,7 @@ bcc main.bcl -L libs/sort -L libs/string
 
 ### Boolean literals
 
-| Name | Compiles to |
+| Name | Transpiles to |
 |------|-------------|
 | `TRUE` | `-1` |
 | `FALSE` | `0` |

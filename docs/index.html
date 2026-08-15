@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BASCAL — a structured compiler for classic BASIC</title>
-<meta name="description" content="BASCAL compiles structured .bcl source into classic 1980s Microsoft BASIC. Side-by-side samples of what the record/file syntax saves you over generated FIELD/GET/PUT/LSET.">
+<title>BASCAL — a structured transpiler for classic BASIC</title>
+<meta name="description" content="BASCAL transpiles structured .bcl source into classic 1980s Microsoft BASIC. Side-by-side samples of what the record/file syntax saves you over generated FIELD/GET/PUT/LSET.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
@@ -17,7 +17,7 @@
     <p class="backronym"><strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage</p>
     <img class="hero-art" src="hero-computer.svg" width="170" height="163" alt="A retro all-in-one computer showing green phosphor BASIC code, with a violet cursor blinking at the prompt">
     <p class="tagline">
-      A structured compiler for classic 1980s Microsoft BASIC. Write
+      A structured transpiler for classic 1980s Microsoft BASIC. Write
       <code>.bcl</code> source with real control flow, functions, arrays,
       and a typed record/file syntax for random-access files — <code>bcc</code> transpiles it straight to
       plain line-numbered BASIC you can still hand-read and compile with
@@ -58,13 +58,13 @@
       <code>@function</code>, and <code>@procedure</code>, plus
       <code>{label}</code> in place of raw line numbers. I always wanted to
       build a proper modern equivalent — the tool I wish I'd had the skills
-      and tools for back in 1985 — and building a real compiler, rather than
+      and tools for back in 1985 — and building a real transpiler, rather than
       another preprocessor, was finally within reach with Claude and Codex
       doing the heavy lifting. BASCAL is that reconstruction in Rust, and
       the language itself is significantly more advanced than the original:
       more structured, easier to read, easier to write, and organized into
       reusable files. The idea
-      hasn't changed, though — a real compiler, not a text preprocessor,
+      hasn't changed, though — a real transpiler, not a text preprocessor,
       that still respects the classic BASIC it targets. The goal has stayed
       the same since 1985 — make BASIC more pleasant to write, without
       pretending it is a different runtime. Read the
@@ -81,14 +81,14 @@
       BASCAL is a strict superset of classic BASIC — bitwise
       <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written
       <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code>
-      still compile unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw
+      still pass through unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw
       BASIC too, but with one difference: BASCAL manages line numbering
       itself, so their targets are always a <code>name:</code> label
       declared in source, never a raw line number like
       <code>GOTO 140</code>. Beyond that, wherever BASCAL has its own
       construct for something, that construct is the canonical way to write it in
       <code>.bcl</code> source — treat the original BASIC syntax as what
-      you're compiling <em>away from</em>, not an equally-good
+      you're transpiling <em>away from</em>, not an equally-good
       alternative.
     </p>
 
@@ -126,7 +126,7 @@ end select</code></pre>
         </div>
       </div>
       <p class="note">
-        Both panes run on the same classic BASIC. <code>bcc</code> compiles
+        Both panes run on the same classic BASIC. <code>bcc</code> transpiles
         the pane on the right straight down to the pane on the left's shape
         — you just never have to number the branches or wire the
         <code>GOTO</code>s by hand. See <a href="#control-flow">more
@@ -308,7 +308,7 @@ case else
 end select</code></pre>
         </div>
       </div>
-      <p class="note">This is what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is that a compiler numbered and wired every jump, instead of you.</p>
+      <p class="note">This is what <code>bcc</code> emits for the pane on the right — see the generated <code>IF (BCC_T2% = 100) &lt;&gt; 0 THEN GOTO 250</code> dispatch chain in <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas">tutorial/06_select_case.bas</a>. The only difference is that a transpiler numbered and wired every jump, instead of you.</p>
     </div>
 
     <div class="compare">
@@ -446,12 +446,12 @@ IF (ispositive_result_0% &gt; 0) = 0 THEN GOTO 10
 end if</code></pre>
         </div>
       </div>
-      <p class="note">A <code>||</code> chain (or an inverted <code>do until ... &amp;&amp; ...</code>) needs exactly one extra local label — the point where the chain can stop early once <em>any</em> operand has already decided the answer — worked out by the compiler per condition, not something to reason about by hand.</p>
+      <p class="note">A <code>||</code> chain (or an inverted <code>do until ... &amp;&amp; ...</code>) needs exactly one extra local label — the point where the chain can stop early once <em>any</em> operand has already decided the answer — worked out by the transpiler per condition, not something to reason about by hand.</p>
     </div>
 
     <div class="compare">
       <h3>6. Labels instead of raw line numbers</h3>
-      <p class="note">Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by hand — renumber a block and every reference to it has to be found and fixed too. BASCAL doesn't let <code>.bcl</code> source target a line number at all: <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code> all require a <code>name:</code> label instead, and the compiler is the one that assigns the real number when it renders output — the same job it already does for every <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code> branch target above.</p>
+      <p class="note">Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by hand — renumber a block and every reference to it has to be found and fixed too. BASCAL doesn't let <code>.bcl</code> source target a line number at all: <code>goto</code>/<code>gosub</code>/<code>on error goto</code>/<code>resume</code> all require a <code>name:</code> label instead, and the transpiler is the one that assigns the real number when it renders output — the same job it already does for every <code>if</code>/<code>while</code>/<code>do</code>/<code>select case</code> branch target above.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -486,12 +486,12 @@ done:
 end</code></pre>
         </div>
       </div>
-      <p class="note"><code>on error goto 0</code> is the one numeric exception — it isn't a line number, it's the sentinel that disables the error trap. Everywhere else, a raw number in a branch-target position is a compile-time error.</p>
+      <p class="note"><code>on error goto 0</code> is the one numeric exception — it isn't a line number, it's the sentinel that disables the error trap. Everywhere else, a raw number in a branch-target position is a transpile-time error.</p>
     </div>
 
     <div class="compare">
       <h3>The one exception: <code>for</code>/<code>next</code></h3>
-      <p class="note">Every loop above compiles to a guarded <code>GOTO</code> chain with a local label. <code>for</code>/<code>next</code> doesn't need that trick: BASIC already has a native counted loop, so BASCAL compiles straight to it. <code>exit</code> is spelled the same everywhere in BASCAL source — no <code>exit for</code>, just <code>exit</code> — but here it becomes BASIC's own <code>EXIT FOR</code> instead of a <code>GOTO</code>, because the compiler knows this <code>exit</code> is inside a native <code>FOR</code>, not a GOTO-chain loop.</p>
+      <p class="note">Every loop above transpiles to a guarded <code>GOTO</code> chain with a local label. <code>for</code>/<code>next</code> doesn't need that trick: BASIC already has a native counted loop, so BASCAL transpiles straight to it. <code>exit</code> is spelled the same everywhere in BASCAL source — no <code>exit for</code>, just <code>exit</code> — but here it becomes BASIC's own <code>EXIT FOR</code> instead of a <code>GOTO</code>, because the transpiler knows this <code>exit</code> is inside a native <code>FOR</code>, not a GOTO-chain loop.</p>
       <div class="compare-grid">
         <div class="pane new">
           <span class="tag">BASCAL</span>
@@ -512,7 +512,7 @@ end for</code></pre>
 NEXT i%</code></pre>
         </div>
       </div>
-      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still compiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade-off — it's just the newest place BASCAL makes it.</p>
+      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still transpiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade-off — it's just the newest place BASCAL makes it.</p>
     </div>
   </section>
 
@@ -522,9 +522,9 @@ NEXT i%</code></pre>
       BASCAL supports classic random-access file I/O directly
       (<code>OPEN ... FOR RANDOM</code>, <code>FIELD</code>,
       <code>GET</code>/<code>PUT</code>, <code>LSET</code>,
-      <code>MKx</code>/<code>CVx</code> all still compile as-is), but writing
+      <code>MKx</code>/<code>CVx</code> all still pass through as-is), but writing
       it by hand is exactly the kind of repetitive, error-prone bookkeeping a
-      compiler should do instead. The <code>record</code>/<code>file</code>
+      transpiler should do instead. The <code>record</code>/<code>file</code>
       syntax below is the canonical way to do this in BASCAL: every pane on
       the right is what you write, and it <strong>generates</strong> the pane
       on the left — this syntax doesn't change what runs, only how much of it
@@ -559,7 +559,7 @@ file db as Student = open("students.dat")</code></pre>
 
     <div class="compare">
       <h3>2. Write a whole record</h3>
-      <p class="note">Every declared field is required in the record literal — a field forgotten by hand ships silently; a field forgotten in <code>{ ... }</code> is a compile error.</p>
+      <p class="note">Every declared field is required in the record literal — a field forgotten by hand ships silently; a field forgotten in <code>{ ... }</code> is a transpile error.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -618,7 +618,7 @@ put #1, 2</code></pre>
 
     <div class="compare">
       <h3>5. Update two fields in one shot</h3>
-      <p class="note">Alice got married and re-sat the exam. Whether the fields you <em>didn't</em> list need a <code>GET</code> first is decided at <strong>compile time</strong> — the compiler compares the field names you gave against the record's declared fields. Give it every field and the <code>GET</code> disappears entirely, same as a plain <code>{ ... }</code>. Misspell a field name and it's still a compile error, not silent data loss.</p>
+      <p class="note">Alice got married and re-sat the exam. Whether the fields you <em>didn't</em> list need a <code>GET</code> first is decided at <strong>transpile time</strong> — the transpiler compares the field names you gave against the record's declared fields. Give it every field and the <code>GET</code> disappears entirely, same as a plain <code>{ ... }</code>. Misspell a field name and it's still a transpile error, not silent data loss.</p>
       <div class="compare-grid">
         <div class="pane old">
           <span class="tag">Generated BASIC</span>
@@ -647,7 +647,7 @@ put #1, 1</code></pre>
         also deliberately a <em>second</em> spelling rather than a relaxed
         <code>{ ... }</code> — keeping <code>{ ... }</code> strict means a
         record literal that's missing a field by accident is still always a
-        compile error. <code>?{ ... }</code> exists so that incompleteness
+        transpile error. <code>?{ ... }</code> exists so that incompleteness
         has to be opted into explicitly, one call site at a time, instead of
         silently allowed everywhere.
       </blockquote>
@@ -701,7 +701,7 @@ db[3] = carol</code></pre>
 
   <section id="more">
     <h2>Full tutorial list</h2>
-    <p class="lede">Every tutorial below has its own page with a short walkthrough and a few snippets, plus a link to the real, compiling <code>.bcl</code> source (and its generated <code>.bas</code> output) in the repo.</p>
+    <p class="lede">Every tutorial below has its own page with a short walkthrough and a few snippets, plus a link to the real, transpiling <code>.bcl</code> source (and its generated <code>.bas</code> output) in the repo.</p>
     <ul class="features linked">
       <li><a href="tutorials/01_hello.html"><span class="num">01</span> Hello world</a></li>
       <li><a href="tutorials/02_variables.html"><span class="num">02</span> Variables</a></li>

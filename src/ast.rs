@@ -314,7 +314,7 @@ pub enum Statement {
         value: Expr,
     },
     /// `name:` — a user-declared branch target. Participates in the same
-    /// label -> line-number resolution as compiler-internal labels; see
+    /// label -> line-number resolution as transpiler-internal labels; see
     /// `is_label_line` in codegen.rs.
     Label(String),
     Goto(Expr),
@@ -373,7 +373,7 @@ pub enum Statement {
         tokens: Vec<PrintToken>,
     },
     /// `exit` — leaves the innermost enclosing `for`/`while`/`do` loop.
-    /// Unqualified: the compiler resolves which loop kind it's inside.
+    /// Unqualified: the transpiler resolves which loop kind it's inside.
     Exit,
     SelectCase {
         expr: Expr,

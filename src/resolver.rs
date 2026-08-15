@@ -18,7 +18,7 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
 }
 
 /// `global x` inside a function that also has a parameter named `x` is
-/// silently inert: the compiler always resolves a name to the parameter's
+/// silently inert: the transpiler always resolves a name to the parameter's
 /// storage first, so the `global` declaration never takes effect. That's
 /// never intentional, so reject it instead of leaving it a silent no-op.
 fn reject_global_shadows_param(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
@@ -431,6 +431,3 @@ fn generated_pos() -> SourcePos {
 
 // TODO: Add source-location carrying AST nodes so validation diagnostics can
 // point at the exact function declaration or call expression.
-// TODO: Resolve include/require/import declarations into linker inputs.
-// BASCAL paths are linker selectors, not namespaces; final BASIC symbols stay
-// global and parameters will be lowered to function-prefixed globals.

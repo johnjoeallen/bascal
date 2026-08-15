@@ -6,10 +6,10 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 
 // "ucase", "lcase", "ltrim", and "rtrim" are deliberately absent here: real
 // MBASIC/BASCOM 2.00 has none of them (verified against a real IBM BASIC
-// Compiler 2.00 under dosbox-x -- see src/stdlib.rs), so treating them as
-// safe passthrough builtins the target dialect provides would be wrong.
-// BASCAL provides its own implementations instead; see
-// `stdlib::inject_used_stdlib_functions`.
+// Compiler 2.00 under dosbox-x -- see com/bascal/stdlib/), so treating them
+// as safe passthrough builtins the target dialect provides would be wrong.
+// BASCAL provides its own implementations instead, as an ordinary
+// require-able library; see `lib::stdlib_search_roots`.
 const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
     "str", "chr", "hex", "oct", "space", "environ",
@@ -79,7 +79,7 @@ pub struct CodeGenerator {
     // directly, or a generated temp's name if the bound wasn't already a
     // compile-time constant. Populated as each DIM is actually generated.
     // Every array needs this available, not just ones `sizeof()` is called
-    // on directly: any array can be passed to a function, and the compiler
+    // on directly: any array can be passed to a function, and the transpiler
     // auto-injects its bounds at the call site so the callee's own
     // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
@@ -98,7 +98,7 @@ struct FunctionInfo {
     /// inconsistently). Parallel to `params`.
     param_ranks: Vec<Option<usize>>,
     /// For each array parameter (rank `Some(n)` in `param_ranks`), the `n`
-    /// compiler-synthesized BASIC variable names that carry its per-axis
+    /// transpiler-synthesized BASIC variable names that carry its per-axis
     /// bounds -- never written by the `.bcl` author, never appearing at a
     /// call site. The caller sets them (from the actual argument array's
     /// own resolved bounds) immediately before `GOSUB`, alongside the
@@ -1348,7 +1348,7 @@ impl CodeGenerator {
                             });
                         lines.push(format!("{bound_var} = {bound}"));
                         // Parameter storage is DIMed once, at top-level, sized to fit
-                        // every call site the compiler could resolve at compile time
+                        // every call site the transpiler could resolve at compile time
                         // (see `infer_array_param_capacities`). This is the runtime
                         // backstop for whatever that inference couldn't prove safe --
                         // a call passing more elements than the storage was built for
@@ -1476,7 +1476,7 @@ impl CodeGenerator {
             // be checked before, and instead of, per-function allocation,
             // regardless of scope.
             return if self.synthesized_buffer_names.contains(&source_key) {
-                // Compiler-built (via `buffer_ident`): already
+                // Transpiler-built (via `buffer_ident`): already
                 // deliberately camelCased, so its case is preserved
                 // rather than flattened by the normalization below.
                 ident.as_basic()
@@ -1553,7 +1553,7 @@ impl CodeGenerator {
 
     /// Bound text for one axis of a known array: a frozen DIM-time bound
     /// for a directly-`dim`ed array (local or top-level), or -- for an
-    /// array *parameter* -- the compiler-synthesized hidden variable that
+    /// array *parameter* -- the transpiler-synthesized hidden variable that
     /// the caller sets (from the actual argument's own resolved bound)
     /// immediately before `GOSUB`. `None` means the axis genuinely can't
     /// be resolved (unknown array, or an unsized `dim arr%()` with no
@@ -3229,7 +3229,7 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
 }
 
 /// True for any generated line that is *only* a label declaration: either a
-/// compiler-internal control-flow label (`IF_0004_END:`, `WHILE_0002_TOP:`,
+/// transpiler-internal control-flow label (`IF_0004_END:`, `WHILE_0002_TOP:`,
 /// ...) or a user-written `name:` label from BASCAL source (`Statement::Label`).
 /// Both kinds are resolved to real BASIC line numbers by `number_basic_lines`
 /// and then dropped from the output — codegen never emits any other line
@@ -3266,7 +3266,7 @@ fn label_target_text(target: &Expr) -> String {
 /// would also match `label` as a substring of an unrelated longer identifier,
 /// or inside program output text (e.g. a label named `done` corrupting
 /// `PRINT "done"`) — user-chosen label names are short, ordinary words, so
-/// that collision is a real risk in a way it never was for the compiler's
+/// that collision is a real risk in a way it never was for the transpiler's
 /// own distinctively-prefixed internal labels.
 fn replace_label_word(text: &str, label: &str, replacement: &str) -> String {
     if label.is_empty() {
@@ -3303,7 +3303,7 @@ fn replace_label_word(text: &str, label: &str, replacement: &str) -> String {
 }
 
 /// Pre-generation validation: report every global variable whose name matches
-/// a compiler-generated local name (`stem_var_0suffix`), which would silently
+/// a transpiler-generated local name (`stem_var_0suffix`), which would silently
 /// produce a BASIC program with two distinct roles sharing the same identifier.
 ///
 /// Checks the result variable, every parameter, and every local variable
@@ -3311,7 +3311,7 @@ fn replace_label_word(text: &str, label: &str, replacement: &str) -> String {
 pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnostic> {
     let globals = collect_program_names(program);
 
-    // Names the compiler will never treat as locals.
+    // Names the transpiler will never treat as locals.
     let builtin_stems: HashSet<&str> = BASIC_BUILTINS.iter().copied().collect();
     let function_stems: HashSet<String> = program
         .functions
@@ -3399,7 +3399,7 @@ fn check_one_conflict(
         diagnostics.push(Diagnostic::error(
             SourcePos::new("<validation>", 1, 1),
             format!(
-                "global `{}` conflicts with the compiler-generated name for {}; \
+                "global `{}` conflicts with the transpiler-generated name for {}; \
                  rename the global or the function `{}`",
                 candidate.as_basic(),
                 description,

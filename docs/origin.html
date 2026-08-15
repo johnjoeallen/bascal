@@ -14,7 +14,7 @@
 <header class="hero compact">
   <div class="wrap">
     <h1>Why BASCAL Exists</h1>
-    <p class="tagline">A preprocessor built for a real BASIC shop in 1985, and the compiler I wish I'd had the skills and tools to build back then.</p>
+    <p class="tagline">A preprocessor built for a real BASIC shop in 1985, and the transpiler I wish I'd had the skills and tools to build back then.</p>
   </div>
 </header>
 
@@ -62,13 +62,13 @@
 
 <p><strong>BASCAL</strong> is a modern reconstruction of that idea, written in Rust.</p>
 
-<p>It is not intended to be exactly what I built in the 1980s. It is closer to what I wish I could have built then — the tool I wish I'd had the skills and tools for back in 1985. Building a real compiler, rather than another preprocessor, was finally within reach with Claude and Codex doing the heavy lifting. The result is a structured compiler for classic Microsoft BASIC that keeps the original global BASIC model, but adds a more disciplined source language and a more practical build workflow. The language itself is significantly more advanced than the original: more structured, easier to read, easier to write, and organized into reusable files.</p>
+<p>It is not intended to be exactly what I built in the 1980s. It is closer to what I wish I could have built then — the tool I wish I'd had the skills and tools for back in 1985. Building a real transpiler, rather than another preprocessor, was finally within reach with Claude and Codex doing the heavy lifting. The result is a structured transpiler for classic Microsoft BASIC that keeps the original global BASIC model, but adds a more disciplined source language and a more practical build workflow. The language itself is significantly more advanced than the original: more structured, easier to read, easier to write, and organized into reusable files.</p>
 
-<p>BASCAL source uses <code>.bcl</code> files and is compiled by <code>bcc</code> into generated <code>.bas</code> output. It supports multiline <code>if</code> / <code>else</code> / <code>end if</code>, <code>for</code> / <code>next</code>, <code>while</code> / <code>wend</code>, <code>function</code> declarations with explicit <code>return</code>, BASIC type suffixes, comments preserved in generated output, and path-style <code>require</code> / <code>import</code> dependencies.</p>
+<p>BASCAL source uses <code>.bcl</code> files and is transpiled by <code>bcc</code> into generated <code>.bas</code> output. It supports multiline <code>if</code> / <code>else</code> / <code>end if</code>, <code>for</code> / <code>next</code>, <code>while</code> / <code>wend</code>, <code>function</code> declarations with explicit <code>return</code>, BASIC type suffixes, comments preserved in generated output, and path-style <code>require</code> / <code>import</code> dependencies.</p>
 
-<p>BASCAL is also a strict superset of that classic BASIC: bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> still compile unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw BASIC too, but BASCAL manages line numbering itself, so their targets are always a <code>name:</code> label declared in source, never a raw line number. Beyond that, wherever BASCAL has its own construct for something, that construct is the canonical way to write it in <code>.bcl</code> source — the original BASIC syntax is what you're compiling <em>away from</em>, not an equally-good alternative.</p>
+<p>BASCAL is also a strict superset of that classic BASIC: bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> and hand-written <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> still pass through unchanged. <code>GOTO</code>/<code>GOSUB</code> are raw BASIC too, but BASCAL manages line numbering itself, so their targets are always a <code>name:</code> label declared in source, never a raw line number. Beyond that, wherever BASCAL has its own construct for something, that construct is the canonical way to write it in <code>.bcl</code> source — the original BASIC syntax is what you're transpiling <em>away from</em>, not an equally-good alternative.</p>
 
-<p>One visible difference from the original Ramtech BASIC preprocessor is that BASCAL does not need the old <code>@</code> prefix. The original prefix made sense for a small preprocessor scanning BASIC text. BASCAL is being built as a proper compiler-style tool, so its structured constructs can be part of the language grammar rather than marked as special preprocessor commands.</p>
+<p>One visible difference from the original Ramtech BASIC preprocessor is that BASCAL does not need the old <code>@</code> prefix. The original prefix made sense for a small preprocessor scanning BASIC text. BASCAL is being built as a proper transpiler-style tool, so its structured constructs can be part of the language grammar rather than marked as special preprocessor commands.</p>
 
 <p>The core idea remains the same:</p>
 
@@ -76,11 +76,11 @@
   <p>Make BASIC more pleasant to write, without pretending it is a different runtime.</p>
 </blockquote>
 
-<p>BASCAL deliberately preserves BASIC's global symbol model — variables and functions are still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> — while adding enough structure that larger programs stay maintainable. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus <code>GOSUB</code>. Every parameter is copied in before the call; <code>byref</code> copies the result back out afterward too (<code>byval</code>, the default, doesn't). Array parameters support any number of dimensions, matched against how the callee's body indexes them — a mismatch is a compile-time error. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.</p>
+<p>BASCAL deliberately preserves BASIC's global symbol model — variables and functions are still global, still transpiled to <code>GOTO</code>/<code>GOSUB</code> — while adding enough structure that larger programs stay maintainable. Path-style names are dependency selectors, not runtime namespaces. Functions are transpiled to global parameter/result variables plus <code>GOSUB</code>. Every parameter is copied in before the call; <code>byref</code> copies the result back out afterward too (<code>byval</code>, the default, doesn't). Array parameters support any number of dimensions, matched against how the callee's body indexes them — a mismatch is a transpile-time error. Recursive functions are not supported, because a recursive call would overwrite its own global parameter state.</p>
 
 <p>Generated BASIC is intentionally conservative. BASCAL transpiles structured source into line-numbered <code>GOTO</code> / <code>GOSUB</code> style output suitable for classic BASIC-oriented tooling, while still allowing the source program to be much clearer than the BASIC it generates.</p>
 
-<p>In that sense, BASCAL is both a small compiler project and a personal historical exercise: a chance to revisit the frustration that led to Ramtech BASIC, and to build the version of the tool I would have loved to have had at the start of my career.</p>
+<p>In that sense, BASCAL is both a small transpiler project and a personal historical exercise: a chance to revisit the frustration that led to Ramtech BASIC, and to build the version of the tool I would have loved to have had at the start of my career.</p>
 
 <p>I don't expect anyone to actually reach for BASCAL to ship a real application in 2026 — that was never really the point. It's a fun project: built mostly to see what's possible, and to scratch an old itch along the way.</p>
 

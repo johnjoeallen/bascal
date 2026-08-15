@@ -34,13 +34,13 @@
   <div class="prose">
 <p>A function is declared <code>function name%(...) ... end function</code>; the name
 carries the return-type suffix and every path must reach a <code>return</code>.
-Variables declared inside a function are local by default — the compiler
+Variables declared inside a function are local by default — the transpiler
 prefixes them with the function name — so two functions can each use <code>i%</code>
 without conflict. To touch a global from inside a function, declare it with
 <code>global varname</code>. Functions can't recurse — directly (calling
 themselves) or indirectly (two or more functions calling each other in a
 cycle) — since any recursive call would overwrite its own parameter
-variables; the compiler checks the whole call graph and rejects any
+variables; the transpiler checks the whole call graph and rejects any
 cycle.</p>
   </div>
 
@@ -64,7 +64,7 @@ end function</code></pre>
 
 
   <p class="lede">
-    Full, real, compiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl">tutorial/07_functions.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bas">tutorial/07_functions.bas</a>.
+    Full, real, transpiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl">tutorial/07_functions.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bas">tutorial/07_functions.bas</a>.
   </p>
 
   <p class="crumbs">

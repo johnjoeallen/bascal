@@ -1091,7 +1091,7 @@ impl Parser {
         if self.check_keyword("for") || self.check_keyword("while") || self.check_keyword("do") {
             return Err(self.error(
                 "`exit` no longer takes a loop-type keyword -- just write `exit`; \
-                 the compiler resolves which enclosing loop it leaves",
+                 the transpiler resolves which enclosing loop it leaves",
             ));
         }
         self.consume_line_end()?;
@@ -1512,8 +1512,8 @@ impl Parser {
             }
             // MS-BASIC's own boolean convention (see Operators and
             // Expressions in MANUAL.md): -1 is true, 0 is false. `TRUE`/
-            // `FALSE` are compile-time sugar for those literals, nothing more
-            // -- no boolean type is introduced anywhere else in the compiler.
+            // `FALSE` are transpile-time sugar for those literals, nothing more
+            // -- no boolean type is introduced anywhere else in the transpiler.
             TokenKind::Ident(value) if keyword_eq(value, "true") => {
                 self.advance();
                 Expr::Integer(-1)

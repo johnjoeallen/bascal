@@ -2,7 +2,6 @@ pub mod ast;
 pub mod codegen;
 pub mod diagnostics;
 pub mod lexer;
-pub mod linker;
 pub mod parser;
 pub mod records;
 pub mod resolver;
@@ -99,7 +98,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
 /// via `stdlib_search_roots()`, the same on-disk library `require
 /// com.bascal.stdlib.*` resolves against, just triggered by the AST shape
 /// instead of an explicit `require` line, since nothing in the user's own
-/// source ever names this function -- the compiler synthesizes the call
+/// source ever names this function -- the transpiler synthesizes the call
 /// (see `codegen::MID_ASSIGN_HELPER_NAME`).
 fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Vec<Diagnostic>> {
     let already_defined = program
@@ -118,7 +117,7 @@ fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Ve
         .find(|candidate| candidate.exists())
         .ok_or_else(|| {
             vec![Diagnostic::error(
-                diagnostics::SourcePos::new("<compiler-internal>", 1, 1),
+                diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
                 format!(
                     "internal error: this program uses MID$ statement-form assignment, which \
                      needs BASCAL's own {symbol} helper, but {} could not be found -- this \
@@ -130,7 +129,7 @@ fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Ve
 
     let source = fs::read_to_string(&path).map_err(|err| {
         vec![Diagnostic::error(
-            diagnostics::SourcePos::new("<compiler-internal>", 1, 1),
+            diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
             format!("internal error: failed to read {}: {err}", path.display()),
         )]
     })?;
@@ -185,10 +184,10 @@ fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diag
 /// An identifier with an underscore is a syntax error on real MBASIC/BASCOM
 /// whenever it's read as an expression operand (it's only tolerated as an
 /// assignment target) -- discovered by compiling against a real BASCOM 2.00
-/// compiler. Since almost every variable gets read somewhere, and BASCAL
+/// transpiler. Since almost every variable gets read somewhere, and BASCAL
 /// can't safely rewrite a user's own chosen name, the underscore is rejected
 /// outright at parse time, with camelCase suggested as the fix -- matching
-/// the convention the compiler's own generated names already use.
+/// the convention the transpiler's own generated names already use.
 fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Diagnostic>> {
     let diagnostics: Vec<Diagnostic> = tokens
         .iter()
@@ -798,7 +797,7 @@ END
 
     #[test]
     fn lowers_basic_file_io_statements() {
-        // Mixed-case keywords and variable names: compiler normalises vars to lowercase.
+        // Mixed-case keywords and variable names: transpiler normalises vars to lowercase.
         let source = r#"OPEN InputFile$ FOR INPUT AS #1
 LINE INPUT #1, CurrentLine$
 PRINT #2, CurrentLine$
@@ -1481,7 +1480,7 @@ end
     fn label_name_matching_string_literal_text_is_not_corrupted() {
         // Regression test: label -> line-number substitution used to be a
         // blind `str::replace` across the whole line, which was safe only
-        // because compiler-internal labels use distinctive prefixed names
+        // because transpiler-internal labels use distinctive prefixed names
         // (WHILE_0001_TOP, ...). User labels are short, ordinary words, so
         // a label named `done` must not corrupt `PRINT "...done..."` text
         // on some unrelated line that just happens to contain that word.
@@ -1502,7 +1501,7 @@ end
         // at all (it's a later QuickBASIC-era addition), so this must not
         // pass through as raw `MID$(...) = ...` -- it needs to transpile to a
         // call to BASCAL's own com.bascal.stdlib.midAssign helper, same as
-        // every other real-BASCOM incompatibility this compiler works
+        // every other real-BASCOM incompatibility this transpiler works
         // around.
         let source = r#"s$ = "Hello World"
 mid$(s$, 7, 5) = "BASIC"
@@ -1783,7 +1782,7 @@ end
 
     #[test]
     fn global_matching_generated_param_name_is_an_error() {
-        // fooX0% is exactly what the compiler would generate for param x% in foo%.
+        // fooX0% is exactly what the transpiler would generate for param x% in foo%.
         // Declaring it as a global must be rejected.
         let source = r#"
 fooX0% = 99
@@ -1803,7 +1802,7 @@ end
 
     #[test]
     fn global_matching_generated_result_name_is_an_error() {
-        // fooResult0% is what the compiler generates for the result variable of foo%.
+        // fooResult0% is what the transpiler generates for the result variable of foo%.
         let source = r#"
 fooResult0% = 0
 function foo%(n%)
@@ -1822,7 +1821,7 @@ end
 
     #[test]
     fn global_matching_generated_local_name_is_an_error() {
-        // fooAcc0% is what the compiler would generate for local acc% inside foo%.
+        // fooAcc0% is what the transpiler would generate for local acc% inside foo%.
         let source = r#"
 fooAcc0% = 0
 function foo%(n%)
@@ -2166,7 +2165,7 @@ end
     #[test]
     fn bare_identifier_array_argument_is_accepted_without_parens() {
         // Once a parameter's rank is declared, the call site no longer
-        // needs `()` to mark an argument as an array -- the compiler
+        // needs `()` to mark an argument as an array -- the transpiler
         // already knows from the callee's signature.
         let source = r#"
 function sumGrid%(byref grid%(?, ?))
@@ -2413,7 +2412,7 @@ end
     fn arrays_with_non_literal_bounds_are_always_frozen_even_without_sizeof() {
         // Every array's bounds are frozen at DIM time unconditionally, not
         // just when sizeof() is actually called on it -- any array might
-        // get passed to a function later, and the compiler auto-injects
+        // get passed to a function later, and the transpiler auto-injects
         // its bounds at that call site whether or not the source ever
         // calls sizeof() explicitly.
         let source = "n% = 5\ndim data%(n%)\nprint data%(0)\nend\n";
@@ -2798,7 +2797,7 @@ end
         // The recursive call graph is built from every call reachable
         // anywhere in the AST, not just top-level statements -- a call
         // guarded by if/while/select case/for still counts as a real edge,
-        // since the compiler can't prove at compile time whether that
+        // since the transpiler can't prove at compile time whether that
         // branch runs. This is also the realistic case: virtually all
         // correct recursion is conditional (an unconditional recursive
         // call would just infinite-loop at runtime with no base case).
