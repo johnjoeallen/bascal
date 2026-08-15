@@ -1,0 +1,30 @@
+name: Real-BASCOM Conformance
+
+# Opt-in only: never runs on push/pull_request. Fetches a copy of the
+# copyrighted IBM BASIC Compiler 2.00 from the PCjs archive at run time (see
+# test-fixtures/README.md) -- trigger manually from the Actions tab when you
+# want to validate generated BASIC against the real compiler, e.g. before a
+# release.
+on:
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    name: dosbox-x conformance suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install dosbox-x and mtools
+        run: sudo apt-get update && sudo apt-get install -y dosbox-x mtools
+
+      - name: Fetch IBM BASIC Compiler 2.00
+        run: scripts/fetch-ibm-basic-compiler.sh
+
+      - name: Test (including dosbox-x conformance suite)
+        run: cargo test --locked

@@ -23,6 +23,13 @@ target
 /output/remline/
 tutorial/remline/sample/output.bas
 
+# Third-party test fixtures that are never committed (copyrighted software
+# pulled locally on demand) -- see test-fixtures/README.md.
+/test-fixtures/ibm-basic-compiler/
+
+# Python bytecode cache (scripts/lib/*.py)
+__pycache__/
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

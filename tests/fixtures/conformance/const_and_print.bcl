@@ -1,0 +1,24 @@
+// Conformance fixture: CONST lowering, arithmetic, and string/number PRINT
+// concatenation -- exercises the CONST-is-not-real-BASCOM fix directly.
+
+const maxScore% = 100
+const taxRate!  = 0.2
+
+score% = 87
+bonus% = 5
+total% = score% + bonus%
+
+print "Score: "; total%; " / "; maxScore%
+print "Tax:   "; taxRate!
+
+if total% > maxScore% then
+    print "Capped"
+else
+    print "Under cap"
+end if
+
+for i% = 1 to 3
+    print "Lap "; i%
+end for
+
+end
