@@ -3505,9 +3505,10 @@ end procedure
 
     #[test]
     fn plain_label_error_handler_is_unaffected() {
-        // The raw-label form (inventory.bcl's own errorTrap:) predates this
-        // check and must keep compiling exactly as before -- these new
-        // rules only ever apply to a `procedure` target.
+        // The raw-label form -- what inventory.bcl's own errorTrap used
+        // before it became a procedure -- predates this check and must
+        // keep compiling exactly as before: these new rules only ever
+        // apply to a `procedure` target.
         let source = r#"
 on error goto errorTrap
 x% = 1 / 0

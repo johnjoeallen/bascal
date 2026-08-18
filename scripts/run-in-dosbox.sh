@@ -56,7 +56,7 @@ printf '\x1a' >> "$DOS_BAS"
 # BASCOM doesn't link in ON ERROR GOTO / RESUME support by default --
 # the /E (error trapping) and /X (RESUME) switches must be requested
 # explicitly, or compilation/linking of such a program fails. Discovered
-# on tutorial/inventory.bcl; see its header note and `errorTrap:` label.
+# on tutorial/inventory.bcl; see its header note and `errorTrap()`.
 BASCOM_SWITCHES=""
 if grep -qi 'ON ERROR GOTO' "$BAS_PATH"; then
     BASCOM_SWITCHES="/E/X"
