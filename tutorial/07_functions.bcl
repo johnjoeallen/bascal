@@ -12,6 +12,9 @@
 // overwritten) -- the compiler checks the whole call graph and rejects
 // any cycle.  Use an explicit stack array for recursive algorithms.
 
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+
 /* Integer arithmetic functions */
 // a% -- first value to compare
 // b% -- second value to compare
@@ -56,7 +59,9 @@ end function
 // word$ -- string to title-case
 function titleCase$(word$)
     // Capitalise first letter, lowercase remainder.
-    // Relies on the BASIC runtime's UCASE$/LCASE$ built-ins.
+    // UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
+    // against a real IBM BASIC Compiler 2.00 under dosbox-x), so this
+    // requires BASCAL's own com.bascal.stdlib implementations above.
     if len(word$) = 0 then
         return ""
     end if
