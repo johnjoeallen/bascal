@@ -36,18 +36,6 @@
 // Tracks parts in a fixed 100-record file: check status, add,
 // edit, add/subtract stock, and a reorder report.
 //
-// This version assumes both of the following bcc bugs are fixed:
-//  - `const` referenced inside a function/procedure body now
-//    resolves to the real constant (partCount%/tabCol% are used
-//    directly below, no more literal-inlining workaround).
-//  - `INKEY$` referenced inside a function/procedure body now
-//    resolves to the real builtin (readKey$()/waitAnyKey() call
-//    it directly; no more shared top-level GOSUB-subroutine
-//    indirection through a global `lastKey$`).
-// (The record/file DSL had this same "breaks inside a procedure"
-// problem too; that one was already fixed upstream before this
-// file existed -- inv[...] is used freely inside procedures.)
-//
 // Verified against real BASCOM 2.00 under dosbox-x: compiles
 // clean and links, but -- because this program uses `on error
 // goto` / `resume` -- only when BASCOM is invoked with the /E and
@@ -73,9 +61,9 @@ end record
 
 // BASCAL-ism: `const` is a real compile-time constant, not a plain
 // variable assignment like fhb's `N=100` / `T=20` -- it can never
-// be reassigned, and (per the header note above) resolves to the
-// same value everywhere, including inside every function/procedure
-// below, with no `global` declaration needed.
+// be reassigned, and resolves to the same value everywhere,
+// including inside every function/procedure below, with no
+// `global` declaration needed.
 const partCount% = 100
 const tabCol% = 20
 
@@ -119,11 +107,9 @@ end function
 // BASCAL-ism: `do ... loop until` is a structured post-check loop
 // replacing fhb's `730 KP$=INKEY$:IF KP$="" THEN 730` GOTO-polling
 // idiom. `inkey$` itself is the real INKEY$ builtin passed straight
-// through -- see the header note above on why it needed a bcc fix
-// to resolve correctly from inside a function/procedure body like
-// this one (every menu action below calls readKey$()/waitAnyKey()
-// instead of polling INKEY$ inline, which is exactly the pattern
-// that exposed the original bug).
+// through, resolving correctly from inside a function/procedure
+// body like this one -- every menu action below calls
+// readKey$()/waitAnyKey() rather than polling INKEY$ inline.
 function readKey$()
     do
         k$ = inkey$
@@ -516,11 +502,7 @@ locate 25, 1
 // straight through like fhb's own ERR/ERL (his 3390: "an error on
 // line";ERL). Unlike fhb's version, this doesn't decode ERR into a
 // message per the header note above -- it just reports the raw
-// code. (These aren't referenced from inside a function/procedure
-// body anywhere in this file, so the bcc `const`/INKEY$-in-a-
-// procedure fixes this file exists to demonstrate don't apply to
-// them here -- but they had the identical bug and fix upstream;
-// see MANUAL.md's ON ERROR GOTO section.)
+// code. See MANUAL.md's ON ERROR GOTO section.
 print "There has been an error on line" + str$(erl) + "  Error #" + str$(err)
 k$ = readKey$()
 resume next
