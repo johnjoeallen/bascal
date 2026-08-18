@@ -123,6 +123,13 @@ program name suite suitename</code></pre>
 <p>A <code>program</code> declaration is <strong>not allowed</strong> in library modules loaded via <code>require</code>.</p>
 <h3 id="file-encoding">File Encoding</h3>
 <p>Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are separated by newlines; a colon <code>:</code> may also separate statements on one line.</p>
+<p>There is no line-continuation syntax -- no trailing <code>_</code>, <code>\</code>, or similar. The lexer turns every physical newline into a real token, so any single expression (and the tokens making up a statement header, like a <code>case</code> value list) must fit on one physical line; a newline there ends the statement/expression rather than continuing it. This applies everywhere, not just to obviously statement-like constructs -- a function call's argument list, for example, can't have a newline before its closing <code>)</code> either:</p>
+<pre><code>' Not allowed -- the newline after "1," ends the statement early:
+result% = someFunction(1,
+                        2)
+
+' Allowed -- keep the whole call on one line:
+result% = someFunction(1, 2)</code></pre>
 <hr />
 <h2 id="data-types-and-type-suffixes">Data Types and Type Suffixes</h2>
 <p>BASCAL uses Microsoft BASIC's type-suffix convention. Every variable or function name carries its type in the final character:</p>

@@ -162,6 +162,24 @@ A `program` declaration is **not allowed** in library modules loaded via
 Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are
 separated by newlines; a colon `:` may also separate statements on one line.
 
+There is no line-continuation syntax -- no trailing `_`, `\`, or similar. The
+lexer turns every physical newline into a real token, so any single
+expression (and the tokens making up a statement header, like a `case`
+value list) must fit on one physical line; a newline there ends the
+statement/expression rather than continuing it. This applies everywhere,
+not just to obviously statement-like constructs -- a function call's
+argument list, for example, can't have a newline before its closing `)`
+either:
+
+```
+' Not allowed -- the newline after "1," ends the statement early:
+result% = someFunction(1,
+                        2)
+
+' Allowed -- keep the whole call on one line:
+result% = someFunction(1, 2)
+```
+
 ---
 
 ## Data Types and Type Suffixes
