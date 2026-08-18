@@ -343,7 +343,9 @@ impl Parser {
         if let Some(stmt) = self.pending_statements.pop_front() {
             return Ok(stmt);
         }
-        if self.check_keyword("dim") {
+        if self.check_keyword("def") && self.check_next_keyword("fn") {
+            self.parse_def_fn()
+        } else if self.check_keyword("dim") {
             self.parse_dim()
         } else if self.check_keyword("file") {
             self.parse_file_decl()
@@ -475,6 +477,61 @@ impl Parser {
             self.pending_blank = true;
         }
         Ok(Statement::Label(name))
+    }
+
+    /// Classic single-line `DEF FN` (e.g. `DEF FN A(X) = X * X + 1`) is a
+    /// deliberate scope decision to reject, not a missing feature --
+    /// BASCAL's `function`/`procedure` blocks fully supersede it, and
+    /// real-world `DEF FN` abuse (comma-operator side effects, colon-
+    /// chained pseudo-statements) has no clean general conversion
+    /// semantics. So this parses the grammar shape just far enough to
+    /// recognize the statement as a unit -- including the "weird" forms
+    /// -- purely so the rejection diagnostic below can point at the `DEF`
+    /// token and name the construct specifically, instead of failing with
+    /// a generic error deep inside whatever expression follows `=`. No
+    /// AST node is built and nothing is lowered; this always errors.
+    fn parse_def_fn(&mut self) -> ParseResult<Statement> {
+        let def_pos = self.current_pos();
+        self.expect_keyword("def")?;
+        self.expect_keyword("fn")?;
+        self.expect_ident("expected DEF FN name")?;
+        if self.eat(TokenKind::LParen) {
+            if !matches!(self.current().kind, TokenKind::RParen) {
+                loop {
+                    self.expect_ident("expected DEF FN parameter name")?;
+                    if !self.eat(TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.expect(TokenKind::RParen, "expected `)` after DEF FN parameters")?;
+        }
+        self.expect(TokenKind::Eq, "expected `=` in DEF FN")?;
+        // The expression after `=` is intentionally not structurally
+        // parsed -- real-world DEF FN abuse includes a parenthesized
+        // comma-operator list (`(A = A + 1, A)`) and colon-chained
+        // pseudo-statements (`A = A + 1 : A`), neither of which is a
+        // single expression tree BASCAL's expression parser understands.
+        // Since this always ends in rejection regardless of shape, just
+        // skip every token through end of line/statement -- DEF FN is a
+        // single-line, non-block statement, so nothing after the trailing
+        // newline belongs to it, and skipping is what keeps the error
+        // pointed at `DEF` instead of choking partway through the
+        // expression on some unexpected comma or colon.
+        while !matches!(
+            self.current().kind,
+            TokenKind::Newline | TokenKind::Eof | TokenKind::Comment(_) | TokenKind::BlockComment(_)
+        ) {
+            self.advance();
+        }
+        self.consume_line_end()?;
+        Err(Diagnostic::error(
+            def_pos,
+            "DEF FN is not supported by BASCAL -- `function` and `procedure` blocks (with \
+             parameters, byref/byval, and return values) fully replace it, and real-world DEF \
+             FN abuse has no clean general conversion semantics. Rewrite this by hand as a \
+             `function` before converting this file -- DEF FN is not automatically converted.",
+        ))
     }
 
     fn parse_dim(&mut self) -> ParseResult<Statement> {

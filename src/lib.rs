@@ -3218,4 +3218,97 @@ end
             "check%(b%)'s GOSUB must come after a%'s guard line, not before:\n{output}"
         );
     }
+
+    // ── DEF FN (deliberately unsupported) ───────────────────────────────
+
+    fn assert_def_fn_rejected(filename: &str, source: &str, def_line: usize) {
+        let err = compile_source(filename, source).expect_err("DEF FN should be rejected");
+        assert_eq!(err.len(), 1, "should report exactly one diagnostic: {:?}", err);
+        let d = &err[0];
+        assert!(
+            d.message.contains("DEF FN is not supported by BASCAL"),
+            "must be the specific DEF FN rejection, not a generic parse error: {:?}", err
+        );
+        assert!(
+            d.message.contains("Rewrite this by hand as a `function`"),
+            "must explain how to port it: {:?}", err
+        );
+        assert_eq!(
+            d.pos.line, def_line,
+            "diagnostic must point at the DEF FN statement itself, not a token inside its \
+             expression: {:?}", err
+        );
+    }
+
+    #[test]
+    fn def_fn_clean_form_is_rejected() {
+        let source = r#"program p
+def fn A(X) = X * X + 1
+print "after"
+end
+"#;
+        assert_def_fn_rejected("deffn_clean.bcl", source, 2);
+    }
+
+    #[test]
+    fn def_fn_comma_operator_form_is_rejected() {
+        let source = r#"program p
+def fn X(A) = (A = A + 1, A)
+print "after"
+end
+"#;
+        assert_def_fn_rejected("deffn_comma.bcl", source, 2);
+    }
+
+    #[test]
+    fn def_fn_colon_chained_form_is_rejected() {
+        let source = r#"program p
+def fn Z(A) = A = A + 1 : A
+print "after"
+end
+"#;
+        assert_def_fn_rejected("deffn_colon.bcl", source, 2);
+    }
+
+    #[test]
+    fn def_fn_no_params_form_is_rejected() {
+        let source = r#"program p
+def fn W = X + Y
+print "after"
+end
+"#;
+        assert_def_fn_rejected("deffn_noparams.bcl", source, 2);
+    }
+
+    #[test]
+    fn def_fn_amid_other_statements_reports_only_itself_and_keeps_line_tracking() {
+        // A DEF FN statement sandwiched between valid statements must
+        // produce only the one DEF FN diagnostic (the parser bails out
+        // on the first error, same as any other fatal parse error) --
+        // and the token-skipping used to recognize DEF FN as a unit must
+        // not desync line counting for anything that follows.
+        let source = r#"program p
+print "before"
+def fn A(X) = X * X + 1
+print "after"
+end
+"#;
+        assert_def_fn_rejected("deffn_amid_others.bcl", source, 3);
+    }
+
+    #[test]
+    fn def_used_as_a_plain_identifier_is_not_mistaken_for_def_fn() {
+        // `def` (without a following `fn`) isn't a keyword BASCAL uses
+        // for anything else -- confirmed by grepping the parser for other
+        // `"def"` dispatches (none) -- so a variable literally named
+        // `def%` must compile as an ordinary identifier, not trigger the
+        // DEF FN rejection.
+        let source = r#"program p
+def% = 5
+print def%
+end
+"#;
+        let output = compile_source("def_as_ident.bcl", source).expect("should compile");
+        assert!(output.contains("def% = 5"), "`def%` should compile as a plain variable:\n{output}");
+    }
 }

@@ -1020,6 +1020,18 @@ declaration could never take effect.
   array to simulate recursion if needed.
 - **No return value from a procedure.** Functions must `return` a value;
   for side-effect-only subroutines use `procedure` instead.
+- **No `DEF FN`.** Classic MBASIC/GW-BASIC's single-line `DEF FN` (e.g.
+  `DEF FN A(X) = X * X + 1`) is a deliberate scope decision to reject, not
+  a missing feature — `function`/`procedure` blocks, with real parameters,
+  `byref`/`byval`, and return values, fully supersede its clean form, and
+  real-world `DEF FN` source sometimes abuses the comma operator or a
+  colon-chained pseudo-statement list purely for evaluation-order side
+  effects (`DEF FN X(A) = (A = A + 1, A)`), which has no clean general
+  conversion into a `function` body. `bcc` recognizes the `DEF FN` grammar
+  shape (including these abused forms) specifically so it can reject it
+  with a clear, specific diagnostic rather than a generic parse error —
+  but it is always rejected, never auto-converted. Rewrite each `DEF FN`
+  by hand as a `function` before converting a file that uses it.
 
 ### How Functions Are Transpiled
 
