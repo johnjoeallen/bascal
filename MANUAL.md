@@ -2254,6 +2254,18 @@ on error goto errHandler   ' jump to errHandler on any error
 on error goto 0            ' disable the error trap
 ```
 
+The target can be a raw `name:` label or a `procedure`. A `procedure` target
+gets extra compile-time checking, because it's reached with a plain `GOTO`
+(never a `GOSUB`), so there's no call frame for `RETURN` to pop: bcc rejects
+any `return` inside such a procedure's body, and rejects the body unless
+every path is proven to end in `resume`/`resume next`/`resume <label>` (an
+`if`/`select case` only counts if every branch, including a mandatory
+`else`/`case else`, diverges the same way). A procedure that passes both
+checks also can't be called like an ordinary procedure anywhere else in the
+program — it's proven to never return, so it could never come back to a
+normal caller. See `errorTrap()` in `tutorial/inventory.bcl` for a worked
+example.
+
 #### RESUME
 
 Resumes execution after an error handler has run.

@@ -19,10 +19,12 @@
 //    row) and `VIEW PRINT` (scroll-region windowing for the list
 //    screen) are interpreter/console features BASCAL doesn't
 //    expose.
-//  - fhb's numeric-ERR-code-to-message lookup table (ERR=1 "Input
-//    value overflow", ERR=2 "Syntax error", ... ERR=25) is
-//    collapsed below into a single line reporting the raw ERR/ERL
-//    values instead.
+//  - fhb's own hand-rolled numeric-ERR-code-to-message lookup table
+//    (ERR=1 "Input value overflow", ERR=2 "Syntax error", ... ERR=25)
+//    is replaced below by BASCAL's com.bascal.stdlib.error library
+//    (ERROR$(code%)) -- same idea, BASCAL's own table; it still
+//    doesn't decode ERL, which errorTrap() reports as the raw line
+//    number.
 //  - fhb's one-time "hidden" datafile initializer (PUT-ing 100
 //    blank, CHR$(255)-flagged records) isn't reproduced here --
 //    inven.dat must be pre-populated with 100 such blank records
@@ -40,8 +42,10 @@
 // clean and links, but -- because this program uses `on error
 // goto` / `resume` -- only when BASCOM is invoked with the /E and
 // /X switches (error trapping isn't linked in by default). See
-// `errorTrap:` at the bottom.
+// `errorTrap()` at the bottom.
 // ============================================================
+
+require com.bascal.stdlib.error
 
 // BASCAL-ism: the record/file DSL. `record ... end record` plus
 // `file ... as ... = open(...)` below replace fhb's manual
@@ -491,23 +495,28 @@ inv.close()
 END
 
 // -------------------- Error handling --------------------
-// A raw label, not a procedure -- ON ERROR GOTO reaches either one with
-// a plain GOTO, so that's not the deciding factor. What is: a procedure
-// with a body that doesn't end in `return` gets an unconditional RETURN
-// appended by bcc (see codegen's ends_with_return), and this body ends
-// in `resume next`, not `return`. Normally harmless dead code -- RESUME
-// jumps away first -- but if a future edit ever dropped that trailing
-// RESUME, execution would fall into the auto-appended RETURN with no
-// GOSUB frame on the stack to pop (GOTO never pushes one), crashing
-// with "RETURN without GOSUB". Staying a label sidesteps that risk
-// entirely: bcc never appends anything after a label's body.
-errorTrap:
+// A procedure, not just a raw label -- safe here because bcc's resolver
+// specifically proves it safe. `errorTrap()` is the target of `on error
+// goto` above, reached via a raw GOTO rather than a GOSUB, so a `return`
+// or a fallen-through implicit trailing RETURN would have no GOSUB frame
+// to pop and would crash with "RETURN without GOSUB" (fittingly, exactly
+// what ERROR$(3) below reports). bcc rejects any procedure named as an
+// `on error goto` target that contains a `return` anywhere, or that can't
+// be proven to end every path in `resume`/`resume next`/`resume <label>`
+// (this one's trailing `resume next` qualifies) -- and, given that proof,
+// codegen skips the implicit trailing RETURN entirely, so there's nothing
+// left to fall into even if the proof were somehow wrong. The same check
+// also rejects calling it like an ordinary procedure anywhere else:
+// something proven to never return can never come back to a normal caller.
+procedure errorTrap()
     locate 25, 1
     // `err` and `erl` are real numeric system pseudo-variables, passed
     // straight through like fhb's own ERR/ERL (his 3390: "an error on
-    // line";ERL). Unlike fhb's version, this doesn't decode ERR into a
-    // message per the header note above -- it just reports the raw
-    // code. See MANUAL.md's ON ERROR GOTO section.
-    print "There has been an error on line" + str$(erl) + "  Error #" + str$(err)
+    // line";ERL). Unlike fhb's version, which used a hand-rolled ERR
+    // lookup table, this decodes ERR through BASCAL's own
+    // com.bascal.stdlib.error (ERROR$) instead -- see the header note
+    // above. See MANUAL.md's ON ERROR GOTO section.
+    print "There has been an error on line" + str$(erl) + ": " + error$(err)
     k$ = readKey$()
     resume next
+end procedure
