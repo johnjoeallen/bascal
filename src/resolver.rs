@@ -9,6 +9,7 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_call_cycles(program, &mut diagnostics);
     reject_missing_returns(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
+    reject_unsafe_error_handler_procedures(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
@@ -185,6 +186,146 @@ fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) 
                 ),
             ));
         }
+    }
+}
+
+/// A procedure named as an `on error goto` target is entered via a raw
+/// `GOTO`, never a `GOSUB` -- so there is no call frame for a `RETURN` to
+/// pop. That makes two things unsafe for such a procedure, both otherwise
+/// perfectly normal:
+///
+/// - Any `return`/bare `return` (== `RETURN`) inside its body, reached or
+///   not: real BASIC has no way to distinguish "this RETURN was reached via
+///   GOSUB" from "it wasn't" until the crash.
+/// - Falling off the end of the body: codegen appends an implicit `RETURN`
+///   there for every procedure whose body doesn't already end in `return`
+///   (see `ends_with_return` in codegen.rs) -- fine for an ordinarily
+///   GOSUB-called procedure, fatal here if that fallthrough is ever
+///   actually reached.
+///
+/// So a procedure used this way must (a) contain no `return` anywhere, and
+/// (b) provably never fall through -- every path must end in `resume`,
+/// `resume next`, `resume <label>`, `goto`, or `end`. Given both hold, it
+/// also can't be usable as an ordinary procedure anywhere else in the
+/// program: something proven to never return can never come back to a
+/// normal caller either.
+fn reject_unsafe_error_handler_procedures(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let handler_targets = error_handler_targets(program);
+    if handler_targets.is_empty() {
+        return;
+    }
+
+    for function in &program.functions {
+        if !function.is_procedure {
+            continue;
+        }
+        if !handler_targets.iter().any(|t| same_ident(t, &function.name)) {
+            continue;
+        }
+
+        if contains_return(&function.body) {
+            diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`{}` cannot contain `return` -- it's the target of `on error goto`, \
+                     which jumps to it with a raw GOTO, never a GOSUB, so a RETURN there has \
+                     no call frame to pop and crashes at runtime; end every path with \
+                     `resume`, `resume next`, or `resume <label>` instead",
+                    function.name
+                ),
+            ));
+        }
+
+        if !diverges(&function.body) {
+            diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`{}` doesn't end every path with `resume`/`resume next`/`resume <label>` \
+                     (or `goto`/`end`) -- it's the target of `on error goto`, so falling off \
+                     the end would run into bcc's implicit RETURN with no GOSUB frame to pop, \
+                     crashing at runtime",
+                    function.name
+                ),
+            ));
+        }
+
+        if statements_call_function(&program.statements, &function.name)
+            || program
+                .functions
+                .iter()
+                .any(|f| statements_call_function(&f.body, &function.name))
+        {
+            diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`{}` is both an `on error goto` target and called like an ordinary \
+                     procedure -- a procedure that safely handles the first can never return \
+                     to a normal caller, so it can't do both; give the error handler its own \
+                     procedure",
+                    function.name
+                ),
+            ));
+        }
+    }
+}
+
+/// Every identifier named as an `on error goto` target anywhere in the
+/// program (main body or any function/procedure body) -- `on error goto 0`
+/// (the disable sentinel) is a numeric literal, not an identifier, so it's
+/// naturally excluded. Exposed for codegen: a procedure in this set has
+/// been proven by `validate` to never fall through, so codegen must not
+/// append its usual implicit trailing RETURN for one.
+pub fn error_handler_targets(program: &Program) -> Vec<BasicIdent> {
+    let mut targets = Vec::new();
+    collect_on_error_goto_targets(&program.statements, &mut targets);
+    for function in &program.functions {
+        collect_on_error_goto_targets(&function.body, &mut targets);
+    }
+    targets
+}
+
+fn collect_on_error_goto_targets(statements: &[Statement], out: &mut Vec<BasicIdent>) {
+    for stmt in statements {
+        match stmt {
+            Statement::OnErrorGoto { target: Expr::Ident(ident) } => out.push(ident.clone()),
+            Statement::If { then_body, else_body, .. } => {
+                collect_on_error_goto_targets(then_body, out);
+                collect_on_error_goto_targets(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_on_error_goto_targets(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_on_error_goto_targets(&case.body, out);
+                }
+                collect_on_error_goto_targets(else_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// True if every path through `statements` is provably non-fallthrough --
+/// ends in `resume`/`goto`/`end`, or (recursively) an `if` whose `then` and
+/// `else` both diverge, or a `select case` whose every `case` and a
+/// mandatory `case else` all diverge. Loops are never treated as diverging
+/// (they may not run, or may complete normally), so a handler ending in a
+/// loop still needs an explicit `resume`/`goto`/`end` after it.
+fn diverges(statements: &[Statement]) -> bool {
+    let last = statements
+        .iter()
+        .rev()
+        .find(|s| !matches!(s, Statement::BlankLine));
+    match last {
+        Some(Statement::Resume(_)) | Some(Statement::Goto(_)) | Some(Statement::End) => true,
+        Some(Statement::If { then_body, else_body, .. }) => {
+            diverges(then_body) && diverges(else_body)
+        }
+        Some(Statement::SelectCase { cases, else_body, .. }) => {
+            cases.iter().all(|c| diverges(&c.body)) && diverges(else_body)
+        }
+        _ => false,
     }
 }
 

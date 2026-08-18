@@ -90,6 +90,15 @@ pub struct CodeGenerator {
     // auto-injects its bounds at the call site so the callee's own
     // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
+    // Lowercase names of every procedure named as an `on error goto` target
+    // somewhere in the program. resolver::validate has already proven each
+    // one contains no `return` and never falls off the end (every path
+    // ends in resume/goto/end) -- so unlike an ordinary procedure, codegen
+    // must NOT append an implicit trailing RETURN for one of these: it's
+    // been proven unreachable, and appending it anyway would reintroduce
+    // exactly the "RETURN with no GOSUB frame" crash risk the proof exists
+    // to rule out.
+    error_handler_procedures: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -156,6 +165,7 @@ impl CodeGenerator {
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
+            error_handler_procedures: HashSet::new(),
         }
     }
 
@@ -196,6 +206,10 @@ impl CodeGenerator {
             ));
         }
         self.functions = functions;
+        self.error_handler_procedures = crate::resolver::error_handler_targets(program)
+            .iter()
+            .map(|ident| ident.name.to_ascii_lowercase())
+            .collect();
         self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
         self.record_buffer_names = collect_record_buffer_names(program);
         {
@@ -324,7 +338,17 @@ impl CodeGenerator {
         self.line(&format!("{}:", info.label));
         self.indent += 1;
         self.statements(&function.body, Some(&info));
-        if !ends_with_return(&function.body) {
+        // A procedure named as an `on error goto` target is entered via a
+        // raw GOTO, never a GOSUB -- resolver::validate has already proven
+        // it contains no `return` and never falls off the end, so the
+        // usual implicit trailing RETURN below would be both unreachable
+        // and, if that proof were ever wrong, a "RETURN without GOSUB"
+        // crash. Skip it entirely for these, same as a raw label.
+        let is_unreturnable_error_handler = function.is_procedure
+            && self
+                .error_handler_procedures
+                .contains(&function.name.name.to_ascii_lowercase());
+        if !ends_with_return(&function.body) && !is_unreturnable_error_handler {
             self.line("RETURN");
         }
         self.indent -= 1;
@@ -694,19 +718,19 @@ impl CodeGenerator {
                 self.line(&format!("{name}:"));
             }
             Statement::Goto(target) => {
-                self.line(&format!("GOTO {}", label_target_text(target)));
+                self.line(&format!("GOTO {}", self.label_target_text(target)));
             }
             Statement::Gosub(target) => {
-                self.line(&format!("GOSUB {}", label_target_text(target)));
+                self.line(&format!("GOSUB {}", self.label_target_text(target)));
             }
             Statement::OnErrorGoto { target } => {
-                self.line(&format!("ON ERROR GOTO {}", label_target_text(target)));
+                self.line(&format!("ON ERROR GOTO {}", self.label_target_text(target)));
             }
             Statement::Resume(kind) => match kind {
                 ResumeTarget::Same => self.line("RESUME"),
                 ResumeTarget::Next => self.line("RESUME NEXT"),
                 ResumeTarget::Line(expr) => {
-                    self.line(&format!("RESUME {}", label_target_text(expr)));
+                    self.line(&format!("RESUME {}", self.label_target_text(expr)));
                 }
             },
             Statement::ErrorStmt { code } => {
@@ -758,7 +782,7 @@ impl CodeGenerator {
             }
             Statement::Restore(target) => {
                 if let Some(target) = target {
-                    self.line(&format!("RESTORE {}", label_target_text(target)));
+                    self.line(&format!("RESTORE {}", self.label_target_text(target)));
                 } else {
                     self.line("RESTORE");
                 }
@@ -911,7 +935,8 @@ impl CodeGenerator {
             Statement::OnBranch { expr, targets, is_gosub } => {
                 let (prelude, expr) = self.expr(expr, current_function);
                 self.lines(prelude);
-                let rendered: Vec<String> = targets.iter().map(label_target_text).collect();
+                let rendered: Vec<String> =
+                    targets.iter().map(|t| self.label_target_text(t)).collect();
                 let keyword = if *is_gosub { "GOSUB" } else { "GOTO" };
                 self.line(&format!("ON {expr} {keyword} {}", rendered.join(", ")));
             }
@@ -1547,6 +1572,32 @@ impl CodeGenerator {
         self.functions
             .iter()
             .find(|function| same_ident(&function.source_name, name))
+    }
+
+    /// Renders a `goto`/`gosub`/`on error goto`/`resume`/`on ... goto`/
+    /// `on ... gosub` target. The parser only ever produces a bare label
+    /// identifier here, or (for `on error goto` only) the integer `0`
+    /// sentinel that disables the error trap.
+    ///
+    /// A target naming a declared `function`/`procedure` needs special
+    /// handling: unlike an ordinary `name:` label (emitted, and later
+    /// number-resolved, using the exact text the author wrote), a
+    /// function/procedure entry point is emitted under its own synthesized
+    /// `FN_<stem>` label (see `FunctionInfo::from_def`) -- an ordinary call
+    /// site already knows to emit that directly, but a raw label reference
+    /// like this one has no reason to guess it, so look it up through the
+    /// function table instead of rendering the identifier text as-is.
+    fn label_target_text(&self, target: &Expr) -> String {
+        match target {
+            Expr::Ident(ident) => match self.function_info(ident) {
+                Some(info) => info.label.clone(),
+                None => ident.as_basic(),
+            },
+            Expr::Integer(0) => "0".to_string(),
+            _ => unreachable!(
+                "goto/gosub/on/resume targets are label identifiers (or the `on error goto 0` sentinel), enforced at parse time"
+            ),
+        }
     }
 
     /// Declared rank of the array named `name`, resolved in whatever scope
@@ -3261,23 +3312,6 @@ fn is_label_line(line: &str) -> Option<&str> {
         Some(label)
     } else {
         None
-    }
-}
-
-/// Renders a `goto`/`gosub`/`on error goto`/`resume`/`on ... goto`/
-/// `on ... gosub` target. The parser only ever produces a bare label
-/// identifier here, or (for `on error goto` only) the integer `0` sentinel
-/// that disables the error trap — never a general expression — so this
-/// renders the raw text directly instead of going through `self.expr()`,
-/// which would incorrectly apply variable scoping/local-mangling meant for
-/// actual variable reads.
-fn label_target_text(target: &Expr) -> String {
-    match target {
-        Expr::Ident(ident) => ident.as_basic(),
-        Expr::Integer(0) => "0".to_string(),
-        _ => unreachable!(
-            "goto/gosub/on/resume targets are label identifiers (or the `on error goto 0` sentinel), enforced at parse time"
-        ),
     }
 }
 

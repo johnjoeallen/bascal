@@ -3311,4 +3311,215 @@ end
         let output = compile_source("def_as_ident.bcl", source).expect("should compile");
         assert!(output.contains("def% = 5"), "`def%` should compile as a plain variable:\n{output}");
     }
+
+    #[test]
+    fn error_handler_procedure_that_always_resumes_compiles_with_no_trailing_return() {
+        // A procedure named as an `on error goto` target is entered via a
+        // raw GOTO, never a GOSUB -- so codegen's usual implicit trailing
+        // RETURN (for a body that doesn't already end in `return`) would
+        // have no call frame to pop if it were ever reached. Once
+        // resolver::validate proves every path here ends in `resume`,
+        // codegen must skip that RETURN entirely, same as a raw label.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+print "after"
+end
+
+procedure errHandler()
+    print "caught err "; err
+    resume next
+end procedure
+"#;
+        let output = compile_source("error_handler_resumes.bcl", source).expect("should compile");
+        let handler = output
+            .lines()
+            .skip_while(|l| !l.contains("procedure errhandler"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !handler.contains("RETURN"),
+            "a proven-diverging error-handler procedure must not get an implicit RETURN:\n{output}"
+        );
+    }
+
+    #[test]
+    fn error_handler_procedure_containing_return_is_rejected() {
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    if err = 11 then
+        return
+    end if
+    resume next
+end procedure
+"#;
+        let err = compile_source("error_handler_with_return.bcl", source)
+            .expect_err("a `return` inside an on-error-goto-target procedure should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`errHandler` cannot contain `return`")
+                    && d.message.contains("on error goto")
+            }),
+            "error must explain the RETURN-without-GOSUB risk: {:?}", err
+        );
+    }
+
+    #[test]
+    fn error_handler_procedure_that_can_fall_through_is_rejected() {
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    if err = 11 then
+        resume next
+    end if
+    print "unhandled"
+end procedure
+"#;
+        let err = compile_source("error_handler_fallthrough.bcl", source)
+            .expect_err("a procedure that can fall off the end should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`errHandler` doesn't end every path")
+                    && d.message.contains("implicit RETURN")
+            }),
+            "error must explain the fallthrough risk: {:?}", err
+        );
+    }
+
+    #[test]
+    fn error_handler_procedure_also_called_normally_is_rejected() {
+        let source = r#"
+on error goto errHandler
+errHandler()
+end
+
+procedure errHandler()
+    resume next
+end procedure
+"#;
+        let err = compile_source("error_handler_dual_use.bcl", source)
+            .expect_err("a procedure that's both an error-goto target and normally called should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("`errHandler` is both an `on error goto` target")
+                    && d.message.contains("called like an ordinary procedure")
+            }),
+            "error must explain the dual-use conflict: {:?}", err
+        );
+    }
+
+    #[test]
+    fn error_handler_procedure_diverging_via_select_case_compiles_clean() {
+        // Exercises the SelectCase arm of `diverges`: every case, including
+        // a mandatory `case else`, must itself diverge.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    select case err
+    case 11
+        resume next
+    case else
+        resume next
+    end select
+end procedure
+"#;
+        let output = compile_source("error_handler_select_case.bcl", source).expect("should compile");
+        let handler = output
+            .lines()
+            .skip_while(|l| !l.contains("procedure errhandler"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !handler.contains("RETURN"),
+            "every select case arm diverges, so no implicit RETURN should be appended:\n{output}"
+        );
+    }
+
+    #[test]
+    fn error_handler_procedure_select_case_missing_case_else_is_rejected() {
+        // Without `case else`, the select case can't be proven to diverge
+        // on every input -- ERR could be a value none of the cases cover.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    select case err
+    case 11
+        resume next
+    end select
+end procedure
+"#;
+        let err = compile_source("error_handler_select_case_no_else.bcl", source)
+            .expect_err("a select case with no case else can't be proven to diverge");
+        assert!(
+            err.iter().any(|d| d.message.contains("`errHandler` doesn't end every path")),
+            "error must flag the unproven fallthrough: {:?}", err
+        );
+    }
+
+    #[test]
+    fn on_error_goto_targeting_a_procedure_resolves_to_its_real_label() {
+        // Regression test: a procedure's GOSUB entry point is emitted under
+        // a synthesized `FN_<stem>` label (see FunctionInfo::from_def), not
+        // the author's literal spelling -- an ordinary call site already
+        // knows to emit that directly, but `on error goto`/`goto`/`gosub`/
+        // `resume <label>` used to render the raw identifier text as-is
+        // (label_target_text), which only ever matched a genuine `name:`
+        // label statement. Targeting a procedure silently left the
+        // identifier text unresolved in the output -- syntactically valid
+        // BASCAL, but real BASIC would reject it as an undefined label.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    resume next
+end procedure
+"#;
+        let output = compile_source("error_handler_label_resolution.bcl", source)
+            .expect("should compile");
+        assert!(
+            !output.contains("GOTO errHandler") && !output.contains("GOTO errhandler"),
+            "on error goto's target must be resolved to a real line number, not left as \
+             unresolved text:\n{output}"
+        );
+        assert!(
+            output.lines().any(|l| l.trim_start().starts_with("ON ERROR GOTO")
+                && l.trim_end().rsplit(' ').next().is_some_and(|w| w.chars().all(|c| c.is_ascii_digit()))),
+            "expected `ON ERROR GOTO <number>`:\n{output}"
+        );
+    }
+
+    #[test]
+    fn plain_label_error_handler_is_unaffected() {
+        // The raw-label form (inventory.bcl's own errorTrap:) predates this
+        // check and must keep compiling exactly as before -- these new
+        // rules only ever apply to a `procedure` target.
+        let source = r#"
+on error goto errorTrap
+x% = 1 / 0
+print "after"
+end
+
+errorTrap:
+locate 25, 1
+print "error " + str$(err)
+resume next
+"#;
+        let output = compile_source("label_error_handler.bcl", source).expect("should compile");
+        assert!(output.contains("RESUME NEXT"), "unexpected output:\n{output}");
+    }
 }
