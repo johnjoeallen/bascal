@@ -57,16 +57,18 @@ single line reporting the raw <code>ERR</code>/<code>ERL</code> values. See
 the header comment in the source below for the full list, including why
 <code>inven.dat</code> must be pre-populated with 100 blank records before
 the program will run correctly — fhb's original had a one-time hidden
-initializer for this that isn't reproduced.</p>
+initializer for this that has no BASCAL-source equivalent in
+<code>inventory.bcl</code> itself.</p>
 <p>Verified against real BASCOM 2.00 under dosbox-x: it compiles clean and
 links, but only when BASCOM is invoked with the <code>/E</code> and
 <code>/X</code> switches, since <code>on error goto</code>/<code>resume</code>
 isn't linked in by default. <a
 href="https://github.com/johnjoeallen/bascal/blob/main/scripts/run-in-dosbox.sh"><code>scripts/run-in-dosbox.sh</code></a>
 in the repo automates all of this — compiling with <code>bcc</code>,
-seeding a blank <code>inven.dat</code>, adding the right BASCOM switches,
-and launching an interactive dosbox-x session — so you can actually run
-this one instead of just reading it.</p>
+seeding a blank <code>inven.dat</code> with 100 records itself (reproducing
+fhb's one-time initializer at the tooling level, outside the language),
+adding the right BASCOM switches, and launching an interactive dosbox-x
+session — so you can actually run this one instead of just reading it.</p>
   </div>
 
     <div class="snippet">
