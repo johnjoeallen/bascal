@@ -1,5 +1,11 @@
 /* Shared string helpers for REMLINE. */
 
+// UCASE$ isn't a real MBASIC/BASCOM 2.00 builtin (verified against a real
+// IBM BASIC Compiler 2.00 under dosbox-x), so upper$() below needs BASCAL's
+// own com.bascal.stdlib implementation rather than assuming the target
+// dialect provides one.
+require com.bascal.stdlib.ucase
+
 // text$ -- string to trim
 function trimLeft$(text$)
     /* Walk from the left until the first non-space character appears. */
@@ -16,7 +22,7 @@ end function
 
 // text$ -- string to uppercase
 function upper$(text$)
-    return UCASE$(text$)
+    return ucase$(text$)
 end function
 
 // text$    -- string to test
