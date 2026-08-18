@@ -631,6 +631,200 @@ end
     }
 
     #[test]
+    fn top_level_const_resolves_globally_inside_procedure() {
+        // A top-level `const` referenced inside a `procedure` body must
+        // resolve to the real top-level name, not a fresh per-function
+        // local -- otherwise the reference reads an unassigned local
+        // instead of the actual constant.
+        let source = r#"const col% = 20
+
+procedure show()
+    locate 1, col%
+end procedure
+
+show()
+end
+"#;
+        let output = compile_source("const_global_proc.bcl", source).expect("should compile");
+        assert!(
+            output.contains("LOCATE 1, col%"),
+            "reference inside the procedure should resolve to the real top-level const, not a synthesized showCol-style local:\n{output}"
+        );
+        assert!(
+            !output.contains("showCol"),
+            "no per-function local should be synthesized for a top-level const:\n{output}"
+        );
+    }
+
+    #[test]
+    fn inkey_inside_function_resolves_to_builtin() {
+        // INKEY$ referenced inside a `function` body must resolve to the
+        // real builtin (via known_callables), not a fresh per-function
+        // local -- otherwise the assignment reads an unassigned local
+        // forever, hanging any `loop until` that polls it.
+        let source = r#"function readKey$()
+    global lastKey$
+    lastKey$ = inkey$
+    return lastKey$
+end function
+
+k$ = readKey$()
+print k$
+end
+"#;
+        let output = compile_source("inkey_in_function.bcl", source).expect("should compile");
+        assert!(
+            output.contains("= INKEY$"),
+            "INKEY$ inside a function should lower to the real builtin, not a synthesized local:\n{output}"
+        );
+    }
+
+    #[test]
+    fn input_dollar_inside_function_resolves_to_builtin() {
+        // INPUT$(n) referenced inside a `function` body must resolve to
+        // the real builtin call, not a fresh per-function local array --
+        // "input" was missing from BASIC_BUILTINS the same way "inkey"
+        // was, so the Expr::Call codegen path fell through to treating
+        // `input$(1)` as an unassigned local array reference.
+        let source = r#"function readOne$()
+    x$ = input$(1)
+    return x$
+end function
+
+print readOne$()
+end
+"#;
+        let output = compile_source("input_dollar_in_function.bcl", source).expect("should compile");
+        assert!(
+            output.contains("= INPUT$(1)"),
+            "INPUT$ inside a function should lower to the real builtin, not a synthesized local array:\n{output}"
+        );
+    }
+
+    #[test]
+    fn err_and_erl_inside_procedure_resolve_to_builtins() {
+        // ERR and ERL, the numeric error-handler pseudo-variables, must
+        // resolve globally when referenced inside a `procedure` body,
+        // the same as DATE$/TIME$/TIMER/INKEY$ -- they were missing from
+        // BASIC_BUILTINS, so a reference inside a procedure resolved to
+        // an unassigned local instead of the real system variable.
+        let source = r#"procedure checkErr()
+    if err = 53 then
+        print "no file"
+    end if
+    print erl
+end procedure
+
+on error goto handler
+error 53
+goto after
+handler:
+checkErr()
+resume next
+after:
+end
+"#;
+        let output = compile_source("err_erl_in_procedure.bcl", source).expect("should compile");
+        assert!(
+            output.contains("ERR = 53"),
+            "ERR inside a procedure should resolve to the real system variable:\n{output}"
+        );
+        assert!(
+            output.contains("PRINT ERL"),
+            "ERL inside a procedure should resolve to the real system variable:\n{output}"
+        );
+    }
+
+    #[test]
+    fn top_level_const_resolves_globally_inside_function() {
+        // Same as the procedure case above, but for `function`, to cover
+        // both callable kinds -- ident() resolution doesn't distinguish
+        // between them, but the regression this guards against was only
+        // ever demonstrated against `procedure`.
+        let source = r#"const factor% = 3
+
+function scale%(n%)
+    return n% * factor%
+end function
+
+print scale%(5)
+end
+"#;
+        let output = compile_source("const_global_func.bcl", source).expect("should compile");
+        assert!(
+            output.contains("factor%"),
+            "reference inside the function should resolve to the real top-level const:\n{output}"
+        );
+        assert!(
+            !output.contains("scaleFactor"),
+            "no per-function local should be synthesized for a top-level const:\n{output}"
+        );
+    }
+
+    #[test]
+    fn top_level_const_and_explicit_global_coexist_in_same_function() {
+        // A top-level const referenced alongside an explicit
+        // `global`-declared unrelated variable in the same body must not
+        // interfere with each other -- the const resolves globally
+        // without a `global` declaration, and the explicit global keeps
+        // working exactly as before.
+        let source = r#"const limit% = 10
+dim total%
+
+procedure accumulate()
+    global total%
+    total% = total% + limit%
+end procedure
+
+accumulate()
+print total%
+end
+"#;
+        let output = compile_source("const_and_global.bcl", source).expect("should compile");
+        assert!(
+            output.contains("limit%"),
+            "the const should still resolve to the real top-level name:\n{output}"
+        );
+        assert!(
+            output.contains("total% = total% + limit%"),
+            "the explicit global and the const should resolve together correctly:\n{output}"
+        );
+    }
+
+    #[test]
+    fn top_level_const_resolves_identically_across_multiple_procedures() {
+        // A const referenced both at top level and inside multiple
+        // different procedures in the same program must resolve to the
+        // same real name everywhere -- no per-function duplication or
+        // divergence.
+        let source = r#"const rate% = 7
+
+procedure showA()
+    print rate%
+end procedure
+
+procedure showB()
+    print rate% * 2
+end procedure
+
+print rate%
+showA()
+showB()
+end
+"#;
+        let output = compile_source("const_multi_proc.bcl", source).expect("should compile");
+        let occurrences = output.matches("rate%").count();
+        assert!(
+            occurrences >= 4,
+            "every reference (top level + both procedures) should use the same real `rate%` name:\n{output}"
+        );
+        assert!(
+            !output.contains("showARate") && !output.contains("showBRate"),
+            "no per-function local should be synthesized for the const in either procedure:\n{output}"
+        );
+    }
+
+    #[test]
     fn procedure_early_return_emits_bare_return() {
         let source = r#"procedure sayIfPositive(n%)
     if n% <= 0 then

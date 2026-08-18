@@ -15,13 +15,13 @@ const BASIC_BUILTINS: &[&str] = &[
     "str", "chr", "hex", "oct", "space", "environ",
     "command", "trim",
     // Multi-arg string (Expr::Call, but include for completeness)
-    "left", "right", "mid", "instr", "format", "string",
+    "left", "right", "mid", "instr", "format", "string", "input",
     // Single-arg numeric (no suffix → Expr::Call already, but included for safety)
     "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof",
     "sin", "cos", "tan", "atn", "log", "exp", "cint", "clng", "csng", "cdbl",
     "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
     "fre", "lpos", "varptr",
-    "date", "time", "timer",
+    "date", "time", "timer", "inkey", "err", "erl",
     // Print-position helpers (used inside PRINT)
     "tab", "spc",
     // Multi-arg numeric
@@ -59,6 +59,13 @@ pub struct CodeGenerator {
     // ident() must never allocate a per-function local for one, regardless
     // of which scope the LSET/GET/PUT referencing it appears in.
     record_buffer_names: HashSet<String>,
+    // Lowercase BASIC names of every top-level `const` declaration. `const`
+    // values are compile-time literals, never reassignable, so unlike an
+    // ordinary global variable there's no scoping/shadowing concern that
+    // would justify requiring an explicit `global` declaration to see one
+    // from inside a function/procedure body -- they should always resolve
+    // to the real top-level name, the same way record_buffer_names does.
+    const_names: HashSet<String>,
     // Lowercase BASIC names of the *subset* of `record_buffer_names` that
     // `records::lower` invented itself (via `buffer_ident`), as opposed to
     // a `FIELD` buffer name the author typed directly in raw-BASIC-
@@ -144,6 +151,7 @@ impl CodeGenerator {
             loop_exit_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
+            const_names: HashSet::new(),
             synthesized_buffer_names: HashSet::new(),
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
@@ -190,6 +198,11 @@ impl CodeGenerator {
         self.functions = functions;
         self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
         self.record_buffer_names = collect_record_buffer_names(program);
+        {
+            let mut consts = HashMap::new();
+            collect_consts(&program.statements, &mut consts);
+            self.const_names = consts.keys().map(|k| k.to_ascii_lowercase()).collect();
+        }
         *self.taken_names.borrow_mut() = taken;
 
         self.known_callables = self
@@ -1486,6 +1499,13 @@ impl CodeGenerator {
                 // any other identifier.
                 BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
             };
+        }
+        if self.const_names.contains(&source_key) {
+            // `const` values always resolve globally, with or without an
+            // explicit `global` declaration -- see the field comment on
+            // const_names for why. Checked before the current_function
+            // branch below, same as record_buffer_names above.
+            return BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic();
         }
         if let Some(info) = current_function {
             // Params have already-allocated lowered names.
