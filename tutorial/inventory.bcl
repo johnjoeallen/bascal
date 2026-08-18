@@ -497,12 +497,12 @@ END
 // to either compiler bug, so it stays a label regardless of the fixes
 // above.
 errorTrap:
-locate 25, 1
-// `err` and `erl` are real numeric system pseudo-variables, passed
-// straight through like fhb's own ERR/ERL (his 3390: "an error on
-// line";ERL). Unlike fhb's version, this doesn't decode ERR into a
-// message per the header note above -- it just reports the raw
-// code. See MANUAL.md's ON ERROR GOTO section.
-print "There has been an error on line" + str$(erl) + "  Error #" + str$(err)
-k$ = readKey$()
-resume next
+    locate 25, 1
+    // `err` and `erl` are real numeric system pseudo-variables, passed
+    // straight through like fhb's own ERR/ERL (his 3390: "an error on
+    // line";ERL). Unlike fhb's version, this doesn't decode ERR into a
+    // message per the header note above -- it just reports the raw
+    // code. See MANUAL.md's ON ERROR GOTO section.
+    print "There has been an error on line" + str$(erl) + "  Error #" + str$(err)
+    k$ = readKey$()
+    resume next
