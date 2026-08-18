@@ -491,10 +491,16 @@ inv.close()
 END
 
 // -------------------- Error handling --------------------
-// Still a raw label, not a procedure: ON ERROR GOTO's target and RESUME
-// both need to act on the main program's execution state, not a nested
-// GOSUB/function-call frame -- that's a language-design reason, so it
-// stays a label.
+// A raw label, not a procedure -- ON ERROR GOTO reaches either one with
+// a plain GOTO, so that's not the deciding factor. What is: a procedure
+// with a body that doesn't end in `return` gets an unconditional RETURN
+// appended by bcc (see codegen's ends_with_return), and this body ends
+// in `resume next`, not `return`. Normally harmless dead code -- RESUME
+// jumps away first -- but if a future edit ever dropped that trailing
+// RESUME, execution would fall into the auto-appended RETURN with no
+// GOSUB frame on the stack to pop (GOTO never pushes one), crashing
+// with "RETURN without GOSUB". Staying a label sidesteps that risk
+// entirely: bcc never appends anything after a label's body.
 errorTrap:
     locate 25, 1
     // `err` and `erl` are real numeric system pseudo-variables, passed
