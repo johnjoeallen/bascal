@@ -180,6 +180,27 @@ result% = someFunction(1,
 result% = someFunction(1, 2)
 ```
 
+The same rule governs statement headers like `if`/`then`: the condition and
+the `then` that closes it must be on one physical line. A newline can only
+appear *after* `then`, where it's meaningful -- it's what selects the block
+form of `if` over the single-line form (see
+[IF / ELSEIF / ELSE / END IF](#if-elseif-else-end-if)):
+
+```
+' Not allowed -- the newline before "then" ends the statement early:
+if score% >= 60
+    then PRINT "Pass"
+
+' Not allowed -- same problem, condition split across lines:
+if score% >= 60 and
+    attendance% >= 80 then PRINT "Pass"
+
+' Allowed -- condition and "then" on one line, body starts after the newline:
+if score% >= 60 and attendance% >= 80 then
+    PRINT "Pass"
+end if
+```
+
 ---
 
 ## Data Types and Type Suffixes
@@ -548,7 +569,9 @@ if condition then statement else statement
 ```
 
 A newline right after `then` is what selects the block form above instead
-— that's the only difference between the two. The single-line form may
+— that's the only difference between the two (BASCAL is line-oriented with
+no line-continuation syntax; see [File Encoding](#file-encoding)). The
+single-line form may
 chain multiple statements with `:`, same as anywhere else in BASCAL, and
 its `else` (if any) must be on that same line too:
 
