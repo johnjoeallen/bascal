@@ -61,9 +61,93 @@ count% = count% + 1
     </div>
 
 
-  <p class="lede">
-    Full, real, transpiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/shared.bcl">tutorial/13_suite/shared.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/start.bcl">tutorial/13_suite/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/show.bcl">tutorial/13_suite/show.bcl</a>.
-  </p>
+  <!-- BEGIN generated source embed (scripts/embed-tutorial-sources.py) -->
+  <div class="source-embed">
+    <details>
+      <summary><code>tutorial/13_suite/shared.bcl</code></summary>
+      <pre><code>/*
+ * Suite file for Tutorial 13 — COMMON / CHAIN.
+ *
+ * `suite shared` declares this file as the suite itself, named `shared`
+ * (matching this filename, shared.bcl). Every program that begins with
+ * "program name suite shared" receives an identical COMMON block at the
+ * top of its generated BASIC, built from the `dim` declarations below --
+ * so the listed variables are shared across CHAINed programs in a
+ * multi-program application.
+ *
+ * (The older spelling -- no `suite` header, just `common count%, label$`,
+ * with the suite name taken from the filename alone -- still works too.)
+ *
+ * This suite shares a counter and a label between two programs:
+ *   start.bcl  — initialises and increments the counter
+ *   show.bcl   — reports the final value
+ */
+suite shared
+
+dim count%
+dim label$
+</code></pre>
+    </details>
+    <details>
+      <summary><code>tutorial/13_suite/start.bcl</code></summary>
+      <pre><code>// Tutorial 13 — Suite COMMON, program 1 of 2
+//
+// "program name suite suitename" tells bcc to load suitename.bcl and
+// emit its COMMON declarations at the very top of the generated output.
+// All programs in the same suite emit the same COMMON block, so the
+// variables survive a CHAIN to the next program.
+//
+// Compile:
+//   bcc tutorial/13_suite/start.bcl
+//
+// The generated .bas will open with COMMON count%, label$ followed by
+// the program body below.
+
+program start suite shared
+
+label$ = "Counter demo"
+count% = 0
+
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+
+print "Initialised: " + label$
+print "Count after 3 increments: " + str$(count%)
+
+/* In a real multi-program application you would chain to show.bas: */
+/* CHAIN "show.bas" */
+end
+</code></pre>
+    </details>
+    <details>
+      <summary><code>tutorial/13_suite/show.bcl</code></summary>
+      <pre><code>// Tutorial 13 — Suite COMMON, program 2 of 2
+//
+// This program shares the same suite as start.bcl.  Its generated BASIC
+// will begin with the same COMMON block, so count% and label$ contain
+// whatever values start.bas left in them when it CHAINed here.
+//
+// Compile:
+//   bcc tutorial/13_suite/show.bcl
+
+program show suite shared
+
+print "Label:  " + label$
+print "Count:  " + str$(count%)
+
+if count% &gt; 0 then
+    print "Counter was incremented " + str$(count%) + " time(s)."
+else
+    print "Counter was never incremented."
+end if
+
+end
+</code></pre>
+    </details>
+    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/shared.bcl">tutorial/13_suite/shared.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/start.bcl">tutorial/13_suite/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/show.bcl">tutorial/13_suite/show.bcl</a>.</p>
+  </div>
+<!-- END generated source embed -->
 
   <p class="crumbs">
     <a href="12_require.html">&larr; 12. Require and Multi-File Projects</a> &nbsp;&middot;&nbsp; <a href="14_procedures.html">14. Procedures &rarr;</a>

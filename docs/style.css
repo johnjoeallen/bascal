@@ -229,6 +229,24 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 .snippet h3 { margin: 0 0 .2rem; font-size: 1.05rem; }
 .snippet .note { color: var(--fg-dim); font-size: .9rem; margin: 0 0 .9rem; }
 
+/* full-source <details> blocks embedded at the bottom of tutorial pages */
+.source-embed { margin-bottom: 1.4rem; }
+.source-embed details {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: .6rem;
+  padding: .7rem 1.2rem;
+  margin-bottom: .7rem;
+}
+.source-embed details[open] { padding-bottom: 1.1rem; }
+.source-embed summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: .2rem 0;
+}
+.source-embed summary code { background: none; padding: 0; font-size: .95em; }
+.source-embed details pre { margin-top: .8rem; }
+
 /* grid of .snippet cards, used for the "What BASCAL adds" feature overview */
 .feature-examples {
   display: grid;

@@ -58,9 +58,102 @@ let greeting$ = &quot;Score is &quot; + str$(score%)</code></pre>
     </div>
 
 
-  <p class="lede">
-    Full, real, transpiling source: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bcl">tutorial/02_variables.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bas">tutorial/02_variables.bas</a>.
-  </p>
+  <!-- BEGIN generated source embed (scripts/embed-tutorial-sources.py) -->
+  <div class="source-embed">
+    <details>
+      <summary><code>tutorial/02_variables.bcl</code></summary>
+      <pre><code>// Tutorial 2 — Variables and Constants
+//
+// Every name in BASCAL ends with a type suffix that tells the runtime
+// how to store the value:
+//
+//   %   integer   — 16-bit signed, -32768 to 32767
+//   $   string    — variable-length text
+//   !   single    — 32-bit floating-point
+//   #   double    — 64-bit floating-point
+//   &amp;   long      — 32-bit signed integer
+//
+// All variables are global.  They spring into existence on first use;
+// dim is needed only for arrays or when you want to be explicit.
+//
+// const names a value that cannot change.  Use it for magic numbers
+// so the intent is clear and the value lives in one place.
+
+const maxScore%  = 100
+const passMark%  = 60
+const appName$   = "Grade Checker"
+const taxRate!   = 0.2
+
+// Variable assignment uses =
+playerName$  = "Alice"
+score%       = 87
+temperature! = 36.6
+
+// print mixes strings and numbers directly with ; (no str$() needed)
+print appName$
+print "Player:      "; playerName$
+print "Score:       "; score%; "/ "; maxScore%
+print "Pass mark:   "; passMark%
+print "Temperature: "; temperature!
+print "Tax rate:    "; taxRate!
+
+// str$() is still available when you need to build a string value
+let greeting$ = "Score is " + str$(score%)
+print greeting$
+
+end
+</code></pre>
+    </details>
+    <details>
+      <summary><code>tutorial/02_variables.bas</code></summary>
+      <pre><code>10 ' BASCAL generated BASIC
+20 ' Functions are transpiled to global variables, labels, and GOSUB
+
+30 ' Tutorial 2 — Variables and Constants
+40 ' 
+50 ' Every name in BASCAL ends with a type suffix that tells the runtime
+60 ' how to store the value:
+70 ' 
+80 ' %   integer   — 16-bit signed, -32768 to 32767
+90 ' $   string    — variable-length text
+100 ' !   single    — 32-bit floating-point
+110 ' #   double    — 64-bit floating-point
+120 ' &amp;   long      — 32-bit signed integer
+130 ' 
+140 ' All variables are global.  They spring into existence on first use;
+150 ' dim is needed only for arrays or when you want to be explicit.
+160 ' 
+170 ' const names a value that cannot change.  Use it for magic numbers
+180 ' so the intent is clear and the value lives in one place.
+
+190 maxscore% = 100
+200 passmark% = 60
+210 appname$ = "Grade Checker"
+220 taxrate! = 0.2
+
+230 ' Variable assignment uses =
+240 playername$ = "Alice"
+250 score% = 87
+260 temperature! = 36.6
+
+270 ' print mixes strings and numbers directly with ; (no str$() needed)
+280 PRINT appname$
+290 PRINT "Player:      "; playername$
+300 PRINT "Score:       "; score%; "/ "; maxscore%
+310 PRINT "Pass mark:   "; passmark%
+320 PRINT "Temperature: "; temperature!
+330 PRINT "Tax rate:    "; taxrate!
+
+340 ' str$() is still available when you need to build a string value
+350 greeting$ = "Score is " + STR$(score%)
+360 PRINT greeting$
+
+370 END
+</code></pre>
+    </details>
+    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bcl">tutorial/02_variables.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bas">tutorial/02_variables.bas</a>.</p>
+  </div>
+<!-- END generated source embed -->
 
   <p class="crumbs">
     <a href="01_hello.html">&larr; 01. Hello, World</a> &nbsp;&middot;&nbsp; <a href="03_arithmetic.html">03. Operators and Expressions &rarr;</a>
