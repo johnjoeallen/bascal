@@ -493,9 +493,8 @@ END
 // -------------------- Error handling --------------------
 // Still a raw label, not a procedure: ON ERROR GOTO's target and RESUME
 // both need to act on the main program's execution state, not a nested
-// GOSUB/function-call frame -- that's a language-design reason, unrelated
-// to either compiler bug, so it stays a label regardless of the fixes
-// above.
+// GOSUB/function-call frame -- that's a language-design reason, so it
+// stays a label.
 errorTrap:
     locate 25, 1
     // `err` and `erl` are real numeric system pseudo-variables, passed
