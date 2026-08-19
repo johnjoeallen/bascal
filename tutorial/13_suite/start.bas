@@ -1,30 +1,30 @@
-' BASCAL generated BASIC
-' Functions are transpiled to global variables, labels, and GOSUB
-COMMON count%, label$
+10 ' BASCAL generated BASIC
+20 ' Functions are transpiled to global variables, labels, and GOSUB
+30 COMMON count%, label$
 
-' Tutorial 13 — Suite COMMON, program 1 of 2
-' 
-' "program name suite suitename" tells bcc to load suitename.bcl and
-' emit its COMMON declarations at the very top of the generated output.
-' All programs in the same suite emit the same COMMON block, so the
-' variables survive a CHAIN to the next program.
-' 
-' Compile:
-' bcc tutorial/13_suite/start.bcl
-' 
-' The generated .bas will open with COMMON count%, label$ followed by
-' the program body below.
+40 ' Tutorial 13 — Shared COMMON, program 1 of 2
+50 ' 
+60 ' "program name shared sharedname" tells bcc to load sharedname.bcl and
+70 ' emit its COMMON declarations at the very top of the generated output.
+80 ' Every program referencing the same shared file emits the same COMMON
+90 ' block, so the variables survive a CHAIN to the next program.
+100 ' 
+110 ' Compile:
+120 ' bcc tutorial/13_suite/start.bcl
+130 ' 
+140 ' The generated .bas will open with COMMON count%, label$ followed by
+150 ' the program body below.
 
-label$ = "Counter demo"
-count% = 0
+160 label$ = "Counter demo"
+170 count% = 0
 
-count% = count% + 1
-count% = count% + 1
-count% = count% + 1
+180 count% = count% + 1
+190 count% = count% + 1
+200 count% = count% + 1
 
-PRINT "Initialised: " + label$
-PRINT "Count after 3 increments: " + STR$(count%)
+210 PRINT "Initialised: " + label$
+220 PRINT "Count after 3 increments: " + STR$(count%)
 
-' In a real multi-program application you would chain to show.bas:
-' CHAIN "show.bas"
-END
+230 ' In a real multi-program application you would chain to show.bas:
+240 ' CHAIN "show.bas"
+250 END

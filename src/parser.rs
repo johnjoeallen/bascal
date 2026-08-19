@@ -48,9 +48,8 @@ impl Parser {
     fn parse_program_inner(&mut self) -> ParseResult<Program> {
         let mut program_decl = None;
         let mut library_decl = None;
-        let mut suite_decl = None;
+        let mut shared_decl = None;
         let mut declarations = Vec::new();
-        let mut common = Vec::new();
         let mut statements = Vec::new();
         let mut functions = Vec::new();
         let mut records = Vec::new();
@@ -65,8 +64,8 @@ impl Parser {
                 if library_decl.is_some() {
                     return Err(self.error("a file cannot have both a `program` declaration and a `library` declaration"));
                 }
-                if suite_decl.is_some() {
-                    return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
+                if shared_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `program` declaration and a `shared` declaration"));
                 }
                 program_decl = Some(decl);
             } else if self.check_keyword("library") {
@@ -76,29 +75,32 @@ impl Parser {
                 if program_decl.is_some() {
                     return Err(self.error("a file cannot have both a `program` declaration and a `library` declaration"));
                 }
-                if suite_decl.is_some() {
-                    return Err(self.error("a file cannot have both a `library` declaration and a `suite` declaration"));
+                if shared_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `library` declaration and a `shared` declaration"));
                 }
                 self.expect_keyword("library")?;
                 let name = self.expect_ident("expected library name after `library`")?;
                 self.consume_line_end()?;
                 library_decl = Some(name);
-            } else if self.check_keyword("suite") {
-                if suite_decl.is_some() {
-                    return Err(self.error("only one `suite` declaration is allowed per file"));
+            } else if self.check_keyword("shared") {
+                if shared_decl.is_some() {
+                    return Err(self.error("only one `shared` declaration is allowed per file"));
                 }
                 if program_decl.is_some() {
-                    return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
+                    return Err(self.error("a file cannot have both a `program` declaration and a `shared` declaration"));
                 }
                 if library_decl.is_some() {
-                    return Err(self.error("a file cannot have both a `library` declaration and a `suite` declaration"));
+                    return Err(self.error("a file cannot have both a `library` declaration and a `shared` declaration"));
                 }
-                self.expect_keyword("suite")?;
-                let name = self.expect_ident("expected suite name after `suite`")?;
+                self.expect_keyword("shared")?;
+                let name = self.expect_ident("expected shared-file name after `shared`")?;
                 self.consume_line_end()?;
-                suite_decl = Some(name);
+                shared_decl = Some(name);
             } else if self.check_keyword("common") {
-                common.push(self.parse_common_block()?);
+                return Err(self.error(
+                    "the `common` keyword has been removed -- declare shared variables with \
+                     `dim` inside a `shared <name>` file instead",
+                ));
             } else if self.check_keyword("require") {
                 declarations.push(self.parse_path_decl(false)?);
             } else if self.check_keyword("import") {
@@ -123,9 +125,9 @@ impl Parser {
         Ok(Program {
             program_decl,
             library_decl,
-            suite_decl,
+            shared_decl,
             declarations,
-            common,
+            common: Vec::new(),
             statements,
             functions,
             records,
@@ -135,34 +137,14 @@ impl Parser {
     fn parse_program_decl(&mut self) -> ParseResult<ProgramDecl> {
         self.expect_keyword("program")?;
         let name = self.expect_ident("expected program name")?;
-        let suite = if self.check_keyword("suite") {
+        let shared = if self.check_keyword("shared") {
             self.advance();
-            Some(self.expect_ident("expected suite name after `suite`")?)
+            Some(self.expect_ident("expected shared-file name after `shared`")?)
         } else {
             None
         };
         self.consume_line_end()?;
-        Ok(ProgramDecl { name, suite })
-    }
-
-    fn parse_common_block(&mut self) -> ParseResult<CommonBlock> {
-        self.expect_keyword("common")?;
-        let mut vars = Vec::new();
-        loop {
-            let name = BasicIdent::parse(&self.expect_ident("expected variable name in COMMON")?);
-            let is_array = if self.eat(TokenKind::LParen) {
-                self.expect(TokenKind::RParen, "expected `)` after `(` in COMMON")?;
-                true
-            } else {
-                false
-            };
-            vars.push(CommonVar { name, is_array });
-            if !self.eat(TokenKind::Comma) {
-                break;
-            }
-        }
-        self.consume_line_end()?;
-        Ok(CommonBlock { vars })
+        Ok(ProgramDecl { name, shared })
     }
 
     fn parse_path_decl(&mut self, import: bool) -> ParseResult<DependencyDecl> {
@@ -474,7 +456,10 @@ impl Parser {
         } else if self.check_keyword("let") {
             self.parse_let()
         } else if self.check_keyword("common") {
-            Err(self.error("`common` is only valid at program level in a suite file"))
+            Err(self.error(
+                "the `common` keyword has been removed -- declare shared variables with `dim` \
+                 inside a `shared <name>` file instead",
+            ))
         } else if self.check_keyword("program") {
             Err(self.error("`program` declaration must appear before any statements"))
         } else if matches!(self.current().kind, TokenKind::Ident(_)) && self.check_next_is_colon() {

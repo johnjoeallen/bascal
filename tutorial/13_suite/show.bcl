@@ -1,13 +1,14 @@
-// Tutorial 13 — Suite COMMON, program 2 of 2
+// Tutorial 13 — Shared COMMON, program 2 of 2
 //
-// This program shares the same suite as start.bcl.  Its generated BASIC
-// will begin with the same COMMON block, so count% and label$ contain
-// whatever values start.bas left in them when it CHAINed here.
+// This program references the same shared file as start.bcl.  Its
+// generated BASIC will begin with the same COMMON block, so count% and
+// label$ contain whatever values start.bas left in them when it CHAINed
+// here.
 //
 // Compile:
 //   bcc tutorial/13_suite/show.bcl
 
-program show suite shared
+program show shared state
 
 print "Label:  " + label$
 print "Count:  " + str$(count%)

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Suite COMMON — BASCAL Tutorials</title>
-<meta name="description" content="Suite files and program ... suite ... in BASCAL, for coordinating COMMON across CHAINed programs.">
+<title>Shared COMMON — BASCAL Tutorials</title>
+<meta name="description" content="Shared files and program ... shared ... in BASCAL, for coordinating COMMON across CHAINed programs.">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../style.css">
 <script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
@@ -13,8 +13,8 @@
 
 <header class="hero compact">
   <div class="wrap">
-    <h1>13. Suite COMMON</h1>
-    <p class="tagline">A shared COMMON block, declared once, emitted verbatim into every program that joins the suite.</p>
+    <h1>13. Shared COMMON</h1>
+    <p class="tagline">A COMMON block, declared once in a shared file, emitted verbatim into every program that references it.</p>
   </div>
 </header>
 
@@ -29,29 +29,30 @@
 </nav>
 
 <main class="wrap">
-  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Suite COMMON</p>
+  <p class="crumbs"><a href="../">Home</a> / <a href="./">Tutorials</a> / Shared COMMON</p>
 
   <div class="prose">
 <p>Classic multi-program BASIC systems pass shared variables across a
 <code>CHAIN</code> with <code>COMMON</code> — every chained program has to declare an
 <strong>identical</strong> <code>COMMON</code> list, or values land in the wrong slots. A
-BASCAL suite file contains only variable declarations; any program that
-opens with <code>program name suite suitename</code> gets that suite's declarations
+BASCAL shared file contains only <code>dim</code> declarations — every variable in
+it is COMMON by default, no separate keyword needed — and any program that
+opens with <code>program name shared sharedname</code> gets those declarations
 emitted verbatim at the top of its generated output, so two programs can't
 drift out of sync by hand.</p>
   </div>
 
     <div class="snippet">
-      <h3>The suite file</h3>
-      <p class="note"><code>suite &lt;name&gt;</code> declares this file as the suite itself (mirroring a regular file's <code>program &lt;name&gt;</code>), and each <code>dim</code> below becomes one shared variable -- no statements, no functions. The older headerless <code>common count%, label$</code> spelling still works too.</p>
-      <pre><code>suite shared
+      <h3>The shared file</h3>
+      <p class="note"><code>shared &lt;name&gt;</code> declares this file as the shared-variables file itself (mirroring a regular file's <code>program &lt;name&gt;</code>), and each <code>dim</code> below becomes one shared variable -- no statements, no functions.</p>
+      <pre><code>shared state
 
 dim count%
 dim label$</code></pre>
     </div>
     <div class="snippet">
-      <h3>A program that joins the suite</h3>
-      <pre><code>program start suite shared
+      <h3>A program that references the shared file</h3>
+      <pre><code>program start shared state
 
 count% = count% + 1
 count% = count% + 1
@@ -64,22 +65,23 @@ count% = count% + 1
   <!-- BEGIN generated source embed (scripts/embed-tutorial-sources.py) -->
   <div class="source-embed">
     <details>
-      <summary><code>tutorial/13_suite/shared.bcl</code></summary>
+      <summary><code>tutorial/13_suite/state.bcl</code></summary>
       <pre><code>/*
- * Suite file for Tutorial 13 — COMMON / CHAIN.
+ * Shared file for Tutorial 13 — COMMON / CHAIN.
  *
- * `suite shared` declares this file as the suite itself, named `shared`
- * (matching this filename, shared.bcl). Every program that begins with
- * "program name suite shared" receives an identical COMMON block at the
- * top of its generated BASIC, built from the `dim` declarations below --
- * so the listed variables are shared across CHAINed programs in a
- * multi-program application.
+ * `shared state` declares this file as the shared-variables file itself,
+ * named `state` (matching this filename, state.bcl). Every program that
+ * begins with "program name shared state" receives an identical COMMON
+ * block at the top of its generated BASIC, built from the `dim`
+ * declarations below -- so the listed variables are shared across
+ * CHAINed programs in a multi-program application. Variables here are
+ * COMMON by default; there's no separate keyword to opt in.
  *
- * This suite shares a counter and a label between two programs:
+ * This file shares a counter and a label between two programs:
  *   start.bcl  — initialises and increments the counter
  *   show.bcl   — reports the final value
  */
-suite shared
+shared state
 
 dim count%
 dim label$
@@ -87,12 +89,12 @@ dim label$
     </details>
     <details>
       <summary><code>tutorial/13_suite/start.bcl</code></summary>
-      <pre><code>// Tutorial 13 — Suite COMMON, program 1 of 2
+      <pre><code>// Tutorial 13 — Shared COMMON, program 1 of 2
 //
-// "program name suite suitename" tells bcc to load suitename.bcl and
+// "program name shared sharedname" tells bcc to load sharedname.bcl and
 // emit its COMMON declarations at the very top of the generated output.
-// All programs in the same suite emit the same COMMON block, so the
-// variables survive a CHAIN to the next program.
+// Every program referencing the same shared file emits the same COMMON
+// block, so the variables survive a CHAIN to the next program.
 //
 // Compile:
 //   bcc tutorial/13_suite/start.bcl
@@ -100,7 +102,7 @@ dim label$
 // The generated .bas will open with COMMON count%, label$ followed by
 // the program body below.
 
-program start suite shared
+program start shared state
 
 label$ = "Counter demo"
 count% = 0
@@ -119,16 +121,17 @@ end
     </details>
     <details>
       <summary><code>tutorial/13_suite/show.bcl</code></summary>
-      <pre><code>// Tutorial 13 — Suite COMMON, program 2 of 2
+      <pre><code>// Tutorial 13 — Shared COMMON, program 2 of 2
 //
-// This program shares the same suite as start.bcl.  Its generated BASIC
-// will begin with the same COMMON block, so count% and label$ contain
-// whatever values start.bas left in them when it CHAINed here.
+// This program references the same shared file as start.bcl.  Its
+// generated BASIC will begin with the same COMMON block, so count% and
+// label$ contain whatever values start.bas left in them when it CHAINed
+// here.
 //
 // Compile:
 //   bcc tutorial/13_suite/show.bcl
 
-program show suite shared
+program show shared state
 
 print "Label:  " + label$
 print "Count:  " + str$(count%)
@@ -142,7 +145,7 @@ end if
 end
 </code></pre>
     </details>
-    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/shared.bcl">tutorial/13_suite/shared.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/start.bcl">tutorial/13_suite/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/show.bcl">tutorial/13_suite/show.bcl</a>.</p>
+    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/state.bcl">tutorial/13_suite/state.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/start.bcl">tutorial/13_suite/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/show.bcl">tutorial/13_suite/show.bcl</a>.</p>
   </div>
 <!-- END generated source embed -->
 

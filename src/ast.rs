@@ -7,12 +7,16 @@ pub struct Program {
     /// module (only such files may be `require`d/`import`ed; see
     /// load_program_recursive in lib.rs).
     pub library_decl: Option<String>,
-    /// `suite <name>` — present when this file declares *itself* to be the
-    /// suite definition named `<name>` (see load_suite_file in lib.rs).
-    /// Distinct from `ProgramDecl.suite`, which is a *reference* to a suite
-    /// by name from an ordinary program.
-    pub suite_decl: Option<String>,
+    /// `shared <name>` — present when this file declares *itself* to be the
+    /// shared-variables definition named `<name>` (see load_shared_file in
+    /// lib.rs). Distinct from `ProgramDecl.shared`, which is a *reference*
+    /// to one by name from an ordinary program.
+    pub shared_decl: Option<String>,
     pub declarations: Vec<DependencyDecl>,
+    /// COMMON blocks to emit, built by lib.rs from a `shared <name>` file's
+    /// `dim` declarations -- BASCAL source itself has no `common` keyword;
+    /// this is purely the internal representation codegen emits as `COMMON`
+    /// lines.
     pub common: Vec<CommonBlock>,
     pub statements: Vec<Statement>,
     pub functions: Vec<FunctionDef>,
@@ -46,7 +50,7 @@ pub enum RecordFieldType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProgramDecl {
     pub name: String,
-    pub suite: Option<String>,
+    pub shared: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

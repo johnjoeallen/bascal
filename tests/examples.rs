@@ -178,11 +178,10 @@ fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
         Ok(o) => o,
         Err(ref diagnostics)
             if diagnostics.iter().all(|d| {
-                d.message.contains("COMMON is only valid in suite files")
-                    || d.message.contains("`suite` declaration is only valid in suite files")
+                d.message.contains("`shared` declaration is only valid in shared-variable files")
             }) =>
         {
-            return; // suite definition file — not a standalone compilable program
+            return; // shared-variables file — not a standalone compilable program
         }
         Err(diagnostics) => {
             panic!("failed to compile {}:\n{diagnostics:#?}", path.display())

@@ -51,7 +51,7 @@
 <li><a href="#data-statements">Data Statements</a></li>
 <li><a href="#miscellaneous-statements">Miscellaneous Statements</a></li>
 <li><a href="#dependencies--require-and-import">Dependencies — REQUIRE and IMPORT</a></li>
-<li><a href="#suite-common">Suite COMMON</a></li>
+<li><a href="#shared-common">Shared COMMON</a></li>
 <li><a href="#generated-basic-shape">Generated BASIC Shape</a></li>
 <li><a href="#command-line-reference">Command-Line Reference</a></li>
 <li><a href="#statement-quick-reference">Statement Quick Reference</a></li>
@@ -66,7 +66,7 @@
 <li><code>function</code> declarations with typed return values and explicit <code>return</code></li>
 <li><code>procedure</code> declarations for action subroutines with no return value</li>
 <li>Path-style <code>require</code> for multi-file projects</li>
-<li><code>program</code> / <code>suite</code> declarations for coordinating <code>COMMON</code> across chained programs</li>
+<li><code>program</code> / <code>library</code> / <code>shared</code> declarations, the last coordinating <code>COMMON</code> across chained programs</li>
 <li>Multi-line <code>/* */</code> block comments and <code>//</code> end-of-line comments in addition to the classic <code>'</code> comment</li>
 <li><code>select case</code> with range and <code>is</code> comparisons</li>
 <li>All classic BASCOM 1980s statements: <code>DATA</code>/<code>READ</code>/<code>RESTORE</code>, <code>LOCATE</code>, <code>COLOR</code>, <code>ON ... GOTO</code>, <code>SWAP</code>, <code>RANDOMIZE</code>, <code>CONST</code>, and more</li>
@@ -132,26 +132,25 @@ END</code></pre>
 <td>yes</td>
 </tr>
 <tr class="odd">
-<td><code>suite name</code></td>
-<td>suite definition (see <a href="#suite-common">Suite COMMON</a>)</td>
-<td>no (resolved via <code>program ... suite name</code>, not <code>require</code>)</td>
+<td><code>shared name</code></td>
+<td>shared-variables file (see <a href="#shared-common">Shared COMMON</a>)</td>
+<td>no (resolved via <code>program ... shared name</code>, not <code>require</code>)</td>
 <td>no</td>
 </tr>
 </tbody>
 </table>
-<p>A file with no header, or with more than one of these, is a transpile-time error. <code>require</code>/<code>import</code> targets a file that must declare <code>library</code>; a <code>program name suite suitename</code> clause resolves its suite through a separate lookup, not through <code>require</code>.</p>
+<p>A file with no header, or with more than one of these, is a transpile-time error. <code>require</code>/<code>import</code> targets a file that must declare <code>library</code>; a <code>program name shared sharedname</code> clause resolves its shared file through a separate lookup, not through <code>require</code>.</p>
 <p>Beyond the header, a <code>.bcl</code> file consists of optional sections in the following order:</p>
 <ol type="1">
-<li>Mandatory <code>program</code> / <code>library</code> / <code>suite</code> declaration</li>
+<li>Mandatory <code>program</code> / <code>library</code> / <code>shared</code> declaration</li>
 <li><code>require</code> / <code>import</code> dependency declarations (<code>program</code>/<code>library</code> files only)</li>
-<li><code>common</code> declarations (suite files only)</li>
-<li>Top-level statements (the main program body; <code>library</code> files should stick to <code>function</code>/<code>procedure</code> definitions and supporting <code>dim</code>/<code>data</code>, see <a href="#module-conventions">Module Conventions</a>)</li>
+<li>Top-level statements (the main program body; a <code>shared</code> file's body is <code>dim</code> declarations only — every variable in it is COMMON by default, see <a href="#shared-common">Shared COMMON</a> — and a <code>library</code> file should stick to <code>function</code>/<code>procedure</code> definitions and supporting <code>dim</code>/<code>data</code>, see <a href="#module-conventions">Module Conventions</a>)</li>
 <li><code>function</code> definitions (may appear in any order relative to statements)</li>
 </ol>
 <h3 id="program-declaration">Program Declaration</h3>
 <pre><code>program name
-program name suite suitename</code></pre>
-<p>Identifies the file as a runnable program, by name, and optionally links it to a suite (see <a href="#suite-common">Suite COMMON</a>). Required in every file that isn't a <code>library</code> or <code>suite</code> file — in particular, the file passed to <code>bcc</code> on the command line must have one.</p>
+program name shared sharedname</code></pre>
+<p>Identifies the file as a runnable program, by name, and optionally links it to a shared-variables file (see <a href="#shared-common">Shared COMMON</a>). Required in every file that isn't a <code>library</code> or <code>shared</code> file — in particular, the file passed to <code>bcc</code> on the command line must have one.</p>
 <p>A <code>program</code> declaration is <strong>not allowed</strong> in library modules loaded via <code>require</code>.</p>
 <h3 id="library-declaration">Library Declaration</h3>
 <pre><code>library name</code></pre>
@@ -162,7 +161,7 @@ library ucase
 
 function ucase$(s$)
     ...</code></pre>
-<p>The name isn't validated against anything (unlike <code>suite name</code>, which must match the resolved suite's filename) — it's documentation, not a lookup key. A <code>library</code> declaration is <strong>not allowed</strong> in the root file <code>bcc</code> was invoked on, and a file <code>require</code>d/<code>import</code>ed without one is a transpile-time error (see <a href="#module-conventions">Module Conventions</a>).</p>
+<p>The name isn't validated against anything (unlike <code>shared name</code>, which must match the resolved shared file's filename) — it's documentation, not a lookup key. A <code>library</code> declaration is <strong>not allowed</strong> in the root file <code>bcc</code> was invoked on, and a file <code>require</code>d/<code>import</code>ed without one is a transpile-time error (see <a href="#module-conventions">Module Conventions</a>).</p>
 <h3 id="file-encoding">File Encoding</h3>
 <p>Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are separated by newlines; a colon <code>:</code> may also separate statements on one line.</p>
 <p>There is no line-continuation syntax -- no trailing <code>_</code>, <code>\</code>, or similar. The lexer turns every physical newline into a real token, so any single expression (and the tokens making up a statement header, like a <code>case</code> value list) must fit on one physical line; a newline there ends the statement/expression rather than continuing it. This applies everywhere, not just to obviously statement-like constructs -- a function call's argument list, for example, can't have a newline before its closing <code>)</code> either:</p>
@@ -1592,53 +1591,44 @@ require stats                       →  stats.bcl</code></pre>
 <h3 id="module-conventions">Module Conventions</h3>
 <p>Every file loaded via <code>require</code>/<code>import</code> <strong>must</strong> start with a <a href="#library-declaration"><code>library &lt;name&gt;</code> declaration</a> — a transpile-time error, not just a convention. Beyond that required header, by convention a library module should: - Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements - Not contain a <code>program</code> declaration - Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></p>
 <hr />
-<h2 id="suite-common">Suite COMMON</h2>
+<h2 id="shared-common">Shared COMMON</h2>
 <p>In classic BASCOM programs, multiple programs chained together with <code>CHAIN</code> share variables through <code>COMMON</code> declarations. For this to work correctly, every program in the chain must declare <strong>identical</strong> <code>COMMON</code> lists — the variable positions in the <code>COMMON</code> block must match exactly.</p>
-<p>BASCAL coordinates <code>COMMON</code> through suite files. A suite file contains only variable declarations (see below); programs that belong to the suite reference it with a <code>suite</code> clause on their <code>program</code> declaration.</p>
-<h3 id="suite-file">Suite File</h3>
-<p>A suite file is a <code>.bcl</code> file containing only variable declarations — <code>dim</code> and/or <code>common</code> (see <a href="#dim-declaration-recommended">DIM Declaration</a> and <a href="#common-declaration">COMMON Declaration</a> below) — plus blank lines and comments.</p>
-<p>It starts with a mandatory <code>suite &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
-<p>From <code>tutorial/13_suite/shared.bcl</code>:</p>
+<p>BASCAL coordinates <code>COMMON</code> through shared files. A shared file contains only <code>dim</code> declarations (see below) — every variable in it is COMMON by default, with no separate keyword needed to opt in — and programs that use it reference it with a <code>shared</code> clause on their <code>program</code> declaration.</p>
+<h3 id="shared-file">Shared File</h3>
+<p>A shared file is a <code>.bcl</code> file containing only <code>dim</code> declarations (see <a href="#dim-declaration">DIM Declaration</a> below), plus blank lines and comments.</p>
+<p>It starts with a mandatory <code>shared &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
+<p>From <code>tutorial/13_suite/state.bcl</code>:</p>
 <pre><code>/*
- * Suite file for Tutorial 13 — COMMON / CHAIN.
+ * Shared file for Tutorial 13 — COMMON / CHAIN.
  *
- * Every program that begins with &quot;program name suite shared&quot; receives
+ * Every program that begins with &quot;program name shared state&quot; receives
  * an identical COMMON block at the top of its generated BASIC, so the
  * listed variables survive a CHAIN to the next program.
  */
-suite shared
+shared state
 
 dim count%
 dim label$</code></pre>
-<p>Rules for suite files: - The <code>suite &lt;name&gt;</code> header is mandatory, and its name must match the filename the transpiler resolved it as (<code>shared.bcl</code> → <code>suite shared</code>). - Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code>/<code>library</code> declarations are all rejected with a diagnostic error. - The suite file must contain at least one <code>dim</code> or <code>common</code> declaration. - A file may declare at most one of <code>program</code>, <code>library</code>, or <code>suite</code> — a suite definition can't also be an ordinary program or library module.</p>
-<h3 id="dim-declaration-recommended">DIM Declaration (recommended)</h3>
-<pre><code>suite shared
+<p>Rules for shared files: - The <code>shared &lt;name&gt;</code> header is mandatory, and its name must match the filename the transpiler resolved it as (<code>state.bcl</code> → <code>shared state</code>). - Only <code>dim</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code>/<code>library</code> declarations are all rejected with a diagnostic error. - The shared file must contain at least one <code>dim</code> declaration. - A file may declare at most one of <code>program</code>, <code>library</code>, or <code>shared</code> — a shared file can't also be an ordinary program or library module.</p>
+<h3 id="dim-declaration">DIM Declaration</h3>
+<pre><code>shared state
 
 dim count%
 dim label$
 dim scores%()</code></pre>
-<p>Inside a <code>suite &lt;name&gt;</code>-headed file, every top-level <code>dim</code> becomes one shared variable, in declaration order — exactly the <a href="#dim">DIM</a> statement used anywhere else in BASCAL, including its multi-name comma form (<code>dim count%, label$</code>) and array declarations (<code>dim scores%()</code>, empty-parens, same as a <code>COMMON</code> array). No bounds are stored either way — <code>common</code>/suite <code>dim</code> only ever declares <em>that</em> a name is an array, not its size.</p>
-<h3 id="common-declaration">COMMON Declaration</h3>
-<pre><code>common var1%, var2$, arr%()</code></pre>
-<p>The pre-<code>dim</code> spelling: lists the variables that participate in the <code>COMMON</code> block directly, without a <code>dim</code>. Array names are written with empty parentheses <code>()</code>. A suite file needs <em>either</em> <code>dim</code> or <code>common</code> declarations (or both), not specifically one.</p>
-<p>Multiple <code>common</code> declarations are allowed; each generates a separate <code>COMMON</code> line in the output:</p>
-<pre><code>common score%, level%, playerName$
-common hiScore%</code></pre>
-<p>Generates:</p>
-<pre><code>COMMON score%, level%, playerName$
-COMMON hiScore%</code></pre>
-<h3 id="program-declaration-with-suite">Program Declaration with Suite</h3>
-<pre><code>program start suite shared</code></pre>
-<p>When a suite name is present, the transpiler: 1. Searches for <code>shared.bcl</code> in the source file's directory (then <code>-L</code> paths). 2. Validates that the suite file contains only <code>common</code> declarations. 3. Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</p>
-<h3 id="using-the-suite">Using the Suite</h3>
+<p>Inside a <code>shared &lt;name&gt;</code>-headed file, every top-level <code>dim</code> becomes one shared (COMMON) variable, in declaration order — exactly the <a href="#dim">DIM</a> statement used anywhere else in BASCAL, including its multi-name comma form (<code>dim count%, label$</code>) and array declarations (<code>dim scores%()</code>, empty-parens, same as a <code>COMMON</code> array). No bounds are stored either way — a shared file's <code>dim</code> only ever declares <em>that</em> a name is an array, not its size.</p>
+<h3 id="program-declaration-with-shared-file">Program Declaration with Shared File</h3>
+<pre><code>program start shared state</code></pre>
+<p>When a shared-file name is present, the transpiler: 1. Searches for <code>state.bcl</code> in the source file's directory (then <code>-L</code> paths). 2. Validates that the shared file contains only <code>dim</code> declarations. 3. Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</p>
+<h3 id="using-a-shared-file">Using a Shared File</h3>
 <p>From <code>tutorial/13_suite/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
-<p><strong><code>shared.bcl</code></strong> (suite file):</p>
-<pre><code>suite shared
+<p><strong><code>state.bcl</code></strong> (shared file):</p>
+<pre><code>shared state
 
 dim count%
 dim label$</code></pre>
 <p><strong><code>start.bcl</code></strong> (program 1):</p>
-<pre><code>program start suite shared
+<pre><code>program start shared state
 
 label$ = &quot;Counter demo&quot;
 count% = 0
@@ -1652,7 +1642,7 @@ PRINT &quot;Count after 3 increments: &quot; + STR$(count%)
 /* CHAIN &quot;show.bas&quot; */
 END</code></pre>
 <p><strong><code>show.bcl</code></strong> (program 2):</p>
-<pre><code>program show suite shared
+<pre><code>program show shared state
 
 PRINT &quot;Label:  &quot; + label$
 PRINT &quot;Count:  &quot; + STR$(count%)
@@ -1662,12 +1652,11 @@ END</code></pre>
 <p>ensuring that <code>CHAIN "show.bas"</code> from <code>start.bas</code> leaves the variables in the correct slots.</p>
 <h3 id="restrictions-2">Restrictions</h3>
 <ul>
-<li><code>common</code> is illegal everywhere except in suite files. Using <code>common</code> in a regular program or library module is a transpile error.</li>
-<li>A <code>suite &lt;name&gt;</code> header is illegal everywhere except in a suite file being loaded as a suite — a stray <code>suite</code> header in an ordinary program or library module is a transpile error, same as <code>common</code>. A suite file without one is also an error — the header is mandatory.</li>
+<li>A <code>shared &lt;name&gt;</code> header is illegal everywhere except in a shared file being loaded as one — a stray <code>shared</code> header in an ordinary program or library module is a transpile error. A shared file without one is also an error — the header is mandatory.</li>
 <li>A <code>program</code> declaration is illegal in library modules (files loaded via <code>require</code>), and mandatory in the root file <code>bcc</code> was invoked on.</li>
 <li>A <code>library</code> declaration is illegal in the root file <code>bcc</code> was invoked on, and mandatory in every file loaded via <code>require</code>/<code>import</code>.</li>
-<li>A file may declare at most one of <code>program</code>, <code>library</code>, or <code>suite</code>.</li>
-<li>If the named suite file does not exist, the program transpiles without a <code>COMMON</code> block (no error). This allows incremental development.</li>
+<li>A file may declare at most one of <code>program</code>, <code>library</code>, or <code>shared</code>.</li>
+<li>If the named shared file does not exist, the program transpiles without a <code>COMMON</code> block (no error). This allows incremental development.</li>
 </ul>
 <hr />
 <h2 id="generated-basic-shape">Generated BASIC Shape</h2>
@@ -1677,7 +1666,7 @@ END</code></pre>
 <pre><code>&#39; BASCAL generated BASIC
 &#39; Functions are transpiled to global variables, labels, and GOSUB</code></pre>
 <h3 id="common-block">COMMON Block</h3>
-<p>If a suite is declared, <code>COMMON</code> lines appear before the header comment.</p>
+<p>If a shared file is referenced, <code>COMMON</code> lines appear before the header comment.</p>
 <h3 id="line-numbers">Line Numbers</h3>
 <p>By default, <code>bcc</code> numbers every emitted line, not just branch targets. Real MBASIC/BASCOM has no notion of an unnumbered statement line -- classic BASIC source is a sequence of numbered lines, full stop -- so this is what real compilers and interpreters expect. Numbered comment-only lines are harmless on real BASCOM, but an unnumbered <em>statement</em> line is a syntax error.</p>
 <p>Pass <code>--sparse-line-numbers</code> to fall back to the old behavior, numbering only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) and leaving everything else unnumbered. This is more readable, but only safe with more lenient dialects (e.g. FreeBASIC's <code>-lang qb</code>) -- not real MBASIC/BASCOM.</p>
@@ -1884,11 +1873,6 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td>Set foreground/background colour</td>
 </tr>
 <tr class="even">
-<td><code>COMMON</code></td>
-<td><code>common var[, ...]</code></td>
-<td>Declare suite COMMON variables (suite files only)</td>
-</tr>
-<tr class="odd">
 <td><code>CONST</code></td>
 <td><code>CONST name = expr</code></td>
 <td>Declare a named constant</td>
@@ -2055,7 +2039,7 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 </tr>
 <tr class="even">
 <td><code>PROGRAM</code></td>
-<td><code>program name</code> / <code>program name suite suitename</code></td>
+<td><code>program name</code> / <code>program name shared sharedname</code></td>
 <td>Declare this file as a runnable program (mandatory in the file passed to <code>bcc</code>)</td>
 </tr>
 <tr class="odd">
@@ -2114,9 +2098,9 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td>Stop program execution</td>
 </tr>
 <tr class="even">
-<td><code>SUITE</code></td>
-<td><code>suite name</code></td>
-<td>Declare this file as suite <code>name</code> (suite files only; shared vars listed via <code>dim</code>)</td>
+<td><code>SHARED</code></td>
+<td><code>shared name</code></td>
+<td>Declare this file as the shared-variables file <code>name</code> (shared vars listed via <code>dim</code>)</td>
 </tr>
 <tr class="odd">
 <td><code>SWAP</code></td>

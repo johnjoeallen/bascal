@@ -24,7 +24,7 @@
 16. [Data Statements](#data-statements)
 17. [Miscellaneous Statements](#miscellaneous-statements)
 18. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
-19. [Suite COMMON](#suite-common)
+19. [Shared COMMON](#shared-common)
 20. [Generated BASIC Shape](#generated-basic-shape)
 21. [Command-Line Reference](#command-line-reference)
 22. [Statement Quick Reference](#statement-quick-reference)
@@ -47,8 +47,8 @@ semantics:
 - `function` declarations with typed return values and explicit `return`
 - `procedure` declarations for action subroutines with no return value
 - Path-style `require` for multi-file projects
-- `program` / `suite` declarations for coordinating `COMMON` across chained
-  programs
+- `program` / `library` / `shared` declarations, the last coordinating
+  `COMMON` across chained programs
 - Multi-line `/* */` block comments and `//` end-of-line comments in addition
   to the classic `'` comment
 - `select case` with range and `is` comparisons
@@ -142,36 +142,37 @@ header on its first non-comment, non-blank line:
 |--------|---------------|---------------------|------------------------|
 | `program name` | runnable program (the file you hand to `bcc`) | no | yes |
 | `library name` | library module | yes — only files with this header may | yes |
-| `suite name` | suite definition (see [Suite COMMON](#suite-common)) | no (resolved via `program ... suite name`, not `require`) | no |
+| `shared name` | shared-variables file (see [Shared COMMON](#shared-common)) | no (resolved via `program ... shared name`, not `require`) | no |
 
 A file with no header, or with more than one of these, is a transpile-time
 error. `require`/`import` targets a file that must declare `library`; a
-`program name suite suitename` clause resolves its suite through a
+`program name shared sharedname` clause resolves its shared file through a
 separate lookup, not through `require`.
 
 Beyond the header, a `.bcl` file consists of optional sections in the
 following order:
 
-1. Mandatory `program` / `library` / `suite` declaration
+1. Mandatory `program` / `library` / `shared` declaration
 2. `require` / `import` dependency declarations (`program`/`library` files
    only)
-3. `common` declarations (suite files only)
-4. Top-level statements (the main program body; `library` files should stick
-   to `function`/`procedure` definitions and supporting `dim`/`data`, see
+3. Top-level statements (the main program body; a `shared` file's body is
+   `dim` declarations only — every variable in it is COMMON by default, see
+   [Shared COMMON](#shared-common) — and a `library` file should stick to
+   `function`/`procedure` definitions and supporting `dim`/`data`, see
    [Module Conventions](#module-conventions))
-5. `function` definitions (may appear in any order relative to statements)
+4. `function` definitions (may appear in any order relative to statements)
 
 ### Program Declaration
 
 ```
 program name
-program name suite suitename
+program name shared sharedname
 ```
 
 Identifies the file as a runnable program, by name, and optionally links it
-to a suite (see [Suite COMMON](#suite-common)). Required in every file that
-isn't a `library` or `suite` file — in particular, the file passed to `bcc`
-on the command line must have one.
+to a shared-variables file (see [Shared COMMON](#shared-common)). Required in
+every file that isn't a `library` or `shared` file — in particular, the file
+passed to `bcc` on the command line must have one.
 
 A `program` declaration is **not allowed** in library modules loaded via
 `require`.
@@ -194,8 +195,9 @@ function ucase$(s$)
     ...
 ```
 
-The name isn't validated against anything (unlike `suite name`, which must
-match the resolved suite's filename) — it's documentation, not a lookup key.
+The name isn't validated against anything (unlike `shared name`, which must
+match the resolved shared file's filename) — it's documentation, not a lookup
+key.
 A `library` declaration is **not allowed** in the root file `bcc` was
 invoked on, and a file `require`d/`import`ed without one is a transpile-time
 error (see [Module Conventions](#module-conventions)).
@@ -2563,117 +2565,89 @@ library module should:
 
 ---
 
-## Suite COMMON
+## Shared COMMON
 
 In classic BASCOM programs, multiple programs chained together with `CHAIN`
 share variables through `COMMON` declarations. For this to work correctly,
 every program in the chain must declare **identical** `COMMON` lists — the
 variable positions in the `COMMON` block must match exactly.
 
-BASCAL coordinates `COMMON` through suite files. A suite file contains only
-variable declarations (see below); programs that belong to the suite
-reference it with a `suite` clause on their `program` declaration.
+BASCAL coordinates `COMMON` through shared files. A shared file contains only
+`dim` declarations (see below) — every variable in it is COMMON by default,
+with no separate keyword needed to opt in — and programs that use it
+reference it with a `shared` clause on their `program` declaration.
 
-### Suite File
+### Shared File
 
-A suite file is a `.bcl` file containing only variable declarations — `dim`
-and/or `common` (see [DIM Declaration](#dim-declaration-recommended) and
-[COMMON Declaration](#common-declaration) below) — plus blank lines and
-comments.
+A shared file is a `.bcl` file containing only `dim` declarations (see
+[DIM Declaration](#dim-declaration) below), plus blank lines and comments.
 
-It starts with a mandatory `suite <name>` header, analogous to a regular
+It starts with a mandatory `shared <name>` header, analogous to a regular
 file's `program <name>` header, and declares its shared variables with
 ordinary `dim`:
 
-From `tutorial/13_suite/shared.bcl`:
+From `tutorial/13_suite/state.bcl`:
 
 ```
 /*
- * Suite file for Tutorial 13 — COMMON / CHAIN.
+ * Shared file for Tutorial 13 — COMMON / CHAIN.
  *
- * Every program that begins with "program name suite shared" receives
+ * Every program that begins with "program name shared state" receives
  * an identical COMMON block at the top of its generated BASIC, so the
  * listed variables survive a CHAIN to the next program.
  */
-suite shared
+shared state
 
 dim count%
 dim label$
 ```
 
-Rules for suite files:
-- The `suite <name>` header is mandatory, and its name must match the
-  filename the transpiler resolved it as (`shared.bcl` → `suite shared`).
-- Only `dim`/`common` declarations, blank lines, and comments are allowed.
+Rules for shared files:
+- The `shared <name>` header is mandatory, and its name must match the
+  filename the transpiler resolved it as (`state.bcl` → `shared state`).
+- Only `dim` declarations, blank lines, and comments are allowed.
 - `require`, `function`, executable statements, and `program`/`library`
   declarations are all rejected with a diagnostic error.
-- The suite file must contain at least one `dim` or `common` declaration.
-- A file may declare at most one of `program`, `library`, or `suite` — a
-  suite definition can't also be an ordinary program or library module.
+- The shared file must contain at least one `dim` declaration.
+- A file may declare at most one of `program`, `library`, or `shared` — a
+  shared file can't also be an ordinary program or library module.
 
-### DIM Declaration (recommended)
+### DIM Declaration
 
 ```
-suite shared
+shared state
 
 dim count%
 dim label$
 dim scores%()
 ```
 
-Inside a `suite <name>`-headed file, every top-level `dim` becomes one
-shared variable, in declaration order — exactly the [DIM](#dim) statement
-used anywhere else in BASCAL, including its multi-name comma form
-(`dim count%, label$`) and array declarations (`dim scores%()`,
-empty-parens, same as a `COMMON` array). No bounds are stored either way —
-`common`/suite `dim` only ever declares *that* a name is an array, not its
-size.
+Inside a `shared <name>`-headed file, every top-level `dim` becomes one
+shared (COMMON) variable, in declaration order — exactly the [DIM](#dim)
+statement used anywhere else in BASCAL, including its multi-name comma form
+(`dim count%, label$`) and array declarations (`dim scores%()`, empty-parens,
+same as a `COMMON` array). No bounds are stored either way — a shared file's
+`dim` only ever declares *that* a name is an array, not its size.
 
-### COMMON Declaration
-
-```
-common var1%, var2$, arr%()
-```
-
-The pre-`dim` spelling: lists the variables that participate in the
-`COMMON` block directly, without a `dim`. Array names are written with
-empty parentheses `()`. A suite file needs *either* `dim` or `common`
-declarations (or both), not specifically one.
-
-Multiple `common` declarations are allowed; each generates a separate `COMMON`
-line in the output:
+### Program Declaration with Shared File
 
 ```
-common score%, level%, playerName$
-common hiScore%
+program start shared state
 ```
 
-Generates:
-
-```
-COMMON score%, level%, playerName$
-COMMON hiScore%
-```
-
-### Program Declaration with Suite
-
-```
-program start suite shared
-```
-
-When a suite name is present, the transpiler:
-1. Searches for `shared.bcl` in the source file's directory (then `-L` paths).
-2. Validates that the suite file contains only `common` declarations.
+When a shared-file name is present, the transpiler:
+1. Searches for `state.bcl` in the source file's directory (then `-L` paths).
+2. Validates that the shared file contains only `dim` declarations.
 3. Emits the `COMMON` lines at the very top of the generated `.bas` file,
    before any other output.
 
-### Using the Suite
+### Using a Shared File
 
 From `tutorial/13_suite/` — two programs that share `count%` and `label$`:
 
-**`shared.bcl`** (suite file):
+**`state.bcl`** (shared file):
 ```
-suite shared
+shared state
 
 dim count%
 dim label$
@@ -2681,7 +2655,7 @@ dim label$
 
 **`start.bcl`** (program 1):
 ```
-program start suite shared
+program start shared state
 
 label$ = "Counter demo"
 count% = 0
@@ -2698,7 +2672,7 @@ END
 
 **`show.bcl`** (program 2):
 ```
-program show suite shared
+program show shared state
 
 PRINT "Label:  " + label$
 PRINT "Count:  " + STR$(count%)
@@ -2716,18 +2690,16 @@ correct slots.
 
 ### Restrictions
 
-- `common` is illegal everywhere except in suite files. Using `common` in a
-  regular program or library module is a transpile error.
-- A `suite <name>` header is illegal everywhere except in a suite file being
-  loaded as a suite — a stray `suite` header in an ordinary program or
-  library module is a transpile error, same as `common`. A suite file
-  without one is also an error — the header is mandatory.
+- A `shared <name>` header is illegal everywhere except in a shared file
+  being loaded as one — a stray `shared` header in an ordinary program or
+  library module is a transpile error. A shared file without one is also an
+  error — the header is mandatory.
 - A `program` declaration is illegal in library modules (files loaded via
   `require`), and mandatory in the root file `bcc` was invoked on.
 - A `library` declaration is illegal in the root file `bcc` was invoked on,
   and mandatory in every file loaded via `require`/`import`.
-- A file may declare at most one of `program`, `library`, or `suite`.
-- If the named suite file does not exist, the program transpiles without a
+- A file may declare at most one of `program`, `library`, or `shared`.
+- If the named shared file does not exist, the program transpiles without a
   `COMMON` block (no error). This allows incremental development.
 
 ---
@@ -2747,7 +2719,7 @@ Every generated file begins with:
 
 ### COMMON Block
 
-If a suite is declared, `COMMON` lines appear before the header comment.
+If a shared file is referenced, `COMMON` lines appear before the header comment.
 
 ### Line Numbers
 
@@ -2980,7 +2952,6 @@ bcc main.bcl -L libs/sort -L libs/string
 | `CLS` | `CLS` | Clear the screen |
 | `CLOSE` | `CLOSE #n` | Close file channel *n* |
 | `COLOR` | `COLOR fg[, bg]` | Set foreground/background colour |
-| `COMMON` | `common var[, ...]` | Declare suite COMMON variables (suite files only) |
 | `CONST` | `CONST name = expr` | Declare a named constant |
 | `DATA` | `DATA val[, ...]` | Embed literal data values |
 | `DIM` | `DIM name[(d1[, d2, ...])][, name2...]` | Declare one or more variables or 1-D/multi-D arrays |
@@ -3014,7 +2985,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `OUT` | `OUT port, val` | Write byte to hardware I/O port |
 | `POKE` | `POKE address, val` | Write byte to memory address |
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
-| `PROGRAM` | `program name` / `program name suite suitename` | Declare this file as a runnable program (mandatory in the file passed to `bcc`) |
+| `PROGRAM` | `program name` / `program name shared sharedname` | Declare this file as a runnable program (mandatory in the file passed to `bcc`) |
 | `LIBRARY` | `library name` | Declare this file as a library module (mandatory in every `require`/`import` target) |
 | `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |
 | `PRINT #` | `PRINT #n, expr[, ...]` | Print to file |
@@ -3026,7 +2997,7 @@ bcc main.bcl -L libs/sort -L libs/string
 | `RETURN` | `RETURN expr` / `RETURN` | Return value from function; bare form exits a procedure early |
 | `SELECT CASE` | `SELECT CASE expr` … `END SELECT` | Multi-way branch |
 | `STOP` | `STOP` | Stop program execution |
-| `SUITE` | `suite name` | Declare this file as suite `name` (suite files only; shared vars listed via `dim`) |
+| `SHARED` | `shared name` | Declare this file as the shared-variables file `name` (shared vars listed via `dim`) |
 | `SWAP` | `SWAP a, b` | Exchange two variable values |
 | `SYSTEM` | `SYSTEM` | Exit to operating system |
 | `WHILE` | `WHILE cond` … `END WHILE` (or `WEND`) | Condition-at-top loop |

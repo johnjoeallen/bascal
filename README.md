@@ -29,7 +29,7 @@ larger programs practical:
   must be a plain variable, and a passed array's dimensionality must match
   how the callee indexes it
 - path-style `require` dependencies
-- `program name [suite suitename]` declaration with `COMMON` block coordination
+- `program name [shared sharedname]` declaration with `COMMON` block coordination; `library name` marks a `require`/`import` target
 - `select case` with single values, ranges, and `is` comparisons
 - `&&` / `||` short-circuit operators for `if`/`elseif`/`while`/`do` conditions
   — unlike bitwise `AND`/`OR`, the second operand is only evaluated when it
@@ -111,22 +111,23 @@ with `-L`:
 bcc input.bcl -L ./libs -L ./vendor
 ```
 
-## Suite COMMON
+## Shared COMMON
 
 In 1980s BASIC, multi-program systems used `COMMON` to declare shared variable
 slots that survive a `CHAIN` into the next program. Every chained program had to
 declare an **identical** `COMMON` list or variables would land in the wrong
 slots.
 
-BASCAL coordinates this with suite files. A suite file contains only variable
-declarations; any program that names it with `suite` receives those declarations
-verbatim at the top of its generated `.bas` output.
+BASCAL coordinates this with shared files. A shared file contains only `dim`
+declarations — every variable in it is COMMON by default, no separate keyword
+needed — and any program that names it with `shared` receives those
+declarations verbatim at the top of its generated `.bas` output.
 
-**Suite file `arcade.bcl`:**
+**Shared file `arcade.bcl`:**
 
 ```
-' Shared state for the ARCADE suite.
-suite arcade
+' Shared state for the ARCADE programs.
+shared arcade
 
 dim score%
 dim level%
@@ -134,16 +135,10 @@ dim playerName$
 dim hiScore%
 ```
 
-The `suite <name>` header (mirroring a regular file's `program <name>`) plus
-plain `dim` declarations is the recommended form. The older spelling — no
-header, just `common score%, level%, playerName$` / `common hiScore%`, with
-the suite name taken from the filename alone — still works and transpiles to
-identical output.
-
 **Program files:**
 
 ```
-program menu suite arcade
+program menu shared arcade
 
 INPUT "Your name: "; playerName$
 score% = 0
@@ -153,7 +148,7 @@ END
 ```
 
 ```
-program game suite arcade
+program game shared arcade
 
 score% = score% + 50 * level%
 PRINT "Score: " + STR$(score%)
@@ -169,13 +164,15 @@ COMMON hiScore%
 ```
 
 Rules:
-- A suite file may contain only `dim`/`common` declarations (and comments).
+- Every `.bcl` file must declare exactly one of `program`, `library`, or
+  `shared` as its first non-comment line.
+- A shared file may contain only `dim` declarations (and comments).
   Functions, statements, and `require` are rejected.
-- `common` and a `suite <name>` header are both illegal in any file that
-  isn't a suite file.
-- A file can't have both a `program` header and a `suite` header.
-- A `program` declaration (with or without `suite`) is illegal in library
-  modules loaded via `require`.
+- A `shared <name>` header is illegal in any file that isn't a shared file.
+- A file can't have more than one of `program`/`library`/`shared`.
+- A `program` declaration (with or without `shared`) is illegal in library
+  modules — those declare `library name` instead, and only a `library`
+  file may be `require`d/`import`ed.
 
 ## Generated BASIC Shape
 
@@ -288,9 +285,9 @@ fbc -lang qb examples/remline/remline.bas -x tmp/remline
 diff -u examples/remline/sample/expected.bas examples/remline/sample/output.bas
 ```
 
-### Arcade suite
+### Arcade shared COMMON
 
-`examples/arcade` demonstrates suite `COMMON` coordination across two programs
+`examples/arcade` demonstrates shared `COMMON` coordination across two programs
 that share score, level, and player state.
 
 ```bash

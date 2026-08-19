@@ -192,15 +192,15 @@ end select</code></pre>
       </div>
 
       <div class="snippet">
-        <h3>Suite COMMON</h3>
-        <p class="note">A suite file's shared variables are emitted identically into every <code>program ... suite ...</code> that references it, so a <code>CHAIN</code>ed program can't drift out of sync with the variable slots it's sharing.</p>
-        <p class="note"><code>shared.bcl</code> (suite file) — <code>suite &lt;name&gt;</code> plus <code>dim</code> is the recommended form; the older headerless <code>common count%, label$</code> spelling still works too:</p>
-        <pre><code>suite shared
+        <h3>Shared COMMON</h3>
+        <p class="note">A shared file's variables are emitted identically into every <code>program ... shared ...</code> that references it, so a <code>CHAIN</code>ed program can't drift out of sync with the variable slots it's sharing.</p>
+        <p class="note"><code>state.bcl</code> (shared file) — <code>shared &lt;name&gt;</code> plus <code>dim</code>; every variable listed is COMMON by default, no separate keyword needed:</p>
+        <pre><code>shared state
 
 dim count%
 dim label$</code></pre>
         <p class="note"><code>show.bcl</code>:</p>
-        <pre><code>program show suite shared
+        <pre><code>program show shared state
 
 print &quot;Count: &quot; + STR$(count%)
 end</code></pre>
@@ -716,7 +716,7 @@ db[3] = carol</code></pre>
       <li><a href="tutorials/10_files.html"><span class="num">10</span> File I/O</a></li>
       <li><a href="tutorials/11_screen.html"><span class="num">11</span> Screen control</a></li>
       <li><a href="tutorials/12_require.html"><span class="num">12</span> Require / dependencies</a></li>
-      <li><a href="tutorials/13_suite.html"><span class="num">13</span> Suite COMMON</a></li>
+      <li><a href="tutorials/13_suite.html"><span class="num">13</span> Shared COMMON</a></li>
       <li><a href="tutorials/14_procedures.html"><span class="num">14</span> Procedures</a></li>
       <li><a href="tutorials/15_random_and_record_files.html"><span class="num">15</span> Random-access &amp; record files</a></li>
       <li><a href="tutorials/16_short_circuit.html"><span class="num">16</span> Short-circuit &amp;&amp; and ||</a></li>
