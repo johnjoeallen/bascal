@@ -108,19 +108,61 @@ PRINT msg$
 END</code></pre>
 <hr />
 <h2 id="program-structure">Program Structure</h2>
-<p>A <code>.bcl</code> file consists of optional sections in the following order:</p>
+<p>Every <code>.bcl</code> file is exactly one of three things, declared by a mandatory header on its first non-comment, non-blank line:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Header</th>
+<th>File is a...</th>
+<th>May be <code>require</code>d?</th>
+<th>May itself <code>require</code>?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>program name</code></td>
+<td>runnable program (the file you hand to <code>bcc</code>)</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr class="even">
+<td><code>library name</code></td>
+<td>library module</td>
+<td>yes — only files with this header may</td>
+<td>yes</td>
+</tr>
+<tr class="odd">
+<td><code>suite name</code></td>
+<td>suite definition (see <a href="#suite-common">Suite COMMON</a>)</td>
+<td>no (resolved via <code>program ... suite name</code>, not <code>require</code>)</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>A file with no header, or with more than one of these, is a transpile-time error. <code>require</code>/<code>import</code> targets a file that must declare <code>library</code>; a <code>program name suite suitename</code> clause resolves its suite through a separate lookup, not through <code>require</code>.</p>
+<p>Beyond the header, a <code>.bcl</code> file consists of optional sections in the following order:</p>
 <ol type="1">
-<li>Optional <code>program</code> declaration</li>
-<li><code>require</code> / <code>import</code> dependency declarations</li>
+<li>Mandatory <code>program</code> / <code>library</code> / <code>suite</code> declaration</li>
+<li><code>require</code> / <code>import</code> dependency declarations (<code>program</code>/<code>library</code> files only)</li>
 <li><code>common</code> declarations (suite files only)</li>
-<li>Top-level statements (the main program body)</li>
+<li>Top-level statements (the main program body; <code>library</code> files should stick to <code>function</code>/<code>procedure</code> definitions and supporting <code>dim</code>/<code>data</code>, see <a href="#module-conventions">Module Conventions</a>)</li>
 <li><code>function</code> definitions (may appear in any order relative to statements)</li>
 </ol>
 <h3 id="program-declaration">Program Declaration</h3>
 <pre><code>program name
 program name suite suitename</code></pre>
-<p>The <code>program</code> declaration is optional. When present it must be the first non-comment, non-blank line in the file. It identifies the program by name and optionally links it to a suite (see <a href="#suite-common">Suite COMMON</a>).</p>
+<p>Identifies the file as a runnable program, by name, and optionally links it to a suite (see <a href="#suite-common">Suite COMMON</a>). Required in every file that isn't a <code>library</code> or <code>suite</code> file — in particular, the file passed to <code>bcc</code> on the command line must have one.</p>
 <p>A <code>program</code> declaration is <strong>not allowed</strong> in library modules loaded via <code>require</code>.</p>
+<h3 id="library-declaration">Library Declaration</h3>
+<pre><code>library name</code></pre>
+<p>Identifies the file as a library module — the only kind of file <code>require</code>/<code>import</code> may load. From <code>com/bascal/stdlib/ucase.bcl</code>:</p>
+<pre><code>library ucase
+
+// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
+// a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+function ucase$(s$)
+    ...</code></pre>
+<p>The name isn't validated against anything (unlike <code>suite name</code>, which must match the resolved suite's filename) — it's documentation, not a lookup key. A <code>library</code> declaration is <strong>not allowed</strong> in the root file <code>bcc</code> was invoked on, and a file <code>require</code>d/<code>import</code>ed without one is a transpile-time error (see <a href="#module-conventions">Module Conventions</a>).</p>
 <h3 id="file-encoding">File Encoding</h3>
 <p>Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are separated by newlines; a colon <code>:</code> may also separate statements on one line.</p>
 <p>There is no line-continuation syntax -- no trailing <code>_</code>, <code>\</code>, or similar. The lexer turns every physical newline into a real token, so any single expression (and the tokens making up a statement header, like a <code>case</code> value list) must fit on one physical line; a newline there ends the statement/expression rather than continuing it. This applies everywhere, not just to obviously statement-like constructs -- a function call's argument list, for example, can't have a newline before its closing <code>)</code> either:</p>
@@ -130,6 +172,19 @@ result% = someFunction(1,
 
 ' Allowed -- keep the whole call on one line:
 result% = someFunction(1, 2)</code></pre>
+<p>The same rule governs statement headers like <code>if</code>/<code>then</code>: the condition and the <code>then</code> that closes it must be on one physical line. A newline can only appear <em>after</em> <code>then</code>, where it's meaningful -- it's what selects the block form of <code>if</code> over the single-line form (see <a href="#if-elseif-else-end-if">IF / ELSEIF / ELSE / END IF</a>):</p>
+<pre><code>' Not allowed -- the newline before "then" ends the statement early:
+if score% >= 60
+    then PRINT "Pass"
+
+' Not allowed -- same problem, condition split across lines:
+if score% >= 60 and
+    attendance% >= 80 then PRINT "Pass"
+
+' Allowed -- condition and "then" on one line, body starts after the newline:
+if score% >= 60 and attendance% >= 80 then
+    PRINT "Pass"
+end if</code></pre>
 <hr />
 <h2 id="data-types-and-type-suffixes">Data Types and Type Suffixes</h2>
 <p>BASCAL uses Microsoft BASIC's type-suffix convention. Every variable or function name carries its type in the final character:</p>
@@ -484,7 +539,7 @@ end if</code></pre>
 <p>BASCAL also supports classic BASIC's single-line form: a statement directly after <code>then</code>, on the same line, needs no <code>end if</code>.</p>
 <pre><code>if condition then statement
 if condition then statement else statement</code></pre>
-<p>A newline right after <code>then</code> is what selects the block form above instead — that's the only difference between the two. The single-line form may chain multiple statements with <code>:</code>, same as anywhere else in BASCAL, and its <code>else</code> (if any) must be on that same line too:</p>
+<p>A newline right after <code>then</code> is what selects the block form above instead — that's the only difference between the two (BASCAL is line-oriented with no line-continuation syntax; see <a href="#file-encoding">File Encoding</a>). The single-line form may chain multiple statements with <code>:</code>, same as anywhere else in BASCAL, and its <code>else</code> (if any) must be on that same line too:</p>
 <pre><code>if x% &gt; 0 then print &quot;positive&quot;
 if x% &gt; 100 then print &quot;big&quot; else print &quot;small&quot;
 if x% &gt; 0 then y% = 1: z% = 2</code></pre>
@@ -1535,14 +1590,14 @@ require stats                       →  stats.bcl</code></pre>
 <h3 id="function-merging">Function Merging</h3>
 <p>All functions from a required file (and its transitive dependencies) are merged into the generated output. Duplicate function names are rejected with a diagnostic error.</p>
 <h3 id="module-conventions">Module Conventions</h3>
-<p>By convention, library modules (files loaded via <code>require</code>) should: - Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements - Not contain a <code>program</code> declaration - Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></p>
+<p>Every file loaded via <code>require</code>/<code>import</code> <strong>must</strong> start with a <a href="#library-declaration"><code>library &lt;name&gt;</code> declaration</a> — a transpile-time error, not just a convention. Beyond that required header, by convention a library module should: - Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements - Not contain a <code>program</code> declaration - Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></p>
 <hr />
 <h2 id="suite-common">Suite COMMON</h2>
 <p>In classic BASCOM programs, multiple programs chained together with <code>CHAIN</code> share variables through <code>COMMON</code> declarations. For this to work correctly, every program in the chain must declare <strong>identical</strong> <code>COMMON</code> lists — the variable positions in the <code>COMMON</code> block must match exactly.</p>
 <p>BASCAL coordinates <code>COMMON</code> through suite files. A suite file contains only variable declarations (see below); programs that belong to the suite reference it with a <code>suite</code> clause on their <code>program</code> declaration.</p>
 <h3 id="suite-file">Suite File</h3>
 <p>A suite file is a <code>.bcl</code> file containing only variable declarations — <code>dim</code> and/or <code>common</code> (see <a href="#dim-declaration-recommended">DIM Declaration</a> and <a href="#common-declaration">COMMON Declaration</a> below) — plus blank lines and comments.</p>
-<p>The canonical form starts with a <code>suite &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
+<p>It starts with a mandatory <code>suite &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
 <p>From <code>tutorial/13_suite/shared.bcl</code>:</p>
 <pre><code>/*
  * Suite file for Tutorial 13 — COMMON / CHAIN.
@@ -1555,8 +1610,7 @@ suite shared
 
 dim count%
 dim label$</code></pre>
-<p>The older filename-only form — no <code>suite</code> header, just one or more <code>common</code> declarations, with the suite name taken purely from the filename — still works and transpiles to identical output; see <a href="#common-declaration">COMMON Declaration</a> below.</p>
-<p>Rules for suite files: - Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code> declarations are all rejected with a diagnostic error. - The suite file must contain at least one <code>dim</code> or <code>common</code> declaration. - A file may not have both a <code>program</code> header and a <code>suite</code> header — a file is either an ordinary program (optionally referencing a suite) or a suite definition, never both.</p>
+<p>Rules for suite files: - The <code>suite &lt;name&gt;</code> header is mandatory, and its name must match the filename the transpiler resolved it as (<code>shared.bcl</code> → <code>suite shared</code>). - Only <code>dim</code>/<code>common</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code>/<code>library</code> declarations are all rejected with a diagnostic error. - The suite file must contain at least one <code>dim</code> or <code>common</code> declaration. - A file may declare at most one of <code>program</code>, <code>library</code>, or <code>suite</code> — a suite definition can't also be an ordinary program or library module.</p>
 <h3 id="dim-declaration-recommended">DIM Declaration (recommended)</h3>
 <pre><code>suite shared
 
@@ -1564,10 +1618,9 @@ dim count%
 dim label$
 dim scores%()</code></pre>
 <p>Inside a <code>suite &lt;name&gt;</code>-headed file, every top-level <code>dim</code> becomes one shared variable, in declaration order — exactly the <a href="#dim">DIM</a> statement used anywhere else in BASCAL, including its multi-name comma form (<code>dim count%, label$</code>) and array declarations (<code>dim scores%()</code>, empty-parens, same as a <code>COMMON</code> array). No bounds are stored either way — <code>common</code>/suite <code>dim</code> only ever declares <em>that</em> a name is an array, not its size.</p>
-<p>If present, the <code>suite &lt;name&gt;</code> header's name must match the filename the transpiler resolved it as (<code>shared.bcl</code> → <code>suite shared</code>) — a mismatch is a transpile-time error, catching a suite file copied to a new filename without updating its own header.</p>
 <h3 id="common-declaration">COMMON Declaration</h3>
 <pre><code>common var1%, var2$, arr%()</code></pre>
-<p>The older, pre-<code>suite</code>-header spelling: lists the variables that participate in the <code>COMMON</code> block directly, without a <code>dim</code>. Array names are written with empty parentheses <code>()</code>. Still fully supported — a suite file needs <em>either</em> <code>dim</code> or <code>common</code> declarations (or both), not specifically one.</p>
+<p>The pre-<code>dim</code> spelling: lists the variables that participate in the <code>COMMON</code> block directly, without a <code>dim</code>. Array names are written with empty parentheses <code>()</code>. A suite file needs <em>either</em> <code>dim</code> or <code>common</code> declarations (or both), not specifically one.</p>
 <p>Multiple <code>common</code> declarations are allowed; each generates a separate <code>COMMON</code> line in the output:</p>
 <pre><code>common score%, level%, playerName$
 common hiScore%</code></pre>
@@ -1610,9 +1663,10 @@ END</code></pre>
 <h3 id="restrictions-2">Restrictions</h3>
 <ul>
 <li><code>common</code> is illegal everywhere except in suite files. Using <code>common</code> in a regular program or library module is a transpile error.</li>
-<li>A <code>suite &lt;name&gt;</code> header is illegal everywhere except in a suite file being loaded as a suite — a stray <code>suite</code> header in an ordinary program or library module is a transpile error, same as <code>common</code>.</li>
-<li>A <code>program</code> declaration is illegal in library modules (files loaded via <code>require</code>).</li>
-<li>A file cannot have both a <code>program</code> header and a <code>suite</code> header.</li>
+<li>A <code>suite &lt;name&gt;</code> header is illegal everywhere except in a suite file being loaded as a suite — a stray <code>suite</code> header in an ordinary program or library module is a transpile error, same as <code>common</code>. A suite file without one is also an error — the header is mandatory.</li>
+<li>A <code>program</code> declaration is illegal in library modules (files loaded via <code>require</code>), and mandatory in the root file <code>bcc</code> was invoked on.</li>
+<li>A <code>library</code> declaration is illegal in the root file <code>bcc</code> was invoked on, and mandatory in every file loaded via <code>require</code>/<code>import</code>.</li>
+<li>A file may declare at most one of <code>program</code>, <code>library</code>, or <code>suite</code>.</li>
 <li>If the named suite file does not exist, the program transpiles without a <code>COMMON</code> block (no error). This allows incremental development.</li>
 </ul>
 <hr />
@@ -1998,6 +2052,16 @@ bcc main.bcl -L libs/sort -L libs/string</code></pre>
 <td><code>PRINT</code></td>
 <td><code>PRINT expr[, ...]</code></td>
 <td>Print to screen</td>
+</tr>
+<tr class="even">
+<td><code>PROGRAM</code></td>
+<td><code>program name</code> / <code>program name suite suitename</code></td>
+<td>Declare this file as a runnable program (mandatory in the file passed to <code>bcc</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>LIBRARY</code></td>
+<td><code>library name</code></td>
+<td>Declare this file as a library module (mandatory in every <code>require</code>/<code>import</code> target)</td>
 </tr>
 <tr class="even">
 <td><code>PROCEDURE</code></td>

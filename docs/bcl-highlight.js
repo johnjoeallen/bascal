@@ -8,7 +8,7 @@
   "use strict";
 
   var KEYWORDS = [
-    "program", "suite", "common", "require", "import", "as",
+    "program", "library", "suite", "common", "require", "import", "as",
     "dim", "const", "global", "let",
     "if", "then", "elseif", "else", "end",
     "for", "to", "downto", "step", "next",
