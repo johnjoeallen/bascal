@@ -1,3 +1,4 @@
+program requireDemo
 // Tutorial 12 — REQUIRE and multi-file projects
 //
 // REQUIRE loads another .bcl file and merges its functions into the

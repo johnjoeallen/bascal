@@ -1,3 +1,4 @@
+library midAssign
 // Same-length splice into target$ -- the shared implementation behind
 // MID$ statement-form assignment (`MID$(target$, start[, len]) =
 // value`). Not meant to be called directly: bcc transpiles that syntax

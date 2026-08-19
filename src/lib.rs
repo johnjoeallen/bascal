@@ -237,6 +237,7 @@ fn load_program_recursive(
     if !visited.insert(input.clone()) {
         return Ok(ast::Program {
             program_decl: None,
+            library_decl: None,
             suite_decl: None,
             declarations: Vec::new(),
             common: Vec::new(),
@@ -266,6 +267,16 @@ fn load_program_recursive(
         ));
     }
 
+    if is_root && program.library_decl.is_some() {
+        errors.push(Diagnostic::error(
+            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+            format!(
+                "`library` declaration is not allowed in the root program file (`{}`) -- only files loaded via `require`/`import` may declare `library`",
+                input.display()
+            ),
+        ));
+    }
+
     if !program.common.is_empty() {
         errors.push(Diagnostic::error(
             diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
@@ -286,12 +297,37 @@ fn load_program_recursive(
         ));
     }
 
+    // Every file must declare exactly one of `program`/`library`/`suite`.
+    // Gated on `suite_decl.is_none()` so a file that already errored above
+    // for a stray `suite` header doesn't also get a confusing second error
+    // about a missing `program`/`library` header.
+    if program.suite_decl.is_none() {
+        if is_root && program.program_decl.is_none() {
+            errors.push(Diagnostic::error(
+                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+                format!(
+                    "file `{}` must start with `program <name>` -- only files loaded via `require`/`import` may omit it (and only if they declare `library <name>` instead)",
+                    input.display()
+                ),
+            ));
+        } else if !is_root && program.library_decl.is_none() && program.program_decl.is_none() {
+            errors.push(Diagnostic::error(
+                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+                format!(
+                    "required file `{}` must declare `library <name>` -- only files declared `library` may be `require`d/`import`ed",
+                    input.display()
+                ),
+            ));
+        }
+    }
+
     if !errors.is_empty() {
         return Err(errors);
     }
 
     let mut merged = ast::Program {
         program_decl: program.program_decl,
+        library_decl: None,
         suite_decl: None,
         declarations: Vec::new(),
         common: Vec::new(),
@@ -362,20 +398,29 @@ fn load_suite_file(path: &Path, suite_name: &str) -> Result<Vec<ast::CommonBlock
             format!("suite file `{}` may only contain COMMON declarations and DIM statements (no program declaration)", path.display()),
         ));
     }
-    // A `suite <name>` header is optional (the older filename-only
-    // convention still works), but if present it must name the same suite
-    // this file was actually resolved as -- catches a copy-pasted header
-    // pointing at the wrong filename.
-    if let Some(declared) = &program.suite_decl {
-        if declared != suite_name {
-            errors.push(Diagnostic::error(
-                pos.clone(),
-                format!(
-                    "suite file `{}` declares `suite {declared}`, but was loaded as suite `{suite_name}` -- its filename must be `{declared}.bcl`",
-                    path.display()
-                ),
-            ));
-        }
+    if program.library_decl.is_some() {
+        errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` may only contain COMMON declarations and DIM statements (no library declaration)", path.display()),
+        ));
+    }
+    // The `suite <name>` header is mandatory -- every file must declare
+    // exactly one of `program`/`library`/`suite` -- and if present it must
+    // name the same suite this file was actually resolved as, catching a
+    // copy-pasted header pointing at the wrong filename.
+    match &program.suite_decl {
+        None => errors.push(Diagnostic::error(
+            pos.clone(),
+            format!("suite file `{}` must declare `suite {suite_name}`", path.display()),
+        )),
+        Some(declared) if declared != suite_name => errors.push(Diagnostic::error(
+            pos.clone(),
+            format!(
+                "suite file `{}` declares `suite {declared}`, but was loaded as suite `{suite_name}` -- its filename must be `{declared}.bcl`",
+                path.display()
+            ),
+        )),
+        Some(_) => {}
     }
 
     // Every `dim name[()]` in the file becomes one more shared variable,
@@ -883,7 +928,7 @@ END
         let common_path = dir.path().join("mysuite.bcl");
 
         std::fs::write(&suite_path, "program myapp suite mysuite\nPRINT \"hello\"\nEND\n").unwrap();
-        std::fs::write(&common_path, "common score%, level%\ncommon name$\n").unwrap();
+        std::fs::write(&common_path, "suite mysuite\n\ncommon score%, level%\ncommon name$\n").unwrap();
 
         let output = compile_file(&suite_path, &CompileOptions::new())
             .expect("program with suite should compile");

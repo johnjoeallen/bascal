@@ -1,3 +1,4 @@
+program sortDriver
 /* Sort driver for the BASCAL example sort library. */
 /* Uses 5000 reverse-sorted elements (worst case for comparison sorts). */
 require com.bascal.sort.bubbleSort

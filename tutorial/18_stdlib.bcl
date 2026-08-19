@@ -1,3 +1,4 @@
+program stdlib
 // Tutorial 18 — Standard library functions
 //
 // com.bascal.stdlib is an ordinary require-able library, resolved the same

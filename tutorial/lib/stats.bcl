@@ -1,3 +1,4 @@
+library stats
 // stats.bcl — basic statistics library for the BASCAL tutorial.
 // Loaded by tutorial/12_require.bcl via:
 //   require stats

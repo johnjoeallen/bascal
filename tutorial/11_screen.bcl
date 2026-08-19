@@ -1,3 +1,4 @@
+program screen
 // Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
 //
 // These statements control the terminal display and connected hardware.

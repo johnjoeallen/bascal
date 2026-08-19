@@ -1,3 +1,4 @@
+library ucase
 // Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
 function ucase$(s$)

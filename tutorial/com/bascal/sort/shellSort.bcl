@@ -1,3 +1,4 @@
+library shellSort
 /* Shell sort demonstrates a nested dependency. The helper is intentionally */
 /* trivial; the point is to exercise recursive require resolution. */
 require com.bascal.sort.helpers.touch

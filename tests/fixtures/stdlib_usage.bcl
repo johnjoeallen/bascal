@@ -1,3 +1,4 @@
+program stdlibUsage
 require com.bascal.stdlib.ltrim
 require com.bascal.stdlib.rtrim
 require com.bascal.stdlib.ucase

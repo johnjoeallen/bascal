@@ -1,3 +1,4 @@
+library lineparse
 require com.bascal.examples.remline.strings
 
 /* Parse and strip leading decimal line numbers. */

@@ -3,11 +3,14 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub program_decl: Option<ProgramDecl>,
+    /// `library <name>` — present when this file declares itself a library
+    /// module (only such files may be `require`d/`import`ed; see
+    /// load_program_recursive in lib.rs).
+    pub library_decl: Option<String>,
     /// `suite <name>` — present when this file declares *itself* to be the
-    /// suite definition named `<name>`, an alternative to the older
-    /// filename-only convention (see load_suite_file in lib.rs). Distinct
-    /// from `ProgramDecl.suite`, which is a *reference* to a suite by name
-    /// from an ordinary program.
+    /// suite definition named `<name>` (see load_suite_file in lib.rs).
+    /// Distinct from `ProgramDecl.suite`, which is a *reference* to a suite
+    /// by name from an ordinary program.
     pub suite_decl: Option<String>,
     pub declarations: Vec<DependencyDecl>,
     pub common: Vec<CommonBlock>,

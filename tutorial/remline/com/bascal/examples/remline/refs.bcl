@@ -1,3 +1,4 @@
+library refs
 require com.bascal.examples.remline.lineparse
 require com.bascal.examples.remline.strings
 

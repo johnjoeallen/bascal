@@ -1,3 +1,4 @@
+program midAssign
 // MID$ statement-form assignment: edge cases exercising real QuickBASIC/
 // MBASIC in-place-splice semantics. Same fixture as
 // tests/fixtures/mid_assign_edge_cases.bcl (run under FreeBASIC by

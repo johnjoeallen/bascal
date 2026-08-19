@@ -1,3 +1,4 @@
+library quickSort
 /* Iterative quicksort using an explicit stack for partition bounds. */
 /* Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input. */
 /* data% is byref so the sorted result is copied back to the caller. */

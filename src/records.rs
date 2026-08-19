@@ -38,6 +38,7 @@ pub fn lower(program: Program) -> Result<(Program, std::collections::HashSet<Str
     Ok((
         Program {
             program_decl: program.program_decl,
+            library_decl: program.library_decl,
             suite_decl: program.suite_decl,
             declarations: program.declarations,
             common: program.common,

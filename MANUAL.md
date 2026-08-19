@@ -135,12 +135,30 @@ END
 
 ## Program Structure
 
-A `.bcl` file consists of optional sections in the following order:
+Every `.bcl` file is exactly one of three things, declared by a mandatory
+header on its first non-comment, non-blank line:
 
-1. Optional `program` declaration
-2. `require` / `import` dependency declarations
+| Header | File is a... | May be `require`d? | May itself `require`? |
+|--------|---------------|---------------------|------------------------|
+| `program name` | runnable program (the file you hand to `bcc`) | no | yes |
+| `library name` | library module | yes — only files with this header may | yes |
+| `suite name` | suite definition (see [Suite COMMON](#suite-common)) | no (resolved via `program ... suite name`, not `require`) | no |
+
+A file with no header, or with more than one of these, is a transpile-time
+error. `require`/`import` targets a file that must declare `library`; a
+`program name suite suitename` clause resolves its suite through a
+separate lookup, not through `require`.
+
+Beyond the header, a `.bcl` file consists of optional sections in the
+following order:
+
+1. Mandatory `program` / `library` / `suite` declaration
+2. `require` / `import` dependency declarations (`program`/`library` files
+   only)
 3. `common` declarations (suite files only)
-4. Top-level statements (the main program body)
+4. Top-level statements (the main program body; `library` files should stick
+   to `function`/`procedure` definitions and supporting `dim`/`data`, see
+   [Module Conventions](#module-conventions))
 5. `function` definitions (may appear in any order relative to statements)
 
 ### Program Declaration
@@ -150,12 +168,37 @@ program name
 program name suite suitename
 ```
 
-The `program` declaration is optional. When present it must be the first
-non-comment, non-blank line in the file. It identifies the program by name and
-optionally links it to a suite (see [Suite COMMON](#suite-common)).
+Identifies the file as a runnable program, by name, and optionally links it
+to a suite (see [Suite COMMON](#suite-common)). Required in every file that
+isn't a `library` or `suite` file — in particular, the file passed to `bcc`
+on the command line must have one.
 
 A `program` declaration is **not allowed** in library modules loaded via
 `require`.
+
+### Library Declaration
+
+```
+library name
+```
+
+Identifies the file as a library module — the only kind of file `require`/
+`import` may load. From `com/bascal/stdlib/ucase.bcl`:
+
+```
+library ucase
+
+// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
+// a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+function ucase$(s$)
+    ...
+```
+
+The name isn't validated against anything (unlike `suite name`, which must
+match the resolved suite's filename) — it's documentation, not a lookup key.
+A `library` declaration is **not allowed** in the root file `bcc` was
+invoked on, and a file `require`d/`import`ed without one is a transpile-time
+error (see [Module Conventions](#module-conventions)).
 
 ### File Encoding
 
@@ -2510,7 +2553,10 @@ diagnostic error.
 
 ### Module Conventions
 
-By convention, library modules (files loaded via `require`) should:
+Every file loaded via `require`/`import` **must** start with a
+[`library <name>` declaration](#library-declaration) — a transpile-time
+error, not just a convention. Beyond that required header, by convention a
+library module should:
 - Contain only `function` definitions and supporting `DIM` / `DATA` statements
 - Not contain a `program` declaration
 - Not contain top-level executable statements other than `DIM` and `DATA`
@@ -2535,9 +2581,9 @@ and/or `common` (see [DIM Declaration](#dim-declaration-recommended) and
 [COMMON Declaration](#common-declaration) below) — plus blank lines and
 comments.
 
-The canonical form starts with a `suite <name>` header, analogous to a
-regular file's `program <name>` header, and declares its shared variables
-with ordinary `dim`:
+It starts with a mandatory `suite <name>` header, analogous to a regular
+file's `program <name>` header, and declares its shared variables with
+ordinary `dim`:
 
 From `tutorial/13_suite/shared.bcl`:
 
@@ -2555,19 +2601,15 @@ dim count%
 dim label$
 ```
 
-The older filename-only form — no `suite` header, just one or more `common`
-declarations, with the suite name taken purely from the filename — still
-works and transpiles to identical output; see
-[COMMON Declaration](#common-declaration) below.
-
 Rules for suite files:
+- The `suite <name>` header is mandatory, and its name must match the
+  filename the transpiler resolved it as (`shared.bcl` → `suite shared`).
 - Only `dim`/`common` declarations, blank lines, and comments are allowed.
-- `require`, `function`, executable statements, and `program` declarations
-  are all rejected with a diagnostic error.
+- `require`, `function`, executable statements, and `program`/`library`
+  declarations are all rejected with a diagnostic error.
 - The suite file must contain at least one `dim` or `common` declaration.
-- A file may not have both a `program` header and a `suite` header — a file
-  is either an ordinary program (optionally referencing a suite) or a suite
-  definition, never both.
+- A file may declare at most one of `program`, `library`, or `suite` — a
+  suite definition can't also be an ordinary program or library module.
 
 ### DIM Declaration (recommended)
 
@@ -2587,21 +2629,16 @@ empty-parens, same as a `COMMON` array). No bounds are stored either way —
 `common`/suite `dim` only ever declares *that* a name is an array, not its
 size.
 
-If present, the `suite <name>` header's name must match the filename the
-transpiler resolved it as (`shared.bcl` → `suite shared`) — a mismatch is a
-transpile-time error, catching a suite file copied to a new filename without
-updating its own header.
-
 ### COMMON Declaration
 
 ```
 common var1%, var2$, arr%()
 ```
 
-The older, pre-`suite`-header spelling: lists the variables that participate
-in the `COMMON` block directly, without a `dim`. Array names are written
-with empty parentheses `()`. Still fully supported — a suite file needs
-*either* `dim` or `common` declarations (or both), not specifically one.
+The pre-`dim` spelling: lists the variables that participate in the
+`COMMON` block directly, without a `dim`. Array names are written with
+empty parentheses `()`. A suite file needs *either* `dim` or `common`
+declarations (or both), not specifically one.
 
 Multiple `common` declarations are allowed; each generates a separate `COMMON`
 line in the output:
@@ -2683,10 +2720,13 @@ correct slots.
   regular program or library module is a transpile error.
 - A `suite <name>` header is illegal everywhere except in a suite file being
   loaded as a suite — a stray `suite` header in an ordinary program or
-  library module is a transpile error, same as `common`.
+  library module is a transpile error, same as `common`. A suite file
+  without one is also an error — the header is mandatory.
 - A `program` declaration is illegal in library modules (files loaded via
-  `require`).
-- A file cannot have both a `program` header and a `suite` header.
+  `require`), and mandatory in the root file `bcc` was invoked on.
+- A `library` declaration is illegal in the root file `bcc` was invoked on,
+  and mandatory in every file loaded via `require`/`import`.
+- A file may declare at most one of `program`, `library`, or `suite`.
 - If the named suite file does not exist, the program transpiles without a
   `COMMON` block (no error). This allows incremental development.
 
@@ -2974,6 +3014,8 @@ bcc main.bcl -L libs/sort -L libs/string
 | `OUT` | `OUT port, val` | Write byte to hardware I/O port |
 | `POKE` | `POKE address, val` | Write byte to memory address |
 | `PRINT` | `PRINT expr[, ...]` | Print to screen |
+| `PROGRAM` | `program name` / `program name suite suitename` | Declare this file as a runnable program (mandatory in the file passed to `bcc`) |
+| `LIBRARY` | `library name` | Declare this file as a library module (mandatory in every `require`/`import` target) |
 | `PROCEDURE` | `PROCEDURE name(params)` … `END PROCEDURE` | Define a procedure (no return value) |
 | `PRINT #` | `PRINT #n, expr[, ...]` | Print to file |
 | `PRINT USING` | `PRINT USING fmt$; expr[; ...]` | Formatted print (also `LPRINT USING`, `PRINT #n, USING`) |

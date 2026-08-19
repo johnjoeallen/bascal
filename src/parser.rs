@@ -47,6 +47,7 @@ impl Parser {
 
     fn parse_program_inner(&mut self) -> ParseResult<Program> {
         let mut program_decl = None;
+        let mut library_decl = None;
         let mut suite_decl = None;
         let mut declarations = Vec::new();
         let mut common = Vec::new();
@@ -61,16 +62,36 @@ impl Parser {
                 if program_decl.is_some() {
                     return Err(self.error("only one `program` declaration is allowed per file"));
                 }
+                if library_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `program` declaration and a `library` declaration"));
+                }
                 if suite_decl.is_some() {
                     return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
                 }
                 program_decl = Some(decl);
+            } else if self.check_keyword("library") {
+                if library_decl.is_some() {
+                    return Err(self.error("only one `library` declaration is allowed per file"));
+                }
+                if program_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `program` declaration and a `library` declaration"));
+                }
+                if suite_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `library` declaration and a `suite` declaration"));
+                }
+                self.expect_keyword("library")?;
+                let name = self.expect_ident("expected library name after `library`")?;
+                self.consume_line_end()?;
+                library_decl = Some(name);
             } else if self.check_keyword("suite") {
                 if suite_decl.is_some() {
                     return Err(self.error("only one `suite` declaration is allowed per file"));
                 }
                 if program_decl.is_some() {
                     return Err(self.error("a file cannot have both a `program` declaration and a `suite` declaration"));
+                }
+                if library_decl.is_some() {
+                    return Err(self.error("a file cannot have both a `library` declaration and a `suite` declaration"));
                 }
                 self.expect_keyword("suite")?;
                 let name = self.expect_ident("expected suite name after `suite`")?;
@@ -101,6 +122,7 @@ impl Parser {
 
         Ok(Program {
             program_decl,
+            library_decl,
             suite_decl,
             declarations,
             common,

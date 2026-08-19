@@ -1,3 +1,4 @@
+library strings
 /* Shared string helpers for REMLINE. */
 
 // UCASE$ isn't a real MBASIC/BASCOM 2.00 builtin (verified against a real

@@ -1,3 +1,4 @@
+program data
 // Tutorial 9 — data, read, restore, swap, randomize
 //
 // data embeds literal values directly in the program.  read consumes
