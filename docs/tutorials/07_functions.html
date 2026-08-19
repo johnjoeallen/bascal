@@ -67,8 +67,7 @@ end function</code></pre>
   <div class="source-embed">
     <details>
       <summary><code>tutorial/07_functions.bcl</code></summary>
-      <pre><code>program functions
-// Tutorial 7 — Functions
+      <pre><code>// Tutorial 7 — Functions
 //
 // A BASCAL function is declared with FUNCTION ... END FUNCTION.
 // The function name carries the return type suffix.  Parameters
@@ -81,6 +80,7 @@ end function</code></pre>
 // Functions cannot recurse, directly or indirectly (parameters would be
 // overwritten) -- the compiler checks the whole call graph and rejects
 // any cycle.  Use an explicit stack array for recursive algorithms.
+program functions
 
 require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase

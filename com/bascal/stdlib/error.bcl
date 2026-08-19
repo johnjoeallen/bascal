@@ -1,4 +1,3 @@
-library error
 // Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
 // and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
 // returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
@@ -8,6 +7,8 @@ library error
 // realistically going to hit -- not the full table, but every code common
 // enough to be worth a real message instead of falling through to the
 // generic one.
+library error
+
 function error$(code%)
     select case code%
         case 2

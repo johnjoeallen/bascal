@@ -1,4 +1,3 @@
-program loops
 // Tutorial 5 — Loops: for, WHILE, DO
 //
 // BASCAL provides three loop constructs:
@@ -18,6 +17,7 @@ program loops
 // All three loops share one early-exit statement: exit. It's unqualified --
 // no "exit for"/"exit while"/"exit do" -- the compiler already knows which
 // loop it's inside from context.
+program loops
 
 /* --- for / NEXT --- */
 print "Squares 1..5:"

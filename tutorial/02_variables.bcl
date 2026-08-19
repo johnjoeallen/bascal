@@ -1,4 +1,3 @@
-program variables
 // Tutorial 2 — Variables and Constants
 //
 // Every name in BASCAL ends with a type suffix that tells the runtime
@@ -15,6 +14,7 @@ program variables
 //
 // const names a value that cannot change.  Use it for magic numbers
 // so the intent is clear and the value lives in one place.
+program variables
 
 const maxScore%  = 100
 const passMark%  = 60

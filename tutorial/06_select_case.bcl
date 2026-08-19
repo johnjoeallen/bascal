@@ -1,4 +1,3 @@
-program selectCase
 // Tutorial 6 — SELECT CASE
 //
 // SELECT CASE tests one expression against multiple patterns.  The
@@ -11,6 +10,7 @@ program selectCase
 //   case low to high         — inclusive range
 //   case is <op> value       — comparison (=  <>  <  <=  >  >=)
 //   case else                — default; must be the last clause
+program selectCase
 
 /* Integer select: convert numeric score to letter grade */
 score% = 85

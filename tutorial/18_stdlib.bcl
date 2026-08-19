@@ -1,4 +1,3 @@
-program stdlib
 // Tutorial 18 — Standard library functions
 //
 // com.bascal.stdlib is an ordinary require-able library, resolved the same
@@ -12,6 +11,7 @@ program stdlib
 //
 // Run with:
 //   bcc tutorial/18_stdlib.bcl
+program stdlib
 
 require com.bascal.stdlib.ltrim
 require com.bascal.stdlib.rtrim

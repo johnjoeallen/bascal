@@ -156,10 +156,10 @@ program name suite suitename</code></pre>
 <h3 id="library-declaration">Library Declaration</h3>
 <pre><code>library name</code></pre>
 <p>Identifies the file as a library module — the only kind of file <code>require</code>/<code>import</code> may load. From <code>com/bascal/stdlib/ucase.bcl</code>:</p>
-<pre><code>library ucase
-
-// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
+<pre><code>// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+library ucase
+
 function ucase$(s$)
     ...</code></pre>
 <p>The name isn't validated against anything (unlike <code>suite name</code>, which must match the resolved suite's filename) — it's documentation, not a lookup key. A <code>library</code> declaration is <strong>not allowed</strong> in the root file <code>bcc</code> was invoked on, and a file <code>require</code>d/<code>import</code>ed without one is a transpile-time error (see <a href="#module-conventions">Module Conventions</a>).</p>

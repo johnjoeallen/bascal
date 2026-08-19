@@ -1,4 +1,3 @@
-program arithmetic
 // Tutorial 3 — Operators and Expressions
 //
 // Arithmetic:   +  -  *  /  \  MOD  ^
@@ -21,6 +20,7 @@ program arithmetic
 //
 // IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 // Test for false with (expr) = 0, not NOT expr.
+program arithmetic
 
 /* Arithmetic — mix labels and numbers with ; */
 a% = 17

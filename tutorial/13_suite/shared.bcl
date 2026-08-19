@@ -8,9 +8,6 @@
  * so the listed variables are shared across CHAINed programs in a
  * multi-program application.
  *
- * (The older spelling -- no `suite` header, just `common count%, label$`,
- * with the suite name taken from the filename alone -- still works too.)
- *
  * This suite shares a counter and a label between two programs:
  *   start.bcl  — initialises and increments the counter
  *   show.bcl   — reports the final value

@@ -1,9 +1,9 @@
-library stats
 // stats.bcl — basic statistics library for the BASCAL tutorial.
 // Loaded by tutorial/12_require.bcl via:
 //   require stats
 //
 // Provides: mean!, maximum%, minimum%, rangeOf%
+library stats
 
 // data% -- array to average; byval, since mean! only reads it
 function mean!(data%(?))

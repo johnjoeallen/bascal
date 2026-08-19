@@ -64,8 +64,7 @@ file db as Student = open(&quot;students.dat&quot;)</code></pre>
   <div class="source-embed">
     <details>
       <summary><code>tutorial/15_random_and_record_files.bcl</code></summary>
-      <pre><code>program randomAndRecordFiles
-// Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
+      <pre><code>// Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
 //
 // This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
 // random-access file primitives directly. Part 2 uses BASCAL's `record`/
@@ -106,6 +105,7 @@ file db as Student = open(&quot;students.dat&quot;)</code></pre>
 // at all. There's also no RTRIM$ builtin on real MBASIC/BASCOM -- trimming a
 // fixed-width, space-padded FIELD buffer back down to its real length needs
 // a hand-rolled loop, like trimmed$ below.
+program randomAndRecordFiles
 
 // trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 function trimmed$(s$)

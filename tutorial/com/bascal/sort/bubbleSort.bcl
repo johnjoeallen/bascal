@@ -1,9 +1,10 @@
-library bubbleSort
 /* In-place bubble sort. */
 /* data% is a byref array parameter, so bcc copies the sorted result back */
 /* into the caller's array; byval (the default) would sort a private copy */
 /* and discard it. */
 // data% -- array to sort, mutated in place
+library bubbleSort
+
 function bubbleSort%(byref data%(?))
     count% = sizeof(data%)
     /* After each outer pass, the largest remaining value has bubbled right. */

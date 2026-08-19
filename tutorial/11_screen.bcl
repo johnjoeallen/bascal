@@ -1,4 +1,3 @@
-program screen
 // Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
 //
 // These statements control the terminal display and connected hardware.
@@ -15,6 +14,7 @@ program screen
 //
 // stop   — halt execution (may invoke debugger)
 // system — exit to the operating system immediately
+program screen
 
 /* Clear screen and draw a simple title banner */
 cls

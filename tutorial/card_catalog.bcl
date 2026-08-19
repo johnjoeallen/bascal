@@ -1,4 +1,3 @@
-program cardCatalog
 // Card Catalog — a flagship example for the record/file DSL + procedures
 //
 // Adapted from CLERK.BAS, a menu-driven card-catalog manager written by
@@ -31,6 +30,7 @@ program cardCatalog
 //     (LPRINT) output. This example keeps one catalog file and the two
 //     named searches, and drops the rest, to stay focused on what the
 //     record/file DSL and procedures are actually demonstrating here.
+program cardCatalog
 
 record Entry
     author:  string(20)

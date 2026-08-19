@@ -1,5 +1,5 @@
-library strings
 /* Shared string helpers for REMLINE. */
+library strings
 
 // UCASE$ isn't a real MBASIC/BASCOM 2.00 builtin (verified against a real
 // IBM BASIC Compiler 2.00 under dosbox-x), so upper$() below needs BASCAL's

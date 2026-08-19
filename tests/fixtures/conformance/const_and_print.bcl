@@ -1,6 +1,6 @@
-program constAndPrint
 // Conformance fixture: CONST lowering, arithmetic, and string/number PRINT
 // concatenation -- exercises the CONST-is-not-real-BASCOM fix directly.
+program constAndPrint
 
 const maxScore% = 100
 const taxRate!  = 0.2

@@ -1,10 +1,10 @@
-program midAssign
 // MID$ statement-form assignment: edge cases exercising real QuickBASIC/
 // MBASIC in-place-splice semantics. Same fixture as
 // tests/fixtures/mid_assign_edge_cases.bcl (run under FreeBASIC by
 // tests::freebasic_runs_mid_assign_edge_cases_when_available in
 // tests/examples.rs); this copy also runs under real BASCOM 2.00 via
 // mid_assign_matches_real_bascom in tests/dosbox_conformance.rs.
+program midAssign
 
 a$ = "0123456789"
 mid$(a$, 3, 4) = "XY"

@@ -60,8 +60,7 @@ print 6 xor 3; &quot; (expect 5 -- 110 XOR 011 = 101)&quot;</code></pre>
   <div class="source-embed">
     <details>
       <summary><code>tutorial/03_arithmetic.bcl</code></summary>
-      <pre><code>program arithmetic
-// Tutorial 3 — Operators and Expressions
+      <pre><code>// Tutorial 3 — Operators and Expressions
 //
 // Arithmetic:   +  -  *  /  \  MOD  ^
 // Comparison:   =  &lt;&gt;  &lt;  &lt;=  &gt;  &gt;=   (result: -1 true, 0 false)
@@ -83,6 +82,7 @@ print 6 xor 3; &quot; (expect 5 -- 110 XOR 011 = 101)&quot;</code></pre>
 //
 // IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
 // Test for false with (expr) = 0, not NOT expr.
+program arithmetic
 
 /* Arithmetic — mix labels and numbers with ; */
 a% = 17

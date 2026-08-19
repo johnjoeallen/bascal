@@ -1,4 +1,3 @@
-program files
 // Tutorial 10 — File Input and Output
 //
 // BASCAL supports sequential file I/O through open, close, and the
@@ -15,6 +14,7 @@ program files
 // line input #n, var$     — read one complete line into var$
 // input #n, var[, ...]    — read comma-delimited values (matches write)
 // eof(n)                  — returns non-zero when file n is exhausted
+program files
 
 csvFile$ = "tutorial_scores.csv"
 

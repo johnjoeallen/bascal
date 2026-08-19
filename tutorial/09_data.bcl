@@ -1,4 +1,3 @@
-program data
 // Tutorial 9 — data, read, restore, swap, randomize
 //
 // data embeds literal values directly in the program.  read consumes
@@ -10,6 +9,7 @@ program data
 //
 // randomize seeds the BASIC RND function.  Pass timer for a
 // time-based seed; pass a literal for reproducible results.
+program data
 
 const numCapitals% = 5
 

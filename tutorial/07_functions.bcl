@@ -1,4 +1,3 @@
-program functions
 // Tutorial 7 — Functions
 //
 // A BASCAL function is declared with FUNCTION ... END FUNCTION.
@@ -12,6 +11,7 @@ program functions
 // Functions cannot recurse, directly or indirectly (parameters would be
 // overwritten) -- the compiler checks the whole call graph and rejects
 // any cycle.  Use an explicit stack array for recursive algorithms.
+program functions
 
 require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase

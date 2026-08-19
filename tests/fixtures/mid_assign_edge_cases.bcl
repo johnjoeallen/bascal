@@ -1,8 +1,8 @@
-program midAssignEdgeCases
 // MID$ statement-form assignment: edge cases exercising real QuickBASIC/
 // MBASIC in-place-splice semantics -- see tests::mid_assign_edge_cases in
 // tests/examples.rs, which runs this under FreeBASIC and checks the exact
 // printed output.
+program midAssignEdgeCases
 
 a$ = "0123456789"
 mid$(a$, 3, 4) = "XY"

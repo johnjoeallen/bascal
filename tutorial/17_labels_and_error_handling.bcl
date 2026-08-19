@@ -1,4 +1,3 @@
-program labelsAndErrorHandling
 // Tutorial 17 — Labels and Error Handling
 //
 // BASCAL manages line numbers itself -- goto, gosub, on error goto, resume,
@@ -10,6 +9,7 @@ program labelsAndErrorHandling
 //
 // on error goto 0 is the one numeric exception -- 0 isn't a line number,
 // it's the sentinel that disables the error trap.
+program labelsAndErrorHandling
 
 /* ---- goto / label basics ---- */
 

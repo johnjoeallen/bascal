@@ -1,4 +1,3 @@
-program requireDemo
 // Tutorial 12 — REQUIRE and multi-file projects
 //
 // REQUIRE loads another .bcl file and merges its functions into the
@@ -16,6 +15,7 @@ program requireDemo
 //
 // The -L flag adds tutorial/lib/ to the search path so that
 //   require stats   resolves to  tutorial/lib/stats.bcl
+program requireDemo
 
 require stats
 

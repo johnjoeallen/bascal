@@ -1,4 +1,3 @@
-program shortCircuit
 // Tutorial 16 — Short-Circuit && and ||
 //
 // Classic BASIC's AND/OR are bitwise and always evaluate both sides -- there
@@ -16,6 +15,7 @@ program shortCircuit
 // passed as a function argument). A condition may chain any number of the
 // *same* operator; mixing && and || in one condition is a compile-time
 // error -- split into nested if statements instead.
+program shortCircuit
 
 /* ---- Guard clause: only check an array element when the index is valid ---- */
 

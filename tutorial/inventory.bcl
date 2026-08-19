@@ -1,4 +1,3 @@
-program inventory
 // ============================================================
 // INVENTORY.BCL -- Random-Access Inventory Program
 //
@@ -45,6 +44,7 @@ program inventory
 // /X switches (error trapping isn't linked in by default). See
 // `errorTrap()` at the bottom.
 // ============================================================
+program inventory
 
 require com.bascal.stdlib.error
 

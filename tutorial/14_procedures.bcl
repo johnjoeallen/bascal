@@ -1,4 +1,3 @@
-program procedures
 // Tutorial 14 — Procedures
 //
 // A procedure is like a function but returns no value.  Declare it with
@@ -13,6 +12,7 @@ program procedures
 //
 // A bare RETURN exits a procedure early.  Falling through to END PROCEDURE
 // is also valid — an implicit RETURN is emitted.
+program procedures
 
 /* Procedure with no parameters */
 procedure printSeparator()

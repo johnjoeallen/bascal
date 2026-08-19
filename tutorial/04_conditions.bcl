@@ -1,4 +1,3 @@
-program conditions
 // Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
 //
 // BASCAL supports multi-line block IF statements.  The compiler transpiles
@@ -16,6 +15,7 @@ program conditions
 // directly after `then` on the same line selects the single-line form
 // instead -- that's the only difference. elseif isn't available
 // single-line, same as classic BASIC.
+program conditions
 
 /* Simple IF */
 temperature% = 23

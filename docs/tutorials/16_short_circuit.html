@@ -65,8 +65,7 @@ end do</code></pre>
   <div class="source-embed">
     <details>
       <summary><code>tutorial/16_short_circuit.bcl</code></summary>
-      <pre><code>program shortCircuit
-// Tutorial 16 — Short-Circuit &amp;&amp; and ||
+      <pre><code>// Tutorial 16 — Short-Circuit &amp;&amp; and ||
 //
 // Classic BASIC's AND/OR are bitwise and always evaluate both sides -- there
 // is no short-circuit primitive in the generated BASIC at all. &amp;&amp; and ||
@@ -83,6 +82,7 @@ end do</code></pre>
 // passed as a function argument). A condition may chain any number of the
 // *same* operator; mixing &amp;&amp; and || in one condition is a compile-time
 // error -- split into nested if statements instead.
+program shortCircuit
 
 /* ---- Guard clause: only check an array element when the index is valid ---- */
 

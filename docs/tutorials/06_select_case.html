@@ -60,8 +60,7 @@ end select</code></pre>
   <div class="source-embed">
     <details>
       <summary><code>tutorial/06_select_case.bcl</code></summary>
-      <pre><code>program selectCase
-// Tutorial 6 — SELECT CASE
+      <pre><code>// Tutorial 6 — SELECT CASE
 //
 // SELECT CASE tests one expression against multiple patterns.  The
 // compiler evaluates the expression once, stores it in a temporary
@@ -73,6 +72,7 @@ end select</code></pre>
 //   case low to high         — inclusive range
 //   case is &lt;op&gt; value       — comparison (=  &lt;&gt;  &lt;  &lt;=  &gt;  &gt;=)
 //   case else                — default; must be the last clause
+program selectCase
 
 /* Integer select: convert numeric score to letter grade */
 score% = 85

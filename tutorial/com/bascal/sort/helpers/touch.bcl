@@ -1,6 +1,7 @@
-library touch
 /* Tiny helper used to prove recursive require resolution. */
 // value% -- number passed through unchanged
+library touch
+
 function touch%(value%)
     /* Return the value unchanged. */
     return value%

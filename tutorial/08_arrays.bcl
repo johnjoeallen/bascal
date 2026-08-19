@@ -1,4 +1,3 @@
-program arrays
 // Tutorial 8 — Arrays
 //
 // dim name%(size) declares a 1-D array of size+1 elements, indexed 0..size.
@@ -16,6 +15,7 @@ program arrays
 // copy, and changes never reach the caller.  Write byref to copy the
 // result back out after the call -- insertionSort% below needs it, since
 // its whole job is to mutate the caller's array in place.
+program arrays
 
 /* Declare and populate */
 const N% = 6

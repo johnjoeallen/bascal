@@ -186,10 +186,10 @@ Identifies the file as a library module — the only kind of file `require`/
 `import` may load. From `com/bascal/stdlib/ucase.bcl`:
 
 ```
-library ucase
-
 // Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+library ucase
+
 function ucase$(s$)
     ...
 ```

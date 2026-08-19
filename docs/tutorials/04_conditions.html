@@ -68,8 +68,7 @@ if temperature% &gt; 100 then print &quot;Scorching&quot; else print &quot;Not s
   <div class="source-embed">
     <details>
       <summary><code>tutorial/04_conditions.bcl</code></summary>
-      <pre><code>program conditions
-// Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
+      <pre><code>// Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
 //
 // BASCAL supports multi-line block IF statements.  The compiler transpiles
 // them to numeric goto targets so the generated BASIC is compatible with
@@ -86,6 +85,7 @@ if temperature% &gt; 100 then print &quot;Scorching&quot; else print &quot;Not s
 // directly after `then` on the same line selects the single-line form
 // instead -- that's the only difference. elseif isn't available
 // single-line, same as classic BASIC.
+program conditions
 
 /* Simple IF */
 temperature% = 23
