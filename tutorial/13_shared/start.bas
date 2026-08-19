@@ -10,7 +10,7 @@
 90 ' block, so the variables survive a CHAIN to the next program.
 100 ' 
 110 ' Compile:
-120 ' bcc tutorial/13_suite/start.bcl
+120 ' bcc tutorial/13_shared/start.bcl
 130 ' 
 140 ' The generated .bas will open with COMMON count%, label$ followed by
 150 ' the program body below.

@@ -65,7 +65,7 @@ count% = count% + 1
   <!-- BEGIN generated source embed (scripts/embed-tutorial-sources.py) -->
   <div class="source-embed">
     <details>
-      <summary><code>tutorial/13_suite/state.bcl</code></summary>
+      <summary><code>tutorial/13_shared/state.bcl</code></summary>
       <pre><code>/*
  * Shared file for Tutorial 13 — COMMON / CHAIN.
  *
@@ -88,7 +88,7 @@ dim label$
 </code></pre>
     </details>
     <details>
-      <summary><code>tutorial/13_suite/start.bcl</code></summary>
+      <summary><code>tutorial/13_shared/start.bcl</code></summary>
       <pre><code>// Tutorial 13 — Shared COMMON, program 1 of 2
 //
 // "program name shared sharedname" tells bcc to load sharedname.bcl and
@@ -97,7 +97,7 @@ dim label$
 // block, so the variables survive a CHAIN to the next program.
 //
 // Compile:
-//   bcc tutorial/13_suite/start.bcl
+//   bcc tutorial/13_shared/start.bcl
 //
 // The generated .bas will open with COMMON count%, label$ followed by
 // the program body below.
@@ -120,7 +120,7 @@ end
 </code></pre>
     </details>
     <details>
-      <summary><code>tutorial/13_suite/show.bcl</code></summary>
+      <summary><code>tutorial/13_shared/show.bcl</code></summary>
       <pre><code>// Tutorial 13 — Shared COMMON, program 2 of 2
 //
 // This program references the same shared file as start.bcl.  Its
@@ -129,7 +129,7 @@ end
 // here.
 //
 // Compile:
-//   bcc tutorial/13_suite/show.bcl
+//   bcc tutorial/13_shared/show.bcl
 
 program show shared state
 
@@ -145,7 +145,7 @@ end if
 end
 </code></pre>
     </details>
-    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/state.bcl">tutorial/13_suite/state.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/start.bcl">tutorial/13_suite/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_suite/show.bcl">tutorial/13_suite/show.bcl</a>.</p>
+    <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_shared/state.bcl">tutorial/13_shared/state.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_shared/start.bcl">tutorial/13_shared/start.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/13_shared/show.bcl">tutorial/13_shared/show.bcl</a>.</p>
   </div>
 <!-- END generated source embed -->
 

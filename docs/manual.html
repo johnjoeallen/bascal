@@ -1597,7 +1597,7 @@ require stats                       →  stats.bcl</code></pre>
 <h3 id="shared-file">Shared File</h3>
 <p>A shared file is a <code>.bcl</code> file containing only <code>dim</code> declarations (see <a href="#dim-declaration">DIM Declaration</a> below), plus blank lines and comments.</p>
 <p>It starts with a mandatory <code>shared &lt;name&gt;</code> header, analogous to a regular file's <code>program &lt;name&gt;</code> header, and declares its shared variables with ordinary <code>dim</code>:</p>
-<p>From <code>tutorial/13_suite/state.bcl</code>:</p>
+<p>From <code>tutorial/13_shared/state.bcl</code>:</p>
 <pre><code>/*
  * Shared file for Tutorial 13 — COMMON / CHAIN.
  *
@@ -1621,7 +1621,7 @@ dim scores%()</code></pre>
 <pre><code>program start shared state</code></pre>
 <p>When a shared-file name is present, the transpiler: 1. Searches for <code>state.bcl</code> in the source file's directory (then <code>-L</code> paths). 2. Validates that the shared file contains only <code>dim</code> declarations. 3. Emits the <code>COMMON</code> lines at the very top of the generated <code>.bas</code> file, before any other output.</p>
 <h3 id="using-a-shared-file">Using a Shared File</h3>
-<p>From <code>tutorial/13_suite/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
+<p>From <code>tutorial/13_shared/</code> — two programs that share <code>count%</code> and <code>label$</code>:</p>
 <p><strong><code>state.bcl</code></strong> (shared file):</p>
 <pre><code>shared state
 

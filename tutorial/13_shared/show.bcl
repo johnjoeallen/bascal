@@ -6,7 +6,7 @@
 // here.
 //
 // Compile:
-//   bcc tutorial/13_suite/show.bcl
+//   bcc tutorial/13_shared/show.bcl
 
 program show shared state
 

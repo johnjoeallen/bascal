@@ -2586,7 +2586,7 @@ It starts with a mandatory `shared <name>` header, analogous to a regular
 file's `program <name>` header, and declares its shared variables with
 ordinary `dim`:
 
-From `tutorial/13_suite/state.bcl`:
+From `tutorial/13_shared/state.bcl`:
 
 ```
 /*
@@ -2643,7 +2643,7 @@ When a shared-file name is present, the transpiler:
 
 ### Using a Shared File
 
-From `tutorial/13_suite/` — two programs that share `count%` and `label$`:
+From `tutorial/13_shared/` — two programs that share `count%` and `label$`:
 
 **`state.bcl`** (shared file):
 ```

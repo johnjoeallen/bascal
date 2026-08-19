@@ -6,7 +6,7 @@
 // block, so the variables survive a CHAIN to the next program.
 //
 // Compile:
-//   bcc tutorial/13_suite/start.bcl
+//   bcc tutorial/13_shared/start.bcl
 //
 // The generated .bas will open with COMMON count%, label$ followed by
 // the program body below.
