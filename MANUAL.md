@@ -60,6 +60,15 @@ plain Microsoft BASIC. The structured constructs are transpiled as follows:
 functions become `GOSUB` subroutines, loops become `GOTO`-based constructs,
 and `if` chains become `IF ... THEN GOTO` sequences.
 
+That's the `basic` target -- the complete one, and what the rest of this
+manual describes throughout. BASCAL also has a second, **experimental**
+target: `--target c`, a native-C backend aiming to eventually produce
+native Linux/macOS/Win32 binaries directly, without going through a BASIC
+compiler at all. It's still narrow (no arrays, functions, or `select
+case` yet) -- see the [Backends](#backends) section of the
+[Command-Line Reference](#command-line-reference) for exactly what it
+supports today.
+
 **BASCAL is a strict superset of classic BASIC.** Raw statements from the
 target dialect — `OPEN`/`FIELD`/`GET`/`PUT` for random-access files, bitwise
 `AND`/`OR`/`NOT` — still pass through unchanged. `GOTO`/`GOSUB`/`ON ERROR GOTO`/

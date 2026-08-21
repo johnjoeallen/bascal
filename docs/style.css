@@ -257,17 +257,11 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 .pane.old .tag { background: color-mix(in srgb, var(--old-tag) 18%, transparent); color: var(--old-tag); }
 .pane.new .tag { background: color-mix(in srgb, var(--new-tag) 18%, transparent); color: var(--new-tag); }
 
-/* per-tutorial "also compiles under --target c" pill, docs/tutorials/index.html */
-.features.linked .target-tag {
-  float: right;
-  font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  padding: .15rem .5rem;
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--accent-2) 18%, transparent);
-  color: var(--accent-2);
+/* per-tutorial backend list, e.g. "(Basic, C)", docs/tutorials/index.html */
+.features.linked .targets {
+  font-size: .82rem;
+  font-weight: 400;
+  color: var(--fg-dim);
 }
 
 /* single-pane snippet card, used on tutorial pages */
