@@ -9,15 +9,18 @@
 //! *scalar* variables (numeric: `%`/`&`/`!`/`#`; string: `$`, fixed-size
 //! `char[256]` buffers written only via `snprintf`, never `strcpy`/
 //! `strcat` -- see `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string
-//! concatenation, and `if`/`elseif`/`else`/`end if` (including the
-//! single-line form, and nesting), wrapped in `int main(void) { ... }`.
-//! Everything else (functions, other statement kinds, arrays, loops,
-//! calls) reports a "not supported yet" diagnostic rather than panicking
-//! or emitting wrong code -- this is a walking skeleton to prove the
+//! concatenation, `if`/`elseif`/`else`/`end if` (including the
+//! single-line form, and nesting), `for`/`next`, `while`/`wend`, every
+//! `do`/`loop` pre-/post-check variant, and `exit` (maps to a plain C
+//! `break;` -- C's native loops already give it the right "innermost
+//! enclosing loop" target for free), wrapped in `int main(void) { ... }`.
+//! Everything else (functions, other statement kinds, arrays, calls)
+//! reports a "not supported yet" diagnostic rather than panicking or
+//! emitting wrong code -- this is a walking skeleton to prove the
 //! CLI/dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`)
-//! end-to-end, not a real backend. Three tutorials compile end to end
-//! today: `tutorial/01_hello.bcl`, `tutorial/03_arithmetic.bcl`, and
-//! `tutorial/04_conditions.bcl`.
+//! end-to-end, not a real backend. Tutorials that compile end to end
+//! today: `tutorial/01_hello.bcl`, `tutorial/03_arithmetic.bcl`,
+//! `tutorial/04_conditions.bcl`, and `tutorial/05_loops.bcl`.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -33,7 +36,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ast::{BasicIdent, BinaryOp, Expr, PrintToken, Program, Statement, TypeSuffix, UnaryOp};
+use crate::ast::{
+    BasicIdent, BinaryOp, DoCondition, Expr, PrintToken, Program, Statement, TypeSuffix, UnaryOp,
+};
 use crate::diagnostics::{Diagnostic, SourcePos};
 
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
@@ -163,6 +168,34 @@ fn collect_vars_in_statement(
                 collect_vars_in_statement(stmt, numeric_out, string_out);
             }
         }
+        Statement::For { var, start, end, step, body } => {
+            register_var(var, numeric_out, string_out);
+            collect_vars_in_expr(start, numeric_out, string_out);
+            collect_vars_in_expr(end, numeric_out, string_out);
+            if let Some(step) = step {
+                collect_vars_in_expr(step, numeric_out, string_out);
+            }
+            for stmt in body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+        }
+        Statement::While { condition, body } => {
+            collect_vars_in_expr(condition, numeric_out, string_out);
+            for stmt in body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+        }
+        Statement::Do { condition, body, post_condition } => {
+            if let Some(cond) = condition {
+                collect_vars_in_expr(&cond.expr, numeric_out, string_out);
+            }
+            for stmt in body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+            if let Some(cond) = post_condition {
+                collect_vars_in_expr(&cond.expr, numeric_out, string_out);
+            }
+        }
         _ => {}
     }
 }
@@ -282,6 +315,106 @@ fn emit_statement(
             }
             Ok(())
         }
+        // BASIC evaluates a FOR loop's end/step expressions exactly once,
+        // at loop entry -- not on every iteration, unlike a naive C `for`
+        // whose condition re-reads whatever's in the expression each time.
+        // If `end`/`step` refer to a variable the body mutates, that
+        // matters: BASIC's bound stays fixed, so it's captured into its
+        // own temp once, same as `render_string_expr`'s temps. The
+        // increment direction (`<=` vs `>=`) is a runtime check on the
+        // step's sign (`bt_step_n >= 0 ? ... : ...`), not assumed from the
+        // step expression's syntactic shape, since a computed/variable
+        // step's sign isn't known until runtime either.
+        Statement::For { var, start, end, step, body } => {
+            let Some(suffix) = var.suffix else {
+                return Err(format!(
+                    "`for {var}` isn't supported by the minimal C backend yet -- give the loop \
+                     variable an explicit type suffix"
+                ));
+            };
+            let Some((c_type, target_is_float)) = numeric_c_type(suffix) else {
+                return Err(format!(
+                    "`for {var}` isn't supported by the minimal C backend yet -- the loop \
+                     variable must be numeric (%, &, !, #)"
+                ));
+            };
+            let loop_var = c_var_name(var, suffix);
+            let (start_text, start_is_float) = render_numeric_expr(start, needs_math)?;
+            let start_text = coerce_numeric(start_text, start_is_float, target_is_float, needs_math);
+            let (end_text, end_is_float) = render_numeric_expr(end, needs_math)?;
+            let end_text = coerce_numeric(end_text, end_is_float, target_is_float, needs_math);
+            let step_text = match step {
+                Some(step_expr) => {
+                    let (text, is_float) = render_numeric_expr(step_expr, needs_math)?;
+                    coerce_numeric(text, is_float, target_is_float, needs_math)
+                }
+                None => "1".to_string(),
+            };
+            let limit = format!("bt_lim_{temp_counter}");
+            let step_var = format!("bt_step_{temp_counter}");
+            *temp_counter += 1;
+            out.push_str(&format!("    {c_type} {limit} = {end_text};\n"));
+            out.push_str(&format!("    {c_type} {step_var} = {step_text};\n"));
+            out.push_str(&format!(
+                "    for ({loop_var} = {start_text}; {step_var} >= 0 ? {loop_var} <= {limit} : \
+                 {loop_var} >= {limit}; {loop_var} += {step_var}) {{\n"
+            ));
+            for stmt in body {
+                emit_statement(stmt, out, needs_math, temp_counter)?;
+            }
+            out.push_str("    }\n");
+            Ok(())
+        }
+        // Direct translation -- BASIC's WHILE/WEND is already exactly C's
+        // `while`: pre-checked, continues while the condition is truthy
+        // (nonzero), same "0 is false, anything else is true" rule C
+        // already uses natively, no BASIC-specific semantics to bridge.
+        Statement::While { condition, body } => {
+            let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
+            out.push_str(&format!("    while ({cond_text}) {{\n"));
+            for stmt in body {
+                emit_statement(stmt, out, needs_math, temp_counter)?;
+            }
+            out.push_str("    }\n");
+            Ok(())
+        }
+        // Every `do` variant (pre-check `do while`/`do until`, post-check
+        // `do ... loop while`/`loop until`, and a bare `do ... end do`
+        // relying only on `exit`) is expressed uniformly as `while (1) { \
+        // ...guards...; body; ...guards... }` rather than mapped
+        // individually onto C's native `while`/`do-while` -- one shape
+        // that's already correct for every case (including a
+        // hypothetical pre-and-post-condition combination, if the parser
+        // ever produced one) beats juggling several native-but-narrower
+        // translations. A guard is `if (!(cond)) break;` for `while cond`
+        // (exit when no longer true) or `if (cond) break;` for `until
+        // cond` (exit once true) -- see `emit_do_guard`.
+        Statement::Do { condition, body, post_condition } => {
+            out.push_str("    while (1) {\n");
+            if let Some(cond) = condition {
+                out.push_str(&emit_do_guard(cond, needs_math)?);
+            }
+            for stmt in body {
+                emit_statement(stmt, out, needs_math, temp_counter)?;
+            }
+            if let Some(cond) = post_condition {
+                out.push_str(&emit_do_guard(cond, needs_math)?);
+            }
+            out.push_str("    }\n");
+            Ok(())
+        }
+        // `exit` is unqualified in BASCAL source (no "exit for"/"exit
+        // while"/"exit do") -- the transpiler already knows which loop
+        // it's in from context. The BASIC backend needs a loop_exit_stack
+        // to track that (real MBASIC/BASCOM's own GOTO-chain-based loops
+        // have no native "break"), but every C loop above is a real
+        // native for/while loop, so plain `break;` already targets the
+        // correct (innermost enclosing) one automatically -- no stack
+        // needed here.
+        Statement::Exit => {
+            out.push_str("    break;\n");
+            Ok(())
+        }
         Statement::BlankLine => {
             out.push('\n');
             Ok(())
@@ -304,9 +437,35 @@ fn emit_statement(
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, and assignment/`const` of scalar variables (%, &, !, #, $) are \
-             implemented so far"
+             `dim`, `if`, `for`, `while`, `do`, `exit`, and assignment/`const` of scalar \
+             variables (%, &, !, #, $) are implemented so far"
         )),
+    }
+}
+
+/// Coerces a numeric value into a target of known float-ness, for any
+/// narrowing (float/double source -> int target) assignment -- a bare `x%
+/// = y / 2` (or a FOR loop's `i% = start`/limit/step, which needs the same
+/// treatment). Real MBASIC/BASCOM **rounds** on this conversion, the same
+/// as `CINT()`, confirmed directly against real BASCOM under dosbox-x:
+/// `N% = 27 / 2` gives `N% = 14` (27/2 = 13.5, rounded up), not `13`
+/// (C's own implicit double-to-int conversion truncates toward zero,
+/// which would silently produce a different, wrong value here -- this
+/// was caught by `for`/`while` loops actually exercising the case, e.g.
+/// `n% = n% / 2` in a Collatz-sequence loop). Widening (int -> float/
+/// double) needs no coercion: C converts an in-range integer to float/
+/// double exactly, no rounding decision involved.
+fn coerce_numeric(
+    value_text: String,
+    value_is_float: bool,
+    target_is_float: bool,
+    needs_math: &mut bool,
+) -> String {
+    if !target_is_float && value_is_float {
+        *needs_math = true;
+        format!("((int)round((double)({value_text})))")
+    } else {
+        value_text
     }
 }
 
@@ -324,8 +483,10 @@ fn emit_assignment(
 ) -> Result<(), String> {
     match name.suffix {
         Some(suffix) if numeric_c_type(suffix).is_some() => {
-            let (value_text, _) = render_numeric_expr(value, needs_math)?;
-            out.push_str(&format!("    {} = {value_text};\n", c_var_name(name, suffix)));
+            let (_, target_is_float) = numeric_c_type(suffix).unwrap();
+            let (value_text, value_is_float) = render_numeric_expr(value, needs_math)?;
+            let coerced = coerce_numeric(value_text, value_is_float, target_is_float, needs_math);
+            out.push_str(&format!("    {} = {coerced};\n", c_var_name(name, suffix)));
             Ok(())
         }
         Some(TypeSuffix::String) => {
@@ -344,6 +505,20 @@ fn emit_assignment(
              explicit type suffix (%, &, !, #, $)"
         )),
     }
+}
+
+/// One `do`/`loop` guard line -- `if (!(cond)) break;` for a `while`
+/// condition (exit once no longer true) or `if (cond) break;` for an
+/// `until` condition (exit once true) -- shared by `Statement::Do`'s
+/// pre-check and post-check cases (see its own comment for why both map
+/// onto the same `while (1) { ...guards...; body; ...guards... }` shape).
+fn emit_do_guard(cond: &DoCondition, needs_math: &mut bool) -> Result<String, String> {
+    let (cond_text, _) = render_numeric_expr(&cond.expr, needs_math)?;
+    Ok(if cond.is_while {
+        format!("    if (!({cond_text})) break;\n")
+    } else {
+        format!("    if ({cond_text}) break;\n")
+    })
 }
 
 /// Whether `expr` is a string-typed expression -- a string literal, a

@@ -3599,7 +3599,11 @@ resume next
         // manually against each tutorial's own documented `// expect ...`
         // comments and matched exactly.
         let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
-        for tutorial in ["tutorial/03_arithmetic.bcl", "tutorial/04_conditions.bcl"] {
+        for tutorial in [
+            "tutorial/03_arithmetic.bcl",
+            "tutorial/04_conditions.bcl",
+            "tutorial/05_loops.bcl",
+        ] {
             let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(tutorial);
             compile_file(&input, &options)
                 .unwrap_or_else(|d| panic!("{tutorial} should compile to C: {d:?}"));
@@ -4042,6 +4046,97 @@ end
             ),
             "unexpected output:\n{output}"
         );
+    }
+
+    #[test]
+    fn c_target_supports_for_while_do_and_exit() {
+        // C has native for/while/do-while and `break`, so all four map
+        // directly -- exit becomes plain `break;` and relies on C's own
+        // "innermost enclosing loop" rule, no manual tracking needed
+        // (unlike the BASIC backend's loop_exit_stack, needed because real
+        // MBASIC/BASCOM's loops are GOTO chains with no native break).
+        let source = r#"for i% = 1 to 5
+    print i%
+end for
+
+j% = 0
+while j% < 3
+    print j%
+    j% = j% + 1
+wend
+
+k% = 0
+do while k% < 3
+    print k%
+    k% = k% + 1
+end do
+
+do
+    if k% = 5 then
+        exit
+    end if
+    k% = k% + 1
+end do
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(
+                "for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; \
+                 bv_i_i += bt_step_0) {"
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("while ((-(bv_i_j < 3))) {"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("while (1) {\n    if (!((-(bv_i_k < 3)))) break;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("    break;\n"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_for_loop_evaluates_bounds_once_not_per_iteration() {
+        // BASIC's FOR captures start/end/step at loop entry -- if the body
+        // mutates the variable the bound expression reads, the bound must
+        // NOT change mid-loop the way a naive re-evaluated C condition
+        // would. limit%/step_var are captured into their own temps once,
+        // used in every iteration's condition instead of re-reading limit%.
+        let source = "limit% = 3\nfor i% = 1 to limit%\n    print i%\n    limit% = 100\nend for\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("int bt_lim_0 = bv_i_limit;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bv_i_i <= bt_lim_0"),
+            "loop condition must use the captured temp, not bv_i_limit directly:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_assignment_rounds_narrowing_conversions_like_real_bascom() {
+        // Confirmed directly against real IBM Personal Computer BASIC
+        // Compiler 2.00 under dosbox-x: `N% = 27 / 2` gives `N% = 14`
+        // (27/2 = 13.5, rounded), not 13 -- C's own implicit double-to-int
+        // assignment conversion truncates toward zero instead, which would
+        // silently produce a different, wrong value. Surfaced by a
+        // Collatz-sequence loop (`n% = n% / 2`) actually exercising a
+        // narrowing assignment for the first time.
+        let source = "n% = 27\nn% = n% / 2\nprint n%\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bv_i_n = ((int)round((double)(((double)bv_i_n / (double)2))));"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_assignment_does_not_round_widening_conversions() {
+        // int -> float/double needs no rounding decision -- C converts an
+        // in-range integer to float/double exactly. round() must not
+        // appear here.
+        let source = "x! = 5\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("bv_f_x = 5;"), "unexpected output:\n{output}");
+        assert!(!output.contains("round("), "widening assignment should not round:\n{output}");
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a

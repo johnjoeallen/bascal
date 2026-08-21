@@ -2934,28 +2934,44 @@ describes: plain 1980s Microsoft BASIC/BASCOM output.
 produce native Linux/macOS/Win32 binaries directly (via `gcc`) without
 going through a BASIC compiler at all — while the BASCOM-compatible
 `basic` target keeps gating what language features BASCAL adds, so both
-backends stay able to express the same language. Three tutorials compile
+backends stay able to express the same language. Four tutorials compile
 end to end today: [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl),
-[`tutorial/03_arithmetic.bcl`](tutorial/03_arithmetic.bcl), and
-[`tutorial/04_conditions.bcl`](tutorial/04_conditions.bcl) — see each
-one's `.c` counterpart for its output.
+[`tutorial/03_arithmetic.bcl`](tutorial/03_arithmetic.bcl),
+[`tutorial/04_conditions.bcl`](tutorial/04_conditions.bcl), and
+[`tutorial/05_loops.bcl`](tutorial/05_loops.bcl) — see each one's `.c`
+counterpart for its output.
 
 Currently supported: `print`, `end`, `dim`, `const`, `if`/`elseif`/
 `else`/`end if` (block, single-line, and nested — C has native
 `if`/`else`, so this is a direct structural translation, unlike the
 `basic` target, which has to transpile to a GOTO/label chain since real
-MBASIC/BASCOM has no block `IF`), scalar variables — both numeric
-(`%`/`&`/`!`/`#`) and string (`$`) — matching BASIC's spring-into-
-existence-zero-initialized semantics (every variable touched anywhere is
-declared once at the top of `main`), every arithmetic operator
-(`+ - * / \ MOD ^`), every comparison operator (`= <> < <= > >=`,
-evaluating to BASIC's own `-1`/`0`, not C's `1`/`0`), every bitwise/
-logical operator (`AND OR XOR NOT` — genuinely bitwise, not
-short-circuit booleans: C's `&`/`|`/`^`/`~` are correct here, not
-`&&`/`||`/`!`, since real MBASIC/BASCOM has no short-circuit boolean
-primitive at all), and string concatenation (`+`). Anything else
-(arrays, loops, functions, calls...) reports a "not supported yet"
-diagnostic instead of emitting incorrect code.
+MBASIC/BASCOM has no block `IF`), `for`/`next`, `while`/`wend`, every
+`do`/`loop` pre-/post-check variant, and `exit` (a plain C `break;` --
+C's native loops already give it the right "innermost enclosing loop"
+target for free, unlike the BASIC backend, which needs its own
+loop_exit_stack since real MBASIC/BASCOM's loops are GOTO chains with no
+native break), scalar variables — both numeric (`%`/`&`/`!`/`#`) and
+string (`$`) — matching BASIC's spring-into-existence-zero-initialized
+semantics (every variable touched anywhere is declared once at the top
+of `main`), every arithmetic operator (`+ - * / \ MOD ^`), every
+comparison operator (`= <> < <= > >=`, evaluating to BASIC's own
+`-1`/`0`, not C's `1`/`0`), every bitwise/logical operator (`AND OR XOR
+NOT` — genuinely bitwise, not short-circuit booleans: C's `&`/`|`/`^`/`~`
+are correct here, not `&&`/`||`/`!`, since real MBASIC/BASCOM has no
+short-circuit boolean primitive at all), and string concatenation (`+`).
+Anything else (arrays, functions, calls...) reports a "not supported
+yet" diagnostic instead of emitting incorrect code.
+
+A narrowing numeric assignment (a float/double-valued expression
+assigned into an integer-suffixed variable, e.g. `n% = n% / 2`) rounds,
+matching real MBASIC/BASCOM's own `CINT()`-style conversion (confirmed
+directly against real BASCOM: `N% = 27 / 2` gives `14`, not `13`) -- not
+C's own implicit truncating conversion, which would silently give a
+different, wrong answer. A `for` loop's start/end/step are each
+captured into their own temp exactly once, at loop entry, matching
+BASIC's own "evaluated once, not re-read every iteration" semantics -- a
+naive C `for` whose condition directly re-reads a variable the body
+mutates would behave differently.
 
 Every operator needed its exact BASIC semantics tracked down first, not
 assumed to be "the same as the C operator": `/` gets explicit `(double)`
