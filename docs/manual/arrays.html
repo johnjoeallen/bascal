@@ -30,6 +30,10 @@
 
 <main class="wrap" id="arrays">
   <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Arrays</p>
+  <nav class="chapter-nav">
+    <a href="procedures.html">&larr; Procedures</a>
+    <a href="input-and-output.html">Input and Output &rarr;</a>
+  </nav>
 
   <div class="prose">
 <h3 id="declaration-2">Declaration</h3>
@@ -180,11 +184,10 @@ end function</code></pre>
 <p><code>sizeof()</code> and <a href="#array-parameter-storage-capacity">storage capacity</a> are two different numbers that happen to often be equal. <code>sizeof(arr%)</code> is always the <em>actual</em> array this particular call passed — it can be smaller than capacity (e.g. <code>sumArr%</code> above sees <code>sizeof(arr%) = 3</code> on the call that passes <code>small%</code>, even though its storage was sized for 10 to also fit <code>big%</code>). Capacity is the fixed ceiling that storage was built for, decided once, up front, for every call the program will ever make.</p>
   </div>
 
-  <p class="crumbs">
+  <nav class="chapter-nav">
     <a href="procedures.html">&larr; Procedures</a>
-
     <a href="input-and-output.html">Input and Output &rarr;</a>
-  </p>
+  </nav>
 </main>
 
 <footer>

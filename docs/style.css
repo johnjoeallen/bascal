@@ -212,6 +212,23 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Chapter prev/next nav, shown at both the top and bottom of a manual
+   chapter page (not the manual index) -- previous pinned left, next
+   pinned right, regardless of whether one side is empty (first/last
+   chapter). */
+.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 1.1rem 0;
+}
+.chapter-nav a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.chapter-nav a:hover { color: var(--accent-2); }
+
 .compare {
   background: var(--card-bg);
   border: 1px solid var(--card-border);

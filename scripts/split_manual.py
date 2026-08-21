@@ -118,12 +118,12 @@ PAGE_TEMPLATE = """<!doctype html>
 
 <main class="wrap" id="{cid}">
   <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / {title}</p>
+{nav}
 
   <div class="prose">
 {body}  </div>
 
-  <p class="crumbs">
-{nav_links}  </p>
+{nav}
 </main>
 
 <footer>
@@ -158,17 +158,23 @@ for idx, cid in enumerate(ordered_ids):
         description = description[:197].rsplit(" ", 1)[0] + "..."
     description = description.replace('"', "&quot;")
 
-    nav_bits = []
+    # Previous pinned left, next pinned right (flexbox space-between in
+    # CSS handles the pinning regardless of which side, if either, is
+    # empty) -- same nav block reused verbatim at both the top and bottom
+    # of the page.
     if idx > 0:
         prev_id = ordered_ids[idx - 1]
         prev_title = strip_tags(sections[prev_id]["title"])
-        nav_bits.append(f'    <a href="{prev_id}.html">&larr; {prev_title}</a>\n')
+        prev_slot = f'<a href="{prev_id}.html">&larr; {prev_title}</a>'
+    else:
+        prev_slot = "<span></span>"
     if idx < total - 1:
         next_id = ordered_ids[idx + 1]
         next_title = strip_tags(sections[next_id]["title"])
-        sep = "\n" if nav_bits else ""
-        nav_bits.append(f'{sep}    <a href="{next_id}.html">{next_title} &rarr;</a>\n')
-    nav_links = "".join(nav_bits) if nav_bits else "    <a href=\"./\">Back to Manual</a>\n"
+        next_slot = f'<a href="{next_id}.html">{next_title} &rarr;</a>'
+    else:
+        next_slot = "<span></span>"
+    nav = f'  <nav class="chapter-nav">\n    {prev_slot}\n    {next_slot}\n  </nav>'
 
     page = PAGE_TEMPLATE.format(
         title=title,
@@ -176,7 +182,7 @@ for idx, cid in enumerate(ordered_ids):
         num=idx + 1,
         total=total,
         body=body_html,
-        nav_links=nav_links,
+        nav=nav,
         cid=cid,
     )
     (OUT_DIR / f"{cid}.html").write_text(page)

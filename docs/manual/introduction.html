@@ -30,6 +30,10 @@
 
 <main class="wrap" id="introduction">
   <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Introduction</p>
+  <nav class="chapter-nav">
+    <span></span>
+    <a href="getting-started.html">Getting Started &rarr;</a>
+  </nav>
 
   <div class="prose">
 <p><strong>BASCAL</strong> — <strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage — is a transpiler that translates structured <code>.bcl</code> source files into line-numbered Microsoft BASIC programs (<code>.bas</code>) compatible with BASCOM and FreeBASIC's QB compatibility mode.</p>
@@ -49,9 +53,10 @@
 <p><strong>BASCAL is a strict superset of classic BASIC.</strong> Raw statements from the target dialect — <code>OPEN</code>/<code>FIELD</code>/<code>GET</code>/<code>PUT</code> for random-access files, bitwise <code>AND</code>/<code>OR</code>/<code>NOT</code> — still pass through unchanged. <code>GOTO</code>/<code>GOSUB</code>/<code>ON ERROR GOTO</code>/ <code>RESUME</code>/<code>RESTORE</code> are raw BASIC too, but with one restriction: BASCAL manages line numbering itself, so their targets must be a <code>name:</code> label declared in source, never a raw line number — see <a href="miscellaneous-statements.html#labels">Labels</a>. Beyond that, wherever this manual documents a BASCAL construct for something (<code>select case</code> instead of an <code>IF</code>/<code>GOTO</code> dispatch chain, <code>record</code>/<code>file</code> instead of hand-written <code>FIELD</code>/<code>GET</code>/<code>PUT</code>, <code>&amp;&amp;</code>/<code>||</code> instead of bitwise short-circuit workarounds), treat that construct as the canonical way to write it in <code>.bcl</code> source — the original BASIC syntax is what the transpiler exists to get you away from, not an equally good alternative.</p>
   </div>
 
-  <p class="crumbs">
+  <nav class="chapter-nav">
+    <span></span>
     <a href="getting-started.html">Getting Started &rarr;</a>
-  </p>
+  </nav>
 </main>
 
 <footer>

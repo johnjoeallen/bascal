@@ -30,6 +30,10 @@
 
 <main class="wrap" id="dependencies-require-and-import">
   <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Dependencies — REQUIRE and IMPORT</p>
+  <nav class="chapter-nav">
+    <a href="miscellaneous-statements.html">&larr; Miscellaneous Statements</a>
+    <a href="shared-common.html">Shared COMMON &rarr;</a>
+  </nav>
 
   <div class="prose">
 <p>BASCAL supports multi-file projects through <code>require</code> (and its alias <code>import</code>). Dependencies are declared at the top of the file, before any statements.</p>
@@ -62,11 +66,10 @@ require stats                       →  stats.bcl</code></pre>
 <p>Every file loaded via <code>require</code>/<code>import</code> <strong>must</strong> start with a <a href="program-structure.html#library-declaration"><code>library &lt;name&gt;</code> declaration</a> — a transpile-time error, not just a convention. Beyond that required header, by convention a library module should: - Contain only <code>function</code> definitions and supporting <code>DIM</code> / <code>DATA</code> statements - Not contain a <code>program</code> declaration - Not contain top-level executable statements other than <code>DIM</code> and <code>DATA</code></p>
   </div>
 
-  <p class="crumbs">
+  <nav class="chapter-nav">
     <a href="miscellaneous-statements.html">&larr; Miscellaneous Statements</a>
-
     <a href="shared-common.html">Shared COMMON &rarr;</a>
-  </p>
+  </nav>
 </main>
 
 <footer>
