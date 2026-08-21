@@ -1,10 +1,11 @@
 //! Minimal native-C backend.
 //!
-//! Deliberately narrow: this only understands a top-level `print` of string
-//! and numeric literals, and `end`, wrapped in `int main(void) { ... }`.
-//! Everything else (functions, other statement kinds, variables) reports a
-//! "not supported yet" diagnostic rather than panicking or emitting wrong
-//! code -- this is a walking skeleton to prove the CLI/dispatch plumbing
+//! Deliberately narrow: this only understands a top-level `print` of
+//! string/numeric literals (including negation and `+`/`-`/`*` of them) and
+//! `end`, wrapped in `int main(void) { ... }`. Everything else (functions,
+//! other statement kinds, variables, `/`/`\`/MOD/`^`) reports a "not
+//! supported yet" diagnostic rather than panicking or emitting wrong code
+//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
 //! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
@@ -19,7 +20,7 @@
 //! explicitly at the byte offsets `records.rs` already computes for the
 //! BASIC backend, the same offsets both backends should share.
 
-use crate::ast::{Expr, PrintToken, Program, Statement, UnaryOp};
+use crate::ast::{BinaryOp, Expr, PrintToken, Program, Statement, UnaryOp};
 use crate::diagnostics::{Diagnostic, SourcePos};
 
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
@@ -85,8 +86,8 @@ fn emit_statement(statement: &Statement, out: &mut String) -> Result<(), String>
             Ok(())
         }
         other => Err(format!(
-            "{other:?} is not supported by the minimal C backend yet -- only `print` of string \
-             literals and `end` are implemented so far"
+            "{other:?} is not supported by the minimal C backend yet -- only `print` of \
+             string/numeric literals and `end` are implemented so far"
         )),
     }
 }
@@ -113,45 +114,11 @@ fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bo
                 needs_newline = true;
                 format.push_str(&escape_c_string(s));
             }
-            PrintToken::Expr(Expr::Integer(n)) => {
+            PrintToken::Expr(expr) => {
+                let (text, is_float) = render_numeric_expr(expr)?;
                 needs_newline = true;
-                format.push_str("%d");
-                args.push(n.to_string());
-            }
-            PrintToken::Expr(Expr::Float(f)) => {
-                needs_newline = true;
-                format.push_str("%g");
-                args.push(format!("{f:?}"));
-            }
-            // `-5`/`-1.25` parse as `Unary { op: Neg, expr: Integer/Float
-            // }`, not a literal `Expr::Integer(-5)` -- constant-fold just
-            // this one shape rather than reporting a negative literal, the
-            // single most common case, as unsupported.
-            PrintToken::Expr(Expr::Unary { op: UnaryOp::Neg, expr }) => match expr.as_ref() {
-                Expr::Integer(n) => {
-                    needs_newline = true;
-                    format.push_str("%d");
-                    args.push((-n).to_string());
-                }
-                Expr::Float(f) => {
-                    needs_newline = true;
-                    format.push_str("%g");
-                    args.push(format!("{:?}", -f));
-                }
-                _ => {
-                    return Err(
-                        "the minimal C backend's `print` only supports string and numeric \
-                         literals so far -- not variables, calls, or operators"
-                            .to_string(),
-                    )
-                }
-            },
-            PrintToken::Expr(_) => {
-                return Err(
-                    "the minimal C backend's `print` only supports string and numeric literals \
-                     so far -- not variables, calls, or operators"
-                        .to_string(),
-                )
+                format.push_str(if is_float { "%g" } else { "%d" });
+                args.push(text);
             }
             PrintToken::Semi | PrintToken::Comma => {
                 needs_newline = index != tokens.len() - 1;
@@ -159,6 +126,64 @@ fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bo
         }
     }
     Ok((format, args, needs_newline))
+}
+
+/// Renders a numeric-literal expression tree as C expression text, plus
+/// whether the result is floating-point (picks `%g` vs `%d` in the caller).
+/// Covers literals, negation, and `+`/`-`/`*` combinations of them --
+/// direct translations with no semantic gap between BASIC and C. `/`, `\`,
+/// `MOD`, and `^` are deliberately NOT included even though they're
+/// "just another operator": BASIC's `/` always performs floating-point
+/// division, even between two integers, unlike C's `/`, which truncates
+/// between two ints; `\` and `MOD` round/truncate their operands using
+/// BASIC-specific rules C's `/`/`%` don't share; and `^` needs `pow()` from
+/// `<math.h>`, not a C operator at all. Translating any of them the same
+/// way as `+`/`-`/`*` would silently emit wrong output rather than erroring
+/// -- worse than just not supporting them yet.
+fn render_numeric_expr(expr: &Expr) -> Result<(String, bool), String> {
+    match expr {
+        Expr::Integer(n) => Ok((n.to_string(), false)),
+        Expr::Float(f) => Ok((format!("{f:?}"), true)),
+        Expr::Unary { op: UnaryOp::Neg, expr } => {
+            let (inner, is_float) = render_numeric_expr(expr)?;
+            Ok((format!("-({inner})"), is_float))
+        }
+        Expr::Binary { left, op: op @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul), right } => {
+            let (left_text, left_float) = render_numeric_expr(left)?;
+            let (right_text, right_float) = render_numeric_expr(right)?;
+            let c_op = match op {
+                BinaryOp::Add => "+",
+                BinaryOp::Sub => "-",
+                BinaryOp::Mul => "*",
+                _ => unreachable!(),
+            };
+            Ok((format!("({left_text} {c_op} {right_text})"), left_float || right_float))
+        }
+        Expr::Binary { op: BinaryOp::Div, .. } => Err(
+            "`/` isn't supported by the minimal C backend yet -- BASIC's `/` always performs \
+             floating-point division, even between two integers, unlike C's `/`"
+                .to_string(),
+        ),
+        Expr::Binary { op: BinaryOp::IntDiv, .. } => Err(
+            "`\\` (integer division) isn't supported by the minimal C backend yet".to_string(),
+        ),
+        Expr::Binary { op: BinaryOp::Mod, .. } => Err(
+            "MOD isn't supported by the minimal C backend yet -- BASIC's MOD rounds \
+             floating-point operands to integers first, unlike C's `%`, which requires integer \
+             operands"
+                .to_string(),
+        ),
+        Expr::Binary { op: BinaryOp::Pow, .. } => Err(
+            "`^` isn't supported by the minimal C backend yet -- needs pow() from <math.h>, not \
+             a plain C operator"
+                .to_string(),
+        ),
+        _ => Err(
+            "the minimal C backend's `print` only supports string/numeric literals and +, -, * \
+             of them so far -- not variables, calls, comparisons, or other operators"
+                .to_string(),
+        ),
+    }
 }
 
 /// C string-literal escaping -- deliberately a separate function from

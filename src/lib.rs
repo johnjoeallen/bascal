@@ -3620,7 +3620,7 @@ end
             "unexpected output:\n{output}"
         );
         assert!(output.contains(r#"printf("%d\n", 42);"#), "unexpected output:\n{output}");
-        assert!(output.contains(r#"printf("%g\n", -1.25);"#), "unexpected output:\n{output}");
+        assert!(output.contains(r#"printf("%g\n", -(1.25));"#), "unexpected output:\n{output}");
     }
 
     #[test]
@@ -3634,7 +3634,57 @@ end
         let result = compile_file(&path, &options);
         assert!(result.is_err());
         let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
-        assert!(msg.contains("not variables, calls, or operators"), "unexpected message: {msg}");
+        assert!(msg.contains("not variables, calls, comparisons"), "unexpected message: {msg}");
+    }
+
+    #[test]
+    fn c_target_print_supports_add_sub_mul_of_literals() {
+        let source = r#"print "Sum: "; 1 + 2 * 3
+print "Mixed: "; 1 + 2.5
+print "Neg: "; -(3 + 4)
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        // (2 * 3) binds tighter than the outer +, same associativity BASCAL's
+        // parser already resolved -- every Binary node is parenthesized, so
+        // the C compiler doesn't need to re-derive precedence itself.
+        assert!(
+            output.contains(r#"printf("Sum: %d\n", (1 + (2 * 3)));"#),
+            "unexpected output:\n{output}"
+        );
+        // int + float promotes the whole expression to %g, matching BASIC's
+        // own mixed-type promotion rule.
+        assert!(
+            output.contains(r#"printf("Mixed: %g\n", (1 + 2.5));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("Neg: %d\n", -((3 + 4)));"#),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_print_rejects_division_with_a_specific_reason() {
+        // `/` is deliberately NOT translated like +/-/* -- BASIC's `/`
+        // always performs floating-point division, even between two
+        // integers, unlike C's `/`, which truncates between two ints.
+        // Translating it the same way as +/-/* would silently produce
+        // wrong output, so it must fail with a diagnostic that explains why,
+        // not just a generic "unsupported" message.
+        let source = "print 10 / 3\nend\n";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("div.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let result = compile_file(&path, &options);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(
+            msg.contains("floating-point division") && msg.contains("even between two integers"),
+            "unexpected message: {msg}"
+        );
     }
 
     /// Helper for the two tests above: writes `source` (with a `program`
