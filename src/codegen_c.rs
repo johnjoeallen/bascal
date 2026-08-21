@@ -2,16 +2,17 @@
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
 //! string/numeric literals -- including negation, every arithmetic
-//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`), and every comparison operator
-//! (`=`/`<>`/`<`/`<=`/`>`/`>=`) of them -- `end`, `dim`, `const`,
-//! assignment/reading of *numeric scalar* variables (`%`/`&`/`!`/`#`), and
-//! `if`/`elseif`/`else`/`end if` (including the single-line form, and
-//! nesting), wrapped in `int main(void) { ... }`. Everything else
-//! (functions, other statement kinds, string variables, arrays, `AND`/
-//! `OR`/`XOR`/`NOT`, loops) reports a "not supported yet" diagnostic
-//! rather than panicking or emitting wrong code -- this is a walking
-//! skeleton to prove the CLI/dispatch plumbing (`Target::C`, `--target c`,
-//! `invoke_gcc`) end-to-end, not a real backend.
+//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`), every comparison operator
+//! (`=`/`<>`/`<`/`<=`/`>`/`>=`), and every bitwise/logical operator
+//! (`AND`/`OR`/`XOR`/`NOT` -- genuinely bitwise, not short-circuit
+//! booleans) of them -- `end`, `dim`, `const`, assignment/reading of
+//! *numeric scalar* variables (`%`/`&`/`!`/`#`), and `if`/`elseif`/`else`/
+//! `end if` (including the single-line form, and nesting), wrapped in
+//! `int main(void) { ... }`. Everything else (functions, other statement
+//! kinds, string variables, arrays, loops) reports a "not supported yet"
+//! diagnostic rather than panicking or emitting wrong code -- this is a
+//! walking skeleton to prove the CLI/dispatch plumbing (`Target::C`,
+//! `--target c`, `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -484,10 +485,58 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             };
             Ok((format!("(-({left_text} {c_op} {right_text}))"), false))
         }
+        // Real MBASIC/BASCOM's AND/OR/XOR are genuinely bitwise, not
+        // short-circuit booleans -- see the project memory saved
+        // specifically for this. Verified against the GW-BASIC Reference
+        // Manual: "Logical operators work by converting their operands to
+        // 16-bit, signed, two's complement integers... the given operation
+        // is performed on these integers bit by bit." Same round-to-integer
+        // step `\`/MOD use (the manual doesn't say "rounded" here as
+        // explicitly as it does for `\`/MOD, but "converting... to
+        // integers" for a float operand is assumed to mean the same
+        // rounding, for consistency with the rest of this codebase's
+        // float-to-int conversions -- not independently verified against
+        // real BASCOM output). This is exactly why C's `&`/`|`/`^` are the
+        // right translation and C's `&&`/`||` would NOT be: this operates
+        // on arbitrary integer *values* (`6 XOR 3 = 5`), not just BASIC's
+        // -1/0 booleans -- though on -1/0 inputs specifically, plain
+        // bitwise AND/OR/XOR already reproduces BASIC's truth table exactly
+        // (two's complement -1 is all-ones), so no separate boolean-vs-
+        // integer branch is needed.
+        Expr::Binary {
+            left,
+            op: op @ (BinaryOp::And | BinaryOp::Or | BinaryOp::Xor),
+            right,
+        } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            *needs_math = true;
+            let c_op = match op {
+                BinaryOp::And => "&",
+                BinaryOp::Or => "|",
+                BinaryOp::Xor => "^",
+                _ => unreachable!(),
+            };
+            Ok((
+                format!(
+                    "((int)((long)round((double){left_text}) {c_op} (long)round((double){right_text})))"
+                ),
+                false,
+            ))
+        }
+        // `NOT` is bitwise complement, not boolean negation -- `NOT 1` is
+        // `-2`, not `0` (MANUAL.md's own Logical Operators section makes a
+        // point of this exact example, since it surprises anyone expecting
+        // C-style `!`). Same round-to-integer step as AND/OR/XOR above.
+        Expr::Unary { op: UnaryOp::Not, expr } => {
+            let (inner, _) = render_numeric_expr(expr, needs_math)?;
+            *needs_math = true;
+            Ok((format!("((int)(~(long)round((double){inner})))"), false))
+        }
         _ => Err(
             "the minimal C backend only supports string/numeric literals, numeric scalar \
-             variables (%, &, !, #), arithmetic, and comparisons on them so far -- not calls, \
-             AND/OR/XOR/NOT, string variables, or arrays"
+             variables (%, &, !, #), arithmetic, comparisons, and AND/OR/XOR/NOT on them so far \
+             -- not calls, string variables, or arrays"
                 .to_string(),
         ),
     }

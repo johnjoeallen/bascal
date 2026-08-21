@@ -3798,6 +3798,48 @@ end
     }
 
     #[test]
+    fn c_target_supports_and_or_xor_not_matching_the_manual_examples() {
+        // Real MBASIC/BASCOM's AND/OR/XOR/NOT are genuinely bitwise, not
+        // short-circuit booleans -- verified against the GW-BASIC
+        // Reference Manual's own worked examples (63 AND 16 = 16,
+        // 6 XOR 3 = 5) and MANUAL.md's own NOT 1 = -2 example (the point
+        // being it's NOT 0, which a naive C `!` translation would give).
+        let source = r#"print "A: "; 63 and 16
+print "B: "; 6 xor 3
+print "C: "; not 1
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(r#"printf("A: %d\n", ((int)((long)round((double)63) & (long)round((double)16))));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("B: %d\n", ((int)((long)round((double)6) ^ (long)round((double)3))));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("C: %d\n", ((int)(~(long)round((double)1))));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("#include <math.h>"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_supports_and_in_if_condition() {
+        // The "next simplest program" a bitwise AND actually gets used
+        // for in practice: a compound if condition, same as
+        // tutorial/03_arithmetic.bcl and tutorial/04_conditions.bcl (both
+        // still blocked on string variables, but no longer on AND).
+        let source = "age% = 25\nincome% = 45000\nif age% >= 18 and income% >= 30000 then\n    print \"Eligible\"\nelse\n    print \"Not eligible\"\nend if\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("if (((int)((long)round((double)(-(bv_i_age >= 18))) & (long)round((double)(-(bv_i_income >= 30000))))))"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_print_supports_add_sub_mul_of_literals() {
         let source = r#"print "Sum: "; 1 + 2 * 3
 print "Mixed: "; 1 + 2.5

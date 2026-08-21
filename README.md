@@ -115,20 +115,23 @@ BASCAL has two code generators, selected with `--target`:
   since real MBASIC/BASCOM has no block `IF`, C has native `if`/`else`, so
   this is a direct structural translation). Comparisons evaluate to
   BASIC's own `-1`/`0` (`-(a == b)` on C's native `0`/`1` result), not C's
-  `1`/`0`. Anything else (string variables, arrays, `AND`/`OR`/`XOR`/
-  `NOT`, loops, functions...) reports a "not supported yet" diagnostic
-  rather than emitting wrong code. Each operator needed its exact BASIC
-  semantics
-  tracked down first, not just assumed to be "the same as the C operator":
-  `/` gets explicit `(double)` casts so it stays true division even
-  between two integers, unlike plain C `int / int`; `\`/`MOD` round each
-  operand first via `round()`, then respectively truncate or take C's
-  native `%` of the integer quotient — GW-BASIC's own examples show
-  `MOD`'s remainder comes from the same rounded division `\` performs, and
-  C's `%` is defined the same way, so no separate sign logic was needed;
-  `^` maps to `pow()` from `<math.h>`, not a plain C operator. `%`/`&`
-  (BASIC's 16-bit integer and 32-bit long) are collapsed to the same plain
-  C `int`, the same simplification already used for arithmetic results.
+  `1`/`0`. `AND`/`OR`/`XOR`/`NOT` are genuinely bitwise (`6 XOR 3 = 5`,
+  `NOT 1 = -2`), not short-circuit booleans — C's own `&`/`|`/`^`/`~` are
+  the correct translation, not `&&`/`||`/`!`, since real MBASIC/BASCOM has
+  no short-circuit boolean primitive at all. Anything else (string
+  variables, arrays, loops, functions...) reports a "not supported yet"
+  diagnostic rather than emitting wrong code. Each operator needed its
+  exact BASIC semantics tracked down first, not just assumed to be "the
+  same as the C operator": `/` gets explicit `(double)` casts so it stays
+  true division even between two integers, unlike plain C `int / int`;
+  `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` round each operand first via `round()`
+  (GW-BASIC's own examples show `MOD`'s remainder comes from the same
+  rounded division `\` performs, and that logical operators "convert
+  their operands to 16-bit... integers" the same way), then respectively
+  apply C's native `/`, `%`, `&`, `|`, `^`, or `~`; `^` (exponent) maps to
+  `pow()` from `<math.h>`, not a plain C operator. `%`/`&` (BASIC's 16-bit integer
+  and 32-bit long) are collapsed to the same plain C `int`, the same
+  simplification already used for arithmetic results.
   [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
   enough to compile under it today — see
   [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The
