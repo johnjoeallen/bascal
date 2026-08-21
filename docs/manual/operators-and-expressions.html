@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operators and Expressions — BASCAL Manual</title>
+<meta name="description" content="Comparison expressions evaluate to -1 (true) or 0 (false) at the BASIC runtime, consistent with Microsoft BASIC semantics.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Operators and Expressions</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 6 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="operators-and-expressions">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Operators and Expressions</p>
+
+  <div class="prose">
+<h3 id="arithmetic-operators">Arithmetic Operators</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Operation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>+</code></td>
+<td>Addition / string concatenation</td>
+</tr>
+<tr class="even">
+<td><code>-</code></td>
+<td>Subtraction / unary negation</td>
+</tr>
+<tr class="odd">
+<td><code>*</code></td>
+<td>Multiplication</td>
+</tr>
+<tr class="even">
+<td><code>/</code></td>
+<td>Division (truncates toward zero)</td>
+</tr>
+<tr class="odd">
+<td><code>\</code></td>
+<td>Integer division (floor quotient)</td>
+</tr>
+<tr class="even">
+<td><code>MOD</code></td>
+<td>Modulus (remainder after integer division)</td>
+</tr>
+<tr class="odd">
+<td><code>^</code></td>
+<td>Exponentiation (right-associative)</td>
+</tr>
+</tbody>
+</table>
+<pre><code>a% = 17
+b% = 5
+print a%; &quot;+ &quot;; b%; &quot;=&quot;; a% + b%    // 22
+print a%; &quot;\ &quot;; b%; &quot;=&quot;; a% \ b%    // 3  (integer quotient)
+print a%; &quot;MOD &quot;; b%; &quot;=&quot;; a% mod b% // 2  (remainder)
+print &quot;2 ^ 8 =&quot;; 2 ^ 8              // 256
+print &quot;2 ^ 3 ^ 2 =&quot;; 2 ^ 3 ^ 2     // 512  (right-assoc: 2 ^ (3^2))</code></pre>
+<h3 id="comparison-operators">Comparison Operators</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>=</code></td>
+<td>Equal</td>
+</tr>
+<tr class="even">
+<td><code>&lt;&gt;</code></td>
+<td>Not equal</td>
+</tr>
+<tr class="odd">
+<td><code>&lt;</code></td>
+<td>Less than</td>
+</tr>
+<tr class="even">
+<td><code>&lt;=</code></td>
+<td>Less than or equal</td>
+</tr>
+<tr class="odd">
+<td><code>&gt;</code></td>
+<td>Greater than</td>
+</tr>
+<tr class="even">
+<td><code>&gt;=</code></td>
+<td>Greater than or equal</td>
+</tr>
+</tbody>
+</table>
+<p>Comparison expressions evaluate to -1 (true) or 0 (false) at the BASIC runtime, consistent with Microsoft BASIC semantics.</p>
+<h3 id="true-and-false">TRUE and FALSE</h3>
+<p><code>TRUE</code> and <code>FALSE</code> are transpile-time sugar for BASIC's own boolean convention — <code>-1</code> and <code>0</code> — so a programmer-boolean flag can be compared against a name instead of a magic number:</p>
+<pre><code>found% = TRUE
+done%  = FALSE
+
+if found% = TRUE then
+    print &quot;found it&quot;
+end if</code></pre>
+<p>They transpile straight through to the literals themselves — <code>found% = TRUE</code> generates <code>found% = -1</code> — so they're valid anywhere an integer literal is, including <code>CONST</code> and array bounds. No boolean type is introduced anywhere else in the language; see the <code>NOT</code> caveat above for why explicit <code>= 0</code> / <code>&lt;&gt; 0</code> comparisons are still how you test a flag.</p>
+<h3 id="compound-assignment">Compound Assignment</h3>
+<pre><code>x% += n%    &#39; x% = x% + n%
+x% -= n%    &#39; x% = x% - n%
+x% *= n%    &#39; x% = x% * n%
+x% /= n%    &#39; x% = x% / n%</code></pre>
+<p>Shorthand for reassigning a variable in terms of itself — the common case in loop counters and accumulators. <code>total% += x%</code> is exactly equivalent to <code>total% = total% + x%</code>; it works on array elements and record fields too:</p>
+<pre><code>scores%(i%) += 1
+s.total# -= fee#</code></pre>
+<p>Only <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code> are provided — there is no compound form of <code>\</code>, <code>MOD</code>, <code>^</code>, or the bitwise/logical operators.</p>
+<h3 id="logical-operators">Logical Operators</h3>
+<table>
+<colgroup>
+<col style="width: 52%" />
+<col style="width: 47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Operator</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>AND</code></td>
+<td>Bitwise AND (also serves as logical AND when operands are 0/-1)</td>
+</tr>
+<tr class="even">
+<td><code>OR</code></td>
+<td>Bitwise OR</td>
+</tr>
+<tr class="odd">
+<td><code>NOT</code></td>
+<td>Bitwise NOT</td>
+</tr>
+<tr class="even">
+<td><code>XOR</code></td>
+<td>Bitwise XOR</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Important:</strong> <code>NOT</code> is bitwise in Microsoft BASIC. <code>NOT 1</code> yields <code>-2</code>, not <code>0</code>. BASCAL's transpiler emits <code>(expr) = 0</code> instead of <code>NOT expr</code> in generated control-flow conditions so that programmer-boolean values like <code>found% = 1</code> behave as expected. Use explicit <code>= 0</code> or <code>&lt;&gt; 0</code> comparisons in your own code when testing boolean flags.</p>
+<p><code>AND</code>/<code>OR</code> always evaluate both sides — there's no short-circuit primitive in generated BASIC at all. See <a href="control-flow.html#short-circuit-and">Short-Circuit <code>&amp;&amp;</code> and <code>||</code></a> for BASCAL's condition-only short-circuit operators.</p>
+<pre><code>age%    = 25
+income% = 45000
+if age% &gt;= 18 and income% &gt;= 30000 then
+    print &quot;Eligible&quot;
+end if
+print 6 xor 3   // 5  (110 XOR 011 = 101)</code></pre>
+<h3 id="operator-precedence-highest-first">Operator Precedence (highest first)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Level</th>
+<th>Operators</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>9</td>
+<td><code>^</code> (right-associative)</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Unary <code>-</code></td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td><code>*</code>, <code>/</code></td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td><code>\</code></td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td><code>MOD</code></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td><code>+</code>, <code>-</code></td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>=</code>, <code>&lt;&gt;</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td><code>NOT</code></td>
+</tr>
+<tr class="odd">
+<td>1</td>
+<td><code>AND</code></td>
+</tr>
+<tr class="even">
+<td>0</td>
+<td><code>OR</code></td>
+</tr>
+<tr class="odd">
+<td>-1</td>
+<td><code>XOR</code></td>
+</tr>
+</tbody>
+</table>
+<p>Use parentheses to override precedence.</p>
+  </div>
+
+  <p class="crumbs">
+    <a href="variables-and-constants.html">&larr; Variables and Constants</a>
+
+    <a href="comments.html">Comments &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

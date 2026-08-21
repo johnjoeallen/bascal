@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arrays — BASCAL Manual</title>
+<meta name="description" content="Array indices run from 0 to size (i.e., size+1 elements in total, using BASIC's default OPTION BASE 0).">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Arrays</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 11 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="arrays">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Arrays</p>
+
+  <div class="prose">
+<h3 id="declaration-2">Declaration</h3>
+<pre><code>DIM values%(100)    &#39; 101 elements: values%(0) .. values%(100)
+DIM names$(50)</code></pre>
+<p>Array indices run from 0 to <em>size</em> (i.e., <em>size</em>+1 elements in total, using BASIC's default <code>OPTION BASE 0</code>).</p>
+<h3 id="access">Access</h3>
+<pre><code>values%(0) = 42
+PRINT values%(i%)</code></pre>
+<h3 id="passing-arrays-to-functions">Passing Arrays to Functions</h3>
+<p>An array parameter must declare its rank right in the signature — one <code>?</code> per dimension, in parens after the name: <code>arr%(?)</code> for 1-D, <code>grid%(?, ?)</code> for 2-D, and so on. A scalar parameter stays a bare name. There's no way to declare an array parameter without stating its rank this way — a parameter that's indexed as an array in the function body but declared without one is a <strong>transpile-time error</strong>, not a warning.</p>
+<p>At the call site, just write the plain array name — <strong>no <code>()</code> needed</strong>. The transpiler already knows that parameter is an array from its declaration, so there's nothing left for the call site to mark.</p>
+<p>And separately: <code>byref</code> does <strong>not</strong> give the function a real reference to the caller's array — BASIC has no pointers or aliasing at this level. <code>byref</code> copies the array's elements in before the call and copies them back out after; <code>byval</code> (the default) only does the copy-in half. Either way the function always works on its own private copy — <code>byref</code> just <em>simulates</em> "the caller sees the result" by copying twice instead of once. See <a href="#byref-byval">byref / byval</a> for the full mechanism.</p>
+<p><code>insertionSort%</code> mutates the array in place, so its <code>arr%</code> parameter needs <code>byref</code>; <code>indexOf%</code> only reads it, so the unmarked (<code>byval</code>) default is correct as-is:</p>
+<pre><code>&#39; arr% -- array to sort; byref because it&#39;s mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% &gt;= 0 and arr%(j%) &gt; key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function
+
+&#39; arr%    -- array to search; byval, since indexOf% only reads it
+&#39; target% -- value to search for
+function indexOf%(arr%(?), target%)
+    for i% = 0 to sizeof(arr%) - 1
+        if arr%(i%) = target% then
+            return i%
+        end if
+    end for
+    return -1
+end function</code></pre>
+<p>From <code>tutorial/08_arrays.bcl</code>:</p>
+<pre><code>CONST N% = 6
+DIM data%(N%)
+data%(0) = 64 : data%(1) = 25 : data%(2) = 12
+data%(3) = 22 : data%(4) =  3 : data%(5) = 11
+
+dummy% = insertionSort%(data%)   &#39; sorts in place -- arr% is byref
+
+idx% = indexOf%(data%, 22)
+if idx% &gt;= 0 then
+    PRINT &quot;22 found at index &quot; + STR$(idx%)
+end if</code></pre>
+<p>See <a href="#byref-byval">byref / byval</a> for exactly what gets copied, and when.</p>
+<h3 id="byref-byval"><code>byref</code> / <code>byval</code></h3>
+<p>Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:</p>
+<pre><code>function insertionSort%(byref arr%(?))   &#39; byref: copied in, then back out
+function indexOf%(arr%(?), target%)      &#39; unmarked = byval: copied in only</code></pre>
+<ul>
+<li><strong><code>byval</code></strong> (the default — an unmarked parameter is <code>byval</code>): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.</li>
+<li><strong><code>byref</code></strong>: copied in before the call, same as <code>byval</code> — but also copied back out to the caller after the call returns.</li>
+</ul>
+<p>This applies uniformly to both parameter kinds:</p>
+<ul>
+<li><p><strong>Array parameters</strong>: <code>byval</code> copies elements in; <code>byref</code> copies them in <em>and</em> back out. A function that only reads its array argument (like <code>indexOf%</code> above) should stay <code>byval</code> — a <code>byref</code> array with no writes is just a slower <code>byval</code>, since the transpiler still generates the copy-out loop.</p></li>
+<li><p><strong>Scalar parameters</strong>: <code>byval</code> is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. <code>byref</code> turns a scalar parameter into a true output parameter:</p>
+<pre><code>&#39; n% -- value to increment; byref so the caller sees the result
+procedure increment(byref n%)
+    n% = n% + 1
+end procedure
+
+x% = 5
+increment(x%)   &#39; x% is now 6</code></pre>
+<p>A <code>byref</code> argument must be a plain variable — <code>increment(x% + 1)</code> is a transpile-time error, because there's nowhere for the result to be written back to.</p></li>
+</ul>
+<p>If you're coming from classic MBASIC/BASCOM: there's no local scope there at all, so a <code>GOSUB</code>-based "subroutine" touching an array was always touching the <em>one</em> array that exists — mutations were visible everywhere, instantly, because there was never more than one copy. BASCAL's parameters don't work that way by default. <code>byval</code> (the default) gives the function its own copy, and <code>byref</code> is what asks for the old always-visible, always-shared behavior back, deliberately, per parameter.</p>
+<h3 id="why-copy-incopy-out-not-just-globals">Why Copy-In/Copy-Out, Not Just Globals?</h3>
+<p>MBASIC/BASCOM has exactly one subroutine primitive: <code>GOSUB</code>/<code>RETURN</code>. There is no <code>SUB</code>, no <code>FUNCTION</code>, no parameter list of any kind — the most disciplined code the raw dialect allows is a <code>GOSUB</code> target with a contract enforced only by comments (<em>"expects <code>A$</code> and <code>B%</code> set, leaves the result in <code>C%</code>"</em>). That convention-only discipline, and the maintenance burden of getting it wrong across a team and a growing codebase, is exactly what BASCAL exists to replace.</p>
+<p>So the choice was never "copy-in/copy-out versus some simpler globals-based way to pass parameters" — MBASIC/BASCOM has no other mechanism to build parameters out of at all. <code>GOSUB</code> and global variables are the only two primitives available. Giving <code>.bcl</code> functions real parameters means simulating them using only those two primitives, and copy-in/copy-out is what that simulation necessarily looks like: assign the argument into the parameter's own storage before the <code>GOSUB</code>, and — for <code>byref</code> — copy the result back out after.</p>
+<p>There's also a structural reason it has to work this way, independent of the target dialect. Each function body is transpiled exactly once, and every call site <code>GOSUB</code>s to that same shared label. A shared body needs one stable name for "its first parameter" — but different call sites pass different things: different variable names, or a whole expression (<code>f(a% + b%)</code>, <code>f(5)</code>) that isn't a variable at all. There's no single caller-side location to just operate on directly in the general case, so the value has to land somewhere fixed before the shared body runs.</p>
+<p><code>global</code> is the escape hatch for when you deliberately want the old always-shared, no-copy behavior back for one specific variable — see <a href="functions.html#variable-scoping">Variable Scoping</a>. It works precisely because it commits to one hardcoded name forever, which is exactly what makes it not a reusable, callable-with-different-data routine anymore.</p>
+<h3 id="multi-dimensional-array-parameters">Multi-Dimensional Array Parameters</h3>
+<p>A 2-D (or higher) array parameter declares its rank the same way as 1-D — one <code>?</code> per dimension — and passes the same way, too: just the plain array name, no <code>()</code> and no count arguments of any kind. The transpiler already knows the real array's bounds (from its <code>DIM</code>, or — if it's itself a parameter being forwarded onward — from what <em>its</em> caller passed), and carries them alongside the array automatically. Nothing about that is visible in <code>.bcl</code> source; use <a href="#sizeof"><code>sizeof()</code></a> inside the function body wherever the bound is needed.</p>
+<pre><code>&#39; grid% -- 2-D array to sum
+function sumGrid%(byref grid%(?, ?))
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1
+        for c% = 0 to sizeof(grid%, 1) - 1
+            total% = total% + grid%(r%, c%)
+        end for
+    end for
+    return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%)</code></pre>
+<p>There's no way to pass the wrong bounds by hand here — unlike a manually typed count argument, which could silently drift out of sync with the array's real <code>DIM</code> (say, <code>3, 3</code> for an array actually <code>dim</code>ed <code>(2, 2)</code>, reading one row and one column past the end of the real array at runtime), the transpiler reads <code>grid%</code>'s bounds directly from <code>g%</code>'s own <code>DIM</code> and there's no hand-typed number in the picture to get wrong.</p>
+<p><code>grid%(?, ?)</code> is cross-checked two ways, both at transpile time:</p>
+<ul>
+<li>Against the function's own body — <code>grid%(r%, c%)</code> above indexes with two subscripts, matching the declared two <code>?</code>s. A declaration that disagrees with how the body actually uses the parameter is an error.</li>
+<li>Against whatever array is actually passed at each call site — passing a 1-D array where the parameter declares two dimensions (or vice versa) is also an error.</li>
+</ul>
+<p>Either mismatch is caught before it ever reaches generated BASIC: the two shapes genuinely can't share one copy loop, so BASCAL refuses rather than emit a <code>DIM</code>/subscript mismatch that real BASIC would only catch at runtime.</p>
+<h3 id="array-parameter-storage-capacity">Array Parameter Storage Capacity</h3>
+<p>An array parameter's storage is one shared, generated variable, reused by every call to that function — the same reason a scalar parameter's storage is shared. Arrays additionally need a fixed <em>size</em>, though, and classic BASIC has no <code>REDIM</code>: once an array is <code>DIM</code>ed, it can never be resized, and a second <code>DIM</code> on the same array is a fatal runtime error. So a parameter's storage is <code>DIM</code>ed exactly once, at the very top of the generated program — before any call happens — sized to the biggest array anything anywhere ever passes it.</p>
+<p>Normally this needs no attention at all. Write <code>?</code> for every axis, same as always; the transpiler works out a safe capacity itself by scanning every call site in the program and taking the largest resolved size. Below, <code>sumArr%</code>'s storage ends up sized for 10 elements even though its first call only ever passes it 3:</p>
+<pre><code>function sumArr%(arr%(?))
+    &#39; ...
+end function
+
+dim small%(2)
+dim big%(9)
+dummy% = sumArr%(small%)
+dummy% = sumArr%(big%)</code></pre>
+<p>This works whenever every call site's array size is knowable at transpile time — a literal <code>DIM</code> bound, a <code>const</code>, or (when the array being passed is itself another function's array parameter, forwarded onward) that parameter's own already-resolved capacity. It genuinely can't work when a call site's array size is a real runtime value:</p>
+<pre><code>input n%
+dim data%(n%)
+dummy% = sumArr%(data%)   &#39; error: arr%&#39;s capacity can&#39;t be inferred</code></pre>
+<p>There's no way to know at transpile time how big <code>data%</code> will turn out to be, so there's no safe number to give its shared storage automatically. Write an explicit capacity instead of <code>?</code> for that axis — a literal integer, chosen to comfortably cover every use:</p>
+<pre><code>function sumArr%(arr%(100))
+    &#39; ...
+end function</code></pre>
+<p>Whichever way a capacity is decided — inferred or explicit — every call site still checks the array's <em>actual</em> size against it at runtime, right before copying in, and halts with a clear error if it doesn't fit:</p>
+<pre><code>IF sumarrArrDim00% &gt; 100 THEN PRINT &quot;runtime error: ...&quot; : STOP</code></pre>
+<p>This is a backstop, not the primary defense — a call site whose size <em>is</em> a transpile-time constant and provably too big for its capacity is already rejected at transpile time, before generated BASIC exists to run at all. The runtime check exists for the one case that's genuinely unprovable ahead of time: a capacity chosen to comfortably cover today's inputs that a later, larger runtime value turns out to exceed.</p>
+<h3 id="sizeof"><code>sizeof()</code></h3>
+<p><code>sizeof(name)</code> returns a <code>dim</code>ed array's size, resolved entirely at transpile time — it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:</p>
+<pre><code>dim data%(9)
+print sizeof(data%)   &#39; 9 -- same value used in the dim</code></pre>
+<p>For 2-D or higher, the axis is required — <code>sizeof(name, axis)</code>, zero-based in the same order as the array's own <code>DIM</code>:</p>
+<pre><code>dim grid%(2, 2)
+print sizeof(grid%, 0)   &#39; 2 -- first DIM bound
+print sizeof(grid%, 1)   &#39; 2 -- second DIM bound</code></pre>
+<p>The axis must be a literal integer — it selects which frozen value to substitute at transpile time, not something computed at runtime.</p>
+<p><strong>What "resolved at transpile time" means in practice:</strong> if the bound is a literal, <code>sizeof</code> just re-emits that literal. If it's an expression (a variable, a <code>const</code>, anything not a bare number), the transpiler captures its value into a hidden variable right at the <code>dim</code> site, and <code>sizeof</code> always reads that captured value — never the live variable, which might change afterward:</p>
+<pre><code>n% = 5
+dim data%(n%)
+n% = 99
+print sizeof(data%)   &#39; 5 -- the value dim actually used, not the later 99</code></pre>
+<p><strong>Inside a function, <code>sizeof</code> on one of the function's own array parameters works differently</strong> — there's no local <code>dim</code> to freeze a value from, since the array parameter's real size depends on whatever the caller happens to pass. There's no manually declared count parameter to read either: every array parameter's bounds are carried automatically, one hidden transpiler-generated variable per axis, set by the caller (from the real argument array's own resolved bounds) immediately before the call. <code>sizeof(grid%, 0)</code> inside <code>sumGrid%</code>'s own body just reads that hidden variable back:</p>
+<pre><code>function sumGrid%(byref grid%(?, ?))
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1     &#39; reads the auto-passed row count
+        for c% = 0 to sizeof(grid%, 1) - 1 &#39; reads the auto-passed column count
+            total% = total% + grid%(r%, c%)
+        end for
+    end for
+    return total%
+end function</code></pre>
+<p>Nothing here is written by the <code>.bcl</code> author, at the call site or in the signature — the bound simply isn't a value you pass, it's a value you ask for with <code>sizeof()</code> wherever you need it.</p>
+<p><code>sizeof()</code> and <a href="#array-parameter-storage-capacity">storage capacity</a> are two different numbers that happen to often be equal. <code>sizeof(arr%)</code> is always the <em>actual</em> array this particular call passed — it can be smaller than capacity (e.g. <code>sumArr%</code> above sees <code>sizeof(arr%) = 3</code> on the call that passes <code>small%</code>, even though its storage was sized for 10 to also fit <code>big%</code>). Capacity is the fixed ceiling that storage was built for, decided once, up front, for every call the program will ever make.</p>
+  </div>
+
+  <p class="crumbs">
+    <a href="procedures.html">&larr; Procedures</a>
+
+    <a href="input-and-output.html">Input and Output &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

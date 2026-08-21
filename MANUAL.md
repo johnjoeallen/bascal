@@ -23,7 +23,7 @@
 15. [Record Files](#record-files)
 16. [Data Statements](#data-statements)
 17. [Miscellaneous Statements](#miscellaneous-statements)
-18. [Dependencies — REQUIRE and IMPORT](#dependencies--require-and-import)
+18. [Dependencies — REQUIRE and IMPORT](#dependencies-require-and-import)
 19. [Shared COMMON](#shared-common)
 20. [Generated BASIC Shape](#generated-basic-shape)
 21. [Command-Line Reference](#command-line-reference)
@@ -497,7 +497,7 @@ behave as expected. Use explicit `= 0` or `<> 0` comparisons in your own code
 when testing boolean flags.
 
 `AND`/`OR` always evaluate both sides — there's no short-circuit primitive in
-generated BASIC at all. See [Short-Circuit `&&` and `||`](#short-circuit--and-)
+generated BASIC at all. See [Short-Circuit `&&` and `||`](#short-circuit-and)
 for BASCAL's condition-only short-circuit operators.
 
 ```
@@ -1134,7 +1134,7 @@ developer uses at global scope.
 
 Every parameter is copied into its generated name before the call. Whether
 anything is copied back afterward depends on its passing mode — see
-[byref / byval](#byref--byval).
+[byref / byval](#byref-byval).
 
 ---
 
@@ -1215,7 +1215,7 @@ end procedure
 
 ### Array Parameters
 
-Array parameters use the same [byref / byval](#byref--byval) rules and the
+Array parameters use the same [byref / byval](#byref-byval) rules and the
 same `(?, ?, ...)` rank declaration as functions. Pass the plain array name
 at the call site — no `()`:
 
@@ -1306,7 +1306,7 @@ the caller's array — BASIC has no pointers or aliasing at this level.
 back out after; `byval` (the default) only does the copy-in half. Either
 way the function always works on its own private copy — `byref` just
 *simulates* "the caller sees the result" by copying twice instead of once.
-See [byref / byval](#byref--byval) for the full mechanism.
+See [byref / byval](#byref-byval) for the full mechanism.
 
 `insertionSort%` mutates the array in place, so its `arr%` parameter needs
 `byref`; `indexOf%` only reads it, so the unmarked (`byval`) default is
@@ -1355,7 +1355,7 @@ if idx% >= 0 then
 end if
 ```
 
-See [byref / byval](#byref--byval) for exactly what gets copied, and when.
+See [byref / byval](#byref-byval) for exactly what gets copied, and when.
 
 ### `byref` / `byval`
 
@@ -3091,7 +3091,7 @@ ships its own implementations, built from genuinely portable primitives
 (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`),
 as an ordinary `require`-able library under `com.bascal.stdlib` — the same
 mechanism as any other BASCAL library (see [Dependencies — REQUIRE and
-IMPORT](#dependencies--require-and-import)), not something auto-injected
+IMPORT](#dependencies-require-and-import)), not something auto-injected
 by call-site detection:
 
 ```

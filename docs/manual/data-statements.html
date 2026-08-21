@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Statements — BASCAL Manual</title>
+<meta name="description" content="DATA, READ, and RESTORE provide an embedded data table read at run time. DATA statements may appear anywhere in the program body; the generated BASIC places them after END.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Data Statements</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 16 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="data-statements">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Data Statements</p>
+
+  <div class="prose">
+<p><code>DATA</code>, <code>READ</code>, and <code>RESTORE</code> provide an embedded data table read at run time. <code>DATA</code> statements may appear anywhere in the program body; the generated BASIC places them after <code>END</code>.</p>
+<p>From <code>tutorial/09_data.bcl</code>:</p>
+<pre><code>CONST NUM_CAPITALS% = 5
+
+DIM country$(NUM_CAPITALS%)
+DIM capital$(NUM_CAPITALS%)
+
+for i% = 1 to NUM_CAPITALS%
+    READ country$(i%), capital$(i%)
+end for
+
+PRINT &quot;Country         Capital&quot;
+PRINT &quot;--------------- ---------------&quot;
+for i% = 1 to NUM_CAPITALS%
+    PRINT country$(i%) + &quot;        &quot; + capital$(i%)
+end for
+
+&#39; RESTORE rewinds to the first DATA element
+RESTORE
+READ firstCountry$, firstCapital$
+PRINT &quot;First entry re-read: &quot; + firstCountry$ + &quot; -&gt; &quot; + firstCapital$
+
+END
+
+DATA &quot;France&quot;,  &quot;Paris&quot;
+DATA &quot;Germany&quot;, &quot;Berlin&quot;
+DATA &quot;Japan&quot;,   &quot;Tokyo&quot;
+DATA &quot;Brazil&quot;,  &quot;Brasilia&quot;
+DATA &quot;Egypt&quot;,   &quot;Cairo&quot;</code></pre>
+<h3 id="restore">RESTORE</h3>
+<p>Resets the <code>DATA</code> pointer to the beginning (or to a specific label).</p>
+<pre><code>RESTORE           &#39; rewind to the first DATA
+RESTORE fromHere  &#39; rewind to the DATA right after the `fromHere:` label</code></pre>
+  </div>
+
+  <p class="crumbs">
+    <a href="record-files.html">&larr; Record Files</a>
+
+    <a href="miscellaneous-statements.html">Miscellaneous Statements &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

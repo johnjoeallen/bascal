@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Variables and Constants — BASCAL Manual</title>
+<meta name="description" content="Variables declared or assigned at the top level are global and visible throughout the entire program.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Variables and Constants</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 5 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="variables-and-constants">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Variables and Constants</p>
+
+  <div class="prose">
+<h3 id="variables">Variables</h3>
+<p>Variables declared or assigned at the top level are <strong>global</strong> and visible throughout the entire program.</p>
+<p>Variables inside a <code>function</code> or <code>procedure</code> body are <strong>local by default</strong>: the transpiler maps them to uniquely-generated BASIC names (e.g. <code>fnameVar0%</code>), indexed against every name already in use at transpile time so they're guaranteed never to collide with global variables or with locals in other functions. To read or write a global variable from inside a function or procedure, declare it at the top of the body with the <code>global</code> keyword:</p>
+<pre><code>total% = 0
+
+&#39; x% -- amount to add to the running total
+function addToTotal%(x%)
+    global total%           &#39; access the global variable, not a local one
+    total% = total% + x%
+    return total%
+end function</code></pre>
+<p>BASIC builtin functions (<code>UCASE$</code>, <code>STR$</code>, <code>LEN</code>, etc.) are always recognised as callables and are never treated as local variables.</p>
+<p>Variables do not require pre-declaration; they come into existence on first assignment. Use <code>DIM</code> to declare arrays or to make intent clear.</p>
+<h3 id="dim">DIM</h3>
+<p>Declares an array or a simple variable.</p>
+<pre><code>dim playerName$
+dim scores%(100)       &#39; 1-D: 101 elements, scores%(0) .. scores%(100)
+dim grid%(9, 9)        &#39; 2-D: 10×10 grid, grid%(row, col)
+dim cube%(3, 4, 5)     &#39; 3-D: up to 8 dimensions supported</code></pre>
+<p>The bounds expression for each dimension may be any integer expression, including a constant. Elements are indexed from 0 to <em>bound</em> in each dimension (following <code>OPTION BASE 0</code>, the default):</p>
+<pre><code>const rows% = 4
+const cols% = 4
+dim matrix%(rows% - 1, cols% - 1)
+
+for r% = 0 to rows% - 1
+    for c% = 0 to cols% - 1
+        matrix%(r%, c%) = r% * cols% + c%
+    end for
+end for</code></pre>
+<p><code>dim name%()</code> (empty parens) declares an array without specifying bounds — use this when the array will be passed in from outside or when BASIC's default sizing is sufficient.</p>
+<p>A single <code>dim</code> may declare more than one name, comma-separated, mixing plain variables and arrays freely:</p>
+<pre><code>dim a%, b%(3), c$</code></pre>
+<p>This is exactly equivalent to writing three separate <code>dim</code> statements — <code>dim a%</code>, then <code>dim b%(3)</code>, then <code>dim c$</code> — and generates one <code>DIM</code> line per name in the output.</p>
+<h3 id="option-base">OPTION BASE</h3>
+<p>Sets the default lower bound for all subsequently declared arrays. Must be placed before any <code>DIM</code> statements it is meant to affect.</p>
+<pre><code>option base 0   &#39; arrays start at index 0 (default)
+option base 1   &#39; arrays start at index 1</code></pre>
+<p>With <code>OPTION BASE 1</code>, <code>dim scores%(10)</code> allocates 10 elements indexed 1..10 instead of 11 elements indexed 0..10.</p>
+<h3 id="erase">ERASE</h3>
+<p>Frees memory occupied by one or more arrays. After <code>ERASE</code>, the array variables are undefined until re-declared.</p>
+<pre><code>dim bigTable%(1000, 200)
+&#39; ... use bigTable% ...
+erase bigTable%          &#39; release memory
+
+dim names$(50), codes%(50)
+&#39; ... use both ...
+erase names$, codes%     &#39; erase multiple at once</code></pre>
+<h3 id="const">CONST</h3>
+<p>Declares a named constant. The value must be a literal.</p>
+<pre><code>CONST PASS_MARK%  = 60
+CONST APP_NAME$   = &quot;Grade Checker&quot;
+CONST PI!         = 3.14159
+CONST TAX_RATE!   = 0.2</code></pre>
+<p>Constants follow the same type-suffix rules as variables. Once declared, a constant may not be reassigned.</p>
+<p>From <code>tutorial/02_variables.bcl</code>:</p>
+<pre><code>CONST PASS_MARK%  = 60
+CONST APP_NAME$   = &quot;Grade Checker&quot;
+
+score%       = 87
+playerName$  = &quot;Alice&quot;
+
+if score% &gt;= PASS_MARK% then
+    PRINT APP_NAME$ + &quot;: &quot; + playerName$ + &quot; passed with &quot; + STR$(score%)
+end if</code></pre>
+  </div>
+
+  <p class="crumbs">
+    <a href="data-types-and-type-suffixes.html">&larr; Data Types and Type Suffixes</a>
+
+    <a href="operators-and-expressions.html">Operators and Expressions &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

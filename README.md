@@ -9,7 +9,7 @@
 building a real 2026 application. See [the origin story](https://johnjoeallen.github.io/bascal/origin.html).*
 
 **[Browse the website](https://johnjoeallen.github.io/bascal/)** — tutorials,
-side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual.html).
+side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual/).
 
 BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
 The transpiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full

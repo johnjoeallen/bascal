@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generated BASIC Shape — BASCAL Manual</title>
+<meta name="description" content="Understanding how BASCAL transpiles its constructs helps when reading generated output or debugging.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Generated BASIC Shape</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 20 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="generated-basic-shape">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Generated BASIC Shape</p>
+
+  <div class="prose">
+<p>Understanding how BASCAL transpiles its constructs helps when reading generated output or debugging.</p>
+<h3 id="header">Header</h3>
+<p>Every generated file begins with:</p>
+<pre><code>&#39; BASCAL generated BASIC
+&#39; Functions are transpiled to global variables, labels, and GOSUB</code></pre>
+<h3 id="common-block">COMMON Block</h3>
+<p>If a shared file is referenced, <code>COMMON</code> lines appear before the header comment.</p>
+<h3 id="line-numbers">Line Numbers</h3>
+<p>By default, <code>bcc</code> numbers every emitted line, not just branch targets. Real MBASIC/BASCOM has no notion of an unnumbered statement line -- classic BASIC source is a sequence of numbered lines, full stop -- so this is what real compilers and interpreters expect. Numbered comment-only lines are harmless on real BASCOM, but an unnumbered <em>statement</em> line is a syntax error.</p>
+<p>Pass <code>--sparse-line-numbers</code> to fall back to the old behavior, numbering only lines that are branch targets (destinations of <code>GOTO</code> or <code>GOSUB</code>) and leaving everything else unnumbered. This is more readable, but only safe with more lenient dialects (e.g. FreeBASIC's <code>-lang qb</code>) -- not real MBASIC/BASCOM.</p>
+<h3 id="if-transpilation">If Transpilation</h3>
+<pre><code>if x% &gt; 0 then
+    PRINT &quot;positive&quot;
+end if</code></pre>
+<p>Becomes:</p>
+<pre><code>IF (x% &gt; 0) = 0 THEN GOTO 10
+    PRINT &quot;positive&quot;
+10 REM END IF</code></pre>
+<p>The condition is inverted with <code>= 0</code> rather than <code>NOT</code> to avoid bitwise semantics (see <a href="operators-and-expressions.html#operators-and-expressions">Operators</a>).</p>
+<h3 id="while-transpilation">While Transpilation</h3>
+<pre><code>p% = 1
+while p% &lt; 100
+    PRINT STR$(p%)
+    p% = p% * 2
+end while</code></pre>
+<p>Becomes:</p>
+<pre><code>p% = 1
+10 IF (p% &lt; 100) = 0 THEN GOTO 20
+    PRINT STR$(p%)
+    p% = p% * 2
+    GOTO 10
+20 REM END WHILE</code></pre>
+<h3 id="do-transpilation">Do Transpilation</h3>
+<pre><code>do while k% &lt;= 3
+    PRINT STR$(k%)
+    k% = k% + 1
+end do</code></pre>
+<p>Becomes:</p>
+<pre><code>10 IF (k% &lt;= 3) = 0 THEN GOTO 20
+    PRINT STR$(k%)
+    k% = k% + 1
+    GOTO 10
+20 REM END DO</code></pre>
+<p>The post-check form skips the leading guard entirely, since the body always runs at least once:</p>
+<pre><code>do
+    PRINT STR$(k%)
+    k% = k% + 1
+loop until k% &gt; 3</code></pre>
+<p>Becomes:</p>
+<pre><code>10 PRINT STR$(k%)
+    k% = k% + 1
+    IF (k% &gt; 3) = 0 THEN GOTO 10
+20 REM END DO</code></pre>
+<h3 id="for-transpilation">For Transpilation</h3>
+<p>BASCAL emits native <code>FOR</code> / <code>NEXT</code>, which BASIC runtimes handle efficiently. The BASCAL <code>end for</code> (or bare <code>end</code>) is stripped; the BASIC <code>NEXT</code> is emitted by the transpiler:</p>
+<pre><code>FOR i% = 1 TO 5
+    PRINT STR$(i%) + &quot;^2 = &quot; + STR$(i% * i%)
+NEXT i%</code></pre>
+<h3 id="function-transpilation">Function Transpilation</h3>
+<pre><code>&#39; value% -- number to constrain
+&#39; lo%    -- lower bound, inclusive
+&#39; hi%    -- upper bound, inclusive
+function clamp%(value%, lo%, hi%)
+    return max%(lo%, min%(value%, hi%))
+end function
+
+result% = clamp%(15, 1, 10)</code></pre>
+<p>The calls to <code>max%</code> and <code>min%</code> inside <code>clamp%</code> are also transpiled to GOSUBs. The outermost call produces:</p>
+<pre><code>clamp_value% = 15
+clamp_lo%    = 1
+clamp_hi%    = 10
+GOSUB 100
+result% = clamp_result%
+...
+END
+
+&#39; function clamp%(value%, lo%, hi%)
+100 &#39; (transpiled body — calls max% and min% via GOSUB)
+    clamp_result% = ...
+    RETURN
+&#39; end function clamp%</code></pre>
+<h3 id="procedure-transpilation">Procedure Transpilation</h3>
+<p>Procedures follow the same GOSUB pattern as functions but have no result variable:</p>
+<pre><code>&#39; label$ -- text shown before the score
+&#39; score% -- value to print
+procedure printScore(label$, score%)
+    PRINT label$ + &quot;: &quot; + STR$(score%)
+end procedure
+
+printScore(&quot;Alice&quot;, 91)</code></pre>
+<p>Transpiles to:</p>
+<pre><code>printscore_label$ = &quot;Alice&quot;
+printscore_score% = 91
+GOSUB 200
+...
+END
+
+&#39; procedure printScore(label$, score%)
+200 PRINT (printscore_label$ + &quot;: &quot;) + STR$(printscore_score%)
+    RETURN
+&#39; end procedure printScore</code></pre>
+<p>There is no <code>printscore_result</code> variable. A bare <code>return</code> inside a procedure transpiles to plain <code>RETURN</code>.</p>
+<h3 id="select-case-transpilation">Select Case Transpilation</h3>
+<p><code>SELECT CASE</code> is transpiled to an <code>IF</code>/<code>GOTO</code> dispatch chain. The select expression is stored in a temporary variable (e.g., <code>BCCT1%</code>) to avoid re-evaluation.</p>
+<h3 id="exit-statements">Exit Statements</h3>
+<p><code>exit</code> is unqualified in BASCAL source; the transpiler picks the shape below based on which loop it's innermost inside:</p>
+<ul>
+<li>inside <code>for</code> → <code>EXIT FOR</code> (native FreeBASIC / QB extension)</li>
+<li>inside <code>while</code> → <code>GOTO end_label</code></li>
+<li>inside <code>do</code> → <code>GOTO end_label</code></li>
+</ul>
+  </div>
+
+  <p class="crumbs">
+    <a href="shared-common.html">&larr; Shared COMMON</a>
+
+    <a href="command-line-reference.html">Command-Line Reference &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

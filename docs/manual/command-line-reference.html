@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command-Line Reference — BASCAL Manual</title>
+<meta name="description" content="--target basic (the default) is everything else on this page: plain 1980s Microsoft BASIC/BASCOM output.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Command-Line Reference</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 21 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="command-line-reference">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Command-Line Reference</p>
+
+  <div class="prose">
+<pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
+              [--line-numbers] [--clean | -c] [--binary | -b]
+              [--target | -t basic|c]</code></pre>
+<table>
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 26%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Flag</th>
+<th>Short</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>-o output.bas</code></td>
+<td></td>
+<td>Output file path. Default: source path with <code>.bas</code> (or <code>.c</code>, under <code>--target c</code>) extension in the same directory.</td>
+</tr>
+<tr class="even">
+<td><code>-L dir</code></td>
+<td></td>
+<td>Add a directory to the library search path. Repeatable.</td>
+</tr>
+<tr class="odd">
+<td><code>-l name</code></td>
+<td></td>
+<td>Name a library (reserved).</td>
+</tr>
+<tr class="even">
+<td><code>--line-numbers</code></td>
+<td></td>
+<td>Number every output line, not just branch targets.</td>
+</tr>
+<tr class="odd">
+<td><code>--clean</code></td>
+<td><code>-c</code></td>
+<td>Re-transpile even if the output is already up to date.</td>
+</tr>
+<tr class="even">
+<td><code>--binary</code></td>
+<td><code>-b</code></td>
+<td>Compile the generated output to a binary in <code>tmp/</code>: <code>fbc</code> for <code>--target basic</code>, <code>gcc</code> for <code>--target c</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>--target &lt;t&gt;</code></td>
+<td><code>-t</code></td>
+<td>Backend to generate code for: <code>basic</code> (default, the only complete one) or <code>c</code> (just getting started — see below).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="backends">Backends</h3>
+<p><code>--target basic</code> (the default) is everything else on this page: plain 1980s Microsoft BASIC/BASCOM output.</p>
+<p><code>--target c</code> is a new, deliberately minimal native-C backend. Today it only understands a top-level <code>print</code> of string literals and <code>end</code> — anything else reports a "not supported yet" diagnostic instead of emitting incorrect code. <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.bcl"><code>tutorial/01_hello.bcl</code></a> is currently the only tutorial small enough to compile under it; see <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.c"><code>tutorial/01_hello.c</code></a> for its output. The BASCOM-compatible <code>basic</code> target continues to gate which language features BASCAL adds, so both backends stay able to express the same language as the C backend grows.</p>
+<h3 id="up-to-date-check">Up-to-Date Check</h3>
+<p>Without <code>--clean</code>, <code>bcc</code> skips re-transpiling if the output <code>.bas</code> file is newer than all input <code>.bcl</code> files. With <code>--binary</code>, a second up-to-date check covers the compiled binary.</p>
+<h3 id="library-search-order">Library Search Order</h3>
+<ol type="1">
+<li>The directory containing the primary source file (always first).</li>
+<li>Paths supplied with <code>-L</code>, in the order given.</li>
+</ol>
+<p>Multiple <code>-L</code> flags are supported:</p>
+<pre><code>bcc tutorial/12_require.bcl -L tutorial/lib
+bcc main.bcl -L libs/sort -L libs/string</code></pre>
+  </div>
+
+  <p class="crumbs">
+    <a href="generated-basic-shape.html">&larr; Generated BASIC Shape</a>
+
+    <a href="statement-quick-reference.html">Statement Quick Reference &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

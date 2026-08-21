@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Types and Type Suffixes — BASCAL Manual</title>
+<meta name="description" content="BASCAL uses Microsoft BASIC's type-suffix convention. Every variable or function name carries its type in the final character:">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Data Types and Type Suffixes</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 4 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="data-types-and-type-suffixes">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Data Types and Type Suffixes</p>
+
+  <div class="prose">
+<p>BASCAL uses Microsoft BASIC's type-suffix convention. Every variable or function name carries its type in the final character:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Suffix</th>
+<th>Type</th>
+<th>Range / Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>%</code></td>
+<td>Integer</td>
+<td>16-bit signed, -32768 to 32767</td>
+</tr>
+<tr class="even">
+<td><code>$</code></td>
+<td>String</td>
+<td>Variable-length string</td>
+</tr>
+<tr class="odd">
+<td><code>!</code></td>
+<td>Single</td>
+<td>32-bit IEEE 754 single-precision float</td>
+</tr>
+<tr class="even">
+<td><code>#</code></td>
+<td>Double</td>
+<td>64-bit IEEE 754 double-precision float</td>
+</tr>
+<tr class="odd">
+<td><code>&amp;</code></td>
+<td>Long</td>
+<td>32-bit signed integer</td>
+</tr>
+</tbody>
+</table>
+<p>Variables without a suffix follow the DEFtype settings of the BASIC runtime (default: single precision). In BASCAL source it is strongly recommended to always use explicit suffixes.</p>
+<p>All type checking is deferred to the BASIC runtime. The BASCAL transpiler does not perform static type inference.</p>
+  </div>
+
+  <p class="crumbs">
+    <a href="program-structure.html">&larr; Program Structure</a>
+
+    <a href="variables-and-constants.html">Variables and Constants &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>

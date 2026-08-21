@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record Files — BASCAL Manual</title>
+<meta name="description" content="From Part 2 of tutorial/15_random_and_record_files.bcl:">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Record Files</h1>
+    <p class="tagline">BASCAL Language Manual, chapter 15 of 23.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="../">Home</a>
+    <a href="../manual/" class="current">Manual</a>
+    <a href="../tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap" id="record-files">
+  <p class="crumbs"><a href="../">Home</a> / <a href="../manual/">Manual</a> / Record Files</p>
+
+  <div class="prose">
+<p>From Part 2 of <code>tutorial/15_random_and_record_files.bcl</code>:</p>
+<p>The <code>record</code> / <code>file</code> DSL is sugar over everything in <a href="random-access-file-io.html#random-access-file-io">Random-Access File I/O</a> above. It computes the record's byte width, allocates the file number, and generates the <code>OPEN</code>/<code>FIELD</code>/<code>LSET</code>/<code>RSET</code>/<code>PUT</code>/<code>GET</code>/<code>MKx</code>/<code>CVx</code> calls for you — nothing about the <em>generated</em> BASIC changes; only the BASCAL source you write does.</p>
+<h3 id="record-...-end-record">record ... end record</h3>
+<p>Declares a fixed-layout record type:</p>
+<pre><code>record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record</code></pre>
+<p>Supported field types and their packed width: <code>int16</code> (2 bytes), <code>int32</code> (4 bytes), <code>float32</code> (4 bytes), <code>float64</code> (8 bytes), <code>string(N)</code> (N bytes). The record's total width — used as the <code>OPEN ... LEN =</code> value — is the sum of its field widths, in declaration order.</p>
+<h3 id="file-...-as-...-open...">file ... as ... = open(...)</h3>
+<pre><code>file db as Student = open(&quot;students.dat&quot;)</code></pre>
+<p>Transpiles to one <code>OPEN ... FOR RANDOM AS #n LEN = &lt;width&gt;</code> plus one matching <code>FIELD #n, ...</code> statement, binding one string buffer variable per field. File numbers are allocated automatically, starting at <code>#1</code>, in the order <code>file</code> declarations appear in the source.</p>
+<h3 id="whole-record-write">Whole-record write</h3>
+<pre><code>db[1] = { id: 1, name: &quot;Alice&quot;, score: 95.0 }</code></pre>
+<p>Every declared field must be supplied exactly once. Transpiles to one <code>LSET</code> per field — numeric fields are packed first (<code>MKI$</code>/<code>MKL$</code>/<code>MKS$</code>/<code>MKD$</code>), string fields are assigned directly — followed by a single <code>PUT #n, 1</code>. <code>LSET</code> is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).</p>
+<p>Note <code>MKx$</code> always carries a <code>$</code> suffix, never a type suffix matching the value being packed (<code>MKI%</code>, <code>MKD#</code>, etc. are not real MBASIC/BASCOM functions) — every <code>MKx$</code> variant returns a string, which is what <code>LSET</code> requires.</p>
+<p>A record literal missing a declared field is a <strong>transpile-time error</strong> — this is a safety net that real BASIC's raw <code>FIELD</code>/<code>LSET</code>/<code>PUT</code> gives you no equivalent of (see <a href="#partial-record-write">Partial-record write</a> for the deliberately-incomplete form).</p>
+<h3 id="partial-record-write">Partial-record write</h3>
+<pre><code>db[2] = ?{ score: 61.5 }</code></pre>
+<p><code>?{ ... }</code> is <code>{ ... }</code>'s deliberately-incomplete counterpart: any subset of fields is allowed, and unlisted fields are left untouched on disk rather than erroring. <code>?</code> doesn't collide with anything — it isn't tokenized at all outside this position.</p>
+<p>Whether the fields you <em>didn't</em> mention need preserving is fully decided at transpile time, by comparing the field names you gave against the record's declared fields — there's no runtime check:</p>
+<ul>
+<li>If the listed fields don't cover every declared field, an implicit <code>GET #n, i</code> is emitted first (so the unlisted fields keep their current on-disk values), then <code>LSET</code> for only the fields given, then <code>PUT #n, i</code>.</li>
+<li>If the listed fields happen to cover every declared field anyway, no <code>GET</code> is emitted — it transpiles exactly like a plain <code>{ ... }</code> literal.</li>
+</ul>
+<p>Unlike <code>{ ... }</code>, an unknown field name inside <code>?{ ... }</code> is still a transpile-time error — only <em>missing</em> fields are permitted, not <em>misspelled</em> ones.</p>
+<p>Note: <code>GET</code>ing a record number past the current end of a random-access file doesn't error in real BASIC (records can be sparse), but the fields you meant to "preserve" will simply read back as zero/blank the first time a given record number is touched, since there was nothing on disk yet to preserve.</p>
+<h3 id="whole-record-read">Whole-record read</h3>
+<pre><code>let s = db[i]</code></pre>
+<p>Transpiles to <code>GET #n, i</code> followed by one unpacking assignment per field (<code>CVI</code>/<code>CVL</code>/<code>CVS</code>/<code>CVD</code> for numeric fields, taking no suffix at all on real MBASIC/BASCOM), each one written into a scalar named <code>&lt;var&gt;&lt;Field&gt;</code> — e.g. <code>sId%</code>, <code>sName$</code>, <code>sScore#</code>. Later references to <code>s.id</code>, <code>s.name</code>, <code>s.score</code> in the source resolve directly to those scalars; no <code>Ident</code> named literally <code>s.id</code> is ever emitted.</p>
+<p>String fields aren't unpacked with <code>RTRIM$</code> — it isn't a real MBASIC/BASCOM builtin. Instead, the transpiler builds an inline right-trim loop directly from <code>LEN</code>/<code>MID$</code>/<code>LEFT$</code>, walking back from the end of the fixed-width buffer past trailing spaces.</p>
+<p>Because BASIC doesn't auto-convert numbers to strings for concatenation, writing a numeric field next to a string with <code>+</code> (as in <code>print "[" + s.id + "]"</code>) automatically wraps the numeric side in <code>STR$(...)</code> — but only where a record field is actually involved; ordinary BASCAL <code>+</code> expressions are untouched.</p>
+<p>Once <code>s</code> exists, <code>s.field = value</code> reassigns only the in-memory scalar (<code>s_field</code>) — it does <strong>not</strong> touch the file. Assignment alone never causes disk I/O; see <a href="#writing-a-record-variable-back">Writing a record variable back</a> for the explicit commit step.</p>
+<h3 id="partial-field-update">Partial-field update</h3>
+<pre><code>db[i].field = value</code></pre>
+<p>For a single field, on its own, this is the terse form: it transpiles to an implicit <code>GET #n, i</code>, a single <code>LSET</code> for just that field, then <code>PUT #n, i</code>.</p>
+<p>This form does its own <code>GET</code>/<code>PUT</code> every time it appears, so chaining several of them against the same record index costs one full round trip per field. To change several fields on one record with a single <code>GET</code>/<code>PUT</code>, either use <a href="#partial-record-write">a partial-record write</a> (<code>db[i] = ?{ ... }</code>) with several fields at once, or read it into a variable first and write it back once — see below.</p>
+<h3 id="writing-a-record-variable-back">Writing a record variable back</h3>
+<pre><code>let s = db[i]
+s.name  = &quot;Alicia&quot;
+s.score = 99.0
+db[i] = s</code></pre>
+<p><code>db[i] = s</code> — where <code>s</code> was bound by an earlier <code>let s = db[...]</code> — packs every field straight from <code>s</code>'s scalars and issues a single <code>PUT #n, i</code>, regardless of how many of <code>s</code>'s fields were reassigned first. Combined with the fact that <code>s.field = value</code> is pure in-memory assignment, this is the one-<code>GET</code>-one-<code>PUT</code> way to change multiple fields: exactly one <code>GET</code> (from the <code>let</code>) and one <code>PUT</code> (from the write-back) no matter how many fields in between were changed. <code>s</code> must have been read from a <code>file</code> of the same record type as the target; writing an <code>A</code> into a <code>file</code> of <code>B</code>s is a transpile-time error.</p>
+<h3 id="file.close">file.close()</h3>
+<pre><code>db.close()</code></pre>
+<p>Transpiles to <code>CLOSE #n</code>.</p>
+<h3 id="downto">downto</h3>
+<pre><code>for i = 3 downto 1
+    ...
+end for</code></pre>
+<p>Sugar for <code>for i = 3 to 1 step -1</code>; ascending <code>for i = A to B</code> is unchanged.</p>
+<h3 id="type-checking">Type checking</h3>
+<p>The transpilation pass rejects, at transpile time: field names not declared on the record (in a record literal or a <code>.field</code> access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its <code>string(N)</code> field, a string literal assigned to a numeric field (or vice versa), an unknown record type named by <code>file ... as ...</code>, and any reference to a <code>file</code> or <code>let</code>-bound record variable that was never declared.</p>
+  </div>
+
+  <p class="crumbs">
+    <a href="random-access-file-io.html">&larr; Random-Access File I/O</a>
+
+    <a href="data-statements.html">Data Statements &rarr;</a>
+  </p>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    This page is generated from
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/MANUAL.md">MANUAL.md</a>
+    in the repo — that file is the source of truth.
+  </div>
+</footer>
+
+<script src="../bcl-highlight.js"></script>
+<script src="../theme-toggle.js"></script>
+</body>
+</html>
