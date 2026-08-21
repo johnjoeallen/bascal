@@ -246,3 +246,30 @@ fn stdlib_functions_match_real_bascom() {
         expected_path.display()
     );
 }
+
+/// Locks in the exact tie-break rounding facts the C backend's \/MOD/AND
+/// translation (src/codegen_c.rs) depends on -- round() ties away from
+/// zero, matching real BASCOM's own float-to-integer conversion, verified
+/// once by hand under dosbox-x and captured here as a permanent regression
+/// check rather than staying a one-off manual run.
+#[test]
+fn tie_break_rounding_matches_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("tie_break_rounding");
+
+    let expected_path = repo_root().join("tests/fixtures/conformance/tie_break_rounding.expected.txt");
+    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
+        panic!("failed to read {}: {err}", expected_path.display())
+    });
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's \\/MOD/AND tie-break rounding no longer matches the \
+         golden expectation at {} -- if this is a deliberate/expected \
+         change, double-check codegen_c.rs's round()-based translation \
+         still matches",
+        expected_path.display()
+    );
+}
