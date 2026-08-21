@@ -105,7 +105,7 @@ BASCAL has two code generators, selected with `--target`:
 - **`c`** — a native C backend, **just getting started**. It currently
   understands a top-level `print` of string/numeric literals — every
   arithmetic operator on them included (`+`, `-`, `*`, `/`, `\`, `MOD`,
-  `^`) — `end`, `dim`, and assignment/reading of *numeric scalar*
+  `^`) — `end`, `dim`, `const`, and assignment/reading of *numeric scalar*
   variables (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-
   zero-initialized semantics: every variable touched anywhere is declared
   once at the top of `main`, regardless of where it first appears).

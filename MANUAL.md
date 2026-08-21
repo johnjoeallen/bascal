@@ -2933,7 +2933,7 @@ describes: plain 1980s Microsoft BASIC/BASCOM output.
 `--target c` is a new, deliberately minimal native-C backend. Today it only
 understands a top-level `print` of string/numeric literals — every
 arithmetic operator on them included (`+`, `-`, `*`, `/`, `\`, `MOD`, `^`)
-— `end`, `dim`, and assignment/reading of *numeric scalar* variables
+— `end`, `dim`, `const`, and assignment/reading of *numeric scalar* variables
 (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-zero-initialized
 semantics: every variable touched anywhere is declared once at the top of
 `main`, regardless of where it first appears). Anything else (string

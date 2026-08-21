@@ -3701,6 +3701,27 @@ end
     }
 
     #[test]
+    fn c_target_supports_const_same_as_assignment() {
+        // Real MBASIC/BASCOM has no CONST statement at all -- `const`
+        // codegens exactly like an ordinary assignment, same as the BASIC
+        // backend's own treatment of it (BASCAL's resolver, not codegen,
+        // is what enforces a const is never reassigned).
+        let source = r#"const maxScore% = 100
+const rate! = 0.15
+score% = 85
+print "Score: "; score%; " / "; maxScore%
+print "Bonus: "; score% * rate!
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("int bv_i_maxscore = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("float bv_f_rate = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_i_maxscore = 100;"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_f_rate = 0.15;"), "unexpected output:\n{output}");
+        assert!(!output.contains("CONST"), "real MBASIC/BASCOM has no CONST:\n{output}");
+    }
+
+    #[test]
     fn c_target_print_supports_add_sub_mul_of_literals() {
         let source = r#"print "Sum: "; 1 + 2 * 3
 print "Mixed: "; 1 + 2.5

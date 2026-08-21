@@ -121,7 +121,8 @@ fn collect_numeric_vars_in_statement(statement: &Statement, out: &mut BTreeMap<S
         Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
             register_numeric_var(name, out);
         }
-        Statement::Assignment { target: Expr::Ident(name), value } => {
+        Statement::Assignment { target: Expr::Ident(name), value }
+        | Statement::Const { name, value } => {
             register_numeric_var(name, out);
             collect_numeric_vars_in_expr(value, out);
         }
@@ -188,17 +189,15 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
                 )),
             }
         }
-        Statement::Assignment { target: Expr::Ident(name), value } => match name.suffix {
-            Some(suffix) if numeric_c_type(suffix).is_some() => {
-                let (value_text, _) = render_numeric_expr(value, needs_math)?;
-                out.push_str(&format!("    {} = {value_text};\n", c_var_name(name, suffix)));
-                Ok(())
-            }
-            _ => Err(format!(
-                "assignment to `{name}` isn't supported by the minimal C backend yet -- only \
-                 numeric scalar variables (%, &, !, #) are"
-            )),
-        },
+        Statement::Assignment { target: Expr::Ident(name), value } => {
+            emit_scalar_assignment(name, value, out, needs_math)
+        }
+        // Real MBASIC/BASCOM has no CONST statement at all -- `const` in
+        // `.bcl` source is purely a naming/intent signal to the reader
+        // (BASCAL's resolver already enforces it's never reassigned before
+        // codegen ever runs), so it codegens exactly like an ordinary
+        // assignment, same as the BASIC backend's own treatment of it.
+        Statement::Const { name, value } => emit_scalar_assignment(name, value, out, needs_math),
         Statement::BlankLine => {
             out.push('\n');
             Ok(())
@@ -221,7 +220,30 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, and assignment of numeric scalar variables (%, &, !, #) are implemented so far"
+             `dim`, and assignment/`const` of numeric scalar variables (%, &, !, #) are \
+             implemented so far"
+        )),
+    }
+}
+
+/// Shared by `Statement::Assignment` and `Statement::Const` -- both are
+/// "evaluate `value`, store it in `name`'s variable," identical at the C
+/// level (see the `Const` match arm's comment for why).
+fn emit_scalar_assignment(
+    name: &BasicIdent,
+    value: &Expr,
+    out: &mut String,
+    needs_math: &mut bool,
+) -> Result<(), String> {
+    match name.suffix {
+        Some(suffix) if numeric_c_type(suffix).is_some() => {
+            let (value_text, _) = render_numeric_expr(value, needs_math)?;
+            out.push_str(&format!("    {} = {value_text};\n", c_var_name(name, suffix)));
+            Ok(())
+        }
+        _ => Err(format!(
+            "assignment to `{name}` isn't supported by the minimal C backend yet -- only \
+             numeric scalar variables (%, &, !, #) are"
         )),
     }
 }
