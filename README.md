@@ -103,11 +103,15 @@ BASCAL has two code generators, selected with `--target`:
   1980s Microsoft BASIC/BASCOM, described throughout this README. Everything
   above applies to this backend.
 - **`c`** — a native C backend, **just getting started**. It currently
-  understands only a top-level `print` of string/numeric literals — every
+  understands a top-level `print` of string/numeric literals — every
   arithmetic operator on them included (`+`, `-`, `*`, `/`, `\`, `MOD`,
-  `^`) — and `end`; anything else (variables, `if`, loops, functions,
-  arrays, comparisons...) reports a "not supported yet" diagnostic rather
-  than emitting wrong code. Each operator needed its exact BASIC semantics
+  `^`) — `end`, `dim`, and assignment/reading of *numeric scalar*
+  variables (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-
+  zero-initialized semantics: every variable touched anywhere is declared
+  once at the top of `main`, regardless of where it first appears).
+  Anything else (string variables, arrays, `if`, loops, functions,
+  comparisons...) reports a "not supported yet" diagnostic rather than
+  emitting wrong code. Each operator needed its exact BASIC semantics
   tracked down first, not just assumed to be "the same as the C operator":
   `/` gets explicit `(double)` casts so it stays true division even
   between two integers, unlike plain C `int / int`; `\`/`MOD` round each
@@ -115,7 +119,9 @@ BASCAL has two code generators, selected with `--target`:
   native `%` of the integer quotient — GW-BASIC's own examples show
   `MOD`'s remainder comes from the same rounded division `\` performs, and
   C's `%` is defined the same way, so no separate sign logic was needed;
-  `^` maps to `pow()` from `<math.h>`, not a plain C operator.
+  `^` maps to `pow()` from `<math.h>`, not a plain C operator. `%`/`&`
+  (BASIC's 16-bit integer and 32-bit long) are collapsed to the same plain
+  C `int`, the same simplification already used for arithmetic results.
   [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
   enough to compile under it today — see
   [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The

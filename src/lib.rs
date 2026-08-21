@@ -3592,10 +3592,10 @@ resume next
 
     #[test]
     fn c_target_rejects_unsupported_statements_with_a_diagnostic() {
-        // A `dim` isn't part of the minimal C backend's supported surface
-        // yet -- this must fail with a clear diagnostic, not panic or
-        // silently emit wrong C.
-        let source = "dim x%\nx% = 1\nend\n";
+        // Array `dim` isn't part of the minimal C backend's supported
+        // surface yet (only scalar `dim` is) -- this must fail with a
+        // clear diagnostic, not panic or silently emit wrong C.
+        let source = "dim x%(5)\nend\n";
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("unsupported.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
@@ -3628,8 +3628,11 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_variables_and_expressions() {
-        let source = "print x%\nend\n";
+    fn c_target_print_still_rejects_string_variables_and_expressions() {
+        // Numeric scalar variables ARE supported now (see the dedicated
+        // variable tests below) -- but string variables, calls, and
+        // comparisons still aren't.
+        let source = "print name$\nend\n";
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("var_print.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
@@ -3638,7 +3641,63 @@ end
         let result = compile_file(&path, &options);
         assert!(result.is_err());
         let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
-        assert!(msg.contains("not variables, calls, comparisons"), "unexpected message: {msg}");
+        assert!(msg.contains("numeric scalar variables"), "unexpected message: {msg}");
+    }
+
+    #[test]
+    fn c_target_supports_scalar_variables_dim_assignment_and_read() {
+        // dim + assignment + read, spring-into-existence zero-init (z% is
+        // read before ever being assigned), and int/float mixed arithmetic
+        // between two different variables.
+        let source = r#"dim total%
+x% = 5
+y% = 10
+total% = x% + y%
+print "Total: "; total%
+
+price! = 19.99
+qty% = 3
+print "Cost: "; price! * qty%
+
+z% = z% + 1
+print "Z: "; z%
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("int bv_i_total = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("int bv_i_x = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("float bv_f_price = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_i_x = 5;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"printf("Total: %d\n", bv_i_total);"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("Cost: %g\n", (bv_f_price * bv_i_qty));"#),
+            "unexpected output:\n{output}"
+        );
+        // z% is read (in `z% + 1`) before ever being assigned -- it must
+        // still be declared/zero-initialized, not left as a use of an
+        // undeclared C variable.
+        assert!(output.contains("int bv_i_z = 0;"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_i_z = (bv_i_z + 1);"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_scalar_variable_declarations_are_sorted_and_deduplicated() {
+        // Declarations come from a BTreeMap (sorted by C name, so codegen
+        // output is deterministic across runs) and are collected once per
+        // variable no matter how many times it's referenced.
+        let source = "x% = 1\nx% = x% + 1\nx% = x% + 1\ny% = 2\nprint x%; y%\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert_eq!(
+            output.matches("int bv_i_x = 0;").count(),
+            1,
+            "x% must be declared exactly once:\n{output}"
+        );
+        let x_pos = output.find("int bv_i_x = 0;").unwrap();
+        let y_pos = output.find("int bv_i_y = 0;").unwrap();
+        assert!(x_pos < y_pos, "declarations should be sorted (bv_i_x before bv_i_y):\n{output}");
     }
 
     #[test]

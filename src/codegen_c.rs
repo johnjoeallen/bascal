@@ -2,12 +2,13 @@
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
 //! string/numeric literals -- including negation and every arithmetic
-//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`) of them -- and `end`, wrapped in
-//! `int main(void) { ... }`. Everything else (functions, other statement
-//! kinds, variables, comparisons) reports a "not supported yet" diagnostic
-//! rather than panicking or emitting wrong code -- this is a walking
-//! skeleton to prove the CLI/dispatch plumbing (`Target::C`, `--target c`,
-//! `invoke_gcc`) end-to-end, not a real backend.
+//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`) of them -- `end`, `dim`, and
+//! assignment/reading of *numeric scalar* variables (`%`/`&`/`!`/`#`),
+//! wrapped in `int main(void) { ... }`. Everything else (functions, other
+//! statement kinds, string variables, arrays, comparisons) reports a "not
+//! supported yet" diagnostic rather than panicking or emitting wrong code
+//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
+//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -21,7 +22,9 @@
 //! explicitly at the byte offsets `records.rs` already computes for the
 //! BASIC backend, the same offsets both backends should share.
 
-use crate::ast::{BinaryOp, Expr, PrintToken, Program, Statement, UnaryOp};
+use std::collections::BTreeMap;
+
+use crate::ast::{BasicIdent, BinaryOp, Expr, PrintToken, Program, Statement, TypeSuffix, UnaryOp};
 use crate::diagnostics::{Diagnostic, SourcePos};
 
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
@@ -31,7 +34,29 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         )]);
     }
 
+    // BASIC variables "spring into existence on first use" -- there's no
+    // separate declaration step to hook into, so every numeric scalar
+    // variable touched anywhere in the program (by `dim`, an assignment
+    // target, or a read) is collected up front and declared, zero-
+    // initialized, at the very top of `main`, regardless of where it's
+    // first mentioned in source order. This pass is deliberately
+    // infallible -- it only ever *adds* a declaration for a variable shape
+    // it understands; anything it doesn't (string variables, arrays, ...)
+    // is silently skipped here and reported as a real error later, when
+    // `emit_statement`/`render_numeric_expr` actually tries to use it.
+    let mut declared_vars = BTreeMap::new();
+    for statement in &program.statements {
+        collect_numeric_vars_in_statement(statement, &mut declared_vars);
+    }
+
     let mut body = String::new();
+    for (c_name, c_type) in &declared_vars {
+        body.push_str(&format!("    {c_type} {c_name} = 0;\n"));
+    }
+    if !declared_vars.is_empty() {
+        body.push('\n');
+    }
+
     let mut needs_math = false;
     for statement in &program.statements {
         emit_statement(statement, &mut body, &mut needs_math)
@@ -50,6 +75,83 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let includes =
         if needs_math { "#include <stdio.h>\n#include <math.h>\n" } else { "#include <stdio.h>\n" };
     Ok(format!("{includes}\nint main(void) {{\n{body}}}\n"))
+}
+
+/// The C identifier a BASIC scalar variable maps to. Prefixed (`bv_...`,
+/// "bascal variable") so a BASIC name that happens to collide with a C
+/// keyword (a variable named `int`, say) can't produce invalid C, and
+/// tagged with `suffix` so `x%`/`x&`/`x!`/`x#` -- distinct BASIC
+/// variables, despite sharing a base name -- map to distinct C names
+/// instead of colliding. Lowercases the name first since BASIC identifiers
+/// are case-insensitive; BASCAL source can't contain an underscore in an
+/// identifier (rejected at parse time, see `reject_underscored_identifiers`
+/// in `lib.rs`), so the lowercased name alone is already collision-free as
+/// a C identifier fragment.
+fn c_var_name(ident: &BasicIdent, suffix: TypeSuffix) -> String {
+    let tag = match suffix {
+        TypeSuffix::Integer => 'i',
+        TypeSuffix::Long => 'l',
+        TypeSuffix::Single => 'f',
+        TypeSuffix::Double => 'd',
+        TypeSuffix::String => 's',
+    };
+    format!("bv_{tag}_{}", ident.name.to_ascii_lowercase())
+}
+
+/// The C type and `printf`/`render_numeric_expr` float-ness for a numeric
+/// scalar variable's suffix. `%`/`&` (BASIC's 16-bit integer and 32-bit
+/// long) are deliberately collapsed to the same plain C `int`/`%d` bucket
+/// -- the same simplification this backend already makes for arithmetic
+/// results (see `IntDiv`/`Mod` above), rather than introducing a `long`/
+/// `%ld` type-tracking dimension for one BASIC type that's rarely
+/// distinguished from `%` in practice. Returns `None` for `$`/no suffix --
+/// string variables and suffixless (default-type) variables aren't
+/// supported yet.
+fn numeric_c_type(suffix: TypeSuffix) -> Option<(&'static str, bool)> {
+    match suffix {
+        TypeSuffix::Integer | TypeSuffix::Long => Some(("int", false)),
+        TypeSuffix::Single => Some(("float", true)),
+        TypeSuffix::Double => Some(("double", true)),
+        TypeSuffix::String => None,
+    }
+}
+
+fn collect_numeric_vars_in_statement(statement: &Statement, out: &mut BTreeMap<String, &'static str>) {
+    match statement {
+        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
+            register_numeric_var(name, out);
+        }
+        Statement::Assignment { target: Expr::Ident(name), value } => {
+            register_numeric_var(name, out);
+            collect_numeric_vars_in_expr(value, out);
+        }
+        Statement::Print { tokens } => {
+            for token in tokens {
+                if let PrintToken::Expr(expr) = token {
+                    collect_numeric_vars_in_expr(expr, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_numeric_vars_in_expr(expr: &Expr, out: &mut BTreeMap<String, &'static str>) {
+    match expr {
+        Expr::Ident(ident) => register_numeric_var(ident, out),
+        Expr::Unary { expr, .. } => collect_numeric_vars_in_expr(expr, out),
+        Expr::Binary { left, right, .. } => {
+            collect_numeric_vars_in_expr(left, out);
+            collect_numeric_vars_in_expr(right, out);
+        }
+        _ => {}
+    }
+}
+
+fn register_numeric_var(ident: &BasicIdent, out: &mut BTreeMap<String, &'static str>) {
+    let Some(suffix) = ident.suffix else { return };
+    let Some((c_type, _)) = numeric_c_type(suffix) else { return };
+    out.insert(c_var_name(ident, suffix), c_type);
 }
 
 fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool) -> Result<(), String> {
@@ -72,6 +174,31 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
             out.push_str("    return 0;\n");
             Ok(())
         }
+        // Declarations are hoisted to the top of `main` up front (see
+        // `collect_numeric_vars_in_statement` in `generate`), matching
+        // BASIC's "springs into existence on first use" semantics -- `dim`
+        // of a numeric scalar is therefore a pure no-op here, already
+        // handled wherever it happens to appear in source order.
+        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
+            match name.suffix.and_then(numeric_c_type) {
+                Some(_) => Ok(()),
+                None => Err(format!(
+                    "`dim {name}` isn't supported by the minimal C backend yet -- only numeric \
+                     scalar variables (%, &, !, #) are"
+                )),
+            }
+        }
+        Statement::Assignment { target: Expr::Ident(name), value } => match name.suffix {
+            Some(suffix) if numeric_c_type(suffix).is_some() => {
+                let (value_text, _) = render_numeric_expr(value, needs_math)?;
+                out.push_str(&format!("    {} = {value_text};\n", c_var_name(name, suffix)));
+                Ok(())
+            }
+            _ => Err(format!(
+                "assignment to `{name}` isn't supported by the minimal C backend yet -- only \
+                 numeric scalar variables (%, &, !, #) are"
+            )),
+        },
         Statement::BlankLine => {
             out.push('\n');
             Ok(())
@@ -93,8 +220,8 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
             Ok(())
         }
         other => Err(format!(
-            "{other:?} is not supported by the minimal C backend yet -- only `print` of \
-             string/numeric literals and `end` are implemented so far"
+            "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
+             `dim`, and assignment of numeric scalar variables (%, &, !, #) are implemented so far"
         )),
     }
 }
@@ -106,11 +233,11 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
 /// gets one.
 ///
 /// String literals contribute their (escaped) text directly to the format
-/// string; integer/float literals contribute a `%d`/`%g` placeholder plus a
-/// C literal in `args`. Any other expression (a variable, a call, an
-/// operator) isn't supported yet -- there's no C-side variable/expression
-/// codegen at all so far -- and is reported as an error rather than
-/// silently mishandled.
+/// string; every numeric expression `render_numeric_expr` understands
+/// (literals, numeric scalar variables, arithmetic) contributes a `%d`/`%g`
+/// placeholder plus C expression text in `args`. Anything else (a string
+/// variable, a call, a comparison) isn't supported yet and is reported as
+/// an error rather than silently mishandled.
 fn render_print_tokens(
     tokens: &[PrintToken],
     needs_math: &mut bool,
@@ -138,9 +265,12 @@ fn render_print_tokens(
     Ok((format, args, needs_newline))
 }
 
-/// Renders a numeric-literal expression tree as C expression text, plus
-/// whether the result is floating-point (picks `%g` vs `%d` in the caller).
-/// Covers literals, negation, and every arithmetic operator: `+`/`-`/`*`
+/// Renders a numeric expression tree as C expression text, plus whether the
+/// result is floating-point (picks `%g` vs `%d` in the caller). Covers
+/// literals, numeric scalar variable reads (`%`/`&`/`!`/`#` -- the C
+/// identifier and float-ness come from `c_var_name`/`numeric_c_type`;
+/// string variables and no-suffix variables aren't supported yet), negation,
+/// and every arithmetic operator: `+`/`-`/`*`
 /// (direct translations, no semantic gap between BASIC and C), `/`
 /// (explicit `(double)` casts on both operands, since BASIC's `/` always
 /// performs floating-point division, even between two integers, unlike
@@ -160,6 +290,13 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
+        Expr::Ident(ident) => match ident.suffix.and_then(numeric_c_type) {
+            Some((_, is_float)) => Ok((c_var_name(ident, ident.suffix.unwrap()), is_float)),
+            None => Err(format!(
+                "`{ident}` isn't supported by the minimal C backend yet -- only numeric scalar \
+                 variables (%, &, !, #) are"
+            )),
+        },
         Expr::Unary { op: UnaryOp::Neg, expr } => {
             let (inner, is_float) = render_numeric_expr(expr, needs_math)?;
             Ok((format!("-({inner})"), is_float))
@@ -258,8 +395,9 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             Ok((format!("pow((double){left_text}, (double){right_text})"), true))
         }
         _ => Err(
-            "the minimal C backend's `print` only supports string/numeric literals and +, -, * \
-             of them so far -- not variables, calls, comparisons, or other operators"
+            "the minimal C backend only supports string/numeric literals, numeric scalar \
+             variables (%, &, !, #), and arithmetic on them so far -- not calls, comparisons, \
+             string variables, or arrays"
                 .to_string(),
         ),
     }
