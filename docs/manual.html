@@ -1774,7 +1774,8 @@ END
 <hr />
 <h2 id="command-line-reference">Command-Line Reference</h2>
 <pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
-              [--line-numbers] [--clean | -c] [--binary | -b]</code></pre>
+              [--line-numbers] [--clean | -c] [--binary | -b]
+              [--target | -t basic|c]</code></pre>
 <table>
 <colgroup>
 <col style="width: 23%" />
@@ -1792,7 +1793,7 @@ END
 <tr class="odd">
 <td><code>-o output.bas</code></td>
 <td></td>
-<td>Output file path. Default: source path with <code>.bas</code> extension in the same directory.</td>
+<td>Output file path. Default: source path with <code>.bas</code> (or <code>.c</code>, under <code>--target c</code>) extension in the same directory.</td>
 </tr>
 <tr class="even">
 <td><code>-L dir</code></td>
@@ -1817,10 +1818,18 @@ END
 <tr class="even">
 <td><code>--binary</code></td>
 <td><code>-b</code></td>
-<td>Invoke <code>fbc</code> after transpilation to produce a binary. The binary is placed in <code>tmp/</code>.</td>
+<td>Compile the generated output to a binary in <code>tmp/</code>: <code>fbc</code> for <code>--target basic</code>, <code>gcc</code> for <code>--target c</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>--target &lt;t&gt;</code></td>
+<td><code>-t</code></td>
+<td>Backend to generate code for: <code>basic</code> (default, the only complete one) or <code>c</code> (just getting started — see below).</td>
 </tr>
 </tbody>
 </table>
+<h3 id="backends">Backends</h3>
+<p><code>--target basic</code> (the default) is everything else on this page: plain 1980s Microsoft BASIC/BASCOM output.</p>
+<p><code>--target c</code> is a new, deliberately minimal native-C backend. Today it only understands a top-level <code>print</code> of string literals and <code>end</code> — anything else reports a "not supported yet" diagnostic instead of emitting incorrect code. <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.bcl"><code>tutorial/01_hello.bcl</code></a> is currently the only tutorial small enough to compile under it; see <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.c"><code>tutorial/01_hello.c</code></a> for its output. The BASCOM-compatible <code>basic</code> target continues to gate which language features BASCAL adds, so both backends stay able to express the same language as the C backend grows.</p>
 <h3 id="up-to-date-check">Up-to-Date Check</h3>
 <p>Without <code>--clean</code>, <code>bcc</code> skips re-transpiling if the output <code>.bas</code> file is newer than all input <code>.bcl</code> files. With <code>--binary</code>, a second up-to-date check covers the compiled binary.</p>
 <h3 id="library-search-order">Library Search Order</h3>
