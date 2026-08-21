@@ -3717,16 +3717,38 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_mod_and_pow_with_specific_reasons() {
-        // Unlike `/` and `\`, MOD/`^` are still NOT translated -- each has
-        // BASIC-specific rounding rules (or, for `^`, needs pow() from
-        // <math.h>) that a direct translation would silently get wrong, so
-        // each must fail with a diagnostic that explains why, not just a
-        // generic "unsupported" message.
-        let cases: &[(&str, &str)] = &[
-            ("print 10 mod 3\nend\n", "rounds"),
-            ("print 2 ^ 8\nend\n", "pow()"),
-        ];
+    fn c_target_print_supports_mod_matching_the_manual_examples() {
+        // Same round-then-truncate rounding \ uses, then C's native % on
+        // the rounded operands -- GW-BASIC's own MOD examples say the
+        // remainder comes from the *same* integer division \ performs, and
+        // C's % is defined the same way since C99 (sign follows the
+        // dividend), so no separate sign logic is needed.
+        let source = r#"print "A: "; 10.4 mod 4
+print "B: "; 25.68 mod 6.99
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(
+                r#"printf("A: %d\n", ((int)((long)round((double)10.4) % (long)round((double)4))));"#
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(
+                r#"printf("B: %d\n", ((int)((long)round((double)25.68) % (long)round((double)6.99))));"#
+            ),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_print_still_rejects_pow_with_a_specific_reason() {
+        // Unlike `/`, `\`, and MOD, `^` is still NOT translated -- it needs
+        // pow() from <math.h>, not a plain C operator, so it must fail with
+        // a diagnostic that explains why, not just a generic "unsupported"
+        // message.
+        let cases: &[(&str, &str)] = &[("print 2 ^ 8\nend\n", "pow()")];
         for (source, expect) in cases {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("op.bcl");

@@ -1,11 +1,11 @@
 //! Minimal native-C backend.
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
-//! string/numeric literals (including negation and `+`/`-`/`*`/`/` of them)
-//! and `end`, wrapped in `int main(void) { ... }`. Everything else
-//! (functions, other statement kinds, variables, `\`/MOD/`^`) reports a
-//! "not supported yet" diagnostic rather than panicking or emitting wrong
-//! code -- this is a walking skeleton to prove the CLI/dispatch plumbing
+//! string/numeric literals (including negation and `+`/`-`/`*`/`/`/`\`/MOD
+//! of them) and `end`, wrapped in `int main(void) { ... }`. Everything else
+//! (functions, other statement kinds, variables, `^`) reports a "not
+//! supported yet" diagnostic rather than panicking or emitting wrong code
+//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
 //! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
@@ -143,18 +143,17 @@ fn render_print_tokens(
 /// semantic gap between BASIC and C), `/` (explicit `(double)` casts on
 /// both operands, since BASIC's `/` always performs floating-point
 /// division, even between two integers, unlike plain C `/` between two
-/// `int`s), and `\` (round each operand first, per real MBASIC/BASCOM,
-/// then truncate the integer quotient -- see below). `MOD` is deliberately
-/// NOT included even though it's "just another operator": it rounds its
-/// operands using the same BASIC-specific rule as `\`, but C's `%` requires
-/// integer operands to begin with, and `^` needs `pow()` from `<math.h>`,
-/// not a C operator at all. Translating either the same way as the
-/// operators above would silently emit wrong output rather than erroring
-/// -- worse than just not supporting them yet.
+/// `int`s), and `\`/`MOD` (round each operand first, per real MBASIC/
+/// BASCOM, then respectively truncate or take the remainder of the integer
+/// quotient -- see below). `^` is deliberately NOT included even though
+/// it's "just another operator": it needs `pow()` from `<math.h>`, not a C
+/// operator at all, and translating it the same way as the operators above
+/// would silently emit wrong output rather than erroring -- worse than
+/// just not supporting it yet.
 ///
 /// `needs_math` is set whenever generated code calls into `<math.h>` (so
-/// far: only `\`, via `round()`), so the caller knows to add that
-/// `#include` -- most programs won't need it.
+/// far: `\` and `MOD`, both via `round()`), so the caller knows to add
+/// that `#include` -- most programs won't need it.
 fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bool), String> {
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
@@ -216,12 +215,29 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
                 false,
             ))
         }
-        Expr::Binary { op: BinaryOp::Mod, .. } => Err(
-            "MOD isn't supported by the minimal C backend yet -- BASIC's MOD rounds \
-             floating-point operands to integers first, unlike C's `%`, which requires integer \
-             operands"
-                .to_string(),
-        ),
+        // Real MBASIC/BASCOM's `MOD`: "the integer value that is the
+        // remainder of an integer division" -- the same rounded, truncating
+        // division `\` performs above (GW-BASIC Reference Manual examples:
+        // `10.4 MOD 4 = 2` from `10 \ 4 = 2`; `25.68 MOD 6.99 = 5` from
+        // `26 \ 7 = 3`, remainder 5). That's exactly C's `%` operator's own
+        // definition since C99 (`a % b` has the same sign as `a`, matching
+        // truncating division) -- no separate sign-handling logic needed,
+        // just apply `%` to the same rounded, `long`-cast operands `\` uses.
+        // MOD by a literal zero isn't specially detected: it's undefined
+        // behavior in C (typically SIGFPE), where BASIC raises a runtime
+        // "Division by zero" error instead -- not addressed here, same
+        // category of gap as `/`'s and `\`'s.
+        Expr::Binary { left, op: BinaryOp::Mod, right } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            *needs_math = true;
+            Ok((
+                format!(
+                    "((int)((long)round((double){left_text}) % (long)round((double){right_text})))"
+                ),
+                false,
+            ))
+        }
         Expr::Binary { op: BinaryOp::Pow, .. } => Err(
             "`^` isn't supported by the minimal C backend yet -- needs pow() from <math.h>, not \
              a plain C operator"
