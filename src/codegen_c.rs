@@ -542,10 +542,14 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // integer first (verified against the GW-BASIC Reference Manual --
         // see MANUAL.md's Arithmetic Operators table), *then* the quotient
         // is truncated toward zero. `round()` rounds ties away from zero,
-        // which is the assumed tie-break rule here -- not independently
-        // verified against real BASCOM output (no dosbox-x in this
-        // environment), unlike most of this codebase's BASIC-compatibility
-        // claims. C's `/` between two (rounded, cast-to-`long`) integers
+        // which is the assumed tie-break rule here -- not yet independently
+        // verified against real BASCOM output, unlike most of this
+        // codebase's BASIC-compatibility claims. A genuine, period-accurate
+        // IBM Personal Computer BASIC Compiler 2.00 is fetchable locally
+        // (scripts/fetch-ibm-basic-compiler.sh, see
+        // test-fixtures/README.md) and could settle this directly under
+        // dosbox-x; hasn't been run for this specific case yet. C's `/`
+        // between two (rounded, cast-to-`long`) integers
         // already truncates toward zero as of C99, so no extra truncation
         // step is needed once both operands are rounded. The final
         // `(int)` cast keeps the result a plain `int` so `%d` (not `%ld`)
@@ -642,8 +646,11 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // explicitly as it does for `\`/MOD, but "converting... to
         // integers" for a float operand is assumed to mean the same
         // rounding, for consistency with the rest of this codebase's
-        // float-to-int conversions -- not independently verified against
-        // real BASCOM output). This is exactly why C's `&`/`|`/`^` are the
+        // float-to-int conversions -- not yet independently verified
+        // against real BASCOM output, though a genuine, period-accurate
+        // copy is fetchable locally to settle it -- see
+        // scripts/fetch-ibm-basic-compiler.sh / test-fixtures/README.md).
+        // This is exactly why C's `&`/`|`/`^` are the
         // right translation and C's `&&`/`||` would NOT be: this operates
         // on arbitrary integer *values* (`6 XOR 3 = 5`), not just BASIC's
         // -1/0 booleans -- though on -1/0 inputs specifically, plain

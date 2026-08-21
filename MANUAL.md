@@ -2963,7 +2963,15 @@ casts so it stays true division even between two integers (plain C
 `int / int` truncates); `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` round each
 operand first via `round()` (verified against the GW-BASIC Reference
 Manual), then apply C's native `/`, `%`, `&`, `|`, `^`, or `~`; `^`
-(exponent) maps to `pow()` from `<math.h>`. String variables are
+(exponent) maps to `pow()` from `<math.h>`. A handful of narrower
+assumptions (e.g. `round()`'s ties-away-from-zero tie-break) are noted
+in `codegen_c.rs` as unverified against the real compiler -- a genuine,
+period-accurate IBM Personal Computer BASIC Compiler 2.00 (BASCOM), the
+same one the `basic` target's own dosbox-x conformance suite checks
+generated BASIC against, can be fetched locally with
+`scripts/fetch-ibm-basic-compiler.sh` -- see
+[test-fixtures/README.md](test-fixtures/README.md) -- to check them
+directly. String variables are
 fixed-size buffers (`char[256]`) — real BASIC strings are dynamically
 sized, which this backend doesn't attempt — written exclusively via
 `snprintf` (safely truncates an over-long value, never overflows), never
