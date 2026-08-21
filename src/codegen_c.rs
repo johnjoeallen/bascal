@@ -541,15 +541,13 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // Real MBASIC/BASCOM's `\`: each operand is rounded to the nearest
         // integer first (verified against the GW-BASIC Reference Manual --
         // see MANUAL.md's Arithmetic Operators table), *then* the quotient
-        // is truncated toward zero. `round()` rounds ties away from zero,
-        // which is the assumed tie-break rule here -- not yet independently
-        // verified against real BASCOM output, unlike most of this
-        // codebase's BASIC-compatibility claims. A genuine, period-accurate
-        // IBM Personal Computer BASIC Compiler 2.00 is fetchable locally
-        // (scripts/fetch-ibm-basic-compiler.sh, see
-        // test-fixtures/README.md) and could settle this directly under
-        // dosbox-x; hasn't been run for this specific case yet. C's `/`
-        // between two (rounded, cast-to-`long`) integers
+        // is truncated toward zero. `round()`'s ties-away-from-zero
+        // tie-break is confirmed correct: real IBM Personal Computer BASIC
+        // Compiler 2.00, run under dosbox-x, gives `2.5 \ 1 = 3` and
+        // `-2.5 \ 1 = -3` -- round-half-to-even (the other common
+        // convention) would instead round 2.5/-2.5 to their nearer *even*
+        // neighbor, 2/-2, giving 2 and -2. C's `/` between two (rounded,
+        // cast-to-`long`) integers
         // already truncates toward zero as of C99, so no extra truncation
         // step is needed once both operands are rounded. The final
         // `(int)` cast keeps the result a plain `int` so `%d` (not `%ld`)
@@ -641,15 +639,13 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // specifically for this. Verified against the GW-BASIC Reference
         // Manual: "Logical operators work by converting their operands to
         // 16-bit, signed, two's complement integers... the given operation
-        // is performed on these integers bit by bit." Same round-to-integer
-        // step `\`/MOD use (the manual doesn't say "rounded" here as
-        // explicitly as it does for `\`/MOD, but "converting... to
-        // integers" for a float operand is assumed to mean the same
-        // rounding, for consistency with the rest of this codebase's
-        // float-to-int conversions -- not yet independently verified
-        // against real BASCOM output, though a genuine, period-accurate
-        // copy is fetchable locally to settle it -- see
-        // scripts/fetch-ibm-basic-compiler.sh / test-fixtures/README.md).
+        // is performed on these integers bit by bit." The manual doesn't
+        // say "rounded" here as explicitly as it does for `\`/MOD, but that
+        // it means the same round()-style conversion is now confirmed, not
+        // just assumed: real IBM Personal Computer BASIC Compiler 2.00,
+        // run under dosbox-x, gives `2.5 AND 3 = 3` (round(2.5)=3, 3&3=3)
+        // and `3.5 AND 3 = 0` (round(3.5)=4, 4&3=0) -- a plain truncating
+        // conversion (int(2.5)=2, int(3.5)=3) would instead give 2 and 3.
         // This is exactly why C's `&`/`|`/`^` are the
         // right translation and C's `&&`/`||` would NOT be: this operates
         // on arbitrary integer *values* (`6 XOR 3 = 5`), not just BASIC's
