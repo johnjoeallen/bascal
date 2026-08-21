@@ -410,8 +410,8 @@ end if
 | `+`      | Addition / string concatenation |
 | `-`      | Subtraction / unary negation    |
 | `*`      | Multiplication |
-| `/`      | Division (truncates toward zero) |
-| `\`      | Integer division (floor quotient) |
+| `/`      | Division (always floating-point, even between two integers) |
+| `\`      | Integer division (each operand is rounded to an integer first, then the quotient is truncated toward zero) |
 | `MOD`    | Modulus (remainder after integer division) |
 | `^`      | Exponentiation (right-associative) |
 
