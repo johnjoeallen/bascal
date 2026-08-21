@@ -3743,27 +3743,31 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_pow_with_a_specific_reason() {
-        // Unlike `/`, `\`, and MOD, `^` is still NOT translated -- it needs
-        // pow() from <math.h>, not a plain C operator, so it must fail with
-        // a diagnostic that explains why, not just a generic "unsupported"
-        // message.
-        let cases: &[(&str, &str)] = &[("print 2 ^ 8\nend\n", "pow()")];
-        for (source, expect) in cases {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join("op.bcl");
-            std::fs::write(&path, format!("program p\n{source}")).unwrap();
-            let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
-            let result = compile_file(&path, &options);
-            assert!(result.is_err(), "expected `{source}` to fail");
-            let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
-            assert!(msg.contains(expect), "unexpected message for `{source}`: {msg}");
-        }
+    fn c_target_print_supports_pow_matching_the_manual_examples() {
+        // Right-associativity (2 ^ 3 ^ 2 = 2 ^ (3^2) = 512, not (2^3)^2 =
+        // 64) is already reflected in the AST's tree shape by the time
+        // codegen sees it -- BASCAL's parser resolves that, same as +/-/*'s
+        // precedence -- so a nested pow() call is all that's needed here.
+        let source = r#"print "A: "; 2 ^ 8
+print "B: "; 2 ^ 3 ^ 2
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(r#"printf("A: %g\n", pow((double)2, (double)8));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(
+                r#"printf("B: %g\n", pow((double)2, (double)pow((double)3, (double)2)));"#
+            ),
+            "unexpected output:\n{output}"
+        );
     }
 
-    /// Helper for the two tests above: writes `source` (with a `program`
-    /// header prepended) to a temp file and compiles it under `Target::C`,
-    /// panicking with the diagnostics on failure.
+    /// Helper for the C-backend tests above: writes `source` (with a
+    /// `program` header prepended) to a temp file and compiles it under
+    /// `Target::C`, panicking with the diagnostics on failure.
     fn compile_source_via_c_target(source: &str) -> String {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("numeric_print.bcl");

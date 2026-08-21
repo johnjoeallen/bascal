@@ -2931,18 +2931,19 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 describes: plain 1980s Microsoft BASIC/BASCOM output.
 
 `--target c` is a new, deliberately minimal native-C backend. Today it only
-understands a top-level `print` of string/numeric literals (`+`, `-`, `*`,
-`/`, `\`, `MOD` of them included — `/` gets explicit `(double)` casts so it
-stays true division, matching BASIC, instead of truncating like plain C
-`int / int`; `\`/`MOD` round each operand first via `round()`, then
-respectively truncate or take C's native `%` of the integer quotient --
-GW-BASIC's own examples show `MOD`'s remainder comes from the same
-rounded division `\` performs, and C's `%` is defined the same way, so no
-separate sign logic was needed) and `end` — anything else reports a "not
-supported yet" diagnostic instead of emitting incorrect code. `^` is
-deliberately excluded even though it's "just another operator" — it needs
-`pow()` from `<math.h>`, not a plain operator, and translating it directly
-would silently get the wrong answer.
+understands a top-level `print` of string/numeric literals — every
+arithmetic operator on them included (`+`, `-`, `*`, `/`, `\`, `MOD`, `^`)
+— and `end`; anything else (variables, `if`, loops, functions, arrays,
+comparisons...) reports a "not supported yet" diagnostic instead of
+emitting incorrect code. Each operator needed its exact BASIC semantics
+tracked down first, not just assumed to be "the same as the C operator":
+`/` gets explicit `(double)` casts so it stays true division even between
+two integers, unlike plain C `int / int`; `\`/`MOD` round each operand
+first via `round()`, then respectively truncate or take C's native `%` of
+the integer quotient — GW-BASIC's own examples show `MOD`'s remainder
+comes from the same rounded division `\` performs, and C's `%` is defined
+the same way, so no separate sign logic was needed; `^` maps to `pow()`
+from `<math.h>`, not a plain C operator.
 [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is currently the only
 tutorial small enough to compile under it; see
 [`tutorial/01_hello.c`](tutorial/01_hello.c) for its output. The BASCOM-

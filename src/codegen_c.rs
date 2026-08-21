@@ -1,12 +1,13 @@
 //! Minimal native-C backend.
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
-//! string/numeric literals (including negation and `+`/`-`/`*`/`/`/`\`/MOD
-//! of them) and `end`, wrapped in `int main(void) { ... }`. Everything else
-//! (functions, other statement kinds, variables, `^`) reports a "not
-//! supported yet" diagnostic rather than panicking or emitting wrong code
-//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
-//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
+//! string/numeric literals -- including negation and every arithmetic
+//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`) of them -- and `end`, wrapped in
+//! `int main(void) { ... }`. Everything else (functions, other statement
+//! kinds, variables, comparisons) reports a "not supported yet" diagnostic
+//! rather than panicking or emitting wrong code -- this is a walking
+//! skeleton to prove the CLI/dispatch plumbing (`Target::C`, `--target c`,
+//! `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -139,21 +140,22 @@ fn render_print_tokens(
 
 /// Renders a numeric-literal expression tree as C expression text, plus
 /// whether the result is floating-point (picks `%g` vs `%d` in the caller).
-/// Covers literals, negation, `+`/`-`/`*` (direct translations, no
-/// semantic gap between BASIC and C), `/` (explicit `(double)` casts on
-/// both operands, since BASIC's `/` always performs floating-point
-/// division, even between two integers, unlike plain C `/` between two
-/// `int`s), and `\`/`MOD` (round each operand first, per real MBASIC/
-/// BASCOM, then respectively truncate or take the remainder of the integer
-/// quotient -- see below). `^` is deliberately NOT included even though
-/// it's "just another operator": it needs `pow()` from `<math.h>`, not a C
-/// operator at all, and translating it the same way as the operators above
-/// would silently emit wrong output rather than erroring -- worse than
-/// just not supporting it yet.
+/// Covers literals, negation, and every arithmetic operator: `+`/`-`/`*`
+/// (direct translations, no semantic gap between BASIC and C), `/`
+/// (explicit `(double)` casts on both operands, since BASIC's `/` always
+/// performs floating-point division, even between two integers, unlike
+/// plain C `/` between two `int`s), `\`/`MOD` (round each operand first,
+/// per real MBASIC/BASCOM, then respectively truncate or take the
+/// remainder of the integer quotient), and `^` (`pow()` from `<math.h>`,
+/// right-associative -- already reflected in the tree shape by the time it
+/// reaches here, same as the other operators' precedence). Every one of
+/// these needed its exact BASIC semantics tracked down first (see the
+/// per-arm comments below) rather than assuming "it's just the C operator"
+/// -- several aren't.
 ///
 /// `needs_math` is set whenever generated code calls into `<math.h>` (so
-/// far: `\` and `MOD`, both via `round()`), so the caller knows to add
-/// that `#include` -- most programs won't need it.
+/// far: `\`/`MOD` via `round()`, `^` via `pow()`), so the caller knows to
+/// add that `#include` -- most programs won't need it.
 fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bool), String> {
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
@@ -238,11 +240,23 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
                 false,
             ))
         }
-        Expr::Binary { op: BinaryOp::Pow, .. } => Err(
-            "`^` isn't supported by the minimal C backend yet -- needs pow() from <math.h>, not \
-             a plain C operator"
-                .to_string(),
-        ),
+        // `^` (right-associative -- already reflected in the tree shape by
+        // the time it reaches here, same as `+`/`-`/`*`'s precedence, so no
+        // extra handling needed for that part) maps directly to pow() from
+        // <math.h>, which always returns a `double`. A whole-number result
+        // (`2 ^ 8` -> `256.0`) still prints as `256` under `%g`, not
+        // `256.000000`, so this doesn't look any different from an integer
+        // result in the common case. Negative bases with non-integer
+        // exponents (e.g. `(-8) ^ (1/3)`) produce `nan` via real-valued
+        // pow(), same as they'd error in BASIC -- a behavioral gap, not
+        // addressed here, same category as the other operators' noted
+        // gaps above.
+        Expr::Binary { left, op: BinaryOp::Pow, right } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            *needs_math = true;
+            Ok((format!("pow((double){left_text}, (double){right_text})"), true))
+        }
         _ => Err(
             "the minimal C backend's `print` only supports string/numeric literals and +, -, * \
              of them so far -- not variables, calls, comparisons, or other operators"
