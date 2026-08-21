@@ -3591,6 +3591,22 @@ resume next
     }
 
     #[test]
+    fn c_target_compiles_arithmetic_and_conditions_tutorials() {
+        // The first real, complete tutorials (not just custom test
+        // snippets) the C backend can compile beyond 01_hello -- string
+        // variables were the last piece both needed. Compiling is checked
+        // here (in-process, fast); actual gcc-and-run output was verified
+        // manually against each tutorial's own documented `// expect ...`
+        // comments and matched exactly.
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        for tutorial in ["tutorial/03_arithmetic.bcl", "tutorial/04_conditions.bcl"] {
+            let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(tutorial);
+            compile_file(&input, &options)
+                .unwrap_or_else(|d| panic!("{tutorial} should compile to C: {d:?}"));
+        }
+    }
+
+    #[test]
     fn c_target_rejects_unsupported_statements_with_a_diagnostic() {
         // Array `dim` isn't part of the minimal C backend's supported
         // surface yet (only scalar `dim` is) -- this must fail with a
@@ -3628,20 +3644,85 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_string_variables_and_expressions() {
-        // Numeric scalar variables ARE supported now (see the dedicated
-        // variable tests below) -- but string variables, calls, and
-        // comparisons still aren't.
-        let source = "print name$\nend\n";
+    fn c_target_print_still_rejects_string_function_calls() {
+        // String scalar variables ARE supported now (see the dedicated
+        // string tests below) -- but calls like LEN$() still aren't.
+        let source = "name$ = \"Alice\"\nprint len(name$)\nend\n";
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("var_print.bcl");
+        let path = dir.path().join("call_print.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
 
         let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
         let result = compile_file(&path, &options);
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
-        assert!(msg.contains("numeric scalar variables"), "unexpected message: {msg}");
+    }
+
+    #[test]
+    fn c_target_supports_string_variables_const_and_assignment() {
+        let source = r#"const appName$ = "Grade Checker"
+playerName$ = "Alice"
+print appName$
+print "Player: "; playerName$
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("char bv_s_appname[256] = {0};"), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"snprintf(bv_s_appname, sizeof(bv_s_appname), "%s", "Grade Checker");"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains(r#"printf("%s\n", bv_s_appname);"#), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"printf("Player: %s\n", bv_s_playername);"#),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_string_concatenation_uses_snprintf_never_strcpy_or_strcat() {
+        // Every string buffer is fixed-size -- snprintf is used for every
+        // write specifically so a string that doesn't fit is *safely
+        // truncated*, never a buffer overflow. strcpy/strcat (unbounded,
+        // a real overflow risk against a fixed buffer) must never appear.
+        let source = r#"grade$ = "A"
+print "Grade: " + grade$
+print "Hello" + ", " + "World" + "!"
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(r#"snprintf(bt_s_0, sizeof(bt_s_0), "%s%s", "Grade: ", bv_s_grade);"#),
+            "unexpected output:\n{output}"
+        );
+        // Left-associative chain -- each + gets its own temp buffer.
+        assert!(
+            output.contains(r#"snprintf(bt_s_1, sizeof(bt_s_1), "%s%s", "Hello", ", ");"#)
+                && output.contains(r#"snprintf(bt_s_2, sizeof(bt_s_2), "%s%s", bt_s_1, "World");"#)
+                && output.contains(r#"snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bt_s_2, "!");"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(!output.contains("strcpy") && !output.contains("strcat"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_string_literal_percent_is_not_doubled_as_a_plain_value() {
+        // A % in a string used as a printf format-string argument (this
+        // module's escape_c_string_literal) must NOT be doubled to %% --
+        // only text embedded directly into printf's own format string
+        // (escape_c_format_text) needs that. Getting this backwards would
+        // either corrupt a value string ("100%" -> "100%%") or, worse, let
+        // an unescaped % inside a literal print reach printf's format
+        // parser.
+        let source = "grade$ = \"100%\"\nprint grade$\nprint \"100%\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(r#"snprintf(bv_s_grade, sizeof(bv_s_grade), "%s", "100%");"#),
+            "a literal used as a plain value must keep a single %:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("100%%\n");"#),
+            "a literal embedded directly in printf's format string must double %:\n{output}"
+        );
     }
 
     #[test]

@@ -26,7 +26,7 @@
 //! explicitly at the byte offsets `records.rs` already computes for the
 //! BASIC backend, the same offsets both backends should share.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::{BasicIdent, BinaryOp, Expr, PrintToken, Program, Statement, TypeSuffix, UnaryOp};
 use crate::diagnostics::{Diagnostic, SourcePos};
@@ -39,31 +39,37 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
 
     // BASIC variables "spring into existence on first use" -- there's no
-    // separate declaration step to hook into, so every numeric scalar
-    // variable touched anywhere in the program (by `dim`, an assignment
-    // target, or a read) is collected up front and declared, zero-
-    // initialized, at the very top of `main`, regardless of where it's
-    // first mentioned in source order. This pass is deliberately
-    // infallible -- it only ever *adds* a declaration for a variable shape
-    // it understands; anything it doesn't (string variables, arrays, ...)
-    // is silently skipped here and reported as a real error later, when
-    // `emit_statement`/`render_numeric_expr` actually tries to use it.
-    let mut declared_vars = BTreeMap::new();
+    // separate declaration step to hook into, so every scalar variable
+    // touched anywhere in the program (by `dim`, an assignment target, or
+    // a read) is collected up front and declared, zero-initialized (for a
+    // string, that means an all-zero buffer -- a valid, empty C string),
+    // at the very top of `main`, regardless of where it's first mentioned
+    // in source order. This pass is deliberately infallible -- it only
+    // ever *adds* a declaration for a variable shape it understands;
+    // anything it doesn't (arrays, ...) is silently skipped here and
+    // reported as a real error later, when `emit_statement`/
+    // `render_numeric_expr`/`render_string_expr` actually tries to use it.
+    let mut numeric_vars = BTreeMap::new();
+    let mut string_vars = BTreeSet::new();
     for statement in &program.statements {
-        collect_numeric_vars_in_statement(statement, &mut declared_vars);
+        collect_vars_in_statement(statement, &mut numeric_vars, &mut string_vars);
     }
 
     let mut body = String::new();
-    for (c_name, c_type) in &declared_vars {
+    for (c_name, c_type) in &numeric_vars {
         body.push_str(&format!("    {c_type} {c_name} = 0;\n"));
     }
-    if !declared_vars.is_empty() {
+    for c_name in &string_vars {
+        body.push_str(&format!("    char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"));
+    }
+    if !numeric_vars.is_empty() || !string_vars.is_empty() {
         body.push('\n');
     }
 
     let mut needs_math = false;
+    let mut temp_counter = 0;
     for statement in &program.statements {
-        emit_statement(statement, &mut body, &mut needs_math)
+        emit_statement(statement, &mut body, &mut needs_math, &mut temp_counter)
             .map_err(|message| vec![unsupported(&message)])?;
     }
     // `Statement::End` already emits its own `return 0;` -- only add the
@@ -120,58 +126,87 @@ fn numeric_c_type(suffix: TypeSuffix) -> Option<(&'static str, bool)> {
     }
 }
 
-fn collect_numeric_vars_in_statement(statement: &Statement, out: &mut BTreeMap<String, &'static str>) {
+fn collect_vars_in_statement(
+    statement: &Statement,
+    numeric_out: &mut BTreeMap<String, &'static str>,
+    string_out: &mut BTreeSet<String>,
+) {
     match statement {
         Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
-            register_numeric_var(name, out);
+            register_var(name, numeric_out, string_out);
         }
         Statement::Assignment { target: Expr::Ident(name), value }
         | Statement::Const { name, value } => {
-            register_numeric_var(name, out);
-            collect_numeric_vars_in_expr(value, out);
+            register_var(name, numeric_out, string_out);
+            collect_vars_in_expr(value, numeric_out, string_out);
         }
         Statement::Print { tokens } => {
             for token in tokens {
                 if let PrintToken::Expr(expr) = token {
-                    collect_numeric_vars_in_expr(expr, out);
+                    collect_vars_in_expr(expr, numeric_out, string_out);
                 }
             }
         }
         Statement::If { condition, then_body, else_body } => {
-            collect_numeric_vars_in_expr(condition, out);
+            collect_vars_in_expr(condition, numeric_out, string_out);
             for stmt in then_body {
-                collect_numeric_vars_in_statement(stmt, out);
+                collect_vars_in_statement(stmt, numeric_out, string_out);
             }
             for stmt in else_body {
-                collect_numeric_vars_in_statement(stmt, out);
+                collect_vars_in_statement(stmt, numeric_out, string_out);
             }
         }
         _ => {}
     }
 }
 
-fn collect_numeric_vars_in_expr(expr: &Expr, out: &mut BTreeMap<String, &'static str>) {
+fn collect_vars_in_expr(
+    expr: &Expr,
+    numeric_out: &mut BTreeMap<String, &'static str>,
+    string_out: &mut BTreeSet<String>,
+) {
     match expr {
-        Expr::Ident(ident) => register_numeric_var(ident, out),
-        Expr::Unary { expr, .. } => collect_numeric_vars_in_expr(expr, out),
+        Expr::Ident(ident) => register_var(ident, numeric_out, string_out),
+        Expr::Unary { expr, .. } => collect_vars_in_expr(expr, numeric_out, string_out),
         Expr::Binary { left, right, .. } => {
-            collect_numeric_vars_in_expr(left, out);
-            collect_numeric_vars_in_expr(right, out);
+            collect_vars_in_expr(left, numeric_out, string_out);
+            collect_vars_in_expr(right, numeric_out, string_out);
         }
         _ => {}
     }
 }
 
-fn register_numeric_var(ident: &BasicIdent, out: &mut BTreeMap<String, &'static str>) {
-    let Some(suffix) = ident.suffix else { return };
-    let Some((c_type, _)) = numeric_c_type(suffix) else { return };
-    out.insert(c_var_name(ident, suffix), c_type);
+fn register_var(
+    ident: &BasicIdent,
+    numeric_out: &mut BTreeMap<String, &'static str>,
+    string_out: &mut BTreeSet<String>,
+) {
+    match ident.suffix {
+        Some(TypeSuffix::String) => {
+            string_out.insert(c_var_name(ident, TypeSuffix::String));
+        }
+        Some(suffix) => {
+            if let Some((c_type, _)) = numeric_c_type(suffix) {
+                numeric_out.insert(c_var_name(ident, suffix), c_type);
+            }
+        }
+        None => {}
+    }
 }
 
-fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool) -> Result<(), String> {
+fn emit_statement(
+    statement: &Statement,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
-            let (mut format, args, needs_newline) = render_print_tokens(tokens, needs_math)?;
+            let (prelude, mut format, args, needs_newline) =
+                render_print_tokens(tokens, needs_math, temp_counter)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
             if needs_newline {
                 format.push_str("\\n");
             }
@@ -191,26 +226,26 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
         // Declarations are hoisted to the top of `main` up front (see
         // `collect_numeric_vars_in_statement` in `generate`), matching
         // BASIC's "springs into existence on first use" semantics -- `dim`
-        // of a numeric scalar is therefore a pure no-op here, already
-        // handled wherever it happens to appear in source order.
-        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
-            match name.suffix.and_then(numeric_c_type) {
-                Some(_) => Ok(()),
-                None => Err(format!(
-                    "`dim {name}` isn't supported by the minimal C backend yet -- only numeric \
-                     scalar variables (%, &, !, #) are"
-                )),
-            }
-        }
+        // of a scalar is therefore a pure no-op here, already handled
+        // wherever it happens to appear in source order.
+        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => match name.suffix {
+            Some(suffix) if numeric_c_type(suffix).is_some() || suffix == TypeSuffix::String => Ok(()),
+            _ => Err(format!(
+                "`dim {name}` isn't supported by the minimal C backend yet -- only scalar \
+                 variables (%, &, !, #, $) are"
+            )),
+        },
         Statement::Assignment { target: Expr::Ident(name), value } => {
-            emit_scalar_assignment(name, value, out, needs_math)
+            emit_assignment(name, value, out, needs_math, temp_counter)
         }
         // Real MBASIC/BASCOM has no CONST statement at all -- `const` in
         // `.bcl` source is purely a naming/intent signal to the reader
         // (BASCAL's resolver already enforces it's never reassigned before
         // codegen ever runs), so it codegens exactly like an ordinary
         // assignment, same as the BASIC backend's own treatment of it.
-        Statement::Const { name, value } => emit_scalar_assignment(name, value, out, needs_math),
+        Statement::Const { name, value } => {
+            emit_assignment(name, value, out, needs_math, temp_counter)
+        }
         // Unlike the BASIC backend, which has to transpile `if`/`elseif`/
         // `else` into a GOTO/label chain (real MBASIC/BASCOM has no block
         // `IF`), C has native `if`/`else`, so this is a direct structural
@@ -227,14 +262,14 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
             let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));
             for stmt in then_body {
-                emit_statement(stmt, out, needs_math)?;
+                emit_statement(stmt, out, needs_math, temp_counter)?;
             }
             if else_body.is_empty() {
                 out.push_str("    }\n");
             } else {
                 out.push_str("    } else {\n");
                 for stmt in else_body {
-                    emit_statement(stmt, out, needs_math)?;
+                    emit_statement(stmt, out, needs_math, temp_counter)?;
                 }
                 out.push_str("    }\n");
             }
@@ -262,7 +297,7 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, and assignment/`const` of numeric scalar variables (%, &, !, #) are \
+             `dim`, `if`, and assignment/`const` of scalar variables (%, &, !, #, $) are \
              implemented so far"
         )),
     }
@@ -270,12 +305,15 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
 
 /// Shared by `Statement::Assignment` and `Statement::Const` -- both are
 /// "evaluate `value`, store it in `name`'s variable," identical at the C
-/// level (see the `Const` match arm's comment for why).
-fn emit_scalar_assignment(
+/// level (see the `Const` match arm's comment for why). Dispatches between
+/// numeric and string variables; anything else (an array target, a
+/// suffixless variable) is an error.
+fn emit_assignment(
     name: &BasicIdent,
     value: &Expr,
     out: &mut String,
     needs_math: &mut bool,
+    temp_counter: &mut usize,
 ) -> Result<(), String> {
     match name.suffix {
         Some(suffix) if numeric_c_type(suffix).is_some() => {
@@ -283,29 +321,121 @@ fn emit_scalar_assignment(
             out.push_str(&format!("    {} = {value_text};\n", c_var_name(name, suffix)));
             Ok(())
         }
+        Some(TypeSuffix::String) => {
+            let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            let c_name = c_var_name(name, TypeSuffix::String);
+            out.push_str(&format!(
+                "    snprintf({c_name}, sizeof({c_name}), \"%s\", {value_text});\n"
+            ));
+            Ok(())
+        }
         _ => Err(format!(
-            "assignment to `{name}` isn't supported by the minimal C backend yet -- only \
-             numeric scalar variables (%, &, !, #) are"
+            "assignment to `{name}` isn't supported by the minimal C backend yet -- give it an \
+             explicit type suffix (%, &, !, #, $)"
         )),
     }
 }
 
-/// Builds a `printf` format string plus its positional argument
-/// expressions, and reports whether the statement wants a trailing newline
-/// -- same rule the BASIC backend's `render_print_tokens` uses: a trailing
-/// `;`/`,` suppresses it, anything else (including no separator at all)
-/// gets one.
+/// Whether `expr` is a string-typed expression -- a string literal, a
+/// read of a `$`-suffixed variable, or `+` (concatenation) where either
+/// side is. Used to route a `print`/assignment expression to
+/// `render_string_expr` instead of `render_numeric_expr`; BASCAL's own
+/// resolver has already rejected genuinely mixed-type `+` (a string plus a
+/// number) before codegen ever runs, so this heuristic (check one side,
+/// trust the program is well-typed) doesn't need to be a full type checker.
+fn is_string_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::String(_) => true,
+        Expr::Ident(ident) => ident.suffix == Some(TypeSuffix::String),
+        Expr::Binary { op: BinaryOp::Add, left, right } => {
+            is_string_expr(left) || is_string_expr(right)
+        }
+        _ => false,
+    }
+}
+
+/// Every string variable/temporary is a fixed-size buffer -- real BASIC
+/// strings are dynamically sized (heap-allocated, grow/shrink freely),
+/// which this minimal backend doesn't attempt to replicate. `snprintf` is
+/// used for every write into one of these buffers specifically so a string
+/// longer than fits is *safely truncated*, never a buffer overflow --
+/// unlike `strcpy`/`strcat`, which this backend deliberately never emits.
+const STRING_BUFFER_SIZE: usize = 256;
+
+/// Renders a string expression tree as C expression text usable as a
+/// `char*` argument (an `snprintf`/`printf` `%s` argument, an assignment
+/// source), plus any statements that must run first to materialize it.
 ///
-/// String literals contribute their (escaped) text directly to the format
-/// string; every numeric expression `render_numeric_expr` understands
-/// (literals, numeric scalar variables, arithmetic) contributes a `%d`/`%g`
-/// placeholder plus C expression text in `args`. Anything else (a string
-/// variable, a call, a comparison) isn't supported yet and is reported as
-/// an error rather than silently mishandled.
+/// String literals and `$`-suffixed variable reads need no prelude -- a
+/// quoted C string literal and a buffer name (which decays to `char*`)
+/// are both usable directly as a `%s` argument. `+` (concatenation)
+/// does: C has no string-concatenation operator, so each concatenation
+/// gets its own freshly declared temp buffer (`bt_s_<n>`, `temp_counter`
+/// keeps every one unique within the program) and an `snprintf(dest,
+/// sizeof(dest), "%s%s", left, right)` call -- safe against overflow the
+/// same way `emit_assignment`'s string case is, and it's why plain C99
+/// mid-block declarations (the temp buffer's `char bt_s_n[256];` line)
+/// are emitted right where first needed rather than hoisted, unlike named
+/// variables. A chain like `a$ + b$ + c$` (left-associative, same as
+/// BASIC) therefore costs one temp buffer per `+`, not just one for the
+/// whole chain -- more buffers than strictly necessary, but simple and
+/// correct, consistent with this backend's other "correct over clever"
+/// choices.
+fn render_string_expr(
+    expr: &Expr,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+) -> Result<(Vec<String>, String), String> {
+    match expr {
+        Expr::String(s) => Ok((Vec::new(), format!("\"{}\"", escape_c_string_literal(s)))),
+        Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
+            Ok((Vec::new(), c_var_name(ident, TypeSuffix::String)))
+        }
+        Expr::Binary { op: BinaryOp::Add, left, right } if is_string_expr(left) || is_string_expr(right) => {
+            let (mut prelude, left_text) = render_string_expr(left, needs_math, temp_counter)?;
+            let (right_prelude, right_text) = render_string_expr(right, needs_math, temp_counter)?;
+            prelude.extend(right_prelude);
+            let temp = format!("bt_s_{temp_counter}");
+            *temp_counter += 1;
+            prelude.push(format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+            prelude.push(format!(
+                "    snprintf({temp}, sizeof({temp}), \"%s%s\", {left_text}, {right_text});\n"
+            ));
+            Ok((prelude, temp))
+        }
+        _ => Err(
+            "the minimal C backend's string expressions only support string literals, string \
+             scalar variables ($), and + (concatenation) of them so far"
+                .to_string(),
+        ),
+    }
+}
+
+/// Builds any statements that must run before the `printf` call (e.g. a
+/// string concatenation's temp-buffer setup), the `printf` format string
+/// itself, its positional argument expressions, and whether the statement
+/// wants a trailing newline -- same rule the BASIC backend's
+/// `render_print_tokens` uses: a trailing `;`/`,` suppresses it, anything
+/// else (including no separator at all) gets one.
+///
+/// A bare string literal contributes its (escaped) text directly to the
+/// format string, with no `%s`/prelude needed. Any other string-typed
+/// expression (`is_string_expr`: a string variable read, or `+`
+/// concatenation) goes through `render_string_expr` instead, contributing
+/// a `%s` placeholder, its value in `args`, and its prelude lines (if any)
+/// to the output. Everything else goes through `render_numeric_expr`,
+/// contributing a `%d`/`%g` placeholder plus C expression text. Anything
+/// neither function understands (a call, an array) isn't supported yet and
+/// is reported as an error rather than silently mishandled.
 fn render_print_tokens(
     tokens: &[PrintToken],
     needs_math: &mut bool,
-) -> Result<(String, Vec<String>, bool), String> {
+    temp_counter: &mut usize,
+) -> Result<(Vec<String>, String, Vec<String>, bool), String> {
+    let mut prelude = Vec::new();
     let mut format = String::new();
     let mut args = Vec::new();
     let mut needs_newline = true;
@@ -313,7 +443,14 @@ fn render_print_tokens(
         match token {
             PrintToken::Expr(Expr::String(s)) => {
                 needs_newline = true;
-                format.push_str(&escape_c_string(s));
+                format.push_str(&escape_c_format_text(s));
+            }
+            PrintToken::Expr(expr) if is_string_expr(expr) => {
+                let (expr_prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+                prelude.extend(expr_prelude);
+                needs_newline = true;
+                format.push_str("%s");
+                args.push(text);
             }
             PrintToken::Expr(expr) => {
                 let (text, is_float) = render_numeric_expr(expr, needs_math)?;
@@ -326,7 +463,7 @@ fn render_print_tokens(
             }
         }
     }
-    Ok((format, args, needs_newline))
+    Ok((prelude, format, args, needs_newline))
 }
 
 /// Renders a numeric expression tree as C expression text, plus whether the
@@ -542,19 +679,23 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
     }
 }
 
-/// C string-literal escaping -- deliberately a separate function from
+/// Escapes `value` as the body of a plain C string literal (no surrounding
+/// quotes) -- correct for a string used as an ordinary argument (an
+/// `snprintf` source, an assignment value, a concatenation operand: see
+/// `render_string_expr`). Deliberately a separate function from
 /// `codegen_basic::escape_string`, not a shared one: BASIC string literals
 /// have no backslash escapes at all (a literal `"` is doubled, that's the
 /// entire rule), while C needs `\"`, `\\`, and control bytes escaped.
 /// Reusing the BASIC escaper here would silently emit invalid/wrong C the
 /// moment a string contained a backslash or an unescaped control byte.
 ///
-/// Every use of this ends up inside a `printf` format-string argument (see
-/// `render_print_tokens`), so a literal `%` is escaped to `%%` too --
-/// without that, a BASIC string containing `%` would be read by `printf` as
-/// a format specifier instead of literal text, which is a correctness bug
-/// (wrong output at best, mismatched varargs / crash at worst).
-fn escape_c_string(value: &str) -> String {
+/// NOT correct for embedding text directly into a `printf`-style format
+/// string itself (as opposed to one of its arguments) -- that additionally
+/// needs a literal `%` doubled to `%%`, which this deliberately does NOT
+/// do (a string used as a plain value, e.g. `grade$ = "100%"`, must keep
+/// its single `%` -- doubling it here would be a correctness bug in the
+/// other direction). See `escape_c_format_text` for the format-string case.
+fn escape_c_string_literal(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for ch in value.chars() {
         match ch {
@@ -563,12 +704,21 @@ fn escape_c_string(value: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            '%' => out.push_str("%%"),
             c if (c as u32) < 0x20 => out.push_str(&format!("\\x{:02x}", c as u32)),
             c => out.push(c),
         }
     }
     out
+}
+
+/// Everything `escape_c_string_literal` does, plus doubling a literal `%`
+/// to `%%` -- for text embedded directly into a `printf`-style format
+/// string (see `render_print_tokens`'s `PrintToken::Expr(Expr::String(s))`
+/// case), where an unescaped `%` would otherwise be read as a format
+/// specifier instead of literal text -- a correctness bug (wrong output at
+/// best, mismatched varargs / crash at worst).
+fn escape_c_format_text(value: &str) -> String {
+    escape_c_string_literal(value).replace('%', "%%")
 }
 
 /// Same rule as `codegen_basic::ends_with_end`: the last statement that

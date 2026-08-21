@@ -102,44 +102,46 @@ BASCAL has two code generators, selected with `--target`:
 - **`basic`** (default) — BASCAL's original and only complete target: plain
   1980s Microsoft BASIC/BASCOM, described throughout this README. Everything
   above applies to this backend.
-- **`c`** — a native C backend, **just getting started**. It currently
-  understands a top-level `print` of string/numeric literals — every
-  arithmetic operator (`+`, `-`, `*`, `/`, `\`, `MOD`, `^`) and every
-  comparison operator (`=`, `<>`, `<`, `<=`, `>`, `>=`) on them included —
-  `end`, `dim`, `const`, assignment/reading of *numeric scalar* variables
-  (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-zero-initialized
-  semantics: every variable touched anywhere is declared once at the top
-  of `main`, regardless of where it first appears), and `if`/`elseif`/
-  `else`/`end if` (block, single-line, and nested forms — unlike the
-  `basic` target, which has to transpile `if` into a GOTO/label chain
-  since real MBASIC/BASCOM has no block `IF`, C has native `if`/`else`, so
-  this is a direct structural translation). Comparisons evaluate to
-  BASIC's own `-1`/`0` (`-(a == b)` on C's native `0`/`1` result), not C's
-  `1`/`0`. `AND`/`OR`/`XOR`/`NOT` are genuinely bitwise (`6 XOR 3 = 5`,
-  `NOT 1 = -2`), not short-circuit booleans — C's own `&`/`|`/`^`/`~` are
-  the correct translation, not `&&`/`||`/`!`, since real MBASIC/BASCOM has
-  no short-circuit boolean primitive at all. Anything else (string
-  variables, arrays, loops, functions...) reports a "not supported yet"
-  diagnostic rather than emitting wrong code. Each operator needed its
-  exact BASIC semantics tracked down first, not just assumed to be "the
-  same as the C operator": `/` gets explicit `(double)` casts so it stays
-  true division even between two integers, unlike plain C `int / int`;
-  `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` round each operand first via `round()`
-  (GW-BASIC's own examples show `MOD`'s remainder comes from the same
-  rounded division `\` performs, and that logical operators "convert
-  their operands to 16-bit... integers" the same way), then respectively
-  apply C's native `/`, `%`, `&`, `|`, `^`, or `~`; `^` (exponent) maps to
-  `pow()` from `<math.h>`, not a plain C operator. `%`/`&` (BASIC's 16-bit integer
-  and 32-bit long) are collapsed to the same plain C `int`, the same
-  simplification already used for arithmetic results.
-  [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
-  enough to compile under it today — see
-  [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The
-  eventual point of this backend is producing native Linux/macOS/Win32
-  binaries directly (via `gcc`), without going through a BASIC compiler at
-  all — while the BASCOM-compatible `basic` target keeps gating what
-  language features BASCAL adds, so both backends can keep expressing the
-  same language.
+- **`c`** — a native C backend, **just getting started**, aiming to
+  produce native Linux/macOS/Win32 binaries directly (via `gcc`) without
+  going through a BASIC compiler at all — while the BASCOM-compatible
+  `basic` target keeps gating what language features BASCAL adds, so both
+  backends stay able to express the same language. Three tutorials
+  compile end to end today:
+  [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl),
+  [`tutorial/03_arithmetic.bcl`](tutorial/03_arithmetic.bcl), and
+  [`tutorial/04_conditions.bcl`](tutorial/04_conditions.bcl) — see each
+  one's `.c` counterpart for its output.
+
+  Currently supported: `print`, `end`, `dim`, `const`, `if`/`elseif`/
+  `else`/`end if` (block, single-line, and nested — C has native
+  `if`/`else`, so this is a direct structural translation, unlike the
+  `basic` target, which has to transpile to a GOTO/label chain since real
+  MBASIC/BASCOM has no block `IF`), scalar variables — both numeric
+  (`%`/`&`/`!`/`#`) and string (`$`) — matching BASIC's spring-into-
+  existence-zero-initialized semantics (every variable touched anywhere
+  is declared once at the top of `main`), every arithmetic operator
+  (`+ - * / \ MOD ^`), every comparison operator (`= <> < <= > >=`,
+  evaluating to BASIC's own `-1`/`0`, not C's `1`/`0`), every bitwise/
+  logical operator (`AND OR XOR NOT` — genuinely bitwise, not
+  short-circuit booleans: C's `&`/`|`/`^`/`~` are correct here, not
+  `&&`/`||`/`!`, since real MBASIC/BASCOM has no short-circuit boolean
+  primitive at all), and string concatenation (`+`). Anything else
+  (arrays, loops, functions, calls...) reports a "not supported yet"
+  diagnostic rather than emitting wrong code.
+
+  Every operator needed its exact BASIC semantics tracked down first, not
+  assumed to be "the same as the C operator" — e.g. `/` gets explicit
+  `(double)` casts so it stays true division even between two integers
+  (plain C `int / int` truncates); `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` round
+  each operand first via `round()` (verified against the GW-BASIC
+  Reference Manual), then apply C's native `/`, `%`, `&`, `|`, `^`, or
+  `~`; `^` (exponent) maps to `pow()` from `<math.h>`. String variables
+  are fixed-size buffers (`char[256]`) — real BASIC strings are
+  dynamically sized, which this backend doesn't attempt — written
+  exclusively via `snprintf` (safely truncates an over-long value, never
+  overflows), never `strcpy`/`strcat`. `%`/`&` (BASIC's 16-bit integer and
+  32-bit long) are collapsed to the same plain C `int`.
 
 ## Dependencies
 
