@@ -6,13 +6,18 @@
 //! (`=`/`<>`/`<`/`<=`/`>`/`>=`), and every bitwise/logical operator
 //! (`AND`/`OR`/`XOR`/`NOT` -- genuinely bitwise, not short-circuit
 //! booleans) of them -- `end`, `dim`, `const`, assignment/reading of
-//! *numeric scalar* variables (`%`/`&`/`!`/`#`), and `if`/`elseif`/`else`/
-//! `end if` (including the single-line form, and nesting), wrapped in
-//! `int main(void) { ... }`. Everything else (functions, other statement
-//! kinds, string variables, arrays, loops) reports a "not supported yet"
-//! diagnostic rather than panicking or emitting wrong code -- this is a
-//! walking skeleton to prove the CLI/dispatch plumbing (`Target::C`,
-//! `--target c`, `invoke_gcc`) end-to-end, not a real backend.
+//! *scalar* variables (numeric: `%`/`&`/`!`/`#`; string: `$`, fixed-size
+//! `char[256]` buffers written only via `snprintf`, never `strcpy`/
+//! `strcat` -- see `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string
+//! concatenation, and `if`/`elseif`/`else`/`end if` (including the
+//! single-line form, and nesting), wrapped in `int main(void) { ... }`.
+//! Everything else (functions, other statement kinds, arrays, loops,
+//! calls) reports a "not supported yet" diagnostic rather than panicking
+//! or emitting wrong code -- this is a walking skeleton to prove the
+//! CLI/dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`)
+//! end-to-end, not a real backend. Three tutorials compile end to end
+//! today: `tutorial/01_hello.bcl`, `tutorial/03_arithmetic.bcl`, and
+//! `tutorial/04_conditions.bcl`.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -115,8 +120,10 @@ fn c_var_name(ident: &BasicIdent, suffix: TypeSuffix) -> String {
 /// results (see `IntDiv`/`Mod` above), rather than introducing a `long`/
 /// `%ld` type-tracking dimension for one BASIC type that's rarely
 /// distinguished from `%` in practice. Returns `None` for `$`/no suffix --
-/// string variables and suffixless (default-type) variables aren't
-/// supported yet.
+/// `$` is a real, supported type, just not a *numeric* one, so it's
+/// handled by a separate path (`render_string_expr`/`emit_assignment`'s
+/// string branch), not here; suffixless (default-type) variables aren't
+/// supported at all yet.
 fn numeric_c_type(suffix: TypeSuffix) -> Option<(&'static str, bool)> {
     match suffix {
         TypeSuffix::Integer | TypeSuffix::Long => Some(("int", false)),
@@ -469,9 +476,12 @@ fn render_print_tokens(
 /// Renders a numeric expression tree as C expression text, plus whether the
 /// result is floating-point (picks `%g` vs `%d` in the caller). Covers
 /// literals, numeric scalar variable reads (`%`/`&`/`!`/`#` -- the C
-/// identifier and float-ness come from `c_var_name`/`numeric_c_type`;
-/// string variables and no-suffix variables aren't supported yet), negation,
-/// and every arithmetic operator: `+`/`-`/`*`
+/// identifier and float-ness come from `c_var_name`/`numeric_c_type`; a
+/// string variable read is a type error in a *numeric* context, so this
+/// function still rejects `$` -- but strings themselves are handled fine,
+/// just by `render_string_expr` instead, for expressions callers route
+/// there via `is_string_expr`; no-suffix variables aren't supported at
+/// all yet), negation, and every arithmetic operator: `+`/`-`/`*`
 /// (direct translations, no semantic gap between BASIC and C), `/`
 /// (explicit `(double)` casts on both operands, since BASIC's `/` always
 /// performs floating-point division, even between two integers, unlike
@@ -671,9 +681,11 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             Ok((format!("((int)(~(long)round((double){inner})))"), false))
         }
         _ => Err(
-            "the minimal C backend only supports string/numeric literals, numeric scalar \
-             variables (%, &, !, #), arithmetic, comparisons, and AND/OR/XOR/NOT on them so far \
-             -- not calls, string variables, or arrays"
+            "this expression isn't supported in a numeric context by the minimal C backend yet \
+             -- render_numeric_expr only covers numeric literals, numeric scalar variables (%, \
+             &, !, #), arithmetic, comparisons, and AND/OR/XOR/NOT (a string variable is a type \
+             error here, not just unimplemented -- see render_string_expr for string \
+             expressions); calls and arrays aren't supported in either context yet"
                 .to_string(),
         ),
     }
