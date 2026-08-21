@@ -185,16 +185,15 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Plain arrow-style chapter list -- no card boxes, just a link per line
-   with a leading arrow glyph, same visual language as the prev/next
-   .crumbs links at the bottom of each chapter page. */
-.toc-arrows {
+/* Plain chapter list for the manual index -- no card boxes, just one
+   link per line. */
+.manual-toc {
   list-style: none;
   margin: 1.2rem 0 0;
   padding: 0;
 }
-.toc-arrows li + li { margin-top: .15rem; }
-.toc-arrows a {
+.manual-toc li + li { margin-top: .15rem; }
+.manual-toc a {
   display: flex;
   align-items: baseline;
   gap: .5rem;
@@ -202,12 +201,8 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
   color: var(--fg);
   text-decoration: none;
 }
-.toc-arrows a:hover { color: var(--accent-2); }
-.toc-arrows a::before {
-  content: "\2192";
-  color: var(--fg-dim);
-}
-.toc-arrows .num {
+.manual-toc a:hover { color: var(--accent-2); }
+.manual-toc .num {
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
 }
