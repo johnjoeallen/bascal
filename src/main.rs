@@ -148,6 +148,10 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<(), String> {
         .arg(c_path)
         .arg("-o")
         .arg(&binary_path)
+        // Always linked, even for programs that don't need it (e.g. `\`'s
+        // round()) -- harmless when unused, and simpler than detecting
+        // per-file whether <math.h> was pulled in.
+        .arg("-lm")
         .status()
         .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
     if !status.success() {

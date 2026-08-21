@@ -104,14 +104,17 @@ BASCAL has two code generators, selected with `--target`:
   above applies to this backend.
 - **`c`** — a native C backend, **just getting started**. It currently
   understands only a top-level `print` of string/numeric literals (`+`,
-  `-`, `*`, `/` of them included — `/` gets explicit `(double)` casts so it
-  stays true division, matching BASIC, instead of truncating like plain C
-  `int / int`) and `end`; anything else (variables, `if`, loops, functions,
-  arrays...) reports a "not supported yet" diagnostic rather than emitting
-  wrong code. `\`, `MOD`, and `^` are deliberately excluded even though
-  they're "just more operators" — each has BASIC-specific rounding/
-  truncation rules (or, for `^`, needs `pow()` from `<math.h>`, not a plain
-  operator) that a direct translation would silently get wrong.
+  `-`, `*`, `/`, `\` of them included — `/` gets explicit `(double)` casts
+  so it stays true division, matching BASIC, instead of truncating like
+  plain C `int / int`; `\` rounds each operand first via `round()`, then
+  truncates the integer quotient, matching real MBASIC/BASCOM) and `end`;
+  anything else (variables, `if`, loops, functions, arrays...) reports a
+  "not supported yet" diagnostic rather than emitting wrong code. `MOD` and
+  `^` are deliberately excluded even though they're "just more operators"
+  — `MOD` needs the same BASIC-specific rounding as `\` before C's `%` (an
+  integer-only operator) can apply, and `^` needs `pow()` from `<math.h>`,
+  not a plain operator; either would silently get the wrong answer if
+  translated directly.
   [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
   enough to compile under it today — see
   [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The

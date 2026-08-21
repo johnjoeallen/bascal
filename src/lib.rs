@@ -3621,6 +3621,10 @@ end
         );
         assert!(output.contains(r#"printf("%d\n", 42);"#), "unexpected output:\n{output}");
         assert!(output.contains(r#"printf("%g\n", -(1.25));"#), "unexpected output:\n{output}");
+        assert!(
+            !output.contains("math.h"),
+            "a program with no `\\` shouldn't pull in <math.h>:\n{output}"
+        );
     }
 
     #[test]
@@ -3686,14 +3690,40 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_intdiv_mod_and_pow_with_specific_reasons() {
-        // Unlike `/`, `\`/MOD/`^` are still NOT translated -- each has
-        // BASIC-specific rounding/truncation rules (or, for `^`, needs
-        // pow() from <math.h>) that a direct translation would silently
-        // get wrong, so each must fail with a diagnostic that explains why,
-        // not just a generic "unsupported" message.
+    fn c_target_print_supports_intdiv_as_round_then_truncate() {
+        // `\` rounds each operand to the nearest integer first (verified
+        // against the GW-BASIC Reference Manual), then truncates the
+        // integer quotient toward zero -- not plain C `/` truncation
+        // between the original operands, and not a floor.
+        let source = r#"print "Exact: "; 17 \ 5
+print "Rounds: "; 7.5 \ 2
+print "Neg: "; -17 \ 5
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(
+                r#"printf("Exact: %d\n", ((int)((long)round((double)17) / (long)round((double)5))));"#
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(
+                r#"printf("Rounds: %d\n", ((int)((long)round((double)7.5) / (long)round((double)2))));"#
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("#include <math.h>"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_print_still_rejects_mod_and_pow_with_specific_reasons() {
+        // Unlike `/` and `\`, MOD/`^` are still NOT translated -- each has
+        // BASIC-specific rounding rules (or, for `^`, needs pow() from
+        // <math.h>) that a direct translation would silently get wrong, so
+        // each must fail with a diagnostic that explains why, not just a
+        // generic "unsupported" message.
         let cases: &[(&str, &str)] = &[
-            ("print 10 \\ 3\nend\n", "integer division"),
             ("print 10 mod 3\nend\n", "rounds"),
             ("print 2 ^ 8\nend\n", "pow()"),
         ];

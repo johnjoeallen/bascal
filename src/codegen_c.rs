@@ -31,8 +31,10 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
 
     let mut body = String::new();
+    let mut needs_math = false;
     for statement in &program.statements {
-        emit_statement(statement, &mut body).map_err(|message| vec![unsupported(&message)])?;
+        emit_statement(statement, &mut body, &mut needs_math)
+            .map_err(|message| vec![unsupported(&message)])?;
     }
     // `Statement::End` already emits its own `return 0;` -- only add the
     // implicit fallthrough one when the program didn't already end with an
@@ -42,13 +44,17 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         body.push_str("    return 0;\n");
     }
 
-    Ok(format!("#include <stdio.h>\n\nint main(void) {{\n{body}}}\n"))
+    // <math.h> is only pulled in when something (currently just `\`) needs
+    // round() from it -- most programs won't.
+    let includes =
+        if needs_math { "#include <stdio.h>\n#include <math.h>\n" } else { "#include <stdio.h>\n" };
+    Ok(format!("{includes}\nint main(void) {{\n{body}}}\n"))
 }
 
-fn emit_statement(statement: &Statement, out: &mut String) -> Result<(), String> {
+fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
-            let (mut format, args, needs_newline) = render_print_tokens(tokens)?;
+            let (mut format, args, needs_newline) = render_print_tokens(tokens, needs_math)?;
             if needs_newline {
                 format.push_str("\\n");
             }
@@ -104,7 +110,10 @@ fn emit_statement(statement: &Statement, out: &mut String) -> Result<(), String>
 /// operator) isn't supported yet -- there's no C-side variable/expression
 /// codegen at all so far -- and is reported as an error rather than
 /// silently mishandled.
-fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bool), String> {
+fn render_print_tokens(
+    tokens: &[PrintToken],
+    needs_math: &mut bool,
+) -> Result<(String, Vec<String>, bool), String> {
     let mut format = String::new();
     let mut args = Vec::new();
     let mut needs_newline = true;
@@ -115,7 +124,7 @@ fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bo
                 format.push_str(&escape_c_string(s));
             }
             PrintToken::Expr(expr) => {
-                let (text, is_float) = render_numeric_expr(expr)?;
+                let (text, is_float) = render_numeric_expr(expr, needs_math)?;
                 needs_newline = true;
                 format.push_str(if is_float { "%g" } else { "%d" });
                 args.push(text);
@@ -131,26 +140,32 @@ fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bo
 /// Renders a numeric-literal expression tree as C expression text, plus
 /// whether the result is floating-point (picks `%g` vs `%d` in the caller).
 /// Covers literals, negation, `+`/`-`/`*` (direct translations, no
-/// semantic gap between BASIC and C), and `/` (explicit `(double)` casts
-/// on both operands, since BASIC's `/` always performs floating-point
+/// semantic gap between BASIC and C), `/` (explicit `(double)` casts on
+/// both operands, since BASIC's `/` always performs floating-point
 /// division, even between two integers, unlike plain C `/` between two
-/// `int`s). `\` and `MOD` are deliberately NOT included even though they're
-/// "just another operator": both round/truncate their operands using
-/// BASIC-specific rules C's `/`/`%` don't share, and `^` needs `pow()` from
-/// `<math.h>`, not a C operator at all. Translating any of them the same
-/// way as `+`/`-`/`*`/`/` would silently emit wrong output rather than
-/// erroring -- worse than just not supporting them yet.
-fn render_numeric_expr(expr: &Expr) -> Result<(String, bool), String> {
+/// `int`s), and `\` (round each operand first, per real MBASIC/BASCOM,
+/// then truncate the integer quotient -- see below). `MOD` is deliberately
+/// NOT included even though it's "just another operator": it rounds its
+/// operands using the same BASIC-specific rule as `\`, but C's `%` requires
+/// integer operands to begin with, and `^` needs `pow()` from `<math.h>`,
+/// not a C operator at all. Translating either the same way as the
+/// operators above would silently emit wrong output rather than erroring
+/// -- worse than just not supporting them yet.
+///
+/// `needs_math` is set whenever generated code calls into `<math.h>` (so
+/// far: only `\`, via `round()`), so the caller knows to add that
+/// `#include` -- most programs won't need it.
+fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bool), String> {
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
         Expr::Unary { op: UnaryOp::Neg, expr } => {
-            let (inner, is_float) = render_numeric_expr(expr)?;
+            let (inner, is_float) = render_numeric_expr(expr, needs_math)?;
             Ok((format!("-({inner})"), is_float))
         }
         Expr::Binary { left, op: op @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul), right } => {
-            let (left_text, left_float) = render_numeric_expr(left)?;
-            let (right_text, right_float) = render_numeric_expr(right)?;
+            let (left_text, left_float) = render_numeric_expr(left, needs_math)?;
+            let (right_text, right_float) = render_numeric_expr(right, needs_math)?;
             let c_op = match op {
                 BinaryOp::Add => "+",
                 BinaryOp::Sub => "-",
@@ -170,13 +185,37 @@ fn render_numeric_expr(expr: &Expr) -> Result<(String, bool), String> {
         // a real behavioral gap, just not a memory-safety one, and not
         // addressed here.
         Expr::Binary { left, op: BinaryOp::Div, right } => {
-            let (left_text, _) = render_numeric_expr(left)?;
-            let (right_text, _) = render_numeric_expr(right)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
             Ok((format!("((double){left_text} / (double){right_text})"), true))
         }
-        Expr::Binary { op: BinaryOp::IntDiv, .. } => Err(
-            "`\\` (integer division) isn't supported by the minimal C backend yet".to_string(),
-        ),
+        // Real MBASIC/BASCOM's `\`: each operand is rounded to the nearest
+        // integer first (verified against the GW-BASIC Reference Manual --
+        // see MANUAL.md's Arithmetic Operators table), *then* the quotient
+        // is truncated toward zero. `round()` rounds ties away from zero,
+        // which is the assumed tie-break rule here -- not independently
+        // verified against real BASCOM output (no dosbox-x in this
+        // environment), unlike most of this codebase's BASIC-compatibility
+        // claims. C's `/` between two (rounded, cast-to-`long`) integers
+        // already truncates toward zero as of C99, so no extra truncation
+        // step is needed once both operands are rounded. The final
+        // `(int)` cast keeps the result a plain `int` so `%d` (not `%ld`)
+        // is a correct printf format for it -- passing a `long` through a
+        // `%d` vararg would be a real (if often silently-tolerated) type
+        // mismatch. Overflow (a rounded operand or the quotient not
+        // fitting in `long`/`int`) isn't specially detected, same as `/`'s
+        // division-by-zero gap above.
+        Expr::Binary { left, op: BinaryOp::IntDiv, right } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            *needs_math = true;
+            Ok((
+                format!(
+                    "((int)((long)round((double){left_text}) / (long)round((double){right_text})))"
+                ),
+                false,
+            ))
+        }
         Expr::Binary { op: BinaryOp::Mod, .. } => Err(
             "MOD isn't supported by the minimal C backend yet -- BASIC's MOD rounds \
              floating-point operands to integers first, unlike C's `%`, which requires integer \

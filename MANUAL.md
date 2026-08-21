@@ -2932,13 +2932,16 @@ describes: plain 1980s Microsoft BASIC/BASCOM output.
 
 `--target c` is a new, deliberately minimal native-C backend. Today it only
 understands a top-level `print` of string/numeric literals (`+`, `-`, `*`,
-`/` of them included — `/` gets explicit `(double)` casts so it stays true
-division, matching BASIC, instead of truncating like plain C `int / int`)
-and `end` — anything else reports a "not supported yet" diagnostic instead
-of emitting incorrect code. `\`, `MOD`, and `^` are deliberately excluded
-even though they're "just more operators" — each has BASIC-specific
-rounding/truncation rules (or, for `^`, needs `pow()` from `<math.h>`, not
-a plain operator) that a direct translation would silently get wrong.
+`/`, `\` of them included — `/` gets explicit `(double)` casts so it stays
+true division, matching BASIC, instead of truncating like plain C
+`int / int`; `\` rounds each operand first via `round()`, then truncates
+the integer quotient, matching real MBASIC/BASCOM) and `end` — anything
+else reports a "not supported yet" diagnostic instead of emitting
+incorrect code. `MOD` and `^` are deliberately excluded even though
+they're "just more operators" — `MOD` needs the same BASIC-specific
+rounding as `\` before C's `%` (an integer-only operator) can apply, and
+`^` needs `pow()` from `<math.h>`, not a plain operator; either would
+silently get the wrong answer if translated directly.
 [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is currently the only
 tutorial small enough to compile under it; see
 [`tutorial/01_hello.c`](tutorial/01_hello.c) for its output. The BASCOM-
