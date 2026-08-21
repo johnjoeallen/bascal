@@ -3722,6 +3722,27 @@ end
     }
 
     #[test]
+    fn c_target_comparisons_produce_basic_minus_one_zero() {
+        // Real MBASIC/BASCOM comparisons evaluate to -1 (true) or 0
+        // (false), per MANUAL.md's own Comparison Operators section -- not
+        // C's 1/0. -(a == b) gets there directly from C's native 0/1
+        // comparison result.
+        let source = r#"score% = 85
+print "A: "; 5 = 5
+print "B: "; 5 = 6
+print "C: "; score% >= 60
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains(r#"printf("A: %d\n", (-(5 == 5)));"#), "unexpected output:\n{output}");
+        assert!(output.contains(r#"printf("B: %d\n", (-(5 == 6)));"#), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"printf("C: %d\n", (-(bv_i_score >= 60)));"#),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_print_supports_add_sub_mul_of_literals() {
         let source = r#"print "Sum: "; 1 + 2 * 3
 print "Mixed: "; 1 + 2.5

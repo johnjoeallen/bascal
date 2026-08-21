@@ -1,14 +1,16 @@
 //! Minimal native-C backend.
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
-//! string/numeric literals -- including negation and every arithmetic
-//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`) of them -- `end`, `dim`, and
+//! string/numeric literals -- including negation, every arithmetic
+//! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`), and every comparison operator
+//! (`=`/`<>`/`<`/`<=`/`>`/`>=`) of them -- `end`, `dim`, `const`, and
 //! assignment/reading of *numeric scalar* variables (`%`/`&`/`!`/`#`),
 //! wrapped in `int main(void) { ... }`. Everything else (functions, other
-//! statement kinds, string variables, arrays, comparisons) reports a "not
-//! supported yet" diagnostic rather than panicking or emitting wrong code
-//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
-//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
+//! statement kinds, string variables, arrays, `AND`/`OR`/`XOR`/`NOT`, `if`/
+//! loops) reports a "not supported yet" diagnostic rather than panicking or
+//! emitting wrong code -- this is a walking skeleton to prove the CLI/
+//! dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`) end-to-end,
+//! not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -416,10 +418,37 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             *needs_math = true;
             Ok((format!("pow((double){left_text}, (double){right_text})"), true))
         }
+        // Real MBASIC/BASCOM's comparison operators evaluate to -1 (true)
+        // or 0 (false) -- confirmed in MANUAL.md's own Comparison Operators
+        // section -- not 1/0 like C's `==`/`<`/etc. `-(a == b)` gets there
+        // directly: C's comparison already produces 0 or 1, and negating
+        // that gives exactly 0 or -1. The result is always a plain `int`
+        // (is_float = false), matching how a BASIC boolean gets used
+        // (printed as an integer, fed into arithmetic or, eventually,
+        // AND/OR -- see the bitwise-AND/OR project memory for why those
+        // must NOT reuse C's `&&`/`||` the way this reuses `==`/`<`/etc.).
+        Expr::Binary {
+            left,
+            op: op @ (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge),
+            right,
+        } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let c_op = match op {
+                BinaryOp::Eq => "==",
+                BinaryOp::Ne => "!=",
+                BinaryOp::Lt => "<",
+                BinaryOp::Le => "<=",
+                BinaryOp::Gt => ">",
+                BinaryOp::Ge => ">=",
+                _ => unreachable!(),
+            };
+            Ok((format!("(-({left_text} {c_op} {right_text}))"), false))
+        }
         _ => Err(
             "the minimal C backend only supports string/numeric literals, numeric scalar \
-             variables (%, &, !, #), and arithmetic on them so far -- not calls, comparisons, \
-             string variables, or arrays"
+             variables (%, &, !, #), arithmetic, and comparisons on them so far -- not calls, \
+             AND/OR/XOR/NOT, string variables, or arrays"
                 .to_string(),
         ),
     }

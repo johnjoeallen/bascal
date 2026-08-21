@@ -104,14 +104,17 @@ BASCAL has two code generators, selected with `--target`:
   above applies to this backend.
 - **`c`** — a native C backend, **just getting started**. It currently
   understands a top-level `print` of string/numeric literals — every
-  arithmetic operator on them included (`+`, `-`, `*`, `/`, `\`, `MOD`,
-  `^`) — `end`, `dim`, `const`, and assignment/reading of *numeric scalar*
+  arithmetic operator (`+`, `-`, `*`, `/`, `\`, `MOD`, `^`) and every
+  comparison operator (`=`, `<>`, `<`, `<=`, `>`, `>=`) on them included —
+  `end`, `dim`, `const`, and assignment/reading of *numeric scalar*
   variables (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-
   zero-initialized semantics: every variable touched anywhere is declared
   once at the top of `main`, regardless of where it first appears).
-  Anything else (string variables, arrays, `if`, loops, functions,
-  comparisons...) reports a "not supported yet" diagnostic rather than
-  emitting wrong code. Each operator needed its exact BASIC semantics
+  Comparisons evaluate to BASIC's own `-1`/`0` (`-(a == b)` on C's native
+  `0`/`1` result), not C's `1`/`0`. Anything else (string variables,
+  arrays, `AND`/`OR`/`XOR`/`NOT`, `if`, loops, functions...) reports a
+  "not supported yet" diagnostic rather than emitting wrong code. Each
+  operator needed its exact BASIC semantics
   tracked down first, not just assumed to be "the same as the C operator":
   `/` gets explicit `(double)` casts so it stays true division even
   between two integers, unlike plain C `int / int`; `\`/`MOD` round each
