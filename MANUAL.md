@@ -35,9 +35,17 @@
 ## Introduction
 
 **BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer
-**A**pplication **L**anguage — is a transpiler that translates structured
-`.bcl` source files into line-numbered Microsoft BASIC programs (`.bas`)
-compatible with BASCOM and FreeBASIC's QB compatibility mode.
+**A**pplication **L**anguage — is a transpiler with two backends:
+`--target basic` (the default, and the complete one), which translates
+structured `.bcl` source files into line-numbered Microsoft BASIC
+programs (`.bas`) compatible with BASCOM and FreeBASIC's QB compatibility
+mode; and `--target c`, an **experimental**, still-narrow native-C
+backend aiming to eventually produce native Linux/macOS/Win32 binaries
+directly, with no BASIC compiler involved at all -- see the
+[Backends](#backends) section of the
+[Command-Line Reference](#command-line-reference) for exactly what it
+supports today. Everything else in this manual describes the `basic`
+target, unless a section says otherwise.
 
 BASCAL adds structured programming constructs on top of BASIC's run-time
 semantics:
@@ -55,19 +63,13 @@ semantics:
 - All classic BASCOM 1980s statements: `DATA`/`READ`/`RESTORE`, `LOCATE`,
   `COLOR`, `ON ... GOTO`, `SWAP`, `RANDOMIZE`, `CONST`, and more
 
-**BASCAL does not invent a new runtime.** Every BASCAL program transpiles to
-plain Microsoft BASIC. The structured constructs are transpiled as follows:
-functions become `GOSUB` subroutines, loops become `GOTO`-based constructs,
-and `if` chains become `IF ... THEN GOTO` sequences.
-
-That's the `basic` target -- the complete one, and what the rest of this
-manual describes throughout. BASCAL also has a second, **experimental**
-target: `--target c`, a native-C backend aiming to eventually produce
-native Linux/macOS/Win32 binaries directly, without going through a BASIC
-compiler at all. It's still narrow (no arrays, functions, or `select
-case` yet) -- see the [Backends](#backends) section of the
-[Command-Line Reference](#command-line-reference) for exactly what it
-supports today.
+**On `basic`, BASCAL does not invent a new runtime.** Every BASCAL program
+transpiles to plain Microsoft BASIC. The structured constructs are
+transpiled as follows: functions become `GOSUB` subroutines, loops become
+`GOTO`-based constructs, and `if` chains become `IF ... THEN GOTO`
+sequences. (`--target c` is different -- its `if`/loops compile to C's own
+native `if`/`for`/`while`, since C, unlike BASIC, actually has them; see
+the Backends section linked above.)
 
 **BASCAL is a strict superset of classic BASIC.** Raw statements from the
 target dialect — `OPEN`/`FIELD`/`GET`/`PUT` for random-access files, bitwise
