@@ -3665,26 +3665,48 @@ end
     }
 
     #[test]
-    fn c_target_print_rejects_division_with_a_specific_reason() {
-        // `/` is deliberately NOT translated like +/-/* -- BASIC's `/`
-        // always performs floating-point division, even between two
-        // integers, unlike C's `/`, which truncates between two ints.
-        // Translating it the same way as +/-/* would silently produce
-        // wrong output, so it must fail with a diagnostic that explains why,
-        // not just a generic "unsupported" message.
-        let source = "print 10 / 3\nend\n";
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("div.bcl");
-        std::fs::write(&path, format!("program p\n{source}")).unwrap();
-
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
-        let result = compile_file(&path, &options);
-        assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+    fn c_target_print_supports_division_as_true_division() {
+        // `/` gets explicit `(double)` casts on both operands, so `10 / 3`
+        // stays true (floating-point) division in the generated C too, the
+        // same as BASIC -- not truncated to `3` the way plain C `int / int`
+        // would be.
+        let source = r#"print "Int/Int: "; 10 / 3
+print "Exact: "; 10 / 2
+end
+"#;
+        let output = compile_source_via_c_target(source);
         assert!(
-            msg.contains("floating-point division") && msg.contains("even between two integers"),
-            "unexpected message: {msg}"
+            output.contains(r#"printf("Int/Int: %g\n", ((double)10 / (double)3));"#),
+            "unexpected output:\n{output}"
         );
+        assert!(
+            output.contains(r#"printf("Exact: %g\n", ((double)10 / (double)2));"#),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_print_still_rejects_intdiv_mod_and_pow_with_specific_reasons() {
+        // Unlike `/`, `\`/MOD/`^` are still NOT translated -- each has
+        // BASIC-specific rounding/truncation rules (or, for `^`, needs
+        // pow() from <math.h>) that a direct translation would silently
+        // get wrong, so each must fail with a diagnostic that explains why,
+        // not just a generic "unsupported" message.
+        let cases: &[(&str, &str)] = &[
+            ("print 10 \\ 3\nend\n", "integer division"),
+            ("print 10 mod 3\nend\n", "rounds"),
+            ("print 2 ^ 8\nend\n", "pow()"),
+        ];
+        for (source, expect) in cases {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("op.bcl");
+            std::fs::write(&path, format!("program p\n{source}")).unwrap();
+            let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+            let result = compile_file(&path, &options);
+            assert!(result.is_err(), "expected `{source}` to fail");
+            let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+            assert!(msg.contains(expect), "unexpected message for `{source}`: {msg}");
+        }
     }
 
     /// Helper for the two tests above: writes `source` (with a `program`

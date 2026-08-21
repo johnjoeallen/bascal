@@ -104,13 +104,14 @@ BASCAL has two code generators, selected with `--target`:
   above applies to this backend.
 - **`c`** — a native C backend, **just getting started**. It currently
   understands only a top-level `print` of string/numeric literals (`+`,
-  `-`, `*` of them included) and `end`; anything else (variables, `/`
-  division, `if`, loops, functions, arrays...) reports a "not supported
-  yet" diagnostic rather than emitting wrong code. `/`, `\`, `MOD`, and `^`
-  are deliberately excluded even though they're "just more operators" —
-  each has BASIC-specific semantics (e.g. `/` always divides as floats,
-  even between two integers, unlike C's `/`) that a direct translation
-  would silently get wrong.
+  `-`, `*`, `/` of them included — `/` gets explicit `(double)` casts so it
+  stays true division, matching BASIC, instead of truncating like plain C
+  `int / int`) and `end`; anything else (variables, `if`, loops, functions,
+  arrays...) reports a "not supported yet" diagnostic rather than emitting
+  wrong code. `\`, `MOD`, and `^` are deliberately excluded even though
+  they're "just more operators" — each has BASIC-specific rounding/
+  truncation rules (or, for `^`, needs `pow()` from `<math.h>`, not a plain
+  operator) that a direct translation would silently get wrong.
   [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
   enough to compile under it today — see
   [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The

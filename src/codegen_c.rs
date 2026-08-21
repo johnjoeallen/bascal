@@ -1,11 +1,11 @@
 //! Minimal native-C backend.
 //!
 //! Deliberately narrow: this only understands a top-level `print` of
-//! string/numeric literals (including negation and `+`/`-`/`*` of them) and
-//! `end`, wrapped in `int main(void) { ... }`. Everything else (functions,
-//! other statement kinds, variables, `/`/`\`/MOD/`^`) reports a "not
-//! supported yet" diagnostic rather than panicking or emitting wrong code
-//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
+//! string/numeric literals (including negation and `+`/`-`/`*`/`/` of them)
+//! and `end`, wrapped in `int main(void) { ... }`. Everything else
+//! (functions, other statement kinds, variables, `\`/MOD/`^`) reports a
+//! "not supported yet" diagnostic rather than panicking or emitting wrong
+//! code -- this is a walking skeleton to prove the CLI/dispatch plumbing
 //! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
@@ -130,16 +130,16 @@ fn render_print_tokens(tokens: &[PrintToken]) -> Result<(String, Vec<String>, bo
 
 /// Renders a numeric-literal expression tree as C expression text, plus
 /// whether the result is floating-point (picks `%g` vs `%d` in the caller).
-/// Covers literals, negation, and `+`/`-`/`*` combinations of them --
-/// direct translations with no semantic gap between BASIC and C. `/`, `\`,
-/// `MOD`, and `^` are deliberately NOT included even though they're
-/// "just another operator": BASIC's `/` always performs floating-point
-/// division, even between two integers, unlike C's `/`, which truncates
-/// between two ints; `\` and `MOD` round/truncate their operands using
-/// BASIC-specific rules C's `/`/`%` don't share; and `^` needs `pow()` from
+/// Covers literals, negation, `+`/`-`/`*` (direct translations, no
+/// semantic gap between BASIC and C), and `/` (explicit `(double)` casts
+/// on both operands, since BASIC's `/` always performs floating-point
+/// division, even between two integers, unlike plain C `/` between two
+/// `int`s). `\` and `MOD` are deliberately NOT included even though they're
+/// "just another operator": both round/truncate their operands using
+/// BASIC-specific rules C's `/`/`%` don't share, and `^` needs `pow()` from
 /// `<math.h>`, not a C operator at all. Translating any of them the same
-/// way as `+`/`-`/`*` would silently emit wrong output rather than erroring
-/// -- worse than just not supporting them yet.
+/// way as `+`/`-`/`*`/`/` would silently emit wrong output rather than
+/// erroring -- worse than just not supporting them yet.
 fn render_numeric_expr(expr: &Expr) -> Result<(String, bool), String> {
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
@@ -159,11 +159,21 @@ fn render_numeric_expr(expr: &Expr) -> Result<(String, bool), String> {
             };
             Ok((format!("({left_text} {c_op} {right_text})"), left_float || right_float))
         }
-        Expr::Binary { op: BinaryOp::Div, .. } => Err(
-            "`/` isn't supported by the minimal C backend yet -- BASIC's `/` always performs \
-             floating-point division, even between two integers, unlike C's `/`"
-                .to_string(),
-        ),
+        // Explicit `(double)` casts on both operands make this always a
+        // floating-point division in C too, matching BASIC's `/` even when
+        // both operands are integers (`5 / 2` is `2.5` in BASIC, but plain
+        // C `/` between two `int`s would truncate to `2`).
+        //
+        // Division by a literal zero isn't specially detected: BASIC's `/`
+        // raises a runtime "Division by zero" error, while C's `(double)x /
+        // (double)0` silently produces `inf`/`nan` instead of crashing --
+        // a real behavioral gap, just not a memory-safety one, and not
+        // addressed here.
+        Expr::Binary { left, op: BinaryOp::Div, right } => {
+            let (left_text, _) = render_numeric_expr(left)?;
+            let (right_text, _) = render_numeric_expr(right)?;
+            Ok((format!("((double){left_text} / (double){right_text})"), true))
+        }
         Expr::Binary { op: BinaryOp::IntDiv, .. } => Err(
             "`\\` (integer division) isn't supported by the minimal C backend yet".to_string(),
         ),
