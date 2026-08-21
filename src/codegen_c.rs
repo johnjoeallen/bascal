@@ -3,14 +3,15 @@
 //! Deliberately narrow: this only understands a top-level `print` of
 //! string/numeric literals -- including negation, every arithmetic
 //! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`), and every comparison operator
-//! (`=`/`<>`/`<`/`<=`/`>`/`>=`) of them -- `end`, `dim`, `const`, and
-//! assignment/reading of *numeric scalar* variables (`%`/`&`/`!`/`#`),
-//! wrapped in `int main(void) { ... }`. Everything else (functions, other
-//! statement kinds, string variables, arrays, `AND`/`OR`/`XOR`/`NOT`, `if`/
-//! loops) reports a "not supported yet" diagnostic rather than panicking or
-//! emitting wrong code -- this is a walking skeleton to prove the CLI/
-//! dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`) end-to-end,
-//! not a real backend.
+//! (`=`/`<>`/`<`/`<=`/`>`/`>=`) of them -- `end`, `dim`, `const`,
+//! assignment/reading of *numeric scalar* variables (`%`/`&`/`!`/`#`), and
+//! `if`/`elseif`/`else`/`end if` (including the single-line form, and
+//! nesting), wrapped in `int main(void) { ... }`. Everything else
+//! (functions, other statement kinds, string variables, arrays, `AND`/
+//! `OR`/`XOR`/`NOT`, loops) reports a "not supported yet" diagnostic
+//! rather than panicking or emitting wrong code -- this is a walking
+//! skeleton to prove the CLI/dispatch plumbing (`Target::C`, `--target c`,
+//! `invoke_gcc`) end-to-end, not a real backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -135,6 +136,15 @@ fn collect_numeric_vars_in_statement(statement: &Statement, out: &mut BTreeMap<S
                 }
             }
         }
+        Statement::If { condition, then_body, else_body } => {
+            collect_numeric_vars_in_expr(condition, out);
+            for stmt in then_body {
+                collect_numeric_vars_in_statement(stmt, out);
+            }
+            for stmt in else_body {
+                collect_numeric_vars_in_statement(stmt, out);
+            }
+        }
         _ => {}
     }
 }
@@ -200,6 +210,35 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
         // codegen ever runs), so it codegens exactly like an ordinary
         // assignment, same as the BASIC backend's own treatment of it.
         Statement::Const { name, value } => emit_scalar_assignment(name, value, out, needs_math),
+        // Unlike the BASIC backend, which has to transpile `if`/`elseif`/
+        // `else` into a GOTO/label chain (real MBASIC/BASCOM has no block
+        // `IF`), C has native `if`/`else`, so this is a direct structural
+        // translation -- no labels needed. `elseif` doesn't need separate
+        // handling either: the parser already desugars it into a single
+        // nested `Statement::If` inside `else_body`, which the recursive
+        // `emit_statement` call below just walks into naturally, producing
+        // (harmless, if not maximally idiomatic) `} else {\n if (...) {`
+        // nesting rather than a flat `else if` chain. Body statements are
+        // NOT re-indented per nesting level (still flush against the same
+        // base indent as everything else) -- purely cosmetic, not a
+        // correctness gap.
+        Statement::If { condition, then_body, else_body } => {
+            let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
+            out.push_str(&format!("    if ({cond_text}) {{\n"));
+            for stmt in then_body {
+                emit_statement(stmt, out, needs_math)?;
+            }
+            if else_body.is_empty() {
+                out.push_str("    }\n");
+            } else {
+                out.push_str("    } else {\n");
+                for stmt in else_body {
+                    emit_statement(stmt, out, needs_math)?;
+                }
+                out.push_str("    }\n");
+            }
+            Ok(())
+        }
         Statement::BlankLine => {
             out.push('\n');
             Ok(())
@@ -222,7 +261,7 @@ fn emit_statement(statement: &Statement, out: &mut String, needs_math: &mut bool
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, and assignment/`const` of numeric scalar variables (%, &, !, #) are \
+             `dim`, `if`, and assignment/`const` of numeric scalar variables (%, &, !, #) are \
              implemented so far"
         )),
     }

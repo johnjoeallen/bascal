@@ -3743,6 +3743,61 @@ end
     }
 
     #[test]
+    fn c_target_supports_if_elseif_else_and_nested_if() {
+        // Unlike the BASIC backend, which transpiles `if`/`elseif`/`else`
+        // into a GOTO/label chain (real MBASIC/BASCOM has no block IF), C
+        // has native if/else, so this is a direct structural translation.
+        // `elseif` needs no special handling: the parser already desugars
+        // it into a single nested Statement::If inside else_body.
+        let source = r#"score% = 72
+if score% >= 60 then
+    print "Pass"
+else
+    print "Fail"
+end if
+
+points% = 85
+if points% >= 90 then
+    grade% = 4
+elseif points% >= 80 then
+    grade% = 3
+else
+    grade% = 1
+end if
+print grade%
+
+x% = 15
+if x% > 0 then
+    if x% > 10 then
+        print "large"
+    else
+        print "small"
+    end if
+end if
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("if ((-(bv_i_score >= 60))) {"), "unexpected output:\n{output}");
+        assert!(output.contains("} else {"), "unexpected output:\n{output}");
+        // elseif desugars to a nested if inside the else branch.
+        assert!(
+            output.contains("if ((-(bv_i_points >= 90))) {")
+                && output.contains("if ((-(bv_i_points >= 80))) {"),
+            "unexpected output:\n{output}"
+        );
+        // Nested if inside a then-branch.
+        assert!(output.contains("if ((-(bv_i_x > 10))) {"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_if_with_no_else_omits_the_else_branch() {
+        let source = "x% = 5\nif x% > 0 then\n    print \"positive\"\nend if\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("if ((-(bv_i_x > 0))) {"), "unexpected output:\n{output}");
+        assert!(!output.contains("} else {"), "no else branch should mean no else clause:\n{output}");
+    }
+
+    #[test]
     fn c_target_print_supports_add_sub_mul_of_literals() {
         let source = r#"print "Sum: "; 1 + 2 * 3
 print "Mixed: "; 1 + 2.5

@@ -106,15 +106,19 @@ BASCAL has two code generators, selected with `--target`:
   understands a top-level `print` of string/numeric literals — every
   arithmetic operator (`+`, `-`, `*`, `/`, `\`, `MOD`, `^`) and every
   comparison operator (`=`, `<>`, `<`, `<=`, `>`, `>=`) on them included —
-  `end`, `dim`, `const`, and assignment/reading of *numeric scalar*
-  variables (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-
-  zero-initialized semantics: every variable touched anywhere is declared
-  once at the top of `main`, regardless of where it first appears).
-  Comparisons evaluate to BASIC's own `-1`/`0` (`-(a == b)` on C's native
-  `0`/`1` result), not C's `1`/`0`. Anything else (string variables,
-  arrays, `AND`/`OR`/`XOR`/`NOT`, `if`, loops, functions...) reports a
-  "not supported yet" diagnostic rather than emitting wrong code. Each
-  operator needed its exact BASIC semantics
+  `end`, `dim`, `const`, assignment/reading of *numeric scalar* variables
+  (`%`/`&`/`!`/`#`, matching BASIC's spring-into-existence-zero-initialized
+  semantics: every variable touched anywhere is declared once at the top
+  of `main`, regardless of where it first appears), and `if`/`elseif`/
+  `else`/`end if` (block, single-line, and nested forms — unlike the
+  `basic` target, which has to transpile `if` into a GOTO/label chain
+  since real MBASIC/BASCOM has no block `IF`, C has native `if`/`else`, so
+  this is a direct structural translation). Comparisons evaluate to
+  BASIC's own `-1`/`0` (`-(a == b)` on C's native `0`/`1` result), not C's
+  `1`/`0`. Anything else (string variables, arrays, `AND`/`OR`/`XOR`/
+  `NOT`, loops, functions...) reports a "not supported yet" diagnostic
+  rather than emitting wrong code. Each operator needed its exact BASIC
+  semantics
   tracked down first, not just assumed to be "the same as the C operator":
   `/` gets explicit `(double)` casts so it stays true division even
   between two integers, unlike plain C `int / int`; `\`/`MOD` round each
