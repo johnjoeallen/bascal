@@ -2931,8 +2931,9 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 describes: plain 1980s Microsoft BASIC/BASCOM output.
 
 `--target c` is a new, deliberately minimal native-C backend. Today it only
-understands a top-level `print` of string literals and `end` — anything else
-reports a "not supported yet" diagnostic instead of emitting incorrect code.
+understands a top-level `print` of string and numeric literals (including
+negative ones) and `end` — anything else reports a "not supported yet"
+diagnostic instead of emitting incorrect code.
 [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is currently the only
 tutorial small enough to compile under it; see
 [`tutorial/01_hello.c`](tutorial/01_hello.c) for its output. The BASCOM-

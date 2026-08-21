@@ -103,9 +103,10 @@ BASCAL has two code generators, selected with `--target`:
   1980s Microsoft BASIC/BASCOM, described throughout this README. Everything
   above applies to this backend.
 - **`c`** — a native C backend, **just getting started**. It currently
-  understands only a top-level `print` of string literals and `end`; anything
-  else (variables, `if`, loops, functions, arrays...) reports a "not
-  supported yet" diagnostic rather than emitting wrong code.
+  understands only a top-level `print` of string and numeric literals
+  (including negative ones) and `end`; anything else (variables, `if`,
+  loops, functions, arrays...) reports a "not supported yet" diagnostic
+  rather than emitting wrong code.
   [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
   enough to compile under it today — see
   [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The

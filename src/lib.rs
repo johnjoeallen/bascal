@@ -3606,4 +3606,50 @@ resume next
         let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
         assert!(msg.contains("not supported by the minimal C backend yet"), "unexpected message: {msg}");
     }
+
+    #[test]
+    fn c_target_print_supports_numeric_literals_mixed_with_strings() {
+        let source = r#"print "Score: "; 100; " / "; 3.5; " (100%)"
+print 42
+print -1.25
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(r#"printf("Score: %d / %g (100%%)\n", 100, 3.5);"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains(r#"printf("%d\n", 42);"#), "unexpected output:\n{output}");
+        assert!(output.contains(r#"printf("%g\n", -1.25);"#), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_print_still_rejects_variables_and_expressions() {
+        let source = "print x%\nend\n";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("var_print.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let result = compile_file(&path, &options);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("not variables, calls, or operators"), "unexpected message: {msg}");
+    }
+
+    /// Helper for the two tests above: writes `source` (with a `program`
+    /// header prepended) to a temp file and compiles it under `Target::C`,
+    /// panicking with the diagnostics on failure.
+    fn compile_source_via_c_target(source: &str) -> String {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("numeric_print.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        compile_file(&path, &options).unwrap_or_else(|diagnostics| {
+            panic!(
+                "should compile: {}",
+                diagnostics.into_iter().map(|d| d.to_string()).collect::<String>()
+            )
+        })
+    }
 }
