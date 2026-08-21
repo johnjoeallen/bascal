@@ -79,19 +79,41 @@ push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
 ```bash
 bcc input.bcl [-o output.bas] [-L dir] [-l library]
               [--line-numbers] [--clean | -c] [--binary | -b]
+              [--target | -t basic|c]
 ```
 
 | Flag | Meaning |
 |------|---------|
-| `-o output.bas` | Output path (default: input with `.bas` extension, same directory) |
+| `-o output.bas` | Output path (default: input with `.bas`/`.c` extension, same directory) |
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets |
 | `--clean`, `-c` | Re-transpile even if output is already up to date |
-| `--binary`, `-b` | Invoke `fbc` to compile the generated `.bas` to a binary in `tmp/` |
+| `--binary`, `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `basic`, `gcc` for `c` |
+| `--target`, `-t` | Backend to generate code for: `basic` (default) or `c` (see [Backends](#backends)) |
 
 The input file's directory is always the first implicit search root. `-L` adds
 additional roots searched in order.
+
+## Backends
+
+BASCAL has two code generators, selected with `--target`:
+
+- **`basic`** (default) — BASCAL's original and only complete target: plain
+  1980s Microsoft BASIC/BASCOM, described throughout this README. Everything
+  above applies to this backend.
+- **`c`** — a native C backend, **just getting started**. It currently
+  understands only a top-level `print` of string literals and `end`; anything
+  else (variables, `if`, loops, functions, arrays...) reports a "not
+  supported yet" diagnostic rather than emitting wrong code.
+  [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is the one tutorial small
+  enough to compile under it today — see
+  [`tutorial/01_hello.c`](tutorial/01_hello.c) for its current output. The
+  eventual point of this backend is producing native Linux/macOS/Win32
+  binaries directly (via `gcc`), without going through a BASIC compiler at
+  all — while the BASCOM-compatible `basic` target keeps gating what
+  language features BASCAL adds, so both backends can keep expressing the
+  same language.
 
 ## Dependencies
 

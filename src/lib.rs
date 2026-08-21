@@ -1,5 +1,7 @@
 pub mod ast;
 pub mod codegen;
+mod codegen_basic;
+mod codegen_c;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
@@ -11,6 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use codegen::CodeGenerator;
+pub use codegen::Target;
 use diagnostics::Diagnostic;
 use lexer::{Lexer, TokenKind};
 use parser::Parser;
@@ -22,6 +25,11 @@ pub struct CompileOptions {
     /// Number every output line (BASCOM strict mode). When false, only lines
     /// that are branch targets receive a line number.
     pub line_numbers: bool,
+    /// Which backend to generate code for. Defaults to `Target::Basic` --
+    /// the only backend `compile_file` can actually produce output for
+    /// today; `Target::C` always fails with a "not supported" diagnostic
+    /// (see `codegen_c::generate`).
+    pub target: Target,
 }
 
 impl CompileOptions {
@@ -30,6 +38,7 @@ impl CompileOptions {
             library_dirs: Vec::new(),
             libraries: Vec::new(),
             line_numbers: false,
+            target: Target::Basic,
         }
     }
 }
@@ -86,10 +95,13 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let (mut program, synthesized_buffer_names) = records::lower(program)?;
     inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
-    CodeGenerator::new()
-        .with_line_numbers(options.line_numbers)
-        .with_synthesized_buffer_names(synthesized_buffer_names)
-        .generate(&program)
+    match options.target {
+        Target::Basic => CodeGenerator::new()
+            .with_line_numbers(options.line_numbers)
+            .with_synthesized_buffer_names(synthesized_buffer_names)
+            .generate(&program),
+        Target::C => codegen_c::generate(&program),
+    }
 }
 
 /// If `program` uses `MID$` statement-form assignment anywhere (top-level
@@ -170,8 +182,12 @@ fn statement_uses_mid_assign(statement: &ast::Statement) -> bool {
     }
 }
 
-pub fn default_output_path(input: &Path) -> std::path::PathBuf {
-    input.with_extension("bas")
+pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
+    let extension = match target {
+        Target::Basic => "bas",
+        Target::C => "c",
+    };
+    input.with_extension(extension)
 }
 
 fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diagnostic>> {
@@ -3551,5 +3567,43 @@ resume next
 "#;
         let output = compile_source("label_error_handler.bcl", source).expect("should compile");
         assert!(output.contains("RESUME NEXT"), "unexpected output:\n{output}");
+    }
+
+    // ── C backend (Target::C) ──────────────────────────────────────────
+
+    #[test]
+    fn c_target_compiles_hello_world_tutorial() {
+        // tutorial/01_hello.bcl uses only `print` of string literals and
+        // `end` -- the minimal C backend's entire current surface -- so it
+        // must compile cleanly under Target::C, unlike most tutorials.
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/01_hello.bcl");
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let output = compile_file(&input, &options).expect("hello world should compile to C");
+        assert!(output.contains("#include <stdio.h>"));
+        assert!(output.contains("int main(void) {"));
+        assert!(output.contains(r#"printf("Hello, World!\n");"#));
+        assert!(output.contains(r#"printf("Welcome to BASCAL.\n");"#));
+        assert_eq!(
+            output.matches("return 0;").count(),
+            1,
+            "explicit `end` must not also get an implicit fallthrough return:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_unsupported_statements_with_a_diagnostic() {
+        // A `dim` isn't part of the minimal C backend's supported surface
+        // yet -- this must fail with a clear diagnostic, not panic or
+        // silently emit wrong C.
+        let source = "dim x%\nx% = 1\nend\n";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("unsupported.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let result = compile_file(&path, &options);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        assert!(msg.contains("not supported by the minimal C backend yet"), "unexpected message: {msg}");
     }
 }

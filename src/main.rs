@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-use bcc::{compile_file, default_output_path, CompileOptions};
+use bcc::{compile_file, default_output_path, CompileOptions, Target};
 
 #[derive(Debug)]
 struct Cli {
@@ -15,6 +15,7 @@ struct Cli {
     sparse_line_numbers: bool,
     clean: bool,
     binary: bool,
+    target: Target,
 }
 
 fn main() -> ExitCode {
@@ -33,7 +34,7 @@ fn run() -> Result<(), String> {
     let output_path = cli
         .output
         .clone()
-        .unwrap_or_else(|| default_output_path(cli.input.as_path()));
+        .unwrap_or_else(|| default_output_path(cli.input.as_path(), cli.target));
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -49,7 +50,7 @@ fn run() -> Result<(), String> {
             format!("error: invalid BASIC output path {}", output_path.display())
         })?);
         if cli.binary && !is_up_to_date(&cli.input, &binary_path) {
-            return invoke_fbc(&output_path);
+            return invoke_binary(cli.target, &output_path);
         }
         println!("up to date: {}", output_path.display());
         return Ok(());
@@ -59,6 +60,7 @@ fn run() -> Result<(), String> {
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
         line_numbers: cli.line_numbers && !cli.sparse_line_numbers,
+        target: cli.target,
     };
     let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
@@ -72,7 +74,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
 
     if cli.binary {
-        invoke_fbc(&output_path)?;
+        invoke_binary(cli.target, &output_path)?;
     }
 
     Ok(())
@@ -92,6 +94,20 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
         return false;
     };
     out_mtime >= in_mtime
+}
+
+/// Compiles the transpiler's generated output down to a native binary with
+/// whatever third-party compiler actually understands that target's output
+/// -- `fbc` (FreeBASIC) for `Target::Basic`'s `.bas`, `gcc` for `Target::C`'s
+/// (not yet generated) `.c`. `Target::C` can't reach this in practice today:
+/// `compile_file` already fails with a "not implemented" diagnostic before
+/// `--binary` ever gets a `.c` file to hand to `gcc`, but the dispatch is
+/// wired up now so it needs no changes once that backend exists.
+fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<(), String> {
+    match target {
+        Target::Basic => invoke_fbc(output_path),
+        Target::C => invoke_gcc(output_path),
+    }
 }
 
 fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
@@ -120,6 +136,30 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+fn invoke_gcc(c_path: &PathBuf) -> Result<(), String> {
+    let binary_name = c_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid C output path {}", c_path.display()))?;
+    let binary_dir = PathBuf::from("tmp");
+    fs::create_dir_all(&binary_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
+    let binary_path = binary_dir.join(binary_name);
+    let status = Command::new("gcc")
+        .arg(c_path)
+        .arg("-o")
+        .arg(&binary_path)
+        .status()
+        .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
+    if !status.success() {
+        return Err(format!(
+            "error: gcc failed compiling {}",
+            c_path.display()
+        ));
+    }
+    println!("binary: {}", binary_path.display());
+    Ok(())
+}
+
 fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut input = None;
     let mut output = None;
@@ -133,6 +173,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut sparse_line_numbers = false;
     let mut clean = false;
     let mut binary = false;
+    let mut target = Target::Basic;
     let mut i = 0;
 
     while i < args.len() {
@@ -163,6 +204,21 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
             "--sparse-line-numbers" => sparse_line_numbers = true,
             "--clean" | "-c" => clean = true,
             "--binary" | "-b" => binary = true,
+            "--target" | "-t" => {
+                i += 1;
+                let value = args.get(i).ok_or_else(|| {
+                    "error: --target requires a value (basic or c)".to_string()
+                })?;
+                target = match value.as_str() {
+                    "basic" => Target::Basic,
+                    "c" => Target::C,
+                    other => {
+                        return Err(format!(
+                            "error: unknown --target `{other}` (expected `basic` or `c`)"
+                        ))
+                    }
+                };
+            }
             "-h" | "--help" => return Err(usage()),
             flag if flag.starts_with('-') => return Err(format!("error: unknown flag `{flag}`")),
             path => {
@@ -183,6 +239,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         sparse_line_numbers,
         clean,
         binary,
+        target,
     })
 }
 
@@ -190,6 +247,7 @@ fn usage() -> String {
     [
         "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
         "              [--sparse-line-numbers] [--clean | -c] [--binary | -b]",
+        "              [--target | -t basic|c]",
         "",
         "Options:",
         "  -o output.bas          Output path (default: input with .bas extension)",
@@ -198,7 +256,11 @@ fn usage() -> String {
         "                         real MBASIC/BASCOM; only safe with lenient dialects like",
         "                         FreeBASIC's -lang qb)",
         "  --clean, -c            Re-transpile even if the output is already up to date",
-        "  --binary, -b           Invoke fbc to compile the generated .bas to tmp/<stem>",
+        "  --binary, -b           Compile the generated output to tmp/<stem>: fbc for",
+        "                         --target basic's .bas, gcc for --target c's .c",
+        "  --target, -t <target>  Backend to generate code for: `basic` (default, the only",
+        "                         one implemented) or `c` (reserved for a future native",
+        "                         backend; currently always fails with a diagnostic)",
     ]
     .join("\n")
 }

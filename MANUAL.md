@@ -2912,16 +2912,33 @@ based on which loop it's innermost inside:
 ```
 bcc input.bcl [-o output.bas] [-L dir] [-l library]
               [--line-numbers] [--clean | -c] [--binary | -b]
+              [--target | -t basic|c]
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `-o output.bas` | | Output file path. Default: source path with `.bas` extension in the same directory. |
+| `-o output.bas` | | Output file path. Default: source path with `.bas` (or `.c`, under `--target c`) extension in the same directory. |
 | `-L dir` | | Add a directory to the library search path. Repeatable. |
 | `-l name` | | Name a library (reserved). |
 | `--line-numbers` | | Number every output line, not just branch targets. |
 | `--clean` | `-c` | Re-transpile even if the output is already up to date. |
-| `--binary` | `-b` | Invoke `fbc` after transpilation to produce a binary. The binary is placed in `tmp/`. |
+| `--binary` | `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `--target basic`, `gcc` for `--target c`. |
+| `--target <t>` | `-t` | Backend to generate code for: `basic` (default, the only complete one) or `c` (just getting started — see below). |
+
+### Backends
+
+`--target basic` (the default) is everything this manual otherwise
+describes: plain 1980s Microsoft BASIC/BASCOM output.
+
+`--target c` is a new, deliberately minimal native-C backend. Today it only
+understands a top-level `print` of string literals and `end` — anything else
+reports a "not supported yet" diagnostic instead of emitting incorrect code.
+[`tutorial/01_hello.bcl`](tutorial/01_hello.bcl) is currently the only
+tutorial small enough to compile under it; see
+[`tutorial/01_hello.c`](tutorial/01_hello.c) for its output. The BASCOM-
+compatible `basic` target continues to gate which language features BASCAL
+adds, so both backends stay able to express the same language as the C
+backend grows.
 
 ### Up-to-Date Check
 
