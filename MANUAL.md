@@ -63,13 +63,23 @@ semantics:
 - All classic BASCOM 1980s statements: `DATA`/`READ`/`RESTORE`, `LOCATE`,
   `COLOR`, `ON ... GOTO`, `SWAP`, `RANDOMIZE`, `CONST`, and more
 
-**On `basic`, BASCAL does not invent a new runtime.** Every BASCAL program
-transpiles to plain Microsoft BASIC. The structured constructs are
-transpiled as follows: functions become `GOSUB` subroutines, loops become
-`GOTO`-based constructs, and `if` chains become `IF ... THEN GOTO`
-sequences. (`--target c` is different -- its `if`/loops compile to C's own
-native `if`/`for`/`while`, since C, unlike BASIC, actually has them; see
-the Backends section linked above.)
+For the `basic` target, BASCAL does not invent a new runtime: every BASCAL
+program transpiles to plain Microsoft BASIC and runs under whatever BASIC
+you already have (BASCOM, FreeBASIC's QB compatibility mode). The
+structured constructs are transpiled directly onto BASIC's own control
+flow -- functions become `GOSUB` subroutines, loops become `GOTO`-based
+constructs, and `if` chains become `IF ... THEN GOTO` sequences.
+
+For the `c` target, the opposite is true: there's no BASIC runtime
+underneath at all. `if`/`for`/`while` compile to C's own native control
+flow, and BASCAL's C backend has its own, different runtime rather than
+reusing BASIC's -- this backend is experimental and still narrow, so not
+everything carries over. Statements whose behavior depends on BASIC's own
+runtime -- `CHAIN` being the clearest example, since it depends on BASIC's
+program-swapping semantics -- aren't supported under `--target c`. See the
+[Backends](#backends) section of the
+[Command-Line Reference](#command-line-reference) for exactly what is and
+isn't supported today.
 
 **BASCAL is a strict superset of classic BASIC.** Raw statements from the
 target dialect — `OPEN`/`FIELD`/`GET`/`PUT` for random-access files, bitwise
