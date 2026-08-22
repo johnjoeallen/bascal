@@ -529,6 +529,84 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
     layouts
 }
 
+/// Applies every top-level `FIELD` statement (the record/file DSL's own
+/// synthesized ones included) into `layout`, in program order, *before*
+/// `generate()` emits any function/procedure body. Without this, a
+/// function referencing a channel's `FIELD` layout -- declared at the top
+/// level, always executed before the function is ever called, but *textually
+/// emitted after* every function in the generated C (see `generate()`) --
+/// would see no layout for that channel at all: `FileIoLayout` is normally
+/// only ever populated live, as `Statement::Field` is actually emitted (see
+/// `FileIoLayout`'s own doc comment for why), and a function's own body is
+/// emitted in a separate pass that runs first.
+///
+/// This does not attempt to give a function the *exact* layout active at
+/// its own particular call site -- a channel re-`FIELD`ed partway through
+/// `main` could in principle need a different layout depending on when a
+/// function happens to be called, which this backend has no way to express
+/// per-call-site anyway (a function is emitted once, not once per call).
+/// It uses whichever layout is current once every top-level statement has
+/// been walked -- correct for the overwhelmingly common shape (each
+/// channel `FIELD`ed once, used for the program's whole run), and a
+/// reasonable, well-defined default otherwise.
+///
+/// `generate()` runs this against its own *separate*, throwaway
+/// `FileIoLayout` (never the one used for the real, order-sensitive
+/// top-level pass) -- replaying the exact same `FIELD` statements against
+/// a single shared instance would double the generation counter for every
+/// channel `FIELD`ed more than once, corrupting the synthesized helper
+/// names the real pass computes (a real regression this had, caught by
+/// `c_target_field_layout_tracks_program_order_not_last_field_wins`).
+/// `generate()` then merges only this throwaway instance's already-emitted
+/// helper text and dedup-tracking into the real one before the top-level
+/// pass runs, so the two passes end up sharing helper functions by name
+/// (deterministic, since both walk the identical `FIELD` sequence) without
+/// either emitting a duplicate definition.
+fn apply_field_layouts_before_functions(
+    program: &Program,
+    layout: &mut FileIoLayout,
+) -> Result<(), String> {
+    fn walk(statements: &[Statement], layout: &mut FileIoLayout) -> Result<(), String> {
+        for statement in statements {
+            match statement {
+                Statement::Field {
+                    channel,
+                    fields,
+                    record_type,
+                    string_fields,
+                    field_types,
+                } => {
+                    apply_field_statement(channel, fields, record_type, string_fields, field_types, layout)?;
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    walk(then_body, layout)?;
+                    walk(else_body, layout)?;
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => {
+                    walk(body, layout)?;
+                }
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        walk(&case.body, layout)?;
+                    }
+                    walk(else_body, layout)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    walk(&program.statements, layout)
+}
+
 /// Validates every function's shape up front and builds the lookup table
 /// `render_numeric_expr`/`render_string_expr` use for `Expr::Call`.
 /// Deliberately narrow, same "reject rather than emit wrong code" policy
@@ -706,17 +784,19 @@ fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let functions =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
-    let mut file_io = FileIoLayout {
+    let known_layouts = known_record_layouts(program);
+    let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
         channel_fields: HashMap::new(),
         field_widths: HashMap::new(),
         used: false,
         channel_record_type: HashMap::new(),
-        known_record_layouts: known_record_layouts(program),
+        known_record_layouts,
         record_helpers: std::collections::HashSet::new(),
         channel_generation: HashMap::new(),
         helper_defs: String::new(),
         pending_field_values: HashMap::new(),
     };
+    let mut file_io = new_file_io(known_layouts.clone());
 
     // BASIC variables "spring into existence on first use" -- there's no
     // separate declaration step to hook into, so every scalar variable
@@ -756,6 +836,17 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let mut needs_string = false;
     let mut temp_counter = 0;
 
+    // A function/procedure body is emitted (below) before the top-level
+    // `FIELD` declarations that establish the layout it needs -- see
+    // `apply_field_layouts_before_functions`'s own doc comment. Pre-scan
+    // into a *separate* throwaway layout, used only for function bodies,
+    // rather than `file_io` itself: that instance's own doc comment
+    // explains why sharing one would corrupt the real, order-sensitive
+    // pass's generation counting.
+    let mut function_view = new_file_io(known_layouts);
+    apply_field_layouts_before_functions(program, &mut function_view)
+        .map_err(|message| vec![unsupported(&message)])?;
+
     let mut prototypes = String::new();
     let mut function_defs = String::new();
     for func in &program.functions {
@@ -770,10 +861,22 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut needs_math,
             &mut needs_string,
             &mut temp_counter,
-            &mut file_io,
+            &mut function_view,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
+    // Fold in only the helper text and dedup-tracking function bodies
+    // produced -- never `function_view`'s own layout state, which the real
+    // pass below still needs to build up itself, live, in program order.
+    // Safe to share by name: both passes walk the identical `FIELD`
+    // sequence (`function_view`'s over `program.statements` alone, the
+    // real pass's below over the same statements), so any helper name the
+    // real pass computes for a channel's Nth distinct shape is guaranteed
+    // to already be exactly what `function_view` computed for that same
+    // Nth shape.
+    file_io.used = function_view.used;
+    file_io.record_helpers = function_view.record_helpers;
+    file_io.helper_defs = function_view.helper_defs;
 
     let mut body = String::new();
     for statement in &program.statements {
