@@ -5235,6 +5235,42 @@ end
     }
 
     #[test]
+    fn c_target_supports_instr() {
+        let source = "dim s$, pos%\ns$ = \"hello world\"\npos% = instr(s$, \"world\")\nprint pos%\nprint instr(s$, \"xyz\")\nprint instr(\"BASCAL\", \"CAL\")\nend\n";
+        let output = compile_source_via_c_target(source);
+        // Regression check, same category as the RIGHT$ one above: the
+        // bcc_instr helper calls strstr, which needs <string.h> -- missing
+        // it produces C that fails to *compile*, not something a
+        // generated-source-text check alone would catch.
+        assert!(
+            output.contains("#include <string.h>"),
+            "INSTR needs <string.h> for strstr:\n{output}"
+        );
+        assert!(
+            output.contains("static int bcc_instr("),
+            "INSTR needs the INSTR_HELPER block for bcc_instr:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_instr(bv_s_s, \"world\")"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_instr(\"BASCAL\", \"CAL\")"),
+            "a string literal argument should be passed straight through:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_instr_helper_when_instr_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_instr"),
+            "the INSTR helper shouldn't be emitted when `instr` is never called:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);
