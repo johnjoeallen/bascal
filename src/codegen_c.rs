@@ -734,6 +734,17 @@ fn is_string_expr(expr: &Expr) -> bool {
 /// used for every write into one of these buffers specifically so a string
 /// longer than fits is *safely truncated*, never a buffer overflow --
 /// unlike `strcpy`/`strcat`, which this backend deliberately never emits.
+///
+/// A Pascal-style representation (a length byte, heap storage rounded up
+/// to 16-byte blocks so most assignments reuse the existing block instead
+/// of reallocating) was considered and deliberately deferred: it doesn't
+/// reduce allocation count below this scheme's current zero (every buffer
+/// is a fixed-size local, allocated once, never resized), and it would
+/// reintroduce exactly the malloc/realloc/free lifetime bugs (leaks,
+/// use-after-free) this design exists to avoid, for no benefit while every
+/// string is still a lone scalar. It's worth revisiting once this backend
+/// supports arrays -- a flat `char[256][N]` string array is the case where
+/// per-element right-sizing would actually matter -- but not before then.
 const STRING_BUFFER_SIZE: usize = 256;
 
 /// Renders a string expression tree as C expression text usable as a
