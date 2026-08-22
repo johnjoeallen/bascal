@@ -1,0 +1,78 @@
+/* The book is intentionally quiet: a reading surface first, navigation and
+   cross-references second. */
+:root {
+  --book-paper: #f7f3e9;
+  --book-ink: #28251f;
+  --book-muted: #746e60;
+  --book-rule: #d8d0be;
+  --book-accent: #8a3425;
+  --book-link: #1c6759;
+  --book-code: #25231e;
+  --book-code-ink: #f6f0df;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --book-paper: #1d1b17;
+    --book-ink: #f1ead9;
+    --book-muted: #c1b8a5;
+    --book-rule: #484136;
+    --book-accent: #ea947d;
+    --book-link: #82d6c0;
+    --book-code: #12110e;
+    --book-code-ink: #f6f0df;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  color: var(--book-ink);
+  background: var(--book-paper);
+  font: 1.08rem/1.72 Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+}
+a { color: var(--book-link); }
+.book-width { width: min(100% - 2.5rem, 48rem); margin: 0 auto; }
+.book-masthead { border-bottom: 1px solid var(--book-rule); padding: 1rem 0 .9rem; }
+.book-masthead .book-width { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.book-name, .book-home { color: var(--book-ink); font-family: ui-monospace, monospace; font-size: .78rem; letter-spacing: .06em; text-decoration: none; text-transform: uppercase; }
+.book-home { color: var(--book-muted); }
+.book-home:hover, .book-name:hover { color: var(--book-link); }
+.book-hero { padding: 6.5rem 0 4.8rem; border-bottom: 1px solid var(--book-rule); }
+.eyebrow { margin: 0 0 1rem; color: var(--book-accent); font: 700 .78rem/1.2 ui-monospace, monospace; letter-spacing: .11em; text-transform: uppercase; }
+h1, h2, h3 { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; line-height: 1.12; }
+h1 { max-width: 12em; margin: 0; font-size: clamp(2.8rem, 8vw, 5.4rem); font-weight: 500; letter-spacing: -.045em; }
+.subtitle { max-width: 35rem; margin: 1.4rem 0 0; color: var(--book-muted); font-size: 1.3rem; }
+.byline { margin-top: 2.7rem; color: var(--book-muted); font-size: .92rem; }
+.book-main { padding: 3.5rem 0 5rem; }
+.intro { color: var(--book-muted); font-size: 1.18rem; }
+.part { margin-top: 3.8rem; }
+.part h2 { margin: 0 0 .35rem; color: var(--book-accent); font-size: .82rem; font-family: ui-monospace, monospace; letter-spacing: .09em; text-transform: uppercase; }
+.part > p { margin: 0 0 1rem; color: var(--book-muted); font-size: .95rem; }
+.chapters { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--book-rule); }
+.chapters li { border-bottom: 1px solid var(--book-rule); }
+.chapters a { display: grid; grid-template-columns: 3rem 1fr; gap: .4rem; padding: 1.15rem 0; color: var(--book-ink); text-decoration: none; }
+.chapters a:hover { color: var(--book-link); }
+.chapter-number { color: var(--book-muted); font: .8rem ui-monospace, monospace; padding-top: .32rem; }
+.chapter-title { display: block; font-size: 1.3rem; line-height: 1.18; }
+.chapter-summary { display: block; margin-top: .22rem; color: var(--book-muted); font: .92rem/1.45 Georgia, serif; }
+.book-footer { border-top: 1px solid var(--book-rule); color: var(--book-muted); font-size: .86rem; padding: 2rem 0 3.5rem; }
+.book-footer p { margin: 0; }
+.chapter-header { padding: 4.6rem 0 2.3rem; border-bottom: 1px solid var(--book-rule); }
+.chapter-header h1 { font-size: clamp(2.4rem, 6vw, 4.2rem); }
+.chapter-kicker { margin: 0 0 1.1rem; color: var(--book-muted); font: .8rem ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.chapter-main { padding: 2.6rem 0 4.5rem; }
+.chapter-main h2 { margin: 2.7rem 0 .7rem; font-size: 1.75rem; font-weight: 500; }
+.chapter-main h2:first-child { margin-top: 0; }
+.chapter-main p, .chapter-main ul { margin: 0 0 1.1rem; }
+.chapter-main li { margin-bottom: .35rem; }
+pre { overflow-x: auto; margin: 1.4rem 0; padding: 1.05rem 1.15rem; border-radius: .15rem; background: var(--book-code); color: var(--book-code-ink); font: .84rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .84em; }
+.tok-kw { color: #c084fc; font-weight: 600; }
+.tok-str { color: #f0a24b; }
+.tok-num { color: #7eaae9; }
+.tok-com { color: #aaa08d; font-style: italic; }
+p code, li code { padding: .08em .25em; background: color-mix(in srgb, var(--book-muted) 14%, transparent); border-radius: .15rem; }
+.aside { margin: 1.7rem 0; padding: .9rem 1.15rem; border-left: 3px solid var(--book-accent); color: var(--book-muted); font-size: .96rem; }
+.chapter-nav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.5rem; padding-top: 1.4rem; border-top: 1px solid var(--book-rule); font-size: .94rem; }
+.chapter-nav a:last-child { margin-left: auto; text-align: right; }
+@media (max-width: 520px) { .book-hero { padding: 4rem 0 3rem; } .book-masthead .book-width { align-items: flex-start; flex-direction: column; gap: .45rem; } }

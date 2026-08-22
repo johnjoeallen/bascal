@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Functions, Procedures, and Libraries — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 4</p><h1>Functions, procedures, and libraries</h1></div></header>
+<main class="chapter-main book-width"><h2>Name an operation</h2><p>A function calculates a typed result; a procedure performs an action. Keeping the distinction explicit makes call sites honest about whether a value comes back.</p><pre><code>function larger%(left%, right%)
+    if left% &gt; right% then
+        return left%
+    end if
+    return right%
+end function
+
+procedure showTotal(amount!)
+    print "Total: "; amount!
+end procedure
+
+showTotal(larger%(4, 9))
+</code></pre><p>Parameters are passed by value unless you say <code>byref</code>. That default makes a call read as an input; use <code>byref</code> only when the caller’s variable is intentionally an output too.</p><h2>Put reusable code in a library file</h2><p>Use <code>require</code> for code a program needs. A dotted path is a file lookup path, not a runtime namespace.</p><pre><code>require com.bascal.sort.quickSort
+
+quickSort(values%())
+</code></pre><p>Put reusable code in a library file, then name that library with <code>require</code>. The compiler resolves the dotted path beneath its search paths: dots become directory separators, so this example identifies <code>com/bascal/sort/quickSort.bcl</code>. It then incorporates the specified library code into the generated program. This Java-inspired path mechanism keeps dependencies named and located consistently while producing one complete program.</p><p>This keeps a larger project simple: source files have useful locations, while the generated BASIC remains compatible with the global model of its runtime. Functions, procedures, and dependencies each have precise declaration and call rules; use them consistently so that a program’s interfaces remain visible in its source.</p><nav class="chapter-nav"><a href="control-flow.html">← Making control flow visible</a><a href="data-and-files.html">Data that outlives a run →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>

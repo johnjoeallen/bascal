@@ -204,9 +204,9 @@ pub enum PrintToken {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResumeTarget {
-    Same,        // RESUME — retry the statement that caused the error
-    Next,        // RESUME NEXT — continue after the failing statement
-    Line(Expr),  // RESUME lineno
+    Same,       // RESUME — retry the statement that caused the error
+    Next,       // RESUME NEXT — continue after the failing statement
+    Line(Expr), // RESUME lineno
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -326,9 +326,13 @@ pub enum Statement {
     Label(String),
     Goto(Expr),
     Gosub(Expr),
-    OnErrorGoto { target: Expr },
+    OnErrorGoto {
+        target: Expr,
+    },
     Resume(ResumeTarget),
-    ErrorStmt { code: Expr },
+    ErrorStmt {
+        code: Expr,
+    },
     Input {
         prompt: Option<String>,
         vars: Vec<Expr>,
@@ -351,16 +355,43 @@ pub enum Statement {
     Field {
         channel: Expr,
         fields: Vec<(Expr, BasicIdent)>,
+        /// The record/file DSL's declared record type name (see
+        /// `records::lower_file_decl`), when this `FIELD` was synthesized
+        /// from `file db as T = open(...)` -- `None` for a raw, hand-typed
+        /// `FIELD` statement, which BASCAL still passes through unchanged.
+        /// Only the C backend (`codegen_c.rs`) reads this, to name its
+        /// synthesized per-record-type `bcc_put<T>Record`/`bcc_get<T>Record`
+        /// helpers after the actual record type instead of an anonymous
+        /// shape index; the `basic` backend ignores it entirely.
+        record_type: Option<String>,
+        /// Logical string fields from the record/file DSL.  The C backend
+        /// uses this to trim FIELD padding after a record read.
+        string_fields: Option<Vec<bool>>,
+        /// Exact DSL field types for the C typed-record path. Raw FIELD
+        /// statements leave this unset and retain byte-buffer semantics.
+        field_types: Option<Vec<RecordFieldType>>,
     },
     Get {
         channel: Expr,
         record: Option<Expr>,
         var: Option<Expr>,
+        /// Set only by the record/file DSL for a partial update. Reading a
+        /// missing record before changing selected fields would otherwise
+        /// turn uninitialized buffer bytes into a newly written record.
+        require_existing: bool,
+        /// The fixed record length for a DSL partial update. This lets the
+        /// BASIC backend reject a record beyond EOF before its GET; raw
+        /// GET statements leave it unset.
+        record_length: Option<u32>,
     },
     Put {
         channel: Expr,
         record: Option<Expr>,
         var: Option<Expr>,
+        /// For a record/file DSL partial update, marks the fields supplied
+        /// by the source literal.  The C backend passes `NULL` for omitted
+        /// fields so its typed PUT helper can preserve them safely.
+        provided_fields: Option<Vec<bool>>,
     },
     Lset {
         var: BasicIdent,

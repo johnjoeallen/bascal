@@ -113,10 +113,11 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
 /// source ever names this function -- the transpiler synthesizes the call
 /// (see `codegen::MID_ASSIGN_HELPER_NAME`).
 fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Vec<Diagnostic>> {
-    let already_defined = program
-        .functions
-        .iter()
-        .any(|f| f.name.name.eq_ignore_ascii_case(codegen::MID_ASSIGN_HELPER_NAME));
+    let already_defined = program.functions.iter().any(|f| {
+        f.name
+            .name
+            .eq_ignore_ascii_case(codegen::MID_ASSIGN_HELPER_NAME)
+    });
     if already_defined || !program_uses_mid_assign(program) {
         return Ok(());
     }
@@ -147,19 +148,26 @@ fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Ve
     })?;
     let filename = path.display().to_string();
     let helper_program = parse_source(filename.clone(), &source)?;
-    let [function]: [ast::FunctionDef; 1] = helper_program.functions.try_into().unwrap_or_else(|functions: Vec<ast::FunctionDef>| {
-        panic!(
-            "BASCAL bug: {filename} must declare exactly one function, found {}",
-            functions.len()
-        )
-    });
+    let [function]: [ast::FunctionDef; 1] =
+        helper_program
+            .functions
+            .try_into()
+            .unwrap_or_else(|functions: Vec<ast::FunctionDef>| {
+                panic!(
+                    "BASCAL bug: {filename} must declare exactly one function, found {}",
+                    functions.len()
+                )
+            });
     program.functions.push(function);
     Ok(())
 }
 
 fn program_uses_mid_assign(program: &ast::Program) -> bool {
     statements_use_mid_assign(&program.statements)
-        || program.functions.iter().any(|f| statements_use_mid_assign(&f.body))
+        || program
+            .functions
+            .iter()
+            .any(|f| statements_use_mid_assign(&f.body))
 }
 
 fn statements_use_mid_assign(statements: &[ast::Statement]) -> bool {
@@ -170,11 +178,15 @@ fn statement_uses_mid_assign(statement: &ast::Statement) -> bool {
     use ast::Statement::*;
     match statement {
         MidAssign { .. } => true,
-        If { then_body, else_body, .. } => {
-            statements_use_mid_assign(then_body) || statements_use_mid_assign(else_body)
-        }
+        If {
+            then_body,
+            else_body,
+            ..
+        } => statements_use_mid_assign(then_body) || statements_use_mid_assign(else_body),
         For { body, .. } | While { body, .. } | Do { body, .. } => statements_use_mid_assign(body),
-        SelectCase { cases, else_body, .. } => {
+        SelectCase {
+            cases, else_body, ..
+        } => {
             cases.iter().any(|c| statements_use_mid_assign(&c.body))
                 || statements_use_mid_assign(else_body)
         }
@@ -346,8 +358,7 @@ fn load_program_recursive(
         match declaration {
             ast::DependencyDecl::Require(symbol) | ast::DependencyDecl::Import(symbol) => {
                 let dependency_path = resolve_required_symbol(&symbol.raw, &input, options)?;
-                let dependency =
-                    load_program_recursive(&dependency_path, false, options, visited)?;
+                let dependency = load_program_recursive(&dependency_path, false, options, visited)?;
                 merged.statements.extend(dependency.statements);
                 merged.functions.extend(dependency.functions);
                 merged.records.extend(dependency.records);
@@ -361,7 +372,10 @@ fn load_program_recursive(
     Ok(merged)
 }
 
-fn load_shared_file(path: &Path, shared_name: &str) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
+fn load_shared_file(
+    path: &Path,
+    shared_name: &str,
+) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
     let source = fs::read_to_string(path).map_err(|err| {
         vec![Diagnostic::error(
             diagnostics::SourcePos::new(path.display().to_string(), 1, 1),
@@ -377,37 +391,54 @@ fn load_shared_file(path: &Path, shared_name: &str) -> Result<Vec<ast::CommonBlo
     // file's variables are COMMON by default, with no separate keyword to
     // opt in.
     if program.statements.iter().any(|s| match s {
-        ast::Statement::BlankLine | ast::Statement::BlockComment(_) | ast::Statement::Dim { .. } => false,
+        ast::Statement::BlankLine
+        | ast::Statement::BlockComment(_)
+        | ast::Statement::Dim { .. } => false,
         ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
         _ => true,
     }) {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("shared file `{}` may only contain DIM declarations (no other statements)", path.display()),
+            format!(
+                "shared file `{}` may only contain DIM declarations (no other statements)",
+                path.display()
+            ),
         ));
     }
     if !program.functions.is_empty() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("shared file `{}` may only contain DIM declarations (no functions)", path.display()),
+            format!(
+                "shared file `{}` may only contain DIM declarations (no functions)",
+                path.display()
+            ),
         ));
     }
     if !program.declarations.is_empty() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("shared file `{}` may only contain DIM declarations (no require/import)", path.display()),
+            format!(
+                "shared file `{}` may only contain DIM declarations (no require/import)",
+                path.display()
+            ),
         ));
     }
     if program.program_decl.is_some() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("shared file `{}` may only contain DIM declarations (no program declaration)", path.display()),
+            format!(
+                "shared file `{}` may only contain DIM declarations (no program declaration)",
+                path.display()
+            ),
         ));
     }
     if program.library_decl.is_some() {
         errors.push(Diagnostic::error(
             pos.clone(),
-            format!("shared file `{}` may only contain DIM declarations (no library declaration)", path.display()),
+            format!(
+                "shared file `{}` may only contain DIM declarations (no library declaration)",
+                path.display()
+            ),
         ));
     }
     // The `shared <name>` header is mandatory -- every file must declare
@@ -447,7 +478,10 @@ fn load_shared_file(path: &Path, shared_name: &str) -> Result<Vec<ast::CommonBlo
     if dim_vars.is_empty() {
         errors.push(Diagnostic::error(
             pos,
-            format!("shared file `{}` contains no DIM declarations", path.display()),
+            format!(
+                "shared file `{}` contains no DIM declarations",
+                path.display()
+            ),
         ));
     }
 
@@ -458,7 +492,11 @@ fn load_shared_file(path: &Path, shared_name: &str) -> Result<Vec<ast::CommonBlo
     Ok(vec![ast::CommonBlock { vars: dim_vars }])
 }
 
-fn resolve_shared_path(shared_name: &str, source_file: &Path, options: &CompileOptions) -> Option<PathBuf> {
+fn resolve_shared_path(
+    shared_name: &str,
+    source_file: &Path,
+    options: &CompileOptions,
+) -> Option<PathBuf> {
     let filename = format!("{shared_name}.bcl");
     for root in search_roots(source_file, options) {
         let candidate = root.join(&filename);
@@ -563,20 +601,34 @@ END
 "#;
 
         let output = compile_source("add.bcl", source).expect("sample should compile");
-        assert!(output.contains("' function add%"), "spec comment should be emitted");
-        assert!(!output.lines().any(|l| {
-            let p = l.trim_start()
-                .trim_start_matches(|c: char| c.is_ascii_digit())
-                .trim_start();
-            !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
-        }), "should not emit BASCOM function declarations");
-        assert!(output.contains("' end function add%"), "end function comment should be emitted");
-        assert!(!output.lines().any(|l| {
-            let p = l.trim_start()
-                .trim_start_matches(|c: char| c.is_ascii_digit())
-                .trim_start();
-            !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
-        }), "should not emit BASCOM end function declarations");
+        assert!(
+            output.contains("' function add%"),
+            "spec comment should be emitted"
+        );
+        assert!(
+            !output.lines().any(|l| {
+                let p = l
+                    .trim_start()
+                    .trim_start_matches(|c: char| c.is_ascii_digit())
+                    .trim_start();
+                !p.starts_with('\'') && p.to_ascii_lowercase().contains("function ")
+            }),
+            "should not emit BASCOM function declarations"
+        );
+        assert!(
+            output.contains("' end function add%"),
+            "end function comment should be emitted"
+        );
+        assert!(
+            !output.lines().any(|l| {
+                let p = l
+                    .trim_start()
+                    .trim_start_matches(|c: char| c.is_ascii_digit())
+                    .trim_start();
+                !p.starts_with('\'') && p.to_ascii_lowercase().starts_with("end function")
+            }),
+            "should not emit BASCOM end function declarations"
+        );
         assert!(output.contains("addLeft0% = 10"));
         assert!(output.contains("addRight0% = 20"));
         assert!(output.contains("GOSUB "));
@@ -606,8 +658,8 @@ END
     #[test]
     fn assigns_repeated_function_results_to_variables() {
         let source = include_str!("../tutorial/07_functions.bcl");
-        let output = compile_source("tutorial/07_functions.bcl", source)
-            .expect("sample should compile");
+        let output =
+            compile_source("tutorial/07_functions.bcl", source).expect("sample should compile");
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));
@@ -625,10 +677,22 @@ greet("World")
 END
 "#;
         let output = compile_source("greet.bcl", source).expect("procedure should compile");
-        assert!(output.contains("GOSUB "), "should emit GOSUB for procedure call");
-        assert!(!output.contains("greet_result"), "procedures must not emit a result variable");
-        assert!(output.contains("' procedure greet("), "should annotate as procedure");
-        assert!(output.contains("' end procedure greet"), "should close annotation as procedure");
+        assert!(
+            output.contains("GOSUB "),
+            "should emit GOSUB for procedure call"
+        );
+        assert!(
+            !output.contains("greet_result"),
+            "procedures must not emit a result variable"
+        );
+        assert!(
+            output.contains("' procedure greet("),
+            "should annotate as procedure"
+        );
+        assert!(
+            output.contains("' end procedure greet"),
+            "should close annotation as procedure"
+        );
     }
 
     #[test]
@@ -647,7 +711,10 @@ end
             output.contains("' jump to done when finished"),
             "comment text must not be rewritten just because it contains a label's name:\n{output}"
         );
-        assert!(output.contains("GOTO 10"), "goto should still resolve to the label's line number");
+        assert!(
+            output.contains("GOTO 10"),
+            "goto should still resolve to the label's line number"
+        );
     }
 
     #[test]
@@ -668,8 +735,14 @@ show()
 end
 "#;
         let output = compile_source("const_local.bcl", source).expect("should compile");
-        assert!(!output.contains("CONST "), "CONST isn't valid on real MBASIC/BASCOM:\n{output}");
-        assert!(output.contains("showN0% = 5"), "unexpected const line:\n{output}");
+        assert!(
+            !output.contains("CONST "),
+            "CONST isn't valid on real MBASIC/BASCOM:\n{output}"
+        );
+        assert!(
+            output.contains("showN0% = 5"),
+            "unexpected const line:\n{output}"
+        );
         assert!(
             output.contains("PRINT showN0%"),
             "PRINT should read back the same local name the const line declared:\n{output}"
@@ -740,7 +813,8 @@ end function
 print readOne$()
 end
 "#;
-        let output = compile_source("input_dollar_in_function.bcl", source).expect("should compile");
+        let output =
+            compile_source("input_dollar_in_function.bcl", source).expect("should compile");
         assert!(
             output.contains("= INPUT$(1)"),
             "INPUT$ inside a function should lower to the real builtin, not a synthesized local array:\n{output}"
@@ -883,9 +957,13 @@ sayIfPositive(5)
 sayIfPositive(-1)
 END
 "#;
-        let output = compile_source("early.bcl", source).expect("procedure with return should compile");
+        let output =
+            compile_source("early.bcl", source).expect("procedure with return should compile");
         assert!(output.contains("RETURN"), "should emit RETURN");
-        assert!(!output.contains("sayIfPositive_result"), "no result variable for procedure");
+        assert!(
+            !output.contains("sayIfPositive_result"),
+            "no result variable for procedure"
+        );
     }
 
     #[test]
@@ -893,10 +971,22 @@ END
         let source = "/*\nFirst paragraph.\n\nSecond paragraph.\n*/\nEND\n";
         let output = compile_source("comment.bcl", source).expect("should compile");
         let lines: Vec<&str> = output.lines().collect();
-        let first = lines.iter().position(|l| l.contains("First paragraph.")).unwrap();
-        let second = lines.iter().position(|l| l.contains("Second paragraph.")).unwrap();
-        assert!(second > first + 1, "blank line should separate the two comment paragraphs");
-        assert!(lines[first + 1].trim().is_empty(), "line between paragraphs should be blank");
+        let first = lines
+            .iter()
+            .position(|l| l.contains("First paragraph."))
+            .unwrap();
+        let second = lines
+            .iter()
+            .position(|l| l.contains("Second paragraph."))
+            .unwrap();
+        assert!(
+            second > first + 1,
+            "blank line should separate the two comment paragraphs"
+        );
+        assert!(
+            lines[first + 1].trim().is_empty(),
+            "line between paragraphs should be blank"
+        );
     }
 
     #[test]
@@ -913,12 +1003,22 @@ END
         assert!(output.contains("' function shellsort%(data%)"));
         assert!(output.contains("' function touch%(value%)"));
         assert!(!output.contains("placeholder"));
-        assert!(!output.contains("BCC_COPY%"), "hardcoded BCC_COPY% loop var should not appear");
+        assert!(
+            !output.contains("BCC_COPY%"),
+            "hardcoded BCC_COPY% loop var should not appear"
+        );
         // sort_driver.bcl uses mixed-case `bubbleData%`; output normalises to lowercase.
-        assert!(output.lines().any(|l| l.contains("bubblesortData0%(") && l.contains(") = bubbledata%(")));
-        assert!(output.lines().any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesortData0%(")));
-        assert!(output.contains("bubblesortData0%(bubblesortJ0%) = bubblesortData0%(bubblesortJ0% + 1)"));
-        assert!(output.contains("quicksortData0%(quicksortWall0%) = quicksortData0%(quicksortQHigh0%)"));
+        assert!(output
+            .lines()
+            .any(|l| l.contains("bubblesortData0%(") && l.contains(") = bubbledata%(")));
+        assert!(output
+            .lines()
+            .any(|l| l.contains("bubbledata%(") && l.contains(") = bubblesortData0%(")));
+        assert!(output
+            .contains("bubblesortData0%(bubblesortJ0%) = bubblesortData0%(bubblesortJ0% + 1)"));
+        assert!(
+            output.contains("quicksortData0%(quicksortWall0%) = quicksortData0%(quicksortQHigh0%)")
+        );
         assert!(output.contains("GOSUB "));
     }
 
@@ -928,8 +1028,16 @@ END
         let prog_path = dir.path().join("myapp.bcl");
         let shared_path = dir.path().join("mystate.bcl");
 
-        std::fs::write(&prog_path, "program myapp shared mystate\nPRINT \"hello\"\nEND\n").unwrap();
-        std::fs::write(&shared_path, "shared mystate\n\ndim score%\ndim level%\ndim name$\n").unwrap();
+        std::fs::write(
+            &prog_path,
+            "program myapp shared mystate\nPRINT \"hello\"\nEND\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shared_path,
+            "shared mystate\n\ndim score%\ndim level%\ndim name$\n",
+        )
+        .unwrap();
 
         let output = compile_file(&prog_path, &CompileOptions::new())
             .expect("program with shared file should compile");
@@ -946,7 +1054,11 @@ END
 
         let result = compile_file(&path, &CompileOptions::new());
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
         assert!(msg.contains("the `common` keyword has been removed"));
     }
 
@@ -961,7 +1073,11 @@ END
 
         let result = compile_file(&prog_path, &CompileOptions::new());
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
         assert!(msg.contains("may only contain DIM declarations"));
     }
 
@@ -994,7 +1110,11 @@ END
 
         let result = compile_file(&prog_path, &CompileOptions::new());
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
         assert!(msg.contains("declares `shared wrongname`"));
     }
 
@@ -1003,7 +1123,11 @@ END
         let source = "program foo\nshared bar\nend\n";
         let result = compile_source("both.bcl", source);
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
         assert!(msg.contains("cannot have both a `program` declaration and a `shared` declaration"));
     }
 
@@ -1015,7 +1139,11 @@ END
 
         let result = compile_file(&path, &CompileOptions::new());
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
         assert!(msg.contains("`shared` declaration is only valid in shared-variable files"));
     }
 
@@ -1063,7 +1191,8 @@ seek #1, 2
 close #1
 end
 "#;
-        let output = compile_source("random.bcl", source).expect("random-access sample should compile");
+        let output =
+            compile_source("random.bcl", source).expect("random-access sample should compile");
         assert!(output.contains("OPEN datafile$ FOR RANDOM AS #1 LEN = 128"));
         assert!(output.contains("FIELD #1, 4 AS recnum$, 124 AS recdata$"));
         assert!(output.contains("LSET recnum$ = MKI%(1)"));
@@ -1130,7 +1259,10 @@ end
             output.contains("snametrimi% = LEN(dbNameBuf$)"),
             "string field unpacking should trim inline, not call RTRIM$:\n{output}"
         );
-        assert!(!output.to_ascii_uppercase().contains("RTRIM$"), "RTRIM$ isn't valid on real MBASIC/BASCOM:\n{output}");
+        assert!(
+            !output.to_ascii_uppercase().contains("RTRIM$"),
+            "RTRIM$ isn't valid on real MBASIC/BASCOM:\n{output}"
+        );
         assert!(output.contains("sname$ = LEFT$(dbNameBuf$, snametrimi%)"));
         assert!(output.contains("sscore# = CVD(dbScoreBuf$)"));
     }
@@ -1208,8 +1340,7 @@ end
             "showItem should read back from the same top-level FIELD buffers:\n{output}"
         );
         assert!(
-            !output.contains("additemItemsNameBuf")
-                && !output.contains("showitemItemsNameBuf"),
+            !output.contains("additemItemsNameBuf") && !output.contains("showitemItemsNameBuf"),
             "FIELD buffer names must never be re-namespaced per procedure:\n{output}"
         );
     }
@@ -1265,10 +1396,24 @@ db[1] = s
 end
 "#;
         let output = compile_source("batch.bcl", source).expect("should compile");
-        assert_eq!(output.matches("GET #1").count(), 1, "exactly one GET for the whole batch");
-        assert_eq!(output.matches("PUT #1").count(), 1, "exactly one PUT for the whole batch");
-        assert!(output.contains(r#"sname$ = "Alicia""#), "field mutation is a plain in-memory assignment");
-        assert!(output.contains("sscore# = 99"), "field mutation is a plain in-memory assignment");
+        assert_eq!(
+            output.matches("GET #1").count(),
+            1,
+            "exactly one GET for the whole batch"
+        );
+        assert_eq!(
+            output.matches("PUT #1").count(),
+            1,
+            "exactly one PUT for the whole batch"
+        );
+        assert!(
+            output.contains(r#"sname$ = "Alicia""#),
+            "field mutation is a plain in-memory assignment"
+        );
+        assert!(
+            output.contains("sscore# = 99"),
+            "field mutation is a plain in-memory assignment"
+        );
         assert!(output.contains("LSET dbIdBuf$ = MKI$(sid%)"));
         assert!(output.contains("LSET dbNameBuf$ = sname$"));
         assert!(output.contains("LSET dbScoreBuf$ = MKD$(sscore#)"));
@@ -1307,11 +1452,40 @@ db[2] = ?{ score: 61.5 }
 end
 "#;
         let output = compile_source("partial.bcl", source).expect("should compile");
-        assert!(output.contains("GET #1, 2"), "partial write covering only some fields needs a GET");
+        assert!(
+            output.contains("GET #1, 2"),
+            "partial write covering only some fields needs a GET"
+        );
         assert!(output.contains("LSET dbScoreBuf$ = MKD$(61.5)"));
-        assert!(!output.contains("LSET dbIdBuf$"), "unmentioned fields must not be LSET");
-        assert!(!output.contains("LSET dbNameBuf$"), "unmentioned fields must not be LSET");
+        assert!(
+            !output.contains("LSET dbIdBuf$"),
+            "unmentioned fields must not be LSET"
+        );
+        assert!(
+            !output.contains("LSET dbNameBuf$"),
+            "unmentioned fields must not be LSET"
+        );
         assert!(output.contains("PUT #1, 2"));
+    }
+
+    #[test]
+    fn record_partial_write_requires_an_existing_record_in_basic_output() {
+        let source = r#"record Student
+    id: int16
+    name: string(20)
+    score: float64
+    faculty: string(20)
+end record
+file db as Student = open("students.dat")
+db[2] = ?{ name: "Bob" }
+end
+"#;
+        let output =
+            compile_source("partial_exists.bcl", source).expect("partial update should compile");
+        assert!(
+            output.contains("IF LOF(#1) < (2) * 50 THEN ERROR 63"),
+            "a partial update must reject a missing fixed-length record before GET:\n{output}"
+        );
     }
 
     #[test]
@@ -1328,7 +1502,10 @@ db[3] = ?{ id: 3, name: "Carol", score: 78.0 }
 end
 "#;
         let output = compile_source("partial_full.bcl", source).expect("should compile");
-        assert!(!output.contains("GET #1"), "covering every field needs no GET");
+        assert!(
+            !output.contains("GET #1"),
+            "covering every field needs no GET"
+        );
         assert!(output.contains("LSET dbIdBuf$ = MKI$(3)"));
         assert!(output.contains("LSET dbNameBuf$ = \"Carol\""));
         assert!(output.contains("LSET dbScoreBuf$ = MKD$(78)"));
@@ -1346,9 +1523,13 @@ file db as A = open("a.dat")
 db[1] = { n: 1 }
 end
 "#;
-        let err = compile_source("full.bcl", source).expect_err("should reject incomplete full literal");
+        let err =
+            compile_source("full.bcl", source).expect_err("should reject incomplete full literal");
         assert!(err.iter().any(|d| d.message.contains("missing field `m`")));
-        assert!(err.iter().any(|d| d.message.contains("?{")), "error should point at the partial alternative");
+        assert!(
+            err.iter().any(|d| d.message.contains("?{")),
+            "error should point at the partial alternative"
+        );
     }
 
     #[test]
@@ -1360,7 +1541,8 @@ file db as A = open("a.dat")
 db[1] = ?{ bogus: 1 }
 end
 "#;
-        let err = compile_source("bogus.bcl", source).expect_err("should reject unknown field even in a partial literal");
+        let err = compile_source("bogus.bcl", source)
+            .expect_err("should reject unknown field even in a partial literal");
         assert!(err.iter().any(|d| d.message.contains("bogus")));
     }
 
@@ -1400,7 +1582,8 @@ file db as A = open("a.dat")
 db[1] = { name: "TooLong" }
 end
 "#;
-        let err = compile_source("bad.bcl", source).expect_err("should reject oversized string literal");
+        let err =
+            compile_source("bad.bcl", source).expect_err("should reject oversized string literal");
         assert!(err.iter().any(|d| d.message.contains("exceeds string(3)")));
     }
 
@@ -1413,7 +1596,8 @@ file db as A = open("a.dat")
 db[1] = { n: "oops" }
 end
 "#;
-        let err = compile_source("bad.bcl", source).expect_err("should reject string for numeric field");
+        let err =
+            compile_source("bad.bcl", source).expect_err("should reject string for numeric field");
         assert!(err.iter().any(|d| d.message.contains("numeric")));
     }
 
@@ -1426,7 +1610,8 @@ file db as A = open("a.dat")
 db[1] = { name: 5 }
 end
 "#;
-        let err = compile_source("bad.bcl", source).expect_err("should reject numeric for string field");
+        let err =
+            compile_source("bad.bcl", source).expect_err("should reject numeric for string field");
         assert!(err.iter().any(|d| d.message.contains("string(N)")));
     }
 
@@ -1436,7 +1621,9 @@ end
 end
 "#;
         let err = compile_source("bad.bcl", source).expect_err("should reject unknown record type");
-        assert!(err.iter().any(|d| d.message.contains("unknown record type")));
+        assert!(err
+            .iter()
+            .any(|d| d.message.contains("unknown record type")));
     }
 
     #[test]
@@ -1448,7 +1635,9 @@ db[1] = { n: 1 }
 end
 "#;
         let err = compile_source("bad.bcl", source).expect_err("should reject undeclared file var");
-        assert!(err.iter().any(|d| d.message.contains("not a declared `file`")));
+        assert!(err
+            .iter()
+            .any(|d| d.message.contains("not a declared `file`")));
     }
 
     #[test]
@@ -1589,7 +1778,10 @@ loop while j% <= 3
 end
 "#;
         let output = compile_source("postcheck_while.bcl", source).expect("should compile");
-        assert!(output.contains("<> 0 THEN GOTO"), "loop while repeats when the condition is still true");
+        assert!(
+            output.contains("<> 0 THEN GOTO"),
+            "loop while repeats when the condition is still true"
+        );
     }
 
     #[test]
@@ -1611,11 +1803,17 @@ end for
 end
 "#;
         let output = compile_source("nested_exit.bcl", source).expect("should compile");
-        assert!(output.contains("EXIT FOR"), "exit directly inside for must become EXIT FOR");
+        assert!(
+            output.contains("EXIT FOR"),
+            "exit directly inside for must become EXIT FOR"
+        );
         // The exit inside the inner `do` must NOT have produced a second
         // EXIT FOR -- only exactly one EXIT FOR should appear anywhere.
         assert_eq!(output.matches("EXIT FOR").count(), 1);
-        assert!(output.contains("GOTO"), "exit inside the inner do must become a GOTO, not EXIT FOR");
+        assert!(
+            output.contains("GOTO"),
+            "exit inside the inner do must become a GOTO, not EXIT FOR"
+        );
     }
 
     #[test]
@@ -1637,7 +1835,10 @@ end
         let output = compile_source("single_line_else.bcl", source).expect("should compile");
         assert!(output.contains(r#"PRINT "big""#));
         assert!(output.contains(r#"PRINT "small""#));
-        assert!(!output.contains("else"), "else must not leak into the generated output");
+        assert!(
+            !output.contains("else"),
+            "else must not leak into the generated output"
+        );
     }
 
     #[test]
@@ -1659,7 +1860,8 @@ end
 
     #[test]
     fn true_and_false_are_sugar_for_minus_one_and_zero() {
-        let source = "found% = TRUE\ndone% = FALSE\nif found% = TRUE then\n    print \"yes\"\nend if\nend\n";
+        let source =
+            "found% = TRUE\ndone% = FALSE\nif found% = TRUE then\n    print \"yes\"\nend if\nend\n";
         let output = compile_source("boolsugar.bcl", source).expect("should compile");
         assert!(output.contains("found% = -1"));
         assert!(output.contains("done% = 0"));
@@ -1686,7 +1888,10 @@ end
         let source =
             "x% = 5\nif x% > 0 then dim p%, q% : p% = 1 : q% = 2 : print p% + q%\nprint \"after\"\nend\n";
         let output = compile_source("dim_in_if.bcl", source).expect("should compile");
-        let if_line = output.lines().position(|l| l.contains("IF (")).expect("if line");
+        let if_line = output
+            .lines()
+            .position(|l| l.contains("IF ("))
+            .expect("if line");
         let end_if_line = output
             .lines()
             .position(|l| l.contains("REM END IF"))
@@ -1706,7 +1911,10 @@ print "after"
 end
 "#;
         let output = compile_source("label.bcl", source).expect("should compile");
-        assert!(!output.contains("skip"), "label text must not leak into generated output");
+        assert!(
+            !output.contains("skip"),
+            "label text must not leak into generated output"
+        );
         let skip_line = output
             .lines()
             .find(|line| line.contains("PRINT \"after\""))
@@ -1771,9 +1979,15 @@ end
             .lines()
             .filter_map(|l| l.trim().strip_prefix("GOSUB "))
             .collect();
-        assert_eq!(gosub_targets.len(), 1, "expected one shared subroutine:\n{output}");
         assert_eq!(
-            output.matches(&format!("GOSUB {}", gosub_targets.iter().next().unwrap())).count(),
+            gosub_targets.len(),
+            1,
+            "expected one shared subroutine:\n{output}"
+        );
+        assert_eq!(
+            output
+                .matches(&format!("GOSUB {}", gosub_targets.iter().next().unwrap()))
+                .count(),
             2,
             "expected both call sites to GOSUB the shared subroutine:\n{output}"
         );
@@ -1858,7 +2072,10 @@ end
             "function lcase$",
             "function error$",
         ] {
-            assert!(output.contains(marker), "expected {marker} to be required in:\n{output}");
+            assert!(
+                output.contains(marker),
+                "expected {marker} to be required in:\n{output}"
+            );
         }
         assert!(!output.contains("' require com.bascal.stdlib.ltrim"));
     }
@@ -1990,7 +2207,7 @@ end
         assert!(output.contains("b% = 17 \\ 5"));
         assert!(output.contains("c% = 17 MOD 5"));
         assert!(output.contains("d% = 6 XOR 3"));
-        assert!(output.contains("e% = 2 ^ (3 ^ 2)"));    // right-associative ^
+        assert!(output.contains("e% = 2 ^ (3 ^ 2)")); // right-associative ^
         assert!(output.contains("f% = (10 \\ 3) MOD 2")); // \ binds tighter than MOD
     }
 
@@ -2010,9 +2227,15 @@ end
 "#;
         let output = compile_source("collision.bcl", source).expect("should compile");
         // Global is normalized to lowercase, as usual for top-level names.
-        assert!(output.contains("foox%"), "global fooX% must be present (lowercased)");
+        assert!(
+            output.contains("foox%"),
+            "global fooX% must be present (lowercased)"
+        );
         // Parameter x% must be lowered to an indexed name, never the bare foox%.
-        assert!(output.contains("fooX0%"), "param x% must use indexed name fooX0%");
+        assert!(
+            output.contains("fooX0%"),
+            "param x% must use indexed name fooX0%"
+        );
         // The two names must be distinct — no line should assign foox% from foox%.
         assert!(!output.contains("foox% = foox%"), "names must not collide");
     }
@@ -2035,7 +2258,8 @@ end
             .expect_err("should reject global that conflicts with generated param name");
         assert!(
             err.iter().any(|d| d.message.contains("fooX0%")),
-            "error must name the conflicting global: {:?}", err
+            "error must name the conflicting global: {:?}",
+            err
         );
     }
 
@@ -2054,7 +2278,8 @@ end
             .expect_err("should reject global that conflicts with generated result name");
         assert!(
             err.iter().any(|d| d.message.contains("fooResult0%")),
-            "error must name the conflicting global: {:?}", err
+            "error must name the conflicting global: {:?}",
+            err
         );
     }
 
@@ -2075,7 +2300,8 @@ end
             .expect_err("should reject global that conflicts with generated local name");
         assert!(
             err.iter().any(|d| d.message.contains("fooAcc0%")),
-            "error must name the conflicting global: {:?}", err
+            "error must name the conflicting global: {:?}",
+            err
         );
     }
 
@@ -2102,7 +2328,9 @@ end
             "byval should still copy the array in:\n{output}"
         );
         assert!(
-            !output.lines().any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
+            !output
+                .lines()
+                .any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
             "byval must not copy the array back out:\n{output}"
         );
     }
@@ -2127,7 +2355,9 @@ end
             "byref should still copy the array in:\n{output}"
         );
         assert!(
-            output.lines().any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
+            output
+                .lines()
+                .any(|l| l.contains("data%(") && l.contains(") = zerooutArr0%(")),
             "byref must copy the array back out:\n{output}"
         );
     }
@@ -2185,8 +2415,10 @@ end
         let err = compile_source("byref_non_lvalue.bcl", source)
             .expect_err("byref argument that isn't a plain variable should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("byref") && d.message.contains("plain variable")),
-            "error must explain the byref/lvalue requirement: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("byref") && d.message.contains("plain variable")),
+            "error must explain the byref/lvalue requirement: {:?}",
+            err
         );
     }
 
@@ -2204,8 +2436,10 @@ end
         let err = compile_source("global_shadow.bcl", source)
             .expect_err("global declaration matching a parameter name should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("global arr%") && d.message.contains("shadows")),
-            "error must explain the parameter shadows the global: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("global arr%") && d.message.contains("shadows")),
+            "error must explain the parameter shadows the global: {:?}",
+            err
         );
     }
 
@@ -2239,15 +2473,15 @@ end
              capacity:\n{output}"
         );
         assert!(
-            output.lines().any(|l| {
-                l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)"
-            }),
+            output
+                .lines()
+                .any(|l| { l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)" }),
             "copy-in should use two indices on both sides:\n{output}"
         );
         assert!(
-            output.lines().any(|l| {
-                l.trim() == "g%(BCCT3%, BCCT4%) = sumgridGrid0%(BCCT3%, BCCT4%)"
-            }),
+            output
+                .lines()
+                .any(|l| { l.trim() == "g%(BCCT3%, BCCT4%) = sumgridGrid0%(BCCT3%, BCCT4%)" }),
             "byref copy-out should use two indices on both sides:\n{output}"
         );
         // Regression test: a 2+-index array access (`grid%(r%, c%)`) parses
@@ -2317,8 +2551,7 @@ end
         );
         assert!(
             output.lines().any(|l| {
-                l.trim()
-                    == "sumcubeCube0%(BCCT1%, BCCT2%, BCCT3%) = cube%(BCCT1%, BCCT2%, BCCT3%)"
+                l.trim() == "sumcubeCube0%(BCCT1%, BCCT2%, BCCT3%) = cube%(BCCT1%, BCCT2%, BCCT3%)"
             }),
             "copy-in should use three indices on both sides:\n{output}"
         );
@@ -2350,7 +2583,8 @@ end
                     && d.message.contains("indexed with 1")
                     && d.message.contains("row%")
             }),
-            "error must name both ranks and the mismatched parameter: {:?}", err
+            "error must name both ranks and the mismatched parameter: {:?}",
+            err
         );
     }
 
@@ -2378,7 +2612,8 @@ end
                     && d.message.contains("doesn't say so")
                     && d.message.contains("arr%(?)")
             }),
-            "error must explain the missing declaration and suggest the fix: {:?}", err
+            "error must explain the missing declaration and suggest the fix: {:?}",
+            err
         );
     }
 
@@ -2397,7 +2632,8 @@ end
                 d.message.contains("declared with 2 dimensions")
                     && d.message.contains("indexed with 1 subscript")
             }),
-            "error must name both the declared and used rank: {:?}", err
+            "error must name both the declared and used rank: {:?}",
+            err
         );
     }
 
@@ -2427,9 +2663,9 @@ end
             "bare identifier array argument should still generate correct copy-in/copy-out:\n{output}"
         );
         assert!(
-            output.lines().any(|l| {
-                l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)"
-            }),
+            output
+                .lines()
+                .any(|l| { l.trim() == "sumgridGrid0%(BCCT1%, BCCT2%) = g%(BCCT1%, BCCT2%)" }),
             "copy-in should read from g%, the bare identifier, not require g%():\n{output}"
         );
     }
@@ -2462,8 +2698,8 @@ dim data%(4)
 print sumArr%(data%)
 end
 "#;
-        let with_parens = compile_source("bare_vs_parens_a.bcl", source_with_parens)
-            .expect("should compile");
+        let with_parens =
+            compile_source("bare_vs_parens_a.bcl", source_with_parens).expect("should compile");
         let bare = compile_source("bare_vs_parens_b.bcl", source_bare).expect("should compile");
         assert_eq!(
             with_parens, bare,
@@ -2484,11 +2720,14 @@ dim g%(2, 2)
 print bad%(g%())
 end
 "#;
-        let err = compile_source("inconsistent_indexing.bcl", source)
-            .expect_err("indexing the same parameter with different subscript counts should be rejected");
+        let err = compile_source("inconsistent_indexing.bcl", source).expect_err(
+            "indexing the same parameter with different subscript counts should be rejected",
+        );
         assert!(
-            err.iter().any(|d| d.message.contains("different numbers of subscripts")),
-            "error must explain the inconsistent usage: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("different numbers of subscripts")),
+            "error must explain the inconsistent usage: {:?}",
+            err
         );
     }
 
@@ -2502,7 +2741,10 @@ print sizeof(data%)
 end
 "#;
         let output = compile_source("sizeof_1d.bcl", source).expect("should compile");
-        assert!(output.contains("PRINT 9"), "sizeof should resolve to the literal bound:\n{output}");
+        assert!(
+            output.contains("PRINT 9"),
+            "sizeof should resolve to the literal bound:\n{output}"
+        );
         assert!(
             !output.to_ascii_lowercase().contains("sizeof"),
             "sizeof must never appear literally in generated BASIC:\n{output}"
@@ -2518,8 +2760,14 @@ print sizeof(grid%, 1)
 end
 "#;
         let output = compile_source("sizeof_2d.bcl", source).expect("should compile");
-        assert!(output.contains("PRINT 2"), "axis 0 should resolve to the first DIM bound:\n{output}");
-        assert!(output.contains("PRINT 3"), "axis 1 should resolve to the second DIM bound:\n{output}");
+        assert!(
+            output.contains("PRINT 2"),
+            "axis 0 should resolve to the first DIM bound:\n{output}"
+        );
+        assert!(
+            output.contains("PRINT 3"),
+            "axis 1 should resolve to the second DIM bound:\n{output}"
+        );
     }
 
     #[test]
@@ -2536,7 +2784,9 @@ end
 "#;
         let output = compile_source("sizeof_frozen.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| l.trim().starts_with("BCCT") && l.contains("= n%")),
+            output
+                .lines()
+                .any(|l| l.trim().starts_with("BCCT") && l.contains("= n%")),
             "a non-literal bound should be captured into a temp right at DIM time:\n{output}"
         );
         assert!(
@@ -2546,7 +2796,10 @@ end
         // The frozen capture must appear before the later reassignment.
         let capture_pos = output.find("BCCT1% = n%").unwrap();
         let reassign_pos = output.find("n% = 99").unwrap();
-        assert!(capture_pos < reassign_pos, "must freeze before n% is reassigned:\n{output}");
+        assert!(
+            capture_pos < reassign_pos,
+            "must freeze before n% is reassigned:\n{output}"
+        );
     }
 
     #[test]
@@ -2595,8 +2848,10 @@ end
         let err = compile_source("sizeof_unknown.bcl", source)
             .expect_err("sizeof on an unrecognized array should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
-            "error must name the unresolvable array: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
+            "error must name the unresolvable array: {:?}",
+            err
         );
     }
 
@@ -2606,8 +2861,11 @@ end
         let err = compile_source("sizeof_bad_axis.bcl", source)
             .expect_err("an axis beyond the array's rank should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("only has 2 dimensions") && d.message.contains("axis 2")),
-            "error must explain the axis is out of range: {:?}", err
+            err.iter().any(
+                |d| d.message.contains("only has 2 dimensions") && d.message.contains("axis 2")
+            ),
+            "error must explain the axis is out of range: {:?}",
+            err
         );
     }
 
@@ -2617,8 +2875,10 @@ end
         let err = compile_source("sizeof_missing_axis.bcl", source)
             .expect_err("sizeof on a multi-D array with no axis argument should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("needs an axis argument")),
-            "error must explain an axis is required: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("needs an axis argument")),
+            "error must explain an axis is required: {:?}",
+            err
         );
     }
 
@@ -2628,8 +2888,10 @@ end
         let err = compile_source("sizeof_non_literal_axis.bcl", source)
             .expect_err("a non-literal axis argument should be rejected");
         assert!(
-            err.iter().any(|d| d.message.contains("must be a literal integer")),
-            "error must explain the axis must be a literal: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("must be a literal integer")),
+            "error must explain the axis must be a literal: {:?}",
+            err
         );
     }
 
@@ -2756,16 +3018,18 @@ dim data%(n%)
 dummy% = sumArr%(data%)
 end
 "#;
-        let err = compile_source("capacity_dynamic.bcl", source)
-            .expect_err("a call site with a non-constant array size should be rejected without \
-                          an explicit capacity");
+        let err = compile_source("capacity_dynamic.bcl", source).expect_err(
+            "a call site with a non-constant array size should be rejected without \
+                          an explicit capacity",
+        );
         assert!(
             err.iter().any(|d| {
                 d.message.contains("can't automatically size")
                     && d.message.contains("arr%")
                     && d.message.contains("compile-time constant")
             }),
-            "error must explain automatic sizing failed and why: {:?}", err
+            "error must explain automatic sizing failed and why: {:?}",
+            err
         );
     }
 
@@ -2785,8 +3049,8 @@ dim data%(n%)
 dummy% = sumArr%(data%)
 end
 "#;
-        let output =
-            compile_source("capacity_explicit.bcl", source).expect("explicit capacity should compile");
+        let output = compile_source("capacity_explicit.bcl", source)
+            .expect("explicit capacity should compile");
         assert!(
             output.contains("DIM sumarrArr0%(100)"),
             "an explicit literal capacity should be used as-is, once, at top-level:\n{output}"
@@ -2808,15 +3072,16 @@ dim data%(9)
 dummy% = sumArr%(data%)
 end
 "#;
-        let err = compile_source("capacity_too_small.bcl", source)
-            .expect_err("a literal call site provably bigger than the declared capacity should \
-                          be a compile error");
+        let err = compile_source("capacity_too_small.bcl", source).expect_err(
+            "a literal call site provably bigger than the declared capacity should \
+                          be a compile error",
+        );
         assert!(
             err.iter().any(|d| {
-                d.message.contains("9 elements")
-                    && d.message.contains("only sized for 4")
+                d.message.contains("9 elements") && d.message.contains("only sized for 4")
             }),
-            "error must name both the offending size and the declared capacity: {:?}", err
+            "error must name both the offending size and the declared capacity: {:?}",
+            err
         );
     }
 
@@ -2832,7 +3097,8 @@ end
             .expect_err("a `?` capacity with no call site to infer from should be rejected");
         assert!(
             err.iter().any(|d| d.message.contains("never called")),
-            "error must explain there's no call site to infer from: {:?}", err
+            "error must explain there's no call site to infer from: {:?}",
+            err
         );
     }
 
@@ -2853,16 +3119,20 @@ end
 "#;
         let output = compile_source("capacity_runtime_check.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| {
-                l.contains("IF sumarrArrDim00% > 9 THEN PRINT")
-                    && l.contains("STOP")
-            }),
+            output
+                .lines()
+                .any(|l| { l.contains("IF sumarrArrDim00% > 9 THEN PRINT") && l.contains("STOP") }),
             "every call site should runtime-check the actual size against the resolved \
              capacity, as a backstop regardless of compile-time inference:\n{output}"
         );
         let check_pos = output.find("IF sumarrArrDim00% > 9 THEN").unwrap();
-        let copy_pos = output.find("copy array argument into transpiled function storage").unwrap();
-        assert!(check_pos < copy_pos, "the runtime check must run before the copy-in loop:\n{output}");
+        let copy_pos = output
+            .find("copy array argument into transpiled function storage")
+            .unwrap();
+        assert!(
+            check_pos < copy_pos,
+            "the runtime check must run before the copy-in loop:\n{output}"
+        );
     }
 
     #[test]
@@ -2883,7 +3153,10 @@ dummy% = printArr%(data%)
 end
 "#;
         let output = compile_source("capacity_dim_once.bcl", source).expect("should compile");
-        let dim_count = output.lines().filter(|l| l.trim().starts_with("DIM printarrArr0%")).count();
+        let dim_count = output
+            .lines()
+            .filter(|l| l.trim().starts_with("DIM printarrArr0%"))
+            .count();
         assert_eq!(
             dim_count, 1,
             "storage must be DIMed exactly once regardless of call count:\n{output}"
@@ -2910,7 +3183,8 @@ end
                 d.message.contains("recursion is not supported")
                     && d.message.contains("`fact%` calls itself")
             }),
-            "error must name the self-recursive function: {:?}", err
+            "error must name the self-recursive function: {:?}",
+            err
         );
     }
 
@@ -2943,7 +3217,8 @@ end
                     && d.message.contains("`isOdd%`")
                     && d.message.contains("->")
             }),
-            "error must show the call cycle: {:?}", err
+            "error must show the call cycle: {:?}",
+            err
         );
     }
 
@@ -2969,9 +3244,12 @@ end
             .expect_err("a three-function call cycle should be rejected");
         assert!(
             err.iter().any(|d| {
-                d.message.contains("`a%`") && d.message.contains("`b%`") && d.message.contains("`c%`")
+                d.message.contains("`a%`")
+                    && d.message.contains("`b%`")
+                    && d.message.contains("`c%`")
             }),
-            "error must show the full cycle: {:?}", err
+            "error must show the full cycle: {:?}",
+            err
         );
     }
 
@@ -2996,10 +3274,10 @@ end
         let err = compile_source("recursion_via_procedure.bcl", source)
             .expect_err("a cycle through a procedure should be rejected");
         assert!(
-            err.iter().any(|d| {
-                d.message.contains("`f%`") && d.message.contains("`p`")
-            }),
-            "error must name both the function and the procedure in the cycle: {:?}", err
+            err.iter()
+                .any(|d| { d.message.contains("`f%`") && d.message.contains("`p`") }),
+            "error must name both the function and the procedure in the cycle: {:?}",
+            err
         );
     }
 
@@ -3044,13 +3322,13 @@ end
 function f%(n%)
   for i% = 1 to 3
     select case n%
-    case 1
-      while n% > 0
-        if n% = 2 then
-          return g%(n%)
-        end if
-        n% = n% - 1
-      end while
+        case 1
+          while n% > 0
+            if n% = 2 then
+              return g%(n%)
+            end if
+            n% = n% - 1
+          end while
     end select
   end for
   return 0
@@ -3063,13 +3341,14 @@ end function
 print f%(2)
 end
 "#;
-        let err = compile_source("nested_conditional_recursion.bcl", source)
-            .expect_err("a recursive call buried inside for/select/while/if should still be rejected");
+        let err = compile_source("nested_conditional_recursion.bcl", source).expect_err(
+            "a recursive call buried inside for/select/while/if should still be rejected",
+        );
         assert!(
-            err.iter().any(|d| {
-                d.message.contains("`f%`") && d.message.contains("`g%`")
-            }),
-            "error must still show the cycle even though the call is deeply nested: {:?}", err
+            err.iter()
+                .any(|d| { d.message.contains("`f%`") && d.message.contains("`g%`") }),
+            "error must still show the cycle even though the call is deeply nested: {:?}",
+            err
         );
     }
 
@@ -3077,7 +3356,9 @@ end
 
     /// Returns the label named by the first `THEN GOTO <label>` in `output`.
     fn first_goto_target(output: &str) -> &str {
-        let idx = output.find("THEN GOTO ").expect("expected a THEN GOTO line");
+        let idx = output
+            .find("THEN GOTO ")
+            .expect("expected a THEN GOTO line");
         output[idx + "THEN GOTO ".len()..]
             .split_whitespace()
             .next()
@@ -3110,7 +3391,10 @@ end
         assert!(output.contains(&guard_a), "missing: {guard_a}\n{output}");
         assert!(output.contains(&guard_b), "missing: {guard_b}\n{output}");
         // Simple AND-chain (not inverted) needs no extra "continue" label.
-        assert!(!output.contains("SC_"), "unexpected short-circuit label:\n{output}");
+        assert!(
+            !output.contains("SC_"),
+            "unexpected short-circuit label:\n{output}"
+        );
     }
 
     #[test]
@@ -3130,7 +3414,10 @@ end
         // a single bare GOTO to a *different* target (the exit label) sits
         // between the two guards and the continue point.
         let exit = first_bare_goto_target(&output);
-        assert_ne!(cont, exit, "continue and exit targets must differ:\n{output}");
+        assert_ne!(
+            cont, exit,
+            "continue and exit targets must differ:\n{output}"
+        );
     }
 
     #[test]
@@ -3168,7 +3455,10 @@ end
         // A bare GOTO to a *different* target (the loop's exit label) sits
         // right after the two guards.
         let exit = first_bare_goto_target(&output);
-        assert_ne!(cont, exit, "continue and exit targets must differ:\n{output}");
+        assert_ne!(
+            cont, exit,
+            "continue and exit targets must differ:\n{output}"
+        );
     }
 
     #[test]
@@ -3183,7 +3473,10 @@ end do
 end
 "#;
         let output = compile_source("sc_do_until_or.bcl", source).expect("should compile");
-        assert!(!output.contains("SC_"), "unexpected continue label for simple inverted OR-chain:\n{output}");
+        assert!(
+            !output.contains("SC_"),
+            "unexpected continue label for simple inverted OR-chain:\n{output}"
+        );
         let target = first_goto_target(&output);
         let guard_a = format!("IF (a% > 0) <> 0 THEN GOTO {target}");
         let guard_b = format!("IF (b% > 0) <> 0 THEN GOTO {target}");
@@ -3254,10 +3547,14 @@ end if
 end
 "#;
         let output = compile_source("sc_side_effect.bcl", source).expect("should compile");
-        let first_guard = output.find("IF (a% > 0) = 0 THEN GOTO").expect("first guard");
+        let first_guard = output
+            .find("IF (a% > 0) = 0 THEN GOTO")
+            .expect("first guard");
         // Search for the actual GOSUB *statement* (line-initial), not the
         // word "GOSUB" that also appears in the generated header comment.
-        let gosub = output.find("\nGOSUB ").expect("GOSUB statement for check%(b%) call");
+        let gosub = output
+            .find("\nGOSUB ")
+            .expect("GOSUB statement for check%(b%) call");
         assert!(
             gosub > first_guard,
             "check%(b%)'s GOSUB must come after a%'s guard line, not before:\n{output}"
@@ -3268,20 +3565,28 @@ end
 
     fn assert_def_fn_rejected(filename: &str, source: &str, def_line: usize) {
         let err = compile_source(filename, source).expect_err("DEF FN should be rejected");
-        assert_eq!(err.len(), 1, "should report exactly one diagnostic: {:?}", err);
+        assert_eq!(
+            err.len(),
+            1,
+            "should report exactly one diagnostic: {:?}",
+            err
+        );
         let d = &err[0];
         assert!(
             d.message.contains("DEF FN is not supported by BASCAL"),
-            "must be the specific DEF FN rejection, not a generic parse error: {:?}", err
+            "must be the specific DEF FN rejection, not a generic parse error: {:?}",
+            err
         );
         assert!(
             d.message.contains("Rewrite this by hand as a `function`"),
-            "must explain how to port it: {:?}", err
+            "must explain how to port it: {:?}",
+            err
         );
         assert_eq!(
             d.pos.line, def_line,
             "diagnostic must point at the DEF FN statement itself, not a token inside its \
-             expression: {:?}", err
+             expression: {:?}",
+            err
         );
     }
 
@@ -3354,7 +3659,10 @@ print def%
 end
 "#;
         let output = compile_source("def_as_ident.bcl", source).expect("should compile");
-        assert!(output.contains("def% = 5"), "`def%` should compile as a plain variable:\n{output}");
+        assert!(
+            output.contains("def% = 5"),
+            "`def%` should compile as a plain variable:\n{output}"
+        );
     }
 
     #[test]
@@ -3409,7 +3717,8 @@ end procedure
                 d.message.contains("`errHandler` cannot contain `return`")
                     && d.message.contains("on error goto")
             }),
-            "error must explain the RETURN-without-GOSUB risk: {:?}", err
+            "error must explain the RETURN-without-GOSUB risk: {:?}",
+            err
         );
     }
 
@@ -3434,7 +3743,8 @@ end procedure
                 d.message.contains("`errHandler` doesn't end every path")
                     && d.message.contains("implicit RETURN")
             }),
-            "error must explain the fallthrough risk: {:?}", err
+            "error must explain the fallthrough risk: {:?}",
+            err
         );
     }
 
@@ -3449,14 +3759,17 @@ procedure errHandler()
     resume next
 end procedure
 "#;
-        let err = compile_source("error_handler_dual_use.bcl", source)
-            .expect_err("a procedure that's both an error-goto target and normally called should be rejected");
+        let err = compile_source("error_handler_dual_use.bcl", source).expect_err(
+            "a procedure that's both an error-goto target and normally called should be rejected",
+        );
         assert!(
             err.iter().any(|d| {
-                d.message.contains("`errHandler` is both an `on error goto` target")
+                d.message
+                    .contains("`errHandler` is both an `on error goto` target")
                     && d.message.contains("called like an ordinary procedure")
             }),
-            "error must explain the dual-use conflict: {:?}", err
+            "error must explain the dual-use conflict: {:?}",
+            err
         );
     }
 
@@ -3471,14 +3784,15 @@ end
 
 procedure errHandler()
     select case err
-    case 11
-        resume next
-    case else
-        resume next
+        case 11
+            resume next
+        case else
+            resume next
     end select
 end procedure
 "#;
-        let output = compile_source("error_handler_select_case.bcl", source).expect("should compile");
+        let output =
+            compile_source("error_handler_select_case.bcl", source).expect("should compile");
         let handler = output
             .lines()
             .skip_while(|l| !l.contains("procedure errhandler"))
@@ -3501,16 +3815,18 @@ end
 
 procedure errHandler()
     select case err
-    case 11
-        resume next
+        case 11
+            resume next
     end select
 end procedure
 "#;
         let err = compile_source("error_handler_select_case_no_else.bcl", source)
             .expect_err("a select case with no case else can't be proven to diverge");
         assert!(
-            err.iter().any(|d| d.message.contains("`errHandler` doesn't end every path")),
-            "error must flag the unproven fallthrough: {:?}", err
+            err.iter()
+                .any(|d| d.message.contains("`errHandler` doesn't end every path")),
+            "error must flag the unproven fallthrough: {:?}",
+            err
         );
     }
 
@@ -3534,16 +3850,21 @@ procedure errHandler()
     resume next
 end procedure
 "#;
-        let output = compile_source("error_handler_label_resolution.bcl", source)
-            .expect("should compile");
+        let output =
+            compile_source("error_handler_label_resolution.bcl", source).expect("should compile");
         assert!(
             !output.contains("GOTO errHandler") && !output.contains("GOTO errhandler"),
             "on error goto's target must be resolved to a real line number, not left as \
              unresolved text:\n{output}"
         );
         assert!(
-            output.lines().any(|l| l.trim_start().starts_with("ON ERROR GOTO")
-                && l.trim_end().rsplit(' ').next().is_some_and(|w| w.chars().all(|c| c.is_ascii_digit()))),
+            output
+                .lines()
+                .any(|l| l.trim_start().starts_with("ON ERROR GOTO")
+                    && l.trim_end()
+                        .rsplit(' ')
+                        .next()
+                        .is_some_and(|w| w.chars().all(|c| c.is_ascii_digit()))),
             "expected `ON ERROR GOTO <number>`:\n{output}"
         );
     }
@@ -3566,7 +3887,10 @@ print "error " + str$(err)
 resume next
 "#;
         let output = compile_source("label_error_handler.bcl", source).expect("should compile");
-        assert!(output.contains("RESUME NEXT"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("RESUME NEXT"),
+            "unexpected output:\n{output}"
+        );
     }
 
     // ── C backend (Target::C) ──────────────────────────────────────────
@@ -3577,7 +3901,10 @@ resume next
         // `end` -- the minimal C backend's entire current surface -- so it
         // must compile cleanly under Target::C, unlike most tutorials.
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/01_hello.bcl");
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         let output = compile_file(&input, &options).expect("hello world should compile to C");
         assert!(output.contains("#include <stdio.h>"));
         assert!(output.contains("int main(void) {"));
@@ -3598,7 +3925,10 @@ resume next
         // here (in-process, fast); actual gcc-and-run output was verified
         // manually against each tutorial's own documented `// expect ...`
         // comments and matched exactly.
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         for tutorial in [
             "tutorial/03_arithmetic.bcl",
             "tutorial/04_conditions.bcl",
@@ -3621,11 +3951,21 @@ resume next
         let path = dir.path().join("unsupported.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
 
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         let result = compile_file(&path, &options);
         assert!(result.is_err());
-        let msg = result.unwrap_err().into_iter().map(|d| d.to_string()).collect::<String>();
-        assert!(msg.contains("not supported by the minimal C backend yet"), "unexpected message: {msg}");
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("not supported by the minimal C backend yet"),
+            "unexpected message: {msg}"
+        );
     }
 
     #[test]
@@ -3640,8 +3980,14 @@ end
             output.contains(r#"printf("Score: %d / %g (100%%)\n", 100, 3.5);"#),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains(r#"printf("%d\n", 42);"#), "unexpected output:\n{output}");
-        assert!(output.contains(r#"printf("%g\n", -(1.25));"#), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"printf("%d\n", 42);"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("%g\n", -(1.25));"#),
+            "unexpected output:\n{output}"
+        );
         assert!(
             !output.contains("math.h"),
             "a program with no `\\` shouldn't pull in <math.h>:\n{output}"
@@ -3656,8 +4002,14 @@ end
         // which predates that support and asserted the opposite.
         let source = "name$ = \"Alice\"\nprint len(name$)\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("#include <string.h>"), "unexpected output:\n{output}");
-        assert!(output.contains("((int)strlen(bv_s_name))"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("#include <string.h>"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("((int)strlen(bv_s_name))"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -3669,12 +4021,20 @@ print "Player: "; playerName$
 end
 "#;
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("char bv_s_appname[256] = {0};"), "unexpected output:\n{output}");
         assert!(
-            output.contains(r#"snprintf(bv_s_appname, sizeof(bv_s_appname), "%s", "Grade Checker");"#),
+            output.contains("char bv_s_appname[256] = {0};"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains(r#"printf("%s\n", bv_s_appname);"#), "unexpected output:\n{output}");
+        assert!(
+            output.contains(
+                r#"snprintf(bv_s_appname, sizeof(bv_s_appname), "%s", "Grade Checker");"#
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("%s\n", bv_s_appname);"#),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains(r#"printf("Player: %s\n", bv_s_playername);"#),
             "unexpected output:\n{output}"
@@ -3704,7 +4064,10 @@ end
                 && output.contains(r#"snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bt_s_2, "!");"#),
             "unexpected output:\n{output}"
         );
-        assert!(!output.contains("strcpy") && !output.contains("strcat"), "unexpected output:\n{output}");
+        assert!(
+            !output.contains("strcpy") && !output.contains("strcat"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -3748,10 +4111,22 @@ print "Z: "; z%
 end
 "#;
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("int bv_i_total = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("int bv_i_x = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("float bv_f_price = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_i_x = 5;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("int bv_i_total = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("int bv_i_x = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("float bv_f_price = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_x = 5;"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains(r#"printf("Total: %d\n", bv_i_total);"#),
             "unexpected output:\n{output}"
@@ -3763,8 +4138,14 @@ end
         // z% is read (in `z% + 1`) before ever being assigned -- it must
         // still be declared/zero-initialized, not left as a use of an
         // undeclared C variable.
-        assert!(output.contains("int bv_i_z = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_i_z = (bv_i_z + 1);"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("int bv_i_z = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_z = (bv_i_z + 1);"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -3781,7 +4162,10 @@ end
         );
         let x_pos = output.find("int bv_i_x = 0;").unwrap();
         let y_pos = output.find("int bv_i_y = 0;").unwrap();
-        assert!(x_pos < y_pos, "declarations should be sorted (bv_i_x before bv_i_y):\n{output}");
+        assert!(
+            x_pos < y_pos,
+            "declarations should be sorted (bv_i_x before bv_i_y):\n{output}"
+        );
     }
 
     #[test]
@@ -3798,11 +4182,26 @@ print "Bonus: "; score% * rate!
 end
 "#;
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("int bv_i_maxscore = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("float bv_f_rate = 0;"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_i_maxscore = 100;"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_f_rate = 0.15;"), "unexpected output:\n{output}");
-        assert!(!output.contains("CONST"), "real MBASIC/BASCOM has no CONST:\n{output}");
+        assert!(
+            output.contains("int bv_i_maxscore = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("float bv_f_rate = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_maxscore = 100;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_f_rate = 0.15;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            !output.contains("CONST"),
+            "real MBASIC/BASCOM has no CONST:\n{output}"
+        );
     }
 
     #[test]
@@ -3818,8 +4217,14 @@ print "C: "; score% >= 60
 end
 "#;
         let output = compile_source_via_c_target(source);
-        assert!(output.contains(r#"printf("A: %d\n", (-(5 == 5)));"#), "unexpected output:\n{output}");
-        assert!(output.contains(r#"printf("B: %d\n", (-(5 == 6)));"#), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"printf("A: %d\n", (-(5 == 5)));"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"printf("B: %d\n", (-(5 == 6)));"#),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains(r#"printf("C: %d\n", (-(bv_i_score >= 60)));"#),
             "unexpected output:\n{output}"
@@ -3861,7 +4266,10 @@ end if
 end
 "#;
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("if ((-(bv_i_score >= 60))) {"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("if ((-(bv_i_score >= 60))) {"),
+            "unexpected output:\n{output}"
+        );
         assert!(output.contains("} else {"), "unexpected output:\n{output}");
         // elseif desugars to a nested if inside the else branch.
         assert!(
@@ -3870,15 +4278,24 @@ end
             "unexpected output:\n{output}"
         );
         // Nested if inside a then-branch.
-        assert!(output.contains("if ((-(bv_i_x > 10))) {"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("if ((-(bv_i_x > 10))) {"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
     fn c_target_if_with_no_else_omits_the_else_branch() {
         let source = "x% = 5\nif x% > 0 then\n    print \"positive\"\nend if\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("if ((-(bv_i_x > 0))) {"), "unexpected output:\n{output}");
-        assert!(!output.contains("} else {"), "no else branch should mean no else clause:\n{output}");
+        assert!(
+            output.contains("if ((-(bv_i_x > 0))) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            !output.contains("} else {"),
+            "no else branch should mean no else clause:\n{output}"
+        );
     }
 
     #[test]
@@ -3895,18 +4312,25 @@ end
 "#;
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains(r#"printf("A: %d\n", ((int)((long)round((double)63) & (long)round((double)16))));"#),
+            output.contains(
+                r#"printf("A: %d\n", ((int)((long)round((double)63) & (long)round((double)16))));"#
+            ),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains(r#"printf("B: %d\n", ((int)((long)round((double)6) ^ (long)round((double)3))));"#),
+            output.contains(
+                r#"printf("B: %d\n", ((int)((long)round((double)6) ^ (long)round((double)3))));"#
+            ),
             "unexpected output:\n{output}"
         );
         assert!(
             output.contains(r#"printf("C: %d\n", ((int)(~(long)round((double)1))));"#),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("#include <math.h>"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("#include <math.h>"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -3995,7 +4419,10 @@ end
             ),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("#include <math.h>"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("#include <math.h>"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -4086,12 +4513,18 @@ end
             ),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("while ((-(bv_i_j < 3))) {"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("while ((-(bv_i_j < 3))) {"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("while (1) {\n        if (!((-(bv_i_k < 3)))) break;"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("    break;\n"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("    break;\n"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -4101,9 +4534,13 @@ end
         // NOT change mid-loop the way a naive re-evaluated C condition
         // would. limit%/step_var are captured into their own temps once,
         // used in every iteration's condition instead of re-reading limit%.
-        let source = "limit% = 3\nfor i% = 1 to limit%\n    print i%\n    limit% = 100\nend for\nend\n";
+        let source =
+            "limit% = 3\nfor i% = 1 to limit%\n    print i%\n    limit% = 100\nend for\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("int bt_lim_0 = bv_i_limit;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("int bt_lim_0 = bv_i_limit;"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("bv_i_i <= bt_lim_0"),
             "loop condition must use the captured temp, not bv_i_limit directly:\n{output}"
@@ -4134,8 +4571,14 @@ end
         // appear here.
         let source = "x! = 5\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("bv_f_x = 5;"), "unexpected output:\n{output}");
-        assert!(!output.contains("round("), "widening assignment should not round:\n{output}");
+        assert!(
+            output.contains("bv_f_x = 5;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            !output.contains("round("),
+            "widening assignment should not round:\n{output}"
+        );
     }
 
     #[test]
@@ -4145,14 +4588,14 @@ end
         // range, and `is <op>` clauses all in one selector.
         let source = "n% = 5\n\
                        select case n%\n\
-                       case 1, 2\n\
-                       print \"low\"\n\
-                       case 3 to 6\n\
-                       print \"mid\"\n\
-                       case is >= 7\n\
-                       print \"high\"\n\
-                       case else\n\
-                       print \"other\"\n\
+                           case 1, 2\n\
+                           print \"low\"\n\
+                           case 3 to 6\n\
+                           print \"mid\"\n\
+                           case is >= 7\n\
+                           print \"high\"\n\
+                           case else\n\
+                           print \"other\"\n\
                        end select\n\
                        end\n";
         let output = compile_source_via_c_target(source);
@@ -4183,14 +4626,17 @@ end
         // <string.h> for it.
         let source = "d$ = \"Saturday\"\n\
                        select case d$\n\
-                       case \"Saturday\", \"Sunday\"\n\
-                       print \"weekend\"\n\
-                       case else\n\
-                       print \"weekday\"\n\
+                           case \"Saturday\", \"Sunday\"\n\
+                           print \"weekend\"\n\
+                           case else\n\
+                           print \"weekday\"\n\
                        end select\n\
                        end\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("#include <string.h>"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("#include <string.h>"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("char bt_sel_0[256];"),
             "string selector should get its own buffer temp:\n{output}"
@@ -4217,8 +4663,14 @@ end
             output.contains("int bf_i_max(int bv_i_a, int bv_i_b) {"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("return bv_i_a;"), "unexpected output:\n{output}");
-        assert!(output.contains("printf(\"%d\\n\", bf_i_max(4, 9));"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("return bv_i_a;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", bf_i_max(4, 9));"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -4233,8 +4685,14 @@ end
         let program = "function addOne%(x%)\n    return x% + 1\nend function\n\
                         function one%()\n    return 1\nend function\n";
         let output = compile_source_via_c_target(&format!("{program}{source}"));
-        assert!(output.contains("bf_i_addone(10)"), "unexpected output:\n{output}");
-        assert!(output.contains("bf_i_one()"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bf_i_addone(10)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bf_i_one()"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -4250,7 +4708,9 @@ end
                         acc$ = acc$ + text$\n    end for\n    return acc$\nend function\n";
         let output = compile_source_via_c_target(&format!("{program}{source}"));
         assert!(
-            output.contains("void bf_s_repeat(const char* bv_s_text_in, int bv_i_n, char* bcc_out) {"),
+            output.contains(
+                "void bf_s_repeat(const char* bv_s_text_in, int bv_i_n, char* bcc_out) {"
+            ),
             "unexpected output:\n{output}"
         );
         assert!(
@@ -4278,7 +4738,10 @@ end
                        print total%\nend\n";
         let program = "function addToTotal%(x%)\n    global total%\n    total% = total% + x%\n    return total%\nend function\n";
         let output = compile_source_via_c_target(&format!("{program}{source}"));
-        assert!(output.contains("static int bv_i_total = 0;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("static int bv_i_total = 0;"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             !output.contains("int bf_i_addtototal(int bv_i_x) {\n    int bv_i_total"),
             "a `global`-declared name must not also be declared as a local:\n{output}"
@@ -4290,7 +4753,9 @@ end
         let source = "procedure sayHi()\n    print \"hi\"\nend procedure\nsayHi()\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("procedure") && d.message.contains("only functions")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("procedure") && d.message.contains("only functions")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -4312,7 +4777,9 @@ end
                        print maybe%(5)\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("must end with an explicit `return`")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("must end with an explicit `return`")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -4332,17 +4799,38 @@ end
                        print asc(mid$(s$, 1, 1))\n\
                        end\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("#define BCC_STRBUF_COUNT"), "unexpected output:\n{output}");
-        assert!(output.contains("static const char* bcc_mid("), "unexpected output:\n{output}");
-        assert!(output.contains("static const char* bcc_chr("), "unexpected output:\n{output}");
+        assert!(
+            output.contains("#define BCC_STRBUF_COUNT"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("static const char* bcc_mid("),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("static const char* bcc_chr("),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("((int)(unsigned char)bv_s_s[0])"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("bcc_chr(65)"), "unexpected output:\n{output}");
-        assert!(output.contains("bcc_mid(bv_s_s, 2, 2147483647)"), "unexpected output:\n{output}");
-        assert!(output.contains("bcc_mid(bv_s_s, 2, 2)"), "unexpected output:\n{output}");
-        assert!(output.contains("bcc_mid(bv_s_s, 1, 3)"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bcc_chr(65)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_mid(bv_s_s, 2, 2147483647)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_mid(bv_s_s, 2, 2)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_mid(bv_s_s, 1, 3)"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("((int)(unsigned char)bcc_mid(bv_s_s, 1, 1)[0])"),
             "ASC of a nested MID$ call must not need a prelude:\n{output}"
@@ -4355,8 +4843,7 @@ end
         // (unlike classic BASIC's bitwise-only AND/OR) -- C's own
         // `&&`/`||` are the direct, correct translation, not a bug the
         // way reusing them for bitwise AND/OR would be.
-        let source =
-            "x% = 5\nif x% > 0 && x% < 10 then\n    print \"in range\"\nend if\nend\n";
+        let source = "x% = 5\nif x% > 0 && x% < 10 then\n    print \"in range\"\nend if\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("if (((-(bv_i_x > 0)) && (-(bv_i_x < 10)))) {"),
@@ -4372,7 +4859,10 @@ end
         // functions) the LEN/ASC/CHR$/MID$/LEFT$ builtins all in one
         // real program.
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         compile_file(&input, &options)
             .unwrap_or_else(|d| panic!("tutorial/07_functions.bcl should compile to C: {d:?}"));
     }
@@ -4385,7 +4875,10 @@ end
         // locks in that it keeps compiling.
         let input =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/15_random_and_record_files.bcl");
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         compile_file(&input, &options).unwrap_or_else(|d| {
             panic!("tutorial/15_random_and_record_files.bcl should compile to C: {d:?}")
         });
@@ -4400,7 +4893,10 @@ end
         // codegen_c.rs).
         let source = "for i = 1 to 3\n    print i\nend for\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("float bv_f_i = 0;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("float bv_f_i = 0;"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("for (bv_f_i = 1; "),
             "suffixless loop variable should use the Single-precision C variable:\n{output}"
@@ -4428,12 +4924,12 @@ end
                        end\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("memcpy(bv_s_firstbuf, bcc_rec + 0, 2);"),
-            "the first GET must still use the first FIELD's layout:\n{output}"
+            output.contains("bcc_get_record_fields_1_0(bcc_files[0], 1, bv_s_firstbuf);"),
+            "the first GET must use the first FIELD layout helper:\n{output}"
         );
         assert!(
-            output.contains("memcpy(bv_s_secondbuf, bcc_rec + 0, 3);"),
-            "the second GET must use the second FIELD's layout:\n{output}"
+            output.contains("bcc_get_record_fields_1_1(bcc_files[0], 1, bv_s_secondbuf);"),
+            "the second GET must use the second FIELD layout helper:\n{output}"
         );
     }
 
@@ -4464,27 +4960,146 @@ end
             output.contains("if (!bcc_files[0]) bcc_files[0] = fopen(\"data.dat\", \"wb+\");"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("bcc_mki(bv_s_idbuf, 7);"), "unexpected output:\n{output}");
         assert!(
-            output.contains("snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), \"%-*.*s\", 20, 20, \"Alice\");"),
+            output.contains("bcc_mki(bv_s_idbuf, 7);"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("memcpy(bcc_rec + 0, bv_s_idbuf, 2);")
-                && output.contains("memcpy(bcc_rec + 2, bv_s_namebuf, 20);"),
-            "PUT should gather every field at its declared offset:\n{output}"
-        );
-        assert!(
-            output.contains("fwrite(bcc_rec, 1, 22, bcc_files[0]);"),
+            output.contains(
+                "snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), \"%-*.*s\", 20, 20, \"Alice\");"
+            ),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("fseek(bcc_files[0], (long)((1) - 1) * 22, SEEK_SET);"),
+            output.contains("static int bcc_put_record_fields_1_0(")
+                && output.contains("memcpy(buffer + 0, field_0, 2);")
+                && output.contains("memcpy(buffer + 2, field_1, 20);"),
+            "the raw FIELD layout should get one reusable pack helper:\n{output}"
+        );
+        assert!(
+            output.contains("static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record)")
+                && output.contains("static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record)"),
+            "record positioning and raw I/O should be centralised in shared helpers:\n{output}"
+        );
+        assert!(
+            output
+                .contains("bcc_put_record_fields_1_0(bcc_files[0], 1, bv_s_idbuf, bv_s_namebuf);")
+                && output.contains(
+                    "bcc_get_record_fields_1_0(bcc_files[0], 1, bv_s_idbuf, bv_s_namebuf);"
+                ),
+            "GET/PUT should delegate to the reusable field-layout helpers:\n{output}"
+        );
+        assert!(
+            !output.contains("fseek(bcc_files[0]"),
+            "individual GET/PUT sites should not repeat seek boilerplate:\n{output}"
+        );
+        assert!(
+            output.contains("return fread(buffer, 1, reclen, file) == reclen;")
+                && output.contains("fwrite(buffer, 1, reclen, file);"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("fread(bcc_rec, 1, 22, bcc_files[0]);"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_i_n = bcc_cvi(bv_s_idbuf);"), "unexpected output:\n{output}");
-        assert!(output.contains("fclose(bcc_files[0]);"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bv_i_n = bcc_cvi(bv_s_idbuf);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fclose(bcc_files[0]);"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_record_dsl_uses_one_get_put_helper_pair_per_record_type() {
+        let source = r#"record Student
+    id: int16
+    name: string(20)
+    score: float64
+    faculty: string(20)
+end record
+
+file db as Student = open("students.dat")
+db[1] = { id: 7, name: "Ada", score: 95.0, faculty: "Engineering" }
+db[1] = ?{ score: 97.5 }
+let s = db[1]
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert_eq!(
+            output.matches("static int bcc_put_record_student(").count(),
+            1,
+            "unexpected output:\n{output}"
+        );
+        assert_eq!(
+            output.matches("static int bcc_get_record_student(").count(),
+            1,
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "bcc_put_record_student(bcc_files[0], 1, &bcc_tmp_0, \"Ada\", &bcc_tmp_1, \"Engineering\");"
+            ) && output.contains(
+                "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
+            ),
+            "PUT should pass typed values straight to the typed helper, with no manual packing \
+             in main; GET should keep delegating to the type-specific helper:\n{output}"
+        );
+        assert!(
+            !output.contains("bcc_mki(bv_s_db")
+                && !output.contains("bcc_mkd(bv_s_db")
+                && !output.contains("snprintf(bv_s_db"),
+            "no manual MKx$/pad packing should remain in main for a record/file DSL write -- the \
+             typed PUT helper now owns all of that:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_write_record(file, buffer, 50, record);")
+                && output.contains("if (!bcc_read_record(file, buffer, 50, record)) return 0;")
+                && output.contains(
+                    "if (!bcc_put_record_student(bcc_files[0], 1, NULL, NULL, &bcc_tmp_2, NULL))"
+                )
+                && output.contains("bcc_read_string_field(field_1, buffer + 2, 20);")
+                && output.contains("bcc_read_string_field(field_3, buffer + 30, 20);")
+                && !output.contains("bcc_read_string_field(field_0")
+                && !output.contains("bcc_read_string_field(field_2"),
+            "record helpers should delegate positioning and I/O to the shared buffer helpers:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3) {"
+            ),
+            "the typed PUT helper should take native-typed parameters, not packed byte strings:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_partial_record_write_requires_an_existing_record() {
+        let source = r#"record Student
+    id: int16
+    name: string(20)
+    score: float64
+    faculty: string(20)
+end record
+
+file db as Student = open("students.dat")
+db[1] = { id: 7, name: "Ada", score: 95.0, faculty: "Engineering" }
+db[2] = ?{ name: "Bob" }
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(
+                "bcc_put_record_student(bcc_files[0], 1, &bcc_tmp_0, \"Ada\", &bcc_tmp_1, \"Engineering\");"
+            ) && !output.contains(
+                "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
+            ),
+            "a complete record literal must write directly without a read, passing typed values \
+             with no manual packing in main:\n{output}"
+        );
+        assert!(
+            output.contains("if (!bcc_put_record_student(bcc_files[0], 2, NULL, \"Bob\", NULL, NULL))")
+                && output.contains("if ((!field_0 || !field_1 || !field_2 || !field_3) && !bcc_read_record(file, buffer, 50, record)) return 0;")
+                && output.contains("BASCAL: record %ld does not exist"),
+            "a partial record literal must let PUT preserve NULL fields and reject a missing record:\n{output}"
+        );
     }
 
     #[test]
@@ -4502,11 +5117,19 @@ end
                        end\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("static void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);"),
+            output.contains(
+                "static void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);"
+            ),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("bcc_mkd(bv_s_scorebuf, 95.5);"), "unexpected output:\n{output}");
-        assert!(output.contains("bv_d_s = bcc_cvd(bv_s_scorebuf);"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bcc_mkd(bv_s_scorebuf, 95.5);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_d_s = bcc_cvd(bv_s_scorebuf);"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -4514,7 +5137,9 @@ end
         let source = "open \"f.txt\" for input as #1\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("sequential file I/O")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("sequential file I/O")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -4524,7 +5149,9 @@ end
         let source = "x$ = \"hi\"\nlset x$ = \"bye\"\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("only a variable declared by a")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("only a variable declared by a")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -4537,7 +5164,9 @@ end
                        end\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("no record number")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("no record number")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
@@ -4572,14 +5201,18 @@ end
         let source = "open \"f.dat\" for random as #99 len = 4\nfield #99, 4 as b$\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("out of range")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("out of range")),
             "unexpected diagnostics: {diagnostics:?}"
         );
 
         let source = "open \"f.dat\" for random as #0 len = 4\nfield #0, 4 as b$\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("out of range")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("out of range")),
             "channel 0 should be rejected too (BASIC channels are 1-based): {diagnostics:?}"
         );
     }
@@ -4591,8 +5224,14 @@ end
         // flag gives this natively, no manual sign handling needed.
         let source = "n% = 5\nprint str$(n%)\nend\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("bcc_stri(bv_i_n)"), "unexpected output:\n{output}");
-        assert!(output.contains("snprintf(out, 256, \"% d\", value);"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bcc_stri(bv_i_n)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(out, 256, \"% d\", value);"),
+            "unexpected output:\n{output}"
+        );
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a
@@ -4602,11 +5241,17 @@ end
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("numeric_print.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         compile_file(&path, &options).unwrap_or_else(|diagnostics| {
             panic!(
                 "should compile: {}",
-                diagnostics.into_iter().map(|d| d.to_string()).collect::<String>()
+                diagnostics
+                    .into_iter()
+                    .map(|d| d.to_string())
+                    .collect::<String>()
             )
         })
     }
@@ -4618,7 +5263,10 @@ end
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("numeric_print.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
         compile_file(&path, &options).expect_err("should not compile")
     }
 }

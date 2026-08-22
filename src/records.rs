@@ -17,7 +17,9 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// set to know which `FIELD` buffer names are transpiler-built camelCase
 /// (case preserved) versus author-typed raw BASIC (still normalized to
 /// lowercase, same as every other identifier).
-pub fn lower(program: Program) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
+pub fn lower(
+    program: Program,
+) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
     let mut lowerer = Lowerer::new();
     lowerer.build_record_table(&program.records);
 
@@ -129,7 +131,10 @@ impl Lowerer {
                     continue;
                 }
                 width += field_width(&f.ty);
-                fields.push(FieldSpec { name: f.name.clone(), ty: f.ty });
+                fields.push(FieldSpec {
+                    name: f.name.clone(),
+                    ty: f.ty,
+                });
             }
             self.records.insert(key, RecordType { fields, width });
         }
@@ -147,7 +152,11 @@ impl Lowerer {
 
     fn lower_statement(&mut self, stmt: Statement, out: &mut Vec<Statement>) {
         match stmt {
-            Statement::FileDecl { var, record_type, path } => {
+            Statement::FileDecl {
+                var,
+                record_type,
+                path,
+            } => {
                 self.lower_file_decl(var, record_type, path, out);
             }
             Statement::Assignment { target, value } => {
@@ -156,57 +165,104 @@ impl Lowerer {
             Statement::ExprStmt(expr) => {
                 self.lower_expr_stmt(expr, out);
             }
-            Statement::If { condition, then_body, else_body } => {
+            Statement::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
                 let condition = self.rewrite_expr(condition).0;
                 let then_body = self.lower_statements(then_body);
                 let else_body = self.lower_statements(else_body);
-                out.push(Statement::If { condition, then_body, else_body });
+                out.push(Statement::If {
+                    condition,
+                    then_body,
+                    else_body,
+                });
             }
-            Statement::For { var, start, end, step, body } => {
+            Statement::For {
+                var,
+                start,
+                end,
+                step,
+                body,
+            } => {
                 let start = self.rewrite_expr(start).0;
                 let end = self.rewrite_expr(end).0;
                 let step = step.map(|s| self.rewrite_expr(s).0);
                 let body = self.lower_statements(body);
-                out.push(Statement::For { var, start, end, step, body });
+                out.push(Statement::For {
+                    var,
+                    start,
+                    end,
+                    step,
+                    body,
+                });
             }
             Statement::While { condition, body } => {
                 let condition = self.rewrite_expr(condition).0;
                 let body = self.lower_statements(body);
                 out.push(Statement::While { condition, body });
             }
-            Statement::Do { condition, body, post_condition } => {
+            Statement::Do {
+                condition,
+                body,
+                post_condition,
+            } => {
                 let condition = condition.map(|c| self.rewrite_do_condition(c));
                 let body = self.lower_statements(body);
                 let post_condition = post_condition.map(|c| self.rewrite_do_condition(c));
-                out.push(Statement::Do { condition, body, post_condition });
+                out.push(Statement::Do {
+                    condition,
+                    body,
+                    post_condition,
+                });
             }
-            Statement::SelectCase { expr, cases, else_body } => {
+            Statement::SelectCase {
+                expr,
+                cases,
+                else_body,
+            } => {
                 let expr = self.rewrite_expr(expr).0;
                 let cases = cases
                     .into_iter()
                     .map(|c| CaseClause {
-                        values: c.values.into_iter().map(|v| self.rewrite_case_value(v)).collect(),
+                        values: c
+                            .values
+                            .into_iter()
+                            .map(|v| self.rewrite_case_value(v))
+                            .collect(),
                         body: self.lower_statements(c.body),
                     })
                     .collect();
                 let else_body = self.lower_statements(else_body);
-                out.push(Statement::SelectCase { expr, cases, else_body });
+                out.push(Statement::SelectCase {
+                    expr,
+                    cases,
+                    else_body,
+                });
             }
             other => out.push(self.rewrite_statement_exprs(other)),
         }
     }
 
     fn rewrite_do_condition(&mut self, cond: DoCondition) -> DoCondition {
-        DoCondition { is_while: cond.is_while, expr: self.rewrite_expr(cond.expr).0 }
+        DoCondition {
+            is_while: cond.is_while,
+            expr: self.rewrite_expr(cond.expr).0,
+        }
     }
 
     fn rewrite_case_value(&mut self, value: CaseValue) -> CaseValue {
         match value {
             CaseValue::Single(e) => CaseValue::Single(self.rewrite_expr(e).0),
-            CaseValue::Range { from, to } => {
-                CaseValue::Range { from: self.rewrite_expr(from).0, to: self.rewrite_expr(to).0 }
-            }
-            CaseValue::Is { op, value } => CaseValue::Is { op, value: self.rewrite_expr(value).0 },
+            CaseValue::Range { from, to } => CaseValue::Range {
+                from: self.rewrite_expr(from).0,
+                to: self.rewrite_expr(to).0,
+            },
+            CaseValue::Is { op, value } => CaseValue::Is {
+                op,
+                value: self.rewrite_expr(value).0,
+            },
         }
     }
 
@@ -226,15 +282,33 @@ impl Lowerer {
     /// exhaustive over every remaining `Statement` variant.
     fn rewrite_statement_exprs(&mut self, stmt: Statement) -> Statement {
         match stmt {
-            Statement::Dim { name, is_array, sizes } => {
+            Statement::Dim {
+                name,
+                is_array,
+                sizes,
+            } => {
                 let sizes = sizes.into_iter().map(|e| self.rewrite_expr(e).0).collect();
-                Statement::Dim { name, is_array, sizes }
+                Statement::Dim {
+                    name,
+                    is_array,
+                    sizes,
+                }
             }
-            Statement::Open { mode, file, channel, len } => {
+            Statement::Open {
+                mode,
+                file,
+                channel,
+                len,
+            } => {
                 let file = self.rewrite_expr(file).0;
                 let channel = self.rewrite_expr(channel).0;
                 let len = len.map(|e| self.rewrite_expr(e).0);
-                Statement::Open { mode, file, channel, len }
+                Statement::Open {
+                    mode,
+                    file,
+                    channel,
+                    len,
+                }
             }
             Statement::LineInput { channel, target } => {
                 let channel = self.rewrite_expr(channel).0;
@@ -251,31 +325,59 @@ impl Lowerer {
                 let tokens = self.rewrite_print_tokens(tokens);
                 Statement::PrintUsing { format, tokens }
             }
-            Statement::PrintFileUsing { channel, format, tokens } => {
+            Statement::PrintFileUsing {
+                channel,
+                format,
+                tokens,
+            } => {
                 let channel = self.rewrite_expr(channel).0;
                 let format = self.rewrite_expr(format).0;
                 let tokens = self.rewrite_print_tokens(tokens);
-                Statement::PrintFileUsing { channel, format, tokens }
+                Statement::PrintFileUsing {
+                    channel,
+                    format,
+                    tokens,
+                }
             }
-            Statement::Close { channel } => Statement::Close { channel: self.rewrite_expr(channel).0 },
-            Statement::Kill { file } => Statement::Kill { file: self.rewrite_expr(file).0 },
+            Statement::Close { channel } => Statement::Close {
+                channel: self.rewrite_expr(channel).0,
+            },
+            Statement::Kill { file } => Statement::Kill {
+                file: self.rewrite_expr(file).0,
+            },
             Statement::Name { from, to } => {
                 let from = self.rewrite_expr(from).0;
                 let to = self.rewrite_expr(to).0;
                 Statement::Name { from, to }
             }
-            Statement::Print { tokens } => Statement::Print { tokens: self.rewrite_print_tokens(tokens) },
-            Statement::Return { value } => Statement::Return { value: self.rewrite_expr(value).0 },
-            Statement::MidAssign { target, start, len, value } => {
+            Statement::Print { tokens } => Statement::Print {
+                tokens: self.rewrite_print_tokens(tokens),
+            },
+            Statement::Return { value } => Statement::Return {
+                value: self.rewrite_expr(value).0,
+            },
+            Statement::MidAssign {
+                target,
+                start,
+                len,
+                value,
+            } => {
                 let target = Box::new(self.rewrite_expr(*target).0);
                 let start = Box::new(self.rewrite_expr(*start).0);
                 let len = len.map(|e| Box::new(self.rewrite_expr(*e).0));
                 let value = Box::new(self.rewrite_expr(*value).0);
-                Statement::MidAssign { target, start, len, value }
+                Statement::MidAssign {
+                    target,
+                    start,
+                    len,
+                    value,
+                }
             }
             Statement::OptionBase(e) => Statement::OptionBase(self.rewrite_expr(e).0),
             Statement::Randomize(e) => Statement::Randomize(e.map(|e| self.rewrite_expr(e).0)),
-            Statement::Swap(a, b) => Statement::Swap(self.rewrite_expr(a).0, self.rewrite_expr(b).0),
+            Statement::Swap(a, b) => {
+                Statement::Swap(self.rewrite_expr(a).0, self.rewrite_expr(b).0)
+            }
             Statement::Poke { address, value } => {
                 let address = self.rewrite_expr(address).0;
                 let value = self.rewrite_expr(value).0;
@@ -283,9 +385,9 @@ impl Lowerer {
             }
             Statement::Goto(e) => Statement::Goto(self.rewrite_expr(e).0),
             Statement::Gosub(e) => Statement::Gosub(self.rewrite_expr(e).0),
-            Statement::OnErrorGoto { target } => {
-                Statement::OnErrorGoto { target: self.rewrite_expr(target).0 }
-            }
+            Statement::OnErrorGoto { target } => Statement::OnErrorGoto {
+                target: self.rewrite_expr(target).0,
+            },
             Statement::Resume(kind) => {
                 let kind = match kind {
                     ResumeTarget::Line(e) => ResumeTarget::Line(self.rewrite_expr(e).0),
@@ -293,7 +395,9 @@ impl Lowerer {
                 };
                 Statement::Resume(kind)
             }
-            Statement::ErrorStmt { code } => Statement::ErrorStmt { code: self.rewrite_expr(code).0 },
+            Statement::ErrorStmt { code } => Statement::ErrorStmt {
+                code: self.rewrite_expr(code).0,
+            },
             Statement::Input { prompt, vars } => {
                 let vars = vars.into_iter().map(|e| self.rewrite_expr(e).0).collect();
                 Statement::Input { prompt, vars }
@@ -309,34 +413,80 @@ impl Lowerer {
             Statement::Read(vars) => {
                 Statement::Read(vars.into_iter().map(|e| self.rewrite_expr(e).0).collect())
             }
-            Statement::Restore(target) => Statement::Restore(target.map(|e| self.rewrite_expr(e).0)),
-            Statement::Const { name, value } => {
-                Statement::Const { name, value: self.rewrite_expr(value).0 }
+            Statement::Restore(target) => {
+                Statement::Restore(target.map(|e| self.rewrite_expr(e).0))
             }
+            Statement::Const { name, value } => Statement::Const {
+                name,
+                value: self.rewrite_expr(value).0,
+            },
             Statement::Write { channel, exprs } => {
                 let channel = self.rewrite_expr(channel).0;
                 let exprs = exprs.into_iter().map(|e| self.rewrite_expr(e).0).collect();
                 Statement::Write { channel, exprs }
             }
-            Statement::Field { channel, fields } => {
+            Statement::Field {
+                channel,
+                fields,
+                record_type,
+                string_fields,
+                field_types,
+            } => {
                 let channel = self.rewrite_expr(channel).0;
-                let fields = fields.into_iter().map(|(w, v)| (self.rewrite_expr(w).0, v)).collect();
-                Statement::Field { channel, fields }
+                let fields = fields
+                    .into_iter()
+                    .map(|(w, v)| (self.rewrite_expr(w).0, v))
+                    .collect();
+                Statement::Field {
+                    channel,
+                    fields,
+                    record_type,
+                    string_fields,
+                    field_types,
+                }
             }
-            Statement::Get { channel, record, var } => {
+            Statement::Get {
+                channel,
+                record,
+                var,
+                require_existing,
+                record_length,
+            } => {
                 let channel = self.rewrite_expr(channel).0;
                 let record = record.map(|e| self.rewrite_expr(e).0);
                 let var = var.map(|e| self.rewrite_expr(e).0);
-                Statement::Get { channel, record, var }
+                Statement::Get {
+                    channel,
+                    record,
+                    var,
+                    require_existing,
+                    record_length,
+                }
             }
-            Statement::Put { channel, record, var } => {
+            Statement::Put {
+                channel,
+                record,
+                var,
+                provided_fields,
+            } => {
                 let channel = self.rewrite_expr(channel).0;
                 let record = record.map(|e| self.rewrite_expr(e).0);
                 let var = var.map(|e| self.rewrite_expr(e).0);
-                Statement::Put { channel, record, var }
+                Statement::Put {
+                    channel,
+                    record,
+                    var,
+                    provided_fields,
+                }
             }
-            Statement::Lset { var, value } => Statement::Lset { var, value: self.rewrite_expr(value).0 },
-            Statement::Rset { var, value } => Statement::Rset { var, value: self.rewrite_expr(value).0 },
+            Statement::Lset { var, value } => Statement::Lset {
+                var,
+                value: self.rewrite_expr(value).0,
+            },
+            Statement::Rset { var, value } => Statement::Rset {
+                var,
+                value: self.rewrite_expr(value).0,
+            },
             Statement::Seek { channel, position } => {
                 let channel = self.rewrite_expr(channel).0;
                 let position = self.rewrite_expr(position).0;
@@ -358,10 +508,21 @@ impl Lowerer {
                 let bg = bg.map(|e| self.rewrite_expr(e).0);
                 Statement::Color { fg, bg }
             }
-            Statement::OnBranch { expr, targets, is_gosub } => {
+            Statement::OnBranch {
+                expr,
+                targets,
+                is_gosub,
+            } => {
                 let expr = self.rewrite_expr(expr).0;
-                let targets = targets.into_iter().map(|e| self.rewrite_expr(e).0).collect();
-                Statement::OnBranch { expr, targets, is_gosub }
+                let targets = targets
+                    .into_iter()
+                    .map(|e| self.rewrite_expr(e).0)
+                    .collect();
+                Statement::OnBranch {
+                    expr,
+                    targets,
+                    is_gosub,
+                }
             }
             Statement::Out { port, value } => {
                 let port = self.rewrite_expr(port).0;
@@ -402,7 +563,13 @@ impl Lowerer {
 
     // ── the five record/file DSL shapes ─────────────────────────────────
 
-    fn lower_file_decl(&mut self, var: BasicIdent, record_type: String, path: Expr, out: &mut Vec<Statement>) {
+    fn lower_file_decl(
+        &mut self,
+        var: BasicIdent,
+        record_type: String,
+        path: Expr,
+        out: &mut Vec<Statement>,
+    ) {
         let path = self.rewrite_expr(path).0;
         let var_key = var.name.to_ascii_lowercase();
         if self.files.contains_key(&var_key) {
@@ -416,7 +583,10 @@ impl Lowerer {
         let Some(rec) = self.records.get(&type_key).cloned() else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
-                format!("unknown record type `{record_type}` in `file {} as {record_type}`", var.name),
+                format!(
+                    "unknown record type `{record_type}` in `file {} as {record_type}`",
+                    var.name
+                ),
             ));
             return;
         };
@@ -427,7 +597,13 @@ impl Lowerer {
             "' file {} as {record_type} = open(...)  [{} bytes/record]",
             var.name, rec.width
         )));
-        self.files.insert(var_key, FileInfo { channel, record_type });
+        self.files.insert(
+            var_key,
+            FileInfo {
+                channel,
+                record_type: record_type.clone(),
+            },
+        );
 
         out.push(Statement::Open {
             mode: OpenMode::Random,
@@ -439,13 +615,26 @@ impl Lowerer {
         let fields = rec
             .fields
             .iter()
-            .map(|f| (Expr::Integer(field_width(&f.ty) as i64), self.buffer_ident(&var.name, &f.name)))
+            .map(|f| {
+                (
+                    Expr::Integer(field_width(&f.ty) as i64),
+                    self.buffer_ident(&var.name, &f.name),
+                )
+            })
             .collect();
-        out.push(Statement::Field { channel: Expr::Integer(channel), fields });
+        out.push(Statement::Field {
+            channel: Expr::Integer(channel),
+            fields,
+            record_type: Some(record_type),
+            string_fields: Some(rec.fields.iter().map(|field| matches!(field.ty, RecordFieldType::Str(_))).collect()),
+            field_types: Some(rec.fields.iter().map(|field| field.ty).collect()),
+        });
     }
 
     fn lower_assignment(&mut self, target: Expr, value: Expr, out: &mut Vec<Statement>) {
-        if let (Expr::FileIndex { var, index }, Expr::RecordLit { fields, partial }) = (&target, &value) {
+        if let (Expr::FileIndex { var, index }, Expr::RecordLit { fields, partial }) =
+            (&target, &value)
+        {
             let var = var.clone();
             let index = (**index).clone();
             let fields = fields.clone();
@@ -466,7 +655,10 @@ impl Lowerer {
         // record variable; otherwise falls through to the generic case
         // below, where a bare `Expr::FileIndex` target is rejected.
         if let (Expr::FileIndex { var, index }, Expr::Ident(record_var)) = (&target, &value) {
-            if self.record_vars.contains_key(&record_var.name.to_ascii_lowercase()) {
+            if self
+                .record_vars
+                .contains_key(&record_var.name.to_ascii_lowercase())
+            {
                 let var = var.clone();
                 let index = (**index).clone();
                 let record_var = record_var.clone();
@@ -504,15 +696,28 @@ impl Lowerer {
         out: &mut Vec<Statement>,
     ) {
         let index = self.rewrite_expr(index).0;
-        let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
+        let Some((channel, rec, type_name)) = self.lookup_file(&var) else {
+            return;
+        };
 
         let literal_syntax = if partial { "?{ ... }" } else { "{ ... }" };
-        let kind = if partial { "partial-record write" } else { "whole-record write" };
-        out.push(Statement::Raw(format!("' {}[...] = {literal_syntax}  ({kind})", var.name)));
+        let kind = if partial {
+            "partial-record write"
+        } else {
+            "whole-record write"
+        };
+        out.push(Statement::Raw(format!(
+            "' {}[...] = {literal_syntax}  ({kind})",
+            var.name
+        )));
 
         let mut provided: HashMap<String, Expr> = HashMap::new();
         for (name, value) in pairs {
-            if !rec.fields.iter().any(|f| f.name.eq_ignore_ascii_case(&name)) {
+            if !rec
+                .fields
+                .iter()
+                .any(|f| f.name.eq_ignore_ascii_case(&name))
+            {
                 self.diagnostics.push(Diagnostic::error(
                     generated_pos(),
                     format!("record `{type_name}` has no field `{name}`"),
@@ -527,8 +732,10 @@ impl Lowerer {
             }
         }
 
-        let covers_every_field =
-            rec.fields.iter().all(|f| provided.contains_key(&f.name.to_ascii_lowercase()));
+        let covers_every_field = rec
+            .fields
+            .iter()
+            .all(|f| provided.contains_key(&f.name.to_ascii_lowercase()));
 
         if !partial && !covers_every_field {
             for f in &rec.fields {
@@ -549,19 +756,36 @@ impl Lowerer {
                 channel: Expr::Integer(channel),
                 record: Some(index.clone()),
                 var: None,
+                require_existing: true,
+                record_length: Some(rec.width),
             });
         }
 
+        let provided_fields = rec
+            .fields
+            .iter()
+            .map(|f| provided.contains_key(&f.name.to_ascii_lowercase()))
+            .collect();
         for f in &rec.fields {
-            let Some(value_expr) = provided.remove(&f.name.to_ascii_lowercase()) else { continue };
+            let Some(value_expr) = provided.remove(&f.name.to_ascii_lowercase()) else {
+                continue;
+            };
             self.check_field_value_type(&value_expr, &f.ty, &f.name, &type_name);
             let value_expr = self.rewrite_expr(value_expr).0;
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, value_expr);
-            out.push(Statement::Lset { var: buf_ident, value: packed });
+            out.push(Statement::Lset {
+                var: buf_ident,
+                value: packed,
+            });
         }
 
-        out.push(Statement::Put { channel: Expr::Integer(channel), record: Some(index), var: None });
+        out.push(Statement::Put {
+            channel: Expr::Integer(channel),
+            record: Some(index),
+            var: None,
+            provided_fields: Some(provided_fields),
+        });
     }
 
     /// `db[i] = s` where `s` was bound by an earlier `let s = db[j]`. Packs
@@ -578,7 +802,9 @@ impl Lowerer {
         out: &mut Vec<Statement>,
     ) {
         let index = self.rewrite_expr(index).0;
-        let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
+        let Some((channel, rec, type_name)) = self.lookup_file(&var) else {
+            return;
+        };
 
         let record_var_key = record_var.name.to_ascii_lowercase();
         let Some(record_var_type) = self.record_vars.get(&record_var_key).cloned() else {
@@ -603,35 +829,66 @@ impl Lowerer {
 
         for f in &rec.fields {
             let scalar_name = camel_join(&[&record_var.name, &f.name]);
-            let scalar_ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&f.ty)) };
+            let scalar_ident = BasicIdent {
+                name: scalar_name,
+                suffix: Some(field_suffix(&f.ty)),
+            };
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, Expr::Ident(scalar_ident));
-            out.push(Statement::Lset { var: buf_ident, value: packed });
+            out.push(Statement::Lset {
+                var: buf_ident,
+                value: packed,
+            });
         }
 
-        out.push(Statement::Put { channel: Expr::Integer(channel), record: Some(index), var: None });
+        out.push(Statement::Put {
+            channel: Expr::Integer(channel),
+            record: Some(index),
+            var: None,
+            provided_fields: None,
+        });
     }
 
-    fn lower_whole_read(&mut self, target: BasicIdent, var: BasicIdent, index: Expr, out: &mut Vec<Statement>) {
+    fn lower_whole_read(
+        &mut self,
+        target: BasicIdent,
+        var: BasicIdent,
+        index: Expr,
+        out: &mut Vec<Statement>,
+    ) {
         let index = self.rewrite_expr(index).0;
-        let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
+        let Some((channel, rec, type_name)) = self.lookup_file(&var) else {
+            return;
+        };
 
         out.push(Statement::Raw(format!(
             "' let {} = {}[...]  (whole-record read)",
             target.name, var.name
         )));
-        out.push(Statement::Get { channel: Expr::Integer(channel), record: Some(index), var: None });
+        out.push(Statement::Get {
+            channel: Expr::Integer(channel),
+            record: Some(index),
+            var: None,
+            require_existing: false,
+            record_length: None,
+        });
 
         for f in &rec.fields {
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let scalar_name = camel_join(&[&target.name, &f.name]);
-            let scalar_ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&f.ty)) };
+            let scalar_ident = BasicIdent {
+                name: scalar_name,
+                suffix: Some(field_suffix(&f.ty)),
+            };
             if field_is_numeric(&f.ty) {
                 let unpacked = Expr::Call {
                     name: BasicIdent::parse(unpack_fn_name(&f.ty)),
                     args: vec![Expr::Ident(buf_ident)],
                 };
-                out.push(Statement::Assignment { target: Expr::Ident(scalar_ident), value: unpacked });
+                out.push(Statement::Assignment {
+                    target: Expr::Ident(scalar_ident),
+                    value: unpacked,
+                });
             } else {
                 // Real MBASIC/BASCOM has no RTRIM$ builtin -- strip the
                 // trailing space padding LSET left in the fixed-width
@@ -645,7 +902,8 @@ impl Lowerer {
             }
         }
 
-        self.record_vars.insert(target.name.to_ascii_lowercase(), type_name);
+        self.record_vars
+            .insert(target.name.to_ascii_lowercase(), type_name);
     }
 
     fn lower_partial_update(
@@ -657,8 +915,14 @@ impl Lowerer {
         out: &mut Vec<Statement>,
     ) {
         let index = self.rewrite_expr(index).0;
-        let Some((channel, rec, type_name)) = self.lookup_file(&var) else { return };
-        let Some(field_spec) = rec.fields.iter().find(|f| f.name.eq_ignore_ascii_case(&field)).cloned()
+        let Some((channel, rec, type_name)) = self.lookup_file(&var) else {
+            return;
+        };
+        let Some(field_spec) = rec
+            .fields
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(&field))
+            .cloned()
         else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
@@ -671,15 +935,35 @@ impl Lowerer {
             "' {}[...].{field} = ...  (partial-field update)",
             var.name
         )));
-        out.push(Statement::Get { channel: Expr::Integer(channel), record: Some(index.clone()), var: None });
+        out.push(Statement::Get {
+            channel: Expr::Integer(channel),
+            record: Some(index.clone()),
+            var: None,
+            require_existing: true,
+            record_length: Some(rec.width),
+        });
 
         self.check_field_value_type(&value, &field_spec.ty, &field_spec.name, &type_name);
         let value = self.rewrite_expr(value).0;
         let buf_ident = self.buffer_ident(&var.name, &field_spec.name);
         let packed = pack_expr(&field_spec.ty, value);
-        out.push(Statement::Lset { var: buf_ident, value: packed });
+        out.push(Statement::Lset {
+            var: buf_ident,
+            value: packed,
+        });
 
-        out.push(Statement::Put { channel: Expr::Integer(channel), record: Some(index), var: None });
+        let provided_fields = Some(
+            rec.fields
+                .iter()
+                .map(|f| f.name.eq_ignore_ascii_case(&field))
+                .collect(),
+        );
+        out.push(Statement::Put {
+            channel: Expr::Integer(channel),
+            record: Some(index),
+            var: None,
+            provided_fields,
+        });
     }
 
     fn lower_expr_stmt(&mut self, expr: Expr, out: &mut Vec<Statement>) {
@@ -689,7 +973,9 @@ impl Lowerer {
                     let var = var.clone();
                     if let Some((channel, _rec, _type_name)) = self.lookup_file(&var) {
                         out.push(Statement::Raw(format!("' {}.close()", var.name)));
-                        out.push(Statement::Close { channel: Expr::Integer(channel) });
+                        out.push(Statement::Close {
+                            channel: Expr::Integer(channel),
+                        });
                     }
                     return;
                 }
@@ -727,11 +1013,18 @@ impl Lowerer {
         };
         // Keyed on the full `as_basic()` form (including the `$` suffix) to
         // match how `codegen.rs`'s `ident()` builds its lookup key.
-        self.synthesized_buffer_names.insert(ident.as_basic().to_ascii_lowercase());
+        self.synthesized_buffer_names
+            .insert(ident.as_basic().to_ascii_lowercase());
         ident
     }
 
-    fn check_field_value_type(&mut self, value: &Expr, ty: &RecordFieldType, field_name: &str, type_name: &str) {
+    fn check_field_value_type(
+        &mut self,
+        value: &Expr,
+        ty: &RecordFieldType,
+        field_name: &str,
+        type_name: &str,
+    ) {
         match (value, ty) {
             (Expr::String(s), RecordFieldType::Str(width)) => {
                 if s.len() as u32 > *width {
@@ -775,7 +1068,10 @@ impl Lowerer {
             Expr::String(_) => (expr, Some(FieldKind::Stringy)),
             Expr::Ident(_) => (expr, None),
             Expr::ArrayRef { name, indices } => {
-                let indices = indices.into_iter().map(|e| self.rewrite_expr(e).0).collect();
+                let indices = indices
+                    .into_iter()
+                    .map(|e| self.rewrite_expr(e).0)
+                    .collect();
                 (Expr::ArrayRef { name, indices }, None)
             }
             Expr::Call { name, args } => {
@@ -784,7 +1080,13 @@ impl Lowerer {
             }
             Expr::Unary { op, expr } => {
                 let (inner, kind) = self.rewrite_expr(*expr);
-                (Expr::Unary { op, expr: Box::new(inner) }, kind)
+                (
+                    Expr::Unary {
+                        op,
+                        expr: Box::new(inner),
+                    },
+                    kind,
+                )
             }
             Expr::Binary { left, op, right } => {
                 let (left, left_kind) = self.rewrite_expr(*left);
@@ -794,33 +1096,56 @@ impl Lowerer {
                         (Some(FieldKind::Stringy), Some(FieldKind::Numeric)) => {
                             let right = wrap_str(right);
                             return (
-                                Expr::Binary { left: Box::new(left), op, right: Box::new(right) },
+                                Expr::Binary {
+                                    left: Box::new(left),
+                                    op,
+                                    right: Box::new(right),
+                                },
                                 Some(FieldKind::Stringy),
                             );
                         }
                         (Some(FieldKind::Numeric), Some(FieldKind::Stringy)) => {
                             let left = wrap_str(left);
                             return (
-                                Expr::Binary { left: Box::new(left), op, right: Box::new(right) },
+                                Expr::Binary {
+                                    left: Box::new(left),
+                                    op,
+                                    right: Box::new(right),
+                                },
                                 Some(FieldKind::Stringy),
                             );
                         }
                         (Some(FieldKind::Stringy), Some(FieldKind::Stringy)) => {
                             return (
-                                Expr::Binary { left: Box::new(left), op, right: Box::new(right) },
+                                Expr::Binary {
+                                    left: Box::new(left),
+                                    op,
+                                    right: Box::new(right),
+                                },
                                 Some(FieldKind::Stringy),
                             );
                         }
                         (Some(FieldKind::Numeric), Some(FieldKind::Numeric)) => {
                             return (
-                                Expr::Binary { left: Box::new(left), op, right: Box::new(right) },
+                                Expr::Binary {
+                                    left: Box::new(left),
+                                    op,
+                                    right: Box::new(right),
+                                },
                                 Some(FieldKind::Numeric),
                             );
                         }
                         _ => {}
                     }
                 }
-                (Expr::Binary { left: Box::new(left), op, right: Box::new(right) }, None)
+                (
+                    Expr::Binary {
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                    },
+                    None,
+                )
             }
             Expr::FieldAccess { base, field } => self.resolve_field_access(*base, field),
             Expr::FileIndex { .. } => {
@@ -858,7 +1183,9 @@ impl Lowerer {
         let Expr::Ident(base_ident) = &base else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
-                format!("`.{field}` is not valid here; expected a record variable created with `let`"),
+                format!(
+                    "`.{field}` is not valid here; expected a record variable created with `let`"
+                ),
             ));
             return (Expr::Integer(0), None);
         };
@@ -866,13 +1193,24 @@ impl Lowerer {
         let Some(record_type) = self.record_vars.get(&base_key).cloned() else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
-                format!("`{}` is not a record variable bound with `let ... = file[i]`", base_ident.name),
+                format!(
+                    "`{}` is not a record variable bound with `let ... = file[i]`",
+                    base_ident.name
+                ),
             ));
             return (Expr::Integer(0), None);
         };
         let record_key = record_type.to_ascii_lowercase();
-        let rec = self.records.get(&record_key).cloned().expect("record_vars only holds valid types");
-        let Some(field_spec) = rec.fields.iter().find(|f| f.name.eq_ignore_ascii_case(&field)) else {
+        let rec = self
+            .records
+            .get(&record_key)
+            .cloned()
+            .expect("record_vars only holds valid types");
+        let Some(field_spec) = rec
+            .fields
+            .iter()
+            .find(|f| f.name.eq_ignore_ascii_case(&field))
+        else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
                 format!("record `{record_type}` has no field `{field}`"),
@@ -880,8 +1218,15 @@ impl Lowerer {
             return (Expr::Integer(0), None);
         };
         let scalar_name = camel_join(&[&base_ident.name, &field_spec.name]);
-        let ident = BasicIdent { name: scalar_name, suffix: Some(field_suffix(&field_spec.ty)) };
-        let kind = if field_is_numeric(&field_spec.ty) { FieldKind::Numeric } else { FieldKind::Stringy };
+        let ident = BasicIdent {
+            name: scalar_name,
+            suffix: Some(field_suffix(&field_spec.ty)),
+        };
+        let kind = if field_is_numeric(&field_spec.ty) {
+            FieldKind::Numeric
+        } else {
+            FieldKind::Stringy
+        };
         (Expr::Ident(ident), Some(kind))
     }
 }
@@ -891,12 +1236,21 @@ fn generated_pos() -> SourcePos {
 }
 
 fn wrap_str(expr: Expr) -> Expr {
-    Expr::Call { name: BasicIdent { name: "str".to_string(), suffix: Some(TypeSuffix::String) }, args: vec![expr] }
+    Expr::Call {
+        name: BasicIdent {
+            name: "str".to_string(),
+            suffix: Some(TypeSuffix::String),
+        },
+        args: vec![expr],
+    }
 }
 
 fn pack_expr(ty: &RecordFieldType, value: Expr) -> Expr {
     if field_is_numeric(ty) {
-        Expr::Call { name: BasicIdent::parse(pack_fn_name(ty)), args: vec![value] }
+        Expr::Call {
+            name: BasicIdent::parse(pack_fn_name(ty)),
+            args: vec![value],
+        }
     } else {
         value
     }
@@ -908,13 +1262,20 @@ fn pack_expr(ty: &RecordFieldType, value: Expr) -> Expr {
 /// The `AND` here has to be the short-circuit `AndAnd` form: once `i% =
 /// 0`, evaluating `MID$(buf$, 0, 1)` is itself a runtime error, so the
 /// second operand must never be reached once the first is false.
-fn trim_statements(buf_ident: &BasicIdent, counter_ident: &BasicIdent, target_ident: &BasicIdent) -> Vec<Statement> {
+fn trim_statements(
+    buf_ident: &BasicIdent,
+    counter_ident: &BasicIdent,
+    target_ident: &BasicIdent,
+) -> Vec<Statement> {
     let buf = || Expr::Ident(buf_ident.clone());
     let counter = || Expr::Ident(counter_ident.clone());
 
     let init = Statement::Assignment {
         target: counter(),
-        value: Expr::Call { name: BasicIdent::parse("len"), args: vec![buf()] },
+        value: Expr::Call {
+            name: BasicIdent::parse("len"),
+            args: vec![buf()],
+        },
     };
 
     let condition = Expr::Binary {
@@ -936,14 +1297,24 @@ fn trim_statements(buf_ident: &BasicIdent, counter_ident: &BasicIdent, target_id
 
     let decrement = Statement::Assignment {
         target: counter(),
-        value: Expr::Binary { left: Box::new(counter()), op: BinaryOp::Sub, right: Box::new(Expr::Integer(1)) },
+        value: Expr::Binary {
+            left: Box::new(counter()),
+            op: BinaryOp::Sub,
+            right: Box::new(Expr::Integer(1)),
+        },
     };
 
-    let while_loop = Statement::While { condition, body: vec![decrement] };
+    let while_loop = Statement::While {
+        condition,
+        body: vec![decrement],
+    };
 
     let finalize = Statement::Assignment {
         target: Expr::Ident(target_ident.clone()),
-        value: Expr::Call { name: BasicIdent::parse("left$"), args: vec![buf(), counter()] },
+        value: Expr::Call {
+            name: BasicIdent::parse("left$"),
+            args: vec![buf(), counter()],
+        },
     };
 
     vec![init, while_loop, finalize]
@@ -996,6 +1367,8 @@ fn unpack_fn_name(ty: &RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "cvl",
         RecordFieldType::Float32 => "cvs",
         RecordFieldType::Float64 => "cvd",
-        RecordFieldType::Str(_) => unreachable!("string fields are trimmed, not unpacked via a function call"),
+        RecordFieldType::Str(_) => {
+            unreachable!("string fields are trimmed, not unpacked via a function call")
+        }
     }
 }

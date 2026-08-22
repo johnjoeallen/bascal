@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Making Control Flow Visible — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 3</p><h1>Making control flow visible</h1></div></header>
+<main class="chapter-main book-width"><h2>Blocks replace branch plumbing</h2><p>A program is easier to change when its source shows where an alternative or repetition begins and ends. BASCAL’s block forms do that while retaining BASIC’s familiar vocabulary.</p><pre><code>for row% = 1 to 10
+    if row% mod 2 = 0 then
+        print "even";
+    else
+        print "odd";
+    end if
+    print row%
+end for
+</code></pre><p><code>if</code>, <code>elseif</code>, <code>else</code>, and <code>end if</code> make a selection one unit. <code>for</code>, <code>while</code>, and <code>do</code> make repetition one unit. The target BASIC still uses its branches, but they are generated from the structure rather than maintained by hand.</p><h2>Choose among many cases</h2><pre><code>select case score%
+case 90 to 100
+    grade$ = "A"
+case is &gt;= 80
+    grade$ = "B"
+case else
+    grade$ = "C"
+end select
+</code></pre><p><code>select case</code> is particularly useful when a ladder of conditions is really one decision. Use <code>&amp;&amp;</code> and <code>||</code> when a later condition must only be evaluated when needed. The complete treatment of block forms also covers early exits and pre- and post-condition <code>do</code> loops.</p><nav class="chapter-nav"><a href="values-and-names.html">← Values, names, and expressions</a><a href="programs-and-libraries.html">Functions, procedures, and libraries →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>

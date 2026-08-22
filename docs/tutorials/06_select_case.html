@@ -78,62 +78,62 @@ program selectCase
 score% = 85
 
 select case score%
-case 100
-    print "Perfect!"
-case 90 to 99
-    print "A  — Excellent"
-case 80 to 89
-    print "B  — Good"      // score% = 85 matches here
-case 70 to 79
-    print "C  — Satisfactory"
-case 60 to 69
-    print "D  — Passing"
-case is &gt;= 0
-    print "F  — Fail"
-case else
-    print "Invalid score"
+    case 100
+        print "Perfect!"
+    case 90 to 99
+        print "A  — Excellent"
+    case 80 to 89
+        print "B  — Good"      // score% = 85 matches here
+    case 70 to 79
+        print "C  — Satisfactory"
+    case 60 to 69
+        print "D  — Passing"
+    case is &gt;= 0
+        print "F  — Fail"
+    case else
+        print "Invalid score"
 end select
 
 /* String select: day-of-week classification */
 day$ = "Saturday"
 
 select case day$
-case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
-    print day$ + " is a weekday"
-case "Saturday", "Sunday"
-    print day$ + " is a weekend"   // matches here
-case else
-    print "Unknown day: " + day$
+    case "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
+        print day$ + " is a weekday"
+    case "Saturday", "Sunday"
+        print day$ + " is a weekend"   // matches here
+    case else
+        print "Unknown day: " + day$
 end select
 
 /* IS comparisons on temperature */
 temp% = -3
 
 select case temp%
-case is &lt; 0
-    print "Below freezing ("; temp%; "°)"  // matches here
-case is &lt; 10
-    print "Cold ("; temp%; "°)"
-case is &lt; 20
-    print "Cool ("; temp%; "°)"
-case is &lt; 30
-    print "Warm ("; temp%; "°)"
-case else
-    print "Hot ("; temp%; "°)"
+    case is &lt; 0
+        print "Below freezing ("; temp%; "°)"  // matches here
+    case is &lt; 10
+        print "Cold ("; temp%; "°)"
+    case is &lt; 20
+        print "Cool ("; temp%; "°)"
+    case is &lt; 30
+        print "Warm ("; temp%; "°)"
+    case else
+        print "Hot ("; temp%; "°)"
 end select
 
 /* Multi-value list on a menu choice */
 choice% = 2
 
 select case choice%
-case 1
-    print "New game"
-case 2, 3
-    print "Load game"   // choice% = 2 matches
-case 4
-    print "Options"
-case else
-    print "Quit"
+    case 1
+        print "New game"
+    case 2, 3
+        print "Load game"   // choice% = 2 matches
+    case 4
+        print "Options"
+    case else
+        print "Quit"
 end select
 
 end

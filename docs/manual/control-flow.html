@@ -201,44 +201,44 @@ end select</code></pre>
 <pre><code>&#39; Numeric score to letter grade
 score% = 85
 select case score%
-case 100
-    PRINT &quot;Perfect!&quot;
-case 90 to 99
-    PRINT &quot;A  — Excellent&quot;
-case 80 to 89
-    PRINT &quot;B  — Good&quot;      &#39; score% = 85 matches here
-case 70 to 79
-    PRINT &quot;C  — Satisfactory&quot;
-case 60 to 69
-    PRINT &quot;D  — Passing&quot;
-case is &gt;= 0
-    PRINT &quot;F  — Fail&quot;
-case else
-    PRINT &quot;Invalid score&quot;
+    case 100
+        PRINT &quot;Perfect!&quot;
+    case 90 to 99
+        PRINT &quot;A  — Excellent&quot;
+    case 80 to 89
+        PRINT &quot;B  — Good&quot;      &#39; score% = 85 matches here
+    case 70 to 79
+        PRINT &quot;C  — Satisfactory&quot;
+    case 60 to 69
+        PRINT &quot;D  — Passing&quot;
+    case is &gt;= 0
+        PRINT &quot;F  — Fail&quot;
+    case else
+        PRINT &quot;Invalid score&quot;
 end select
 
 &#39; String select — weekend / weekday
 day$ = &quot;Saturday&quot;
 select case day$
-case &quot;Monday&quot;, &quot;Tuesday&quot;, &quot;Wednesday&quot;, &quot;Thursday&quot;, &quot;Friday&quot;
-    PRINT day$ + &quot; is a weekday&quot;
-case &quot;Saturday&quot;, &quot;Sunday&quot;
-    PRINT day$ + &quot; is a weekend&quot;
-case else
-    PRINT &quot;Unknown day: &quot; + day$
+    case &quot;Monday&quot;, &quot;Tuesday&quot;, &quot;Wednesday&quot;, &quot;Thursday&quot;, &quot;Friday&quot;
+        PRINT day$ + &quot; is a weekday&quot;
+    case &quot;Saturday&quot;, &quot;Sunday&quot;
+        PRINT day$ + &quot; is a weekend&quot;
+    case else
+        PRINT &quot;Unknown day: &quot; + day$
 end select
 
 &#39; IS comparisons
 temp% = -3
 select case temp%
-case is &lt; 0
-    PRINT &quot;Below freezing&quot;
-case is &lt; 10
-    PRINT &quot;Cold&quot;
-case is &lt; 20
-    PRINT &quot;Cool&quot;
-case else
-    PRINT &quot;Warm or hot&quot;
+    case is &lt; 0
+        PRINT &quot;Below freezing&quot;
+    case is &lt; 10
+        PRINT &quot;Cold&quot;
+    case is &lt; 20
+        PRINT &quot;Cool&quot;
+    case else
+        PRINT &quot;Warm or hot&quot;
 end select</code></pre>
 <p>Supported <code>case</code> forms:</p>
 <table>

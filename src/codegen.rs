@@ -10,7 +10,9 @@
 //! exists.
 
 pub use crate::codegen_basic::CodeGenerator;
-pub(crate) use crate::codegen_basic::{camel_join, check_generated_name_conflicts, MID_ASSIGN_HELPER_NAME};
+pub(crate) use crate::codegen_basic::{
+    camel_join, check_generated_name_conflicts, MID_ASSIGN_HELPER_NAME,
+};
 
 /// Which backend to generate code for. `Basic` (the default) is BASCAL's
 /// original, complete target: plain BASCOM-compatible BASIC. `C` is an

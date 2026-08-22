@@ -3,6 +3,7 @@
 
 30 ' Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 40 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+
 50 ' Shared string helpers for REMLINE.
 
 60 ' UCASE$ isn't a real MBASIC/BASCOM 2.00 builtin (verified against a real

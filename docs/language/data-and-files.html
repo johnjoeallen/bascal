@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Data That Outlives a Run — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 5</p><h1>Data that outlives a run</h1></div></header>
+<main class="chapter-main book-width"><h2>Two shapes of persistent data</h2><p>Some data is naturally a stream: lines of text, written once and read back in order. Other data is naturally a table: fixed-size records you want to reach by number, without reading everything before them. BASCAL supports both. Sequential files use the same statements as classic BASIC; random-access data has a structured form of its own, described below.</p><h2>Sequential files</h2><pre><code>const scoreFile$ = "scores.csv"
+
+open scoreFile$ for output as #1
+write #1, "Ada", 98.5
+write #1, "Grace", 92.0
+close #1
+
+open scoreFile$ for input as #1
+while eof(1) = 0
+    input #1, name$, score!
+    print name$; ": "; score!
+end while
+close #1
+</code></pre><p><code>open ... for output</code> creates a file and truncates it if it already exists; <code>for append</code> adds to the end instead. <code>write #</code> stores each value in a quoted, comma-separated form that <code>input #</code> reads back exactly, including strings that themselves contain commas. Every file you open needs a matching <code>close</code>; a file number can be reused for a different file once its predecessor is closed.</p><h2>Describe the data first</h2><p>For fixed-size random-access data, BASCAL lets you express the record layout in the program instead of tracking byte offsets by hand. The compiler takes care of the target’s <code>FIELD</code>, conversion, and <code>GET</code>/<code>PUT</code> sequence.</p><pre><code>record Student
+    id:      int16
+    name:    string(20)
+    score:   float64
+    faculty: string(20)
+end record
+
+file students as Student = open("students.dat")
+students[1] = { id: 1, name: "Alice", score: 95.0, faculty: "Engineering" }
+</code></pre><p>The source says that a file contains students and that the first student has four named fields. It does not ask you to repeat field offsets and buffer assignments at every write. A <code>{ ... }</code> literal must supply every declared field, in any order; a value of the wrong type, or a string too wide for its <code>string(N)</code> field, is rejected when the program is compiled rather than discovered later against real data.</p><h2>Changing part of a record</h2><p>Rewriting an entire record just to change one field would mean reading it first by hand. <code>?{ ... }</code> does that for you: name only the fields you are changing, and the rest keep whatever is already on disk.</p><pre><code>students[1] = ?{ name: "Alice Smith", score: 91.0 }
+</code></pre><p><code>id</code> and <code>faculty</code> weren’t mentioned, so BASCAL decides at compile time whether they need preserving: since <code>name</code> and <code>score</code> don’t cover every declared field, it reads the record before writing the fields you named. Had you named every field, it would write straight through with no extra read. Either way, an unknown field name is still an error — <code>?{ ... }</code> allows fields to be missing, not misspelled.</p><h2>Reading a record back</h2><pre><code>let a = students[1]
+print a.name; " (" + a.faculty + ") scored "; a.score
+
+a.score = a.score + 1.5
+students[1] = a
+students.close()
+</code></pre><p><code>let a = students[1]</code> reads record 1 into named fields you can use like any other value. Changing <code>a.score</code> here only changes the copy in memory; nothing reaches the file until you write <code>a</code> back with <code>students[1] = a</code>, which takes one read and one write no matter how many of <code>a</code>’s fields you touched in between — <code>id</code> and <code>faculty</code> go along for the ride unchanged.</p><p>That is different from writing a field directly against the file, as in <code>students[1].field = value</code>: with no <code>let</code> in between, that form reads and writes the record immediately, on the spot. Prefer it for a single field changed once; prefer reading into a variable first when you are changing several fields together. <code>students.close()</code> closes the file exactly like closing any other open channel.</p><h2>Keep the target available</h2><p>BASCAL remains a strict superset of the target dialect. Existing sequential file operations and hand-written BASIC file statements can pass through when you need them. In new source, prefer the structured record/file form when it describes the job: it is clearer and protects the layout from drifting apart.</p><nav class="chapter-nav"><a href="programs-and-libraries.html">← Functions, procedures, and libraries</a><a href="the-basic-beneath.html">The targets beneath the program →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
