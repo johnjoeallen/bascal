@@ -5119,6 +5119,67 @@ end
     }
 
     #[test]
+    fn c_target_supports_input_with_a_prompt_for_each_scalar_type() {
+        let source = "dim n$\ndim age%\ndim price!\ninput \"What is your name\"; n$\ninput \"How old are you\"; age%\ninput \"Price\"; price!\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static char bcc_input_buf[256];")
+                && output.contains("static void bcc_read_line(void) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"What is your name? \");")
+                && output.contains("printf(\"How old are you? \");")
+                && output.contains("printf(\"Price? \");"),
+            "the prompt should always get a trailing `? `, matching real BASIC's own INPUT:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(bv_s_n, sizeof(bv_s_n), \"%s\", bcc_input_buf);"),
+            "a string target should be copied straight from the input line:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_age = atoi(bcc_input_buf);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_f_price = atof(bcc_input_buf);"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_input_with_no_prompt() {
+        let source = "dim x%\ninput x%\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("printf(\"? \");"),
+            "a bare `input` with no prompt should still show the plain `? `:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_input_helper_when_input_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_input_buf"),
+            "the input helper shouldn't be emitted when `input` is never called:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_input_with_more_than_one_variable() {
+        let source = "dim a%, b%\ninput a%, b%\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("more than one variable")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_val() {
         let source = "dim s$, n%\ns$ = \"42abc\"\nn% = val(s$)\nprint n%\nprint val(\"3.14\")\nprint val(\"not a number\")\nend\n";
         let output = compile_source_via_c_target(source);

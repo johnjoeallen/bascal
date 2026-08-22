@@ -290,6 +290,15 @@ const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_file
 /// BASCOM's own COLOR (an omitted argument doesn't reset it).
 const COLOR_HELPER: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\n\nstatic void bcc_color(int fg, int bg) {\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
 
+/// `input [prompt$;] var` -- reads one whole line into a shared,
+/// fixed-size scratch buffer (matching every string in this backend
+/// already being a fixed `char[STRING_BUFFER_SIZE]`), stripping the
+/// trailing newline `fgets` leaves in. Every `INPUT` in the program reuses
+/// this same buffer -- safe because each `Statement::Input` fully consumes
+/// it (parses it into the target variable) before the next one runs; there
+/// is never a live reference to a stale read left lying around.
+const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_read_line(void) {\n    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {\n        bcc_input_buf[0] = 0;\n        return;\n    }\n    bcc_input_buf[strcspn(bcc_input_buf, \"\\r\\n\")] = 0;\n}\n\n";
+
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
 /// byte width, and cumulative byte offset within the record. Built by
@@ -556,25 +565,43 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
 /// policy `scan_builtin_usage`/`file_io.used` already follow for their own
 /// helper blocks. `cls`/`beep`/`locate` need no such check: each compiles
 /// to a self-contained `printf` call with no shared helper of its own.
-fn program_uses_color(program: &Program) -> bool {
-    fn walk(statements: &[Statement]) -> bool {
-        statements.iter().any(|statement| match statement {
-            Statement::Color { .. } => true,
-            Statement::If {
-                then_body,
-                else_body,
-                ..
-            } => walk(then_body) || walk(else_body),
-            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do {
-                body, ..
-            } => walk(body),
-            Statement::SelectCase {
-                cases, else_body, ..
-            } => cases.iter().any(|case| walk(&case.body)) || walk(else_body),
-            _ => false,
+/// Whether any statement anywhere in `program` (top level or inside any
+/// function/procedure, any nesting depth) matches `pred` -- the shared
+/// walker behind `program_uses_color`/`program_uses_input`'s own "is this
+/// helper block even needed" checks, the same "only pull in what's
+/// actually used" policy `scan_builtin_usage`/`file_io.used` already
+/// follow for theirs. `pred` is only ever asked about the statement
+/// itself, never its own nested body (an `if`'s `then_body`, a `for`'s
+/// `body`, ...) -- this function does that recursion once, centrally.
+fn program_has_statement(program: &Program, pred: &dyn Fn(&Statement) -> bool) -> bool {
+    fn walk(statements: &[Statement], pred: &dyn Fn(&Statement) -> bool) -> bool {
+        statements.iter().any(|statement| {
+            pred(statement)
+                || match statement {
+                    Statement::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => walk(then_body, pred) || walk(else_body, pred),
+                    Statement::For { body, .. }
+                    | Statement::While { body, .. }
+                    | Statement::Do { body, .. } => walk(body, pred),
+                    Statement::SelectCase {
+                        cases, else_body, ..
+                    } => cases.iter().any(|case| walk(&case.body, pred)) || walk(else_body, pred),
+                    _ => false,
+                }
         })
     }
-    walk(&program.statements) || program.functions.iter().any(|f| walk(&f.body))
+    walk(&program.statements, pred) || program.functions.iter().any(|f| walk(&f.body, pred))
+}
+
+fn program_uses_color(program: &Program) -> bool {
+    program_has_statement(program, &|s| matches!(s, Statement::Color { .. }))
+}
+
+fn program_uses_input(program: &Program) -> bool {
+    program_has_statement(program, &|s| matches!(s, Statement::Input { .. }))
 }
 
 /// Applies every top-level `FIELD` statement (the record/file DSL's own
@@ -950,25 +977,28 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
 
     let builtin_usage = scan_builtin_usage(program);
     let needs_color = program_uses_color(program);
+    let needs_input = program_uses_input(program);
 
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, <string.h> only when a string `select case` needs
-    // strcmp() from it, a LEN/ASC/CHR$/MID$/LEFT$ call needs strlen()
-    // (see `scan_builtin_usage`), or random-access record I/O needs
-    // memcpy() (see `FILE_IO_HELPER`), and <stdint.h> only for that same
-    // record I/O's exact-width `int16_t`/`int32_t` packing -- most
-    // programs won't need any of them.
+    // strcmp() from it, a LEN/ASC/CHR$/MID$/LEFT$ call needs strlen() (see
+    // `scan_builtin_usage`), `input` needs `strcspn` (see `INPUT_HELPER`),
+    // or random-access record I/O needs memcpy() (see `FILE_IO_HELPER`),
+    // and <stdint.h> only for that same record I/O's exact-width
+    // `int16_t`/`int32_t` packing -- most programs won't need any of them.
     let mut includes = String::from("#include <stdio.h>\n");
     if needs_math {
         includes.push_str("#include <math.h>\n");
     }
-    if needs_string || builtin_usage.needs_string_h || file_io.used {
+    if needs_string || builtin_usage.needs_string_h || needs_input || file_io.used {
         includes.push_str("#include <string.h>\n");
     }
     if file_io.used {
         includes.push_str("#include <stdint.h>\n");
         includes.push_str("#include <stdlib.h>\n");
-    } else if builtin_usage.needs_stdlib_h {
+    } else if builtin_usage.needs_stdlib_h || needs_input {
+        // `input`'s numeric targets parse via `atoi`/`atof` (see
+        // `INPUT_HELPER`'s call site in `emit_statement`).
         includes.push_str("#include <stdlib.h>\n");
     }
 
@@ -993,6 +1023,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if needs_color {
         out.push_str(COLOR_HELPER);
+    }
+    if needs_input {
+        out.push_str(INPUT_HELPER);
     }
     if !globals_decl.is_empty() {
         out.push_str(&globals_decl);
@@ -1311,6 +1344,11 @@ fn collect_vars_in_statement(
                 }
             }
         }
+        Statement::Input { vars, .. } => {
+            for var in vars {
+                collect_vars_in_expr(var, numeric_out, string_out);
+            }
+        }
         Statement::Locate { row, col } => {
             collect_vars_in_expr(row, numeric_out, string_out);
             collect_vars_in_expr(col, numeric_out, string_out);
@@ -1511,6 +1549,55 @@ fn emit_statement(
         }
         Statement::End => {
             out.push_str("    return 0;\n");
+            Ok(())
+        }
+        // `input [prompt$;] var` -- interactive keyboard input, distinct
+        // from `input #` (sequential-file input, still unsupported). Real
+        // BASIC always shows a trailing `? ` after the prompt (or alone,
+        // with none given) -- BASCAL's own parser already discards the
+        // `;`/`,` distinction after the prompt (see `Statement::Input`'s
+        // own shape), so the BASIC backend already normalizes both
+        // spellings to the same `; ` form; this matches that. Scoped to
+        // exactly one variable per `input` -- real multi-variable,
+        // comma-split-from-one-line `INPUT` isn't supported yet (no real
+        // tutorial or example program in this repo uses it).
+        Statement::Input { prompt, vars } => {
+            if vars.len() != 1 {
+                return Err(
+                    "`input` with more than one variable isn't supported by the minimal C \
+                     backend yet -- give each variable its own `input` statement"
+                        .to_string(),
+                );
+            }
+            let Expr::Ident(ident) = &vars[0] else {
+                return Err(
+                    "`input`'s target isn't supported by the minimal C backend yet -- only a \
+                     bare scalar variable is"
+                        .to_string(),
+                );
+            };
+            let prompt_text = match prompt {
+                Some(p) => format!("{}? ", escape_c_string_literal(p)),
+                None => "? ".to_string(),
+            };
+            out.push_str(&format!("    printf(\"{prompt_text}\");\n"));
+            out.push_str("    bcc_read_line();\n");
+            if ident.suffix == Some(TypeSuffix::String) {
+                let c_name = c_var_name(ident, TypeSuffix::String);
+                out.push_str(&format!(
+                    "    snprintf({c_name}, sizeof({c_name}), \"%s\", bcc_input_buf);\n"
+                ));
+            } else {
+                let suffix = effective_suffix(ident.suffix);
+                let c_name = c_var_name(ident, suffix);
+                let (_, is_float) = numeric_c_type(suffix)
+                    .expect("effective_suffix never returns TypeSuffix::String");
+                if is_float {
+                    out.push_str(&format!("    {c_name} = atof(bcc_input_buf);\n"));
+                } else {
+                    out.push_str(&format!("    {c_name} = atoi(bcc_input_buf);\n"));
+                }
+            }
             Ok(())
         }
         // Screen I/O -- see `COLOR_HELPER`'s own doc comment for why
