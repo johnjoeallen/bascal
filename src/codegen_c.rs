@@ -269,6 +269,20 @@ const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC
 /// little-endian layout only on those platforms).
 const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
 
+/// `COLOR fg[, bg]`'s runtime helper -- real BASCOM's classic CGA palette
+/// (0-15 foreground, 0-7 background) has no single portable C equivalent,
+/// so this backend targets plain ANSI SGR escape sequences instead (widely
+/// supported on POSIX terminals and modern Windows terminals -- not a
+/// platform-specific console API). ANSI's own base 8 colors are in a
+/// *different order* than CGA's (ANSI red=1/blue=4, CGA blue=1/red=4), and
+/// CGA's bright colors (8-15) are ANSI's "aixterm" bright range (90-97),
+/// not the base range with bold added -- `bcc_ansi_fg`/`bcc_ansi_bg` are
+/// direct CGA-index -> real-ANSI-code lookup tables encoding both of
+/// those, rather than a formula. `bcc_color`'s `bg` of `-1` means "COLOR
+/// fg" alone was given -- leave the background alone, matching real
+/// BASCOM's own COLOR (an omitted argument doesn't reset it).
+const COLOR_HELPER: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\n\nstatic void bcc_color(int fg, int bg) {\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
+
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
 /// byte width, and cumulative byte offset within the record. Built by
@@ -527,6 +541,33 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
         collect(&function.body, &mut layouts);
     }
     layouts
+}
+
+/// Whether `program` uses `color` anywhere (top level or inside any
+/// function/procedure) -- decides whether `generate()` splices in
+/// `COLOR_HELPER` at all, the same "only pull in what's actually used"
+/// policy `scan_builtin_usage`/`file_io.used` already follow for their own
+/// helper blocks. `cls`/`beep`/`locate` need no such check: each compiles
+/// to a self-contained `printf` call with no shared helper of its own.
+fn program_uses_color(program: &Program) -> bool {
+    fn walk(statements: &[Statement]) -> bool {
+        statements.iter().any(|statement| match statement {
+            Statement::Color { .. } => true,
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => walk(then_body) || walk(else_body),
+            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do {
+                body, ..
+            } => walk(body),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => cases.iter().any(|case| walk(&case.body)) || walk(else_body),
+            _ => false,
+        })
+    }
+    walk(&program.statements) || program.functions.iter().any(|f| walk(&f.body))
 }
 
 /// Applies every top-level `FIELD` statement (the record/file DSL's own
@@ -901,6 +942,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
 
     let builtin_usage = scan_builtin_usage(program);
+    let needs_color = program_uses_color(program);
 
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, <string.h> only when a string `select case` needs
@@ -939,6 +981,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
         out.push_str(&file_io.helper_defs);
+    }
+    if needs_color {
+        out.push_str(COLOR_HELPER);
     }
     if !globals_decl.is_empty() {
         out.push_str(&globals_decl);
@@ -1257,6 +1302,16 @@ fn collect_vars_in_statement(
                 }
             }
         }
+        Statement::Locate { row, col } => {
+            collect_vars_in_expr(row, numeric_out, string_out);
+            collect_vars_in_expr(col, numeric_out, string_out);
+        }
+        Statement::Color { fg, bg } => {
+            collect_vars_in_expr(fg, numeric_out, string_out);
+            if let Some(bg) = bg {
+                collect_vars_in_expr(bg, numeric_out, string_out);
+            }
+        }
         Statement::If {
             condition,
             then_body,
@@ -1447,6 +1502,41 @@ fn emit_statement(
         }
         Statement::End => {
             out.push_str("    return 0;\n");
+            Ok(())
+        }
+        // Screen I/O -- see `COLOR_HELPER`'s own doc comment for why
+        // `color` needs a runtime helper while these three don't: each is
+        // a self-contained ANSI escape sequence with nothing to look up.
+        Statement::Cls => {
+            out.push_str("    printf(\"\\x1b[2J\\x1b[H\");\n");
+            Ok(())
+        }
+        Statement::Beep => {
+            out.push_str("    printf(\"\\a\");\n");
+            Ok(())
+        }
+        // ANSI's own cursor-position escape is already `row;col`, 1-based,
+        // exactly matching BASIC's own `LOCATE row, col` -- no reordering
+        // or offset needed, unlike `COLOR`'s palette remapping.
+        Statement::Locate { row, col } => {
+            let (row_text, row_is_float) = render_numeric_expr(row, needs_math, functions)?;
+            let row_text = coerce_numeric(row_text, row_is_float, false, needs_math);
+            let (col_text, col_is_float) = render_numeric_expr(col, needs_math, functions)?;
+            let col_text = coerce_numeric(col_text, col_is_float, false, needs_math);
+            out.push_str(&format!("    printf(\"\\x1b[%d;%dH\", {row_text}, {col_text});\n"));
+            Ok(())
+        }
+        Statement::Color { fg, bg } => {
+            let (fg_text, fg_is_float) = render_numeric_expr(fg, needs_math, functions)?;
+            let fg_text = coerce_numeric(fg_text, fg_is_float, false, needs_math);
+            let bg_text = match bg {
+                Some(bg) => {
+                    let (text, is_float) = render_numeric_expr(bg, needs_math, functions)?;
+                    coerce_numeric(text, is_float, false, needs_math)
+                }
+                None => "-1".to_string(),
+            };
+            out.push_str(&format!("    bcc_color({fg_text}, {bg_text});\n"));
             Ok(())
         }
         // Declarations are hoisted to the top of `main` up front (see

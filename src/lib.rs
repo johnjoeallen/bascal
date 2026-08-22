@@ -5119,6 +5119,84 @@ end
     }
 
     #[test]
+    fn c_target_supports_cls_and_beep() {
+        let source = "cls\nbeep\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("printf(\"\\x1b[2J\\x1b[H\");"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"\\a\");"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_locate() {
+        let source = "locate 5, 10\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("printf(\"\\x1b[%d;%dH\", 5, 10);"),
+            "LOCATE row, col should map straight to ANSI's own row;col cursor-position \
+             escape, no reordering:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_color_with_and_without_background() {
+        let source = "color 14, 1\ncolor 7\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static const int bcc_ansi_fg[16] ="),
+            "the color helper should only be emitted once color is actually used:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_color(14, 1);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_color(7, -1);"),
+            "a bare `color fg` (no background) should pass -1, leaving the background alone:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_color_helper_when_color_is_never_used() {
+        let source = "cls\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_ansi_fg"),
+            "the color helper shouldn't be emitted when `color` is never called:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_locate_and_color_with_variable_arguments() {
+        // Regression check for collect_vars_in_statement: row/col/fg/bg
+        // expressions must be scanned for variable declarations, the same
+        // as any other statement's expressions, or referencing a variable
+        // only inside locate/color would compile to an undeclared C name.
+        let source = "row% = 5\ncol% = 10\nfg% = 14\nbg% = 1\nlocate row%, col%\ncolor fg%, bg%\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bv_i_row = 0;")
+                && output.contains("static int bv_i_col = 0;")
+                && output.contains("static int bv_i_fg = 0;")
+                && output.contains("static int bv_i_bg = 0;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"\\x1b[%d;%dH\", bv_i_row, bv_i_col);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_color(bv_i_fg, bv_i_bg);"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_a_zero_arg_procedure_call() {
         // A zero-argument call always parses as `Expr::ArrayRef`, not
         // `Expr::Call` (see `make_paren_ident_expr` in parser.rs) -- this
