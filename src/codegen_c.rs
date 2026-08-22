@@ -91,8 +91,11 @@ struct FnSig {
     /// `c_var_name`'s `bv_...` namespace so a function and a variable that
     /// happen to share a BASIC name can never collide as C identifiers.
     c_name: String,
+    /// A `procedure` -- no return value at all, a real `void` C function.
+    /// `is_string`/`is_float` are meaningless when this is set.
+    is_void: bool,
     is_string: bool,
-    /// Only meaningful when `!is_string`.
+    /// Only meaningful when `!is_string && !is_void`.
     is_float: bool,
     params: Vec<FnParam>,
 }
@@ -543,16 +546,17 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
 fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionTable, String> {
     let mut table = FunctionTable::new();
     for func in functions {
-        if func.is_procedure {
-            return Err(format!(
-                "procedure `{}` isn't supported by the minimal C backend yet -- only functions \
-                 (declared with a return value) are",
-                func.name
-            ));
-        }
-        let is_string = func.name.suffix == Some(TypeSuffix::String);
-        let numeric = func.name.suffix.and_then(numeric_c_type);
-        if !is_string && numeric.is_none() {
+        // A `procedure` never carries a type suffix (enforced by the
+        // parser) and has no return type at all -- a real `void` C
+        // function. Everything else about it (parameters, body emission)
+        // is shared with `function` below.
+        let is_string = !func.is_procedure && func.name.suffix == Some(TypeSuffix::String);
+        let numeric = if func.is_procedure {
+            None
+        } else {
+            func.name.suffix.and_then(numeric_c_type)
+        };
+        if !func.is_procedure && !is_string && numeric.is_none() {
             return Err(format!(
                 "function `{}` isn't supported by the minimal C backend yet -- give it an \
                  explicit numeric or string return type suffix",
@@ -596,7 +600,11 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionTable, Stri
                 is_float: param_numeric.is_some_and(|(_, f)| f),
             });
         }
-        if !body_always_returns(&func.body) {
+        // A procedure may fall through to its end with no explicit
+        // `return` at all -- real BASIC's own "implicit RETURN" rule for
+        // PROCEDURE (see tutorial 14) -- unlike a function, which must
+        // always produce a value on every path.
+        if !func.is_procedure && !body_always_returns(&func.body) {
             return Err(format!(
                 "function `{}` isn't supported by the minimal C backend yet -- its body must \
                  end with an explicit `return` as its last top-level statement (the minimal C \
@@ -608,6 +616,7 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionTable, Stri
             fn_key(&func.name),
             FnSig {
                 c_name: function_c_name(&func.name),
+                is_void: func.is_procedure,
                 is_string,
                 is_float: numeric.is_some_and(|(_, f)| f),
                 params,
@@ -858,7 +867,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
 /// parameter directly would let the callee mutate the caller's buffer,
 /// breaking byval semantics.
 fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
-    let ret_type = if sig.is_string {
+    let ret_type = if sig.is_void || sig.is_string {
         "void"
     } else {
         numeric_c_type(func.name.suffix.expect("validated by build_function_table"))
@@ -1785,6 +1794,72 @@ fn emit_statement(
             }
             Ok(())
         }
+        // A bare `return` inside a `procedure` -- always legal even
+        // mid-body, unlike falling off the end, which only a `void`
+        // C function allows for free.
+        Statement::ReturnVoid => {
+            if current_function.is_none() {
+                return Err(
+                    "`return` outside of a function isn't supported by the minimal C backend"
+                        .to_string(),
+                );
+            }
+            out.push_str("    return;\n");
+            Ok(())
+        }
+        // A bare call statement -- a `procedure` call, or a `function`
+        // call whose result is deliberately discarded. Argument rendering
+        // mirrors `render_numeric_call`/`render_string_call`'s own
+        // user-function branch; the difference is there's no value to
+        // hand back to a caller here; a string-returning function still
+        // needs a `bcc_out` buffer to write into, just an unused one.
+        // `Expr::ArrayRef` (not just `Expr::Call`) shows up here too -- a
+        // zero-argument call always parses as `ArrayRef` regardless of
+        // suffix (see `make_paren_ident_expr` in parser.rs), which a
+        // parameterless `procedure foo()` call always is.
+        Statement::ExprStmt(Expr::Call { name, args })
+        | Statement::ExprStmt(Expr::ArrayRef {
+            name,
+            indices: args,
+        }) => {
+            let sig = functions.get(&fn_key(name)).ok_or_else(|| {
+                format!(
+                    "`{name}` isn't supported by the minimal C backend yet -- only a bare call \
+                     to a known BASCAL function/procedure is supported as a standalone statement"
+                )
+            })?;
+            if args.len() != sig.params.len() {
+                return Err(format!(
+                    "`{name}` expects {} argument(s), got {}",
+                    sig.params.len(),
+                    args.len()
+                ));
+            }
+            let mut prelude = Vec::new();
+            let mut arg_texts = Vec::with_capacity(args.len());
+            for (arg, param) in args.iter().zip(&sig.params) {
+                if param.is_string {
+                    let (arg_prelude, text) =
+                        render_string_expr(arg, needs_math, temp_counter, functions)?;
+                    prelude.extend(arg_prelude);
+                    arg_texts.push(text);
+                } else {
+                    let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
+                    arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
+                }
+            }
+            for line in prelude {
+                out.push_str(&line);
+            }
+            if sig.is_string {
+                let temp = format!("bt_s_{temp_counter}");
+                *temp_counter += 1;
+                out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+                arg_texts.push(temp);
+            }
+            out.push_str(&format!("    {}({});\n", sig.c_name, arg_texts.join(", ")));
+            Ok(())
+        }
         Statement::BlankLine => {
             out.push('\n');
             Ok(())
@@ -1807,10 +1882,9 @@ fn emit_statement(
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, and \
-             assignment/`const` of scalar variables (%, &, !, #, $) are implemented so far \
-             (a bare procedure-call statement -- discarding a function's return value, or \
-             calling a `procedure` -- isn't supported yet either)"
+             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
+             function/procedure call, and assignment/`const` of scalar variables (%, &, !, #, \
+             $) are implemented so far"
         )),
     }
 }

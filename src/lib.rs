@@ -5119,13 +5119,69 @@ end
     }
 
     #[test]
-    fn c_target_rejects_procedures() {
+    fn c_target_supports_a_zero_arg_procedure_call() {
+        // A zero-argument call always parses as `Expr::ArrayRef`, not
+        // `Expr::Call` (see `make_paren_ident_expr` in parser.rs) -- this
+        // exercises that shape specifically, not just the general case
+        // covered below.
         let source = "procedure sayHi()\n    print \"hi\"\nend procedure\nsayHi()\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("void bf_i_sayhi(void) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("    bf_i_sayhi();\n"),
+            "a zero-arg procedure call should compile to a plain C call:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_procedures_with_parameters_and_implicit_return() {
+        let source = "procedure showTotal(amount!)\n    print \"Total: \"; amount!\nend procedure\nshowTotal(42.5)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("void bf_i_showtotal(float bv_f_amount) {"),
+            "a procedure should compile to a void C function:\n{output}"
+        );
+        assert!(
+            output.contains("    bf_i_showtotal(42.5);\n"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_an_early_bare_return_inside_a_procedure() {
+        let source = "procedure greet(name$)\n    if name$ = \"\" then\n        print \"Hello, stranger.\"\n        return\n    end if\n    print \"Hello, \" + name$ + \".\"\nend procedure\ngreet(\"Ada\")\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("    return;\n"),
+            "a bare `return` inside a procedure should compile to `return;`:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_discarding_a_functions_return_value_as_a_bare_statement() {
+        let source = "function larger%(a%, b%)\n    if a% > b% then\n        return a%\n    end if\n    return b%\nend function\nlarger%(3, 9)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("    bf_i_larger(3, 9);\n"),
+            "a value-returning function called as a bare statement should still just call it, \
+             discarding the result:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_bare_return_outside_any_function_or_procedure() {
+        // Sanity check: `return` outside any function is still rejected the
+        // same way it always was -- procedure support shouldn't have loosened
+        // this.
+        let source = "return\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
             diagnostics
                 .iter()
-                .any(|d| d.message.contains("procedure") && d.message.contains("only functions")),
+                .any(|d| d.message.contains("`return` outside of a function")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
