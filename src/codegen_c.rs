@@ -181,6 +181,12 @@ struct BuiltinUsage {
     /// Set by `INSTR`, whose C translation calls the `bcc_instr` helper
     /// (see `INSTR_HELPER`), which itself needs `strstr` from `<string.h>`.
     needs_instr_helper: bool,
+    /// Set by `EOF(...)`, whose C translation calls the `bcc_eof` helper
+    /// (see `SEQ_FILE_HELPER`). The rest of sequential file I/O is made of
+    /// statement forms, caught by `program_uses_sequential_file_io`
+    /// instead -- `EOF` is the one part that's an expression, so it needs
+    /// its own flag here, in the same expression-visiting pass as `INSTR`.
+    needs_seq_file_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -189,6 +195,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_ring_buffer_helpers: false,
         needs_stdlib_h: false,
         needs_instr_helper: false,
+        needs_seq_file_helper: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -203,6 +210,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                     usage.needs_string_h = true;
                     usage.needs_instr_helper = true;
                 }
+                "eof" => usage.needs_seq_file_helper = true,
                 _ => {}
             }
         }
@@ -316,6 +324,37 @@ const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_r
 /// actual search; this just converts its pointer result to BASIC's
 /// 1-based index convention (or 0 for "not found", instead of C's `NULL`).
 const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
+
+/// Sequential file I/O's runtime helpers -- `OPEN FOR INPUT/OUTPUT/APPEND`
+/// shares `bcc_files`/`FILE_IO_HELPER` with random-access I/O (see
+/// `Statement::Open`'s own doc comment), but reading a sequential file back
+/// needs its own machinery `FILE_IO_HELPER` doesn't have:
+///
+/// `bcc_eof(file)` -- peeks one character with `fgetc`/`ungetc` (the
+/// standard portable "is the next read going to hit EOF" idiom -- C has no
+/// direct "am I at EOF" query that doesn't require having already tried a
+/// failed read) to answer `EOF(#ch)` without disturbing the stream position.
+/// Returns real BASIC's own -1 (true)/0 (false) convention, not C's 1/0 --
+/// see `render_numeric_expr`'s comparison-operator arm for why every
+/// boolean-shaped value in this backend has to be -1/0: something built on
+/// top of this result (`NOT`'s bitwise complement, `AND`/`OR`) assumes it,
+/// and `~1` (C's 1-for-true) is `-2`, not `0`, so plain C truthiness here
+/// silently breaks `NOT`/`AND`/`OR` without ever failing to compile.
+///
+/// `bcc_line_input_file(file, buf, bufsize)` -- backs `LINE INPUT #`,
+/// exactly `bcc_read_line`'s `fgets`-plus-`strcspn` shape (see
+/// `INPUT_HELPER`) but reading from a given file instead of always `stdin`.
+///
+/// `bcc_read_file_field(file, buf, bufsize)` -- backs `INPUT #`, reading
+/// one comma-or-newline-delimited field from the format `WRITE #` produces
+/// (see `Statement::Write`'s own doc comment): a `"`-quoted run reads
+/// everything up to the closing quote verbatim (any BASIC-style embedded
+/// `""` escaping is out of scope, same category as this backend's other
+/// unchecked-range gaps); an unquoted run reads up to the next comma or
+/// line ending. Either way the trailing delimiter (`,`, or `\r`/`\n`) is
+/// consumed so the next field read starts clean, matching real
+/// `INPUT #`'s own field-at-a-time consumption.
+const SEQ_FILE_HELPER: &str = "static int bcc_eof(FILE* file) {\n    int c = fgetc(file);\n    if (c == EOF) return -1;\n    ungetc(c, file);\n    return 0;\n}\n\nstatic void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {\n    if (fgets(buf, (int)bufsize, file) == NULL) {\n        buf[0] = 0;\n        return;\n    }\n    buf[strcspn(buf, \"\\r\\n\")] = 0;\n}\n\nstatic void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {\n    int c = fgetc(file);\n    while (c == ' ') c = fgetc(file);\n    size_t len = 0;\n    if (c == '\"') {\n        c = fgetc(file);\n        while (c != EOF && c != '\"') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        c = fgetc(file);\n        while (c != EOF && c != ',' && c != '\\n') c = fgetc(file);\n    } else {\n        while (c != EOF && c != ',' && c != '\\n' && c != '\\r') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        if (c == '\\r') {\n            int c2 = fgetc(file);\n            if (c2 != '\\n' && c2 != EOF) ungetc(c2, file);\n        }\n    }\n    buf[len] = 0;\n}\n\nstatic char bcc_file_field_buf[256];\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -620,6 +659,29 @@ fn program_uses_color(program: &Program) -> bool {
 
 fn program_uses_input(program: &Program) -> bool {
     program_has_statement(program, &|s| matches!(s, Statement::Input { .. }))
+}
+
+/// Whether `program` uses sequential file I/O anywhere -- decides whether
+/// `generate()` splices in `SEQ_FILE_HELPER`. `WRITE #`/`INPUT #`/
+/// `LINE INPUT #`/`PRINT #`/a non-random-access `OPEN` are all statement
+/// forms, caught directly by `program_has_statement`; `EOF(...)` is an
+/// expression (a plain numeric-function call), so it's caught separately
+/// by `scan_builtin_usage`'s `needs_seq_file_helper` flag instead -- see
+/// its own match arm.
+fn program_uses_sequential_file_io(program: &Program) -> bool {
+    program_has_statement(program, &|s| {
+        matches!(
+            s,
+            Statement::Write { .. }
+                | Statement::InputFile { .. }
+                | Statement::LineInput { .. }
+                | Statement::PrintFile { .. }
+        ) || matches!(
+            s,
+            Statement::Open { mode, .. }
+                if !matches!(mode, OpenMode::Random | OpenMode::Binary)
+        )
+    })
 }
 
 /// Applies every top-level `FIELD` statement (the record/file DSL's own
@@ -996,19 +1058,23 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let builtin_usage = scan_builtin_usage(program);
     let needs_color = program_uses_color(program);
     let needs_input = program_uses_input(program);
+    let needs_seq_io =
+        builtin_usage.needs_seq_file_helper || program_uses_sequential_file_io(program);
 
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, <string.h> only when a string `select case` needs
     // strcmp() from it, a LEN/ASC/CHR$/MID$/LEFT$ call needs strlen() (see
-    // `scan_builtin_usage`), `input` needs `strcspn` (see `INPUT_HELPER`),
-    // or random-access record I/O needs memcpy() (see `FILE_IO_HELPER`),
-    // and <stdint.h> only for that same record I/O's exact-width
-    // `int16_t`/`int32_t` packing -- most programs won't need any of them.
+    // `scan_builtin_usage`), `input`/sequential file I/O need `strcspn`
+    // (see `INPUT_HELPER`/`SEQ_FILE_HELPER`), or random-access record I/O
+    // needs memcpy() (see `FILE_IO_HELPER`), and <stdint.h> only for that
+    // same record I/O's exact-width `int16_t`/`int32_t` packing -- most
+    // programs won't need any of them.
     let mut includes = String::from("#include <stdio.h>\n");
     if needs_math {
         includes.push_str("#include <math.h>\n");
     }
-    if needs_string || builtin_usage.needs_string_h || needs_input || file_io.used {
+    if needs_string || builtin_usage.needs_string_h || needs_input || needs_seq_io || file_io.used
+    {
         includes.push_str("#include <string.h>\n");
     }
     if file_io.used {
@@ -1041,6 +1107,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
         out.push_str(&file_io.helper_defs);
+    }
+    if needs_seq_io {
+        out.push_str(SEQ_FILE_HELPER);
     }
     if needs_color {
         out.push_str(COLOR_HELPER);
@@ -1368,6 +1437,29 @@ fn collect_vars_in_statement(
         Statement::Input { vars, .. } => {
             for var in vars {
                 collect_vars_in_expr(var, numeric_out, string_out);
+            }
+        }
+        Statement::Open { file, .. } => {
+            collect_vars_in_expr(file, numeric_out, string_out);
+        }
+        Statement::LineInput { target, .. } => {
+            collect_vars_in_expr(target, numeric_out, string_out);
+        }
+        Statement::PrintFile { tokens, .. } => {
+            for token in tokens {
+                if let PrintToken::Expr(expr) = token {
+                    collect_vars_in_expr(expr, numeric_out, string_out);
+                }
+            }
+        }
+        Statement::InputFile { vars, .. } => {
+            for var in vars {
+                collect_vars_in_expr(var, numeric_out, string_out);
+            }
+        }
+        Statement::Write { exprs, .. } => {
+            for expr in exprs {
+                collect_vars_in_expr(expr, numeric_out, string_out);
             }
         }
         Statement::Locate { row, col } => {
@@ -1882,30 +1974,32 @@ fn emit_statement(
         // global of the same name via ordinary C lexical scoping -- no
         // per-use rewriting needed here at all.
         Statement::GlobalDecl(_) => Ok(()),
-        // `OPEN ... FOR RANDOM/BINARY AS #ch [LEN = n]` -- only random-
-        // access modes are supported (sequential `INPUT`/`OUTPUT`/
-        // `APPEND` aren't implemented by this backend yet); `LEN` is
-        // accepted but not actually used for anything -- `GET`/`PUT`'s
-        // own record size comes from the `FIELD` layout `scan_field_layout`
-        // already computed, which is always consistent with `LEN` in
-        // BASCAL's own record/file DSL output. Real BASIC's `OPEN FOR
-        // RANDOM` creates the file if it doesn't already exist; C's
-        // `"rb+"` mode requires the file to already exist, so a failed
-        // `"rb+"` open falls back to `"wb+"` (create, read/write) rather
-        // than treating that as a real error.
+        // `OPEN ... FOR RANDOM/BINARY/INPUT/OUTPUT/APPEND AS #ch [LEN = n]`
+        // -- every mode shares the same `bcc_files` channel table (see
+        // `FILE_IO_HELPER`), so this statement alone is what sets
+        // `file_io.used = true`, regardless of mode; a program that opens
+        // a file only for sequential I/O still needs that table declared,
+        // even though `apply_field_statement` (the only other place that
+        // flag was set before) never runs for it. `LEN` is accepted but
+        // not actually used for anything -- `GET`/`PUT`'s own record size
+        // comes from the `FIELD` layout `scan_field_layout` already
+        // computed, which is always consistent with `LEN` in BASCAL's own
+        // record/file DSL output. Real BASIC's `OPEN FOR RANDOM` creates
+        // the file if it doesn't already exist; C's `"rb+"` mode requires
+        // the file to already exist, so a failed `"rb+"` open falls back
+        // to `"wb+"` (create, read/write) rather than treating that as a
+        // real error -- `OUTPUT`/`APPEND` already create-on-open via
+        // C's own `"w"`/`"a"` modes, and `INPUT` (`"r"`) is the one mode
+        // where a missing file is left as a genuine open failure (a
+        // subsequent read/`EOF` against a NULL `FILE*` is this backend's
+        // existing unchecked-range-style gap, same category as everywhere
+        // else it trusts the program not to misuse a channel).
         Statement::Open {
             mode,
             file,
             channel,
             ..
         } => {
-            if !matches!(mode, OpenMode::Random | OpenMode::Binary) {
-                return Err(
-                    "sequential file I/O (OPEN FOR INPUT/OUTPUT/APPEND) isn't supported by the \
-                     minimal C backend yet -- only random-access (OPEN FOR RANDOM/BINARY) is"
-                        .to_string(),
-                );
-            }
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
             let (prelude, file_text) =
@@ -1913,12 +2007,32 @@ fn emit_statement(
             for line in prelude {
                 out.push_str(&line);
             }
-            out.push_str(&format!(
-                "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
-            ));
-            out.push_str(&format!(
-                "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
-            ));
+            file_io.used = true;
+            match mode {
+                OpenMode::Random | OpenMode::Binary => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
+                    ));
+                    out.push_str(&format!(
+                        "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
+                    ));
+                }
+                OpenMode::Input => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"r\");\n"
+                    ));
+                }
+                OpenMode::Output => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"w\");\n"
+                    ));
+                }
+                OpenMode::Append => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"a\");\n"
+                    ));
+                }
+            }
             Ok(())
         }
         Statement::Close { channel } => {
@@ -1926,6 +2040,151 @@ fn emit_statement(
             let idx = ch - 1;
             out.push_str(&format!("    fclose(bcc_files[{idx}]);\n"));
             out.push_str(&format!("    bcc_files[{idx}] = NULL;\n"));
+            Ok(())
+        }
+        // `LINE INPUT #ch, var$` -- reads one whole line, same
+        // `fgets`-plus-`strcspn` shape as keyboard `INPUT`'s own
+        // `bcc_read_line` (see `INPUT_HELPER`), but straight from the
+        // channel's `FILE*` via `bcc_line_input_file` (see
+        // `SEQ_FILE_HELPER`) rather than always `stdin`, and straight into
+        // the target's own buffer -- no shared scratch buffer needed, since
+        // there's nothing further to parse out of a whole line the way
+        // `INPUT #`'s comma-delimited fields need. Scoped to a bare string
+        // variable target, matching keyboard `INPUT`'s own restriction.
+        Statement::LineInput { channel, target } => {
+            let ch = literal_channel(channel)?;
+            let idx = ch - 1;
+            let Expr::Ident(ident) = target else {
+                return Err(
+                    "LINE INPUT #'s target isn't supported by the minimal C backend yet -- only \
+                     a bare string variable is"
+                        .to_string(),
+                );
+            };
+            if ident.suffix != Some(TypeSuffix::String) {
+                return Err(
+                    "LINE INPUT # requires a string (`$`-suffixed) variable".to_string(),
+                );
+            }
+            let c_name = c_var_name(ident, TypeSuffix::String);
+            out.push_str(&format!(
+                "    bcc_line_input_file(bcc_files[{idx}], {c_name}, sizeof({c_name}));\n"
+            ));
+            Ok(())
+        }
+        // `PRINT #ch, ...` -- identical rendering to plain `PRINT` (see its
+        // own arm above, and `render_print_tokens`), just `fprintf`'d to
+        // the channel's `FILE*` instead of `printf`'d to `stdout`.
+        Statement::PrintFile { channel, tokens } => {
+            let ch = literal_channel(channel)?;
+            let idx = ch - 1;
+            let (prelude, mut format, args, needs_newline) =
+                render_print_tokens(tokens, needs_math, temp_counter, functions)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            if needs_newline {
+                format.push_str("\\n");
+            }
+            let mut call = format!("fprintf(bcc_files[{idx}], \"{format}\"");
+            for arg in &args {
+                call.push_str(", ");
+                call.push_str(arg);
+            }
+            call.push(')');
+            out.push_str(&format!("    {call};\n"));
+            Ok(())
+        }
+        // `INPUT #ch, var[, ...]` -- reads each variable's own
+        // comma-delimited field via `bcc_read_file_field` (see
+        // `SEQ_FILE_HELPER`) into a shared scratch buffer, then parses it
+        // the same way keyboard `INPUT`'s own arm above does (`snprintf`
+        // straight through for a string target, `atoi`/`atof` for a
+        // numeric one) -- safe to share one buffer across every field the
+        // same way `INPUT_HELPER`'s `bcc_input_buf` is: each field is fully
+        // consumed into its target variable before the next one is read.
+        // Scoped to bare scalar variable targets, matching keyboard
+        // `INPUT`'s own restriction.
+        Statement::InputFile { channel, vars } => {
+            let ch = literal_channel(channel)?;
+            let idx = ch - 1;
+            for var in vars {
+                let Expr::Ident(ident) = var else {
+                    return Err(
+                        "INPUT #'s targets aren't supported by the minimal C backend yet -- \
+                         only bare scalar variables are"
+                            .to_string(),
+                    );
+                };
+                out.push_str(&format!(
+                    "    bcc_read_file_field(bcc_files[{idx}], bcc_file_field_buf, sizeof(bcc_file_field_buf));\n"
+                ));
+                if ident.suffix == Some(TypeSuffix::String) {
+                    let c_name = c_var_name(ident, TypeSuffix::String);
+                    out.push_str(&format!(
+                        "    snprintf({c_name}, sizeof({c_name}), \"%s\", bcc_file_field_buf);\n"
+                    ));
+                } else {
+                    let suffix = effective_suffix(ident.suffix);
+                    let c_name = c_var_name(ident, suffix);
+                    let (_, is_float) = numeric_c_type(suffix)
+                        .expect("effective_suffix never returns TypeSuffix::String");
+                    if is_float {
+                        out.push_str(&format!(
+                            "    {c_name} = atof(bcc_file_field_buf);\n"
+                        ));
+                    } else {
+                        out.push_str(&format!(
+                            "    {c_name} = atoi(bcc_file_field_buf);\n"
+                        ));
+                    }
+                }
+            }
+            Ok(())
+        }
+        // `WRITE #ch, expr[, ...]` -- quoted-string, comma-separated
+        // format that `INPUT #`/`bcc_read_file_field` can read back
+        // exactly (see its own doc comment): each string argument is
+        // wrapped in literal `"..."`, each numeric argument uses the same
+        // `%d`/`%g` choice `render_print_tokens` does, items are joined
+        // with `,` (no surrounding spaces -- real `WRITE #`'s own format),
+        // and the line always ends in `\n` regardless of a trailing
+        // `;`/`,` (unlike `PRINT`, `WRITE #` has no token-based suppression
+        // syntax at all -- every `WRITE #` is a complete, newline-terminated
+        // record).
+        Statement::Write { channel, exprs } => {
+            let ch = literal_channel(channel)?;
+            let idx = ch - 1;
+            let mut prelude = Vec::new();
+            let mut format = String::new();
+            let mut args = Vec::new();
+            for (index, expr) in exprs.iter().enumerate() {
+                if index > 0 {
+                    format.push(',');
+                }
+                if is_string_expr(expr) {
+                    let (expr_prelude, text) =
+                        render_string_expr(expr, needs_math, temp_counter, functions)?;
+                    prelude.extend(expr_prelude);
+                    format.push_str("\\\"%s\\\"");
+                    args.push(text);
+                } else {
+                    let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
+                    format.push_str(if is_float { "%g" } else { "%d" });
+                    args.push(text);
+                }
+            }
+            format.push_str("\\n");
+            for line in prelude {
+                out.push_str(&line);
+            }
+            let mut call = format!("fprintf(bcc_files[{idx}], \"{format}\"");
+            for arg in &args {
+                call.push_str(", ");
+                call.push_str(arg);
+            }
+            call.push(')');
+            out.push_str(&format!("    {call};\n"));
             Ok(())
         }
         // Pure compile-time bookkeeping, no runtime code -- records this
@@ -3314,6 +3573,15 @@ fn render_numeric_call(
         let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
         let needle = render_prelude_free_string_arg(&args[1], needs_math, functions)?;
         return Ok((format!("bcc_instr({s}, {needle})"), false));
+    }
+    // `EOF(#ch)` -- non-zero once the channel's next read would hit end of
+    // file (see `bcc_eof` in `SEQ_FILE_HELPER`). The channel has to be a
+    // literal integer at compile time, same restriction `OPEN`/`CLOSE`/
+    // `GET`/`PUT` already have (see `literal_channel`).
+    if name.name.eq_ignore_ascii_case("eof") && args.len() == 1 {
+        let ch = literal_channel(&args[0])?;
+        let idx = ch - 1;
+        return Ok((format!("bcc_eof(bcc_files[{idx}])"), false));
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
