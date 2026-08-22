@@ -25,10 +25,11 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), nine BASIC intrinsics
+//! single-precision -- see `effective_suffix`), fourteen BASIC intrinsics
 //! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`,
-//! `STR$`, `VAL`, `INSTR` (see `render_numeric_call`/`render_string_call`/
-//! `MID_HELPER`/`INSTR_HELPER`) -- and
+//! `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`, `SGN` (see
+//! `render_numeric_call`/`render_string_call`/`MID_HELPER`/`INSTR_HELPER`/
+//! `SGN_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
@@ -187,6 +188,10 @@ struct BuiltinUsage {
     /// instead -- `EOF` is the one part that's an expression, so it needs
     /// its own flag here, in the same expression-visiting pass as `INSTR`.
     needs_seq_file_helper: bool,
+    /// Set by `SGN`, whose C translation calls the `bcc_sgn` helper (see
+    /// `SGN_HELPER`) -- `SQR`/`ABS`/`INT`/`FIX` need no helper of their
+    /// own, just `<math.h>` (already covered by `needs_math`).
+    needs_sgn_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -196,6 +201,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_stdlib_h: false,
         needs_instr_helper: false,
         needs_seq_file_helper: false,
+        needs_sgn_helper: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -211,6 +217,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                     usage.needs_instr_helper = true;
                 }
                 "eof" => usage.needs_seq_file_helper = true,
+                "sgn" => usage.needs_sgn_helper = true,
                 _ => {}
             }
         }
@@ -324,6 +331,11 @@ const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_r
 /// actual search; this just converts its pointer result to BASIC's
 /// 1-based index convention (or 0 for "not found", instead of C's `NULL`).
 const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
+
+/// `SGN(x)` -- -1/0/1 by the sign of `x`. No single C library function
+/// does this (unlike `SQR`/`ABS`/`INT`/`FIX`, which map straight onto
+/// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
+const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
 
 /// Sequential file I/O's runtime helpers -- `OPEN FOR INPUT/OUTPUT/APPEND`
 /// shares `bcc_files`/`FILE_IO_HELPER` with random-access I/O (see
@@ -1103,6 +1115,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if builtin_usage.needs_instr_helper {
         out.push_str(INSTR_HELPER);
+    }
+    if builtin_usage.needs_sgn_helper {
+        out.push_str(SGN_HELPER);
     }
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
@@ -3582,6 +3597,70 @@ fn render_numeric_call(
         let ch = literal_channel(&args[0])?;
         let idx = ch - 1;
         return Ok((format!("bcc_eof(bcc_files[{idx}])"), false));
+    }
+    // `SQR(x)` -- real BASIC's SQR always returns a floating-point result
+    // regardless of its argument's own type, exactly like `sqrt()`.
+    if name.name.eq_ignore_ascii_case("sqr") && args.len() == 1 {
+        let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        return Ok((format!("sqrt((double)({inner}))"), true));
+    }
+    // `ABS(x)`/`INT(x)`/`FIX(x)` -- unlike `SQR`, these preserve their
+    // argument's own int/float-ness (real BASIC's ABS/INT/FIX return the
+    // same type they were given), so each computes through `fabs`/
+    // `floor`/`trunc` on a `double` cast either way (simplest correct
+    // shape, and evaluates the argument exactly once), then only casts
+    // the *result* back to `int` when the argument itself was one --
+    // `INT`'s `floor` (round toward negative infinity, not toward zero)
+    // and `FIX`'s `trunc` (round toward zero) are genuinely different
+    // rounding directions for a negative argument, same distinction
+    // `\`/`MOD`'s own doc comment already draws for BASIC's own integer
+    // division.
+    if name.name.eq_ignore_ascii_case("abs") && args.len() == 1 {
+        let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        let call = format!("fabs((double)({inner}))");
+        return Ok((
+            if is_float {
+                call
+            } else {
+                format!("(int)({call})")
+            },
+            is_float,
+        ));
+    }
+    if name.name.eq_ignore_ascii_case("int") && args.len() == 1 {
+        let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        let call = format!("floor((double)({inner}))");
+        return Ok((
+            if is_float {
+                call
+            } else {
+                format!("(int)({call})")
+            },
+            is_float,
+        ));
+    }
+    if name.name.eq_ignore_ascii_case("fix") && args.len() == 1 {
+        let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        let call = format!("trunc((double)({inner}))");
+        return Ok((
+            if is_float {
+                call
+            } else {
+                format!("(int)({call})")
+            },
+            is_float,
+        ));
+    }
+    // `SGN(x)` -- -1/0/1 by sign, always an integer result regardless of
+    // its argument's own type (see `bcc_sgn` in `SGN_HELPER`).
+    if name.name.eq_ignore_ascii_case("sgn") && args.len() == 1 {
+        let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        return Ok((format!("bcc_sgn((double)({inner}))"), false));
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s

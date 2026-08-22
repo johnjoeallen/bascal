@@ -5271,6 +5271,62 @@ end
     }
 
     #[test]
+    fn c_target_supports_sqr_abs_int_fix() {
+        let source = "dim x!\nx! = 9.0\nprint sqr(x!)\nprint abs(-5.5)\nprint abs(-5)\nprint int(3.7)\nprint int(-3.7)\nprint fix(3.7)\nprint fix(-3.7)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("sqrt((double)(bv_f_x))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fabs((double)(-(5.5)))"),
+            "a float ABS argument should stay float-typed:\n{output}"
+        );
+        assert!(
+            output.contains("(int)(fabs((double)(-(5))))"),
+            "an int ABS argument should stay int-typed:\n{output}"
+        );
+        assert!(
+            output.contains("floor((double)(3.7))") && output.contains("floor((double)(-(3.7)))"),
+            "INT should use floor (round toward negative infinity):\n{output}"
+        );
+        assert!(
+            output.contains("trunc((double)(3.7))") && output.contains("trunc((double)(-(3.7)))"),
+            "FIX should use trunc (round toward zero):\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_sgn() {
+        let source = "print sgn(-9.0)\nprint sgn(0.0)\nprint sgn(9.0)\nend\n";
+        let output = compile_source_via_c_target(source);
+        // Regression check, same category as RIGHT$/INSTR above: bcc_sgn
+        // is a genuine helper function, not an inline expression -- a
+        // missing SGN_HELPER splice would fail to *compile*, not just
+        // look wrong in generated source text.
+        assert!(
+            output.contains("static int bcc_sgn("),
+            "SGN needs the SGN_HELPER block for bcc_sgn:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_sgn((double)(-(9.0)))")
+                && output.contains("bcc_sgn((double)(0.0))")
+                && output.contains("bcc_sgn((double)(9.0))"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_sgn_helper_when_sgn_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_sgn"),
+            "the SGN helper shouldn't be emitted when `sgn` is never called:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);
