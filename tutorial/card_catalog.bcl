@@ -22,7 +22,8 @@
 //     listAll, searchByAuthor, searchByAuthorTitle, deleteItem — called
 //     from a `mainMenu` dispatch procedure using `select case`, instead of
 //     CLERK.BAS's numbered GOTO/GOSUB sections. This is the canonical
-//     BASCAL style (see MANUAL.md's Procedures section), and specifically
+//     BASCAL style (see the manual's Procedures section at
+//     https://johnjoeallen.github.io/bascal/manual/), and specifically
 //     exercises record/file access from inside a procedure body, not just
 //     top-level code.
 //   - CLERK.BAS's original also supported a multi-diskette/multi-file

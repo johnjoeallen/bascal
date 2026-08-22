@@ -14,8 +14,7 @@ side-by-side syntax comparisons, and the full [language manual](https://johnjoea
 BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
 The transpiler command is `bcc`. See the
 [full language manual](https://johnjoeallen.github.io/bascal/manual/) on the
-website for the complete reference; [MANUAL.md](MANUAL.md) in this repo is
-just a short pointer to it.
+website for the complete reference.
 
 BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:

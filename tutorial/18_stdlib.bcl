@@ -6,8 +6,9 @@
 // reach it. It exists because LTRIM$, RTRIM$, UCASE$, LCASE$, and ERROR$
 // either aren't real MBASIC/BASCOM 2.00 builtins or don't work at runtime
 // (verified against a real IBM Personal Computer BASIC Compiler 2.00 under
-// dosbox-x) -- see MANUAL.md's "String and error-message functions"
-// section for the full story.
+// dosbox-x) -- see the manual's "String and error-message functions"
+// section (https://johnjoeallen.github.io/bascal/manual/) for the full
+// story.
 //
 // Run with:
 //   bcc tutorial/18_stdlib.bcl

@@ -3809,7 +3809,7 @@ end
     #[test]
     fn c_target_comparisons_produce_basic_minus_one_zero() {
         // Real MBASIC/BASCOM comparisons evaluate to -1 (true) or 0
-        // (false), per MANUAL.md's own Comparison Operators section -- not
+        // (false), per the manual's own Comparison Operators section -- not
         // C's 1/0. -(a == b) gets there directly from C's native 0/1
         // comparison result.
         let source = r#"score% = 85
@@ -3887,7 +3887,7 @@ end
         // Real MBASIC/BASCOM's AND/OR/XOR/NOT are genuinely bitwise, not
         // short-circuit booleans -- verified against the GW-BASIC
         // Reference Manual's own worked examples (63 AND 16 = 16,
-        // 6 XOR 3 = 5) and MANUAL.md's own NOT 1 = -2 example (the point
+        // 6 XOR 3 = 5) and the manual's own NOT 1 = -2 example (the point
         // being it's NOT 0, which a naive C `!` translation would give).
         let source = r#"print "A: "; 63 and 16
 print "B: "; 6 xor 3

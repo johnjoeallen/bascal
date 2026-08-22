@@ -18,7 +18,6 @@ priority = "optional"
 assets = [
     ["target/release/bcc", "usr/bin/", "755"],
     ["README.md", "usr/share/doc/bascal/README.md", "644"],
-    ["MANUAL.md", "usr/share/doc/bascal/MANUAL.md", "644"],
     ["intro.md", "usr/share/doc/bascal/intro.md", "644"],
     ["tutorial/**/*.bcl", "usr/share/doc/bascal/tutorial/", "644"],
     ["tutorial/**/*.md", "usr/share/doc/bascal/tutorial/", "644"],

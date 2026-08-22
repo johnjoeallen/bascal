@@ -1575,7 +1575,7 @@ impl Parser {
                 }
             }
             // MS-BASIC's own boolean convention (see Operators and
-            // Expressions in MANUAL.md): -1 is true, 0 is false. `TRUE`/
+            // Expressions in the manual): -1 is true, 0 is false. `TRUE`/
             // `FALSE` are transpile-time sugar for those literals, nothing more
             // -- no boolean type is introduced anywhere else in the transpiler.
             TokenKind::Ident(value) if keyword_eq(value, "true") => {

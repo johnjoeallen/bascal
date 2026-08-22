@@ -20,7 +20,8 @@ further: it compiles BASCAL's generated `.bas` output against a **real**
 [dosbox-x](https://dosbox-x.com/), and diffs the result against checked-in
 golden output. This is how several real incompatibilities between BASCAL's
 generated code and actual period compilers were originally found and fixed
-(see `MANUAL.md`'s notes on `CONST`, `MKx$`/`CVx`, and identifier naming).
+(see the manual's notes on `CONST`, `MKx$`/`CVx`, and identifier naming at
+https://johnjoeallen.github.io/bascal/manual/).
 
 This suite is **entirely optional and does not run by default** -- neither
 locally nor in CI. It requires two things that BASCAL does not, and will

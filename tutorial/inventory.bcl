@@ -93,8 +93,9 @@ end function
 // MBASIC/BASCOM only has bitwise AND/OR (which fhb relies on here
 // too, since `PART!<1 OR PART!>N!` never short-circuits anyway).
 // BASCAL lowers `&&`/`||` into the equivalent branching so the
-// short-circuit *is* real at the generated-BASIC level; see
-// MANUAL.md's "Short-Circuit && and ||" section.
+// short-circuit *is* real at the generated-BASIC level; see the
+// manual's "Short-Circuit && and ||" section
+// (https://johnjoeallen.github.io/bascal/manual/).
 function partInRange%(n%)
     if n% >= 1 && n% <= partCount% then
         return 1
@@ -516,7 +517,8 @@ procedure errorTrap()
     // line";ERL). Unlike fhb's version, which used a hand-rolled ERR
     // lookup table, this decodes ERR through BASCAL's own
     // com.bascal.stdlib.error (ERROR$) instead -- see the header note
-    // above. See MANUAL.md's ON ERROR GOTO section.
+    // above. See the manual's ON ERROR GOTO section
+    // (https://johnjoeallen.github.io/bascal/manual/).
     print "There has been an error on line" + str$(erl) + ": " + error$(err)
     k$ = readKey$()
     resume next

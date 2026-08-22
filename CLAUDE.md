@@ -20,5 +20,5 @@ When the user says **"release"** (or "cut a release", "tag a release", etc.):
 Source code and test commits (`src/`, `tests/`) do **not** automatically
 trigger a version bump — the bump happens only at release time (step above).
 
-Documentation-only commits (`MANUAL.md`, `*.md`, `tutorial/`) and
+Documentation-only commits (`*.md`, `tutorial/`, `docs/`) and
 compiled-output refreshes (`.bas` files) do not require a version bump.

@@ -715,7 +715,7 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         }
         // Real MBASIC/BASCOM's `\`: each operand is rounded to the nearest
         // integer first (verified against the GW-BASIC Reference Manual --
-        // see MANUAL.md's Arithmetic Operators table), *then* the quotient
+        // see the manual's Arithmetic Operators section), *then* the quotient
         // is truncated toward zero. `round()`'s ties-away-from-zero
         // tie-break is confirmed correct: real IBM Personal Computer BASIC
         // Compiler 2.00, run under dosbox-x, gives `2.5 \ 1 = 3` and
@@ -783,7 +783,7 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             Ok((format!("pow((double){left_text}, (double){right_text})"), true))
         }
         // Real MBASIC/BASCOM's comparison operators evaluate to -1 (true)
-        // or 0 (false) -- confirmed in MANUAL.md's own Comparison Operators
+        // or 0 (false) -- confirmed in the manual's own Comparison Operators
         // section -- not 1/0 like C's `==`/`<`/etc. `-(a == b)` gets there
         // directly: C's comparison already produces 0 or 1, and negating
         // that gives exactly 0 or -1. The result is always a plain `int`
@@ -850,7 +850,7 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             ))
         }
         // `NOT` is bitwise complement, not boolean negation -- `NOT 1` is
-        // `-2`, not `0` (MANUAL.md's own Logical Operators section makes a
+        // `-2`, not `0` (the manual's own Logical Operators section makes a
         // point of this exact example, since it surprises anyone expecting
         // C-style `!`). Same round-to-integer step as AND/OR/XOR above.
         Expr::Unary { op: UnaryOp::Not, expr } => {
