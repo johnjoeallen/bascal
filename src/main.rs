@@ -172,13 +172,19 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
     };
     let looks_like_dir = output.is_dir()
         || output.as_os_str().to_string_lossy().ends_with('/')
-        || output.as_os_str().to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
+        || output
+            .as_os_str()
+            .to_string_lossy()
+            .ends_with(std::path::MAIN_SEPARATOR);
     if !looks_like_dir {
         return Ok(output.clone());
     }
     let default_name = default_output_path(cli.input.as_path(), target);
     let file_name = default_name.file_name().ok_or_else(|| {
-        format!("error: can't derive an output file name from {}", cli.input.display())
+        format!(
+            "error: can't derive an output file name from {}",
+            cli.input.display()
+        )
     })?;
     Ok(output.join(file_name))
 }
@@ -210,7 +216,11 @@ fn run(cli: Cli) -> Result<(), String> {
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
-        return if cli.run { run_binary(&binary_path) } else { Ok(()) };
+        return if cli.run {
+            run_binary(&binary_path)
+        } else {
+            Ok(())
+        };
     }
 
     let options = CompileOptions {
@@ -340,10 +350,7 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
         .status()
         .map_err(|err| format!("error: failed to invoke gcc: {err}"))?;
     if !status.success() {
-        return Err(format!(
-            "error: gcc failed compiling {}",
-            c_path.display()
-        ));
+        return Err(format!("error: gcc failed compiling {}", c_path.display()));
     }
     println!("binary: {}", binary_path.display());
     Ok(binary_path)
@@ -366,15 +373,24 @@ mod tests {
     #[test]
     fn parse_config_value_finds_a_key_case_insensitively_and_trims() {
         let contents = "# a comment\n\ntarget = C \nother=ignored\n";
-        assert_eq!(parse_config_value(contents, "target"), Some("C".to_string()));
-        assert_eq!(parse_config_value(contents, "TARGET"), Some("C".to_string()));
+        assert_eq!(
+            parse_config_value(contents, "target"),
+            Some("C".to_string())
+        );
+        assert_eq!(
+            parse_config_value(contents, "TARGET"),
+            Some("C".to_string())
+        );
         assert_eq!(parse_config_value(contents, "missing"), None);
     }
 
     #[test]
     fn parse_config_value_skips_blank_lines_and_comments() {
         let contents = "\n# target=basic\n  \ntarget=C\n";
-        assert_eq!(parse_config_value(contents, "target"), Some("C".to_string()));
+        assert_eq!(
+            parse_config_value(contents, "target"),
+            Some("C".to_string())
+        );
     }
 
     #[test]
@@ -394,7 +410,10 @@ mod tests {
     fn cli_accepts_run_flag_long_and_short() {
         let cli = Cli::try_parse_from(["bcc", "input.bcl", "--run"]).expect("should parse --run");
         assert!(cli.run);
-        assert!(!cli.binary, "--run alone shouldn't also set binary -- run() adds that itself");
+        assert!(
+            !cli.binary,
+            "--run alone shouldn't also set binary -- run() adds that itself"
+        );
 
         let cli = Cli::try_parse_from(["bcc", "input.bcl", "-r"]).expect("should parse -r");
         assert!(cli.run);
@@ -424,7 +443,10 @@ mod tests {
     #[test]
     fn resolve_output_path_treats_an_existing_directory_as_a_target_directory() {
         let dir = tempfile::tempdir().unwrap();
-        let cli = cli_with_output(PathBuf::from("some/input.bcl"), Some(dir.path().to_path_buf()));
+        let cli = cli_with_output(
+            PathBuf::from("some/input.bcl"),
+            Some(dir.path().to_path_buf()),
+        );
         let resolved = resolve_output_path(&cli, Target::C).unwrap();
         assert_eq!(resolved, dir.path().join("input.c"));
     }
@@ -442,8 +464,10 @@ mod tests {
 
     #[test]
     fn resolve_output_path_treats_a_plain_path_as_an_exact_file() {
-        let cli =
-            cli_with_output(PathBuf::from("input.bcl"), Some(PathBuf::from("exact/output.bas")));
+        let cli = cli_with_output(
+            PathBuf::from("input.bcl"),
+            Some(PathBuf::from("exact/output.bas")),
+        );
         let resolved = resolve_output_path(&cli, Target::Basic).unwrap();
         assert_eq!(resolved, PathBuf::from("exact/output.bas"));
     }

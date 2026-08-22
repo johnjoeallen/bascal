@@ -215,7 +215,10 @@ impl<'a> Lexer<'a> {
                         let pos = self.pos();
                         self.advance();
                         self.advance();
-                        tokens.push(Token { kind: TokenKind::AndAnd, pos });
+                        tokens.push(Token {
+                            kind: TokenKind::AndAnd,
+                            pos,
+                        });
                     } else {
                         tokens.push(self.hex_or_octal_lit());
                     }
@@ -224,7 +227,10 @@ impl<'a> Lexer<'a> {
                     let pos = self.pos();
                     self.advance();
                     self.advance();
-                    tokens.push(Token { kind: TokenKind::OrOr, pos });
+                    tokens.push(Token {
+                        kind: TokenKind::OrOr,
+                        pos,
+                    });
                 }
                 'A'..='Z' | 'a'..='z' | '_' => tokens.push(self.ident()),
                 '(' => tokens.push(self.single(TokenKind::LParen)),
@@ -332,10 +338,16 @@ impl<'a> Lexer<'a> {
                 }
             }
             let lit = format!("&{prefix}{digits}");
-            Token { kind: TokenKind::HexLit(lit), pos }
+            Token {
+                kind: TokenKind::HexLit(lit),
+                pos,
+            }
         } else {
             // bare & — emit as integer 0 (shouldn't occur in valid BASCAL)
-            Token { kind: TokenKind::Number(0), pos }
+            Token {
+                kind: TokenKind::Number(0),
+                pos,
+            }
         }
     }
 

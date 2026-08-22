@@ -179,7 +179,12 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("function")?;
         self.consume_line_end()?;
-        Ok(FunctionDef { name, params, body, is_procedure: false })
+        Ok(FunctionDef {
+            name,
+            params,
+            body,
+            is_procedure: false,
+        })
     }
 
     fn parse_procedure(&mut self) -> ParseResult<FunctionDef> {
@@ -198,7 +203,12 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("procedure")?;
         self.consume_line_end()?;
-        Ok(FunctionDef { name, params, body, is_procedure: true })
+        Ok(FunctionDef {
+            name,
+            params,
+            body,
+            is_procedure: true,
+        })
     }
 
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
@@ -212,7 +222,10 @@ impl Parser {
             self.expect(TokenKind::Colon, "expected `:` after record field name")?;
             let ty = self.parse_record_field_type()?;
             self.consume_line_end()?;
-            fields.push(RecordFieldDef { name: field_name, ty });
+            fields.push(RecordFieldDef {
+                name: field_name,
+                ty,
+            });
             self.skip_newlines();
         }
         self.expect_keyword("end")?;
@@ -268,7 +281,11 @@ impl Parser {
         let path = self.parse_expr(0)?;
         self.expect(TokenKind::RParen, "expected `)` after file path")?;
         self.consume_line_end()?;
-        Ok(Statement::FileDecl { var, record_type, path })
+        Ok(Statement::FileDecl {
+            var,
+            record_type,
+            path,
+        })
     }
 
     fn parse_param_list(&mut self) -> ParseResult<Vec<Param>> {
@@ -422,13 +439,21 @@ impl Parser {
         } else if self.check_keyword("erase") {
             self.parse_erase()
         } else if self.check_keyword("stop") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::Stop)
+            self.advance();
+            self.consume_line_end()?;
+            Ok(Statement::Stop)
         } else if self.check_keyword("cls") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::Cls)
+            self.advance();
+            self.consume_line_end()?;
+            Ok(Statement::Cls)
         } else if self.check_keyword("beep") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::Beep)
+            self.advance();
+            self.consume_line_end()?;
+            Ok(Statement::Beep)
         } else if self.check_keyword("system") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::System)
+            self.advance();
+            self.consume_line_end()?;
+            Ok(Statement::System)
         } else if self.check_keyword("randomize") {
             self.parse_randomize()
         } else if self.check_keyword("poke") {
@@ -438,7 +463,9 @@ impl Parser {
         } else if self.check_keyword("width") {
             self.parse_width()
         } else if self.check_keyword("clear") {
-            self.advance(); self.consume_line_end()?; Ok(Statement::Clear)
+            self.advance();
+            self.consume_line_end()?;
+            Ok(Statement::Clear)
         } else if self.check_keyword("swap") {
             self.parse_swap()
         } else if self.check_keyword("data") {
@@ -472,11 +499,11 @@ impl Parser {
     fn parse_label(&mut self) -> ParseResult<Statement> {
         let name = self.expect_ident("expected label name")?;
         self.eat(TokenKind::Colon); // guaranteed present by check_next_is_colon
-        // Unlike a genuine same-line separator (`x = 1: y = 2`), the label's
-        // own colon is part of `name:` itself — a newline immediately after
-        // it is this statement's normal end of line, not "blank line"
-        // padding, so it doesn't count toward `count_and_skip_newlines`'s
-        // extra-newline (pending_blank) detection below.
+                                    // Unlike a genuine same-line separator (`x = 1: y = 2`), the label's
+                                    // own colon is part of `name:` itself — a newline immediately after
+                                    // it is this statement's normal end of line, not "blank line"
+                                    // padding, so it doesn't count toward `count_and_skip_newlines`'s
+                                    // extra-newline (pending_blank) detection below.
         if matches!(self.current().kind, TokenKind::Newline) {
             self.advance();
         }
@@ -527,7 +554,10 @@ impl Parser {
         // expression on some unexpected comma or colon.
         while !matches!(
             self.current().kind,
-            TokenKind::Newline | TokenKind::Eof | TokenKind::Comment(_) | TokenKind::BlockComment(_)
+            TokenKind::Newline
+                | TokenKind::Eof
+                | TokenKind::Comment(_)
+                | TokenKind::BlockComment(_)
         ) {
             self.advance();
         }
@@ -549,10 +579,18 @@ impl Parser {
         // that loops on `parse_statement()` sees them as separate statements.
         while self.eat(TokenKind::Comma) {
             let (name, is_array, sizes) = self.parse_dim_one()?;
-            self.pending_statements.push_back(Statement::Dim { name, is_array, sizes });
+            self.pending_statements.push_back(Statement::Dim {
+                name,
+                is_array,
+                sizes,
+            });
         }
         self.consume_line_end()?;
-        Ok(Statement::Dim { name, is_array, sizes })
+        Ok(Statement::Dim {
+            name,
+            is_array,
+            sizes,
+        })
     }
 
     fn parse_dim_one(&mut self) -> ParseResult<(BasicIdent, bool, Vec<Expr>)> {
@@ -585,11 +623,19 @@ impl Parser {
             .lines()
             .map(|line| {
                 let trimmed = line.trim();
-                trimmed.strip_prefix('*').map(|s| s.trim()).unwrap_or(trimmed).to_string()
+                trimmed
+                    .strip_prefix('*')
+                    .map(|s| s.trim())
+                    .unwrap_or(trimmed)
+                    .to_string()
             })
             .collect::<Vec<_>>();
         let start = lines.iter().position(|l| !l.is_empty()).unwrap_or(0);
-        let end = lines.iter().rposition(|l| !l.is_empty()).map(|i| i + 1).unwrap_or(start);
+        let end = lines
+            .iter()
+            .rposition(|l| !l.is_empty())
+            .map(|i| i + 1)
+            .unwrap_or(start);
         let lines = lines[start..end].to_vec();
         Ok(Statement::BlockComment(lines))
     }
@@ -637,10 +683,17 @@ impl Parser {
             if self.check_keyword("using") {
                 self.expect_keyword("using")?;
                 let format = self.parse_expr(0)?;
-                self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+                self.expect(
+                    TokenKind::Semicolon,
+                    "expected `;` after USING format string",
+                )?;
                 let tokens = self.parse_print_tokens()?;
                 self.consume_line_end()?;
-                return Ok(Statement::PrintFileUsing { channel, format, tokens });
+                return Ok(Statement::PrintFileUsing {
+                    channel,
+                    format,
+                    tokens,
+                });
             }
             let tokens = self.parse_print_tokens()?;
             self.consume_line_end()?;
@@ -649,7 +702,10 @@ impl Parser {
         if self.check_keyword("using") {
             self.expect_keyword("using")?;
             let format = self.parse_expr(0)?;
-            self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+            self.expect(
+                TokenKind::Semicolon,
+                "expected `;` after USING format string",
+            )?;
             let tokens = self.parse_print_tokens()?;
             self.consume_line_end()?;
             return Ok(Statement::PrintUsing { format, tokens });
@@ -692,7 +748,12 @@ impl Parser {
             None
         };
         self.consume_line_end()?;
-        Ok(Statement::Open { mode, file, channel, len })
+        Ok(Statement::Open {
+            mode,
+            file,
+            channel,
+            len,
+        })
     }
 
     fn parse_field(&mut self) -> ParseResult<Statement> {
@@ -711,7 +772,12 @@ impl Parser {
             }
         }
         self.consume_line_end()?;
-        Ok(Statement::Field { channel, fields })
+        Ok(Statement::Field {
+            channel,
+            fields,
+            record_type: None,
+            string_fields: None,
+        })
     }
 
     fn parse_get(&mut self) -> ParseResult<Statement> {
@@ -734,7 +800,13 @@ impl Parser {
             (None, None)
         };
         self.consume_line_end()?;
-        Ok(Statement::Get { channel, record, var })
+        Ok(Statement::Get {
+            channel,
+            record,
+            var,
+            require_existing: false,
+            record_length: None,
+        })
     }
 
     fn parse_put(&mut self) -> ParseResult<Statement> {
@@ -757,7 +829,12 @@ impl Parser {
             (None, None)
         };
         self.consume_line_end()?;
-        Ok(Statement::Put { channel, record, var })
+        Ok(Statement::Put {
+            channel,
+            record,
+            var,
+            provided_fields: None,
+        })
     }
 
     fn parse_lset(&mut self) -> ParseResult<Statement> {
@@ -896,7 +973,11 @@ impl Parser {
             self.consume_line_end()?;
             Vec::new()
         };
-        Ok(Statement::If { condition, then_body, else_body })
+        Ok(Statement::If {
+            condition,
+            then_body,
+            else_body,
+        })
     }
 
     /// `if cond then stmt [: stmt ...] [else stmt [: stmt ...]]` -- no
@@ -910,7 +991,11 @@ impl Parser {
         } else {
             Vec::new()
         };
-        Ok(Statement::If { condition, then_body, else_body })
+        Ok(Statement::If {
+            condition,
+            then_body,
+            else_body,
+        })
     }
 
     /// Parses statements up to the end of the physical line (each one's own
@@ -965,7 +1050,11 @@ impl Parser {
             self.consume_line_end()?;
             Vec::new()
         };
-        Ok(Statement::If { condition, then_body, else_body })
+        Ok(Statement::If {
+            condition,
+            then_body,
+            else_body,
+        })
     }
 
     fn parse_for(&mut self) -> ParseResult<Statement> {
@@ -1029,9 +1118,13 @@ impl Parser {
 
     fn parse_end_statement(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("end")?;
-        if self.check_keyword("if") || self.check_keyword("function") || self.check_keyword("select")
-            || self.check_keyword("procedure") || self.check_keyword("while")
-            || self.check_keyword("for") || self.check_keyword("do")
+        if self.check_keyword("if")
+            || self.check_keyword("function")
+            || self.check_keyword("select")
+            || self.check_keyword("procedure")
+            || self.check_keyword("while")
+            || self.check_keyword("for")
+            || self.check_keyword("do")
         {
             return Err(self.error("unexpected block terminator"));
         }
@@ -1068,7 +1161,11 @@ impl Parser {
             self.consume_line_end()?;
             None
         };
-        Ok(Statement::Do { condition, body, post_condition })
+        Ok(Statement::Do {
+            condition,
+            body,
+            post_condition,
+        })
     }
 
     fn parse_do_condition(&mut self) -> ParseResult<DoCondition> {
@@ -1107,7 +1204,11 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("select")?;
         self.consume_line_end()?;
-        Ok(Statement::SelectCase { expr, cases, else_body })
+        Ok(Statement::SelectCase {
+            expr,
+            cases,
+            else_body,
+        })
     }
 
     fn parse_case_values(&mut self) -> ParseResult<Vec<CaseValue>> {
@@ -1219,18 +1320,30 @@ impl Parser {
         }
         let expr = self.parse_expr(0)?;
         let is_gosub = if self.check_keyword("goto") {
-            self.advance(); false
+            self.advance();
+            false
         } else {
-            self.expect_keyword("gosub")?; true
+            self.expect_keyword("gosub")?;
+            true
         };
-        let keyword = if is_gosub { "on ... gosub" } else { "on ... goto" };
+        let keyword = if is_gosub {
+            "on ... gosub"
+        } else {
+            "on ... goto"
+        };
         let mut targets = Vec::new();
         loop {
             targets.push(self.parse_label_target(keyword)?);
-            if !self.eat(TokenKind::Comma) { break; }
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
         }
         self.consume_line_end()?;
-        Ok(Statement::OnBranch { expr, targets, is_gosub })
+        Ok(Statement::OnBranch {
+            expr,
+            targets,
+            is_gosub,
+        })
     }
 
     fn parse_resume(&mut self) -> ParseResult<Statement> {
@@ -1259,7 +1372,10 @@ impl Parser {
         if self.check_keyword("using") {
             self.expect_keyword("using")?;
             let format = self.parse_expr(0)?;
-            self.expect(TokenKind::Semicolon, "expected `;` after USING format string")?;
+            self.expect(
+                TokenKind::Semicolon,
+                "expected `;` after USING format string",
+            )?;
             let tokens = self.parse_print_tokens()?;
             self.consume_line_end()?;
             return Ok(Statement::LprintUsing { format, tokens });
@@ -1278,7 +1394,9 @@ impl Parser {
         if !self.at_line_end() {
             loop {
                 exprs.push(self.parse_expr(0)?);
-                if !self.eat(TokenKind::Comma) { break; }
+                if !self.eat(TokenKind::Comma) {
+                    break;
+                }
             }
         }
         self.consume_line_end()?;
@@ -1293,7 +1411,9 @@ impl Parser {
             let mut vars = Vec::new();
             loop {
                 vars.push(self.parse_expr(0)?);
-                if !self.eat(TokenKind::Comma) { break; }
+                if !self.eat(TokenKind::Comma) {
+                    break;
+                }
             }
             self.consume_line_end()?;
             return Ok(Statement::InputFile { channel, vars });
@@ -1315,7 +1435,9 @@ impl Parser {
         let mut vars = Vec::new();
         loop {
             vars.push(self.parse_expr(0)?);
-            if !self.eat(TokenKind::Comma) { break; }
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
         }
         self.consume_line_end()?;
         Ok(Statement::Input { prompt, vars })
@@ -1400,7 +1522,9 @@ impl Parser {
         let mut values = Vec::new();
         loop {
             values.push(self.parse_expr(0)?);
-            if !self.eat(TokenKind::Comma) { break; }
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
         }
         self.consume_line_end()?;
         Ok(Statement::Data(values))
@@ -1411,7 +1535,9 @@ impl Parser {
         let mut vars = Vec::new();
         loop {
             vars.push(self.parse_expr(0)?);
-            if !self.eat(TokenKind::Comma) { break; }
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
         }
         self.consume_line_end()?;
         Ok(Statement::Read(vars))
@@ -1508,10 +1634,7 @@ impl Parser {
     /// called on the parsed left-hand side of `=`. Rejects a target that
     /// isn't a plain string variable or string array element (record/file
     /// DSL sugar, a nested call, etc. can't be spliced into in place).
-    fn try_mid_assign_call(
-        &self,
-        expr: &Expr,
-    ) -> ParseResult<Option<(Expr, Expr, Option<Expr>)>> {
+    fn try_mid_assign_call(&self, expr: &Expr) -> ParseResult<Option<(Expr, Expr, Option<Expr>)>> {
         let Expr::Call { name, args } = expr else {
             return Ok(None);
         };
@@ -1611,9 +1734,16 @@ impl Parser {
                     let member = ident.name[dot_pos + 1..].to_string();
                     if self.eat(TokenKind::LParen) {
                         let args = self.parse_expr_list_until_rparen()?;
-                        Expr::MethodCall { base: Box::new(Expr::Ident(base)), method: member, args }
+                        Expr::MethodCall {
+                            base: Box::new(Expr::Ident(base)),
+                            method: member,
+                            args,
+                        }
                     } else {
-                        Expr::FieldAccess { base: Box::new(Expr::Ident(base)), field: member }
+                        Expr::FieldAccess {
+                            base: Box::new(Expr::Ident(base)),
+                            field: member,
+                        }
                     }
                 } else if self.eat(TokenKind::LParen) {
                     let args = self.parse_expr_list_until_rparen()?;
@@ -1621,7 +1751,10 @@ impl Parser {
                 } else if self.eat(TokenKind::LBracket) {
                     let index = self.parse_expr(0)?;
                     self.expect(TokenKind::RBracket, "expected `]` after file index")?;
-                    Expr::FileIndex { var: ident, index: Box::new(index) }
+                    Expr::FileIndex {
+                        var: ident,
+                        index: Box::new(index),
+                    }
                 } else {
                     Expr::Ident(ident)
                 }
@@ -1635,13 +1768,19 @@ impl Parser {
             TokenKind::LBrace => {
                 self.advance();
                 let fields = self.parse_record_lit_fields()?;
-                Expr::RecordLit { fields, partial: false }
+                Expr::RecordLit {
+                    fields,
+                    partial: false,
+                }
             }
             TokenKind::Question => {
                 self.advance();
                 self.expect(TokenKind::LBrace, "expected `{` after `?`")?;
                 let fields = self.parse_record_lit_fields()?;
-                Expr::RecordLit { fields, partial: true }
+                Expr::RecordLit {
+                    fields,
+                    partial: true,
+                }
             }
             _ => return Err(self.error("expected expression")),
         };
@@ -1653,9 +1792,16 @@ impl Parser {
             let member = self.expect_ident("expected field or method name after `.`")?;
             if self.eat(TokenKind::LParen) {
                 let args = self.parse_expr_list_until_rparen()?;
-                left = Expr::MethodCall { base: Box::new(left), method: member, args };
+                left = Expr::MethodCall {
+                    base: Box::new(left),
+                    method: member,
+                    args,
+                };
             } else {
-                left = Expr::FieldAccess { base: Box::new(left), field: member };
+                left = Expr::FieldAccess {
+                    base: Box::new(left),
+                    field: member,
+                };
             }
         }
 
@@ -1685,7 +1831,10 @@ impl Parser {
         if !matches!(self.current().kind, TokenKind::RBrace) {
             loop {
                 let field_name = self.expect_ident("expected field name in record literal")?;
-                self.expect(TokenKind::Colon, "expected `:` after field name in record literal")?;
+                self.expect(
+                    TokenKind::Colon,
+                    "expected `:` after field name in record literal",
+                )?;
                 let value = self.parse_expr(0)?;
                 fields.push((field_name, value));
                 if !self.eat(TokenKind::Comma) {
@@ -2063,7 +2212,11 @@ mod tests {
     fn parses_file_decl() {
         let program = parse("file db as Student = open(\"students.dat\")\nend\n");
         match &program.statements[0] {
-            Statement::FileDecl { var, record_type, path } => {
+            Statement::FileDecl {
+                var,
+                record_type,
+                path,
+            } => {
                 assert_eq!(var.name, "db");
                 assert_eq!(record_type, "Student");
                 assert!(matches!(path, Expr::String(s) if s == "students.dat"));
@@ -2164,7 +2317,9 @@ mod tests {
     fn parses_for_downto_as_step_negative_one() {
         let program = parse("for i = 3 downto 1\nprint i\nend for\nend\n");
         match &program.statements[0] {
-            Statement::For { start, end, step, .. } => {
+            Statement::For {
+                start, end, step, ..
+            } => {
                 assert!(matches!(start, Expr::Integer(3)));
                 assert!(matches!(end, Expr::Integer(1)));
                 assert!(matches!(step, Some(Expr::Integer(-1))));
@@ -2178,10 +2333,23 @@ mod tests {
         let program = parse("if a > 0 && b > 0 && c > 0 then\nprint a\nend if\nend\n");
         match &program.statements[0] {
             Statement::If { condition, .. } => match condition {
-                Expr::Binary { op: BinaryOp::AndAnd, left, right } => {
-                    assert!(matches!(right.as_ref(), Expr::Binary { op: BinaryOp::Gt, .. }));
+                Expr::Binary {
+                    op: BinaryOp::AndAnd,
+                    left,
+                    right,
+                } => {
+                    assert!(matches!(
+                        right.as_ref(),
+                        Expr::Binary {
+                            op: BinaryOp::Gt,
+                            ..
+                        }
+                    ));
                     match left.as_ref() {
-                        Expr::Binary { op: BinaryOp::AndAnd, .. } => {}
+                        Expr::Binary {
+                            op: BinaryOp::AndAnd,
+                            ..
+                        } => {}
                         other => panic!("expected nested && on the left, got {other:?}"),
                     }
                 }
@@ -2196,7 +2364,13 @@ mod tests {
         let program = parse("if a = 1 || a = 2 then\nprint a\nend if\nend\n");
         match &program.statements[0] {
             Statement::If { condition, .. } => {
-                assert!(matches!(condition, Expr::Binary { op: BinaryOp::OrOr, .. }));
+                assert!(matches!(
+                    condition,
+                    Expr::Binary {
+                        op: BinaryOp::OrOr,
+                        ..
+                    }
+                ));
             }
             other => panic!("expected if statement, got {other:?}"),
         }
@@ -2207,7 +2381,9 @@ mod tests {
         let tokens = Lexer::new("test.bcl", "if a && b || c then\nprint a\nend if\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for mixed && and ||");
-        assert!(errs.iter().any(|d| d.message.contains("mixing `&&` and `||`")));
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("mixing `&&` and `||`")));
     }
 
     #[test]
@@ -2215,8 +2391,18 @@ mod tests {
         let program = parse("if not flag && b > 0 then\nprint b\nend if\nend\n");
         match &program.statements[0] {
             Statement::If { condition, .. } => match condition {
-                Expr::Binary { op: BinaryOp::AndAnd, left, .. } => {
-                    assert!(matches!(left.as_ref(), Expr::Unary { op: UnaryOp::Not, .. }));
+                Expr::Binary {
+                    op: BinaryOp::AndAnd,
+                    left,
+                    ..
+                } => {
+                    assert!(matches!(
+                        left.as_ref(),
+                        Expr::Unary {
+                            op: UnaryOp::Not,
+                            ..
+                        }
+                    ));
                 }
                 other => panic!("expected && chain, got {other:?}"),
             },
@@ -2228,9 +2414,18 @@ mod tests {
     fn do_until_condition_supports_double_pipe_chain() {
         let program = parse("do until done || attempts >= 3\nprint 1\nend do\nend\n");
         match &program.statements[0] {
-            Statement::Do { condition: Some(cond), .. } => {
+            Statement::Do {
+                condition: Some(cond),
+                ..
+            } => {
                 assert!(!cond.is_while);
-                assert!(matches!(cond.expr, Expr::Binary { op: BinaryOp::OrOr, .. }));
+                assert!(matches!(
+                    cond.expr,
+                    Expr::Binary {
+                        op: BinaryOp::OrOr,
+                        ..
+                    }
+                ));
             }
             other => panic!("expected do statement with condition, got {other:?}"),
         }
@@ -2255,8 +2450,12 @@ mod tests {
     #[test]
     fn goto_and_gosub_accept_label_targets() {
         let program = parse("goto there\ngosub there\nend\nthere:\nprint 1\n");
-        assert!(matches!(&program.statements[0], Statement::Goto(Expr::Ident(ident)) if ident.name == "there"));
-        assert!(matches!(&program.statements[1], Statement::Gosub(Expr::Ident(ident)) if ident.name == "there"));
+        assert!(
+            matches!(&program.statements[0], Statement::Goto(Expr::Ident(ident)) if ident.name == "there")
+        );
+        assert!(
+            matches!(&program.statements[1], Statement::Gosub(Expr::Ident(ident)) if ident.name == "there")
+        );
     }
 
     #[test]
@@ -2264,7 +2463,9 @@ mod tests {
         let tokens = Lexer::new("test.bcl", "goto 100\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for a numeric goto target");
-        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("must be a label, not a line number")));
     }
 
     #[test]
@@ -2272,7 +2473,9 @@ mod tests {
         let tokens = Lexer::new("test.bcl", "resume 100\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for a numeric resume target");
-        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("must be a label, not a line number")));
     }
 
     #[test]
@@ -2280,7 +2483,9 @@ mod tests {
         let program = parse("on error goto 0\nend\n");
         assert!(matches!(
             &program.statements[0],
-            Statement::OnErrorGoto { target: Expr::Integer(0) }
+            Statement::OnErrorGoto {
+                target: Expr::Integer(0)
+            }
         ));
     }
 
@@ -2289,7 +2494,9 @@ mod tests {
         let tokens = Lexer::new("test.bcl", "on error goto 9000\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for a numeric on-error-goto target");
-        assert!(errs.iter().any(|d| d.message.contains("except `on error goto 0`")));
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("except `on error goto 0`")));
     }
 
     #[test]
@@ -2297,14 +2504,20 @@ mod tests {
         let tokens = Lexer::new("test.bcl", "on choice% goto 10, 20\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for numeric on...goto targets");
-        assert!(errs.iter().any(|d| d.message.contains("must be a label, not a line number")));
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("must be a label, not a line number")));
     }
 
     #[test]
     fn parses_do_loop_until_as_post_condition() {
         let program = parse("do\nprint 1\nloop until k% > 3\nend\n");
         match &program.statements[0] {
-            Statement::Do { condition, post_condition: Some(cond), .. } => {
+            Statement::Do {
+                condition,
+                post_condition: Some(cond),
+                ..
+            } => {
                 assert!(condition.is_none());
                 assert!(!cond.is_while);
             }
@@ -2316,7 +2529,11 @@ mod tests {
     fn parses_do_loop_while_as_post_condition() {
         let program = parse("do\nprint 1\nloop while j% <= 3\nend\n");
         match &program.statements[0] {
-            Statement::Do { condition, post_condition: Some(cond), .. } => {
+            Statement::Do {
+                condition,
+                post_condition: Some(cond),
+                ..
+            } => {
                 assert!(condition.is_none());
                 assert!(cond.is_while);
             }
@@ -2328,7 +2545,11 @@ mod tests {
     fn parses_bare_do_loop_with_no_condition_at_all() {
         let program = parse("do\nn% = n% + 1\nloop\nend\n");
         match &program.statements[0] {
-            Statement::Do { condition, post_condition, .. } => {
+            Statement::Do {
+                condition,
+                post_condition,
+                ..
+            } => {
                 assert!(condition.is_none());
                 assert!(post_condition.is_none());
             }
@@ -2342,7 +2563,11 @@ mod tests {
         // that `loop [while/until]` is a second valid terminator.
         let program = parse("do while k% <= 3\nprint k%\nend do\nend\n");
         match &program.statements[0] {
-            Statement::Do { condition: Some(cond), post_condition, .. } => {
+            Statement::Do {
+                condition: Some(cond),
+                post_condition,
+                ..
+            } => {
                 assert!(cond.is_while);
                 assert!(post_condition.is_none());
             }
@@ -2355,9 +2580,15 @@ mod tests {
         let program = parse(
             "for i% = 1 to 5\nexit\nend for\nwhile 1\nexit\nend while\ndo\nexit\nend do\nend\n",
         );
-        assert!(matches!(&program.statements[0], Statement::For { body, .. } if matches!(body[0], Statement::Exit)));
-        assert!(matches!(&program.statements[1], Statement::While { body, .. } if matches!(body[0], Statement::Exit)));
-        assert!(matches!(&program.statements[2], Statement::Do { body, .. } if matches!(body[0], Statement::Exit)));
+        assert!(
+            matches!(&program.statements[0], Statement::For { body, .. } if matches!(body[0], Statement::Exit))
+        );
+        assert!(
+            matches!(&program.statements[1], Statement::While { body, .. } if matches!(body[0], Statement::Exit))
+        );
+        assert!(
+            matches!(&program.statements[2], Statement::Do { body, .. } if matches!(body[0], Statement::Exit))
+        );
     }
 
     #[test]
@@ -2367,7 +2598,9 @@ mod tests {
             let tokens = Lexer::new("test.bcl", &source).lex();
             let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
             let errs = result.expect_err(&format!("expected a parse error for `exit {keyword}`"));
-            assert!(errs.iter().any(|d| d.message.contains("no longer takes a loop-type keyword")));
+            assert!(errs
+                .iter()
+                .any(|d| d.message.contains("no longer takes a loop-type keyword")));
         }
     }
 
@@ -2380,7 +2613,11 @@ mod tests {
         // broke before `wend` was a recognized terminator.
         assert!(matches!(program.statements[1], Statement::Print { .. }));
         if let Statement::While { body, .. } = &program.statements[0] {
-            assert_eq!(body.len(), 1, "wend must not be absorbed into the loop body");
+            assert_eq!(
+                body.len(),
+                1,
+                "wend must not be absorbed into the loop body"
+            );
         }
     }
 
@@ -2396,7 +2633,11 @@ mod tests {
     fn single_line_if_needs_no_end_if() {
         let program = parse("if x% > 0 then print \"positive\"\nprint \"after\"\nend\n");
         match &program.statements[0] {
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 assert_eq!(then_body.len(), 1);
                 assert!(else_body.is_empty());
             }
@@ -2411,7 +2652,11 @@ mod tests {
     fn single_line_if_supports_else_on_the_same_line() {
         let program = parse("if x% > 0 then print \"a\" else print \"b\"\nend\n");
         match &program.statements[0] {
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 assert_eq!(then_body.len(), 1);
                 assert_eq!(else_body.len(), 1);
             }
@@ -2424,15 +2669,21 @@ mod tests {
         // A bare `else` starting the *next* line, unattached to any `if`,
         // is invalid -- proves the first if's then-clause really stopped
         // at the newline instead of somehow reaching across it.
-        let tokens = Lexer::new("test.bcl", "if x% > 0 then print \"a\"\nelse print \"stray\"\nend\n").lex();
+        let tokens = Lexer::new(
+            "test.bcl",
+            "if x% > 0 then print \"a\"\nelse print \"stray\"\nend\n",
+        )
+        .lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
-        assert!(result.is_err(), "a dangling `else` on its own line must not parse");
+        assert!(
+            result.is_err(),
+            "a dangling `else` on its own line must not parse"
+        );
 
         // A second line with its *own* legitimate if/else must not have
         // that else misattributed to the first line's if.
-        let program = parse(
-            "if x% > 0 then print \"a\"\nif y% > 0 then print \"b\" else print \"c\"\nend\n",
-        );
+        let program =
+            parse("if x% > 0 then print \"a\"\nif y% > 0 then print \"b\" else print \"c\"\nend\n");
         match &program.statements[0] {
             Statement::If { else_body, .. } => assert!(else_body.is_empty()),
             other => panic!("expected if statement, got {other:?}"),
@@ -2454,12 +2705,20 @@ mod tests {
 
     #[test]
     fn nested_single_line_if_resolves_dangling_else_to_the_innermost_if() {
-        let program = parse("if a% = 1 then if b% = 2 then print \"both\" else print \"only a\"\nend\n");
+        let program =
+            parse("if a% = 1 then if b% = 2 then print \"both\" else print \"only a\"\nend\n");
         match &program.statements[0] {
-            Statement::If { then_body, else_body: outer_else, .. } => {
+            Statement::If {
+                then_body,
+                else_body: outer_else,
+                ..
+            } => {
                 assert!(outer_else.is_empty());
                 match &then_body[0] {
-                    Statement::If { else_body: inner_else, .. } => assert_eq!(inner_else.len(), 1),
+                    Statement::If {
+                        else_body: inner_else,
+                        ..
+                    } => assert_eq!(inner_else.len(), 1),
                     other => panic!("expected nested if, got {other:?}"),
                 }
             }

@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Data That Outlives a Run — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 5</p><h1>Data that outlives a run</h1></div></header>
+<main class="chapter-main book-width"><h2>Describe the data first</h2><p>For fixed-size random-access data, BASCAL lets you express the record layout in the program. The compiler takes care of the target’s <code>FIELD</code>, conversion, and <code>GET</code>/<code>PUT</code> sequence.</p><pre><code>record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+
+file students as Student = open("students.dat")
+students[1] = { id: 1, name: "Ada", score: 98.5 }
+</code></pre><p>The source says that a file contains students and that the first student has three named fields. It does not ask you to repeat field offsets and buffer assignments at every write.</p><h2>Keep the target available</h2><p>BASCAL remains a strict superset of the target dialect. Existing sequential file operations and hand-written BASIC file statements can pass through when you need them. In new source, prefer the structured record/file form when it describes the job: it is clearer and protects the layout from drifting apart. Record files support partial updates, reads, field assignment, and explicit closing as well as full record writes.</p><nav class="chapter-nav"><a href="programs-and-libraries.html">← Functions, procedures, and libraries</a><a href="the-basic-beneath.html">The targets beneath the program →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>

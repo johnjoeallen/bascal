@@ -138,7 +138,10 @@ fn compile_link_run(fixture_name: &str) -> String {
         ..bcc::CompileOptions::new()
     };
     let basic = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
-        panic!("failed to compile {}: {diagnostics:#?}", fixture_bcl.display())
+        panic!(
+            "failed to compile {}: {diagnostics:#?}",
+            fixture_bcl.display()
+        )
     });
 
     let work_dir = std::env::temp_dir().join(format!("bascal-conformance-{fixture_name}"));
@@ -194,9 +197,8 @@ fn const_and_print_matches_real_bascom() {
     let actual = compile_link_run("const_and_print");
 
     let expected_path = repo_root().join("tests/fixtures/conformance/const_and_print.expected.txt");
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
-        panic!("failed to read {}: {err}", expected_path.display())
-    });
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 
     assert_eq!(
         normalize(&actual),
@@ -214,9 +216,8 @@ fn mid_assign_matches_real_bascom() {
     let actual = compile_link_run("mid_assign");
 
     let expected_path = repo_root().join("tests/fixtures/conformance/mid_assign.expected.txt");
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
-        panic!("failed to read {}: {err}", expected_path.display())
-    });
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 
     assert_eq!(
         normalize(&actual),
@@ -233,10 +234,10 @@ fn stdlib_functions_match_real_bascom() {
 
     let actual = compile_link_run("stdlib_functions");
 
-    let expected_path = repo_root().join("tests/fixtures/conformance/stdlib_functions.expected.txt");
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
-        panic!("failed to read {}: {err}", expected_path.display())
-    });
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/stdlib_functions.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 
     assert_eq!(
         normalize(&actual),
@@ -253,11 +254,18 @@ fn stdlib_functions_match_real_bascom() {
 /// alongside anything `compile_link_run_in`/real BASCOM leaves behind in
 /// the same directory) -- returns the program's captured stdout.
 fn compile_run_c_target_in(fixture_name: &str, work_dir: &Path) -> String {
-    let fixture_bcl =
-        repo_root().join("tests/fixtures/conformance").join(format!("{fixture_name}.bcl"));
-    let options = bcc::CompileOptions { target: bcc::Target::C, ..bcc::CompileOptions::new() };
+    let fixture_bcl = repo_root()
+        .join("tests/fixtures/conformance")
+        .join(format!("{fixture_name}.bcl"));
+    let options = bcc::CompileOptions {
+        target: bcc::Target::C,
+        ..bcc::CompileOptions::new()
+    };
     let c_source = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
-        panic!("failed to compile {} to C: {diagnostics:#?}", fixture_bcl.display())
+        panic!(
+            "failed to compile {} to C: {diagnostics:#?}",
+            fixture_bcl.display()
+        )
     });
 
     fs::create_dir_all(work_dir).expect("failed to create C-target work directory");
@@ -300,11 +308,18 @@ fn compile_run_c_target_in(fixture_name: &str, work_dir: &Path) -> String {
 /// target's run wrote into `work_dir` has to survive into the other
 /// target's run right after it.
 fn compile_link_run_in(fixture_name: &str, work_dir: &Path) -> String {
-    let fixture_bcl =
-        repo_root().join("tests/fixtures/conformance").join(format!("{fixture_name}.bcl"));
-    let options = bcc::CompileOptions { line_numbers: true, ..bcc::CompileOptions::new() };
+    let fixture_bcl = repo_root()
+        .join("tests/fixtures/conformance")
+        .join(format!("{fixture_name}.bcl"));
+    let options = bcc::CompileOptions {
+        line_numbers: true,
+        ..bcc::CompileOptions::new()
+    };
     let basic = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
-        panic!("failed to compile {}: {diagnostics:#?}", fixture_bcl.display())
+        panic!(
+            "failed to compile {}: {diagnostics:#?}",
+            fixture_bcl.display()
+        )
     });
 
     stage_compiler_fixture(work_dir);
@@ -341,7 +356,10 @@ fn compile_link_run_in(fixture_name: &str, work_dir: &Path) -> String {
 
     let out_path = work_dir.join("OUT.TXT");
     fs::read_to_string(&out_path).unwrap_or_else(|err| {
-        panic!("expected the compiled program to write {}: {err}", out_path.display())
+        panic!(
+            "expected the compiled program to write {}: {err}",
+            out_path.display()
+        )
     })
 }
 
@@ -416,10 +434,10 @@ fn tie_break_rounding_matches_real_bascom() {
 
     let actual = compile_link_run("tie_break_rounding");
 
-    let expected_path = repo_root().join("tests/fixtures/conformance/tie_break_rounding.expected.txt");
-    let expected = fs::read_to_string(&expected_path).unwrap_or_else(|err| {
-        panic!("failed to read {}: {err}", expected_path.display())
-    });
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/tie_break_rounding.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 
     assert_eq!(
         normalize(&actual),

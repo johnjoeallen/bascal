@@ -12,23 +12,17 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 // require-able library; see `lib::stdlib_search_roots`.
 const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
-    "str", "chr", "hex", "oct", "space", "environ",
-    "command", "trim",
+    "str", "chr", "hex", "oct", "space", "environ", "command", "trim",
     // Multi-arg string (Expr::Call, but include for completeness)
     "left", "right", "mid", "instr", "format", "string", "input",
     // Single-arg numeric (no suffix → Expr::Call already, but included for safety)
-    "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof",
-    "sin", "cos", "tan", "atn", "log", "exp", "cint", "clng", "csng", "cdbl",
-    "peek", "inp", "lof", "loc", "pos", "csrlin", "freefile",
-    "fre", "lpos", "varptr",
-    "date", "time", "timer", "inkey", "err", "erl",
+    "len", "val", "asc", "sqr", "abs", "int", "fix", "sgn", "rnd", "eof", "sin", "cos", "tan",
+    "atn", "log", "exp", "cint", "clng", "csng", "cdbl", "peek", "inp", "lof", "loc", "pos",
+    "csrlin", "freefile", "fre", "lpos", "varptr", "date", "time", "timer", "inkey", "err", "erl",
     // Print-position helpers (used inside PRINT)
-    "tab", "spc",
-    // Multi-arg numeric
-    "ubound", "lbound", "iif",
-    // Random-access record packing/unpacking
-    "mki", "mkl", "mks", "mkd",
-    "cvi", "cvl", "cvs", "cvd",
+    "tab", "spc", // Multi-arg numeric
+    "ubound", "lbound", "iif", // Random-access record packing/unpacking
+    "mki", "mkl", "mks", "mkd", "cvi", "cvl", "cvs", "cvd",
 ];
 
 /// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
@@ -292,16 +286,22 @@ impl CodeGenerator {
             .functions
             .iter()
             .flat_map(|info| {
-                info.params.iter().enumerate().filter_map(move |(index, (param, lowered))| {
-                    param.axes.as_ref()?;
-                    let capacities = info.param_capacities.get(index)?;
-                    if capacities.is_empty() {
-                        return None;
-                    }
-                    let bounds =
-                        capacities.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
-                    Some(format!("DIM {}({bounds})", lowered.as_basic()))
-                })
+                info.params
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(index, (param, lowered))| {
+                        param.axes.as_ref()?;
+                        let capacities = info.param_capacities.get(index)?;
+                        if capacities.is_empty() {
+                            return None;
+                        }
+                        let bounds = capacities
+                            .iter()
+                            .map(|c| c.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        Some(format!("DIM {}({bounds})", lowered.as_basic()))
+                    })
             })
             .collect();
         if lines.is_empty() {
@@ -329,10 +329,16 @@ impl CodeGenerator {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        let lowered_name =
-            BasicIdent { name: function.name.name.to_ascii_lowercase(), suffix: function.name.suffix }
-                .as_basic();
-        let kind = if function.is_procedure { "procedure" } else { "function" };
+        let lowered_name = BasicIdent {
+            name: function.name.name.to_ascii_lowercase(),
+            suffix: function.name.suffix,
+        }
+        .as_basic();
+        let kind = if function.is_procedure {
+            "procedure"
+        } else {
+            "function"
+        };
         self.blank();
         self.line(&format!("' {kind} {}({})", lowered_name, params));
         self.line(&format!("{}:", info.label));
@@ -363,7 +369,11 @@ impl CodeGenerator {
 
     fn statement(&mut self, statement: &Statement, current_function: Option<&FunctionInfo>) {
         match statement {
-            Statement::Dim { name, is_array, sizes } => {
+            Statement::Dim {
+                name,
+                is_array,
+                sizes,
+            } => {
                 let base = self.ident(name, current_function);
                 if sizes.is_empty() {
                     if *is_array {
@@ -406,7 +416,12 @@ impl CodeGenerator {
                     }
                 }
             }
-            Statement::Open { mode, file, channel, len } => {
+            Statement::Open {
+                mode,
+                file,
+                channel,
+                len,
+            } => {
                 let (file_prelude, file) = self.expr(file, current_function);
                 let (channel_prelude, channel) = self.expr(channel, current_function);
                 self.lines(file_prelude);
@@ -425,7 +440,9 @@ impl CodeGenerator {
                 } else {
                     String::new()
                 };
-                self.line(&format!("OPEN {file} FOR {mode_str} AS #{channel}{len_clause}"));
+                self.line(&format!(
+                    "OPEN {file} FOR {mode_str} AS #{channel}{len_clause}"
+                ));
             }
             Statement::FileDecl { .. } => {
                 unreachable!("record/file DSL must be lowered before codegen")
@@ -471,7 +488,12 @@ impl CodeGenerator {
                 self.lines(value_prelude);
                 self.line(&format!("{target} = {value}"));
             }
-            Statement::MidAssign { target, start, len, value } => {
+            Statement::MidAssign {
+                target,
+                start,
+                len,
+                value,
+            } => {
                 // Left-to-right evaluation order, matching how the
                 // statement reads: target, then start, then len (if
                 // written), then value last -- same order `Statement::
@@ -483,9 +505,7 @@ impl CodeGenerator {
                 // element whose index has side effects.
                 let (target_prelude, target_text) = self.expr(target, current_function);
                 let (start_prelude, start_text) = self.expr(start, current_function);
-                let len_rendered = len
-                    .as_ref()
-                    .map(|e| self.expr(e, current_function));
+                let len_rendered = len.as_ref().map(|e| self.expr(e, current_function));
                 let (value_prelude, value_text) = self.expr(value, current_function);
                 self.lines(target_prelude);
                 self.lines(start_prelude);
@@ -508,13 +528,16 @@ impl CodeGenerator {
                 // goes through, just fed pre-rendered argument text instead
                 // of re-evaluating `target`/`start`/`len`/`value` a second
                 // time (see `call_lines_from_rendered_scalars`).
-                let info = self.function_info(&mid_assign_helper_ident()).cloned().unwrap_or_else(|| {
-                    panic!(
-                        "BASCAL bug: com.bascal.stdlib.midAssign should always be \
+                let info = self
+                    .function_info(&mid_assign_helper_ident())
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "BASCAL bug: com.bascal.stdlib.midAssign should always be \
                          auto-injected into the program whenever MID$ assignment \
                          syntax is used"
-                    )
-                });
+                        )
+                    });
                 let call = self.call_lines_from_rendered_scalars(
                     &info,
                     &[target_text.clone(), start_text, len_text, value_text],
@@ -540,7 +563,11 @@ impl CodeGenerator {
                     self.line(&format!("PRINT USING {fmt_str}; {body}"));
                 }
             }
-            Statement::PrintFileUsing { channel, format, tokens } => {
+            Statement::PrintFileUsing {
+                channel,
+                format,
+                tokens,
+            } => {
                 let (ch_pre, ch) = self.expr(channel, current_function);
                 let (fmt_pre, fmt_str) = self.expr(format, current_function);
                 self.lines(ch_pre);
@@ -621,7 +648,11 @@ impl CodeGenerator {
                 self.line(&format!("{end_label}:"));
                 self.line("REM END WHILE");
             }
-            Statement::Do { condition, body, post_condition } => {
+            Statement::Do {
+                condition,
+                body,
+                post_condition,
+            } => {
                 let id = self.next_label;
                 self.next_label += 1;
                 let top_label = format!("DO_{id:04}_TOP");
@@ -809,7 +840,9 @@ impl CodeGenerator {
                 }
                 self.line(&format!("WRITE #{channel}, {}", rendered.join(", ")));
             }
-            Statement::Field { channel, fields } => {
+            Statement::Field {
+                channel, fields, ..
+            } => {
                 let (ch_pre, ch) = self.expr(channel, current_function);
                 self.lines(ch_pre);
                 let mut parts = Vec::new();
@@ -820,7 +853,13 @@ impl CodeGenerator {
                 }
                 self.line(&format!("FIELD #{ch}, {}", parts.join(", ")));
             }
-            Statement::Get { channel, record, var } => {
+            Statement::Get {
+                channel,
+                record,
+                var,
+                require_existing,
+                record_length,
+            } => {
                 let (ch_pre, ch) = self.expr(channel, current_function);
                 self.lines(ch_pre);
                 match (record, var) {
@@ -828,6 +867,11 @@ impl CodeGenerator {
                     (Some(rec), None) => {
                         let (r_pre, r) = self.expr(rec, current_function);
                         self.lines(r_pre);
+                        if *require_existing {
+                            let length = record_length
+                                .expect("DSL partial update must carry its record length");
+                            self.line(&format!("IF LOF(#{ch}) < ({r}) * {length} THEN ERROR 63"));
+                        }
                         self.line(&format!("GET #{ch}, {r}"));
                     }
                     (None, Some(v)) => {
@@ -844,7 +888,12 @@ impl CodeGenerator {
                     }
                 }
             }
-            Statement::Put { channel, record, var } => {
+            Statement::Put {
+                channel,
+                record,
+                var,
+                ..
+            } => {
                 let (ch_pre, ch) = self.expr(channel, current_function);
                 self.lines(ch_pre);
                 match (record, var) {
@@ -911,7 +960,11 @@ impl CodeGenerator {
                 }
                 None => self.line("' warning: EXIT outside of a loop"),
             },
-            Statement::SelectCase { expr, cases, else_body } => {
+            Statement::SelectCase {
+                expr,
+                cases,
+                else_body,
+            } => {
                 self.select_case(expr, cases, else_body, current_function);
             }
             Statement::Locate { row, col } => {
@@ -932,7 +985,11 @@ impl CodeGenerator {
                     self.line(&format!("COLOR {fg}"));
                 }
             }
-            Statement::OnBranch { expr, targets, is_gosub } => {
+            Statement::OnBranch {
+                expr,
+                targets,
+                is_gosub,
+            } => {
                 let (prelude, expr) = self.expr(expr, current_function);
                 self.lines(prelude);
                 let rendered: Vec<String> =
@@ -992,7 +1049,10 @@ impl CodeGenerator {
         current_function: Option<&FunctionInfo>,
     ) {
         let chain_op = match condition {
-            Expr::Binary { op: op @ (BinaryOp::AndAnd | BinaryOp::OrOr), .. } => Some(*op),
+            Expr::Binary {
+                op: op @ (BinaryOp::AndAnd | BinaryOp::OrOr),
+                ..
+            } => Some(*op),
             _ => None,
         };
 
@@ -1106,7 +1166,14 @@ impl CodeGenerator {
                 .join(" OR ");
             self.line(&format!("IF ({cond}) <> 0 THEN GOTO {}", case_labels[i]));
         }
-        self.line(&format!("GOTO {}", if else_body.is_empty() { &end_label } else { &else_label }));
+        self.line(&format!(
+            "GOTO {}",
+            if else_body.is_empty() {
+                &end_label
+            } else {
+                &else_label
+            }
+        ));
 
         // Emit each case body.
         for (i, clause) in cases.iter().enumerate() {
@@ -1165,12 +1232,15 @@ impl CodeGenerator {
             Expr::Ident(ident) => {
                 let is_param = current_function
                     .is_some_and(|f| f.params.iter().any(|(src, _)| same_ident(&src.name, ident)));
-                let emitted =
-                    if !is_param && self.known_callables.contains(&ident.name.to_ascii_lowercase()) {
-                        self.canonical_callable(ident)
-                    } else {
-                        self.ident(ident, current_function)
-                    };
+                let emitted = if !is_param
+                    && self
+                        .known_callables
+                        .contains(&ident.name.to_ascii_lowercase())
+                {
+                    self.canonical_callable(ident)
+                } else {
+                    self.ident(ident, current_function)
+                };
                 (Vec::new(), emitted)
             }
             Expr::ArrayRef { name, indices } => {
@@ -1186,12 +1256,18 @@ impl CodeGenerator {
                     prelude.extend(index_prelude);
                     rendered_indices.push(index);
                 }
-                let base = if self.known_callables.contains(&name.name.to_ascii_lowercase()) {
+                let base = if self
+                    .known_callables
+                    .contains(&name.name.to_ascii_lowercase())
+                {
                     self.canonical_callable(name)
                 } else {
                     self.ident(name, current_function)
                 };
-                (prelude, format!("{}({})", base, rendered_indices.join(", ")))
+                (
+                    prelude,
+                    format!("{}({})", base, rendered_indices.join(", ")),
+                )
             }
             Expr::Call { name, args } => {
                 if name.name.eq_ignore_ascii_case("sizeof") {
@@ -1199,11 +1275,9 @@ impl CodeGenerator {
                         Some(Expr::Ident(array_name)) if args.len() <= 2 => {
                             self.resolve_sizeof(array_name, args.get(1), current_function)
                         }
-                        _ => Err(
-                            "sizeof expects an array name, e.g. `sizeof(arr%)` or \
+                        _ => Err("sizeof expects an array name, e.g. `sizeof(arr%)` or \
                              `sizeof(grid%, 1)`"
-                                .to_string(),
-                        ),
+                            .to_string()),
                     };
                     return match resolved {
                         Ok(text) => (Vec::new(), text),
@@ -1242,7 +1316,10 @@ impl CodeGenerator {
                         // would be silently skipped.
                         self.ident(name, current_function)
                     };
-                    (prelude, format!("{}({})", emit_name, rendered_args.join(", ")))
+                    (
+                        prelude,
+                        format!("{}({})", emit_name, rendered_args.join(", ")),
+                    )
                 }
             }
             Expr::Unary { op, expr } => {
@@ -1345,7 +1422,11 @@ impl CodeGenerator {
                     }
                     _ => {
                         let rank = target_rank.or(source_rank).unwrap_or(1);
-                        Some((self.ident(source_name, current_function), source_name.clone(), rank))
+                        Some((
+                            self.ident(source_name, current_function),
+                            source_name.clone(),
+                            rank,
+                        ))
                     }
                 }
             })
@@ -1368,8 +1449,16 @@ impl CodeGenerator {
         for (index, _arg) in args.iter().enumerate() {
             if let Some((_, lowered)) = info.params.get(index) {
                 if let Some((actual_array, source_name, rank)) = &array_args[index] {
-                    let bound_vars = info.param_bound_vars.get(index).cloned().unwrap_or_default();
-                    let capacities = info.param_capacities.get(index).cloned().unwrap_or_default();
+                    let bound_vars = info
+                        .param_bound_vars
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default();
+                    let capacities = info
+                        .param_capacities
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default();
                     for (axis, bound_var) in bound_vars.iter().enumerate() {
                         let bound = self
                             .resolve_axis_bound(source_name, axis, current_function)
@@ -1423,7 +1512,11 @@ impl CodeGenerator {
                     continue;
                 }
                 if let Some((actual_array, _source_name, rank)) = &array_args[index] {
-                    let bound_vars = info.param_bound_vars.get(index).cloned().unwrap_or_default();
+                    let bound_vars = info
+                        .param_bound_vars
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default();
                     let loop_vars: Vec<String> = (0..*rank).map(|_| self.next_temp_var()).collect();
                     lines.extend(array_copy_lines(
                         actual_array,
@@ -1522,7 +1615,11 @@ impl CodeGenerator {
                 // Author-typed in raw-BASIC-passthrough source: still
                 // gets BASCAL's normal lowercase normalization, same as
                 // any other identifier.
-                BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
+                BasicIdent {
+                    name: ident.name.to_ascii_lowercase(),
+                    suffix: ident.suffix,
+                }
+                .as_basic()
             };
         }
         if self.const_names.contains(&source_key) {
@@ -1530,7 +1627,11 @@ impl CodeGenerator {
             // explicit `global` declaration -- see the field comment on
             // const_names for why. Checked before the current_function
             // branch below, same as record_buffer_names above.
-            return BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic();
+            return BasicIdent {
+                name: ident.name.to_ascii_lowercase(),
+                suffix: ident.suffix,
+            }
+            .as_basic();
         }
         if let Some(info) = current_function {
             // Params have already-allocated lowered names.
@@ -1565,7 +1666,11 @@ impl CodeGenerator {
                 return lowered_basic;
             }
         }
-        BasicIdent { name: ident.name.to_ascii_lowercase(), suffix: ident.suffix }.as_basic()
+        BasicIdent {
+            name: ident.name.to_ascii_lowercase(),
+            suffix: ident.suffix,
+        }
+        .as_basic()
     }
 
     fn function_info(&self, name: &BasicIdent) -> Option<&FunctionInfo> {
@@ -1615,7 +1720,11 @@ impl CodeGenerator {
             if let Some(rank) = info.local_array_ranks.get(&key) {
                 return Some(*rank);
             }
-            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
+            if let Some(index) = info
+                .params
+                .iter()
+                .position(|(p, _)| same_ident(&p.name, name))
+            {
                 return info.param_ranks.get(index).copied().flatten();
             }
         }
@@ -1636,7 +1745,11 @@ impl CodeGenerator {
         current_function: Option<&FunctionInfo>,
     ) -> Option<String> {
         if let Some(info) = current_function {
-            if let Some(index) = info.params.iter().position(|(p, _)| same_ident(&p.name, name)) {
+            if let Some(index) = info
+                .params
+                .iter()
+                .position(|(p, _)| same_ident(&p.name, name))
+            {
                 return info
                     .param_bound_vars
                     .get(index)
@@ -1644,12 +1757,20 @@ impl CodeGenerator {
                     .cloned();
             }
             let key = name.as_basic().to_ascii_lowercase();
-            if let Some(bound) = info.local_array_bounds.borrow().get(&key).and_then(|b| b.get(axis)) {
+            if let Some(bound) = info
+                .local_array_bounds
+                .borrow()
+                .get(&key)
+                .and_then(|b| b.get(axis))
+            {
                 return Some(bound.clone());
             }
         }
         let key = name.as_basic().to_ascii_lowercase();
-        self.top_level_array_bounds.get(&key).and_then(|b| b.get(axis)).cloned()
+        self.top_level_array_bounds
+            .get(&key)
+            .and_then(|b| b.get(axis))
+            .cloned()
     }
 
     /// Resolves `sizeof(name)` / `sizeof(name, axis)` to the text that
@@ -1660,16 +1781,16 @@ impl CodeGenerator {
         axis_expr: Option<&Expr>,
         current_function: Option<&FunctionInfo>,
     ) -> Result<String, String> {
-        let rank = self.resolve_array_rank(name, current_function).ok_or_else(|| {
-            format!("`{name}` isn't a known array, so `sizeof` can't determine its size")
-        })?;
+        let rank = self
+            .resolve_array_rank(name, current_function)
+            .ok_or_else(|| {
+                format!("`{name}` isn't a known array, so `sizeof` can't determine its size")
+            })?;
 
         let axis = match axis_expr {
             Some(Expr::Integer(n)) => *n as usize,
             Some(_) => {
-                return Err(
-                    "the axis argument to `sizeof` must be a literal integer".to_string(),
-                )
+                return Err("the axis argument to `sizeof` must be a literal integer".to_string())
             }
             None if rank == 1 => 0,
             None => {
@@ -1771,8 +1892,7 @@ impl FunctionInfo {
                     .map(|axis| {
                         let preferred =
                             camel_join(&[&stem, &param.name.name, &format!("dim{axis}")]);
-                        let lowered =
-                            allocate_unique(&preferred, Some(TypeSuffix::Integer), taken);
+                        let lowered = allocate_unique(&preferred, Some(TypeSuffix::Integer), taken);
                         taken.insert(lowered.as_basic().to_ascii_lowercase());
                         lowered.as_basic()
                     })
@@ -1820,7 +1940,9 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
                 visit_expr(e, f);
             }
         }
-        Statement::Open { file, channel, len, .. } => {
+        Statement::Open {
+            file, channel, len, ..
+        } => {
             visit_expr(file, f);
             visit_expr(channel, f);
             if let Some(e) = len {
@@ -1840,7 +1962,11 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
             visit_expr(format, f);
             visit_print_tokens(tokens, f);
         }
-        Statement::PrintFileUsing { channel, format, tokens } => {
+        Statement::PrintFileUsing {
+            channel,
+            format,
+            tokens,
+        } => {
             visit_expr(channel, f);
             visit_expr(format, f);
             visit_print_tokens(tokens, f);
@@ -1855,7 +1981,12 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
             visit_expr(target, f);
             visit_expr(value, f);
         }
-        Statement::MidAssign { target, start, len, value } => {
+        Statement::MidAssign {
+            target,
+            start,
+            len,
+            value,
+        } => {
             visit_expr(target, f);
             visit_expr(start, f);
             if let Some(e) = len {
@@ -1865,12 +1996,22 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
         }
         Statement::Print { tokens } => visit_print_tokens(tokens, f),
         Statement::Return { value } => visit_expr(value, f),
-        Statement::If { condition, then_body, else_body } => {
+        Statement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
             visit_expr(condition, f);
             visit_body_exprs(then_body, f);
             visit_body_exprs(else_body, f);
         }
-        Statement::For { start, end, step, body, .. } => {
+        Statement::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
             visit_expr(start, f);
             visit_expr(end, f);
             if let Some(e) = step {
@@ -1882,7 +2023,11 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
             visit_expr(condition, f);
             visit_body_exprs(body, f);
         }
-        Statement::Do { condition, body, post_condition } => {
+        Statement::Do {
+            condition,
+            body,
+            post_condition,
+        } => {
             if let Some(c) = condition {
                 visit_expr(&c.expr, f);
             }
@@ -1943,13 +2088,26 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
                 visit_expr(e, f);
             }
         }
-        Statement::Field { channel, fields } => {
+        Statement::Field {
+            channel, fields, ..
+        } => {
             visit_expr(channel, f);
             for (w, _) in fields {
                 visit_expr(w, f);
             }
         }
-        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+        Statement::Get {
+            channel,
+            record,
+            var,
+            ..
+        }
+        | Statement::Put {
+            channel,
+            record,
+            var,
+            ..
+        } => {
             visit_expr(channel, f);
             if let Some(e) = record {
                 visit_expr(e, f);
@@ -1968,7 +2126,11 @@ fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) 
             visit_expr(format, f);
             visit_print_tokens(tokens, f);
         }
-        Statement::SelectCase { expr, cases, else_body } => {
+        Statement::SelectCase {
+            expr,
+            cases,
+            else_body,
+        } => {
             visit_expr(expr, f);
             for case in cases {
                 for v in &case.values {
@@ -2180,19 +2342,29 @@ fn dim_ranks_in_body(body: &[Statement]) -> HashMap<String, usize> {
 fn collect_dim_ranks(body: &[Statement], out: &mut HashMap<String, usize>) {
     for stmt in body {
         match stmt {
-            Statement::Dim { name, is_array, sizes } => {
+            Statement::Dim {
+                name,
+                is_array,
+                sizes,
+            } => {
                 if *is_array && !sizes.is_empty() {
                     out.insert(name.as_basic().to_ascii_lowercase(), sizes.len());
                 }
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_dim_ranks(then_body, out);
                 collect_dim_ranks(else_body, out);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_dim_ranks(body, out),
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_dim_ranks(&case.body, out);
                 }
@@ -2248,7 +2420,10 @@ fn const_eval(expr: &Expr, consts: &HashMap<String, Vec<Expr>>, depth: u32) -> O
                 _ => None,
             }
         }
-        Expr::Unary { op: UnaryOp::Neg, expr } => const_eval(expr, consts, depth + 1).map(|v| -v),
+        Expr::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } => const_eval(expr, consts, depth + 1).map(|v| -v),
         Expr::Binary { left, op, right } => {
             let l = const_eval(left, consts, depth + 1)?;
             let r = const_eval(right, consts, depth + 1)?;
@@ -2272,16 +2447,24 @@ fn collect_consts(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
     for stmt in body {
         match stmt {
             Statement::Const { name, value } => {
-                out.entry(name.as_basic().to_ascii_lowercase()).or_default().push(value.clone());
+                out.entry(name.as_basic().to_ascii_lowercase())
+                    .or_default()
+                    .push(value.clone());
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_consts(then_body, out);
                 collect_consts(else_body, out);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_consts(body, out),
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_consts(&case.body, out);
                 }
@@ -2299,19 +2482,29 @@ fn collect_consts(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
 fn collect_dim_sizes(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
     for stmt in body {
         match stmt {
-            Statement::Dim { name, is_array, sizes } => {
+            Statement::Dim {
+                name,
+                is_array,
+                sizes,
+            } => {
                 if *is_array && !sizes.is_empty() {
                     out.insert(name.as_basic().to_ascii_lowercase(), sizes.clone());
                 }
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_dim_sizes(then_body, out);
                 collect_dim_sizes(else_body, out);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_dim_sizes(body, out),
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_dim_sizes(&case.body, out);
                 }
@@ -2376,11 +2569,17 @@ fn resolve_call_arg_bound(
 
     if let Some(func) = scope {
         if let Some(def) = functions_by_name.get(func) {
-            if let Some(idx) =
-                def.params.iter().position(|p| p.name.as_basic().to_ascii_lowercase() == key)
+            if let Some(idx) = def
+                .params
+                .iter()
+                .position(|p| p.name.as_basic().to_ascii_lowercase() == key)
             {
                 return if def.params[idx].axes.is_some() {
-                    match resolved.get(func).and_then(|v| v.get(idx)).and_then(|a| a.get(axis)) {
+                    match resolved
+                        .get(func)
+                        .and_then(|v| v.get(idx))
+                        .and_then(|a| a.get(axis))
+                    {
                         Some(Some(v)) => ArgBound::Resolved(*v),
                         _ => ArgBound::Unresolvable,
                     }
@@ -2416,10 +2615,16 @@ fn infer_array_param_capacities(
     program: &Program,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> HashMap<String, Vec<Vec<i64>>> {
-    let function_names: HashSet<String> =
-        program.functions.iter().map(|f| f.name.name.to_ascii_lowercase()).collect();
-    let functions_by_name: HashMap<String, &FunctionDef> =
-        program.functions.iter().map(|f| (f.name.name.to_ascii_lowercase(), f)).collect();
+    let function_names: HashSet<String> = program
+        .functions
+        .iter()
+        .map(|f| f.name.name.to_ascii_lowercase())
+        .collect();
+    let functions_by_name: HashMap<String, &FunctionDef> = program
+        .functions
+        .iter()
+        .map(|f| (f.name.name.to_ascii_lowercase(), f))
+        .collect();
 
     let mut consts = HashMap::new();
     collect_consts(&program.statements, &mut consts);
@@ -2443,8 +2648,11 @@ fn infer_array_param_capacities(
         .functions
         .iter()
         .map(|f| {
-            let per_param =
-                f.params.iter().map(|p| p.axes.clone().unwrap_or_default()).collect();
+            let per_param = f
+                .params
+                .iter()
+                .map(|p| p.axes.clone().unwrap_or_default())
+                .collect();
             (f.name.name.to_ascii_lowercase(), per_param)
         })
         .collect();
@@ -2459,7 +2667,9 @@ fn infer_array_param_capacities(
         for f in &program.functions {
             let fname = f.name.name.to_ascii_lowercase();
             for (param_index, param) in f.params.iter().enumerate() {
-                let Some(declared_axes) = &param.axes else { continue };
+                let Some(declared_axes) = &param.axes else {
+                    continue;
+                };
                 for axis in 0..declared_axes.len() {
                     if resolved[&fname][param_index][axis].is_some() {
                         continue;
@@ -2471,7 +2681,9 @@ fn infer_array_param_capacities(
                         if callee.name.to_ascii_lowercase() != fname {
                             continue;
                         }
-                        let Some(arg) = call_args.get(param_index) else { continue };
+                        let Some(arg) = call_args.get(param_index) else {
+                            continue;
+                        };
                         match resolve_call_arg_bound(
                             scope,
                             arg,
@@ -2514,14 +2726,20 @@ fn infer_array_param_capacities(
     for f in &program.functions {
         let fname = f.name.name.to_ascii_lowercase();
         for (param_index, param) in f.params.iter().enumerate() {
-            let Some(declared_axes) = &param.axes else { continue };
+            let Some(declared_axes) = &param.axes else {
+                continue;
+            };
             for axis in 0..declared_axes.len() {
-                let Some(capacity) = resolved[&fname][param_index][axis] else { continue };
+                let Some(capacity) = resolved[&fname][param_index][axis] else {
+                    continue;
+                };
                 for (scope, callee, call_args) in &call_sites {
                     if callee.name.to_ascii_lowercase() != fname {
                         continue;
                     }
-                    let Some(arg) = call_args.get(param_index) else { continue };
+                    let Some(arg) = call_args.get(param_index) else {
+                        continue;
+                    };
                     if let ArgBound::Resolved(actual) = resolve_call_arg_bound(
                         scope,
                         arg,
@@ -2539,12 +2757,7 @@ fn infer_array_param_capacities(
                                     "a call to `{}` passes {} elements along axis {} of `{}`, \
                                      but its storage is only sized for {} -- give `{}` a \
                                      bigger explicit capacity",
-                                    f.name,
-                                    actual,
-                                    axis,
-                                    param.name,
-                                    capacity,
-                                    param.name,
+                                    f.name, actual, axis, param.name, capacity, param.name,
                                 ),
                             ));
                         }
@@ -2560,13 +2773,16 @@ fn infer_array_param_capacities(
     for f in &program.functions {
         let fname = f.name.name.to_ascii_lowercase();
         for (param_index, param) in f.params.iter().enumerate() {
-            let Some(declared_axes) = &param.axes else { continue };
+            let Some(declared_axes) = &param.axes else {
+                continue;
+            };
             for axis in 0..declared_axes.len() {
                 if resolved[&fname][param_index][axis].is_some() {
                     continue;
                 }
                 let any_call_site = call_sites.iter().any(|(_, callee, call_args)| {
-                    callee.name.to_ascii_lowercase() == fname && call_args.get(param_index).is_some()
+                    callee.name.to_ascii_lowercase() == fname
+                        && call_args.get(param_index).is_some()
                 });
                 let message = if any_call_site {
                     format!(
@@ -2583,7 +2799,10 @@ fn infer_array_param_capacities(
                         param.name, axis, f.name, f.name, param.name,
                     )
                 };
-                diagnostics.push(Diagnostic::error(SourcePos::new("<validation>", 1, 1), message));
+                diagnostics.push(Diagnostic::error(
+                    SourcePos::new("<validation>", 1, 1),
+                    message,
+                ));
             }
         }
     }
@@ -2607,7 +2826,11 @@ fn collect_globals(body: &[Statement]) -> HashSet<String> {
             Statement::GlobalDecl(ident) => {
                 globals.insert(ident.as_basic().to_ascii_lowercase());
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 globals.extend(collect_globals(then_body));
                 globals.extend(collect_globals(else_body));
             }
@@ -2616,7 +2839,9 @@ fn collect_globals(body: &[Statement]) -> HashSet<String> {
             | Statement::Do { body, .. } => {
                 globals.extend(collect_globals(body));
             }
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     globals.extend(collect_globals(&case.body));
                 }
@@ -2651,7 +2876,11 @@ fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<Strin
                     names.insert(var.as_basic().to_ascii_lowercase());
                 }
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_record_buffer_names_in(then_body, names);
                 collect_record_buffer_names_in(else_body, names);
             }
@@ -2660,7 +2889,9 @@ fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<Strin
             | Statement::Do { body, .. } => {
                 collect_record_buffer_names_in(body, names);
             }
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_record_buffer_names_in(&case.body, names);
                 }
@@ -2694,7 +2925,10 @@ fn allocate_unique(
     taken: &HashSet<String>,
 ) -> BasicIdent {
     for i in 0u32.. {
-        let candidate = BasicIdent { name: format!("{preferred_stem}{i}"), suffix };
+        let candidate = BasicIdent {
+            name: format!("{preferred_stem}{i}"),
+            suffix,
+        };
         if !taken.contains(&candidate.as_basic().to_ascii_lowercase()) {
             return candidate;
         }
@@ -2732,7 +2966,12 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
             collect_names_from_expr(target, names);
             collect_names_from_expr(value, names);
         }
-        Statement::MidAssign { target, start, len, value } => {
+        Statement::MidAssign {
+            target,
+            start,
+            len,
+            value,
+        } => {
             collect_names_from_expr(target, names);
             collect_names_from_expr(start, names);
             if let Some(e) = len {
@@ -2770,7 +3009,11 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
                 }
             }
         }
-        Statement::PrintFileUsing { channel, format, tokens } => {
+        Statement::PrintFileUsing {
+            channel,
+            format,
+            tokens,
+        } => {
             collect_names_from_expr(channel, names);
             collect_names_from_expr(format, names);
             for t in tokens {
@@ -2779,12 +3022,22 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
                 }
             }
         }
-        Statement::If { condition, then_body, else_body } => {
+        Statement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
             collect_names_from_expr(condition, names);
             collect_names_from_stmts(then_body, names);
             collect_names_from_stmts(else_body, names);
         }
-        Statement::For { var, start, end, step, body } => {
+        Statement::For {
+            var,
+            start,
+            end,
+            step,
+            body,
+        } => {
             names.insert(var.as_basic().to_ascii_lowercase());
             collect_names_from_expr(start, names);
             collect_names_from_expr(end, names);
@@ -2797,7 +3050,11 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
             collect_names_from_expr(condition, names);
             collect_names_from_stmts(body, names);
         }
-        Statement::Do { condition, body, post_condition } => {
+        Statement::Do {
+            condition,
+            body,
+            post_condition,
+        } => {
             if let Some(c) = condition {
                 collect_names_from_expr(&c.expr, names);
             }
@@ -2806,7 +3063,11 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
                 collect_names_from_expr(&c.expr, names);
             }
         }
-        Statement::SelectCase { expr, cases, else_body } => {
+        Statement::SelectCase {
+            expr,
+            cases,
+            else_body,
+        } => {
             collect_names_from_expr(expr, names);
             for case in cases {
                 for v in &case.values {
@@ -2860,14 +3121,27 @@ fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
                 collect_names_from_expr(e, names);
             }
         }
-        Statement::Field { channel, fields } => {
+        Statement::Field {
+            channel, fields, ..
+        } => {
             collect_names_from_expr(channel, names);
             for (w, v) in fields {
                 collect_names_from_expr(w, names);
                 names.insert(v.as_basic().to_ascii_lowercase());
             }
         }
-        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+        Statement::Get {
+            channel,
+            record,
+            var,
+            ..
+        }
+        | Statement::Put {
+            channel,
+            record,
+            var,
+            ..
+        } => {
             collect_names_from_expr(channel, names);
             if let Some(e) = record {
                 collect_names_from_expr(e, names);
@@ -3001,7 +3275,11 @@ fn collect_global_decl_names(body: &[Statement], names: &mut HashSet<String>) {
             Statement::GlobalDecl(ident) => {
                 names.insert(ident.as_basic().to_ascii_lowercase());
             }
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_global_decl_names(then_body, names);
                 collect_global_decl_names(else_body, names);
             }
@@ -3010,7 +3288,9 @@ fn collect_global_decl_names(body: &[Statement], names: &mut HashSet<String>) {
             | Statement::Do { body, .. } => {
                 collect_global_decl_names(body, names);
             }
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_global_decl_names(&case.body, names);
                 }
@@ -3148,7 +3428,9 @@ fn binary_op(op: BinaryOp) -> &'static str {
         BinaryOp::IntDiv => "\\",
         BinaryOp::Pow => "^",
         BinaryOp::AndAnd | BinaryOp::OrOr => {
-            unreachable!("&&/|| only valid as an if/while/do condition chain — codegen bug if reached here")
+            unreachable!(
+                "&&/|| only valid as an if/while/do condition chain — codegen bug if reached here"
+            )
         }
     }
 }
@@ -3278,15 +3560,15 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
         Expr::String(_) => "$",
         Expr::Integer(_) => "%",
         Expr::Float(_) => "!",
-        Expr::Ident(ident) | Expr::Call { name: ident, .. } | Expr::ArrayRef { name: ident, .. } => {
-            match ident.suffix {
-                Some(TypeSuffix::String) => "$",
-                Some(TypeSuffix::Single) => "!",
-                Some(TypeSuffix::Double) => "#",
-                Some(TypeSuffix::Long) => "&",
-                _ => "%",
-            }
-        }
+        Expr::Ident(ident)
+        | Expr::Call { name: ident, .. }
+        | Expr::ArrayRef { name: ident, .. } => match ident.suffix {
+            Some(TypeSuffix::String) => "$",
+            Some(TypeSuffix::Single) => "!",
+            Some(TypeSuffix::Double) => "#",
+            Some(TypeSuffix::Long) => "&",
+            _ => "%",
+        },
         Expr::HexLit(_) => "%",
         Expr::Unary { expr, .. } => expr_type_suffix(expr),
         Expr::Binary { left, .. } => expr_type_suffix(left),
@@ -3403,7 +3685,11 @@ pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnosti
                 &sanitize_symbol(&param.name.name),
                 param.name.suffix,
                 &func.name,
-                &format!("parameter `{}` of `{}`", param.name.as_basic(), func.name.as_basic()),
+                &format!(
+                    "parameter `{}` of `{}`",
+                    param.name.as_basic(),
+                    func.name.as_basic()
+                ),
                 &mut diagnostics,
             );
         }
@@ -3427,7 +3713,11 @@ pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnosti
                 &sanitize_symbol(&local.name),
                 local.suffix,
                 &func.name,
-                &format!("local variable `{}` in `{}`", local.as_basic(), func.name.as_basic()),
+                &format!(
+                    "local variable `{}` in `{}`",
+                    local.as_basic(),
+                    func.name.as_basic()
+                ),
                 &mut diagnostics,
             );
         }

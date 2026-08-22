@@ -470,25 +470,25 @@ do
         // `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
         // (his 770-840) with one multi-way dispatch.
         select case kp$
-        case "1", "c", "C"
-            checkPart()
-        case "2", "e", "E"
-            editRecord()
-        case "3", "l", "L"
-            listAll()
-        case "4", "a", "A"
-            addStock()
-        case "5", "s", "S"
-            subtractStock()
-        case "6", "r", "R"
-            reorderReport()
-        case "7", "q", "Q"
-            quitFlag% = 1
-        case "8", "x", "X"
-            // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
-            // matching fhb's own `90 CLOSE:SYSTEM`.
-            inv.close()
-            system
+            case "1", "c", "C"
+                checkPart()
+            case "2", "e", "E"
+                editRecord()
+            case "3", "l", "L"
+                listAll()
+            case "4", "a", "A"
+                addStock()
+            case "5", "s", "S"
+                subtractStock()
+            case "6", "r", "R"
+                reorderReport()
+            case "7", "q", "Q"
+                quitFlag% = 1
+            case "8", "x", "X"
+                // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
+                // matching fhb's own `90 CLOSE:SYSTEM`.
+                inv.close()
+                system
         end select
     end if
 loop until quitFlag% = 1

@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Values, Names, and Expressions — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 2</p><h1>Values, names, and expressions</h1></div></header>
+<main class="chapter-main book-width"><h2>Type is part of the name</h2><p>BASCAL follows the classic BASIC convention: a suffix says what a variable holds. Use <code>%</code> for integers, <code>$</code> for strings, <code>!</code> for single-precision numbers, <code>#</code> for doubles, and <code>&amp;</code> for long integers. Declare variables before relying on them.</p><pre><code>const taxRate! = .23
+dim quantity%, description$, subtotal!
+
+quantity% = 3
+description$ = "notebooks"
+subtotal! = quantity% * 4.50
+print description$ + ": " + STR$(subtotal! * (1 + taxRate!))
+</code></pre><p>The suffix travels with every use of the name. It is a small cost for a useful property: in a language with a BASIC target, the storage intent is visible at every call site.</p><h2>Expressions say what is computed</h2><p>Arithmetic, comparisons, and string expressions read in the ordinary way. Parentheses make grouping explicit. BASCAL also supplies <code>TRUE</code> and <code>FALSE</code>; they map to BASIC’s conventional <code>-1</code> and <code>0</code>.</p><h2>Collections are declared, then indexed</h2><pre><code>dim scores%(30)    // indices 0 through 30
+scores%(1) = 92
+scores%(2) = 87
+</code></pre><p>Arrays, constants, conversion rules, and type suffixes are developed throughout the following chapters; each declaration should make both its storage and its intended use clear.</p><nav class="chapter-nav"><a href="first-program.html">← A first program</a><a href="control-flow.html">Making control flow visible →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>

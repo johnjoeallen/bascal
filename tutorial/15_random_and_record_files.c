@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #define BCC_STRBUF_COUNT 8
 static char bcc_strbuf[BCC_STRBUF_COUNT][256];
@@ -46,6 +47,12 @@ static const char* bcc_strd(double value) {
 #define BCC_MAX_CHANNELS 32
 static FILE* bcc_files[BCC_MAX_CHANNELS];
 
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {
+    memcpy(field, source, width);
+    field[width] = 0;
+    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;
+}
+
 static void bcc_mki(char* out, int value) {
     int16_t v = (int16_t)value;
     memcpy(out, &v, 2);
@@ -89,25 +96,64 @@ static double bcc_cvd(const char* s) {
     return v;
 }
 
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
+    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;
+    return fread(buffer, 1, reclen, file) == reclen;
+}
+
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {
+    fseek(file, (record - 1) * (long)reclen, SEEK_SET);
+    fwrite(buffer, 1, reclen, file);
+}
+
+static int bcc_put_record_student(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    if ((!field_0 || !field_1 || !field_2 || !field_3) && !bcc_read_record(file, buffer, 50, record)) return 0;
+    (void)(field_0 && memcpy(buffer + 0, field_0, 2));
+    (void)(field_1 && memcpy(buffer + 2, field_1, 20));
+    (void)(field_2 && memcpy(buffer + 22, field_2, 8));
+    (void)(field_3 && memcpy(buffer + 30, field_3, 20));
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_student(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
 static double bv_d_carolscore = 0;
 static double bv_d_score = 0;
 static double bv_d_sscore = 0;
+static int bv_i_carolfacultytrimi = 0;
 static int bv_i_carolid = 0;
 static int bv_i_carolnametrimi = 0;
 static int bv_i_i = 0;
 static int bv_i_id = 0;
 static int bv_i_numrecs = 0;
 static int bv_i_reclen = 0;
+static int bv_i_sfacultytrimi = 0;
 static int bv_i_sid = 0;
 static int bv_i_snametrimi = 0;
+static char bv_s_carolfaculty[256] = {0};
 static char bv_s_carolname[256] = {0};
+static char bv_s_dbfacultybuf[256] = {0};
 static char bv_s_dbfile[256] = {0};
 static char bv_s_dbidbuf[256] = {0};
 static char bv_s_dbnamebuf[256] = {0};
 static char bv_s_dbscorebuf[256] = {0};
+static char bv_s_facultybuf[256] = {0};
 static char bv_s_idbuf[256] = {0};
 static char bv_s_namebuf[256] = {0};
 static char bv_s_scorebuf[256] = {0};
+static char bv_s_sfaculty[256] = {0};
 static char bv_s_sname[256] = {0};
 
 void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out);
@@ -170,7 +216,7 @@ int main(void) {
 
     // trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 
-    bv_i_reclen = 30;
+    bv_i_reclen = 50;
     bv_i_numrecs = 3;
     snprintf(bv_s_dbfile, sizeof(bv_s_dbfile), "%s", "tutorial_students.dat");
 
@@ -187,40 +233,22 @@ int main(void) {
     bcc_mki(bv_s_idbuf, 1);
     snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), "%-*.*s", 20, 20, "Alice");
     bcc_mkd(bv_s_scorebuf, 95.0);
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_facultybuf, sizeof(bv_s_facultybuf), "%-*.*s", 20, 20, "Engineering");
+    bcc_put_record_student(bcc_files[0], 1, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     // Record 2: Bob, 54
     bcc_mki(bv_s_idbuf, 2);
     snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), "%-*.*s", 20, 20, "Bob");
     bcc_mkd(bv_s_scorebuf, 54.0);
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_facultybuf, sizeof(bv_s_facultybuf), "%-*.*s", 20, 20, "Arts");
+    bcc_put_record_student(bcc_files[0], 2, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     // Record 3: Carol, 78
     bcc_mki(bv_s_idbuf, 3);
     snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), "%-*.*s", 20, 20, "Carol");
     bcc_mkd(bv_s_scorebuf, 78.0);
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_facultybuf, sizeof(bv_s_facultybuf), "%-*.*s", 20, 20, "Science");
+    bcc_put_record_student(bcc_files[0], 3, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     fclose(bcc_files[0]);
     bcc_files[0] = NULL;
@@ -234,17 +262,7 @@ int main(void) {
     int bt_lim_0 = 1;
     int bt_step_0 = -(1);
     for (bv_i_i = bv_i_numrecs; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
-        {
-            fseek(bcc_files[0], (long)((bv_i_i) - 1) * 30, SEEK_SET);
-            unsigned char bcc_rec[30];
-            fread(bcc_rec, 1, 30, bcc_files[0]);
-            memcpy(bv_s_idbuf, bcc_rec + 0, 2);
-            bv_s_idbuf[2] = 0;
-            memcpy(bv_s_namebuf, bcc_rec + 2, 20);
-            bv_s_namebuf[20] = 0;
-            memcpy(bv_s_scorebuf, bcc_rec + 22, 8);
-            bv_s_scorebuf[8] = 0;
-        }
+        bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
         bv_i_id = bcc_cvi(bv_s_idbuf);
         bv_d_score = bcc_cvd(bv_s_scorebuf);
         char bt_s_1[256];
@@ -271,29 +289,12 @@ int main(void) {
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
 
     // Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
-    // always writes the whole 30-byte buffer, so GET has to load the record
-    // first even though idBuf$/nameBuf$ are just being written straight back
+    // always writes the whole 50-byte buffer, so GET has to load the record
+    // first even though idBuf$/nameBuf$/facultyBuf$ are just being written straight back
     // unchanged.
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_idbuf, bcc_rec + 0, 2);
-        bv_s_idbuf[2] = 0;
-        memcpy(bv_s_namebuf, bcc_rec + 2, 20);
-        bv_s_namebuf[20] = 0;
-        memcpy(bv_s_scorebuf, bcc_rec + 22, 8);
-        bv_s_scorebuf[8] = 0;
-    }
+    bcc_get_record_student(bcc_files[0], 2, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
     bcc_mkd(bv_s_scorebuf, 61.5);
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    bcc_put_record_student(bcc_files[0], 2, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     fclose(bcc_files[0]);
     bcc_files[0] = NULL;
@@ -304,32 +305,15 @@ int main(void) {
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
 
     // Alice got married and re-sat the exam — `name` and `score` both change,
-    // `id` doesn't. Same problem as Bob's update, just with two fields instead
-    // of one: GET first (this is what preserves idBuf$), LSET the two fields
+    // `id` and `faculty` don't. Same problem as Bob's update, just with two fields instead
+    // of one: GET first (this is what preserves idBuf$ and facultyBuf$), LSET the two fields
     // that actually changed, then PUT the whole buffer back. Nothing here is
     // specific to "two" fields — five changed fields would look identical,
     // just with five LSET lines between the GET and the PUT.
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_idbuf, bcc_rec + 0, 2);
-        bv_s_idbuf[2] = 0;
-        memcpy(bv_s_namebuf, bcc_rec + 2, 20);
-        bv_s_namebuf[20] = 0;
-        memcpy(bv_s_scorebuf, bcc_rec + 22, 8);
-        bv_s_scorebuf[8] = 0;
-    }
+    bcc_get_record_student(bcc_files[0], 1, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
     snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), "%-*.*s", 20, 20, "Alice Smith");
     bcc_mkd(bv_s_scorebuf, 91.0);
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    bcc_put_record_student(bcc_files[0], 1, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     fclose(bcc_files[0]);
     bcc_files[0] = NULL;
@@ -342,27 +326,10 @@ int main(void) {
     // Carol changed her name and improved her score: the exact same
     // GET / LSET / LSET / PUT shape as Alice's update above, just retyped by
     // hand with Carol's record number and values.
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_idbuf, bcc_rec + 0, 2);
-        bv_s_idbuf[2] = 0;
-        memcpy(bv_s_namebuf, bcc_rec + 2, 20);
-        bv_s_namebuf[20] = 0;
-        memcpy(bv_s_scorebuf, bcc_rec + 22, 8);
-        bv_s_scorebuf[8] = 0;
-    }
+    bcc_get_record_student(bcc_files[0], 3, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
     snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), "%-*.*s", 20, 20, "Carol Jones");
     bcc_mkd(bv_s_scorebuf, 88.0);
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_idbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_namebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_scorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    bcc_put_record_student(bcc_files[0], 3, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
 
     fclose(bcc_files[0]);
     bcc_files[0] = NULL;
@@ -376,17 +343,7 @@ int main(void) {
     int bt_lim_7 = bv_i_numrecs;
     int bt_step_7 = 1;
     for (bv_i_i = 1; bt_step_7 >= 0 ? bv_i_i <= bt_lim_7 : bv_i_i >= bt_lim_7; bv_i_i += bt_step_7) {
-        {
-            fseek(bcc_files[0], (long)((bv_i_i) - 1) * 30, SEEK_SET);
-            unsigned char bcc_rec[30];
-            fread(bcc_rec, 1, 30, bcc_files[0]);
-            memcpy(bv_s_idbuf, bcc_rec + 0, 2);
-            bv_s_idbuf[2] = 0;
-            memcpy(bv_s_namebuf, bcc_rec + 2, 20);
-            bv_s_namebuf[20] = 0;
-            memcpy(bv_s_scorebuf, bcc_rec + 22, 8);
-            bv_s_scorebuf[8] = 0;
-        }
+        bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
         char bt_s_8[256];
         bf_s_trimmed(bv_s_namebuf, bt_s_8);
         char bt_s_9[256];
@@ -407,7 +364,7 @@ int main(void) {
     // - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
     // be repeated, identically, in every OPEN block — get it wrong in one
     // of the five and you're reading or writing the wrong bytes.
-    // - recLen% (30) is 2+20+8 computed by hand; add a field to the record
+    // - recLen% (50) is 2+20+8+20 computed by hand; add a field to the record
     // and every one of those numbers has to be updated together, or the
     // file silently gets corrupted.
     // - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
@@ -482,7 +439,7 @@ int main(void) {
     // Closes the file.
 
 
-    // file db as Student = open(...)  [30 bytes/record]
+    // file db as Student = open(...)  [50 bytes/record]
     bcc_files[0] = fopen("tutorial_records.dat", "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen("tutorial_records.dat", "wb+");
 
@@ -493,42 +450,24 @@ int main(void) {
     bcc_mki(bv_s_dbidbuf, 1);
     snprintf(bv_s_dbnamebuf, sizeof(bv_s_dbnamebuf), "%-*.*s", 20, 20, "Alice");
     bcc_mkd(bv_s_dbscorebuf, 95.0);
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_dbfacultybuf, sizeof(bv_s_dbfacultybuf), "%-*.*s", 20, 20, "Engineering");
+    bcc_put_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
 
     // Record 2: Bob, 54
     // db[...] = { ... }  (whole-record write)
     bcc_mki(bv_s_dbidbuf, 2);
     snprintf(bv_s_dbnamebuf, sizeof(bv_s_dbnamebuf), "%-*.*s", 20, 20, "Bob");
     bcc_mkd(bv_s_dbscorebuf, 54.0);
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_dbfacultybuf, sizeof(bv_s_dbfacultybuf), "%-*.*s", 20, 20, "Arts");
+    bcc_put_record_student(bcc_files[0], 2, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
 
     // Record 3: Carol, 78
     // db[...] = { ... }  (whole-record write)
     bcc_mki(bv_s_dbidbuf, 3);
     snprintf(bv_s_dbnamebuf, sizeof(bv_s_dbnamebuf), "%-*.*s", 20, 20, "Carol");
     bcc_mkd(bv_s_dbscorebuf, 78.0);
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_dbfacultybuf, sizeof(bv_s_dbfacultybuf), "%-*.*s", 20, 20, "Science");
+    bcc_put_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
 
     // ---- Read records in reverse order ----
 
@@ -538,17 +477,7 @@ int main(void) {
     int bt_step_12 = -1;
     for (bv_i_i = 3; bt_step_12 >= 0 ? bv_i_i <= bt_lim_12 : bv_i_i >= bt_lim_12; bv_i_i += bt_step_12) {
         // let s = db[...]  (whole-record read)
-        {
-            fseek(bcc_files[0], (long)((bv_i_i) - 1) * 30, SEEK_SET);
-            unsigned char bcc_rec[30];
-            fread(bcc_rec, 1, 30, bcc_files[0]);
-            memcpy(bv_s_dbidbuf, bcc_rec + 0, 2);
-            bv_s_dbidbuf[2] = 0;
-            memcpy(bv_s_dbnamebuf, bcc_rec + 2, 20);
-            bv_s_dbnamebuf[20] = 0;
-            memcpy(bv_s_dbscorebuf, bcc_rec + 22, 8);
-            bv_s_dbscorebuf[8] = 0;
-        }
+        bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
         bv_i_sid = bcc_cvi(bv_s_dbidbuf);
         bv_i_snametrimi = ((int)strlen(bv_s_dbnamebuf));
         while (((-(bv_i_snametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_snametrimi, 1), " ") == 0)))) {
@@ -556,6 +485,11 @@ int main(void) {
         }
         snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_snametrimi));
         bv_d_sscore = bcc_cvd(bv_s_dbscorebuf);
+        bv_i_sfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
+        while (((-(bv_i_sfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_sfacultytrimi, 1), " ") == 0)))) {
+            bv_i_sfacultytrimi = (bv_i_sfacultytrimi - 1);
+        }
+        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_sfacultytrimi));
         char bt_s_13[256];
         snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", "  [", bcc_stri(bv_i_sid));
         char bt_s_14[256];
@@ -572,60 +506,24 @@ int main(void) {
     // ---- Update one field in place ----
 
     // Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
-    // idBuf$/nameBuf$/scoreBuf$, no mkd$() — just the field that's changing.
+    // idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
     // db[...].score = ...  (partial-field update)
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_dbidbuf, bcc_rec + 0, 2);
-        bv_s_dbidbuf[2] = 0;
-        memcpy(bv_s_dbnamebuf, bcc_rec + 2, 20);
-        bv_s_dbnamebuf[20] = 0;
-        memcpy(bv_s_dbscorebuf, bcc_rec + 22, 8);
-        bv_s_dbscorebuf[8] = 0;
-    }
     bcc_mkd(bv_s_dbscorebuf, 61.5);
-    {
-        fseek(bcc_files[0], (long)((2) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    if (!bcc_put_record_student(bcc_files[0], 2, NULL, NULL, bv_s_dbscorebuf, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)2); exit(1); }
 
     // ---- Update two fields at once, still one GET and one PUT ----
 
     // Alice got married and re-sat the exam. `name` and `score` don't cover
-    // every field of Student, so this needs an implicit GET first (id is
-    // preserved from the existing record) -- exactly Part 1's GET / LSET /
+    // every field of Student, so this needs an implicit GET first (id and
+    // faculty are preserved from the existing record) -- exactly Part 1's GET / LSET /
     // LSET / PUT for Alice, minus having to write out the GET, the buffer
     // names, or the packing calls. Which fields need a GET is worked out by
     // the compiler by comparing `name`/`score` against Student's declared
     // fields — not decided at runtime.
     // db[...] = ?{ ... }  (partial-record write)
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_dbidbuf, bcc_rec + 0, 2);
-        bv_s_dbidbuf[2] = 0;
-        memcpy(bv_s_dbnamebuf, bcc_rec + 2, 20);
-        bv_s_dbnamebuf[20] = 0;
-        memcpy(bv_s_dbscorebuf, bcc_rec + 22, 8);
-        bv_s_dbscorebuf[8] = 0;
-    }
     snprintf(bv_s_dbnamebuf, sizeof(bv_s_dbnamebuf), "%-*.*s", 20, 20, "Alice Smith");
     bcc_mkd(bv_s_dbscorebuf, 91.0);
-    {
-        fseek(bcc_files[0], (long)((1) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    if (!bcc_put_record_student(bcc_files[0], 1, NULL, bv_s_dbnamebuf, bv_s_dbscorebuf, NULL)) { fprintf(stderr, "BASCAL: record %ld does not exist\n", (long)1); exit(1); }
 
     // ---- Batched update: read once, mutate twice, write back once ----
 
@@ -633,17 +531,7 @@ int main(void) {
     // spelling of the same one-GET-one-PUT update, useful when the new values
     // aren't just a couple of literals.
     // let carol = db[...]  (whole-record read)
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        fread(bcc_rec, 1, 30, bcc_files[0]);
-        memcpy(bv_s_dbidbuf, bcc_rec + 0, 2);
-        bv_s_dbidbuf[2] = 0;
-        memcpy(bv_s_dbnamebuf, bcc_rec + 2, 20);
-        bv_s_dbnamebuf[20] = 0;
-        memcpy(bv_s_dbscorebuf, bcc_rec + 22, 8);
-        bv_s_dbscorebuf[8] = 0;
-    }
+    bcc_get_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
     bv_i_carolid = bcc_cvi(bv_s_dbidbuf);
     bv_i_carolnametrimi = ((int)strlen(bv_s_dbnamebuf));
     while (((-(bv_i_carolnametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_carolnametrimi, 1), " ") == 0)))) {
@@ -651,20 +539,19 @@ int main(void) {
     }
     snprintf(bv_s_carolname, sizeof(bv_s_carolname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_carolnametrimi));
     bv_d_carolscore = bcc_cvd(bv_s_dbscorebuf);
+    bv_i_carolfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
+    while (((-(bv_i_carolfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_carolfacultytrimi, 1), " ") == 0)))) {
+        bv_i_carolfacultytrimi = (bv_i_carolfacultytrimi - 1);
+    }
+    snprintf(bv_s_carolfaculty, sizeof(bv_s_carolfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_carolfacultytrimi));
     snprintf(bv_s_carolname, sizeof(bv_s_carolname), "%s", "Carol Jones");
     bv_d_carolscore = 88.0;
     // db[...] = carol  (write back a let-bound record)
     bcc_mki(bv_s_dbidbuf, bv_i_carolid);
     snprintf(bv_s_dbnamebuf, sizeof(bv_s_dbnamebuf), "%-*.*s", 20, 20, bv_s_carolname);
     bcc_mkd(bv_s_dbscorebuf, bv_d_carolscore);
-    {
-        fseek(bcc_files[0], (long)((3) - 1) * 30, SEEK_SET);
-        unsigned char bcc_rec[30];
-        memcpy(bcc_rec + 0, bv_s_dbidbuf, 2);
-        memcpy(bcc_rec + 2, bv_s_dbnamebuf, 20);
-        memcpy(bcc_rec + 22, bv_s_dbscorebuf, 8);
-        fwrite(bcc_rec, 1, 30, bcc_files[0]);
-    }
+    snprintf(bv_s_dbfacultybuf, sizeof(bv_s_dbfacultybuf), "%-*.*s", 20, 20, bv_s_carolfaculty);
+    bcc_put_record_student(bcc_files[0], 3, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
 
     // ---- Verify the updates ----
 
@@ -674,17 +561,7 @@ int main(void) {
     int bt_step_18 = 1;
     for (bv_i_i = 1; bt_step_18 >= 0 ? bv_i_i <= bt_lim_18 : bv_i_i >= bt_lim_18; bv_i_i += bt_step_18) {
         // let s = db[...]  (whole-record read)
-        {
-            fseek(bcc_files[0], (long)((bv_i_i) - 1) * 30, SEEK_SET);
-            unsigned char bcc_rec[30];
-            fread(bcc_rec, 1, 30, bcc_files[0]);
-            memcpy(bv_s_dbidbuf, bcc_rec + 0, 2);
-            bv_s_dbidbuf[2] = 0;
-            memcpy(bv_s_dbnamebuf, bcc_rec + 2, 20);
-            bv_s_dbnamebuf[20] = 0;
-            memcpy(bv_s_dbscorebuf, bcc_rec + 22, 8);
-            bv_s_dbscorebuf[8] = 0;
-        }
+        bcc_get_record_student(bcc_files[0], bv_i_i, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);
         bv_i_sid = bcc_cvi(bv_s_dbidbuf);
         bv_i_snametrimi = ((int)strlen(bv_s_dbnamebuf));
         while (((-(bv_i_snametrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbnamebuf, bv_i_snametrimi, 1), " ") == 0)))) {
@@ -692,6 +569,11 @@ int main(void) {
         }
         snprintf(bv_s_sname, sizeof(bv_s_sname), "%s", bcc_mid(bv_s_dbnamebuf, 1, bv_i_snametrimi));
         bv_d_sscore = bcc_cvd(bv_s_dbscorebuf);
+        bv_i_sfacultytrimi = ((int)strlen(bv_s_dbfacultybuf));
+        while (((-(bv_i_sfacultytrimi > 0)) && (-(strcmp(bcc_mid(bv_s_dbfacultybuf, bv_i_sfacultytrimi, 1), " ") == 0)))) {
+            bv_i_sfacultytrimi = (bv_i_sfacultytrimi - 1);
+        }
+        snprintf(bv_s_sfaculty, sizeof(bv_s_sfaculty), "%s", bcc_mid(bv_s_dbfacultybuf, 1, bv_i_sfacultytrimi));
         char bt_s_19[256];
         snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", "  ", bv_s_sname);
         char bt_s_20[256];

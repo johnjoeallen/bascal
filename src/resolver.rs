@@ -52,14 +52,20 @@ fn collect_global_decls(body: &[Statement], out: &mut Vec<BasicIdent>) {
     for stmt in body {
         match stmt {
             Statement::GlobalDecl(ident) => out.push(ident.clone()),
-            Statement::If { then_body, else_body, .. } => {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_global_decls(then_body, out);
                 collect_global_decls(else_body, out);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_global_decls(body, out),
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_global_decls(&case.body, out);
                 }
@@ -167,7 +173,15 @@ fn reject_call_cycles(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     let mut reported = HashSet::new();
     for i in 0..n {
         if color[i] == Color::White {
-            visit(i, &adjacency, &mut color, &mut path, program, &mut reported, diagnostics);
+            visit(
+                i,
+                &adjacency,
+                &mut color,
+                &mut path,
+                program,
+                &mut reported,
+                diagnostics,
+            );
         }
     }
 }
@@ -219,7 +233,10 @@ fn reject_unsafe_error_handler_procedures(program: &Program, diagnostics: &mut V
         if !function.is_procedure {
             continue;
         }
-        if !handler_targets.iter().any(|t| same_ident(t, &function.name)) {
+        if !handler_targets
+            .iter()
+            .any(|t| same_ident(t, &function.name))
+        {
             continue;
         }
 
@@ -287,15 +304,23 @@ pub fn error_handler_targets(program: &Program) -> Vec<BasicIdent> {
 fn collect_on_error_goto_targets(statements: &[Statement], out: &mut Vec<BasicIdent>) {
     for stmt in statements {
         match stmt {
-            Statement::OnErrorGoto { target: Expr::Ident(ident) } => out.push(ident.clone()),
-            Statement::If { then_body, else_body, .. } => {
+            Statement::OnErrorGoto {
+                target: Expr::Ident(ident),
+            } => out.push(ident.clone()),
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
                 collect_on_error_goto_targets(then_body, out);
                 collect_on_error_goto_targets(else_body, out);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_on_error_goto_targets(body, out),
-            Statement::SelectCase { cases, else_body, .. } => {
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
                 for case in cases {
                     collect_on_error_goto_targets(&case.body, out);
                 }
@@ -319,12 +344,14 @@ fn diverges(statements: &[Statement]) -> bool {
         .find(|s| !matches!(s, Statement::BlankLine));
     match last {
         Some(Statement::Resume(_)) | Some(Statement::Goto(_)) | Some(Statement::End) => true,
-        Some(Statement::If { then_body, else_body, .. }) => {
-            diverges(then_body) && diverges(else_body)
-        }
-        Some(Statement::SelectCase { cases, else_body, .. }) => {
-            cases.iter().all(|c| diverges(&c.body)) && diverges(else_body)
-        }
+        Some(Statement::If {
+            then_body,
+            else_body,
+            ..
+        }) => diverges(then_body) && diverges(else_body),
+        Some(Statement::SelectCase {
+            cases, else_body, ..
+        }) => cases.iter().all(|c| diverges(&c.body)) && diverges(else_body),
         _ => false,
     }
 }
@@ -341,7 +368,12 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
         Statement::Assignment { target: lhs, value } => {
             expr_calls_function(lhs, target) || expr_calls_function(value, target)
         }
-        Statement::MidAssign { target: lhs, start, len, value } => {
+        Statement::MidAssign {
+            target: lhs,
+            start,
+            len,
+            value,
+        } => {
             expr_calls_function(lhs, target)
                 || expr_calls_function(start, target)
                 || len.as_ref().is_some_and(|e| expr_calls_function(e, target))
@@ -373,7 +405,11 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
                     _ => false,
                 })
         }
-        Statement::PrintFileUsing { channel, format, tokens } => {
+        Statement::PrintFileUsing {
+            channel,
+            format,
+            tokens,
+        } => {
             expr_calls_function(channel, target)
                 || expr_calls_function(format, target)
                 || tokens.iter().any(|t| match t {
@@ -414,17 +450,23 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(condition, target) || statements_call_function(body, target)
         }
         Statement::ExprStmt(expr) => expr_calls_function(expr, target),
-        Statement::Do { condition, body, post_condition } => {
-            condition.as_ref().is_some_and(|c| expr_calls_function(&c.expr, target))
+        Statement::Do {
+            condition,
+            body,
+            post_condition,
+        } => {
+            condition
+                .as_ref()
+                .is_some_and(|c| expr_calls_function(&c.expr, target))
                 || statements_call_function(body, target)
-                || post_condition.as_ref().is_some_and(|c| expr_calls_function(&c.expr, target))
+                || post_condition
+                    .as_ref()
+                    .is_some_and(|c| expr_calls_function(&c.expr, target))
         }
-        Statement::Randomize(expr) => {
-            expr.as_ref().is_some_and(|e| expr_calls_function(e, target))
-        }
-        Statement::Swap(a, b) => {
-            expr_calls_function(a, target) || expr_calls_function(b, target)
-        }
+        Statement::Randomize(expr) => expr
+            .as_ref()
+            .is_some_and(|e| expr_calls_function(e, target)),
+        Statement::Swap(a, b) => expr_calls_function(a, target) || expr_calls_function(b, target),
         Statement::Poke { address, value } => {
             expr_calls_function(address, target) || expr_calls_function(value, target)
         }
@@ -455,7 +497,11 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             PrintToken::Expr(e) => expr_calls_function(e, target),
             _ => false,
         }),
-        Statement::SelectCase { expr, cases, else_body } => {
+        Statement::SelectCase {
+            expr,
+            cases,
+            else_body,
+        } => {
             expr_calls_function(expr, target)
                 || cases.iter().any(|c| {
                     c.values.iter().any(|v| match v {
@@ -480,13 +526,28 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(expr, target)
                 || targets.iter().any(|e| expr_calls_function(e, target))
         }
-        Statement::Field { channel, fields } => {
+        Statement::Field {
+            channel, fields, ..
+        } => {
             expr_calls_function(channel, target)
                 || fields.iter().any(|(w, _)| expr_calls_function(w, target))
         }
-        Statement::Get { channel, record, var } | Statement::Put { channel, record, var } => {
+        Statement::Get {
+            channel,
+            record,
+            var,
+            ..
+        }
+        | Statement::Put {
+            channel,
+            record,
+            var,
+            ..
+        } => {
             expr_calls_function(channel, target)
-                || record.as_ref().is_some_and(|e| expr_calls_function(e, target))
+                || record
+                    .as_ref()
+                    .is_some_and(|e| expr_calls_function(e, target))
                 || var.as_ref().is_some_and(|e| expr_calls_function(e, target))
         }
         Statement::Lset { value, .. } | Statement::Rset { value, .. } => {
@@ -501,7 +562,9 @@ fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool 
             expr_calls_function(port, target) || expr_calls_function(value, target)
         }
         Statement::Width { channel, cols } => {
-            channel.as_ref().is_some_and(|c| expr_calls_function(c, target))
+            channel
+                .as_ref()
+                .is_some_and(|c| expr_calls_function(c, target))
                 || expr_calls_function(cols, target)
         }
         Statement::End
@@ -533,13 +596,17 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
         Expr::Binary { left, right, .. } => {
             expr_calls_function(left, target) || expr_calls_function(right, target)
         }
-        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => false,
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {
+            false
+        }
         Expr::FileIndex { index, .. } => expr_calls_function(index, target),
         Expr::FieldAccess { base, .. } => expr_calls_function(base, target),
         Expr::MethodCall { base, args, .. } => {
             expr_calls_function(base, target) || args.iter().any(|a| expr_calls_function(a, target))
         }
-        Expr::RecordLit { fields, .. } => fields.iter().any(|(_, e)| expr_calls_function(e, target)),
+        Expr::RecordLit { fields, .. } => {
+            fields.iter().any(|(_, e)| expr_calls_function(e, target))
+        }
     }
 }
 
@@ -554,10 +621,9 @@ fn contains_return(statements: &[Statement]) -> bool {
         Statement::For { body, .. }
         | Statement::While { body, .. }
         | Statement::Do { body, .. } => contains_return(body),
-        Statement::SelectCase { cases, else_body, .. } => {
-            cases.iter().any(|c| contains_return(&c.body))
-                || contains_return(else_body)
-        }
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => cases.iter().any(|c| contains_return(&c.body)) || contains_return(else_body),
         _ => false,
     })
 }

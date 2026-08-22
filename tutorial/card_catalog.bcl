@@ -163,28 +163,28 @@ procedure mainMenu()
         input "CHOICE: "; choice%
 
         select case choice%
-        case 1
-            listAll()
-        case 2
-            input "AUTHOR  "; author$
-            input "TITLE   "; title$
-            input "SUBJECT "; subject$
-            addItem(author$, title$, subject$)
-        case 3
-            input "AUTHOR "; author$
-            searchByAuthor(author$)
-        case 4
-            input "AUTHOR "; author$
-            input "TITLE  "; title$
-            searchByAuthorTitle(author$, title$)
-        case 5
-            input "AUTHOR (to delete) "; author$
-            input "TITLE  (to delete) "; title$
-            deleteItem(author$, title$)
-        case 6
-            running% = 0
-        case else
-            print "Invalid choice"
+            case 1
+                listAll()
+            case 2
+                input "AUTHOR  "; author$
+                input "TITLE   "; title$
+                input "SUBJECT "; subject$
+                addItem(author$, title$, subject$)
+            case 3
+                input "AUTHOR "; author$
+                searchByAuthor(author$)
+            case 4
+                input "AUTHOR "; author$
+                input "TITLE  "; title$
+                searchByAuthorTitle(author$, title$)
+            case 5
+                input "AUTHOR (to delete) "; author$
+                input "TITLE  (to delete) "; title$
+                deleteItem(author$, title$)
+            case 6
+                running% = 0
+            case else
+                print "Invalid choice"
         end select
     loop
 end procedure

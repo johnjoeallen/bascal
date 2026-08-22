@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn is_library_path(path: &Path) -> bool {
-    path.components().any(|c| {
-        matches!(c.as_os_str().to_str(), Some("com" | "lib"))
-    })
+    path.components()
+        .any(|c| matches!(c.as_os_str().to_str(), Some("com" | "lib")))
 }
 
 #[test]
@@ -88,10 +87,10 @@ fn freebasic_runs_mid_assign_edge_cases_when_available() {
     assert_eq!(
         lines,
         vec![
-            "01XY456789",   // repl$ shorter than len: only LEN(repl$) chars overwritten
-            "ABC3456789",   // repl$ longer than len: truncated to len
-            "0123456789",   // repl$ empty: no-op, length preserved
-            "012345678Z",   // 2-arg form, pos at the very end of the string
+            "01XY456789", // repl$ shorter than len: only LEN(repl$) chars overwritten
+            "ABC3456789", // repl$ longer than len: truncated to len
+            "0123456789", // repl$ empty: no-op, length preserved
+            "012345678Z", // 2-arg form, pos at the very end of the string
         ],
         "MID$ assignment edge cases produced unexpected output:\n{stdout}"
     );
@@ -178,7 +177,8 @@ fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
         Ok(o) => o,
         Err(ref diagnostics)
             if diagnostics.iter().all(|d| {
-                d.message.contains("`shared` declaration is only valid in shared-variable files")
+                d.message
+                    .contains("`shared` declaration is only valid in shared-variable files")
             }) =>
         {
             return; // shared-variables file — not a standalone compilable program

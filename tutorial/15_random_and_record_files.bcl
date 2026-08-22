@@ -50,7 +50,7 @@ function trimmed$(s$)
     return LEFT$(s$, i%)
 end function
 
-const recLen%  = 30   // 2 bytes id + 20 bytes name + 8 bytes score
+const recLen%  = 50   // 2 bytes id + 20 bytes name + 8 bytes score + 20 bytes faculty
 const numRecs% = 3
 const dbFile$  = "tutorial_students.dat"
 
@@ -61,24 +61,27 @@ const dbFile$  = "tutorial_students.dat"
 /* ---- Write three records ---- */
 
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Record 1: Alice, 95
 lset idBuf$    = mki$(1)
 lset nameBuf$  = "Alice"
 lset scoreBuf$ = mkd$(95.0)
+lset facultyBuf$ = "Engineering"
 put #1, 1
 
 // Record 2: Bob, 54
 lset idBuf$    = mki$(2)
 lset nameBuf$  = "Bob"
 lset scoreBuf$ = mkd$(54.0)
+lset facultyBuf$ = "Arts"
 put #1, 2
 
 // Record 3: Carol, 78
 lset idBuf$    = mki$(3)
 lset nameBuf$  = "Carol"
 lset scoreBuf$ = mkd$(78.0)
+lset facultyBuf$ = "Science"
 put #1, 3
 
 close #1
@@ -87,7 +90,7 @@ close #1
 
 print "Part 1 (hand-written) -- reading records in reverse order:"
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 for i% = numRecs% to 1 step -1
     get #1, i%
@@ -101,11 +104,11 @@ close #1
 /* ---- Update one field in place ---- */
 
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
-// always writes the whole 30-byte buffer, so GET has to load the record
-// first even though idBuf$/nameBuf$ are just being written straight back
+// always writes the whole 50-byte buffer, so GET has to load the record
+// first even though idBuf$/nameBuf$/facultyBuf$ are just being written straight back
 // unchanged.
 get #1, 2
 lset scoreBuf$ = mkd$(61.5)
@@ -116,11 +119,11 @@ close #1
 /* ---- Update two fields at once ---- */
 
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Alice got married and re-sat the exam — `name` and `score` both change,
-// `id` doesn't. Same problem as Bob's update, just with two fields instead
-// of one: GET first (this is what preserves idBuf$), LSET the two fields
+// `id` and `faculty` don't. Same problem as Bob's update, just with two fields instead
+// of one: GET first (this is what preserves idBuf$ and facultyBuf$), LSET the two fields
 // that actually changed, then PUT the whole buffer back. Nothing here is
 // specific to "two" fields — five changed fields would look identical,
 // just with five LSET lines between the GET and the PUT.
@@ -134,7 +137,7 @@ close #1
 /* ---- Same shape again ---- */
 
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Carol changed her name and improved her score: the exact same
 // GET / LSET / LSET / PUT shape as Alice's update above, just retyped by
@@ -150,7 +153,7 @@ close #1
 
 print "Part 1 (hand-written) -- after updates:"
 open dbFile$ for random as #1 len = recLen%
-field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 for i% = 1 to numRecs%
     get #1, i%
@@ -165,7 +168,7 @@ close #1
 //   - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
 //     be repeated, identically, in every OPEN block — get it wrong in one
 //     of the five and you're reading or writing the wrong bytes.
-//   - recLen% (30) is 2+20+8 computed by hand; add a field to the record
+//   - recLen% (50) is 2+20+8+20 computed by hand; add a field to the record
 //     and every one of those numbers has to be updated together, or the
 //     file silently gets corrupted.
 //   - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
@@ -243,6 +246,7 @@ record Student
     id:    int16
     name:  string(20)
     score: float64
+    faculty: string(20)
 end record
 
 file db as Student = open("tutorial_records.dat")
@@ -250,13 +254,13 @@ file db as Student = open("tutorial_records.dat")
 /* ---- Write three records ---- */
 
 // Record 1: Alice, 95
-db[1] = { id: 1, name: "Alice", score: 95.0 }
+db[1] = { id: 1, name: "Alice", score: 95.0, faculty: "Engineering" }
 
 // Record 2: Bob, 54
-db[2] = { id: 2, name: "Bob", score: 54.0 }
+db[2] = { id: 2, name: "Bob", score: 54.0, faculty: "Arts" }
 
 // Record 3: Carol, 78
-db[3] = { id: 3, name: "Carol", score: 78.0 }
+db[3] = { id: 3, name: "Carol", score: 78.0, faculty: "Science" }
 
 /* ---- Read records in reverse order ---- */
 
@@ -270,14 +274,14 @@ end for
 /* ---- Update one field in place ---- */
 
 // Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
-// idBuf$/nameBuf$/scoreBuf$, no mkd$() — just the field that's changing.
+// idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
 db[2].score = 61.5
 
 /* ---- Update two fields at once, still one GET and one PUT ---- */
 
 // Alice got married and re-sat the exam. `name` and `score` don't cover
-// every field of Student, so this needs an implicit GET first (id is
-// preserved from the existing record) -- exactly Part 1's GET / LSET /
+// every field of Student, so this needs an implicit GET first (id and
+// faculty are preserved from the existing record) -- exactly Part 1's GET / LSET /
 // LSET / PUT for Alice, minus having to write out the GET, the buffer
 // names, or the packing calls. Which fields need a GET is worked out by
 // the compiler by comparing `name`/`score` against Student's declared
