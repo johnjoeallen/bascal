@@ -88,14 +88,14 @@ push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
 ## Usage
 
 ```bash
-bcc input.bcl [-o output.bas] [-L dir] [-l library]
+bcc input.bcl [-o path] [-L dir] [-l library]
               [--line-numbers | --sparse-line-numbers] [--clean | -c]
               [--binary | -b] [--run | -r] [--target | -t basic|C]
 ```
 
 | Flag | Meaning |
 |------|---------|
-| `-o output.bas` | Output path (default: input with `.bas`/`.c` extension, same directory) |
+| `-o path` | Output path. A directory (existing, or written with a trailing `/` even if it doesn't exist yet) gets an auto-named file inside it; anything else is the output file path. Default: input with `.bas`/`.c` extension, same directory as input |
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets (the default) |

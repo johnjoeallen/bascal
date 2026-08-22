@@ -378,12 +378,16 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
 
 fn usage() -> String {
     [
-        "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
+        "usage: bcc input.bcl [-o path] [-L dir] [-l library]",
         "              [--line-numbers | --sparse-line-numbers] [--clean | -c]",
         "              [--binary | -b] [--run | -r] [--target | -t basic|C]",
         "",
         "Options:",
-        "  -o output.bas          Output path (default: input with .bas/.c extension)",
+        "  -o path                Output path. A directory (existing, or written with a",
+        "                         trailing / even if it doesn't exist yet) gets an",
+        "                         auto-named file inside it; anything else is the output",
+        "                         file path. Default: input with .bas/.c extension, same",
+        "                         directory as input",
         "  -L dir                 Add a library search directory for require resolution",
         "                         (repeatable)",
         "  -l name                Name a library (reserved for future use)",
