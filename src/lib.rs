@@ -5327,6 +5327,28 @@ end
     }
 
     #[test]
+    fn c_target_supports_cint_clng_csng_cdbl() {
+        let source = "dim f!\nf! = 3.6\nprint cint(f!)\nprint clng(-3.6)\nprint csng(7)\nprint cdbl(7)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("((int)round((double)(bv_f_f)))"),
+            "CINT should round to the nearest integer, not truncate:\n{output}"
+        );
+        assert!(
+            output.contains("((int)round((double)(-(3.6))))"),
+            "CLNG should round the same way CINT does:\n{output}"
+        );
+        assert!(
+            output.contains("((float)(7))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("((double)(7))"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);

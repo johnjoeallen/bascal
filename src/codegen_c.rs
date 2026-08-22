@@ -25,11 +25,11 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), fourteen BASIC intrinsics
+//! single-precision -- see `effective_suffix`), eighteen BASIC intrinsics
 //! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`,
-//! `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`, `SGN` (see
-//! `render_numeric_call`/`render_string_call`/`MID_HELPER`/`INSTR_HELPER`/
-//! `SGN_HELPER`) -- and
+//! `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`, `SGN`, `CINT`,
+//! `CLNG`, `CSNG`, `CDBL` (see `render_numeric_call`/`render_string_call`/
+//! `MID_HELPER`/`INSTR_HELPER`/`SGN_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
@@ -3661,6 +3661,38 @@ fn render_numeric_call(
         let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
         *needs_math = true;
         return Ok((format!("bcc_sgn((double)({inner}))"), false));
+    }
+    // `CINT(x)`/`CLNG(x)` -- round to the nearest integer (real BASIC's
+    // own rounding, not truncation -- unlike `FIX`), the same
+    // round-to-`int` shape `coerce_numeric` already gives any
+    // float-to-int narrowing assignment; a caller writing `CINT`/`CLNG`
+    // explicitly gets the identical result an implicit narrowing
+    // assignment would, just spelled out. `CLNG`'s wider (32-bit) range
+    // than `CINT`'s (16-bit) is a distinction real BASIC's INTEGER/LONG
+    // types draw that this backend doesn't -- every integer here is
+    // already a plain C `int` (see `numeric_c_type`), so the two compile
+    // identically.
+    if (name.name.eq_ignore_ascii_case("cint") || name.name.eq_ignore_ascii_case("clng"))
+        && args.len() == 1
+    {
+        let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        *needs_math = true;
+        return Ok((format!("((int)round((double)({inner})))"), false));
+    }
+    // `CSNG(x)`/`CDBL(x)` -- force a float-typed result, same distinction
+    // `numeric_c_type` already draws between `float` (`!`) and `double`
+    // (`#`) variable storage; an already-numeric argument needs no value
+    // transformation, just its own explicit cast, so a later narrowing
+    // context (an assignment into an int-suffixed variable, say) still
+    // goes through the ordinary `coerce_numeric` path as if this call
+    // weren't there at all.
+    if name.name.eq_ignore_ascii_case("csng") && args.len() == 1 {
+        let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        return Ok((format!("((float)({inner}))"), true));
+    }
+    if name.name.eq_ignore_ascii_case("cdbl") && args.len() == 1 {
+        let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        return Ok((format!("((double)({inner}))"), true));
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
