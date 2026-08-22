@@ -5119,6 +5119,29 @@ end
     }
 
     #[test]
+    fn c_target_supports_val() {
+        let source = "dim s$, n%\ns$ = \"42abc\"\nn% = val(s$)\nprint n%\nprint val(\"3.14\")\nprint val(\"not a number\")\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#include <stdlib.h>"),
+            "VAL needs <stdlib.h> for atof:\n{output}"
+        );
+        assert!(
+            output.contains("atof(bv_s_s)"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("atof(\"3.14\")") && output.contains("atof(\"not a number\")"),
+            "a string literal argument should be passed straight through:\n{output}"
+        );
+        assert!(
+            output.contains("((int)round((double)(atof(bv_s_s))))"),
+            "VAL assigned into an integer-suffixed variable should still round-narrow the \
+             same way any other float-returning expression does:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);

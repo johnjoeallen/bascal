@@ -172,12 +172,18 @@ fn function_c_name(ident: &BasicIdent) -> String {
 struct BuiltinUsage {
     needs_string_h: bool,
     needs_ring_buffer_helpers: bool,
+    /// Set by `VAL`, whose C translation (`atof`) is declared in
+    /// `<stdlib.h>`. `generate()` already pulls this header in whenever
+    /// `file_io.used`, for unrelated reasons -- this flag covers a
+    /// program that calls `VAL` without using any random-access I/O.
+    needs_stdlib_h: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
     let mut usage = BuiltinUsage {
         needs_string_h: false,
         needs_ring_buffer_helpers: false,
+        needs_stdlib_h: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -187,6 +193,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                     usage.needs_string_h = true;
                     usage.needs_ring_buffer_helpers = true;
                 }
+                "val" => usage.needs_stdlib_h = true,
                 _ => {}
             }
         }
@@ -960,6 +967,8 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if file_io.used {
         includes.push_str("#include <stdint.h>\n");
+        includes.push_str("#include <stdlib.h>\n");
+    } else if builtin_usage.needs_stdlib_h {
         includes.push_str("#include <stdlib.h>\n");
     }
 
@@ -3153,6 +3162,19 @@ fn render_numeric_call(
     if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 {
         let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
         return Ok((format!("((int)(unsigned char){s}[0])"), false));
+    }
+    // `VAL(s$)` -- parses a leading numeric prefix, real BASIC's own
+    // "stop at the first character that doesn't extend a valid number"
+    // behavior (`0` for a string with no such prefix at all) rather than
+    // an all-or-nothing parse -- exactly what C's `atof` already does, no
+    // helper needed. Always treated as float-typed here, same as the
+    // `CVS`/`CVD` unpack functions below: a caller assigning the result
+    // into an integer-suffixed variable still gets the correct rounding
+    // via the ordinary `coerce_numeric` narrowing path every other
+    // float-returning expression already goes through.
+    if name.name.eq_ignore_ascii_case("val") && args.len() == 1 {
+        let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+        return Ok((format!("atof({s})"), true));
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
