@@ -4,23 +4,70 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 use bcc::{compile_file, default_output_path, CompileOptions, Target};
+use clap::Parser;
 
-#[derive(Debug)]
+/// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
+/// (the `basic` target, complete) or an experimental native-C backend (the
+/// `C` target).
+#[derive(Parser, Debug)]
+#[command(name = "bcc", version, about, after_help = DEFAULT_TARGET_HELP)]
 struct Cli {
+    /// BASCAL source file to compile
+    #[arg(value_name = "input.bcl")]
     input: PathBuf,
+
+    /// Output path. A directory (existing, or written with a trailing `/` even if it doesn't exist yet) gets an auto-named file inside it; anything else is the output file path. Default: input with .bas/.c extension, same directory as input
+    #[arg(short = 'o', value_name = "PATH")]
     output: Option<PathBuf>,
+
+    /// Add a library search directory for `require` resolution (repeatable)
+    #[arg(short = 'L', value_name = "DIR")]
     library_dirs: Vec<PathBuf>,
+
+    /// Name a library (reserved for future use)
+    #[arg(short = 'l', value_name = "NAME")]
     libraries: Vec<String>,
+
+    /// Number every output line, not just branch targets (the default -- only needed to override an earlier --sparse-line-numbers on the same command line)
+    #[arg(long)]
     line_numbers: bool,
+
+    /// Number only branch targets, not every line. Invalid on real MBASIC/BASCOM; only safe with lenient dialects like FreeBASIC's -lang qb
+    #[arg(long)]
     sparse_line_numbers: bool,
+
+    /// Re-transpile even if the output is already up to date
+    #[arg(short = 'c', long)]
     clean: bool,
+
+    /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target C's .c
+    #[arg(short = 'b', long)]
     binary: bool,
+
+    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For --target basic this always means fbc's binary, run directly -- not real BASCOM, whose own .EXE needs a DOS environment/emulator like dosbox-x to run at all
+    #[arg(short = 'r', long)]
     run: bool,
-    target: Target,
+
+    /// Backend to generate code for: `basic` (the original, complete backend) or `C` (an experimental native-C backend). Case-insensitive; `c` also works. Default, if this flag isn't given: see DEFAULT TARGET below
+    #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
+    target: Option<Target>,
 }
 
+const DEFAULT_TARGET_HELP: &str = "\
+Default target (used when --target isn't given), first match wins:
+  1. BASCAL_TARGET environment variable
+  2. ~/.config/bascal/config (\"target=C\", one setting per line)
+  3. /etc/default/bascal (same format, system-wide)
+  4. basic, if none of the above are set";
+
 fn main() -> ExitCode {
-    match run() {
+    // Parsing happens before entering the fallible part of the program on
+    // purpose: a bad flag or --help/--version are clap's own concern (it
+    // prints its own formatted message and exits itself), entirely
+    // separate from the String-based "error: ..." reporting every actual
+    // compile/build/run failure below uses.
+    let cli = Cli::parse();
+    match run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("{message}");
@@ -31,14 +78,23 @@ fn main() -> ExitCode {
 
 /// Case-insensitively parses a `--target`/config-file/env-var value into a
 /// `Target`, or `None` if it names neither backend -- shared by the CLI
-/// flag, `BASCAL_TARGET`, and both config files so all four accept exactly
-/// the same spellings (`basic`/`BASIC`/`Basic`/..., `c`/`C`).
+/// flag's `clap` value parser, `BASCAL_TARGET`, and both config files so
+/// all four accept exactly the same spellings (`basic`/`BASIC`/`Basic`/...,
+/// `c`/`C`).
 fn parse_target_str(value: &str) -> Option<Target> {
     match value.to_ascii_lowercase().as_str() {
         "basic" => Some(Target::Basic),
         "c" => Some(Target::C),
         _ => None,
     }
+}
+
+/// `clap`'s own `value_parser` for `--target`/`-t` -- thin wrapper around
+/// `parse_target_str` matching the `Fn(&str) -> Result<Target, String>`
+/// shape `clap` expects.
+fn parse_target_value(value: &str) -> Result<Target, String> {
+    parse_target_str(value)
+        .ok_or_else(|| format!("expected `basic` or `C` (case-insensitive), got `{value}`"))
 }
 
 /// Finds `key`'s value in a simple `key=value` config file's contents --
@@ -73,7 +129,7 @@ fn parse_config_value(contents: &str, key: &str) -> Option<String> {
 /// Falls back to `Target::Basic` (the original, complete backend) if none
 /// of those are set, or set to something unrecognized. An explicit
 /// `--target`/`-t` flag on the command line always overrides whatever
-/// this returns -- see `parse_args`.
+/// this returns -- see `run`.
 fn resolve_default_target() -> Target {
     if let Ok(value) = env::var("BASCAL_TARGET") {
         if let Some(target) = parse_target_str(&value) {
@@ -100,19 +156,19 @@ fn resolve_default_target() -> Target {
     Target::Basic
 }
 
-/// The `-o` value's *effective* target: if it names a directory (already
-/// exists as one, or is written with a trailing path separator even if it
-/// doesn't exist yet -- `-o out/` for output that hasn't been generated
-/// before), the actual output file goes inside it, auto-named the same
-/// way an omitted `-o` would name it (input's stem plus the target's
-/// extension) -- not a raw file path the caller has to spell out
+/// The `-o` value's *effective* output path: if it names a directory
+/// (already exists as one, or is written with a trailing path separator
+/// even if it doesn't exist yet -- `-o out/` for output that hasn't been
+/// generated before), the actual output file goes inside it, auto-named
+/// the same way an omitted `-o` would name it (input's stem plus the
+/// target's extension) -- not a raw file path the caller has to spell out
 /// themselves. Otherwise (no trailing separator, and not an existing
 /// directory) `-o` is still an exact file path, same as before -- this is
 /// purely additive, not a breaking change to existing `-o exact/path.bas`
 /// usage.
-fn resolve_output_path(cli: &Cli) -> Result<PathBuf, String> {
+fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
     let Some(output) = &cli.output else {
-        return Ok(default_output_path(cli.input.as_path(), cli.target));
+        return Ok(default_output_path(cli.input.as_path(), target));
     };
     let looks_like_dir = output.is_dir()
         || output.as_os_str().to_string_lossy().ends_with('/')
@@ -120,21 +176,21 @@ fn resolve_output_path(cli: &Cli) -> Result<PathBuf, String> {
     if !looks_like_dir {
         return Ok(output.clone());
     }
-    let default_name = default_output_path(cli.input.as_path(), cli.target);
+    let default_name = default_output_path(cli.input.as_path(), target);
     let file_name = default_name.file_name().ok_or_else(|| {
         format!("error: can't derive an output file name from {}", cli.input.display())
     })?;
     Ok(output.join(file_name))
 }
 
-fn run() -> Result<(), String> {
-    let cli = parse_args(env::args().skip(1).collect())?;
+fn run(cli: Cli) -> Result<(), String> {
+    let target = cli.target.unwrap_or_else(resolve_default_target);
     // `--run` implies `--binary` -- there's no point building a binary
     // without one, and no way to run the program without building it
     // first.
     let want_binary = cli.binary || cli.run;
 
-    let output_path = resolve_output_path(&cli)?;
+    let output_path = resolve_output_path(&cli, target)?;
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -150,7 +206,7 @@ fn run() -> Result<(), String> {
             format!("error: invalid BASIC output path {}", output_path.display())
         })?);
         if want_binary && !is_up_to_date(&cli.input, &binary_path) {
-            let built = invoke_binary(cli.target, &output_path)?;
+            let built = invoke_binary(target, &output_path)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
@@ -161,7 +217,7 @@ fn run() -> Result<(), String> {
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
         line_numbers: cli.line_numbers && !cli.sparse_line_numbers,
-        target: cli.target,
+        target,
     };
     let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
@@ -175,7 +231,7 @@ fn run() -> Result<(), String> {
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
 
     if want_binary {
-        let built = invoke_binary(cli.target, &output_path)?;
+        let built = invoke_binary(target, &output_path)?;
         if cli.run {
             return run_binary(&built);
         }
@@ -293,130 +349,6 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     Ok(binary_path)
 }
 
-fn parse_args(args: Vec<String>) -> Result<Cli, String> {
-    let mut input = None;
-    let mut output = None;
-    let mut library_dirs = Vec::new();
-    let mut libraries = Vec::new();
-    // Full line numbering (every emitted line, not just branch targets) is
-    // the default: real MBASIC/BASCOM has no notion of an unnumbered
-    // statement line, so sparse numbering only works on more lenient
-    // dialects (e.g. FreeBASIC's `-lang qb`).
-    let mut line_numbers = true;
-    let mut sparse_line_numbers = false;
-    let mut clean = false;
-    let mut binary = false;
-    let mut run = false;
-    let mut target = resolve_default_target();
-    let mut i = 0;
-
-    while i < args.len() {
-        match args[i].as_str() {
-            "-o" => {
-                i += 1;
-                output =
-                    Some(PathBuf::from(args.get(i).ok_or_else(|| {
-                        "error: -o requires an output path".to_string()
-                    })?));
-            }
-            "-L" => {
-                i += 1;
-                library_dirs
-                    .push(PathBuf::from(args.get(i).ok_or_else(|| {
-                        "error: -L requires a directory".to_string()
-                    })?));
-            }
-            "-l" => {
-                i += 1;
-                libraries.push(
-                    args.get(i)
-                        .ok_or_else(|| "error: -l requires a library name".to_string())?
-                        .clone(),
-                );
-            }
-            "--line-numbers" => line_numbers = true,
-            "--sparse-line-numbers" => sparse_line_numbers = true,
-            "--clean" | "-c" => clean = true,
-            "--binary" | "-b" => binary = true,
-            "--run" | "-r" => run = true,
-            "--target" | "-t" => {
-                i += 1;
-                let value = args.get(i).ok_or_else(|| {
-                    "error: --target requires a value (basic or C)".to_string()
-                })?;
-                target = parse_target_str(value).ok_or_else(|| {
-                    format!(
-                        "error: unknown --target `{value}` (expected `basic` or `C`, \
-                         case-insensitive)"
-                    )
-                })?;
-            }
-            "-h" | "--help" => return Err(usage()),
-            flag if flag.starts_with('-') => return Err(format!("error: unknown flag `{flag}`")),
-            path => {
-                if input.replace(PathBuf::from(path)).is_some() {
-                    return Err("error: only one input file is supported".to_string());
-                }
-            }
-        }
-        i += 1;
-    }
-
-    Ok(Cli {
-        input: input.ok_or_else(usage)?,
-        output,
-        library_dirs,
-        libraries,
-        line_numbers,
-        sparse_line_numbers,
-        clean,
-        binary,
-        run,
-        target,
-    })
-}
-
-fn usage() -> String {
-    [
-        "usage: bcc input.bcl [-o path] [-L dir] [-l library]",
-        "              [--line-numbers | --sparse-line-numbers] [--clean | -c]",
-        "              [--binary | -b] [--run | -r] [--target | -t basic|C]",
-        "",
-        "Options:",
-        "  -o path                Output path. A directory (existing, or written with a",
-        "                         trailing / even if it doesn't exist yet) gets an",
-        "                         auto-named file inside it; anything else is the output",
-        "                         file path. Default: input with .bas/.c extension, same",
-        "                         directory as input",
-        "  -L dir                 Add a library search directory for require resolution",
-        "                         (repeatable)",
-        "  -l name                Name a library (reserved for future use)",
-        "  --line-numbers         Number every output line, not just branch targets",
-        "                         (the default -- only needed to override an earlier",
-        "                         --sparse-line-numbers on the same command line)",
-        "  --sparse-line-numbers  Number only branch targets, not every line (invalid on",
-        "                         real MBASIC/BASCOM; only safe with lenient dialects like",
-        "                         FreeBASIC's -lang qb)",
-        "  --clean, -c            Re-transpile even if the output is already up to date",
-        "  --binary, -b           Compile the generated output to tmp/<stem>: fbc for",
-        "                         --target basic's .bas, gcc for --target C's .c",
-        "  --run, -r              Also run the compiled binary (implies --binary). For",
-        "                         --target basic this always means fbc's binary, run",
-        "                         directly -- not real BASCOM, whose own .EXE needs a DOS",
-        "                         environment/emulator like dosbox-x to run at all",
-        "  --target, -t <target>  Backend to generate code for: `basic` (the original,",
-        "                         complete backend) or `C` (an experimental native-C",
-        "                         backend). Case-insensitive; `c` also works.",
-        "",
-        "Default target (used when --target isn't given), first match wins:",
-        "  1. BASCAL_TARGET environment variable",
-        "  2. ~/.config/bascal/config (\"target=C\", one setting per line)",
-        "  3. /etc/default/bascal (same format, system-wide)",
-        "  4. basic, if none of the above are set",
-    ]
-    .join("\n")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,32 +378,35 @@ mod tests {
     }
 
     #[test]
-    fn parse_args_accepts_uppercase_target_flag() {
-        let cli = parse_args(vec!["input.bcl".to_string(), "--target".to_string(), "C".to_string()])
-            .expect("should parse");
-        assert_eq!(cli.target, Target::C);
+    fn cli_accepts_uppercase_target_flag() {
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--target", "C"]).expect("should parse");
+        assert_eq!(cli.target, Some(Target::C));
     }
 
     #[test]
-    fn parse_args_rejects_unknown_target() {
-        let err = parse_args(vec!["input.bcl".to_string(), "-t".to_string(), "bogus".to_string()])
+    fn cli_rejects_unknown_target() {
+        let err = Cli::try_parse_from(["bcc", "input.bcl", "-t", "bogus"])
             .expect_err("should reject an unknown target");
-        assert!(err.contains("unknown --target"), "unexpected error: {err}");
+        assert!(err.to_string().contains("basic"), "unexpected error: {err}");
     }
 
     #[test]
-    fn parse_args_accepts_run_flag_long_and_short() {
-        let cli = parse_args(vec!["input.bcl".to_string(), "--run".to_string()])
-            .expect("should parse --run");
+    fn cli_accepts_run_flag_long_and_short() {
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--run"]).expect("should parse --run");
         assert!(cli.run);
         assert!(!cli.binary, "--run alone shouldn't also set binary -- run() adds that itself");
 
-        let cli = parse_args(vec!["input.bcl".to_string(), "-r".to_string()])
-            .expect("should parse -r");
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "-r"]).expect("should parse -r");
         assert!(cli.run);
     }
 
-    fn cli_with_output(input: PathBuf, output: Option<PathBuf>, target: Target) -> Cli {
+    #[test]
+    fn cli_target_defaults_to_none_letting_run_apply_resolve_default_target() {
+        let cli = Cli::try_parse_from(["bcc", "input.bcl"]).expect("should parse");
+        assert_eq!(cli.target, None);
+    }
+
+    fn cli_with_output(input: PathBuf, output: Option<PathBuf>) -> Cli {
         Cli {
             input,
             output,
@@ -482,19 +417,15 @@ mod tests {
             clean: false,
             binary: false,
             run: false,
-            target,
+            target: None,
         }
     }
 
     #[test]
     fn resolve_output_path_treats_an_existing_directory_as_a_target_directory() {
         let dir = tempfile::tempdir().unwrap();
-        let cli = cli_with_output(
-            PathBuf::from("some/input.bcl"),
-            Some(dir.path().to_path_buf()),
-            Target::C,
-        );
-        let resolved = resolve_output_path(&cli).unwrap();
+        let cli = cli_with_output(PathBuf::from("some/input.bcl"), Some(dir.path().to_path_buf()));
+        let resolved = resolve_output_path(&cli, Target::C).unwrap();
         assert_eq!(resolved, dir.path().join("input.c"));
     }
 
@@ -504,27 +435,23 @@ mod tests {
         let not_yet_created = dir.path().join("nested");
         let mut with_slash = not_yet_created.to_string_lossy().into_owned();
         with_slash.push('/');
-        let cli =
-            cli_with_output(PathBuf::from("input.bcl"), Some(PathBuf::from(with_slash)), Target::Basic);
-        let resolved = resolve_output_path(&cli).unwrap();
+        let cli = cli_with_output(PathBuf::from("input.bcl"), Some(PathBuf::from(with_slash)));
+        let resolved = resolve_output_path(&cli, Target::Basic).unwrap();
         assert_eq!(resolved, not_yet_created.join("input.bas"));
     }
 
     #[test]
     fn resolve_output_path_treats_a_plain_path_as_an_exact_file() {
-        let cli = cli_with_output(
-            PathBuf::from("input.bcl"),
-            Some(PathBuf::from("exact/output.bas")),
-            Target::Basic,
-        );
-        let resolved = resolve_output_path(&cli).unwrap();
+        let cli =
+            cli_with_output(PathBuf::from("input.bcl"), Some(PathBuf::from("exact/output.bas")));
+        let resolved = resolve_output_path(&cli, Target::Basic).unwrap();
         assert_eq!(resolved, PathBuf::from("exact/output.bas"));
     }
 
     #[test]
     fn resolve_output_path_defaults_next_to_the_input_when_o_is_omitted() {
-        let cli = cli_with_output(PathBuf::from("some/dir/input.bcl"), None, Target::C);
-        let resolved = resolve_output_path(&cli).unwrap();
+        let cli = cli_with_output(PathBuf::from("some/dir/input.bcl"), None);
+        let resolved = resolve_output_path(&cli, Target::C).unwrap();
         assert_eq!(resolved, PathBuf::from("some/dir/input.c"));
     }
 }

@@ -4452,7 +4452,10 @@ end
                        close #1\n\
                        end\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS];"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS + 1];"),
+            "unexpected output:\n{output}"
+        );
         assert!(
             output.contains("bcc_files[1] = fopen(\"data.dat\", \"rb+\");"),
             "unexpected output:\n{output}"
@@ -4536,6 +4539,43 @@ end
         assert!(
             diagnostics.iter().any(|d| d.message.contains("no record number")),
             "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_random_access_channel_1_indexes_bcc_files_safely_in_bounds() {
+        // Regression test: `bcc_files` used to be declared
+        // `[BCC_MAX_CHANNELS]` (32 elements, valid indices 0..=31) while
+        // channel numbers -- 1-based, like real BASIC's own `#1`/`#2`/...
+        // -- were used directly as the index, making channel
+        // `BCC_MAX_CHANNELS` itself (32) index one past the end. Now
+        // declared `[BCC_MAX_CHANNELS + 1]` so every channel from 1
+        // through BCC_MAX_CHANNELS stays in bounds.
+        let source = "open \"f.dat\" for random as #1 len = 4\n\
+                       field #1, 4 as b$\n\
+                       close #1\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS + 1];"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_a_file_channel_number_out_of_range() {
+        let source = "open \"f.dat\" for random as #99 len = 4\nfield #99, 4 as b$\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("out of range")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+
+        let source = "open \"f.dat\" for random as #0 len = 4\nfield #0, 4 as b$\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("out of range")),
+            "channel 0 should be rejected too (BASIC channels are 1-based): {diagnostics:?}"
         );
     }
 

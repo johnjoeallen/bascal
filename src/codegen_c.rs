@@ -230,8 +230,16 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
 const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
 
 /// Random-access record I/O runtime support: `bcc_files` is a fixed-size
-/// table of open `FILE*` handles indexed directly by BASCAL channel
-/// number (see `BCC_MAX_CHANNELS`'s doc comment); `bcc_mki`/`bcc_mkl`/
+/// table of open `FILE*` handles indexed *directly* by BASCAL channel
+/// number, not `channel - 1` -- BASIC channels are 1-based (`#1`, never
+/// `#0`), so the table is declared `[BCC_MAX_CHANNELS + 1]` (not just
+/// `[BCC_MAX_CHANNELS]`) specifically so index `BCC_MAX_CHANNELS` itself
+/// -- the highest channel number `literal_channel` accepts -- is still
+/// in bounds; index `0` goes permanently unused, a harmless one-slot
+/// waste far simpler than remapping every channel reference by one.
+/// `literal_channel` rejects any channel outside `1..=BCC_MAX_CHANNELS`
+/// before it ever reaches here, so nothing at this level needs its own
+/// bounds check. `bcc_mki`/`bcc_mkl`/
 /// `bcc_mks`/`bcc_mkd` and `bcc_cvi`/`bcc_cvl`/`bcc_cvs`/`bcc_cvd` are
 /// `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` -- raw
 /// fixed-width-integer/float byte packing and unpacking via `memcpy`,
@@ -250,7 +258,7 @@ const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC
 /// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
 /// not big-endian mainframes, matching real BASIC's own on-disk
 /// little-endian layout only on those platforms).
-const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
+const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS + 1];\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -327,6 +335,12 @@ fn apply_field_statement(
                 .to_string(),
         );
     };
+    if !(1..=BCC_MAX_CHANNELS).contains(ch) {
+        return Err(format!(
+            "file channel #{ch} is out of range -- the minimal C backend supports channels 1 \
+             through {BCC_MAX_CHANNELS}"
+        ));
+    }
     let mut entries = Vec::with_capacity(fields.len());
     let mut offset = 0u32;
     for (width_expr, var) in fields {
@@ -1446,6 +1460,13 @@ fn emit_statement(
     }
 }
 
+/// Must match `FILE_IO_HELPER`'s own `#define BCC_MAX_CHANNELS 32` --
+/// there's no way to interpolate a Rust `const` into that `const &str` C
+/// template, so this is a second, deliberately-named copy of the same
+/// number instead, kept in sync by hand (checked by
+/// `literal_channel_respects_bcc_max_channels_bound` in `tests`).
+const BCC_MAX_CHANNELS: i64 = 32;
+
 /// A channel number that must be known at compile time -- `GET`/`PUT`
 /// need to look up their channel's `FIELD` layout (`FileIoLayout`), and
 /// `OPEN`/`CLOSE` index the fixed-size `bcc_files` table directly by
@@ -1455,15 +1476,30 @@ fn emit_statement(
 /// only ever produces literal channel numbers (see
 /// `records::lower_file_decl`), so this doesn't reject anything the DSL
 /// itself would need.
+///
+/// Also range-checked here, once, against `BCC_MAX_CHANNELS` -- BASIC
+/// channels are 1-based, so `0` is already meaningless, and a channel
+/// above `BCC_MAX_CHANNELS` would index `bcc_files` out of bounds (real
+/// undefined behavior, not just a wrong answer) if it weren't caught
+/// before ever reaching generated code.
 fn literal_channel(expr: &Expr) -> Result<i64, String> {
-    match expr {
-        Expr::Integer(n) => Ok(*n),
-        _ => Err(
-            "a file channel number must be a literal integer -- the minimal C backend needs to \
-             know it at compile time"
-                .to_string(),
-        ),
+    let channel = match expr {
+        Expr::Integer(n) => *n,
+        _ => {
+            return Err(
+                "a file channel number must be a literal integer -- the minimal C backend needs \
+                 to know it at compile time"
+                    .to_string(),
+            )
+        }
+    };
+    if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
+        return Err(format!(
+            "file channel #{channel} is out of range -- the minimal C backend supports channels \
+             1 through {BCC_MAX_CHANNELS}"
+        ));
     }
+    Ok(channel)
 }
 
 /// Whether `expr` is exactly `MKI$`/`MKL$`/`MKS$`/`MKD$` applied to a
