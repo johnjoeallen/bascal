@@ -5349,6 +5349,36 @@ end
     }
 
     #[test]
+    fn c_target_supports_trig_and_log_exp() {
+        let source = "print sin(0.0)\nprint cos(0.0)\nprint tan(0.0)\nprint atn(1.0)\nprint log(1.0)\nprint exp(0.0)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("sin((double)(0.0))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("cos((double)(0.0))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("tan((double)(0.0))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("atan((double)(1.0))"),
+            "ATN should map to atan(), not atn():\n{output}"
+        );
+        assert!(
+            output.contains("log((double)(1.0))"),
+            "LOG should be the natural log, not log10:\n{output}"
+        );
+        assert!(
+            output.contains("exp((double)(0.0))"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);

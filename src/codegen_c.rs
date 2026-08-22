@@ -25,10 +25,11 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), eighteen BASIC intrinsics
-//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`,
-//! `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`, `SGN`, `CINT`,
-//! `CLNG`, `CSNG`, `CDBL` (see `render_numeric_call`/`render_string_call`/
+//! single-precision -- see `effective_suffix`), twenty-four BASIC
+//! intrinsics implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`,
+//! `LEFT$`, `RIGHT$`, `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`,
+//! `SGN`, `CINT`, `CLNG`, `CSNG`, `CDBL`, `SIN`, `COS`, `TAN`, `ATN`,
+//! `LOG`, `EXP` (see `render_numeric_call`/`render_string_call`/
 //! `MID_HELPER`/`INSTR_HELPER`/`SGN_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
@@ -3693,6 +3694,27 @@ fn render_numeric_call(
     if name.name.eq_ignore_ascii_case("cdbl") && args.len() == 1 {
         let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
         return Ok((format!("((double)({inner}))"), true));
+    }
+    // `SIN`/`COS`/`TAN`/`ATN`/`LOG`/`EXP` -- direct `<math.h>` mappings
+    // (radians in and out, same convention real BASIC's own trig
+    // functions use), each always float-typed regardless of its
+    // argument's own type, same as `SQR`. `LOG` is the natural
+    // logarithm (`log()`/`ln`), not base-10 -- real BASIC's own
+    // convention (`LOG` is `ln`; base-10 would be `LOG10`, which BASIC
+    // doesn't have a builtin for at all).
+    for (basic_name, c_fn) in [
+        ("sin", "sin"),
+        ("cos", "cos"),
+        ("tan", "tan"),
+        ("atn", "atan"),
+        ("log", "log"),
+        ("exp", "exp"),
+    ] {
+        if name.name.eq_ignore_ascii_case(basic_name) && args.len() == 1 {
+            let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+            *needs_math = true;
+            return Ok((format!("{c_fn}((double)({inner}))"), true));
+        }
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
