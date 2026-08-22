@@ -5360,6 +5360,50 @@ end
     }
 
     #[test]
+    fn c_target_record_field_accessed_from_a_procedure_body_sees_its_layout() {
+        // Regression test for a real bug: a function/procedure body is
+        // emitted *before* the top-level FIELD declarations that establish
+        // a channel's layout, even though those declarations always run
+        // first at actual program execution -- found via
+        // tutorial/card_catalog.bcl while implementing procedure support.
+        let source = r#"record Header
+    size: int16
+end record
+
+file header as Header = open("catalog.dat")
+
+procedure touch()
+    header[1] = { size: 1 }
+end procedure
+
+touch()
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bcc_put_record_header("),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_put_record_header(bcc_files[0], 1, &bcc_tmp_0);"),
+            "the procedure body should be able to reach the typed record helper:\n{output}"
+        );
+        // The helper must be defined exactly once -- a naive fix that lets
+        // the function-body pre-scan and the real top-level pass each emit
+        // their own copy would produce a duplicate-symbol C file.
+        assert_eq!(
+            output.matches("static int bcc_put_record_header(").count(),
+            1,
+            "unexpected output:\n{output}"
+        );
+        assert_eq!(
+            output.matches("static int bcc_get_record_header(").count(),
+            1,
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_random_access_field_get_put_lset() {
         // OPEN FOR RANDOM/FIELD/LSET/PUT/GET round-trip -- the core
         // random-access record I/O shape (see codegen_c.rs's
