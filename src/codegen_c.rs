@@ -3,42 +3,48 @@
 //! Deliberately narrow: this only understands a top-level `print` of
 //! string/numeric literals -- including negation, every arithmetic
 //! operator (`+`/`-`/`*`/`/`/`\`/MOD/`^`), every comparison operator
-//! (`=`/`<>`/`<`/`<=`/`>`/`>=`), and every bitwise/logical operator
+//! (`=`/`<>`/`<`/`<=`/`>`/`>=`), every bitwise/logical operator
 //! (`AND`/`OR`/`XOR`/`NOT` -- genuinely bitwise, not short-circuit
-//! booleans) of them -- `end`, `dim`, `const`, assignment/reading of
-//! *scalar* variables (numeric: `%`/`&`/`!`/`#`; string: `$`, fixed-size
-//! `char[256]` buffers written only via `snprintf`, never `strcpy`/
-//! `strcat` -- see `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string
-//! concatenation, `if`/`elseif`/`else`/`end if` (including the
-//! single-line form, and nesting), `for`/`next`, `while`/`wend`, every
-//! `do`/`loop` pre-/post-check variant, `exit` (maps to a plain C
-//! `break;` -- C's native loops already give it the right "innermost
-//! enclosing loop" target for free), `select case` (single-value,
-//! `to` range, and `is <op>` clauses on a numeric selector;
-//! exact-match-only on a string selector, via `strcmp` -- see
-//! `emit_select_case`), and `function` declarations with byval scalar
-//! parameters (numeric and string), `return`, local variables (real C
-//! function-local scope -- no name-mangling needed, unlike the BASIC
-//! backend's GOSUB-against-shared-globals approach), and `global` to
-//! opt into reading/writing a top-level variable instead (see
-//! `build_function_table`/`emit_function_def`). NOT yet supported:
-//! `procedure` (no return value), `byref`/array parameters, and a
-//! function body that doesn't provably `return` on every path (see
+//! booleans) of them, and `&&`/`||` (BASCAL's own, *already*
+//! short-circuit operators -- unlike bitwise `AND`/`OR`, C's native
+//! `&&`/`||` are the direct, correct translation here) -- `end`, `dim`,
+//! `const`, assignment/reading of *scalar* variables (numeric: `%`/`&`/
+//! `!`/`#`; string: `$`, fixed-size `char[256]` buffers written only via
+//! `snprintf`, never `strcpy`/`strcat` -- see
+//! `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string concatenation,
+//! `if`/`elseif`/`else`/`end if` (including the single-line form, and
+//! nesting), `for`/`next`, `while`/`wend`, every `do`/`loop` pre-/
+//! post-check variant, `exit` (maps to a plain C `break;` -- C's native
+//! loops already give it the right "innermost enclosing loop" target for
+//! free), `select case` (single-value, `to` range, and `is <op>` clauses
+//! on a numeric selector; exact-match-only on a string selector, via
+//! `strcmp` -- see `emit_select_case`), `function` declarations with
+//! byval scalar parameters (numeric and string), `return`, local
+//! variables (real C function-local scope -- no name-mangling needed,
+//! unlike the BASIC backend's GOSUB-against-shared-globals approach), and
+//! `global` to opt into reading/writing a top-level variable instead (see
+//! `build_function_table`/`emit_function_def`), and five BASIC intrinsics
+//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$` (see
+//! `render_numeric_call`/`render_string_call`/`MID_HELPER`). NOT yet
+//! supported: `procedure` (no return value), `byref`/array parameters,
+//! and a function body that doesn't provably `return` on every path (see
 //! `body_always_returns`) -- all rejected with a diagnostic rather than
 //! guessed at. Recursion (direct or indirect) is rejected at the
 //! resolver level before codegen ever runs, for every target, not just
-//! this one. Everything else (other statement kinds, arrays, BASIC
-//! intrinsic calls like `LEN`/`MID$`/`CHR$`) reports a "not supported
-//! yet" diagnostic rather than panicking or emitting wrong code -- this
-//! is a walking skeleton to prove the CLI/dispatch plumbing
-//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real
-//! backend. Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
+//! this one. Everything else (other statement kinds, arrays, any BASIC
+//! intrinsic beyond the five above) reports a "not supported yet"
+//! diagnostic rather than panicking or emitting wrong code -- this is a
+//! walking skeleton to prove the CLI/dispatch plumbing (`Target::C`,
+//! `--target c`, `invoke_gcc`) end-to-end, not a real backend. Tutorials
+//! that compile end to end today: `tutorial/01_hello.bcl`,
 //! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
-//! `tutorial/05_loops.bcl`, and `tutorial/06_select_case.bcl` --
-//! `tutorial/07_functions.bcl` itself still needs `require`d library
-//! functions and BASIC intrinsic calls (`LEN`/`MID$`/`ASC`/`CHR$`) this
-//! backend doesn't support yet, even though plain user-defined functions
-//! now work.
+//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`, and
+//! `tutorial/07_functions.bcl` (including its two `require`d
+//! `com.bascal.stdlib` library functions, `ucase$`/`lcase$` -- library
+//! merging itself needed no C-backend-specific work at all, since
+//! `lib.rs`'s `require`/`import` resolution already merges a required
+//! file's functions into `Program.functions` before either backend's
+//! codegen ever runs).
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -98,6 +104,22 @@ fn fn_key(ident: &BasicIdent) -> (String, Option<TypeSuffix>) {
     (ident.name.to_ascii_lowercase(), ident.suffix)
 }
 
+/// Whether `name` is *plausibly* a call at all -- a known user-defined
+/// function, or one of the handful of BASIC intrinsics this backend
+/// implements natively (`LEN`/`ASC`/`CHR$`/`MID$`/`LEFT$` -- see
+/// `render_numeric_call`/`render_string_call`). Used only to disambiguate
+/// `Expr::ArrayRef` (a single-argument or zero-argument call parses as
+/// this, not `Expr::Call` -- see `make_paren_ident_expr` in `parser.rs`)
+/// from a genuine, unsupported array access sharing the same shape:
+/// deliberately permissive (an unknown builtin name still routes to
+/// `render_numeric_call`/`render_string_call`, which reject it with a
+/// precise error) rather than trying to enumerate every way a call could
+/// be invalid here too.
+fn is_known_callable(name: &BasicIdent, functions: &FunctionTable) -> bool {
+    functions.contains_key(&fn_key(name))
+        || matches!(name.name.to_ascii_lowercase().as_str(), "len" | "asc" | "chr" | "mid" | "left")
+}
+
 /// The C identifier a BASCAL function maps to. Same `bf_<tag>_<name>`
 /// shape as `c_var_name`'s `bv_<tag>_<name>`, but its own prefix -- a
 /// function and a variable sharing a BASIC name (legal, since they're
@@ -113,6 +135,69 @@ fn function_c_name(ident: &BasicIdent) -> String {
     };
     format!("bf_{tag}_{}", ident.name.to_ascii_lowercase())
 }
+
+/// Which of the small set of BASIC intrinsics this backend implements
+/// natively (`LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$` -- see
+/// `render_numeric_call`/`render_string_call`) the program actually calls
+/// anywhere, computed once, up front, by one AST scan (reusing
+/// `codegen_basic::visit_body_exprs`, which already knows how to walk
+/// every expression in every statement kind) rather than threading yet
+/// another mutable flag through the entire codegen call graph the way
+/// `needs_math`/`needs_string` already are: those two are set reactively,
+/// exactly where the triggering construct is actually emitted, but this
+/// only needs a yes/no answer *before* any code is emitted at all (to
+/// decide whether to emit the `bcc_mid`/`bcc_chr` helper functions and the
+/// `<string.h>` include), so a simple up-front scan is simpler than
+/// plumbing.
+struct BuiltinUsage {
+    needs_string_h: bool,
+    needs_ring_buffer_helpers: bool,
+}
+
+fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
+    let mut usage = BuiltinUsage { needs_string_h: false, needs_ring_buffer_helpers: false };
+    let mut visit = |expr: &Expr| {
+        if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
+            match name.name.to_ascii_lowercase().as_str() {
+                "len" | "asc" => usage.needs_string_h = true,
+                "mid" | "left" | "chr" => {
+                    usage.needs_string_h = true;
+                    usage.needs_ring_buffer_helpers = true;
+                }
+                _ => {}
+            }
+        }
+    };
+    crate::codegen_basic::visit_body_exprs(&program.statements, &mut visit);
+    for func in &program.functions {
+        crate::codegen_basic::visit_body_exprs(&func.body, &mut visit);
+    }
+    usage
+}
+
+/// `bcc_mid`/`bcc_chr` -- `MID$`/`LEFT$` and `CHR$` -- both return
+/// `const char*` from a small fixed pool of `BCC_STRBUF_COUNT` static
+/// buffers, cycling through them round-robin, rather than the
+/// out-parameter-plus-caller-supplied-temp convention every *other*
+/// string value in this backend uses (`render_string_expr`'s own
+/// concatenation/user-function-call cases). That convention needs a
+/// prelude -- a temp buffer declared, then a statement writing into it,
+/// *before* the line that uses the result -- which `render_numeric_expr`
+/// has nowhere to put (it returns a single expression, no prelude
+/// mechanism at all): `LEN(MID$(s$, i%, 1))`/`ASC(...)` need to use a
+/// nested `MID$`/`CHR$` call as a plain sub-expression, no statement
+/// support needed. A self-contained returned pointer sidesteps the whole
+/// problem, at the cost of a real, narrow trade-off: the buffer a given
+/// call's result lives in gets reused after `BCC_STRBUF_COUNT` further
+/// `bcc_mid`/`bcc_chr` calls -- fine for the handful of calls a single
+/// expression or statement ordinarily makes, but a result must be
+/// consumed (assigned, concatenated, printed) well before that many more
+/// such calls happen, or it silently reads back changed. User-defined
+/// string-returning functions don't share this pool -- see
+/// `function_signature`'s `bcc_out` convention -- so nesting one of
+/// *those* inside `LEN`/`ASC` still isn't supported (see
+/// `render_prelude_free_string_arg`).
+const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\n";
 
 /// Validates every function's shape up front and builds the lookup table
 /// `render_numeric_expr`/`render_string_expr` use for `Expr::Call`.
@@ -349,14 +434,18 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         body.push_str("    return 0;\n");
     }
 
+    let builtin_usage = scan_builtin_usage(program);
+
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, and <string.h> only when a string `select case`
-    // needs strcmp() from it -- most programs won't need either.
+    // needs strcmp() from it, or a LEN/ASC/CHR$/MID$/LEFT$ call needs
+    // strlen() (see `scan_builtin_usage`) -- most programs won't need
+    // either.
     let mut includes = String::from("#include <stdio.h>\n");
     if needs_math {
         includes.push_str("#include <math.h>\n");
     }
-    if needs_string {
+    if needs_string || builtin_usage.needs_string_h {
         includes.push_str("#include <string.h>\n");
     }
 
@@ -370,6 +459,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
 
     let mut out = includes;
     out.push('\n');
+    if builtin_usage.needs_ring_buffer_helpers {
+        out.push_str(MID_HELPER);
+    }
     if !globals_decl.is_empty() {
         out.push_str(&globals_decl);
         out.push('\n');
@@ -1327,11 +1419,48 @@ fn render_string_call(
     temp_counter: &mut usize,
     functions: &FunctionTable,
 ) -> Result<(Vec<String>, String), String> {
+    // `CHR$(code%)`/`MID$(s$, start%[, length%])`/`LEFT$(s$, n%)` (`LEFT$`
+    // is exactly `MID$(s$, 1, n%)`) all delegate to the `bcc_chr`/`bcc_mid`
+    // ring-buffer helpers (see `MID_HELPER`'s doc comment for why: they
+    // return a self-contained `const char*` expression, no prelude of
+    // their own needed, unlike every other non-trivial string value in
+    // this backend). The 2-argument `MID$` form passes `INT_MAX` as the
+    // length, relying on `bcc_mid`'s own clamp-to-available-length
+    // behavior to reduce that to "everything from `start` to the end."
+    // Only the *argument* expressions can still need a prelude of their
+    // own (e.g. a concatenation as `MID$`'s source string) -- that's
+    // still collected and threaded through normally.
+    if name.name.eq_ignore_ascii_case("chr") && args.len() == 1 {
+        let (text, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        let coerced = coerce_numeric(text, is_float, false, needs_math);
+        return Ok((Vec::new(), format!("bcc_chr({coerced})")));
+    }
+    if (name.name.eq_ignore_ascii_case("mid") && (args.len() == 2 || args.len() == 3))
+        || (name.name.eq_ignore_ascii_case("left") && args.len() == 2)
+    {
+        let (prelude, s_text) = render_string_expr(&args[0], needs_math, temp_counter, functions)?;
+        let is_left = name.name.eq_ignore_ascii_case("left");
+        let (start_text, length_text) = if is_left {
+            let (t, f) = render_numeric_expr(&args[1], needs_math, functions)?;
+            ("1".to_string(), coerce_numeric(t, f, false, needs_math))
+        } else {
+            let (st, sf) = render_numeric_expr(&args[1], needs_math, functions)?;
+            let start = coerce_numeric(st, sf, false, needs_math);
+            let length = if args.len() == 3 {
+                let (lt, lf) = render_numeric_expr(&args[2], needs_math, functions)?;
+                coerce_numeric(lt, lf, false, needs_math)
+            } else {
+                "2147483647".to_string()
+            };
+            (start, length)
+        };
+        return Ok((prelude, format!("bcc_mid({s_text}, {start_text}, {length_text})")));
+    }
     let sig = functions.get(&fn_key(name)).ok_or_else(|| {
         format!(
             "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
              functions with a byval scalar signature are callable so far (no built-in BASIC \
-             intrinsics like LEN$/MID$/CHR$ yet)"
+             intrinsics like LEN/ASC/CHR$/MID$/LEFT$ are, and are already handled above)"
         )
     })?;
     if args.len() != sig.params.len() {
@@ -1419,7 +1548,7 @@ fn render_string_expr(
             render_string_call(name, args, needs_math, temp_counter, functions)
         }
         Expr::ArrayRef { name, indices }
-            if name.suffix == Some(TypeSuffix::String) && functions.contains_key(&fn_key(name)) =>
+            if name.suffix == Some(TypeSuffix::String) && is_known_callable(name, functions) =>
         {
             render_string_call(name, indices, needs_math, temp_counter, functions)
         }
@@ -1516,11 +1645,28 @@ fn render_numeric_call(
     needs_math: &mut bool,
     functions: &FunctionTable,
 ) -> Result<(String, bool), String> {
+    // `LEN(s$)` -- `strlen`, cast to `int` so it prints under `%d` like
+    // every other integer result here rather than a possibly-64-bit
+    // `size_t`. `ASC(s$)` -- the ASCII code of the first character;
+    // reading `s[0]` is always in-bounds (every string here is a
+    // null-terminated `char[256]` buffer, so an empty string's `s[0]` is
+    // just its own NUL terminator, giving `0`) -- unlike real BASIC,
+    // which raises a runtime error on an empty string, this is a
+    // behavioral gap, not a memory-safety one, same category as this
+    // backend's other unchecked-range operators.
+    if name.name.eq_ignore_ascii_case("len") && args.len() == 1 {
+        let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+        return Ok((format!("((int)strlen({s}))"), false));
+    }
+    if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 {
+        let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+        return Ok((format!("((int)(unsigned char){s}[0])"), false));
+    }
     let sig = functions.get(&fn_key(name)).ok_or_else(|| {
         format!(
             "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
              functions with a byval scalar signature are callable so far (no built-in BASIC \
-             intrinsics like LEN/MID$/CHR$ yet)"
+             intrinsics like CHR$/MID$/LEFT$ are, and LEN/ASC are already handled above)"
         )
     })?;
     if sig.is_string {
@@ -1536,7 +1682,7 @@ fn render_numeric_call(
     let mut arg_texts = Vec::with_capacity(args.len());
     for (arg, param) in args.iter().zip(&sig.params) {
         if param.is_string {
-            arg_texts.push(render_prelude_free_string_arg(arg)?);
+            arg_texts.push(render_prelude_free_string_arg(arg, needs_math, functions)?);
         } else {
             let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
             arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
@@ -1681,6 +1827,31 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionT
             };
             Ok((format!("(-({left_text} {c_op} {right_text}))"), false))
         }
+        // BASCAL's `&&`/`||` (distinct from bitwise `AND`/`OR` above --
+        // restricted to `if`/`elseif`/`while`/`do` conditions, never
+        // storable in a variable) are *already* real short-circuit
+        // operators, unlike classic BASIC's bitwise-only `AND`/`OR` --
+        // real C's own `&&`/`||` are the direct, correct translation
+        // here (genuinely short-circuit, same as BASCAL's own), not the
+        // bug `Eq`/`Ne`/etc. above's own comment warns `AND`/`OR` against
+        // reusing. The BASIC backend needs a manual GOTO-chain
+        // (`condition_jump`) to fake short-circuit evaluation, since
+        // real MBASIC/BASCOM has no such primitive at all; C already
+        // does. Result is `int` (0/1, not BASIC's -1/0) -- fine here
+        // since, like the comparison operators above producing a value
+        // that's *only* ever tested for zero-vs-nonzero in a condition,
+        // this can't be stored into a variable and compared against a
+        // literal `-1` elsewhere the way an ordinary BASIC boolean might.
+        Expr::Binary { left, op: op @ (BinaryOp::AndAnd | BinaryOp::OrOr), right } => {
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
+            let c_op = match op {
+                BinaryOp::AndAnd => "&&",
+                BinaryOp::OrOr => "||",
+                _ => unreachable!(),
+            };
+            Ok((format!("({left_text} {c_op} {right_text})"), false))
+        }
         // Real MBASIC/BASCOM's AND/OR/XOR are genuinely bitwise, not
         // short-circuit booleans -- see the project memory saved
         // specifically for this. Verified against the GW-BASIC Reference
@@ -1751,23 +1922,63 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionT
 }
 
 /// A string argument to a function called from a *numeric* context
-/// (`render_numeric_expr`'s own `Expr::Call` arm) -- restricted to the two
-/// shapes that need no prelude of their own (a plain literal or a bare
-/// `$`-suffixed variable read), since `render_numeric_expr` has no prelude
-/// mechanism to route setup code (e.g. a concatenation's temp buffer)
-/// through. A string-returning function called from a *string* context
-/// doesn't have this restriction -- see `render_string_expr`'s own
-/// `Expr::Call` arm, which does have a prelude to work with.
-fn render_prelude_free_string_arg(expr: &Expr) -> Result<String, String> {
+/// (`render_numeric_expr`'s own `Expr::Call` arm, or `LEN`/`ASC`'s own
+/// string argument in `render_numeric_call`) -- restricted to shapes that
+/// need no prelude of their own, since `render_numeric_expr` has no
+/// prelude mechanism to route setup code (e.g. `+` concatenation's temp
+/// buffer) through: a plain literal, a bare `$`-suffixed variable read,
+/// or a `CHR$`/`MID$`/`LEFT$` call (these three are also prelude-free
+/// expressions in their own right -- see `MID_HELPER`'s doc comment --
+/// *if* their own arguments are too, checked recursively here). A
+/// string-returning **user-defined** function called from a *string*
+/// context doesn't have this restriction -- see `render_string_expr`'s
+/// own `Expr::Call` arm, which does have a prelude to work with -- but
+/// one called from here still does, since it uses the
+/// out-parameter-plus-temp-buffer convention (`function_signature`'s
+/// `bcc_out`), not the ring buffer.
+fn render_prelude_free_string_arg(
+    expr: &Expr,
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+) -> Result<String, String> {
     match expr {
         Expr::String(s) => Ok(format!("\"{}\"", escape_c_string_literal(s))),
         Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
             Ok(c_var_name(ident, TypeSuffix::String))
         }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("chr") && args.len() == 1 =>
+        {
+            let (text, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+            let coerced = coerce_numeric(text, is_float, false, needs_math);
+            Ok(format!("bcc_chr({coerced})"))
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if (name.name.eq_ignore_ascii_case("mid") && (args.len() == 2 || args.len() == 3))
+                || (name.name.eq_ignore_ascii_case("left") && args.len() == 2) =>
+        {
+            let s_text = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+            let is_left = name.name.eq_ignore_ascii_case("left");
+            let (start_text, length_text) = if is_left {
+                let (t, f) = render_numeric_expr(&args[1], needs_math, functions)?;
+                ("1".to_string(), coerce_numeric(t, f, false, needs_math))
+            } else {
+                let (st, sf) = render_numeric_expr(&args[1], needs_math, functions)?;
+                let start = coerce_numeric(st, sf, false, needs_math);
+                let length = if args.len() == 3 {
+                    let (lt, lf) = render_numeric_expr(&args[2], needs_math, functions)?;
+                    coerce_numeric(lt, lf, false, needs_math)
+                } else {
+                    "2147483647".to_string()
+                };
+                (start, length)
+            };
+            Ok(format!("bcc_mid({s_text}, {start_text}, {length_text})"))
+        }
         _ => Err(
             "a string argument to a function called from a numeric context must be a plain \
-             string literal or string variable (no concatenation or nested calls) -- not \
-             supported by the minimal C backend yet"
+             string literal, string variable, or CHR$/MID$/LEFT$ call (no concatenation or \
+             user-defined function calls) -- not supported by the minimal C backend yet"
                 .to_string(),
         ),
     }

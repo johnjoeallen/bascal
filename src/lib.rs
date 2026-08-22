@@ -3649,17 +3649,15 @@ end
     }
 
     #[test]
-    fn c_target_print_still_rejects_string_function_calls() {
-        // String scalar variables ARE supported now (see the dedicated
-        // string tests below) -- but calls like LEN$() still aren't.
+    fn c_target_print_supports_len_builtin() {
+        // LEN is one of the small set of BASIC intrinsics this backend
+        // implements natively (see `render_numeric_call` in codegen_c.rs)
+        // -- superseded `c_target_print_still_rejects_string_function_calls`,
+        // which predates that support and asserted the opposite.
         let source = "name$ = \"Alice\"\nprint len(name$)\nend\n";
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("call_print.bcl");
-        std::fs::write(&path, format!("program p\n{source}")).unwrap();
-
-        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
-        let result = compile_file(&path, &options);
-        assert!(result.is_err());
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("#include <string.h>"), "unexpected output:\n{output}");
+        assert!(output.contains("((int)strlen(bv_s_name))"), "unexpected output:\n{output}");
     }
 
     #[test]
@@ -4317,6 +4315,66 @@ end
             diagnostics.iter().any(|d| d.message.contains("must end with an explicit `return`")),
             "unexpected diagnostics: {diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn c_target_supports_asc_chr_mid_left_builtins() {
+        // ASC/CHR$/MID$/LEFT$ round-trip through the `bcc_mid`/`bcc_chr`
+        // ring-buffer helpers (see `MID_HELPER` in codegen_c.rs) so a
+        // nested call (ASC of a MID$/CHR$ result) works even inside a
+        // numeric context, which has no prelude mechanism of its own.
+        let source = "s$ = \"hello\"\n\
+                       print asc(s$)\n\
+                       print chr$(65)\n\
+                       print mid$(s$, 2)\n\
+                       print mid$(s$, 2, 2)\n\
+                       print left$(s$, 3)\n\
+                       print asc(mid$(s$, 1, 1))\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("#define BCC_STRBUF_COUNT"), "unexpected output:\n{output}");
+        assert!(output.contains("static const char* bcc_mid("), "unexpected output:\n{output}");
+        assert!(output.contains("static const char* bcc_chr("), "unexpected output:\n{output}");
+        assert!(
+            output.contains("((int)(unsigned char)bv_s_s[0])"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("bcc_chr(65)"), "unexpected output:\n{output}");
+        assert!(output.contains("bcc_mid(bv_s_s, 2, 2147483647)"), "unexpected output:\n{output}");
+        assert!(output.contains("bcc_mid(bv_s_s, 2, 2)"), "unexpected output:\n{output}");
+        assert!(output.contains("bcc_mid(bv_s_s, 1, 3)"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("((int)(unsigned char)bcc_mid(bv_s_s, 1, 1)[0])"),
+            "ASC of a nested MID$ call must not need a prelude:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_short_circuit_and_or_in_conditions() {
+        // BASCAL's `&&`/`||` are already real short-circuit operators
+        // (unlike classic BASIC's bitwise-only AND/OR) -- C's own
+        // `&&`/`||` are the direct, correct translation, not a bug the
+        // way reusing them for bitwise AND/OR would be.
+        let source =
+            "x% = 5\nif x% > 0 && x% < 10 then\n    print \"in range\"\nend if\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("if (((-(bv_i_x > 0)) && (-(bv_i_x < 10)))) {"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_compiles_functions_tutorial() {
+        // The tutorial that motivated adding function support in the
+        // first place -- byval scalar functions, nested calls, `global`,
+        // string functions, and (via its two `require`d library
+        // functions) the LEN/ASC/CHR$/MID$/LEFT$ builtins all in one
+        // real program.
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        compile_file(&input, &options)
+            .unwrap_or_else(|d| panic!("tutorial/07_functions.bcl should compile to C: {d:?}"));
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a

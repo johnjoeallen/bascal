@@ -1807,7 +1807,7 @@ impl FunctionInfo {
 /// find every array-element access to a given parameter, wherever it
 /// appears in a function body, so its declared rank can be inferred from
 /// how many indices it's actually used with.
-fn visit_body_exprs<'a>(body: &'a [Statement], f: &mut impl FnMut(&'a Expr)) {
+pub(crate) fn visit_body_exprs<'a>(body: &'a [Statement], f: &mut impl FnMut(&'a Expr)) {
     for stmt in body {
         visit_statement_exprs(stmt, f);
     }
