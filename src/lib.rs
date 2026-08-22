@@ -5833,14 +5833,74 @@ end
     }
 
     #[test]
-    fn c_target_rejects_sequential_open_modes() {
-        let source = "open \"f.txt\" for input as #1\nend\n";
-        let diagnostics = compile_source_via_c_target_err(source);
+    fn c_target_supports_sequential_open_modes() {
+        let source = "open \"f.txt\" for input as #1\nclose #1\nopen \"f.txt\" for output as #1\nclose #1\nopen \"f.txt\" for append as #1\nclose #1\nend\n";
+        let output = compile_source_via_c_target(source);
         assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.message.contains("sequential file I/O")),
-            "unexpected diagnostics: {diagnostics:?}"
+            output.contains("fopen(\"f.txt\", \"r\")"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fopen(\"f.txt\", \"w\")"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fopen(\"f.txt\", \"a\")"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_round_trips_write_and_input_file() {
+        let source = "dim name$, score%\nopen \"scores.csv\" for output as #1\nwrite #1, \"Alice\", 95\nclose #1\nopen \"scores.csv\" for input as #1\nwhile eof(1) = 0\n    input #1, name$, score%\n    print name$; score%\nwend\nclose #1\nend\n";
+        let output = compile_source_via_c_target(source);
+        // Regression check, same category as RIGHT$/INSTR above: bcc_eof
+        // and bcc_read_file_field both need <string.h>/`FILE*` machinery
+        // that a text-only check of the call sites wouldn't catch a
+        // missing include/helper for.
+        assert!(
+            output.contains("static int bcc_eof("),
+            "EOF needs the SEQ_FILE_HELPER block:\n{output}"
+        );
+        assert!(
+            output.contains("static void bcc_read_file_field("),
+            "INPUT # needs the SEQ_FILE_HELPER block:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_eof(bcc_files[0])"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fprintf(bcc_files[0], \"\\\"%s\\\",%d\\n\", \"Alice\", 95)"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_line_input_file_and_print_file() {
+        let source = "dim line$\nopen \"f.txt\" for output as #1\nprint #1, \"hi\"\nclose #1\nopen \"f.txt\" for input as #1\nline input #1, line$\nclose #1\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static void bcc_line_input_file("),
+            "LINE INPUT # needs the SEQ_FILE_HELPER block:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_line_input_file(bcc_files[0], bv_s_line, sizeof(bv_s_line));"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fprintf(bcc_files[0], \"hi\\n\")"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_seq_file_helper_when_sequential_io_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_eof(") && !output.contains("bcc_read_file_field("),
+            "the sequential file I/O helper shouldn't be emitted when it's never used:\n{output}"
         );
     }
 
