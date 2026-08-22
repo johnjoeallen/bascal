@@ -28,6 +28,77 @@ fn main() -> ExitCode {
     }
 }
 
+/// Case-insensitively parses a `--target`/config-file/env-var value into a
+/// `Target`, or `None` if it names neither backend -- shared by the CLI
+/// flag, `BASCAL_TARGET`, and both config files so all four accept exactly
+/// the same spellings (`basic`/`BASIC`/`Basic`/..., `c`/`C`).
+fn parse_target_str(value: &str) -> Option<Target> {
+    match value.to_ascii_lowercase().as_str() {
+        "basic" => Some(Target::Basic),
+        "c" => Some(Target::C),
+        _ => None,
+    }
+}
+
+/// Finds `key`'s value in a simple `key=value` config file's contents --
+/// one setting per line, blank lines and `#`-prefixed comments ignored,
+/// key matched case-insensitively. Shared by the user (`~/.config/bascal/
+/// config`) and system (`/etc/default/bascal`) config files -- same
+/// format as a shell env file, deliberately not a new format/parser
+/// dependency to learn.
+fn parse_config_value(contents: &str, key: &str) -> Option<String> {
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            if k.trim().eq_ignore_ascii_case(key) {
+                return Some(v.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+/// The `--target` value to use when the CLI flag itself isn't given --
+/// lets a user or system set `C` as their working default without typing
+/// `--target c` on every invocation. Checked in order, first match wins:
+/// the `BASCAL_TARGET` environment variable (works the same on every
+/// platform, including Windows, where there's no real equivalent of
+/// `/etc/default/`); `~/.config/bascal/config`, a per-user default;
+/// `/etc/default/bascal`, a system-wide default (the standard Debian
+/// `/etc/default/<pkgname>` convention -- a plain file, not a directory).
+/// Falls back to `Target::Basic` (the original, complete backend) if none
+/// of those are set, or set to something unrecognized. An explicit
+/// `--target`/`-t` flag on the command line always overrides whatever
+/// this returns -- see `parse_args`.
+fn resolve_default_target() -> Target {
+    if let Ok(value) = env::var("BASCAL_TARGET") {
+        if let Some(target) = parse_target_str(&value) {
+            return target;
+        }
+    }
+    if let Ok(home) = env::var("HOME") {
+        let user_config = PathBuf::from(home).join(".config/bascal/config");
+        if let Ok(contents) = fs::read_to_string(&user_config) {
+            if let Some(value) = parse_config_value(&contents, "target") {
+                if let Some(target) = parse_target_str(&value) {
+                    return target;
+                }
+            }
+        }
+    }
+    if let Ok(contents) = fs::read_to_string("/etc/default/bascal") {
+        if let Some(value) = parse_config_value(&contents, "target") {
+            if let Some(target) = parse_target_str(&value) {
+                return target;
+            }
+        }
+    }
+    Target::Basic
+}
+
 fn run() -> Result<(), String> {
     let cli = parse_args(env::args().skip(1).collect())?;
 
@@ -177,7 +248,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut sparse_line_numbers = false;
     let mut clean = false;
     let mut binary = false;
-    let mut target = Target::Basic;
+    let mut target = resolve_default_target();
     let mut i = 0;
 
     while i < args.len() {
@@ -211,17 +282,14 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
             "--target" | "-t" => {
                 i += 1;
                 let value = args.get(i).ok_or_else(|| {
-                    "error: --target requires a value (basic or c)".to_string()
+                    "error: --target requires a value (basic or C)".to_string()
                 })?;
-                target = match value.as_str() {
-                    "basic" => Target::Basic,
-                    "c" => Target::C,
-                    other => {
-                        return Err(format!(
-                            "error: unknown --target `{other}` (expected `basic` or `c`)"
-                        ))
-                    }
-                };
+                target = parse_target_str(value).ok_or_else(|| {
+                    format!(
+                        "error: unknown --target `{value}` (expected `basic` or `C`, \
+                         case-insensitive)"
+                    )
+                })?;
             }
             "-h" | "--help" => return Err(usage()),
             flag if flag.starts_with('-') => return Err(format!("error: unknown flag `{flag}`")),
@@ -251,20 +319,69 @@ fn usage() -> String {
     [
         "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
         "              [--sparse-line-numbers] [--clean | -c] [--binary | -b]",
-        "              [--target | -t basic|c]",
+        "              [--target | -t basic|C]",
         "",
         "Options:",
-        "  -o output.bas          Output path (default: input with .bas extension)",
+        "  -o output.bas          Output path (default: input with .bas/.c extension)",
         "  -L dir                 Add a library search directory for require resolution",
         "  --sparse-line-numbers  Number only branch targets, not every line (invalid on",
         "                         real MBASIC/BASCOM; only safe with lenient dialects like",
         "                         FreeBASIC's -lang qb)",
         "  --clean, -c            Re-transpile even if the output is already up to date",
         "  --binary, -b           Compile the generated output to tmp/<stem>: fbc for",
-        "                         --target basic's .bas, gcc for --target c's .c",
-        "  --target, -t <target>  Backend to generate code for: `basic` (default, the only",
-        "                         one implemented) or `c` (reserved for a future native",
-        "                         backend; currently always fails with a diagnostic)",
+        "                         --target basic's .bas, gcc for --target C's .c",
+        "  --target, -t <target>  Backend to generate code for: `basic` (the original,",
+        "                         complete backend) or `C` (an experimental native-C",
+        "                         backend). Case-insensitive; `c` also works.",
+        "",
+        "Default target (used when --target isn't given), first match wins:",
+        "  1. BASCAL_TARGET environment variable",
+        "  2. ~/.config/bascal/config (\"target=C\", one setting per line)",
+        "  3. /etc/default/bascal (same format, system-wide)",
+        "  4. basic, if none of the above are set",
     ]
     .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_target_str_is_case_insensitive() {
+        assert_eq!(parse_target_str("basic"), Some(Target::Basic));
+        assert_eq!(parse_target_str("BASIC"), Some(Target::Basic));
+        assert_eq!(parse_target_str("Basic"), Some(Target::Basic));
+        assert_eq!(parse_target_str("c"), Some(Target::C));
+        assert_eq!(parse_target_str("C"), Some(Target::C));
+        assert_eq!(parse_target_str("bogus"), None);
+    }
+
+    #[test]
+    fn parse_config_value_finds_a_key_case_insensitively_and_trims() {
+        let contents = "# a comment\n\ntarget = C \nother=ignored\n";
+        assert_eq!(parse_config_value(contents, "target"), Some("C".to_string()));
+        assert_eq!(parse_config_value(contents, "TARGET"), Some("C".to_string()));
+        assert_eq!(parse_config_value(contents, "missing"), None);
+    }
+
+    #[test]
+    fn parse_config_value_skips_blank_lines_and_comments() {
+        let contents = "\n# target=basic\n  \ntarget=C\n";
+        assert_eq!(parse_config_value(contents, "target"), Some("C".to_string()));
+    }
+
+    #[test]
+    fn parse_args_accepts_uppercase_target_flag() {
+        let cli = parse_args(vec!["input.bcl".to_string(), "--target".to_string(), "C".to_string()])
+            .expect("should parse");
+        assert_eq!(cli.target, Target::C);
+    }
+
+    #[test]
+    fn parse_args_rejects_unknown_target() {
+        let err = parse_args(vec!["input.bcl".to_string(), "-t".to_string(), "bogus".to_string()])
+            .expect_err("should reject an unknown target");
+        assert!(err.contains("unknown --target"), "unexpected error: {err}");
+    }
 }

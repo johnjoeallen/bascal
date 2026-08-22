@@ -12,7 +12,7 @@ The `bcc` transpiler translates structured `.bcl` source into an intermediate
 language that can then be compiled into a runnable binary. Two backends are
 available, selected with `--target`: `basic` (default) — plain 1980s
 Microsoft BASIC, compiled with a period BASIC compiler like BASCOM or
-FreeBASIC's QB-compatible mode — is fully functional; `c` — native C,
+FreeBASIC's QB-compatible mode — is fully functional; `C` — native C,
 compiled directly with `gcc`, no BASIC compiler involved — is an
 experimental backend still under development.
 
@@ -90,7 +90,7 @@ push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
 ```bash
 bcc input.bcl [-o output.bas] [-L dir] [-l library]
               [--line-numbers] [--clean | -c] [--binary | -b]
-              [--target | -t basic|c]
+              [--target | -t basic|C]
 ```
 
 | Flag | Meaning |
@@ -100,19 +100,34 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets |
 | `--clean`, `-c` | Re-transpile even if output is already up to date |
-| `--binary`, `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `basic`, `gcc` for `c` |
-| `--target`, `-t` | Backend to generate code for: `basic` (default) or `c` (see [Backends](#backends)) |
+| `--binary`, `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `basic`, `gcc` for `C` |
+| `--target`, `-t` | Backend to generate code for: `basic` (default) or `C` (see [Backends](#backends)) — case-insensitive |
 
 The input file's directory is always the first implicit search root. `-L` adds
 additional roots searched in order.
+
+### Default target
+
+Without `--target`, `bcc` picks a default from, first match wins: the
+`BASCAL_TARGET` environment variable; `~/.config/bascal/config`
+(`target=C`, one `key=value` setting per line, `#` comments allowed);
+`/etc/default/bascal` (same format, system-wide); otherwise `basic`. An
+explicit `--target`/`-t` always overrides whatever this picks. Handy for
+setting `C` as your working default without typing `--target C` on every
+call:
+
+```bash
+mkdir -p ~/.config/bascal
+echo "target=C" > ~/.config/bascal/config
+```
 
 ## Backends
 
 BASCAL has two code generators, selected with `--target`: **`basic`**
 (default) — the original, complete target, plain 1980s Microsoft
-BASIC/BASCOM — and **`c`**, an experimental native-C backend aiming to
+BASIC/BASCOM — and **`C`**, an experimental native-C backend aiming to
 produce native Linux/macOS/Win32 binaries directly, with no BASIC
-compiler involved. Full detail on both — exactly what `--target c`
+compiler involved. Full detail on both — exactly what `--target C`
 supports today, and every BASIC-vs-C semantic decision behind it — lives
 on the website's
 [Backends](https://johnjoeallen.github.io/bascal/manual/command-line-reference.html#backends)
