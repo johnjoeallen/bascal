@@ -269,9 +269,9 @@
 
 2310 PRINT "Part 2 (record/file DSL) -- reading records in reverse order:"
 
-2320 FOR i = 3 TO 1 STEP -1
+2320 FOR i% = 3 TO 1 STEP -1
 2330     ' let s = db[...]  (whole-record read)
-2340     GET #1, i
+2340     GET #1, i%
 2350     sid% = CVI(dbIdBuf$)
 2360     snametrimi% = LEN(dbNameBuf$)
 2370     IF (snametrimi% > 0) = 0 THEN GOTO 2410
@@ -282,7 +282,7 @@
 2420     sname$ = LEFT$(dbNameBuf$, snametrimi%)
 2430     sscore# = CVD(dbScoreBuf$)
 2440     PRINT (((("  [" + STR$(sid%)) + "] ") + sname$) + " -- ") + STR$(sscore#)
-2450 NEXT i
+2450 NEXT i%
 
 2460 ' ---- Update one field in place ----
 
@@ -336,9 +336,9 @@
 
 2890 PRINT "Part 2 (record/file DSL) -- after updates:"
 
-2900 FOR i = 1 TO 3
+2900 FOR i% = 1 TO 3
 2910     ' let s = db[...]  (whole-record read)
-2920     GET #1, i
+2920     GET #1, i%
 2930     sid% = CVI(dbIdBuf$)
 2940     snametrimi% = LEN(dbNameBuf$)
 2950     IF (snametrimi% > 0) = 0 THEN GOTO 2990
@@ -349,7 +349,7 @@
 3000     sname$ = LEFT$(dbNameBuf$, snametrimi%)
 3010     sscore# = CVD(dbScoreBuf$)
 3020     PRINT (("  " + sname$) + ": ") + STR$(sscore#)
-3030 NEXT i
+3030 NEXT i%
 
 3040 ' db.close()
 3050 CLOSE #1

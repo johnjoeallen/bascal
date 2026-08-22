@@ -23,13 +23,15 @@
 //! variables (real C function-local scope -- no name-mangling needed,
 //! unlike the BASIC backend's GOSUB-against-shared-globals approach), and
 //! `global` to opt into reading/writing a top-level variable instead (see
-//! `build_function_table`/`emit_function_def`), six BASIC intrinsics
+//! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
+//! numeric variable (real MBASIC/BASCOM's own unoverridden default,
+//! single-precision -- see `effective_suffix`), six BASIC intrinsics
 //! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `STR$`
 //! (see `render_numeric_call`/`render_string_call`/`MID_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
-//! `FileIoLayout`/`scan_field_layout`/`emit_get_or_put`/`FILE_IO_HELPER`
+//! `FileIoLayout`/`apply_field_statement`/`emit_get_or_put`/`FILE_IO_HELPER`
 //! -- two real, documented divergences from real MBASIC/BASCOM live
 //! there: `MKS$`/`MKD$`/`CVS`/`CVD` use plain IEEE 754 instead of real
 //! BASIC's Microsoft Binary Format, and multi-byte values are packed in
@@ -37,30 +39,26 @@
 //! supported: `procedure` (no return value), `byref`/array parameters, a
 //! function body that doesn't provably `return` on every path (see
 //! `body_always_returns`), sequential file I/O (`OPEN FOR
-//! INPUT`/`OUTPUT`/`APPEND`), a `FIELD`/`OPEN`/`GET`/`PUT` channel or
-//! `FIELD` width that isn't a literal integer, and a suffixless
-//! (default-typed) numeric variable -- all rejected with a diagnostic
-//! rather than guessed at. Recursion (direct or indirect) is rejected at
-//! the resolver level before codegen ever runs, for every target, not
-//! just this one. Everything else (other statement kinds, arrays, any
-//! BASIC intrinsic beyond the six above) reports a "not supported yet"
-//! diagnostic rather than panicking or emitting wrong code -- this is a
-//! walking skeleton to prove the CLI/dispatch plumbing (`Target::C`,
-//! `--target c`, `invoke_gcc`) end-to-end, not a real backend. Tutorials
-//! that compile end to end today: `tutorial/01_hello.bcl`,
+//! INPUT`/`OUTPUT`/`APPEND`), and a `FIELD`/`OPEN`/`GET`/`PUT` channel or
+//! `FIELD` width that isn't a literal integer -- all rejected with a
+//! diagnostic rather than guessed at. Recursion (direct or indirect) is
+//! rejected at the resolver level before codegen ever runs, for every
+//! target, not just this one. Everything else (other statement kinds,
+//! arrays, any BASIC intrinsic beyond the six above) reports a "not
+//! supported yet" diagnostic rather than panicking or emitting wrong code
+//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
+//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real
+//! backend. Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
 //! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
-//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`, and
+//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`,
 //! `tutorial/07_functions.bcl` (including its two `require`d
 //! `com.bascal.stdlib` library functions, `ucase$`/`lcase$` -- library
 //! merging itself needed no C-backend-specific work at all, since
 //! `lib.rs`'s `require`/`import` resolution already merges a required
 //! file's functions into `Program.functions` before either backend's
-//! codegen ever runs). `tutorial/15_random_and_record_files.bcl`'s
-//! hand-written Part 1 also compiles and was verified correct end to end
-//! (gcc-compiled and run, every value matches); its DSL-based Part 2
-//! additionally needs suffixless numeric variables, which this backend
-//! doesn't support at all yet, so the tutorial as a whole isn't added to
-//! this list.
+//! codegen ever runs), and `tutorial/15_random_and_record_files.bcl`
+//! (both its hand-written Part 1 and DSL-based Part 2 -- gcc-compiled
+//! and run, every value matches).
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -257,137 +255,115 @@ const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_file
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
 /// byte width, and cumulative byte offset within the record. Built by
-/// `scan_field_layout`.
+/// `apply_field_statement`.
 struct FieldEntry {
     c_name: String,
     width: u32,
     offset: u32,
 }
 
-/// The whole program's random-access record I/O layout, computed by one
-/// up-front AST scan (`scan_field_layout`) rather than tracked as mutable
-/// state threaded through statement emission: `FIELD` always precedes the
-/// `GET`/`PUT`/`LSET`/`RSET` statements that need to know its layout, but
-/// scanning it all first, before any code is emitted, means `emit_statement`
-/// can just look answers up rather than needing to notice and remember
-/// `FIELD` declarations as it goes.
+/// The random-access record I/O layout *currently in effect*, tracked as
+/// mutable state threaded through statement emission (`emit_statement`'s
+/// own `functions`/`current_function` parameters, same shape) rather than
+/// computed once by an up-front whole-program scan: a channel can be
+/// `FIELD`ed more than once over a program's lifetime with a genuinely
+/// different layout each time (reopened for a different purpose, or --
+/// exactly what `tutorial/15_random_and_record_files.bcl` does -- the
+/// same file reopened under a different set of buffer variable names
+/// later in the same program), and each `GET`/`PUT`/`LSET`/`RSET` needs
+/// the layout *most recently established for that channel*, not
+/// whichever `FIELD` statement happens to be textually last in the whole
+/// program. An up-front scan that only kept "the last `FIELD` per
+/// channel" got this wrong -- Part 1 and Part 2 of that tutorial both
+/// `FIELD` channel `#1`, with different variable names, and Part 1's own
+/// `GET`/`PUT` calls were silently reading/writing Part 2's buffers
+/// instead of their own.
 struct FileIoLayout {
-    /// Channel number -> that channel's fields, in `FIELD`-declaration
-    /// order (needed by `GET`/`PUT` to split/join the whole record
-    /// buffer). Re-`FIELD`ing the same channel overwrites its entry here
-    /// (last one wins) -- BASCAL's own record/file DSL only ever emits one
-    /// `FIELD` per channel, so this only matters for hand-written raw
-    /// `FIELD`, not attempted to be modeled more precisely.
+    /// Channel number -> that channel's *currently FIELD'd* fields, in
+    /// `FIELD`-declaration order (needed by `GET`/`PUT` to split/join the
+    /// whole record buffer). Updated in place by `apply_field_statement`
+    /// each time a `FIELD` statement is actually emitted, reflecting
+    /// program order, not just replaced once at scan time.
     channel_fields: HashMap<i64, Vec<FieldEntry>>,
-    /// C variable name -> declared width, flattened across every channel
-    /// -- looked up by `LSET`/`RSET`, which only know their target
-    /// variable, not which channel/`FIELD` it came from.
+    /// C variable name -> its *most recently FIELD'd* width -- looked up
+    /// by `LSET`/`RSET`, which only know their target variable, not which
+    /// channel/`FIELD` it came from. No ordering ambiguity here the way
+    /// `channel_fields` has: two different `FIELD` statements naming the
+    /// same C variable would have to agree on its width anyway (the
+    /// variable's underlying C buffer has only one size), so simple
+    /// insert-and-overwrite is correct regardless of program order.
     field_widths: HashMap<String, u32>,
     /// Whether the program uses random-access record I/O at all (any of
-    /// `OPEN`/`CLOSE`/`FIELD`/`GET`/`PUT`/`LSET`/`RSET`) -- decides
-    /// whether `generate` emits `FILE_IO_HELPER` and pulls in
-    /// `<string.h>`/`<stdint.h>` for it.
+    /// `OPEN`/`CLOSE`/`FIELD`/`GET`/`PUT`/`LSET`/`RSET`) -- set as
+    /// emission encounters one, consulted afterward (same "mutate during
+    /// emission, read once emission's done" pattern `needs_math`/
+    /// `needs_string` already use) to decide whether `generate` emits
+    /// `FILE_IO_HELPER` and pulls in `<string.h>`/`<stdint.h>` for it.
     used: bool,
 }
 
-/// Walks every statement in the program (recursing into `if`/`for`/
-/// `while`/`do`/`select case`, and every function body -- same shape as
-/// `collect_global_decl_idents`) looking for `FIELD` declarations to
-/// build `FileIoLayout` from, and noting whether any random-access I/O
-/// statement appears at all. Errors out (rather than silently guessing)
-/// when a `FIELD`'s channel or a field's width isn't a literal integer:
-/// the layout has to be known at compile time here (there's no runtime
-/// "ask the FIELD table" mechanism the way real BASIC's own interpreter
-/// has), so a computed channel/width -- always a literal in BASCAL's own
-/// record/file DSL output, see `records::lower_file_decl` -- isn't
-/// supported by the minimal C backend yet.
-fn scan_field_layout(program: &Program) -> Result<FileIoLayout, String> {
-    let mut layout = FileIoLayout {
-        channel_fields: HashMap::new(),
-        field_widths: HashMap::new(),
-        used: false,
+/// Applies one `FIELD #ch, w1 AS v1$, ...` statement's layout into
+/// `layout`, in place -- called from `emit_statement`'s own `Statement::
+/// Field` arm at the point the statement is actually emitted (see
+/// `FileIoLayout`'s own doc comment for why this has to happen live,
+/// in program order, rather than as a one-time up-front scan). Errors
+/// out (rather than silently guessing) when the channel or a field's
+/// width isn't a literal integer: the layout has to be known at compile
+/// time here (there's no runtime "ask the FIELD table" mechanism the way
+/// real BASIC's own interpreter has), so a computed channel/width --
+/// always a literal in BASCAL's own record/file DSL output, see
+/// `records::lower_file_decl` -- isn't supported by the minimal C
+/// backend yet.
+fn apply_field_statement(
+    channel: &Expr,
+    fields: &[(Expr, BasicIdent)],
+    layout: &mut FileIoLayout,
+) -> Result<(), String> {
+    layout.used = true;
+    let Expr::Integer(ch) = channel else {
+        return Err(
+            "`FIELD`'s channel must be a literal integer -- the minimal C backend needs to know \
+             the record layout at compile time"
+                .to_string(),
+        );
     };
-    scan_field_layout_body(&program.statements, &mut layout)?;
-    for func in &program.functions {
-        scan_field_layout_body(&func.body, &mut layout)?;
-    }
-    Ok(layout)
-}
-
-fn scan_field_layout_body(body: &[Statement], layout: &mut FileIoLayout) -> Result<(), String> {
-    for stmt in body {
-        match stmt {
-            Statement::Open { .. }
-            | Statement::Close { .. }
-            | Statement::Get { .. }
-            | Statement::Put { .. }
-            | Statement::Lset { .. }
-            | Statement::Rset { .. } => layout.used = true,
-            Statement::Field { channel, fields } => {
-                layout.used = true;
-                let Expr::Integer(ch) = channel else {
-                    return Err(
-                        "`FIELD`'s channel must be a literal integer -- the minimal C backend \
-                         needs to know the record layout at compile time"
-                            .to_string(),
-                    );
-                };
-                let mut entries = Vec::with_capacity(fields.len());
-                let mut offset = 0u32;
-                for (width_expr, var) in fields {
-                    let Expr::Integer(width) = width_expr else {
-                        return Err(
-                            "a `FIELD` width must be a literal integer -- the minimal C backend \
-                             needs to know the record layout at compile time"
-                                .to_string(),
-                        );
-                    };
-                    if var.suffix != Some(TypeSuffix::String) {
-                        return Err(format!(
-                            "`FIELD` variable `{var}` must be a string (`$`) -- real \
-                             MBASIC/BASCOM's `FIELD` only ever declares string variables"
-                        ));
-                    }
-                    // Every FIELD'd variable's C storage is the same
-                    // `char[STRING_BUFFER_SIZE]` buffer as any other
-                    // string -- GET splits raw record bytes into it via
-                    // `memcpy` (see `emit_get_or_put`), so a field wider
-                    // than that buffer would silently overflow it rather
-                    // than truncate the way `snprintf`-based string
-                    // handling elsewhere in this backend safely does.
-                    if *width < 0 || *width as usize >= STRING_BUFFER_SIZE {
-                        return Err(format!(
-                            "`FIELD` variable `{var}`'s width ({width}) must be less than \
-                             {STRING_BUFFER_SIZE} -- every string in the minimal C backend, \
-                             FIELD'd variables included, is a fixed {STRING_BUFFER_SIZE}-byte \
-                             buffer"
-                        ));
-                    }
-                    let width = *width as u32;
-                    let c_name = c_var_name(var, TypeSuffix::String);
-                    layout.field_widths.insert(c_name.clone(), width);
-                    entries.push(FieldEntry { c_name, width, offset });
-                    offset += width;
-                }
-                layout.channel_fields.insert(*ch, entries);
-            }
-            Statement::If { then_body, else_body, .. } => {
-                scan_field_layout_body(then_body, layout)?;
-                scan_field_layout_body(else_body, layout)?;
-            }
-            Statement::For { body, .. } | Statement::While { body, .. } => {
-                scan_field_layout_body(body, layout)?;
-            }
-            Statement::Do { body, .. } => scan_field_layout_body(body, layout)?,
-            Statement::SelectCase { cases, else_body, .. } => {
-                for case in cases {
-                    scan_field_layout_body(&case.body, layout)?;
-                }
-                scan_field_layout_body(else_body, layout)?;
-            }
-            _ => {}
+    let mut entries = Vec::with_capacity(fields.len());
+    let mut offset = 0u32;
+    for (width_expr, var) in fields {
+        let Expr::Integer(width) = width_expr else {
+            return Err(
+                "a `FIELD` width must be a literal integer -- the minimal C backend needs to \
+                 know the record layout at compile time"
+                    .to_string(),
+            );
+        };
+        if var.suffix != Some(TypeSuffix::String) {
+            return Err(format!(
+                "`FIELD` variable `{var}` must be a string (`$`) -- real MBASIC/BASCOM's \
+                 `FIELD` only ever declares string variables"
+            ));
         }
+        // Every FIELD'd variable's C storage is the same
+        // `char[STRING_BUFFER_SIZE]` buffer as any other string -- GET
+        // splits raw record bytes into it via `memcpy` (see
+        // `emit_get_or_put`), so a field wider than that buffer would
+        // silently overflow it rather than truncate the way
+        // `snprintf`-based string handling elsewhere in this backend
+        // safely does.
+        if *width < 0 || *width as usize >= STRING_BUFFER_SIZE {
+            return Err(format!(
+                "`FIELD` variable `{var}`'s width ({width}) must be less than \
+                 {STRING_BUFFER_SIZE} -- every string in the minimal C backend, FIELD'd \
+                 variables included, is a fixed {STRING_BUFFER_SIZE}-byte buffer"
+            ));
+        }
+        let width = *width as u32;
+        let c_name = c_var_name(var, TypeSuffix::String);
+        layout.field_widths.insert(c_name.clone(), width);
+        entries.push(FieldEntry { c_name, width, offset });
+        offset += width;
     }
+    layout.channel_fields.insert(*ch, entries);
     Ok(())
 }
 
@@ -548,7 +524,8 @@ fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let functions =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
-    let file_io = scan_field_layout(program).map_err(|message| vec![unsupported(&message)])?;
+    let mut file_io =
+        FileIoLayout { channel_fields: HashMap::new(), field_widths: HashMap::new(), used: false };
 
     // BASIC variables "spring into existence on first use" -- there's no
     // separate declaration step to hook into, so every scalar variable
@@ -602,7 +579,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut needs_math,
             &mut needs_string,
             &mut temp_counter,
-            &file_io,
+            &mut file_io,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -617,7 +594,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut temp_counter,
             &functions,
             None,
-            &file_io,
+            &mut file_io,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -743,7 +720,7 @@ fn emit_function_def(
     needs_math: &mut bool,
     needs_string: &mut bool,
     temp_counter: &mut usize,
-    file_io: &FileIoLayout,
+    file_io: &mut FileIoLayout,
 ) -> Result<(), String> {
     let mut numeric_locals = BTreeMap::new();
     let mut string_locals = BTreeSet::new();
@@ -754,7 +731,7 @@ fn emit_function_def(
     collect_global_decl_idents(&func.body, &mut global_idents);
     let global_keys: BTreeSet<String> = global_idents
         .iter()
-        .filter_map(|ident| ident.suffix.map(|suffix| c_var_name(ident, suffix)))
+        .map(|ident| c_var_name(ident, effective_suffix(ident.suffix)))
         .collect();
     let param_keys: BTreeSet<String> = sig.params.iter().map(|p| p.c_name.clone()).collect();
     numeric_locals.retain(|k, _| !param_keys.contains(k) && !global_keys.contains(k));
@@ -879,6 +856,24 @@ fn brace_delta(line: &str) -> isize {
 /// identifier (rejected at parse time, see `reject_underscored_identifiers`
 /// in `lib.rs`), so the lowercased name alone is already collision-free as
 /// a C identifier fragment.
+/// The concrete numeric type a *scalar variable reference* has, filling
+/// in real MBASIC/BASCOM's own default when BASCAL source leaves the
+/// suffix off entirely (`i` in `for i = 3 downto 1`, not `i%`/`i!`/etc.).
+/// Real BASIC's default is single-precision floating point, overridable
+/// per-first-letter with `DEFINT`/`DEFSNG`/`DEFDBL`/`DEFLNG`/`DEFSTR` --
+/// but BASCAL exposes no such statement to `.bcl` authors at all (checked
+/// directly: no `DEFxxx` keyword anywhere in `parser.rs`), so a
+/// BASCAL-generated `.bas` file's suffixless variables always fall back
+/// to that same single, un-overridden default when run under real
+/// BASCOM -- making `Single` the one and only correct fill-in here, not
+/// a guess among several real possibilities. Scoped to variable
+/// references only (`Ident`/`Dim`/`For`/assignment targets) -- function/
+/// parameter *declarations* still require an explicit suffix (see
+/// `build_function_table`), since nothing here needs that relaxed too.
+fn effective_suffix(suffix: Option<TypeSuffix>) -> TypeSuffix {
+    suffix.unwrap_or(TypeSuffix::Single)
+}
+
 fn c_var_name(ident: &BasicIdent, suffix: TypeSuffix) -> String {
     let tag = match suffix {
         TypeSuffix::Integer => 'i',
@@ -1060,12 +1055,15 @@ fn register_var(
         Some(TypeSuffix::String) => {
             string_out.insert(c_var_name(ident, TypeSuffix::String));
         }
-        Some(suffix) => {
+        // `None` (suffixless) falls through to the numeric path below via
+        // `effective_suffix` -- see its own doc comment for why `Single`
+        // is the correct fill-in, not just a placeholder guess.
+        suffix => {
+            let suffix = effective_suffix(suffix);
             if let Some((c_type, _)) = numeric_c_type(suffix) {
                 numeric_out.insert(c_var_name(ident, suffix), c_type);
             }
         }
-        None => {}
     }
 }
 
@@ -1077,7 +1075,7 @@ fn emit_statement(
     temp_counter: &mut usize,
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
-    file_io: &FileIoLayout,
+    file_io: &mut FileIoLayout,
 ) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
@@ -1107,13 +1105,17 @@ fn emit_statement(
         // BASIC's "springs into existence on first use" semantics -- `dim`
         // of a scalar is therefore a pure no-op here, already handled
         // wherever it happens to appear in source order.
-        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => match name.suffix {
-            Some(suffix) if numeric_c_type(suffix).is_some() || suffix == TypeSuffix::String => Ok(()),
-            _ => Err(format!(
-                "`dim {name}` isn't supported by the minimal C backend yet -- only scalar \
-                 variables (%, &, !, #, $) are"
-            )),
-        },
+        Statement::Dim { name, is_array: false, sizes } if sizes.is_empty() => {
+            let suffix = effective_suffix(name.suffix);
+            if numeric_c_type(suffix).is_some() || suffix == TypeSuffix::String {
+                Ok(())
+            } else {
+                Err(format!(
+                    "`dim {name}` isn't supported by the minimal C backend yet -- only scalar \
+                     variables (%, &, !, #, $) are"
+                ))
+            }
+        }
         Statement::Assignment { target: Expr::Ident(name), value } => {
             emit_assignment(name, value, out, needs_math, temp_counter, functions)
         }
@@ -1167,12 +1169,7 @@ fn emit_statement(
         // step expression's syntactic shape, since a computed/variable
         // step's sign isn't known until runtime either.
         Statement::For { var, start, end, step, body } => {
-            let Some(suffix) = var.suffix else {
-                return Err(format!(
-                    "`for {var}` isn't supported by the minimal C backend yet -- give the loop \
-                     variable an explicit type suffix"
-                ));
-            };
+            let suffix = effective_suffix(var.suffix);
             let Some((c_type, target_is_float)) = numeric_c_type(suffix) else {
                 return Err(format!(
                     "`for {var}` isn't supported by the minimal C backend yet -- the loop \
@@ -1302,12 +1299,13 @@ fn emit_statement(
             out.push_str(&format!("    bcc_files[{ch}] = NULL;\n"));
             Ok(())
         }
-        // Pure compile-time bookkeeping -- `scan_field_layout` already
-        // recorded this channel's field layout (and declared the fields'
-        // own C storage via `collect_vars_in_statement`'s own `Field`
-        // arm); nothing needs to happen at the point `FIELD` itself
-        // appears in the statement stream.
-        Statement::Field { .. } => Ok(()),
+        // Pure compile-time bookkeeping, no runtime code -- records this
+        // channel's field layout into `file_io` (see `FileIoLayout`'s own
+        // doc comment for why this happens live, right here, rather than
+        // as a one-time up-front scan); the fields' own C storage was
+        // already declared via `collect_vars_in_statement`'s own `Field`
+        // arm.
+        Statement::Field { channel, fields } => apply_field_statement(channel, fields, file_io),
         // `GET`/`PUT #ch, record` -- read/write one whole record (`GET`
         // splits the record's raw bytes across every `FIELD`'d variable
         // on that channel, at their declared offsets; `PUT` does the
@@ -1511,7 +1509,7 @@ fn emit_get_or_put(
     record: &Option<Expr>,
     needs_math: &mut bool,
     functions: &FunctionTable,
-    file_io: &FileIoLayout,
+    file_io: &mut FileIoLayout,
     out: &mut String,
     is_get: bool,
 ) -> Result<(), String> {
@@ -1599,26 +1597,24 @@ fn emit_assignment(
     temp_counter: &mut usize,
     functions: &FunctionTable,
 ) -> Result<(), String> {
-    match name.suffix {
-        Some(suffix) if numeric_c_type(suffix).is_some() => {
-            let (_, target_is_float) = numeric_c_type(suffix).unwrap();
+    if name.suffix == Some(TypeSuffix::String) {
+        let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter, functions)?;
+        for line in prelude {
+            out.push_str(&line);
+        }
+        let c_name = c_var_name(name, TypeSuffix::String);
+        out.push_str(&format!("    snprintf({c_name}, sizeof({c_name}), \"%s\", {value_text});\n"));
+        return Ok(());
+    }
+    let suffix = effective_suffix(name.suffix);
+    match numeric_c_type(suffix) {
+        Some((_, target_is_float)) => {
             let (value_text, value_is_float) = render_numeric_expr(value, needs_math, functions)?;
             let coerced = coerce_numeric(value_text, value_is_float, target_is_float, needs_math);
             out.push_str(&format!("    {} = {coerced};\n", c_var_name(name, suffix)));
             Ok(())
         }
-        Some(TypeSuffix::String) => {
-            let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter, functions)?;
-            for line in prelude {
-                out.push_str(&line);
-            }
-            let c_name = c_var_name(name, TypeSuffix::String);
-            out.push_str(&format!(
-                "    snprintf({c_name}, sizeof({c_name}), \"%s\", {value_text});\n"
-            ));
-            Ok(())
-        }
-        _ => Err(format!(
+        None => Err(format!(
             "assignment to `{name}` isn't supported by the minimal C backend yet -- give it an \
              explicit type suffix (%, &, !, #, $)"
         )),
@@ -1667,7 +1663,7 @@ fn emit_select_case(
     temp_counter: &mut usize,
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
-    file_io: &FileIoLayout,
+    file_io: &mut FileIoLayout,
 ) -> Result<(), String> {
     let is_string = is_string_expr(expr);
     let temp = format!("bt_sel_{temp_counter}");
@@ -2185,13 +2181,16 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionT
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
-        Expr::Ident(ident) => match ident.suffix.and_then(numeric_c_type) {
-            Some((_, is_float)) => Ok((c_var_name(ident, ident.suffix.unwrap()), is_float)),
-            None => Err(format!(
-                "`{ident}` isn't supported by the minimal C backend yet -- only numeric scalar \
-                 variables (%, &, !, #) are"
-            )),
-        },
+        Expr::Ident(ident) => {
+            let suffix = effective_suffix(ident.suffix);
+            match numeric_c_type(suffix) {
+                Some((_, is_float)) => Ok((c_var_name(ident, suffix), is_float)),
+                None => Err(format!(
+                    "`{ident}` isn't supported by the minimal C backend yet -- only numeric \
+                     scalar variables (%, &, !, #, or suffixless) are"
+                )),
+            }
+        }
         Expr::Unary { op: UnaryOp::Neg, expr } => {
             let (inner, is_float) = render_numeric_expr(expr, needs_math, functions)?;
             Ok((format!("-({inner})"), is_float))

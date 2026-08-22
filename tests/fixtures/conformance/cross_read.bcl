@@ -1,0 +1,18 @@
+// Reads back the record cross_write.bcl (same field layout) wrote, and
+// prints it -- STR$ instead of a bare numeric PRINT specifically to avoid
+// the C backend's own already-documented, unrelated numeric-PRINT-format
+// gap (no leading/trailing space) from showing up as a false mismatch in
+// this file-format compatibility check.
+program crossRead
+
+open "CROSS.DAT" for random as #1 len = 12
+field #1, 2 as idBuf$, 10 as nameBuf$
+
+get #1, 1
+
+print str$(cvi(idBuf$))
+print nameBuf$
+
+close #1
+
+end

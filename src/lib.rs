@@ -4378,6 +4378,66 @@ end
     }
 
     #[test]
+    fn c_target_compiles_random_access_files_tutorial() {
+        // Both Part 1 (hand-written FIELD/GET/PUT/LSET) and Part 2 (the
+        // record/file DSL, which lowers to the same primitives) --
+        // verified correct end to end with gcc separately; this just
+        // locks in that it keeps compiling.
+        let input =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/15_random_and_record_files.bcl");
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        compile_file(&input, &options).unwrap_or_else(|d| {
+            panic!("tutorial/15_random_and_record_files.bcl should compile to C: {d:?}")
+        });
+    }
+
+    #[test]
+    fn c_target_supports_suffixless_numeric_variables() {
+        // Real MBASIC/BASCOM's own default for a variable with no type
+        // suffix is single-precision floating point -- BASCAL exposes no
+        // DEFINT/DEFSNG/etc to override that default, so it's the one
+        // correct fill-in here, not a guess (see `effective_suffix` in
+        // codegen_c.rs).
+        let source = "for i = 1 to 3\n    print i\nend for\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("float bv_f_i = 0;"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("for (bv_f_i = 1; "),
+            "suffixless loop variable should use the Single-precision C variable:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_field_layout_tracks_program_order_not_last_field_wins() {
+        // Regression test for a real bug: re-FIELDing the same channel
+        // number later in the program (reopened under different buffer
+        // variable names, exactly what tutorial 15's Part 1/Part 2 both
+        // do on channel #1) used to make *every* GET/PUT on that channel
+        // -- including ones textually *before* the second FIELD -- use
+        // the last FIELD's layout, since it was computed once by an
+        // up-front whole-program scan instead of tracked live in program
+        // order (see FileIoLayout's doc comment in codegen_c.rs).
+        let source = "open \"a.dat\" for random as #1 len = 2\n\
+                       field #1, 2 as firstBuf$\n\
+                       get #1, 1\n\
+                       close #1\n\
+                       open \"b.dat\" for random as #1 len = 3\n\
+                       field #1, 3 as secondBuf$\n\
+                       get #1, 1\n\
+                       close #1\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("memcpy(bv_s_firstbuf, bcc_rec + 0, 2);"),
+            "the first GET must still use the first FIELD's layout:\n{output}"
+        );
+        assert!(
+            output.contains("memcpy(bv_s_secondbuf, bcc_rec + 0, 3);"),
+            "the second GET must use the second FIELD's layout:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_random_access_field_get_put_lset() {
         // OPEN FOR RANDOM/FIELD/LSET/PUT/GET round-trip -- the core
         // random-access record I/O shape (see codegen_c.rs's

@@ -247,6 +247,164 @@ fn stdlib_functions_match_real_bascom() {
     );
 }
 
+/// Compiles `fixture_name.bcl` to `--target c`, builds it with `gcc`, and
+/// runs the resulting binary with `work_dir` as its working directory
+/// (so a relative `OPEN "X.DAT"` reads/writes a file right there,
+/// alongside anything `compile_link_run_in`/real BASCOM leaves behind in
+/// the same directory) -- returns the program's captured stdout.
+fn compile_run_c_target_in(fixture_name: &str, work_dir: &Path) -> String {
+    let fixture_bcl =
+        repo_root().join("tests/fixtures/conformance").join(format!("{fixture_name}.bcl"));
+    let options = bcc::CompileOptions { target: bcc::Target::C, ..bcc::CompileOptions::new() };
+    let c_source = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
+        panic!("failed to compile {} to C: {diagnostics:#?}", fixture_bcl.display())
+    });
+
+    fs::create_dir_all(work_dir).expect("failed to create C-target work directory");
+    let c_path = work_dir.join(format!("{fixture_name}.c"));
+    fs::write(&c_path, &c_source)
+        .unwrap_or_else(|err| panic!("failed to write {}: {err}", c_path.display()));
+
+    let bin_path = work_dir.join(fixture_name);
+    let gcc_output = Command::new("gcc")
+        .arg("-std=c99")
+        .arg("-o")
+        .arg(&bin_path)
+        .arg(&c_path)
+        .arg("-lm")
+        .output()
+        .expect("failed to invoke gcc");
+    assert!(
+        gcc_output.status.success(),
+        "gcc failed to compile the C target's output for `{fixture_name}`:\n{}",
+        String::from_utf8_lossy(&gcc_output.stderr)
+    );
+
+    let run_output = Command::new(&bin_path)
+        .current_dir(work_dir)
+        .output()
+        .unwrap_or_else(|err| panic!("failed to run {}: {err}", bin_path.display()));
+    assert!(
+        run_output.status.success(),
+        "`{fixture_name}` (C target) exited with {}:\nstdout:\n{}\nstderr:\n{}",
+        run_output.status,
+        String::from_utf8_lossy(&run_output.stdout),
+        String::from_utf8_lossy(&run_output.stderr)
+    );
+    String::from_utf8_lossy(&run_output.stdout).into_owned()
+}
+
+/// Same as `compile_link_run`, but runs inside an already-prepared
+/// `work_dir` instead of creating (and wiping) its own -- needed for the
+/// cross-target file-compatibility tests below, where a data file one
+/// target's run wrote into `work_dir` has to survive into the other
+/// target's run right after it.
+fn compile_link_run_in(fixture_name: &str, work_dir: &Path) -> String {
+    let fixture_bcl =
+        repo_root().join("tests/fixtures/conformance").join(format!("{fixture_name}.bcl"));
+    let options = bcc::CompileOptions { line_numbers: true, ..bcc::CompileOptions::new() };
+    let basic = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
+        panic!("failed to compile {}: {diagnostics:#?}", fixture_bcl.display())
+    });
+
+    stage_compiler_fixture(work_dir);
+
+    let dos_stem = "TEST";
+    write_dos_file(&work_dir.join(format!("{dos_stem}.BAS")), &basic);
+    write_dos_file(
+        &work_dir.join("RUNIT.BAT"),
+        &format!(
+            "BASCOM {dos_stem}.BAS,,;\r\nLINK {dos_stem}.OBJ;\r\n{dos_stem}.EXE > OUT.TXT\r\nEXIT\r\n"
+        ),
+    );
+
+    run_dosbox_batch(work_dir, "RUNIT.BAT");
+
+    let lst_path = work_dir.join(format!("{dos_stem}.LST"));
+    let lst = fs::read_to_string(&lst_path).unwrap_or_else(|err| {
+        panic!(
+            "expected BASCOM to produce {} (BASCOM compile failed to run at all?): {err}",
+            lst_path.display()
+        )
+    });
+    assert!(
+        lst.contains("0 Severe  Error(s)"),
+        "real BASCOM rejected the generated BASIC for `{fixture_name}`:\n{lst}"
+    );
+
+    let exe_path = work_dir.join(format!("{dos_stem}.EXE"));
+    assert!(
+        exe_path.is_file(),
+        "expected BASCOM+LINK to produce {} -- compile succeeded but link must have failed",
+        exe_path.display()
+    );
+
+    let out_path = work_dir.join("OUT.TXT");
+    fs::read_to_string(&out_path).unwrap_or_else(|err| {
+        panic!("expected the compiled program to write {}: {err}", out_path.display())
+    })
+}
+
+/// Random-access record files are BASCAL's one place where the two
+/// backends' generated output has to agree on more than just program
+/// *behavior* -- it has to agree on the actual *on-disk byte layout*, or
+/// a file one target writes won't read back correctly under the other.
+/// cross_write.bcl/cross_read.bcl (a 2-byte MKI$-packed int field plus a
+/// 10-byte string field -- deliberately no float field, since
+/// MKS$/MKD$/CVS/CVD are a real, documented divergence from real BASCOM's
+/// Microsoft Binary Format, see `FILE_IO_HELPER`'s doc comment in
+/// codegen_c.rs -- this test isn't the place to re-demonstrate that)
+/// write, then read back, the same record. Checked in both directions:
+/// C writes it and real BASCOM reads it back, and real BASCOM writes it
+/// and C reads it back.
+#[test]
+fn c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes() {
+    require_fixture!();
+
+    let work_dir = std::env::temp_dir().join("bascal-conformance-cross-c-writes");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+
+    compile_run_c_target_in("cross_write", &work_dir);
+    let actual = compile_link_run_in("cross_read", &work_dir);
+
+    let expected_path = repo_root().join("tests/fixtures/conformance/cross_read.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's read of a random-access file the C target wrote doesn't match the \
+         golden expectation at {} -- the two backends' on-disk record layout has diverged",
+        expected_path.display()
+    );
+}
+
+#[test]
+fn c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes() {
+    require_fixture!();
+
+    let work_dir = std::env::temp_dir().join("bascal-conformance-cross-bascom-writes");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+
+    compile_link_run_in("cross_write", &work_dir);
+    let actual = compile_run_c_target_in("cross_read", &work_dir);
+
+    let expected_path = repo_root().join("tests/fixtures/conformance/cross_read.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "the C target's read of a random-access file real BASCOM wrote doesn't match the \
+         golden expectation at {} -- the two backends' on-disk record layout has diverged",
+        expected_path.display()
+    );
+}
+
 /// Locks in the exact tie-break rounding facts the C backend's \/MOD/AND
 /// translation (src/codegen_c.rs) depends on -- round() ties away from
 /// zero, matching real BASCOM's own float-to-integer conversion, verified
