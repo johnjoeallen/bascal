@@ -25,9 +25,10 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), six BASIC intrinsics
-//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `STR$`
-//! (see `render_numeric_call`/`render_string_call`/`MID_HELPER`) -- and
+//! single-precision -- see `effective_suffix`), eight BASIC intrinsics
+//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`,
+//! `STR$`, `VAL` (see `render_numeric_call`/`render_string_call`/
+//! `MID_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
@@ -189,7 +190,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
             match name.name.to_ascii_lowercase().as_str() {
                 "len" | "asc" => usage.needs_string_h = true,
-                "mid" | "left" | "chr" | "str" => {
+                "mid" | "left" | "right" | "chr" | "str" => {
                     usage.needs_string_h = true;
                     usage.needs_ring_buffer_helpers = true;
                 }
@@ -2958,6 +2959,22 @@ const STRING_BUFFER_SIZE: usize = 256;
 /// expression needs a prelude: a fresh temp buffer, plus the call itself
 /// writing into it, exactly the same "materialize into a temp, use the
 /// temp as the expression's value" shape `+` (concatenation) uses.
+/// `RIGHT$(s$, n%)` -- the last `n` characters, or the whole string if
+/// `n` is at least its length. No new C helper needed: it's exactly
+/// `bcc_mid(s, strlen(s) - n + 1, n)`, and `bcc_mid`'s own clamping (see
+/// `MID_HELPER`) already does the right thing at both extremes --
+/// `n` &gt;= `strlen(s)` drives `start` to zero or negative, which clamps up
+/// to the very first character, giving the whole string back; `n <= 0`
+/// drives `length` to zero, clamped the same way `MID$`/`LEFT$`'s own
+/// length argument already is. `s_text`/`n_text` are always safe to
+/// reference twice here: both come from this backend's own render
+/// functions, which already route any real work through a prelude
+/// (assigned to a temp) before returning what's left -- a plain variable
+/// name or literal, never an expression with a side effect to duplicate.
+fn render_right_call(s_text: &str, n_text: &str) -> String {
+    format!("bcc_mid({s_text}, (int)strlen({s_text}) - ({n_text}) + 1, {n_text})")
+}
+
 fn render_string_call(
     name: &BasicIdent,
     args: &[Expr],
@@ -3023,11 +3040,17 @@ fn render_string_call(
             format!("bcc_mid({s_text}, {start_text}, {length_text})"),
         ));
     }
+    if name.name.eq_ignore_ascii_case("right") && args.len() == 2 {
+        let (prelude, s_text) = render_string_expr(&args[0], needs_math, temp_counter, functions)?;
+        let (nt, nf) = render_numeric_expr(&args[1], needs_math, functions)?;
+        let n_text = coerce_numeric(nt, nf, false, needs_math);
+        return Ok((prelude, render_right_call(&s_text, &n_text)));
+    }
     let sig = functions.get(&fn_key(name)).ok_or_else(|| {
         format!(
             "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
              functions with a byval scalar signature are callable so far (no built-in BASIC \
-             intrinsics like LEN/ASC/CHR$/MID$/LEFT$ are, and are already handled above)"
+             intrinsics like LEN/ASC/CHR$/MID$/LEFT$/RIGHT$ are, and are already handled above)"
         )
     })?;
     if args.len() != sig.params.len() {
@@ -3291,7 +3314,7 @@ fn render_numeric_call(
         format!(
             "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
              functions with a byval scalar signature are callable so far (no built-in BASIC \
-             intrinsics like CHR$/MID$/LEFT$ are, and LEN/ASC are already handled above)"
+             intrinsics like CHR$/MID$/LEFT$/RIGHT$ are, and LEN/ASC are already handled above)"
         )
     })?;
     if sig.is_string {
@@ -3673,6 +3696,16 @@ fn render_prelude_free_string_arg(
                 (start, length)
             };
             Ok(format!("bcc_mid({s_text}, {start_text}, {length_text})"))
+        }
+        Expr::Call { name, args }
+        | Expr::ArrayRef {
+            name,
+            indices: args,
+        } if name.name.eq_ignore_ascii_case("right") && args.len() == 2 => {
+            let s_text = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+            let (nt, nf) = render_numeric_expr(&args[1], needs_math, functions)?;
+            let n_text = coerce_numeric(nt, nf, false, needs_math);
+            Ok(render_right_call(&s_text, &n_text))
         }
         Expr::Call { name, args }
         | Expr::ArrayRef {
