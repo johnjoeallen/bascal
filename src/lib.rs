@@ -4453,15 +4453,15 @@ end
                        end\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS + 1];"),
+            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS];"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("bcc_files[1] = fopen(\"data.dat\", \"rb+\");"),
+            output.contains("bcc_files[0] = fopen(\"data.dat\", \"rb+\");"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("if (!bcc_files[1]) bcc_files[1] = fopen(\"data.dat\", \"wb+\");"),
+            output.contains("if (!bcc_files[0]) bcc_files[0] = fopen(\"data.dat\", \"wb+\");"),
             "unexpected output:\n{output}"
         );
         assert!(output.contains("bcc_mki(bv_s_idbuf, 7);"), "unexpected output:\n{output}");
@@ -4475,16 +4475,16 @@ end
             "PUT should gather every field at its declared offset:\n{output}"
         );
         assert!(
-            output.contains("fwrite(bcc_rec, 1, 22, bcc_files[1]);"),
+            output.contains("fwrite(bcc_rec, 1, 22, bcc_files[0]);"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("fseek(bcc_files[1], (long)((1) - 1) * 22, SEEK_SET);"),
+            output.contains("fseek(bcc_files[0], (long)((1) - 1) * 22, SEEK_SET);"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("fread(bcc_rec, 1, 22, bcc_files[1]);"), "unexpected output:\n{output}");
+        assert!(output.contains("fread(bcc_rec, 1, 22, bcc_files[0]);"), "unexpected output:\n{output}");
         assert!(output.contains("bv_i_n = bcc_cvi(bv_s_idbuf);"), "unexpected output:\n{output}");
-        assert!(output.contains("fclose(bcc_files[1]);"), "unexpected output:\n{output}");
+        assert!(output.contains("fclose(bcc_files[0]);"), "unexpected output:\n{output}");
     }
 
     #[test]
@@ -4548,17 +4548,22 @@ end
         // `[BCC_MAX_CHANNELS]` (32 elements, valid indices 0..=31) while
         // channel numbers -- 1-based, like real BASIC's own `#1`/`#2`/...
         // -- were used directly as the index, making channel
-        // `BCC_MAX_CHANNELS` itself (32) index one past the end. Now
-        // declared `[BCC_MAX_CHANNELS + 1]` so every channel from 1
-        // through BCC_MAX_CHANNELS stays in bounds.
-        let source = "open \"f.dat\" for random as #1 len = 4\n\
-                       field #1, 4 as b$\n\
-                       close #1\n\
+        // `BCC_MAX_CHANNELS` itself (32) index one past the end. Now every
+        // `bcc_files[...]` reference is `channel - 1`, so the array stays
+        // `[BCC_MAX_CHANNELS]` and channel `BCC_MAX_CHANNELS` lands on the
+        // last valid index instead of one past the end.
+        let source = "open \"f.dat\" for random as #32 len = 4\n\
+                       field #32, 4 as b$\n\
+                       close #32\n\
                        end\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS + 1];"),
+            output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS];"),
             "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_files[31]"),
+            "channel #32 should index bcc_files[31], the last valid slot:\n{output}"
         );
     }
 

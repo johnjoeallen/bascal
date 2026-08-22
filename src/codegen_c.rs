@@ -230,13 +230,15 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
 const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
 
 /// Random-access record I/O runtime support: `bcc_files` is a fixed-size
-/// table of open `FILE*` handles indexed *directly* by BASCAL channel
-/// number, not `channel - 1` -- BASIC channels are 1-based (`#1`, never
-/// `#0`), so the table is declared `[BCC_MAX_CHANNELS + 1]` (not just
-/// `[BCC_MAX_CHANNELS]`) specifically so index `BCC_MAX_CHANNELS` itself
-/// -- the highest channel number `literal_channel` accepts -- is still
-/// in bounds; index `0` goes permanently unused, a harmless one-slot
-/// waste far simpler than remapping every channel reference by one.
+/// table of open `FILE*` handles, sized `[BCC_MAX_CHANNELS]` and indexed
+/// by `channel - 1` everywhere a channel is used -- BASIC channels are
+/// 1-based (`#1`, never `#0`), but the C array is 0-based, so every
+/// `bcc_files[...]` reference in emitted code subtracts 1 from the
+/// BASCAL channel number first (done once, in Rust, since the channel is
+/// always a compile-time literal -- see `literal_channel`). `FileIoLayout`'s
+/// `channel_fields` map, by contrast, is still keyed by the raw 1-based
+/// channel number -- it's a `HashMap`, not an array, so there's no
+/// out-of-bounds concern to avoid by shifting its keys too.
 /// `literal_channel` rejects any channel outside `1..=BCC_MAX_CHANNELS`
 /// before it ever reaches here, so nothing at this level needs its own
 /// bounds check. `bcc_mki`/`bcc_mkl`/
@@ -258,7 +260,7 @@ const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC
 /// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
 /// not big-endian mainframes, matching real BASIC's own on-disk
 /// little-endian layout only on those platforms).
-const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS + 1];\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
+const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -1295,22 +1297,24 @@ fn emit_statement(
                 );
             }
             let ch = literal_channel(channel)?;
+            let idx = ch - 1;
             let (prelude, file_text) = render_string_expr(file, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
             out.push_str(&format!(
-                "    bcc_files[{ch}] = fopen({file_text}, \"rb+\");\n"
+                "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
             ));
             out.push_str(&format!(
-                "    if (!bcc_files[{ch}]) bcc_files[{ch}] = fopen({file_text}, \"wb+\");\n"
+                "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
             ));
             Ok(())
         }
         Statement::Close { channel } => {
             let ch = literal_channel(channel)?;
-            out.push_str(&format!("    fclose(bcc_files[{ch}]);\n"));
-            out.push_str(&format!("    bcc_files[{ch}] = NULL;\n"));
+            let idx = ch - 1;
+            out.push_str(&format!("    fclose(bcc_files[{idx}]);\n"));
+            out.push_str(&format!("    bcc_files[{idx}] = NULL;\n"));
             Ok(())
         }
         // Pure compile-time bookkeeping, no runtime code -- records this
@@ -1550,6 +1554,7 @@ fn emit_get_or_put(
     is_get: bool,
 ) -> Result<(), String> {
     let ch = literal_channel(channel)?;
+    let idx = ch - 1;
     let Some(record) = record else {
         return Err(
             "GET/PUT with no record number (\"next sequential record\") isn't supported by the \
@@ -1569,11 +1574,11 @@ fn emit_get_or_put(
 
     out.push_str("    {\n");
     out.push_str(&format!(
-        "    fseek(bcc_files[{ch}], (long)(({record_text}) - 1) * {reclen}, SEEK_SET);\n"
+        "    fseek(bcc_files[{idx}], (long)(({record_text}) - 1) * {reclen}, SEEK_SET);\n"
     ));
     out.push_str(&format!("    unsigned char bcc_rec[{reclen}];\n"));
     if is_get {
-        out.push_str(&format!("    fread(bcc_rec, 1, {reclen}, bcc_files[{ch}]);\n"));
+        out.push_str(&format!("    fread(bcc_rec, 1, {reclen}, bcc_files[{idx}]);\n"));
         for field in fields {
             out.push_str(&format!(
                 "    memcpy({0}, bcc_rec + {1}, {2});\n",
@@ -1588,7 +1593,7 @@ fn emit_get_or_put(
                 field.c_name, field.offset, field.width
             ));
         }
-        out.push_str(&format!("    fwrite(bcc_rec, 1, {reclen}, bcc_files[{ch}]);\n"));
+        out.push_str(&format!("    fwrite(bcc_rec, 1, {reclen}, bcc_files[{idx}]);\n"));
     }
     out.push_str("    }\n");
     Ok(())
