@@ -1,13 +1,13 @@
 #include <stdio.h>
 #include <math.h>
 
-int main(void) {
-    int bv_i_i = 0;
-    int bv_i_k = 0;
-    int bv_i_n = 0;
-    int bv_i_p = 0;
-    int bv_i_steps = 0;
+static int bv_i_i = 0;
+static int bv_i_k = 0;
+static int bv_i_n = 0;
+static int bv_i_p = 0;
+static int bv_i_steps = 0;
 
+int main(void) {
     // Tutorial 5 — Loops: for, WHILE, DO
     //
     // BASCAL provides three loop constructs:

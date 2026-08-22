@@ -44,7 +44,7 @@ static const char* bcc_strd(double value) {
 }
 
 #define BCC_MAX_CHANNELS 32
-static FILE* bcc_files[BCC_MAX_CHANNELS];
+static FILE* bcc_files[BCC_MAX_CHANNELS + 1];
 
 static void bcc_mki(char* out, int value) {
     int16_t v = (int16_t)value;

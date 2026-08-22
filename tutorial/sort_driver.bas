@@ -12,12 +12,15 @@
 100 ' into the caller's array; byval (the default) would sort a private copy
 110 ' and discard it.
 120 ' data% -- array to sort, mutated in place
+
 130 ' In-place cocktail shaker sort.
 140 ' This is a bidirectional bubble sort over the active range. data% is
 150 ' byref so the sorted result is copied back to the caller.
 160 ' data% -- array to sort, mutated in place
+
 170 ' Tiny helper used to prove recursive require resolution.
 180 ' value% -- number passed through unchanged
+
 190 ' Shell sort demonstrates a nested dependency. The helper is intentionally
 200 ' trivial; the point is to exercise recursive require resolution.
 
@@ -26,6 +29,7 @@
 230 ' Middle-element pivot avoids O(n^2) on already-sorted or reverse-sorted input.
 240 ' data% is byref so the sorted result is copied back to the caller.
 250 ' data% -- array to sort, mutated in place
+
 260 ' Sort driver for the BASCAL example sort library.
 270 ' Uses 5000 reverse-sorted elements (worst case for comparison sorts).
 

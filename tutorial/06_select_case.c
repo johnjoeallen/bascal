@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 
-int main(void) {
-    int bv_i_choice = 0;
-    int bv_i_score = 0;
-    int bv_i_temp = 0;
-    char bv_s_day[256] = {0};
+static int bv_i_choice = 0;
+static int bv_i_score = 0;
+static int bv_i_temp = 0;
+static char bv_s_day[256] = {0};
 
+int main(void) {
     // Tutorial 6 — SELECT CASE
     //
     // SELECT CASE tests one expression against multiple patterns.  The

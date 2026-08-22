@@ -30,6 +30,18 @@ static const char* bcc_chr(int code) {
     return out;
 }
 
+static const char* bcc_stri(int value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% d", value);
+    return out;
+}
+
+static const char* bcc_strd(double value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% g", value);
+    return out;
+}
+
 static int bv_i_dummy = 0;
 static int bv_i_lo = 0;
 static int bv_i_runningtotal = 0;

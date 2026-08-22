@@ -3,8 +3,10 @@
 
 30 ' Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 40 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+
 50 ' Lower-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
 60 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+
 70 ' Tutorial 7 — Functions
 80 ' 
 90 ' A BASCAL function is declared with FUNCTION ... END FUNCTION.

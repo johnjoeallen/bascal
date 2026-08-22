@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <math.h>
 
-int main(void) {
-    int bv_i_age = 0;
-    int bv_i_income = 0;
-    int bv_i_points = 0;
-    int bv_i_score = 0;
-    int bv_i_temperature = 0;
-    int bv_i_x = 0;
-    char bv_s_grade[256] = {0};
+static int bv_i_age = 0;
+static int bv_i_income = 0;
+static int bv_i_points = 0;
+static int bv_i_score = 0;
+static int bv_i_temperature = 0;
+static int bv_i_x = 0;
+static char bv_s_grade[256] = {0};
 
+int main(void) {
     // Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
     //
     // BASCAL supports multi-line block IF statements.  The compiler transpiles

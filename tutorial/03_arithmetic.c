@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <math.h>
 
-int main(void) {
-    int bv_i_a = 0;
-    int bv_i_b = 0;
-    int bv_i_n = 0;
-    int bv_i_x = 0;
+static int bv_i_a = 0;
+static int bv_i_b = 0;
+static int bv_i_n = 0;
+static int bv_i_x = 0;
 
+int main(void) {
     // Tutorial 3 — Operators and Expressions
     //
     // Arithmetic:   +  -  *  /  \  MOD  ^

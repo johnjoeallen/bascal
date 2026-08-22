@@ -216,7 +216,7 @@ fn run(cli: Cli) -> Result<(), String> {
     let options = CompileOptions {
         library_dirs: cli.library_dirs,
         libraries: cli.libraries,
-        line_numbers: cli.line_numbers && !cli.sparse_line_numbers,
+        line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
         target,
     };
     let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
