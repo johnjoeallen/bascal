@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Functions, Procedures, and Libraries — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
 <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 5</p><h1>Functions, procedures, and libraries</h1></div></header>
-<main class="chapter-main book-width"><h2>Name an operation</h2><p>A function calculates a typed result; a procedure performs an action. Keeping the distinction explicit makes call sites honest about whether a value comes back.</p><pre><code>function larger%(left%, right%)
+<main class="chapter-main book-width"><h2>Name an operation</h2><p>A function calculates a typed result; a procedure performs an action. Keeping the distinction explicit makes call sites honest about whether a value comes back. A name is yours to choose freely, with one exception: it can’t be the same as a real BASIC builtin — <code>function sqr%(x%)</code> is rejected when the program is compiled, since neither silently shadowing <code>SQR</code> nor being shadowed by it was ever what the program meant.</p><pre><code>function larger%(left%, right%)
     if left% &gt; right% then
         return left%
     end if

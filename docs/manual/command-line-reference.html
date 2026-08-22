@@ -38,7 +38,8 @@
   <div class="prose">
 <pre><code>bcc input.bcl [-o dir/] [-L dir] [-l library]
               [--line-numbers | --sparse-line-numbers] [--clean | -c]
-              [--binary | -b] [--run | -r] [--target | -t basic|C]</code></pre>
+              [--binary | -b] [--run | -r] [--target | -t basic|C]
+              [--strict-vars | --strict-vars-warn]</code></pre>
 <table>
 <colgroup>
 <col style="width: 23%" />
@@ -97,6 +98,16 @@
 <td><code>--target &lt;t&gt;</code></td>
 <td><code>-t</code></td>
 <td>Backend to generate code for: <code>basic</code> (the original, complete backend) or <code>C</code> (an experimental native-C backend — see below). Case-insensitive; <code>c</code> also works.</td>
+</tr>
+<tr class="even">
+<td><code>--strict-vars</code></td>
+<td></td>
+<td>Opt-in, Pascal-style mandatory variable declaration — see <a href="variables-and-constants.html#dim">DIM</a>. Rejects the compile if any scalar/array variable is used without a prior <code>DIM</code>/<code>DECLARE</code>, a <code>CONST</code>, a <code>FOR</code> loop's own counter, or a function/procedure parameter. Checked only against this program's own source, never a <code>require</code>d library's. Turning this on means the program is no longer a strict superset of BASIC.</td>
+</tr>
+<tr class="odd">
+<td><code>--strict-vars-warn</code></td>
+<td></td>
+<td>Same check as <code>--strict-vars</code>, but every finding is printed to stderr as a warning instead of failing the compile. Ignored if <code>--strict-vars</code> is also given.</td>
 </tr>
 </tbody>
 </table>

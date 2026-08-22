@@ -439,6 +439,43 @@ mod tests {
         assert_eq!(cli.target, None);
     }
 
+    #[test]
+    fn cli_accepts_strict_vars_and_strict_vars_warn() {
+        let cli =
+            Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars"]).expect("should parse");
+        assert!(cli.strict_vars);
+        assert!(!cli.strict_vars_warn);
+
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars-warn"])
+            .expect("should parse");
+        assert!(!cli.strict_vars);
+        assert!(cli.strict_vars_warn);
+
+        let cli = Cli::try_parse_from(["bcc", "input.bcl"]).expect("should parse");
+        assert!(!cli.strict_vars);
+        assert!(!cli.strict_vars_warn);
+    }
+
+    #[test]
+    fn strict_vars_wins_over_strict_vars_warn_when_both_are_given() {
+        // `run()`'s own precedence rule (`cli.strict_vars_warn && !cli.strict_vars`)
+        // -- both flags parse fine together, but only the hard-error mode
+        // should end up active in the CompileOptions `run()` builds.
+        let cli = Cli::try_parse_from([
+            "bcc",
+            "input.bcl",
+            "--strict-vars",
+            "--strict-vars-warn",
+        ])
+        .expect("should parse both flags together");
+        assert!(cli.strict_vars);
+        assert!(cli.strict_vars_warn);
+        assert!(
+            !(cli.strict_vars_warn && !cli.strict_vars),
+            "the effective warn flag run() computes must be false once --strict-vars is also set"
+        );
+    }
+
     fn cli_with_output(input: PathBuf, output: Option<PathBuf>) -> Cli {
         Cli {
             input,

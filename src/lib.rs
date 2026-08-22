@@ -1107,6 +1107,16 @@ END
     }
 
     #[test]
+    fn declare_compiles_identically_to_dim() {
+        let dim_out = compile_source("d.bcl", "dim x%, y%(20)\nx% = 5\nprint x%\nend\n")
+            .expect("dim should compile");
+        let declare_out = compile_source("e.bcl", "declare x%, y%(20)\nx% = 5\nprint x%\nend\n")
+            .expect("declare should compile");
+        assert_eq!(dim_out, declare_out);
+        assert!(declare_out.contains("DIM x%"), "unexpected output:\n{declare_out}");
+    }
+
+    #[test]
     fn function_cannot_shadow_a_builtin() {
         let source = "function sqr%(x%)\n    return x% * x%\nend function\nprint sqr%(4)\nend\n";
         let diagnostics =
