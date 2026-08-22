@@ -5379,6 +5379,44 @@ end
     }
 
     #[test]
+    fn c_target_supports_labels_and_goto() {
+        let source = "dim i%\ni% = 0\ntop:\ni% = i% + 1\nif i% < 3 then goto top\ngoto skip\nprint \"unreachable\"\nskip:\nprint \"done\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_lbl_top:;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("goto bcc_lbl_top;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_lbl_skip:;") && output.contains("goto bcc_lbl_skip;"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_label_names_are_case_insensitive() {
+        let source = "TOP:\ngoto top\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_lbl_top:;") && output.contains("goto bcc_lbl_top;"),
+            "a label and a differently-cased GOTO to it should resolve to the same C label:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_gosub() {
+        let source = "top:\ngosub top\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            !diagnostics.is_empty(),
+            "GOSUB should still be rejected -- only label:/goto (Phase 1) is implemented so far"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);

@@ -2465,6 +2465,43 @@ fn emit_statement(
             out.push_str(&format!("    // {comment}\n"));
             Ok(())
         }
+        // `label:`/`goto label` -- Phase 1 of raw BASIC's label-based
+        // control flow (see the C-target labels/GOTO tracking issue):
+        // close to a 1:1 mapping onto C's own `goto`/label, since both
+        // languages have the identical primitive. `gosub`/`return` and
+        // `on error goto`/`resume` need a real "remember where to resume"
+        // execution model C's `goto` doesn't give for free, so they're
+        // deliberately still unsupported (falling through to the generic
+        // error below) -- a separate, larger piece of work.
+        //
+        // The label name gets the same `bcc_lbl_`-prefixed, lowercased
+        // treatment `c_var_name` gives variables: C labels live in their
+        // own namespace (no collision risk with a variable of the same
+        // name), but an unprefixed label could still collide with a C
+        // reserved word BASIC doesn't reserve (`int`, `for`, `do`, ...),
+        // which isn't just a naming style choice here -- it would be a
+        // real compile failure. The trailing `;` after the label makes it
+        // a valid (empty) C statement even when it's the last thing in a
+        // block, where a bare `label:}` is a syntax error.
+        Statement::Label(name) => {
+            out.push_str(&format!("    bcc_lbl_{}:;\n", name.to_ascii_lowercase()));
+            Ok(())
+        }
+        Statement::Goto(target) => {
+            let Expr::Ident(ident) = target else {
+                return Err(
+                    "GOTO's target isn't supported by the minimal C backend yet -- only a bare \
+                     label name is (enforced at parse time for every other BASCAL construct, so \
+                     this shouldn't be reachable)"
+                        .to_string(),
+                );
+            };
+            out.push_str(&format!(
+                "    goto bcc_lbl_{};\n",
+                ident.name.to_ascii_lowercase()
+            ));
+            Ok(())
+        }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
