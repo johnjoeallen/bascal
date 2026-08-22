@@ -11,16 +11,20 @@
 //! `strcat` -- see `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string
 //! concatenation, `if`/`elseif`/`else`/`end if` (including the
 //! single-line form, and nesting), `for`/`next`, `while`/`wend`, every
-//! `do`/`loop` pre-/post-check variant, and `exit` (maps to a plain C
+//! `do`/`loop` pre-/post-check variant, `exit` (maps to a plain C
 //! `break;` -- C's native loops already give it the right "innermost
-//! enclosing loop" target for free), wrapped in `int main(void) { ... }`.
+//! enclosing loop" target for free), and `select case` (single-value,
+//! `to` range, and `is <op>` clauses on a numeric selector;
+//! exact-match-only on a string selector, via `strcmp` -- see
+//! `emit_select_case`), wrapped in `int main(void) { ... }`.
 //! Everything else (functions, other statement kinds, arrays, calls)
 //! reports a "not supported yet" diagnostic rather than panicking or
 //! emitting wrong code -- this is a walking skeleton to prove the
 //! CLI/dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`)
 //! end-to-end, not a real backend. Tutorials that compile end to end
 //! today: `tutorial/01_hello.bcl`, `tutorial/03_arithmetic.bcl`,
-//! `tutorial/04_conditions.bcl`, and `tutorial/05_loops.bcl`.
+//! `tutorial/04_conditions.bcl`, `tutorial/05_loops.bcl`, and
+//! `tutorial/06_select_case.bcl`.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -37,7 +41,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::{
-    BasicIdent, BinaryOp, DoCondition, Expr, PrintToken, Program, Statement, TypeSuffix, UnaryOp,
+    BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, PrintToken, Program,
+    Statement, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -77,9 +82,10 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
 
     let mut needs_math = false;
+    let mut needs_string = false;
     let mut temp_counter = 0;
     for statement in &program.statements {
-        emit_statement(statement, &mut body, &mut needs_math, &mut temp_counter)
+        emit_statement(statement, &mut body, &mut needs_math, &mut needs_string, &mut temp_counter)
             .map_err(|message| vec![unsupported(&message)])?;
     }
     // `Statement::End` already emits its own `return 0;` -- only add the
@@ -91,9 +97,15 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
 
     // <math.h> is only pulled in when something (currently just `\`) needs
-    // round() from it -- most programs won't.
-    let includes =
-        if needs_math { "#include <stdio.h>\n#include <math.h>\n" } else { "#include <stdio.h>\n" };
+    // round() from it, and <string.h> only when a string `select case`
+    // needs strcmp() from it -- most programs won't need either.
+    let mut includes = String::from("#include <stdio.h>\n");
+    if needs_math {
+        includes.push_str("#include <math.h>\n");
+    }
+    if needs_string {
+        includes.push_str("#include <string.h>\n");
+    }
     Ok(format!("{includes}\nint main(void) {{\n{body}}}\n"))
 }
 
@@ -196,6 +208,28 @@ fn collect_vars_in_statement(
                 collect_vars_in_expr(&cond.expr, numeric_out, string_out);
             }
         }
+        Statement::SelectCase { expr, cases, else_body } => {
+            collect_vars_in_expr(expr, numeric_out, string_out);
+            for clause in cases {
+                for value in &clause.values {
+                    match value {
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => {
+                            collect_vars_in_expr(e, numeric_out, string_out);
+                        }
+                        CaseValue::Range { from, to } => {
+                            collect_vars_in_expr(from, numeric_out, string_out);
+                            collect_vars_in_expr(to, numeric_out, string_out);
+                        }
+                    }
+                }
+                for stmt in &clause.body {
+                    collect_vars_in_statement(stmt, numeric_out, string_out);
+                }
+            }
+            for stmt in else_body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+        }
         _ => {}
     }
 }
@@ -238,6 +272,7 @@ fn emit_statement(
     statement: &Statement,
     out: &mut String,
     needs_math: &mut bool,
+    needs_string: &mut bool,
     temp_counter: &mut usize,
 ) -> Result<(), String> {
     match statement {
@@ -302,14 +337,14 @@ fn emit_statement(
             let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));
             for stmt in then_body {
-                emit_statement(stmt, out, needs_math, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
             }
             if else_body.is_empty() {
                 out.push_str("    }\n");
             } else {
                 out.push_str("    } else {\n");
                 for stmt in else_body {
-                    emit_statement(stmt, out, needs_math, temp_counter)?;
+                    emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
                 }
                 out.push_str("    }\n");
             }
@@ -360,7 +395,7 @@ fn emit_statement(
                  {loop_var} >= {limit}; {loop_var} += {step_var}) {{\n"
             ));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -373,7 +408,7 @@ fn emit_statement(
             let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
             out.push_str(&format!("    while ({cond_text}) {{\n"));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -395,7 +430,7 @@ fn emit_statement(
                 out.push_str(&emit_do_guard(cond, needs_math)?);
             }
             for stmt in body {
-                emit_statement(stmt, out, needs_math, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
             }
             if let Some(cond) = post_condition {
                 out.push_str(&emit_do_guard(cond, needs_math)?);
@@ -414,6 +449,12 @@ fn emit_statement(
         Statement::Exit => {
             out.push_str("    break;\n");
             Ok(())
+        }
+        // `select case` compiles to a native C `if`/`else if`/`else`
+        // chain, same "no labels needed" story as `if`/`elseif`/`else`
+        // above -- see `emit_select_case`.
+        Statement::SelectCase { expr, cases, else_body } => {
+            emit_select_case(expr, cases, else_body, out, needs_math, needs_string, temp_counter)
         }
         Statement::BlankLine => {
             out.push('\n');
@@ -437,8 +478,8 @@ fn emit_statement(
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, `for`, `while`, `do`, `exit`, and assignment/`const` of scalar \
-             variables (%, &, !, #, $) are implemented so far"
+             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, and assignment/`const` \
+             of scalar variables (%, &, !, #, $) are implemented so far"
         )),
     }
 }
@@ -519,6 +560,154 @@ fn emit_do_guard(cond: &DoCondition, needs_math: &mut bool) -> Result<String, St
     } else {
         format!("    if ({cond_text}) break;\n")
     })
+}
+
+/// `select case` evaluates its expression exactly once (into a fresh temp,
+/// same "evaluate once" discipline as `for`'s start/end/step -- a
+/// selector with side effects, e.g. a function call once those are
+/// supported, must not run once per `case` clause), then compiles to a
+/// native C `if`/`else if`/`else` chain testing that temp against each
+/// clause's patterns -- no labels/GOTO dispatch needed, unlike the BASIC
+/// backend's `select_case`, which has no block `IF` to build on. Wrapped
+/// in its own `{ ... }` block so the temp's declaration can't collide
+/// with another `select case` (or anything else) in the same scope.
+///
+/// The temp is numeric (`int`/`double`, matching `render_numeric_expr`'s
+/// float-ness) or a `char[256]` buffer (matching every other string
+/// value in this backend -- see `STRING_BUFFER_SIZE`), decided once via
+/// `is_string_expr` on the selector and threaded into every clause's
+/// pattern rendering (`render_case_value_cond`): a string selector can
+/// only be tested with string-typed patterns and vice versa, same
+/// type-consistency BASCAL's resolver already enforces before codegen
+/// ever sees this.
+fn emit_select_case(
+    expr: &Expr,
+    cases: &[CaseClause],
+    else_body: &[Statement],
+    out: &mut String,
+    needs_math: &mut bool,
+    needs_string: &mut bool,
+    temp_counter: &mut usize,
+) -> Result<(), String> {
+    let is_string = is_string_expr(expr);
+    let temp = format!("bt_sel_{temp_counter}");
+    *temp_counter += 1;
+
+    out.push_str("    {\n");
+    if is_string {
+        let (prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+        for line in prelude {
+            out.push_str(&line);
+        }
+        out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+        out.push_str(&format!("    snprintf({temp}, sizeof({temp}), \"%s\", {text});\n"));
+    } else {
+        let (text, is_float) = render_numeric_expr(expr, needs_math)?;
+        let c_type = if is_float { "double" } else { "int" };
+        out.push_str(&format!("    {c_type} {temp} = {text};\n"));
+    }
+
+    for (i, clause) in cases.iter().enumerate() {
+        let mut conds = Vec::with_capacity(clause.values.len());
+        for value in &clause.values {
+            conds.push(render_case_value_cond(
+                value,
+                &temp,
+                is_string,
+                out,
+                needs_math,
+                needs_string,
+                temp_counter,
+            )?);
+        }
+        let joined = conds.join(" || ");
+        let keyword = if i == 0 { "if" } else { "} else if" };
+        out.push_str(&format!("    {keyword} ({joined}) {{\n"));
+        for stmt in &clause.body {
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+        }
+    }
+    if !cases.is_empty() {
+        if !else_body.is_empty() {
+            out.push_str("    } else {\n");
+            for stmt in else_body {
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+            }
+        }
+        out.push_str("    }\n");
+    } else {
+        for stmt in else_body {
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+        }
+    }
+    out.push_str("    }\n");
+    Ok(())
+}
+
+/// Renders one `case` pattern (`CaseValue::Single`/`Range`/`Is`) as a C
+/// boolean expression testing `temp` (the selector, already evaluated
+/// once by `emit_select_case`). A string selector only supports
+/// `Single` (exact match, via `strcmp(...) == 0` -- `needs_string` is
+/// set here so `generate` knows to add `#include <string.h>`); `Range`/
+/// `Is` on a string selector is rejected, not silently mistranslated,
+/// since BASIC string comparison (`<`/`>` etc. on strings, or a numeric
+/// `to` range against a string) isn't implemented by this backend at
+/// all yet.
+fn render_case_value_cond(
+    value: &CaseValue,
+    temp: &str,
+    is_string: bool,
+    out: &mut String,
+    needs_math: &mut bool,
+    needs_string: &mut bool,
+    temp_counter: &mut usize,
+) -> Result<String, String> {
+    match value {
+        CaseValue::Single(expr) if is_string => {
+            let (prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            *needs_string = true;
+            Ok(format!("(strcmp({temp}, {text}) == 0)"))
+        }
+        CaseValue::Single(expr) => {
+            let (text, _) = render_numeric_expr(expr, needs_math)?;
+            Ok(format!("({temp} == {text})"))
+        }
+        CaseValue::Range { .. } if is_string => Err(
+            "a `to` range in `select case` isn't supported on a string selector by the minimal \
+             C backend yet -- only exact-match string case values are"
+                .to_string(),
+        ),
+        CaseValue::Range { from, to } => {
+            let (from_text, _) = render_numeric_expr(from, needs_math)?;
+            let (to_text, _) = render_numeric_expr(to, needs_math)?;
+            Ok(format!("({temp} >= {from_text} && {temp} <= {to_text})"))
+        }
+        CaseValue::Is { .. } if is_string => Err(
+            "an `is` comparison in `select case` isn't supported on a string selector by the \
+             minimal C backend yet -- only exact-match string case values are"
+                .to_string(),
+        ),
+        CaseValue::Is { op, value } => {
+            let (text, _) = render_numeric_expr(value, needs_math)?;
+            let c_op = match op {
+                BinaryOp::Eq => "==",
+                BinaryOp::Ne => "!=",
+                BinaryOp::Lt => "<",
+                BinaryOp::Le => "<=",
+                BinaryOp::Gt => ">",
+                BinaryOp::Ge => ">=",
+                _ => {
+                    return Err(format!(
+                        "`is {op:?}` isn't a valid select case comparison operator"
+                    ))
+                }
+            };
+            Ok(format!("({temp} {c_op} {text})"))
+        }
+    }
 }
 
 /// Whether `expr` is a string-typed expression -- a string literal, a

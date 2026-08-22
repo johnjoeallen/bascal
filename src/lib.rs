@@ -3603,6 +3603,7 @@ resume next
             "tutorial/03_arithmetic.bcl",
             "tutorial/04_conditions.bcl",
             "tutorial/05_loops.bcl",
+            "tutorial/06_select_case.bcl",
         ] {
             let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(tutorial);
             compile_file(&input, &options)
@@ -4137,6 +4138,71 @@ end
         let output = compile_source_via_c_target(source);
         assert!(output.contains("bv_f_x = 5;"), "unexpected output:\n{output}");
         assert!(!output.contains("round("), "widening assignment should not round:\n{output}");
+    }
+
+    #[test]
+    fn c_target_select_case_compiles_numeric_single_range_and_is_clauses() {
+        // Numeric `select case` compiles to a native if/else-if/else
+        // chain against a once-evaluated temp -- single-value, `to`
+        // range, and `is <op>` clauses all in one selector.
+        let source = "n% = 5\n\
+                       select case n%\n\
+                       case 1, 2\n\
+                       print \"low\"\n\
+                       case 3 to 6\n\
+                       print \"mid\"\n\
+                       case is >= 7\n\
+                       print \"high\"\n\
+                       case else\n\
+                       print \"other\"\n\
+                       end select\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("int bt_sel_0 = bv_i_n;"),
+            "selector should be evaluated once into its own temp:\n{output}"
+        );
+        assert!(
+            output.contains("if ((bt_sel_0 == 1) || (bt_sel_0 == 2)) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("} else if ((bt_sel_0 >= 3 && bt_sel_0 <= 6)) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("} else if ((bt_sel_0 >= 7)) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("} else {"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_select_case_compiles_string_exact_match_clauses() {
+        // A string selector is copied into its own char[256] temp (same
+        // buffer convention as every other string value in this backend)
+        // and tested with strcmp(...) == 0, not C's `==` -- and pulls in
+        // <string.h> for it.
+        let source = "d$ = \"Saturday\"\n\
+                       select case d$\n\
+                       case \"Saturday\", \"Sunday\"\n\
+                       print \"weekend\"\n\
+                       case else\n\
+                       print \"weekday\"\n\
+                       end select\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("#include <string.h>"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("char bt_sel_0[256];"),
+            "string selector should get its own buffer temp:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "if ((strcmp(bt_sel_0, \"Saturday\") == 0) || (strcmp(bt_sel_0, \"Sunday\") == 0)) {"
+            ),
+            "unexpected output:\n{output}"
+        );
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a
