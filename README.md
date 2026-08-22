@@ -99,7 +99,7 @@ bcc input.bcl [-o path] [-L dir] [-l library]
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
 | `--line-numbers` | Number every output line, not just branch targets (the default) |
-| `--sparse-line-numbers` | Number only branch targets, not every line (invalid on real MBASIC/BASCOM; only safe with lenient dialects like FreeBASIC's `-lang qb`) |
+| `--sparse-line-numbers` | Number only branch targets, not every line. Real MBASIC/BASCOM-family compilers need a switch for this: Microsoft's BASCOM uses `/C`, IBM's BASIC Compiler uses `/N`; FreeBASIC's `-lang qb` accepts it with no switch at all |
 | `--clean`, `-c` | Re-transpile even if output is already up to date |
 | `--binary`, `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `basic`, `gcc` for `C` |
 | `--run`, `-r` | Also run the compiled binary (implies `--binary`). For `basic` this always means `fbc`'s binary, run directly — not real BASCOM, whose own `.EXE` needs a DOS environment/emulator like dosbox-x to run at all |

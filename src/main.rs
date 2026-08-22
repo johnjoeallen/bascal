@@ -32,7 +32,7 @@ struct Cli {
     #[arg(long)]
     line_numbers: bool,
 
-    /// Number only branch targets, not every line. Invalid on real MBASIC/BASCOM; only safe with lenient dialects like FreeBASIC's -lang qb
+    /// Number only branch targets, not every line. Real MBASIC/BASCOM-family compilers need a switch for this: Microsoft's BASCOM uses /C, IBM's BASIC Compiler uses /N; FreeBASIC's -lang qb accepts it with no switch at all
     #[arg(long)]
     sparse_line_numbers: bool,
 
