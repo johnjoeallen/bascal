@@ -100,6 +100,33 @@ fn resolve_default_target() -> Target {
     Target::Basic
 }
 
+/// The `-o` value's *effective* target: if it names a directory (already
+/// exists as one, or is written with a trailing path separator even if it
+/// doesn't exist yet -- `-o out/` for output that hasn't been generated
+/// before), the actual output file goes inside it, auto-named the same
+/// way an omitted `-o` would name it (input's stem plus the target's
+/// extension) -- not a raw file path the caller has to spell out
+/// themselves. Otherwise (no trailing separator, and not an existing
+/// directory) `-o` is still an exact file path, same as before -- this is
+/// purely additive, not a breaking change to existing `-o exact/path.bas`
+/// usage.
+fn resolve_output_path(cli: &Cli) -> Result<PathBuf, String> {
+    let Some(output) = &cli.output else {
+        return Ok(default_output_path(cli.input.as_path(), cli.target));
+    };
+    let looks_like_dir = output.is_dir()
+        || output.as_os_str().to_string_lossy().ends_with('/')
+        || output.as_os_str().to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
+    if !looks_like_dir {
+        return Ok(output.clone());
+    }
+    let default_name = default_output_path(cli.input.as_path(), cli.target);
+    let file_name = default_name.file_name().ok_or_else(|| {
+        format!("error: can't derive an output file name from {}", cli.input.display())
+    })?;
+    Ok(output.join(file_name))
+}
+
 fn run() -> Result<(), String> {
     let cli = parse_args(env::args().skip(1).collect())?;
     // `--run` implies `--binary` -- there's no point building a binary
@@ -107,10 +134,7 @@ fn run() -> Result<(), String> {
     // first.
     let want_binary = cli.binary || cli.run;
 
-    let output_path = cli
-        .output
-        .clone()
-        .unwrap_or_else(|| default_output_path(cli.input.as_path(), cli.target));
+    let output_path = resolve_output_path(&cli)?;
 
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent).map_err(|err| {
@@ -441,5 +465,62 @@ mod tests {
         let cli = parse_args(vec!["input.bcl".to_string(), "-r".to_string()])
             .expect("should parse -r");
         assert!(cli.run);
+    }
+
+    fn cli_with_output(input: PathBuf, output: Option<PathBuf>, target: Target) -> Cli {
+        Cli {
+            input,
+            output,
+            library_dirs: Vec::new(),
+            libraries: Vec::new(),
+            line_numbers: true,
+            sparse_line_numbers: false,
+            clean: false,
+            binary: false,
+            run: false,
+            target,
+        }
+    }
+
+    #[test]
+    fn resolve_output_path_treats_an_existing_directory_as_a_target_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let cli = cli_with_output(
+            PathBuf::from("some/input.bcl"),
+            Some(dir.path().to_path_buf()),
+            Target::C,
+        );
+        let resolved = resolve_output_path(&cli).unwrap();
+        assert_eq!(resolved, dir.path().join("input.c"));
+    }
+
+    #[test]
+    fn resolve_output_path_treats_a_trailing_slash_as_a_directory_even_if_it_does_not_exist_yet() {
+        let dir = tempfile::tempdir().unwrap();
+        let not_yet_created = dir.path().join("nested");
+        let mut with_slash = not_yet_created.to_string_lossy().into_owned();
+        with_slash.push('/');
+        let cli =
+            cli_with_output(PathBuf::from("input.bcl"), Some(PathBuf::from(with_slash)), Target::Basic);
+        let resolved = resolve_output_path(&cli).unwrap();
+        assert_eq!(resolved, not_yet_created.join("input.bas"));
+    }
+
+    #[test]
+    fn resolve_output_path_treats_a_plain_path_as_an_exact_file() {
+        let cli = cli_with_output(
+            PathBuf::from("input.bcl"),
+            Some(PathBuf::from("exact/output.bas")),
+            Target::Basic,
+        );
+        let resolved = resolve_output_path(&cli).unwrap();
+        assert_eq!(resolved, PathBuf::from("exact/output.bas"));
+    }
+
+    #[test]
+    fn resolve_output_path_defaults_next_to_the_input_when_o_is_omitted() {
+        let cli = cli_with_output(PathBuf::from("some/dir/input.bcl"), None, Target::C);
+        let resolved = resolve_output_path(&cli).unwrap();
+        assert_eq!(resolved, PathBuf::from("some/dir/input.c"));
     }
 }

@@ -37,8 +37,8 @@
 
   <div class="prose">
 <pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
-              [--line-numbers] [--clean | -c] [--binary | -b]
-              [--target | -t basic|c]</code></pre>
+              [--line-numbers | --sparse-line-numbers] [--clean | -c]
+              [--binary | -b] [--run | -r] [--target | -t basic|C]</code></pre>
 <table>
 <colgroup>
 <col style="width: 23%" />
@@ -54,9 +54,9 @@
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>-o output.bas</code></td>
+<td><code>-o path</code></td>
 <td></td>
-<td>Output file path. Default: source path with <code>.bas</code> (or <code>.c</code>, under <code>--target c</code>) extension in the same directory.</td>
+<td>Output path. If <code>path</code> names a directory (already exists as one, or is written with a trailing <code>/</code> even if it doesn't exist yet), the output file goes inside it, auto-named the same way an omitted <code>-o</code> would; otherwise it's an exact output file path. Default (no <code>-o</code> at all): source path with <code>.bas</code> (or <code>.c</code>, under <code>--target C</code>) extension in the same directory.</td>
 </tr>
 <tr class="even">
 <td><code>-L dir</code></td>
@@ -71,25 +71,39 @@
 <tr class="even">
 <td><code>--line-numbers</code></td>
 <td></td>
-<td>Number every output line, not just branch targets.</td>
+<td>Number every output line, not just branch targets (the default — only needed to override an earlier <code>--sparse-line-numbers</code> on the same command line).</td>
 </tr>
 <tr class="odd">
+<td><code>--sparse-line-numbers</code></td>
+<td></td>
+<td>Number only branch targets, not every line. Invalid on real MBASIC/BASCOM; only safe with lenient dialects like FreeBASIC's <code>-lang qb</code>.</td>
+</tr>
+<tr class="even">
 <td><code>--clean</code></td>
 <td><code>-c</code></td>
 <td>Re-transpile even if the output is already up to date.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>--binary</code></td>
 <td><code>-b</code></td>
-<td>Compile the generated output to a binary in <code>tmp/</code>: <code>fbc</code> for <code>--target basic</code>, <code>gcc</code> for <code>--target c</code>.</td>
+<td>Compile the generated output to a binary in <code>tmp/</code>: <code>fbc</code> for <code>--target basic</code>, <code>gcc</code> for <code>--target C</code>.</td>
+</tr>
+<tr class="even">
+<td><code>--run</code></td>
+<td><code>-r</code></td>
+<td>Also run the compiled binary (implies <code>--binary</code>), with stdin/stdout/stderr inherited. For <code>--target basic</code> this always means <code>fbc</code>'s binary, run directly — not real BASCOM, whose own <code>.EXE</code> needs a DOS environment/emulator like dosbox-x to run at all.</td>
 </tr>
 <tr class="odd">
 <td><code>--target &lt;t&gt;</code></td>
 <td><code>-t</code></td>
-<td>Backend to generate code for: <code>basic</code> (default, the only complete one) or <code>c</code> (just getting started — see below).</td>
+<td>Backend to generate code for: <code>basic</code> (the original, complete backend) or <code>C</code> (an experimental native-C backend — see below). Case-insensitive; <code>c</code> also works.</td>
 </tr>
 </tbody>
 </table>
+<h3 id="default-target">Default Target</h3>
+<p>Without <code>--target</code>, <code>bcc</code> picks a default from, first match wins: the <code>BASCAL_TARGET</code> environment variable; <code>~/.config/bascal/config</code> (a <code>target=C</code> line, simple <code>key=value</code> settings one per line, <code>#</code> comments allowed); <code>/etc/default/bascal</code> (same format, system-wide — the standard Debian <code>/etc/default/&lt;pkgname&gt;</code> convention, a plain file, not a directory); otherwise <code>basic</code>. An explicit <code>--target</code>/<code>-t</code> on the command line always overrides whatever this picks — handy for setting <code>C</code> as a working default without typing <code>--target C</code> on every call:</p>
+<pre><code>mkdir -p ~/.config/bascal
+echo "target=C" &gt; ~/.config/bascal/config</code></pre>
 <h3 id="backends">Backends</h3>
 <p><code>--target basic</code> (the default) is everything else on this page: plain 1980s Microsoft BASIC/BASCOM output.</p>
 <p><code>--target c</code> is a new, deliberately minimal native-C backend, aiming to produce native Linux/macOS/Win32 binaries directly (via <code>gcc</code>) without going through a BASIC compiler at all — while the BASCOM-compatible <code>basic</code> target keeps gating what language features BASCAL adds, so both backends stay able to express the same language. Seven tutorials compile end to end today: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.bcl"><code>tutorial/01_hello.bcl</code></a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.bcl"><code>tutorial/03_arithmetic.bcl</code></a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.bcl"><code>tutorial/04_conditions.bcl</code></a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl"><code>tutorial/05_loops.bcl</code></a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl"><code>tutorial/06_select_case.bcl</code></a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl"><code>tutorial/07_functions.bcl</code></a>, and <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl"><code>tutorial/15_random_and_record_files.bcl</code></a> — see each one's <code>.c</code> counterpart for its output.</p>
@@ -97,7 +111,7 @@
 <p>A narrowing numeric assignment (a float/double-valued expression assigned into an integer-suffixed variable, e.g. <code>n% = n% / 2</code>) rounds, matching real MBASIC/BASCOM's own <code>CINT()</code>-style conversion (confirmed directly against real BASCOM: <code>N% = 27 / 2</code> gives <code>14</code>, not <code>13</code>) — not C's own implicit truncating conversion, which would silently give a different, wrong answer. A <code>for</code> loop's start/end/step are each captured into their own temp exactly once, at loop entry, matching BASIC's own "evaluated once, not re-read every iteration" semantics — a naive C <code>for</code> whose condition directly re-reads a variable the body mutates would behave differently.</p>
 <p>Every operator needed its exact BASIC semantics tracked down first, not assumed to be "the same as the C operator": <code>/</code> gets explicit <code>(double)</code> casts so it stays true division even between two integers (plain C <code>int / int</code> truncates); <code>\</code>/<code>MOD</code>/<code>AND</code>/<code>OR</code>/<code>XOR</code>/<code>NOT</code> round each operand first via <code>round()</code> (verified against the GW-BASIC Reference Manual), then apply C's native <code>/</code>, <code>%</code>, <code>&amp;</code>, <code>|</code>, <code>^</code>, or <code>~</code>; <code>^</code> (exponent) maps to <code>pow()</code> from <code>&lt;math.h&gt;</code>. <code>round()</code>'s ties-away-from-zero tie-break is confirmed directly against a genuine, period-accurate IBM Personal Computer BASIC Compiler 2.00 under dosbox-x — <code>2.5 \ 1 = 3</code>, <code>2.5 AND 3 = 3</code>, matching <code>round()</code> and disagreeing with e.g. round-half-to-even or plain truncation; see <code>scripts/fetch-ibm-basic-compiler.sh</code> / <a href="https://github.com/johnjoeallen/bascal/blob/main/test-fixtures/README.md"><code>test-fixtures/README.md</code></a> if you want to check this or other real-BASCOM claims yourself, the same fixture the <code>basic</code> target's own dosbox-x conformance suite uses. String variables are fixed-size buffers (<code>char[256]</code>) — real BASIC strings are dynamically sized, which this backend doesn't attempt — written exclusively via <code>snprintf</code> (safely truncates an over-long value, never overflows), never <code>strcpy</code>/<code>strcat</code>. <code>%</code>/<code>&amp;</code> (BASIC's 16-bit integer and 32-bit long) are collapsed to the same plain C <code>int</code>.</p>
 <h3 id="up-to-date-check">Up-to-Date Check</h3>
-<p>Without <code>--clean</code>, <code>bcc</code> skips re-transpiling if the output <code>.bas</code> file is newer than all input <code>.bcl</code> files. With <code>--binary</code>, a second up-to-date check covers the compiled binary.</p>
+<p>Without <code>--clean</code>, <code>bcc</code> skips re-transpiling if the output <code>.bas</code> file is newer than all input <code>.bcl</code> files. With <code>--binary</code> (or <code>--run</code>, which implies it), a second up-to-date check covers the compiled binary — and with <code>--run</code>, the already-built binary still runs even when nothing needed rebuilding.</p>
 <h3 id="library-search-order">Library Search Order</h3>
 <ol type="1">
 <li>The directory containing the primary source file (always first).</li>
