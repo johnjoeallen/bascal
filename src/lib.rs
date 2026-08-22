@@ -5407,12 +5407,65 @@ end
     }
 
     #[test]
-    fn c_target_rejects_gosub() {
-        let source = "top:\ngosub top\nend\n";
+    fn c_target_supports_gosub_and_return() {
+        let source = "print \"before\"\ngosub greet\nprint \"after\"\ngoto skip\ngreet:\nprint \"  hi\"\nreturn\nskip:\nprint \"done\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_MAX_GOSUB_DEPTH"),
+            "GOSUB needs the GOSUB_HELPER block:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 0;")
+                && output.contains("goto bcc_lbl_greet;")
+                && output.contains("bcc_ret_0:;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("switch (bcc_gosub_stack[--bcc_gosub_sp]) {")
+                && output.contains("case 0: goto bcc_ret_0;"),
+            "RETURN should dispatch back through the ID stack:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_a_gosub_shared_by_two_call_sites() {
+        // The same RETURN is reached from two different GOSUB call sites
+        // -- real GOSUB/RETURN's whole point (see `Statement::ReturnVoid`'s
+        // own doc comment): the switch dispatch has to cover both IDs.
+        let source = "gosub greet\ngosub greet\ngoto skip\ngreet:\nprint \"hi\"\nreturn\nskip:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 0;")
+                && output.contains("bcc_ret_0:;")
+                && output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 1;")
+                && output.contains("bcc_ret_1:;"),
+            "each GOSUB call site should get its own resume ID:\n{output}"
+        );
+        assert!(
+            output.contains("case 0: goto bcc_ret_0;") && output.contains("case 1: goto bcc_ret_1;"),
+            "the shared RETURN's dispatch should cover both call sites' IDs:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_gosub_inside_a_procedure() {
+        let source = "procedure p()\n    gosub top\nend procedure\np()\ntop:\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            !diagnostics.is_empty(),
-            "GOSUB should still be rejected -- only label:/goto (Phase 1) is implemented so far"
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("function/procedure")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_gosub_helper_when_gosub_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("BCC_MAX_GOSUB_DEPTH") && !output.contains("bcc_gosub_stack"),
+            "the GOSUB helper shouldn't be emitted when GOSUB is never used:\n{output}"
         );
     }
 
