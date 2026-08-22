@@ -338,6 +338,18 @@ const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* need
 /// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
 const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
 
+/// `GOSUB`/`RETURN`'s runtime state: a return-address stack, exactly how a
+/// real BASIC interpreter itself implements GOSUB (push where to resume,
+/// jump; on RETURN, pop and jump back) -- not a real address, just a small
+/// integer ID `Statement::Gosub`'s own doc comment explains the rest of.
+/// Depth is fixed and unchecked (an overflow silently overwrites the
+/// stack) -- same "trusts the program, no runtime bounds check" category
+/// as this backend's other fixed-size buffers (`STRING_BUFFER_SIZE`,
+/// `BCC_MAX_CHANNELS`); 64 nested GOSUBs is far beyond anything a real
+/// BASIC program written by hand would ever reach.
+const GOSUB_HELPER: &str =
+    "#define BCC_MAX_GOSUB_DEPTH 64\nstatic int bcc_gosub_stack[BCC_MAX_GOSUB_DEPTH];\nstatic int bcc_gosub_sp = 0;\n\n";
+
 /// Sequential file I/O's runtime helpers -- `OPEN FOR INPUT/OUTPUT/APPEND`
 /// shares `bcc_files`/`FILE_IO_HELPER` with random-access I/O (see
 /// `Statement::Open`'s own doc comment), but reading a sequential file back
@@ -664,6 +676,47 @@ fn program_has_statement(program: &Program, pred: &dyn Fn(&Statement) -> bool) -
         })
     }
     walk(&program.statements, pred) || program.functions.iter().any(|f| walk(&f.body, pred))
+}
+
+/// Total number of `GOSUB` statements in `statements`, walking the same
+/// nesting shape `program_has_statement` does (`if`/`for`/`while`/`do`/
+/// `select case` bodies) -- but only over top-level statements, never
+/// into `program.functions`, since GOSUB is rejected outright inside a
+/// function/procedure body (see `Statement::Gosub`'s own doc comment).
+/// Computed once, before emission starts, so `generate()` knows
+/// `gosub_count` up front; the *order* this walks statements in has to
+/// exactly match the order `emit_statement`'s own recursion visits them
+/// in, since that's what lets a plain incrementing counter (`gosub_id`)
+/// assign each GOSUB the same ID both here (implicitly, via position in
+/// the `0..gosub_count` range) and during real emission.
+fn count_gosubs(statements: &[Statement]) -> usize {
+    statements
+        .iter()
+        .map(|statement| {
+            let self_count = usize::from(matches!(statement, Statement::Gosub(_)));
+            let nested_count = match statement {
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_gosubs(then_body) + count_gosubs(else_body),
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => count_gosubs(body),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    cases
+                        .iter()
+                        .map(|case| count_gosubs(&case.body))
+                        .sum::<usize>()
+                        + count_gosubs(else_body)
+                }
+                _ => 0,
+            };
+            self_count + nested_count
+        })
+        .sum()
 }
 
 fn program_uses_color(program: &Program) -> bool {
@@ -1046,6 +1099,8 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     file_io.record_helpers = function_view.record_helpers;
     file_io.helper_defs = function_view.helper_defs;
 
+    let gosub_count = count_gosubs(&program.statements);
+    let mut gosub_id: usize = 0;
     let mut body = String::new();
     for statement in &program.statements {
         emit_statement(
@@ -1057,6 +1112,8 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &functions,
             None,
             &mut file_io,
+            gosub_count,
+            &mut gosub_id,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -1119,6 +1176,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if builtin_usage.needs_sgn_helper {
         out.push_str(SGN_HELPER);
+    }
+    if gosub_count > 0 {
+        out.push_str(GOSUB_HELPER);
     }
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
@@ -1263,6 +1323,12 @@ fn emit_function_def(
         body.push('\n');
     }
 
+    // GOSUB is scoped to top-level code only (see `Statement::Gosub`'s own
+    // doc comment) -- a function/procedure body never legally reaches the
+    // GOSUB arm's `gosub_id`/`gosub_count` reads at all, since it errors
+    // out immediately whenever `current_function` is `Some` (always true
+    // here), so a throwaway `0`/local counter is safe.
+    let mut unused_gosub_id: usize = 0;
     for stmt in &func.body {
         emit_statement(
             stmt,
@@ -1273,6 +1339,8 @@ fn emit_function_def(
             functions,
             Some(sig),
             file_io,
+            0,
+            &mut unused_gosub_id,
         )?;
     }
 
@@ -1656,6 +1724,18 @@ fn emit_statement(
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
     file_io: &mut FileIoLayout,
+    // GOSUB/RETURN support (top-level only -- see `Statement::Gosub`'s own
+    // doc comment): `gosub_count` is the total number of top-level GOSUB
+    // call sites in the whole program (from `count_gosubs`, computed once
+    // before emission starts), and `gosub_id` is a counter incremented
+    // once per GOSUB actually emitted, in the same left-to-right,
+    // depth-first order `count_gosubs` walks the tree in -- guaranteeing
+    // the Nth GOSUB encountered during emission gets the same ID
+    // `count_gosubs` implicitly reserved for it (IDs `0..gosub_count`).
+    // Always `0`/a throwaway counter inside a function/procedure body,
+    // where GOSUB is rejected outright before either is ever read.
+    gosub_count: usize,
+    gosub_id: &mut usize,
 ) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
@@ -1827,6 +1907,8 @@ fn emit_statement(
                     functions,
                     current_function,
                     file_io,
+                    gosub_count,
+                    gosub_id,
                 )?;
             }
             if else_body.is_empty() {
@@ -1843,6 +1925,8 @@ fn emit_statement(
                         functions,
                         current_function,
                         file_io,
+                        gosub_count,
+                        gosub_id,
                     )?;
                 }
                 out.push_str("    }\n");
@@ -1905,6 +1989,8 @@ fn emit_statement(
                     functions,
                     current_function,
                     file_io,
+                    gosub_count,
+                    gosub_id,
                 )?;
             }
             out.push_str("    }\n");
@@ -1927,6 +2013,8 @@ fn emit_statement(
                     functions,
                     current_function,
                     file_io,
+                    gosub_count,
+                    gosub_id,
                 )?;
             }
             out.push_str("    }\n");
@@ -1962,6 +2050,8 @@ fn emit_statement(
                     functions,
                     current_function,
                     file_io,
+                    gosub_count,
+                    gosub_id,
                 )?;
             }
             if let Some(cond) = post_condition {
@@ -2346,6 +2436,8 @@ fn emit_statement(
             functions,
             current_function,
             file_io,
+            gosub_count,
+            gosub_id,
         ),
         // Real C's own return-by-value works here directly: a numeric
         // return coerces the value the same way a plain assignment would
@@ -2381,15 +2473,85 @@ fn emit_statement(
         }
         // A bare `return` inside a `procedure` -- always legal even
         // mid-body, unlike falling off the end, which only a `void`
-        // C function allows for free.
+        // C function allows for free. Outside of any function/procedure
+        // (`current_function.is_none()`), the exact same syntax means
+        // something completely different: a BASIC-level GOSUB's own
+        // `RETURN` (see `Statement::Gosub`'s own doc comment for the full
+        // GOSUB/RETURN design) -- distinguishable here only by that
+        // `current_function` context, never by anything in the AST node
+        // itself, since the parser produces the identical `ReturnVoid` for
+        // both (see `parser::parse_return`).
         Statement::ReturnVoid => {
             if current_function.is_none() {
+                if gosub_count == 0 {
+                    return Err(
+                        "`return` outside of a function isn't supported by the minimal C backend"
+                            .to_string(),
+                    );
+                }
+                // Real GOSUB/RETURN is fully dynamic: which GOSUB call
+                // site reached this particular RETURN is only known at
+                // runtime (via `bcc_gosub_stack`'s popped value), not
+                // statically -- the same RETURN can be reached from
+                // multiple different GOSUBs, and a GOSUB target can fall
+                // through into another one's body. So every RETURN gets
+                // the identical dispatch: pop the ID, `switch` on it, jump
+                // to that ID's own resume point right after its GOSUB
+                // (see the `bcc_ret_<id>:` label `Statement::Gosub` emits)
+                // -- covering every ID `0..gosub_count`, since any of them
+                // could in principle be the one on top of the stack here.
+                out.push_str("    switch (bcc_gosub_stack[--bcc_gosub_sp]) {\n");
+                for id in 0..gosub_count {
+                    out.push_str(&format!("    case {id}: goto bcc_ret_{id};\n"));
+                }
+                out.push_str("    }\n");
+                return Ok(());
+            }
+            out.push_str("    return;\n");
+            Ok(())
+        }
+        // `GOSUB label` -- BASIC-level subroutine call, distinct from a
+        // `function`/`procedure` call: it jumps to `label` with no
+        // parameters and no return value, and `RETURN` (see
+        // `Statement::ReturnVoid`'s own arm above) resumes right after
+        // whichever GOSUB reached it, which is only known at runtime.
+        // Implemented with the same return-address-stack technique a real
+        // BASIC interpreter uses: push a small integer ID (not a real
+        // address -- `gosub_id`, assigned in strict left-to-right,
+        // depth-first encounter order, matching `count_gosubs`' own
+        // walk), jump to the target label, and mark the resume point
+        // right after with a `bcc_ret_<id>:` label RETURN's `switch` jumps
+        // back to.
+        //
+        // Scoped to top level only -- a GOSUB inside a `function`/
+        // `procedure` body (`current_function.is_some()`) is rejected,
+        // since RETURN there always means that function/procedure's own
+        // return (see `Statement::ReturnVoid`), leaving no unambiguous
+        // way to spell a GOSUB's own RETURN in the same body.
+        Statement::Gosub(target) => {
+            if current_function.is_some() {
                 return Err(
-                    "`return` outside of a function isn't supported by the minimal C backend"
+                    "GOSUB inside a function/procedure isn't supported by the minimal C backend \
+                     yet -- only a top-level GOSUB is"
                         .to_string(),
                 );
             }
-            out.push_str("    return;\n");
+            let Expr::Ident(ident) = target else {
+                return Err(
+                    "GOSUB's target isn't supported by the minimal C backend yet -- only a bare \
+                     label name is (enforced at parse time for every other BASCAL construct, so \
+                     this shouldn't be reachable)"
+                        .to_string(),
+                );
+            };
+            let id = *gosub_id;
+            *gosub_id += 1;
+            out.push_str(&format!("    bcc_gosub_stack[bcc_gosub_sp++] = {id};\n"));
+            out.push_str(&format!(
+                "    goto bcc_lbl_{};\n",
+                ident.name.to_ascii_lowercase()
+            ));
+            out.push_str(&format!("    bcc_ret_{id}:;\n"));
             Ok(())
         }
         // A bare call statement -- a `procedure` call, or a `function`
@@ -3078,6 +3240,8 @@ fn emit_select_case(
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
     file_io: &mut FileIoLayout,
+    gosub_count: usize,
+    gosub_id: &mut usize,
 ) -> Result<(), String> {
     let is_string = is_string_expr(expr);
     let temp = format!("bt_sel_{temp_counter}");
@@ -3126,6 +3290,8 @@ fn emit_select_case(
                 functions,
                 current_function,
                 file_io,
+                gosub_count,
+                gosub_id,
             )?;
         }
     }
@@ -3142,6 +3308,8 @@ fn emit_select_case(
                     functions,
                     current_function,
                     file_io,
+                    gosub_count,
+                    gosub_id,
                 )?;
             }
         }
@@ -3157,6 +3325,8 @@ fn emit_select_case(
                 functions,
                 current_function,
                 file_io,
+                gosub_count,
+                gosub_id,
             )?;
         }
     }
