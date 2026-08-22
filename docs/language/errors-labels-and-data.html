@@ -1,0 +1,35 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Errors, Labels, and Embedded Data — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 7</p><h1>Errors, labels, and embedded data</h1></div></header>
+<main class="chapter-main book-width"><h2>Naming a destination without a line number</h2><p>Structured <code>if</code> and loops cover ordinary control flow, but a few classic BASIC mechanisms — error trapping among them — are built on jumping to a specific place in the program. BASCAL keeps that capability without asking the source to carry numbered lines: a <code>label:</code> names a destination, and the compiler assigns the real line number for it.</p><pre><code>gosub greet
+goto after
+
+greet:
+    print "Hello!"
+    return
+
+after:
+    print "done"
+</code></pre><p><code>goto label</code> jumps unconditionally; <code>gosub label</code> jumps and remembers where to come back to, resumed by a matching <code>return</code> — this is BASIC’s own subroutine mechanism, distinct from a BASCAL <code>function</code>/<code>procedure</code> call, and is normally only reached for for the handful of forms in this chapter that require it.</p><h2>Handling an error at the point that needs it</h2><p>A runtime error transfers control to a handler installed with <code>on error goto</code>, the same way any other language’s exception handling redirects execution — except the handler is just another label, and returning from it is explicit.</p><pre><code>on error goto handler
+result% = 10 / zero%
+print "unreachable"
+goto continue
+
+handler:
+    print "error "; err; " on line "; erl
+    resume continue
+
+continue:
+    print "recovered"
+</code></pre><p>Inside the handler, the no-suffix pseudo-variables <code>err</code> and <code>erl</code> hold the failing error code and line. <code>resume</code> retries the statement that failed; <code>resume next</code> skips it and continues with the one after; <code>resume label</code> — shown above — jumps somewhere else entirely, the usual shape when the failing statement can’t simply be retried. <code>on error goto 0</code> disables the trap, letting an error terminate the program again. A program can also raise or re-raise one deliberately with <code>error code%</code>.</p><h2>Shipping small constant tables with <code>data</code></h2><p>Classic BASIC’s <code>data</code>/<code>read</code> pair embeds a small constant table directly in the program instead of a separate file, useful for exactly the kind of fixed lookup table a record file would be overkill for.</p><pre><code>dim country$(2), capital$(2)
+dim i%
+
+for i% = 0 to 2
+    read country$(i%), capital$(i%)
+end for
+
+print country$(0); " "; capital$(0)
+
+data "USA", "Washington"
+data "France", "Paris"
+data "Japan", "Tokyo"
+</code></pre><p><code>data</code> statements can appear anywhere in the source — the compiler gathers them into one sequential table regardless of where they’re written. Each <code>read</code> pulls the next value off that table, left to right, matching each variable’s declared type. <code>restore</code> rewinds back to the first <code>data</code> statement so the table can be read again from the start; <code>restore label</code> rewinds to whichever <code>data</code> statement immediately follows that label instead, useful when a program embeds more than one table and needs to choose between them.</p><nav class="chapter-nav"><a href="data-and-files.html">← Data that outlives a run</a><a href="standard-library.html">The standard library →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
