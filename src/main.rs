@@ -15,6 +15,7 @@ struct Cli {
     sparse_line_numbers: bool,
     clean: bool,
     binary: bool,
+    run: bool,
     target: Target,
 }
 
@@ -101,6 +102,10 @@ fn resolve_default_target() -> Target {
 
 fn run() -> Result<(), String> {
     let cli = parse_args(env::args().skip(1).collect())?;
+    // `--run` implies `--binary` -- there's no point building a binary
+    // without one, and no way to run the program without building it
+    // first.
+    let want_binary = cli.binary || cli.run;
 
     let output_path = cli
         .output
@@ -120,11 +125,12 @@ fn run() -> Result<(), String> {
         let binary_path = PathBuf::from("tmp").join(output_path.file_stem().ok_or_else(|| {
             format!("error: invalid BASIC output path {}", output_path.display())
         })?);
-        if cli.binary && !is_up_to_date(&cli.input, &binary_path) {
-            return invoke_binary(cli.target, &output_path);
+        if want_binary && !is_up_to_date(&cli.input, &binary_path) {
+            let built = invoke_binary(cli.target, &output_path)?;
+            return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
-        return Ok(());
+        return if cli.run { run_binary(&binary_path) } else { Ok(()) };
     }
 
     let options = CompileOptions {
@@ -144,10 +150,32 @@ fn run() -> Result<(), String> {
     fs::write(&output_path, &basic)
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
 
-    if cli.binary {
-        invoke_binary(cli.target, &output_path)?;
+    if want_binary {
+        let built = invoke_binary(cli.target, &output_path)?;
+        if cli.run {
+            return run_binary(&built);
+        }
     }
 
+    Ok(())
+}
+
+/// Runs an already-built binary with stdin/stdout/stderr all inherited
+/// (so an interactive program -- `INPUT`, `INKEY$`, ... -- works exactly
+/// as if it had been run directly), used by `--run`. Doesn't try to
+/// propagate the child's exact exit code -- same "an error is an error"
+/// simplicity every other failure path here already uses -- just whether
+/// it succeeded or not.
+fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
+    let status = Command::new(binary_path)
+        .status()
+        .map_err(|err| format!("error: failed to run {}: {err}", binary_path.display()))?;
+    if !status.success() {
+        return Err(format!(
+            "error: {} exited with {status}",
+            binary_path.display()
+        ));
+    }
     Ok(())
 }
 
@@ -168,20 +196,26 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
 }
 
 /// Compiles the transpiler's generated output down to a native binary with
-/// whatever third-party compiler actually understands that target's output
-/// -- `fbc` (FreeBASIC) for `Target::Basic`'s `.bas`, `gcc` for `Target::C`'s
-/// (not yet generated) `.c`. `Target::C` can't reach this in practice today:
-/// `compile_file` already fails with a "not implemented" diagnostic before
-/// `--binary` ever gets a `.c` file to hand to `gcc`, but the dispatch is
-/// wired up now so it needs no changes once that backend exists.
-fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<(), String> {
+/// whatever third-party compiler actually understands that target's
+/// output, and returns the binary's path on success (used by `--run` to
+/// find what to execute next). `Target::Basic`'s `.bas` goes through
+/// `fbc` (FreeBASIC) specifically, not real BASCOM: `fbc` produces a
+/// binary the host can run directly, the same way `gcc` does for
+/// `Target::C`'s `.c` -- real BASCOM (used only by the opt-in
+/// `tests/dosbox_conformance.rs` conformance suite, see CONTRIBUTING.md)
+/// instead produces a DOS `.EXE`, runnable only under a DOS
+/// environment/emulator like dosbox-x, not directly by this process.
+/// That's also why `--run` always means `fbc` for the `basic` target,
+/// not a user-selectable choice between the two: `fbc`'s binary is the
+/// only one of the pair `--run` could actually execute itself.
+fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
     match target {
         Target::Basic => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
     }
 }
 
-fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
+fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_name = bas_path
         .file_stem()
         .ok_or_else(|| format!("error: invalid BASIC output path {}", bas_path.display()))?;
@@ -204,10 +238,10 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<(), String> {
         ));
     }
     println!("binary: {}", binary_path.display());
-    Ok(())
+    Ok(binary_path)
 }
 
-fn invoke_gcc(c_path: &PathBuf) -> Result<(), String> {
+fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_name = c_path
         .file_stem()
         .ok_or_else(|| format!("error: invalid C output path {}", c_path.display()))?;
@@ -232,7 +266,7 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<(), String> {
         ));
     }
     println!("binary: {}", binary_path.display());
-    Ok(())
+    Ok(binary_path)
 }
 
 fn parse_args(args: Vec<String>) -> Result<Cli, String> {
@@ -248,6 +282,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
     let mut sparse_line_numbers = false;
     let mut clean = false;
     let mut binary = false;
+    let mut run = false;
     let mut target = resolve_default_target();
     let mut i = 0;
 
@@ -279,6 +314,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
             "--sparse-line-numbers" => sparse_line_numbers = true,
             "--clean" | "-c" => clean = true,
             "--binary" | "-b" => binary = true,
+            "--run" | "-r" => run = true,
             "--target" | "-t" => {
                 i += 1;
                 let value = args.get(i).ok_or_else(|| {
@@ -311,6 +347,7 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
         sparse_line_numbers,
         clean,
         binary,
+        run,
         target,
     })
 }
@@ -318,18 +355,27 @@ fn parse_args(args: Vec<String>) -> Result<Cli, String> {
 fn usage() -> String {
     [
         "usage: bcc input.bcl [-o output.bas] [-L dir] [-l library]",
-        "              [--sparse-line-numbers] [--clean | -c] [--binary | -b]",
-        "              [--target | -t basic|C]",
+        "              [--line-numbers | --sparse-line-numbers] [--clean | -c]",
+        "              [--binary | -b] [--run | -r] [--target | -t basic|C]",
         "",
         "Options:",
         "  -o output.bas          Output path (default: input with .bas/.c extension)",
         "  -L dir                 Add a library search directory for require resolution",
+        "                         (repeatable)",
+        "  -l name                Name a library (reserved for future use)",
+        "  --line-numbers         Number every output line, not just branch targets",
+        "                         (the default -- only needed to override an earlier",
+        "                         --sparse-line-numbers on the same command line)",
         "  --sparse-line-numbers  Number only branch targets, not every line (invalid on",
         "                         real MBASIC/BASCOM; only safe with lenient dialects like",
         "                         FreeBASIC's -lang qb)",
         "  --clean, -c            Re-transpile even if the output is already up to date",
         "  --binary, -b           Compile the generated output to tmp/<stem>: fbc for",
         "                         --target basic's .bas, gcc for --target C's .c",
+        "  --run, -r              Also run the compiled binary (implies --binary). For",
+        "                         --target basic this always means fbc's binary, run",
+        "                         directly -- not real BASCOM, whose own .EXE needs a DOS",
+        "                         environment/emulator like dosbox-x to run at all",
         "  --target, -t <target>  Backend to generate code for: `basic` (the original,",
         "                         complete backend) or `C` (an experimental native-C",
         "                         backend). Case-insensitive; `c` also works.",
@@ -383,5 +429,17 @@ mod tests {
         let err = parse_args(vec!["input.bcl".to_string(), "-t".to_string(), "bogus".to_string()])
             .expect_err("should reject an unknown target");
         assert!(err.contains("unknown --target"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn parse_args_accepts_run_flag_long_and_short() {
+        let cli = parse_args(vec!["input.bcl".to_string(), "--run".to_string()])
+            .expect("should parse --run");
+        assert!(cli.run);
+        assert!(!cli.binary, "--run alone shouldn't also set binary -- run() adds that itself");
+
+        let cli = parse_args(vec!["input.bcl".to_string(), "-r".to_string()])
+            .expect("should parse -r");
+        assert!(cli.run);
     }
 }

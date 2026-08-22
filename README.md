@@ -89,8 +89,8 @@ push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
 
 ```bash
 bcc input.bcl [-o output.bas] [-L dir] [-l library]
-              [--line-numbers] [--clean | -c] [--binary | -b]
-              [--target | -t basic|C]
+              [--line-numbers | --sparse-line-numbers] [--clean | -c]
+              [--binary | -b] [--run | -r] [--target | -t basic|C]
 ```
 
 | Flag | Meaning |
@@ -98,9 +98,11 @@ bcc input.bcl [-o output.bas] [-L dir] [-l library]
 | `-o output.bas` | Output path (default: input with `.bas`/`.c` extension, same directory) |
 | `-L dir` | Add a library search directory for `require` resolution (repeatable) |
 | `-l name` | Name a library (reserved for future use) |
-| `--line-numbers` | Number every output line, not just branch targets |
+| `--line-numbers` | Number every output line, not just branch targets (the default) |
+| `--sparse-line-numbers` | Number only branch targets, not every line (invalid on real MBASIC/BASCOM; only safe with lenient dialects like FreeBASIC's `-lang qb`) |
 | `--clean`, `-c` | Re-transpile even if output is already up to date |
 | `--binary`, `-b` | Compile the generated output to a binary in `tmp/`: `fbc` for `basic`, `gcc` for `C` |
+| `--run`, `-r` | Also run the compiled binary (implies `--binary`). For `basic` this always means `fbc`'s binary, run directly — not real BASCOM, whose own `.EXE` needs a DOS environment/emulator like dosbox-x to run at all |
 | `--target`, `-t` | Backend to generate code for: `basic` (default) or `C` (see [Backends](#backends)) — case-insensitive |
 
 The input file's directory is always the first implicit search root. `-L` adds
