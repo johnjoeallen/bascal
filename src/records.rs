@@ -430,6 +430,7 @@ impl Lowerer {
                 fields,
                 record_type,
                 string_fields,
+                field_types,
             } => {
                 let channel = self.rewrite_expr(channel).0;
                 let fields = fields
@@ -441,6 +442,7 @@ impl Lowerer {
                     fields,
                     record_type,
                     string_fields,
+                    field_types,
                 }
             }
             Statement::Get {
@@ -625,6 +627,7 @@ impl Lowerer {
             fields,
             record_type: Some(record_type),
             string_fields: Some(rec.fields.iter().map(|field| matches!(field.ty, RecordFieldType::Str(_))).collect()),
+            field_types: Some(rec.fields.iter().map(|field| field.ty).collect()),
         });
     }
 

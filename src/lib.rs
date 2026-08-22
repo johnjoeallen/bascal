@@ -1483,7 +1483,7 @@ end
         let output =
             compile_source("partial_exists.bcl", source).expect("partial update should compile");
         assert!(
-            output.contains("IF LOF(#1) < (2) * 22 THEN ERROR 63"),
+            output.contains("IF LOF(#1) < (2) * 50 THEN ERROR 63"),
             "a partial update must reject a missing fixed-length record before GET:\n{output}"
         );
     }
@@ -5035,22 +5035,38 @@ end
             "unexpected output:\n{output}"
         );
         assert!(
-            output
-                .contains("bcc_put_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);")
-                && output.contains(
-                    "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
-                ),
-            "record operations should delegate to the type-specific helpers:\n{output}"
+            output.contains(
+                "bcc_put_record_student(bcc_files[0], 1, &bcc_tmp_0, \"Ada\", &bcc_tmp_1, \"Engineering\");"
+            ) && output.contains(
+                "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
+            ),
+            "PUT should pass typed values straight to the typed helper, with no manual packing \
+             in main; GET should keep delegating to the type-specific helper:\n{output}"
+        );
+        assert!(
+            !output.contains("bcc_mki(bv_s_db")
+                && !output.contains("bcc_mkd(bv_s_db")
+                && !output.contains("snprintf(bv_s_db"),
+            "no manual MKx$/pad packing should remain in main for a record/file DSL write -- the \
+             typed PUT helper now owns all of that:\n{output}"
         );
         assert!(
             output.contains("bcc_write_record(file, buffer, 50, record);")
                 && output.contains("if (!bcc_read_record(file, buffer, 50, record)) return 0;")
-                && output.contains("if (!bcc_put_record_student(bcc_files[0], 1, NULL, NULL, bv_s_dbscorebuf, NULL))")
+                && output.contains(
+                    "if (!bcc_put_record_student(bcc_files[0], 1, NULL, NULL, &bcc_tmp_2, NULL))"
+                )
                 && output.contains("bcc_read_string_field(field_1, buffer + 2, 20);")
                 && output.contains("bcc_read_string_field(field_3, buffer + 30, 20);")
                 && !output.contains("bcc_read_string_field(field_0")
                 && !output.contains("bcc_read_string_field(field_2"),
             "record helpers should delegate positioning and I/O to the shared buffer helpers:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3) {"
+            ),
+            "the typed PUT helper should take native-typed parameters, not packed byte strings:\n{output}"
         );
     }
 
@@ -5070,15 +5086,16 @@ end
 "#;
         let output = compile_source_via_c_target(source);
         assert!(
-            output
-                .contains("bcc_put_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);")
-                && !output.contains(
-                    "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
-                ),
-            "a complete record literal must write directly without a read:\n{output}"
+            output.contains(
+                "bcc_put_record_student(bcc_files[0], 1, &bcc_tmp_0, \"Ada\", &bcc_tmp_1, \"Engineering\");"
+            ) && !output.contains(
+                "bcc_get_record_student(bcc_files[0], 1, bv_s_dbidbuf, bv_s_dbnamebuf, bv_s_dbscorebuf, bv_s_dbfacultybuf);"
+            ),
+            "a complete record literal must write directly without a read, passing typed values \
+             with no manual packing in main:\n{output}"
         );
         assert!(
-            output.contains("if (!bcc_put_record_student(bcc_files[0], 2, NULL, bv_s_dbnamebuf, NULL, NULL))")
+            output.contains("if (!bcc_put_record_student(bcc_files[0], 2, NULL, \"Bob\", NULL, NULL))")
                 && output.contains("if ((!field_0 || !field_1 || !field_2 || !field_3) && !bcc_read_record(file, buffer, 50, record)) return 0;")
                 && output.contains("BASCAL: record %ld does not exist"),
             "a partial record literal must let PUT preserve NULL fields and reject a missing record:\n{output}"

@@ -76,7 +76,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
-    ParamMode, PrintToken, Program, Statement, TypeSuffix, UnaryOp,
+    ParamMode, PrintToken, Program, RecordFieldType, Statement, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -264,7 +264,7 @@ const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC
 /// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
 /// not big-endian mainframes, matching real BASIC's own on-disk
 /// little-endian layout only on those platforms).
-const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\n";
+const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -276,6 +276,7 @@ struct FieldEntry {
     width: u32,
     offset: u32,
     is_string: bool,
+    ty: Option<RecordFieldType>,
 }
 
 /// The random-access record I/O layout *currently in effect*, tracked as
@@ -342,6 +343,16 @@ struct FileIoLayout {
     /// into `generate`'s output right after `FILE_IO_HELPER` once emission
     /// of the whole program is done.
     helper_defs: String,
+    /// Buffer C variable name -> the *unpacked* source expression a
+    /// record/file DSL write is packing into it, captured by `Statement::
+    /// Lset`'s C backend arm instead of being packed into the buffer
+    /// immediately. The following `PUT` (always emitted right after,
+    /// see `records::Lowerer::lower_whole_write` and friends) drains this
+    /// to pass each field to the typed DSL PUT helper (`ensure_dsl_record_
+    /// helpers`) as a native value, so the helper -- not generated code in
+    /// `main` -- owns the packing. Never populated for a raw, hand-written
+    /// `FIELD`'s `LSET`, which packs into its buffer immediately as before.
+    pending_field_values: HashMap<String, Expr>,
 }
 
 /// Applies one `FIELD #ch, w1 AS v1$, ...` statement's layout into
@@ -361,6 +372,7 @@ fn apply_field_statement(
     fields: &[(Expr, BasicIdent)],
     record_type: &Option<String>,
     string_fields: &Option<Vec<bool>>,
+    field_types: &Option<Vec<RecordFieldType>>,
     layout: &mut FileIoLayout,
 ) -> Result<(), String> {
     layout.used = true;
@@ -415,6 +427,7 @@ fn apply_field_statement(
             width,
             offset,
             is_string: string_fields.as_ref().and_then(|items| items.get(entries.len())).copied().unwrap_or(false),
+            ty: field_types.as_ref().and_then(|items| items.get(entries.len())).copied(),
         });
         offset += width;
     }
@@ -434,16 +447,27 @@ fn apply_field_statement(
             }
         }
     }
-    let inferred_type = record_type.clone().or_else(|| inferred_layout.map(|(name, _)| name));
     layout.channel_fields.insert(*ch, entries);
-    layout.channel_record_type.insert(*ch, inferred_type);
+    // Only ever the literal `record_type` this `FIELD` statement itself
+    // declared -- never `inferred_layout`'s name. A raw, hand-written
+    // `FIELD` that happens to match a declared record type's byte widths
+    // still gets that inference for `is_string` above (harmless, purely a
+    // read-back detail), but must *not* be treated as if the record DSL
+    // produced it: its buffers are real, user-visible BASIC variables, and
+    // `emit_get_or_put`/`Statement::Lset` both gate the typed DSL PUT
+    // helper path on this map alone.
+    layout.channel_record_type.insert(*ch, record_type.clone());
     Ok(())
 }
 
-/// Collect named record layouts before emitting statements.  The record DSL
-/// leaves its type name on synthesized FIELD statements, so an otherwise raw
-/// FIELD with the same byte widths can share that type's helper pair.  This is
-/// only a C symbol-name choice: both forms still pack the exact FIELD layout.
+/// Collect named record layouts before emitting statements. The record DSL
+/// leaves its type name and per-field `is_string` shape on synthesized
+/// FIELD statements; an otherwise raw FIELD with the same byte widths
+/// reuses that shape purely to classify its own fields correctly (a
+/// numeric-packed field reads back differently from a genuine string one)
+/// -- never to name or share the record type's *helper pair*, which stays
+/// gated on `record_type` being literally present on the FIELD statement
+/// itself (see `apply_field_statement`'s own note on `channel_record_type`).
 fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<bool>)> {
     fn collect(statements: &[Statement], layouts: &mut HashMap<Vec<u32>, (String, Vec<bool>)>) {
         for statement in statements {
@@ -682,6 +706,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         record_helpers: std::collections::HashSet::new(),
         channel_generation: HashMap::new(),
         helper_defs: String::new(),
+        pending_field_values: HashMap::new(),
     };
 
     // BASIC variables "spring into existence on first use" -- there's no
@@ -1595,7 +1620,8 @@ fn emit_statement(
             fields,
             record_type,
             string_fields,
-        } => apply_field_statement(channel, fields, record_type, string_fields, file_io),
+            field_types,
+        } => apply_field_statement(channel, fields, record_type, string_fields, field_types, file_io),
         // `GET`/`PUT #ch, record` -- read/write one whole record (`GET`
         // splits the record's raw bytes across every `FIELD`'d variable
         // on that channel, at their declared offsets; `PUT` does the
@@ -1617,6 +1643,7 @@ fn emit_statement(
             channel,
             record,
             needs_math,
+            temp_counter,
             functions,
             file_io,
             out,
@@ -1633,6 +1660,7 @@ fn emit_statement(
             channel,
             record,
             needs_math,
+            temp_counter,
             functions,
             file_io,
             out,
@@ -1663,6 +1691,24 @@ fn emit_statement(
                      variable declared by a (literal-channel) FIELD is"
                 ));
             };
+            // A record/file DSL write (`db[i] = { ... }`/`?{ ... }`) always
+            // `LSET`s straight into a `PUT` with nothing else reading the
+            // buffer in between (see `records::Lowerer::lower_whole_write`
+            // and friends) -- so for one of *those* buffers, defer instead
+            // of packing: capture the still-native source value now, and
+            // let the following `PUT` hand it straight to the typed helper
+            // (`ensure_dsl_record_helpers`), which does the packing itself.
+            // A raw, hand-written `LSET`/`RSET` never targets one of these
+            // buffers (their names are DSL-synthesized), so this can't
+            // misfire on ordinary user code.
+            if !is_rset && is_dsl_record_buffer(file_io, &c_name) {
+                let raw_value = match mk_pack_call(value) {
+                    Some((_, _, arg)) => arg.clone(),
+                    None => value.clone(),
+                };
+                file_io.pending_field_values.insert(c_name, raw_value);
+                return Ok(());
+            }
             if let Some((fn_name, target_is_float, arg)) = mk_pack_call(value) {
                 if is_rset {
                     return Err(
@@ -1847,6 +1893,22 @@ fn mk_pack_call(expr: &Expr) -> Option<(&'static str, bool, &Expr)> {
     Some((fn_name, matches!(fn_name, "bcc_mks" | "bcc_mkd"), &args[0]))
 }
 
+/// Whether `c_name` is one of the *currently FIELD'd* buffer variables of a
+/// channel the record/file DSL itself declared (`channel_record_type` is
+/// `Some` -- see `apply_field_statement`'s own note on why that map is
+/// never populated from `known_record_layouts`' cosmetic inference). Used
+/// by `Statement::Lset`'s C backend arm to decide whether to defer packing
+/// to the typed PUT helper instead of packing into the buffer immediately.
+fn is_dsl_record_buffer(file_io: &FileIoLayout, c_name: &str) -> bool {
+    file_io.channel_fields.iter().any(|(ch, fields)| {
+        file_io
+            .channel_record_type
+            .get(ch)
+            .is_some_and(Option::is_some)
+            && fields.iter().any(|field| field.c_name == c_name)
+    })
+}
+
 /// Returns a C-safe suffix for helpers named after a BASCAL record type.
 /// Record names are already identifier-like, but keeping this deliberately
 /// narrow prevents a future parser relaxation from turning generated helper
@@ -1864,12 +1926,33 @@ fn record_helper_suffix(record_type: &str) -> String {
         .collect()
 }
 
-/// Emits one reusable pair of pack/unpack functions for a record type or
-/// raw FIELD layout. The functions receive FIELD buffers rather than
-/// referring to particular variables. Record-type helpers can therefore be
-/// shared across files; raw helpers are keyed by their channel generation.
-/// The actual seeking and I/O is delegated to `bcc_read_record` and
-/// `bcc_write_record`.
+/// The native C type backing a DSL record field's typed helper parameter --
+/// exactly wide enough to `memcpy` straight into (or out of) the packed
+/// on-disk representation, since `int16`/`int32`/`float32`/`float64` were
+/// never anything but plain fixed-width binary in the first place (unlike
+/// `MKI$`/`CVI` and friends, which only exist because real BASIC's `LSET`
+/// requires a *string* to assign). `string(N)` fields never call this --
+/// they use `const char*`/`char*` directly, same as everywhere else in
+/// this backend.
+fn record_field_c_type(ty: RecordFieldType) -> &'static str {
+    match ty {
+        RecordFieldType::Int16 => "int16_t",
+        RecordFieldType::Int32 => "int32_t",
+        RecordFieldType::Float32 => "float",
+        RecordFieldType::Float64 => "double",
+        RecordFieldType::Str(_) => unreachable!(
+            "string record fields are passed as const char*/char*, never through record_field_c_type"
+        ),
+    }
+}
+
+/// Emits one reusable pair of pack/unpack functions for a *raw*,
+/// hand-written `FIELD` layout -- keyed by channel generation, since a raw
+/// `FIELD` doesn't declare a named type the way the record DSL does. `PUT`
+/// always writes every bound buffer variable (real BASIC's `FIELD`/`LSET`
+/// gives no partial-write concept), so this helper pair writes
+/// unconditionally, with no NULL handling. The actual seeking and I/O is
+/// delegated to `bcc_read_record`/`bcc_write_record`.
 fn ensure_field_helpers(helper_key: &str, fields: &[FieldEntry], file_io: &mut FileIoLayout) {
     let suffix = record_helper_suffix(helper_key);
     if !file_io.record_helpers.insert(suffix.clone()) {
@@ -1881,6 +1964,86 @@ fn ensure_field_helpers(helper_key: &str, fields: &[FieldEntry], file_io: &mut F
         .iter()
         .enumerate()
         .map(|(index, _)| format!("const char* field_{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let get_params = fields
+        .iter()
+        .enumerate()
+        .map(|(index, _)| format!("char* field_{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let put_separator = if put_params.is_empty() { "" } else { ", " };
+    let get_separator = if get_params.is_empty() { "" } else { ", " };
+
+    file_io.helper_defs.push_str(&format!(
+        "static int bcc_put_record_{suffix}(FILE* file, long record{put_separator}{put_params}) {{\n    unsigned char buffer[{reclen}];\n"
+    ));
+    for (index, field) in fields.iter().enumerate() {
+        file_io.helper_defs.push_str(&format!(
+            "    memcpy(buffer + {offset}, field_{index}, {width});\n",
+            offset = field.offset,
+            width = field.width
+        ));
+    }
+    file_io.helper_defs.push_str(&format!(
+        "    bcc_write_record(file, buffer, {reclen}, record);\n    return 1;\n}}\n\n"
+    ));
+
+    file_io.helper_defs.push_str(&format!(
+        "static int bcc_get_record_{suffix}(FILE* file, long record{get_separator}{get_params}) {{\n    unsigned char buffer[{reclen}];\n    if (!bcc_read_record(file, buffer, {reclen}, record)) return 0;\n"
+    ));
+    for (index, field) in fields.iter().enumerate() {
+        if field.is_string {
+            file_io.helper_defs.push_str(&format!(
+                "    bcc_read_string_field(field_{index}, buffer + {offset}, {width});\n",
+                offset = field.offset,
+                width = field.width
+            ));
+        } else {
+            file_io.helper_defs.push_str(&format!(
+                "    memcpy(field_{index}, buffer + {offset}, {width});\n    field_{index}[{width}] = 0;\n",
+                offset = field.offset,
+                width = field.width
+            ));
+        }
+    }
+    file_io.helper_defs.push_str("    return 1;\n}\n\n");
+}
+
+/// Emits one reusable pair of pack/unpack functions for a record/file DSL
+/// record type. Unlike `ensure_field_helpers`, `PUT` here is fully typed:
+/// each non-string parameter is a pointer to its field's *native* C type
+/// (`int16_t`/`int32_t`/`float`/`double`), packed with a plain `memcpy` --
+/// no `bcc_mkX`/byte-string round trip -- and each `string(N)` parameter is
+/// packed with `bcc_pad_string_field`. A NULL pointer marks a field omitted
+/// by a partial (`?{ ... }`) update, exactly as `ensure_field_helpers`'s old
+/// combined form did; the caller (`emit_get_or_put`) is responsible for
+/// passing already-evaluated, correctly-typed values -- see its own
+/// `pending_field_values` handling. `GET` stays blob-based (`char*` per
+/// field, unconditionally read): its buffers still feed the record/file
+/// DSL's ordinary `CVI`/`CVL`/`CVS`/`CVD`/trim-loop unpacking sequence,
+/// shared with the BASIC backend, so it can't switch representations
+/// without that shared sequence also changing.
+fn ensure_dsl_record_helpers(record_type: &str, fields: &[FieldEntry], file_io: &mut FileIoLayout) {
+    let suffix = record_helper_suffix(record_type);
+    if !file_io.record_helpers.insert(suffix.clone()) {
+        return;
+    }
+
+    let reclen: u32 = fields.iter().map(|field| field.width).sum();
+    let put_params = fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            if field.is_string {
+                format!("const char* field_{index}")
+            } else {
+                let ty = record_field_c_type(field.ty.expect(
+                    "a DSL record field always carries its declared RecordFieldType",
+                ));
+                format!("const {ty}* field_{index}")
+            }
+        })
         .collect::<Vec<_>>()
         .join(", ");
     let get_params = fields
@@ -1910,11 +2073,19 @@ fn ensure_field_helpers(helper_key: &str, fields: &[FieldEntry], file_io: &mut F
         "    if (({missing_field}) && !bcc_read_record(file, buffer, {reclen}, record)) return 0;\n"
     ));
     for (index, field) in fields.iter().enumerate() {
-        file_io.helper_defs.push_str(&format!(
-            "    (void)(field_{index} && memcpy(buffer + {offset}, field_{index}, {width}));\n",
-            offset = field.offset,
-            width = field.width
-        ));
+        if field.is_string {
+            file_io.helper_defs.push_str(&format!(
+                "    if (field_{index}) bcc_pad_string_field(buffer + {offset}, field_{index}, {width});\n",
+                offset = field.offset,
+                width = field.width
+            ));
+        } else {
+            file_io.helper_defs.push_str(&format!(
+                "    (void)(field_{index} && memcpy(buffer + {offset}, field_{index}, {width}));\n",
+                offset = field.offset,
+                width = field.width
+            ));
+        }
     }
     file_io.helper_defs.push_str(&format!(
         "    bcc_write_record(file, buffer, {reclen}, record);\n    return 1;\n}}\n\n"
@@ -1950,6 +2121,7 @@ fn emit_get_or_put(
     channel: &Expr,
     record: &Option<Expr>,
     needs_math: &mut bool,
+    temp_counter: &mut usize,
     functions: &FunctionTable,
     file_io: &mut FileIoLayout,
     out: &mut String,
@@ -1986,29 +2158,77 @@ fn emit_get_or_put(
     let record_type = file_io.channel_record_type.get(&ch).cloned().flatten();
     if let Some(record_type) = record_type {
         let suffix = record_helper_suffix(&record_type);
-        ensure_field_helpers(&suffix, &fields, file_io);
-        let field_args = fields
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                if provided_fields
-                    .is_some_and(|provided| !provided.get(index).copied().unwrap_or(false))
-                {
-                    "NULL".to_string()
-                } else {
-                    field.c_name.clone()
+        ensure_dsl_record_helpers(&record_type, &fields, file_io);
+        if is_get {
+            // GET stays blob-based -- see `ensure_dsl_record_helpers`'s own
+            // doc comment for why -- so its call looks exactly like the raw
+            // path below, just naming the DSL's own helper.
+            let field_args = fields
+                .iter()
+                .map(|field| field.c_name.clone())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let separator = if field_args.is_empty() { "" } else { ", " };
+            out.push_str(&format!(
+                "    bcc_get_record_{suffix}(bcc_files[{idx}], {record_text}{separator}{field_args});\n"
+            ));
+            return Ok(());
+        }
+
+        // PUT is fully typed: pull each provided field's raw source value
+        // straight out of `pending_field_values` (captured by `Statement::
+        // Lset` instead of being packed into a buffer variable -- see that
+        // arm's own doc comment) and pass it to the typed helper as a
+        // native C value, materializing an addressable temporary for a
+        // numeric field (the helper takes a pointer, so a NULL can still
+        // mark a field omitted by a partial update). An omitted field
+        // passes NULL directly, with no value to render at all.
+        let mut field_args = Vec::with_capacity(fields.len());
+        for (index, field) in fields.iter().enumerate() {
+            let provided = !provided_fields
+                .is_some_and(|provided| !provided.get(index).copied().unwrap_or(false));
+            if !provided {
+                field_args.push("NULL".to_string());
+                continue;
+            }
+            let Some(raw_value) = file_io.pending_field_values.remove(&field.c_name) else {
+                return Err(format!(
+                    "internal error: record field `{}` (channel {ch}) has no pending value -- \
+                     expected a `LSET` immediately before this `PUT`",
+                    field.c_name
+                ));
+            };
+            if field.is_string {
+                let (prelude, text) =
+                    render_string_expr(&raw_value, needs_math, temp_counter, functions)?;
+                for line in prelude {
+                    out.push_str(&line);
                 }
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
+                field_args.push(text);
+            } else {
+                let (text, value_is_float) =
+                    render_numeric_expr(&raw_value, needs_math, functions)?;
+                let ty = field
+                    .ty
+                    .expect("a DSL record field always carries its declared RecordFieldType");
+                let target_is_float =
+                    matches!(ty, RecordFieldType::Float32 | RecordFieldType::Float64);
+                let coerced = coerce_numeric(text, value_is_float, target_is_float, needs_math);
+                let tmp = format!("bcc_tmp_{}", *temp_counter);
+                *temp_counter += 1;
+                out.push_str(&format!(
+                    "    {c_ty} {tmp} = {coerced};\n",
+                    c_ty = record_field_c_type(ty)
+                ));
+                field_args.push(format!("&{tmp}"));
+            }
+        }
+        let field_args = field_args.join(", ");
         let separator = if field_args.is_empty() { "" } else { ", " };
-        let direction = if is_get { "get" } else { "put" };
         let call = format!(
-            "bcc_{direction}_record_{suffix}(bcc_files[{idx}], {record_text}{separator}{field_args})"
+            "bcc_put_record_{suffix}(bcc_files[{idx}], {record_text}{separator}{field_args})"
         );
-        if !is_get
-            && provided_fields.is_some_and(|provided| provided.iter().any(|present| !present))
-        {
+        if provided_fields.is_some_and(|provided| provided.iter().any(|present| !present)) {
             out.push_str(&format!(
                 "    if (!{call}) {{ fprintf(stderr, \"BASCAL: record %ld does not exist\\n\", (long){record_text}); exit(1); }}\n"
             ));

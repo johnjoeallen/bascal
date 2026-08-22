@@ -367,6 +367,9 @@ pub enum Statement {
         /// Logical string fields from the record/file DSL.  The C backend
         /// uses this to trim FIELD padding after a record read.
         string_fields: Option<Vec<bool>>,
+        /// Exact DSL field types for the C typed-record path. Raw FIELD
+        /// statements leave this unset and retain byte-buffer semantics.
+        field_types: Option<Vec<RecordFieldType>>,
     },
     Get {
         channel: Expr,

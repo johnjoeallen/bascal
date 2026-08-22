@@ -777,6 +777,7 @@ impl Parser {
             fields,
             record_type: None,
             string_fields: None,
+            field_types: None,
         })
     }
 
