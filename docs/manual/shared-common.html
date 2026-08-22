@@ -83,7 +83,7 @@ count% = count% + 1
 PRINT &quot;Initialised: &quot; + label$
 PRINT &quot;Count after 3 increments: &quot; + STR$(count%)
 
-/* CHAIN &quot;show.bas&quot; */
+/* CHAIN &quot;show&quot; */
 END</code></pre>
 <p><strong><code>show.bcl</code></strong> (program 2):</p>
 <pre><code>program show shared state
@@ -93,7 +93,7 @@ PRINT &quot;Count:  &quot; + STR$(count%)
 END</code></pre>
 <p>Both <code>start.bas</code> and <code>show.bas</code> begin with:</p>
 <pre><code>COMMON count%, label$</code></pre>
-<p>ensuring that <code>CHAIN "show.bas"</code> from <code>start.bas</code> leaves the variables in the correct slots.</p>
+<p>ensuring that <code>CHAIN "show"</code> from <code>start.bas</code> leaves the variables in the correct slots. <code>CHAIN</code> names the compiled program, not the <code>.bas</code> source it came from — verified directly against real BASCOM 2.00 under dosbox-x: <code>CHAIN "show.bas"</code> tries to run the source text itself and corrupts, while <code>CHAIN "show"</code> (or the explicit <code>CHAIN "show.exe"</code>) correctly runs <code>show.exe</code> and carries <code>COMMON</code> across.</p>
 <h3 id="restrictions-2">Restrictions</h3>
 <ul>
 <li>A <code>shared &lt;name&gt;</code> header is illegal everywhere except in a shared file being loaded as one — a stray <code>shared</code> header in an ordinary program or library module is a transpile error. A shared file without one is also an error — the header is mandatory.</li>

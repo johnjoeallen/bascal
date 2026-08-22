@@ -25,6 +25,9 @@
 210 PRINT "Initialised: " + label$
 220 PRINT "Count after 3 increments: " + STR$(count%)
 
-230 ' In a real multi-program application you would chain to show.bas:
-240 ' CHAIN "show.bas"
-250 END
+230 ' In a real multi-program application you would chain to the compiled
+240 ' show.exe -- CHAIN takes a program name, not the .bas source it was
+250 ' compiled from (verified against real BASCOM 2.00 under dosbox-x:
+260 ' CHAIN "show.bas" tries to run the source file itself and corrupts):
+270 ' CHAIN "show"
+280 END

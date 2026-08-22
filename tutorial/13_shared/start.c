@@ -74,7 +74,10 @@ int main(void) {
     snprintf(bt_s_1, sizeof(bt_s_1), "%s%s", "Count after 3 increments: ", bcc_stri(bv_i_count));
     printf("%s\n", bt_s_1);
 
-    // In a real multi-program application you would chain to show.bas:
-    // CHAIN "show.bas"
+    // In a real multi-program application you would chain to the compiled
+    // show.exe -- CHAIN takes a program name, not the .bas source it was
+    // compiled from (verified against real BASCOM 2.00 under dosbox-x:
+    // CHAIN "show.bas" tries to run the source file itself and corrupts):
+    // CHAIN "show"
     return 0;
 }
