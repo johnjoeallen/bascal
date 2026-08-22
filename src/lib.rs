@@ -4377,6 +4377,119 @@ end
             .unwrap_or_else(|d| panic!("tutorial/07_functions.bcl should compile to C: {d:?}"));
     }
 
+    #[test]
+    fn c_target_supports_random_access_field_get_put_lset() {
+        // OPEN FOR RANDOM/FIELD/LSET/PUT/GET round-trip -- the core
+        // random-access record I/O shape (see codegen_c.rs's
+        // `FileIoLayout`/`emit_get_or_put`/`Statement::Lset` handling).
+        let source = "open \"data.dat\" for random as #1 len = 22\n\
+                       field #1, 2 as idBuf$, 20 as nameBuf$\n\
+                       lset idBuf$ = mki$(7)\n\
+                       lset nameBuf$ = \"Alice\"\n\
+                       put #1, 1\n\
+                       get #1, 1\n\
+                       n% = cvi(idBuf$)\n\
+                       close #1\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("static FILE* bcc_files[BCC_MAX_CHANNELS];"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("bcc_files[1] = fopen(\"data.dat\", \"rb+\");"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("if (!bcc_files[1]) bcc_files[1] = fopen(\"data.dat\", \"wb+\");"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("bcc_mki(bv_s_idbuf, 7);"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("snprintf(bv_s_namebuf, sizeof(bv_s_namebuf), \"%-*.*s\", 20, 20, \"Alice\");"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("memcpy(bcc_rec + 0, bv_s_idbuf, 2);")
+                && output.contains("memcpy(bcc_rec + 2, bv_s_namebuf, 20);"),
+            "PUT should gather every field at its declared offset:\n{output}"
+        );
+        assert!(
+            output.contains("fwrite(bcc_rec, 1, 22, bcc_files[1]);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("fseek(bcc_files[1], (long)((1) - 1) * 22, SEEK_SET);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("fread(bcc_rec, 1, 22, bcc_files[1]);"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_i_n = bcc_cvi(bv_s_idbuf);"), "unexpected output:\n{output}");
+        assert!(output.contains("fclose(bcc_files[1]);"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_random_access_helpers_use_ieee754_not_mbf() {
+        // Documented divergence from real MBASIC/BASCOM: MKS$/MKD$/CVS/CVD
+        // use plain IEEE 754 float/double via memcpy, not real BASIC's
+        // Microsoft Binary Format -- see `FILE_IO_HELPER`'s doc comment.
+        let source = "open \"d.dat\" for random as #1 len = 8\n\
+                       field #1, 8 as scoreBuf$\n\
+                       lset scoreBuf$ = mkd$(95.5)\n\
+                       put #1, 1\n\
+                       get #1, 1\n\
+                       s# = cvd(scoreBuf$)\n\
+                       close #1\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("bcc_mkd(bv_s_scorebuf, 95.5);"), "unexpected output:\n{output}");
+        assert!(output.contains("bv_d_s = bcc_cvd(bv_s_scorebuf);"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_rejects_sequential_open_modes() {
+        let source = "open \"f.txt\" for input as #1\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("sequential file I/O")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_lset_on_a_variable_that_was_never_fielded() {
+        let source = "x$ = \"hi\"\nlset x$ = \"bye\"\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("only a variable declared by a")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_get_put_with_no_record_number() {
+        let source = "open \"f.dat\" for random as #1 len = 4\n\
+                       field #1, 4 as b$\n\
+                       get #1\n\
+                       end\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("no record number")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_str_dollar_with_the_leading_space_convention() {
+        // Real MBASIC/BASCOM's STR$ prefixes a space for non-negative
+        // numbers (standing in for the sign) -- C's printf `%` (space)
+        // flag gives this natively, no manual sign handling needed.
+        let source = "n% = 5\nprint str$(n%)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("bcc_stri(bv_i_n)"), "unexpected output:\n{output}");
+        assert!(output.contains("snprintf(out, 256, \"% d\", value);"), "unexpected output:\n{output}");
+    }
+
     /// Helper for the C-backend tests above: writes `source` (with a
     /// `program` header prepended) to a temp file and compiles it under
     /// `Target::C`, panicking with the diagnostics on failure.

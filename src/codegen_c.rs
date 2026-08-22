@@ -23,16 +23,27 @@
 //! variables (real C function-local scope -- no name-mangling needed,
 //! unlike the BASIC backend's GOSUB-against-shared-globals approach), and
 //! `global` to opt into reading/writing a top-level variable instead (see
-//! `build_function_table`/`emit_function_def`), and five BASIC intrinsics
-//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$` (see
-//! `render_numeric_call`/`render_string_call`/`MID_HELPER`). NOT yet
-//! supported: `procedure` (no return value), `byref`/array parameters,
-//! and a function body that doesn't provably `return` on every path (see
-//! `body_always_returns`) -- all rejected with a diagnostic rather than
-//! guessed at. Recursion (direct or indirect) is rejected at the
-//! resolver level before codegen ever runs, for every target, not just
-//! this one. Everything else (other statement kinds, arrays, any BASIC
-//! intrinsic beyond the five above) reports a "not supported yet"
+//! `build_function_table`/`emit_function_def`), six BASIC intrinsics
+//! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `STR$`
+//! (see `render_numeric_call`/`render_string_call`/`MID_HELPER`) -- and
+//! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
+//! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
+//! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
+//! `FileIoLayout`/`scan_field_layout`/`emit_get_or_put`/`FILE_IO_HELPER`
+//! -- two real, documented divergences from real MBASIC/BASCOM live
+//! there: `MKS$`/`MKD$`/`CVS`/`CVD` use plain IEEE 754 instead of real
+//! BASIC's Microsoft Binary Format, and multi-byte values are packed in
+//! the host's native byte order, assumed little-endian). NOT yet
+//! supported: `procedure` (no return value), `byref`/array parameters, a
+//! function body that doesn't provably `return` on every path (see
+//! `body_always_returns`), sequential file I/O (`OPEN FOR
+//! INPUT`/`OUTPUT`/`APPEND`), a `FIELD`/`OPEN`/`GET`/`PUT` channel or
+//! `FIELD` width that isn't a literal integer, and a suffixless
+//! (default-typed) numeric variable -- all rejected with a diagnostic
+//! rather than guessed at. Recursion (direct or indirect) is rejected at
+//! the resolver level before codegen ever runs, for every target, not
+//! just this one. Everything else (other statement kinds, arrays, any
+//! BASIC intrinsic beyond the six above) reports a "not supported yet"
 //! diagnostic rather than panicking or emitting wrong code -- this is a
 //! walking skeleton to prove the CLI/dispatch plumbing (`Target::C`,
 //! `--target c`, `invoke_gcc`) end-to-end, not a real backend. Tutorials
@@ -44,7 +55,12 @@
 //! merging itself needed no C-backend-specific work at all, since
 //! `lib.rs`'s `require`/`import` resolution already merges a required
 //! file's functions into `Program.functions` before either backend's
-//! codegen ever runs).
+//! codegen ever runs). `tutorial/15_random_and_record_files.bcl`'s
+//! hand-written Part 1 also compiles and was verified correct end to end
+//! (gcc-compiled and run, every value matches); its DSL-based Part 2
+//! additionally needs suffixless numeric variables, which this backend
+//! doesn't support at all yet, so the tutorial as a whole isn't added to
+//! this list.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -61,8 +77,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{
-    BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, ParamMode,
-    PrintToken, Program, Statement, TypeSuffix, UnaryOp,
+    BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
+    ParamMode, PrintToken, Program, Statement, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -117,7 +133,10 @@ fn fn_key(ident: &BasicIdent) -> (String, Option<TypeSuffix>) {
 /// be invalid here too.
 fn is_known_callable(name: &BasicIdent, functions: &FunctionTable) -> bool {
     functions.contains_key(&fn_key(name))
-        || matches!(name.name.to_ascii_lowercase().as_str(), "len" | "asc" | "chr" | "mid" | "left")
+        || matches!(
+            name.name.to_ascii_lowercase().as_str(),
+            "len" | "asc" | "chr" | "mid" | "left" | "str" | "cvi" | "cvl" | "cvs" | "cvd"
+        )
 }
 
 /// The C identifier a BASCAL function maps to. Same `bf_<tag>_<name>`
@@ -160,11 +179,24 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
             match name.name.to_ascii_lowercase().as_str() {
                 "len" | "asc" => usage.needs_string_h = true,
-                "mid" | "left" | "chr" => {
+                "mid" | "left" | "chr" | "str" => {
                     usage.needs_string_h = true;
                     usage.needs_ring_buffer_helpers = true;
                 }
                 _ => {}
+            }
+        }
+        // A string comparison (`=`/`<>`/`<`/`<=`/`>`/`>=` where either
+        // side is string-typed) compiles to `strcmp` -- see
+        // `render_numeric_expr`'s own comparison-operator arm.
+        if let Expr::Binary {
+            left,
+            op: BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge,
+            right,
+        } = expr
+        {
+            if is_string_expr(left) || is_string_expr(right) {
+                usage.needs_string_h = true;
             }
         }
     };
@@ -197,7 +229,167 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
 /// `function_signature`'s `bcc_out` convention -- so nesting one of
 /// *those* inside `LEN`/`ASC` still isn't supported (see
 /// `render_prelude_free_string_arg`).
-const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\n";
+const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
+
+/// Random-access record I/O runtime support: `bcc_files` is a fixed-size
+/// table of open `FILE*` handles indexed directly by BASCAL channel
+/// number (see `BCC_MAX_CHANNELS`'s doc comment); `bcc_mki`/`bcc_mkl`/
+/// `bcc_mks`/`bcc_mkd` and `bcc_cvi`/`bcc_cvl`/`bcc_cvs`/`bcc_cvd` are
+/// `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` -- raw
+/// fixed-width-integer/float byte packing and unpacking via `memcpy`,
+/// `<stdint.h>`'s `int16_t`/`int32_t` guaranteeing the exact widths real
+/// MBASIC/BASCOM's own `MKI$`/`MKL$` use regardless of platform `int`
+/// width. Two real, deliberate divergences from real MBASIC/BASCOM,
+/// both documented rather than silently wrong: `MKS$`/`MKD$`/`CVS`/`CVD`
+/// use plain IEEE 754 `float`/`double` (a `memcpy` of C's own
+/// representation) instead of real BASIC's Microsoft Binary Format --
+/// implementing byte-for-byte MBF conversion is real, narrow bit-twiddling
+/// work not attempted here, so a `float64` record field written by this
+/// backend is *not* binary-compatible with one written by real BASCOM
+/// (an `int16`/`int32`/`string(N)` field still is, since those don't
+/// involve MBF at all); and every multi-byte value is packed/unpacked in
+/// the host's native byte order, assumed little-endian (true of every
+/// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
+/// not big-endian mainframes, matching real BASIC's own on-disk
+/// little-endian layout only on those platforms).
+const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
+
+/// One field's layout within a `FIELD`-declared channel record buffer --
+/// its C variable name (always a string, per `records::buffer_ident`),
+/// byte width, and cumulative byte offset within the record. Built by
+/// `scan_field_layout`.
+struct FieldEntry {
+    c_name: String,
+    width: u32,
+    offset: u32,
+}
+
+/// The whole program's random-access record I/O layout, computed by one
+/// up-front AST scan (`scan_field_layout`) rather than tracked as mutable
+/// state threaded through statement emission: `FIELD` always precedes the
+/// `GET`/`PUT`/`LSET`/`RSET` statements that need to know its layout, but
+/// scanning it all first, before any code is emitted, means `emit_statement`
+/// can just look answers up rather than needing to notice and remember
+/// `FIELD` declarations as it goes.
+struct FileIoLayout {
+    /// Channel number -> that channel's fields, in `FIELD`-declaration
+    /// order (needed by `GET`/`PUT` to split/join the whole record
+    /// buffer). Re-`FIELD`ing the same channel overwrites its entry here
+    /// (last one wins) -- BASCAL's own record/file DSL only ever emits one
+    /// `FIELD` per channel, so this only matters for hand-written raw
+    /// `FIELD`, not attempted to be modeled more precisely.
+    channel_fields: HashMap<i64, Vec<FieldEntry>>,
+    /// C variable name -> declared width, flattened across every channel
+    /// -- looked up by `LSET`/`RSET`, which only know their target
+    /// variable, not which channel/`FIELD` it came from.
+    field_widths: HashMap<String, u32>,
+    /// Whether the program uses random-access record I/O at all (any of
+    /// `OPEN`/`CLOSE`/`FIELD`/`GET`/`PUT`/`LSET`/`RSET`) -- decides
+    /// whether `generate` emits `FILE_IO_HELPER` and pulls in
+    /// `<string.h>`/`<stdint.h>` for it.
+    used: bool,
+}
+
+/// Walks every statement in the program (recursing into `if`/`for`/
+/// `while`/`do`/`select case`, and every function body -- same shape as
+/// `collect_global_decl_idents`) looking for `FIELD` declarations to
+/// build `FileIoLayout` from, and noting whether any random-access I/O
+/// statement appears at all. Errors out (rather than silently guessing)
+/// when a `FIELD`'s channel or a field's width isn't a literal integer:
+/// the layout has to be known at compile time here (there's no runtime
+/// "ask the FIELD table" mechanism the way real BASIC's own interpreter
+/// has), so a computed channel/width -- always a literal in BASCAL's own
+/// record/file DSL output, see `records::lower_file_decl` -- isn't
+/// supported by the minimal C backend yet.
+fn scan_field_layout(program: &Program) -> Result<FileIoLayout, String> {
+    let mut layout = FileIoLayout {
+        channel_fields: HashMap::new(),
+        field_widths: HashMap::new(),
+        used: false,
+    };
+    scan_field_layout_body(&program.statements, &mut layout)?;
+    for func in &program.functions {
+        scan_field_layout_body(&func.body, &mut layout)?;
+    }
+    Ok(layout)
+}
+
+fn scan_field_layout_body(body: &[Statement], layout: &mut FileIoLayout) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            Statement::Open { .. }
+            | Statement::Close { .. }
+            | Statement::Get { .. }
+            | Statement::Put { .. }
+            | Statement::Lset { .. }
+            | Statement::Rset { .. } => layout.used = true,
+            Statement::Field { channel, fields } => {
+                layout.used = true;
+                let Expr::Integer(ch) = channel else {
+                    return Err(
+                        "`FIELD`'s channel must be a literal integer -- the minimal C backend \
+                         needs to know the record layout at compile time"
+                            .to_string(),
+                    );
+                };
+                let mut entries = Vec::with_capacity(fields.len());
+                let mut offset = 0u32;
+                for (width_expr, var) in fields {
+                    let Expr::Integer(width) = width_expr else {
+                        return Err(
+                            "a `FIELD` width must be a literal integer -- the minimal C backend \
+                             needs to know the record layout at compile time"
+                                .to_string(),
+                        );
+                    };
+                    if var.suffix != Some(TypeSuffix::String) {
+                        return Err(format!(
+                            "`FIELD` variable `{var}` must be a string (`$`) -- real \
+                             MBASIC/BASCOM's `FIELD` only ever declares string variables"
+                        ));
+                    }
+                    // Every FIELD'd variable's C storage is the same
+                    // `char[STRING_BUFFER_SIZE]` buffer as any other
+                    // string -- GET splits raw record bytes into it via
+                    // `memcpy` (see `emit_get_or_put`), so a field wider
+                    // than that buffer would silently overflow it rather
+                    // than truncate the way `snprintf`-based string
+                    // handling elsewhere in this backend safely does.
+                    if *width < 0 || *width as usize >= STRING_BUFFER_SIZE {
+                        return Err(format!(
+                            "`FIELD` variable `{var}`'s width ({width}) must be less than \
+                             {STRING_BUFFER_SIZE} -- every string in the minimal C backend, \
+                             FIELD'd variables included, is a fixed {STRING_BUFFER_SIZE}-byte \
+                             buffer"
+                        ));
+                    }
+                    let width = *width as u32;
+                    let c_name = c_var_name(var, TypeSuffix::String);
+                    layout.field_widths.insert(c_name.clone(), width);
+                    entries.push(FieldEntry { c_name, width, offset });
+                    offset += width;
+                }
+                layout.channel_fields.insert(*ch, entries);
+            }
+            Statement::If { then_body, else_body, .. } => {
+                scan_field_layout_body(then_body, layout)?;
+                scan_field_layout_body(else_body, layout)?;
+            }
+            Statement::For { body, .. } | Statement::While { body, .. } => {
+                scan_field_layout_body(body, layout)?;
+            }
+            Statement::Do { body, .. } => scan_field_layout_body(body, layout)?,
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    scan_field_layout_body(&case.body, layout)?;
+                }
+                scan_field_layout_body(else_body, layout)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
 
 /// Validates every function's shape up front and builds the lookup table
 /// `render_numeric_expr`/`render_string_expr` use for `Expr::Call`.
@@ -356,6 +548,7 @@ fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let functions =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
+    let file_io = scan_field_layout(program).map_err(|message| vec![unsupported(&message)])?;
 
     // BASIC variables "spring into existence on first use" -- there's no
     // separate declaration step to hook into, so every scalar variable
@@ -409,6 +602,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut needs_math,
             &mut needs_string,
             &mut temp_counter,
+            &file_io,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -423,6 +617,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut temp_counter,
             &functions,
             None,
+            &file_io,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -437,16 +632,21 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let builtin_usage = scan_builtin_usage(program);
 
     // <math.h> is only pulled in when something (currently just `\`) needs
-    // round() from it, and <string.h> only when a string `select case`
-    // needs strcmp() from it, or a LEN/ASC/CHR$/MID$/LEFT$ call needs
-    // strlen() (see `scan_builtin_usage`) -- most programs won't need
-    // either.
+    // round() from it, <string.h> only when a string `select case` needs
+    // strcmp() from it, a LEN/ASC/CHR$/MID$/LEFT$ call needs strlen()
+    // (see `scan_builtin_usage`), or random-access record I/O needs
+    // memcpy() (see `FILE_IO_HELPER`), and <stdint.h> only for that same
+    // record I/O's exact-width `int16_t`/`int32_t` packing -- most
+    // programs won't need any of them.
     let mut includes = String::from("#include <stdio.h>\n");
     if needs_math {
         includes.push_str("#include <math.h>\n");
     }
-    if needs_string || builtin_usage.needs_string_h {
+    if needs_string || builtin_usage.needs_string_h || file_io.used {
         includes.push_str("#include <string.h>\n");
+    }
+    if file_io.used {
+        includes.push_str("#include <stdint.h>\n");
     }
 
     let mut globals_decl = String::new();
@@ -461,6 +661,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     out.push('\n');
     if builtin_usage.needs_ring_buffer_helpers {
         out.push_str(MID_HELPER);
+    }
+    if file_io.used {
+        out.push_str(FILE_IO_HELPER);
     }
     if !globals_decl.is_empty() {
         out.push_str(&globals_decl);
@@ -540,6 +743,7 @@ fn emit_function_def(
     needs_math: &mut bool,
     needs_string: &mut bool,
     temp_counter: &mut usize,
+    file_io: &FileIoLayout,
 ) -> Result<(), String> {
     let mut numeric_locals = BTreeMap::new();
     let mut string_locals = BTreeSet::new();
@@ -579,7 +783,7 @@ fn emit_function_def(
     }
 
     for stmt in &func.body {
-        emit_statement(stmt, &mut body, needs_math, needs_string, temp_counter, functions, Some(sig))?;
+        emit_statement(stmt, &mut body, needs_math, needs_string, temp_counter, functions, Some(sig), file_io)?;
     }
 
     out.push_str(&function_signature(func, sig));
@@ -797,6 +1001,17 @@ fn collect_vars_in_statement(
         // statement as a variable use in the first place.
         Statement::Return { value } => collect_vars_in_expr(value, numeric_out, string_out),
         Statement::ExprStmt(expr) => collect_vars_in_expr(expr, numeric_out, string_out),
+        // Every `FIELD` variable is a real string variable underneath
+        // (see `FieldEntry`/`records::buffer_ident`) and needs the same
+        // top-of-scope declaration as any other -- `scan_field_layout`
+        // separately validates/records its byte layout, but declaring
+        // the C storage for it is this pass's job, same as everything
+        // else here.
+        Statement::Field { fields, .. } => {
+            for (_, var) in fields {
+                register_var(var, numeric_out, string_out);
+            }
+        }
         _ => {}
     }
 }
@@ -862,6 +1077,7 @@ fn emit_statement(
     temp_counter: &mut usize,
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
+    file_io: &FileIoLayout,
 ) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
@@ -927,14 +1143,14 @@ fn emit_statement(
             let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));
             for stmt in then_body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
             }
             if else_body.is_empty() {
                 out.push_str("    }\n");
             } else {
                 out.push_str("    } else {\n");
                 for stmt in else_body {
-                    emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                    emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
                 }
                 out.push_str("    }\n");
             }
@@ -985,7 +1201,7 @@ fn emit_statement(
                  {loop_var} >= {limit}; {loop_var} += {step_var}) {{\n"
             ));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -998,7 +1214,7 @@ fn emit_statement(
             let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
             out.push_str(&format!("    while ({cond_text}) {{\n"));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -1020,7 +1236,7 @@ fn emit_statement(
                 out.push_str(&emit_do_guard(cond, needs_math, functions)?);
             }
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
             }
             if let Some(cond) = post_condition {
                 out.push_str(&emit_do_guard(cond, needs_math, functions)?);
@@ -1048,6 +1264,114 @@ fn emit_statement(
         // global of the same name via ordinary C lexical scoping -- no
         // per-use rewriting needed here at all.
         Statement::GlobalDecl(_) => Ok(()),
+        // `OPEN ... FOR RANDOM/BINARY AS #ch [LEN = n]` -- only random-
+        // access modes are supported (sequential `INPUT`/`OUTPUT`/
+        // `APPEND` aren't implemented by this backend yet); `LEN` is
+        // accepted but not actually used for anything -- `GET`/`PUT`'s
+        // own record size comes from the `FIELD` layout `scan_field_layout`
+        // already computed, which is always consistent with `LEN` in
+        // BASCAL's own record/file DSL output. Real BASIC's `OPEN FOR
+        // RANDOM` creates the file if it doesn't already exist; C's
+        // `"rb+"` mode requires the file to already exist, so a failed
+        // `"rb+"` open falls back to `"wb+"` (create, read/write) rather
+        // than treating that as a real error.
+        Statement::Open { mode, file, channel, .. } => {
+            if !matches!(mode, OpenMode::Random | OpenMode::Binary) {
+                return Err(
+                    "sequential file I/O (OPEN FOR INPUT/OUTPUT/APPEND) isn't supported by the \
+                     minimal C backend yet -- only random-access (OPEN FOR RANDOM/BINARY) is"
+                        .to_string(),
+                );
+            }
+            let ch = literal_channel(channel)?;
+            let (prelude, file_text) = render_string_expr(file, needs_math, temp_counter, functions)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            out.push_str(&format!(
+                "    bcc_files[{ch}] = fopen({file_text}, \"rb+\");\n"
+            ));
+            out.push_str(&format!(
+                "    if (!bcc_files[{ch}]) bcc_files[{ch}] = fopen({file_text}, \"wb+\");\n"
+            ));
+            Ok(())
+        }
+        Statement::Close { channel } => {
+            let ch = literal_channel(channel)?;
+            out.push_str(&format!("    fclose(bcc_files[{ch}]);\n"));
+            out.push_str(&format!("    bcc_files[{ch}] = NULL;\n"));
+            Ok(())
+        }
+        // Pure compile-time bookkeeping -- `scan_field_layout` already
+        // recorded this channel's field layout (and declared the fields'
+        // own C storage via `collect_vars_in_statement`'s own `Field`
+        // arm); nothing needs to happen at the point `FIELD` itself
+        // appears in the statement stream.
+        Statement::Field { .. } => Ok(()),
+        // `GET`/`PUT #ch, record` -- read/write one whole record (`GET`
+        // splits the record's raw bytes across every `FIELD`'d variable
+        // on that channel, at their declared offsets; `PUT` does the
+        // reverse) into a single record-sized stack buffer, `fseek`ing
+        // to `(record - 1) * record_width` first (BASIC record numbers
+        // are 1-based). The bare `GET #ch`/`PUT #ch` (no record number,
+        // "next sequential record") and `GET #ch, , var`/`PUT #ch, ,
+        // var` (explicit target variable, not the FIELD buffer) forms
+        // aren't supported -- BASCAL's own record/file DSL never
+        // produces either, always giving an explicit record number and
+        // no `var`.
+        Statement::Get { channel, record, var: None } => {
+            emit_get_or_put(channel, record, needs_math, functions, file_io, out, true)
+        }
+        Statement::Put { channel, record, var: None } => {
+            emit_get_or_put(channel, record, needs_math, functions, file_io, out, false)
+        }
+        // `LSET`/`RSET var = value` -- restricted to a `FIELD`'d
+        // variable (looked up in `file_io.field_widths`; real BASIC
+        // allows LSET/RSET on any string variable, justifying within
+        // its *current* length, but every string variable in this
+        // backend is a fixed `char[256]` with no meaningful "current
+        // length" of its own, so only the FIELD'd case -- pad/truncate
+        // to the field's *declared* width -- is implemented). `value`
+        // being exactly `MKI$`/`MKL$`/`MKS$`/`MKD$` of a single
+        // argument is special-cased to a direct `bcc_mkX` raw-byte pack
+        // (see `FILE_IO_HELPER`) instead of the ordinary string-render
+        // pipeline -- the packed bytes can contain a `0x00` byte
+        // (e.g. `MKI$(1)` is bytes `01 00`), which a `snprintf`-based
+        // copy would silently truncate at, being null-terminated-string
+        // machinery, not byte-buffer machinery.
+        Statement::Lset { var, value } | Statement::Rset { var, value } => {
+            let is_rset = matches!(statement, Statement::Rset { .. });
+            let c_name = c_var_name(var, TypeSuffix::String);
+            let Some(&width) = file_io.field_widths.get(&c_name) else {
+                return Err(format!(
+                    "LSET/RSET on `{var}` isn't supported by the minimal C backend yet -- only a \
+                     variable declared by a (literal-channel) FIELD is"
+                ));
+            };
+            if let Some((fn_name, target_is_float, arg)) = mk_pack_call(value) {
+                if is_rset {
+                    return Err(
+                        "RSET with MKI$/MKL$/MKS$/MKD$ isn't supported by the minimal C backend \
+                         yet -- real MBASIC/BASCOM packing functions are only ever paired with \
+                         LSET"
+                            .to_string(),
+                    );
+                }
+                let (arg_text, arg_is_float) = render_numeric_expr(arg, needs_math, functions)?;
+                let coerced = coerce_numeric(arg_text, arg_is_float, target_is_float, needs_math);
+                out.push_str(&format!("    {fn_name}({c_name}, {coerced});\n"));
+                return Ok(());
+            }
+            let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter, functions)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            let flag = if is_rset { "" } else { "-" };
+            out.push_str(&format!(
+                "    snprintf({c_name}, sizeof({c_name}), \"%{flag}*.*s\", {width}, {width}, {value_text});\n"
+            ));
+            Ok(())
+        }
         // `select case` compiles to a native C `if`/`else if`/`else`
         // chain, same "no labels needed" story as `if`/`elseif`/`else`
         // above -- see `emit_select_case`.
@@ -1062,6 +1386,7 @@ fn emit_statement(
                 temp_counter,
                 functions,
                 current_function,
+                file_io,
             )
         }
         // Real C's own return-by-value works here directly: a numeric
@@ -1121,6 +1446,118 @@ fn emit_statement(
              calling a `procedure` -- isn't supported yet either)"
         )),
     }
+}
+
+/// A channel number that must be known at compile time -- `GET`/`PUT`
+/// need to look up their channel's `FIELD` layout (`FileIoLayout`), and
+/// `OPEN`/`CLOSE` index the fixed-size `bcc_files` table directly by
+/// literal, both of which need an actual `i64`, not a rendered C
+/// expression. Same restriction `scan_field_layout` already enforces for
+/// `FIELD` itself, for the same reason -- BASCAL's own record/file DSL
+/// only ever produces literal channel numbers (see
+/// `records::lower_file_decl`), so this doesn't reject anything the DSL
+/// itself would need.
+fn literal_channel(expr: &Expr) -> Result<i64, String> {
+    match expr {
+        Expr::Integer(n) => Ok(*n),
+        _ => Err(
+            "a file channel number must be a literal integer -- the minimal C backend needs to \
+             know it at compile time"
+                .to_string(),
+        ),
+    }
+}
+
+/// Whether `expr` is exactly `MKI$`/`MKL$`/`MKS$`/`MKD$` applied to a
+/// single argument -- if so, the `bcc_mkX` helper to call (see
+/// `FILE_IO_HELPER`), whether its C parameter is `double` (`true`, for
+/// `MKS$`/`MKD$`) or `int`/`long` (`false`, for `MKI$`/`MKL$`, so
+/// `coerce_numeric` rounds a narrowing argument the same as any other
+/// narrowing conversion), and the argument expression itself. Used by
+/// `Statement::Lset`'s special case -- see its own doc comment for why
+/// packing bypasses the ordinary string-render pipeline entirely.
+fn mk_pack_call(expr: &Expr) -> Option<(&'static str, bool, &Expr)> {
+    // `MKI$`/`MKL$`/`MKS$`/`MKD$` all carry a `$` suffix and take exactly
+    // one argument, so -- same ambiguity as CHR$/MID$/LEFT$ -- they parse
+    // as `Expr::ArrayRef`, not `Expr::Call` (see `make_paren_ident_expr`
+    // in `parser.rs`).
+    let (name, args) = match expr {
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => (name, args),
+        _ => return None,
+    };
+    if args.len() != 1 {
+        return None;
+    }
+    let fn_name = match name.name.to_ascii_lowercase().as_str() {
+        "mki" => "bcc_mki",
+        "mkl" => "bcc_mkl",
+        "mks" => "bcc_mks",
+        "mkd" => "bcc_mkd",
+        _ => return None,
+    };
+    if name.suffix != Some(TypeSuffix::String) {
+        return None;
+    }
+    Some((fn_name, matches!(fn_name, "bcc_mks" | "bcc_mkd"), &args[0]))
+}
+
+/// `GET`/`PUT #ch, record` -- see `Statement::Get`/`Statement::Put`'s own
+/// doc comment in `emit_statement` for the overall shape. `is_get`
+/// selects which direction the `memcpy`s run: `GET` splits the freshly
+/// `fread`-in record buffer out to every `FIELD`'d variable, `PUT`
+/// gathers them back into the buffer before `fwrite`-ing it.
+fn emit_get_or_put(
+    channel: &Expr,
+    record: &Option<Expr>,
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+    file_io: &FileIoLayout,
+    out: &mut String,
+    is_get: bool,
+) -> Result<(), String> {
+    let ch = literal_channel(channel)?;
+    let Some(record) = record else {
+        return Err(
+            "GET/PUT with no record number (\"next sequential record\") isn't supported by the \
+             minimal C backend yet -- always pass an explicit record number"
+                .to_string(),
+        );
+    };
+    let Some(fields) = file_io.channel_fields.get(&ch) else {
+        return Err(format!(
+            "GET/PUT on channel {ch} isn't supported by the minimal C backend yet -- no FIELD \
+             was seen for it (with a literal channel number) before this point"
+        ));
+    };
+    let reclen: u32 = fields.iter().map(|f| f.width).sum();
+    let (record_text, record_is_float) = render_numeric_expr(record, needs_math, functions)?;
+    let record_text = coerce_numeric(record_text, record_is_float, false, needs_math);
+
+    out.push_str("    {\n");
+    out.push_str(&format!(
+        "    fseek(bcc_files[{ch}], (long)(({record_text}) - 1) * {reclen}, SEEK_SET);\n"
+    ));
+    out.push_str(&format!("    unsigned char bcc_rec[{reclen}];\n"));
+    if is_get {
+        out.push_str(&format!("    fread(bcc_rec, 1, {reclen}, bcc_files[{ch}]);\n"));
+        for field in fields {
+            out.push_str(&format!(
+                "    memcpy({0}, bcc_rec + {1}, {2});\n",
+                field.c_name, field.offset, field.width
+            ));
+            out.push_str(&format!("    {}[{}] = 0;\n", field.c_name, field.width));
+        }
+    } else {
+        for field in fields {
+            out.push_str(&format!(
+                "    memcpy(bcc_rec + {1}, {0}, {2});\n",
+                field.c_name, field.offset, field.width
+            ));
+        }
+        out.push_str(&format!("    fwrite(bcc_rec, 1, {reclen}, bcc_files[{ch}]);\n"));
+    }
+    out.push_str("    }\n");
+    Ok(())
 }
 
 /// Coerces a numeric value into a target of known float-ness, for any
@@ -1230,6 +1667,7 @@ fn emit_select_case(
     temp_counter: &mut usize,
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
+    file_io: &FileIoLayout,
 ) -> Result<(), String> {
     let is_string = is_string_expr(expr);
     let temp = format!("bt_sel_{temp_counter}");
@@ -1267,20 +1705,20 @@ fn emit_select_case(
         let keyword = if i == 0 { "if" } else { "} else if" };
         out.push_str(&format!("    {keyword} ({joined}) {{\n"));
         for stmt in &clause.body {
-            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
         }
     }
     if !cases.is_empty() {
         if !else_body.is_empty() {
             out.push_str("    } else {\n");
             for stmt in else_body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
             }
         }
         out.push_str("    }\n");
     } else {
         for stmt in else_body {
-            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function, file_io)?;
         }
     }
     out.push_str("    }\n");
@@ -1434,6 +1872,20 @@ fn render_string_call(
         let (text, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
         let coerced = coerce_numeric(text, is_float, false, needs_math);
         return Ok((Vec::new(), format!("bcc_chr({coerced})")));
+    }
+    // `STR$(n)` -- a number's string form, with real MBASIC/BASCOM's own
+    // leading-space-for-non-negative convention (the same one the module
+    // doc comment notes `print`'s own numeric formatting doesn't
+    // reproduce yet -- `STR$` does, here, since it's cheap: C's `%` printf
+    // flag on `%d`/`%g` already inserts exactly that leading space for a
+    // non-negative value and a `-` for a negative one natively, no manual
+    // sign handling needed).
+    if name.name.eq_ignore_ascii_case("str") && args.len() == 1 {
+        let (text, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        return Ok((
+            Vec::new(),
+            if is_float { format!("bcc_strd({text})") } else { format!("bcc_stri({text})") },
+        ));
     }
     if (name.name.eq_ignore_ascii_case("mid") && (args.len() == 2 || args.len() == 3))
         || (name.name.eq_ignore_ascii_case("left") && args.len() == 2)
@@ -1639,6 +2091,21 @@ fn render_print_tokens(
 /// `needs_math` is set whenever generated code calls into `<math.h>` (so
 /// far: `\`/`MOD` via `round()`, `^` via `pow()`), so the caller knows to
 /// add that `#include` -- most programs won't need it.
+/// The `bcc_cvX` helper name for `CVI`/`CVL`/`CVS`/`CVD`, or `None` for
+/// any other name -- see `render_numeric_call`'s own use of this.
+fn cv_unpack_fn(name: &BasicIdent) -> Option<&'static str> {
+    if name.suffix.is_some() {
+        return None;
+    }
+    match name.name.to_ascii_lowercase().as_str() {
+        "cvi" => Some("bcc_cvi"),
+        "cvl" => Some("bcc_cvl"),
+        "cvs" => Some("bcc_cvs"),
+        "cvd" => Some("bcc_cvd"),
+        _ => None,
+    }
+}
+
 fn render_numeric_call(
     name: &BasicIdent,
     args: &[Expr],
@@ -1661,6 +2128,30 @@ fn render_numeric_call(
     if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 {
         let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
         return Ok((format!("((int)(unsigned char){s}[0])"), false));
+    }
+    // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
+    // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
+    // own doc comment for why packing/unpacking bypasses the ordinary
+    // string machinery) -- restricted to exactly a bare variable
+    // argument, matching `records::lower_whole_read`'s own always-`
+    // Expr::Ident` usage; a general string expression here would still
+    // need `render_string_expr`'s prelude, which this function has
+    // nowhere to route (same restriction `render_prelude_free_string_arg`
+    // documents).
+    if let Some(fn_name) = cv_unpack_fn(name) {
+        if args.len() == 1 {
+            if let Expr::Ident(ident) = &args[0] {
+                if ident.suffix == Some(TypeSuffix::String) {
+                    let s = c_var_name(ident, TypeSuffix::String);
+                    let is_float = matches!(fn_name, "bcc_cvs" | "bcc_cvd");
+                    return Ok((format!("{fn_name}({s})"), is_float));
+                }
+            }
+        }
+        return Err(format!(
+            "`{name}` isn't supported by the minimal C backend yet -- CVI/CVL/CVS/CVD only \
+             support a bare FIELD'd string variable argument"
+        ));
     }
     let sig = functions.get(&fn_key(name)).ok_or_else(|| {
         format!(
@@ -1814,8 +2305,6 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionT
             op: op @ (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge),
             right,
         } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             let c_op = match op {
                 BinaryOp::Eq => "==",
                 BinaryOp::Ne => "!=",
@@ -1825,6 +2314,20 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionT
                 BinaryOp::Ge => ">=",
                 _ => unreachable!(),
             };
+            // A string comparison (real BASIC's `<`/`<=`/`>`/`>=` on
+            // strings compare lexicographically, exactly what `strcmp`'s
+            // own sign already gives) -- restricted, like every other
+            // string operand in this function, to the prelude-free
+            // shapes `render_prelude_free_string_arg` covers, since this
+            // function has nowhere to route a prelude a fuller string
+            // expression (`+` concatenation) would need.
+            if is_string_expr(left) || is_string_expr(right) {
+                let l = render_prelude_free_string_arg(left, needs_math, functions)?;
+                let r = render_prelude_free_string_arg(right, needs_math, functions)?;
+                return Ok((format!("(-(strcmp({l}, {r}) {c_op} 0))"), false));
+            }
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             Ok((format!("(-({left_text} {c_op} {right_text}))"), false))
         }
         // BASCAL's `&&`/`||` (distinct from bitwise `AND`/`OR` above --
@@ -1975,9 +2478,15 @@ fn render_prelude_free_string_arg(
             };
             Ok(format!("bcc_mid({s_text}, {start_text}, {length_text})"))
         }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("str") && args.len() == 1 =>
+        {
+            let (text, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+            Ok(if is_float { format!("bcc_strd({text})") } else { format!("bcc_stri({text})") })
+        }
         _ => Err(
             "a string argument to a function called from a numeric context must be a plain \
-             string literal, string variable, or CHR$/MID$/LEFT$ call (no concatenation or \
+             string literal, string variable, or CHR$/MID$/LEFT$/STR$ call (no concatenation or \
              user-defined function calls) -- not supported by the minimal C backend yet"
                 .to_string(),
         ),
