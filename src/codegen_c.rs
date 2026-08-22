@@ -13,18 +13,32 @@
 //! single-line form, and nesting), `for`/`next`, `while`/`wend`, every
 //! `do`/`loop` pre-/post-check variant, `exit` (maps to a plain C
 //! `break;` -- C's native loops already give it the right "innermost
-//! enclosing loop" target for free), and `select case` (single-value,
+//! enclosing loop" target for free), `select case` (single-value,
 //! `to` range, and `is <op>` clauses on a numeric selector;
 //! exact-match-only on a string selector, via `strcmp` -- see
-//! `emit_select_case`), wrapped in `int main(void) { ... }`.
-//! Everything else (functions, other statement kinds, arrays, calls)
-//! reports a "not supported yet" diagnostic rather than panicking or
-//! emitting wrong code -- this is a walking skeleton to prove the
-//! CLI/dispatch plumbing (`Target::C`, `--target c`, `invoke_gcc`)
-//! end-to-end, not a real backend. Tutorials that compile end to end
-//! today: `tutorial/01_hello.bcl`, `tutorial/03_arithmetic.bcl`,
-//! `tutorial/04_conditions.bcl`, `tutorial/05_loops.bcl`, and
-//! `tutorial/06_select_case.bcl`.
+//! `emit_select_case`), and `function` declarations with byval scalar
+//! parameters (numeric and string), `return`, local variables (real C
+//! function-local scope -- no name-mangling needed, unlike the BASIC
+//! backend's GOSUB-against-shared-globals approach), and `global` to
+//! opt into reading/writing a top-level variable instead (see
+//! `build_function_table`/`emit_function_def`). NOT yet supported:
+//! `procedure` (no return value), `byref`/array parameters, and a
+//! function body that doesn't provably `return` on every path (see
+//! `body_always_returns`) -- all rejected with a diagnostic rather than
+//! guessed at. Recursion (direct or indirect) is rejected at the
+//! resolver level before codegen ever runs, for every target, not just
+//! this one. Everything else (other statement kinds, arrays, BASIC
+//! intrinsic calls like `LEN`/`MID$`/`CHR$`) reports a "not supported
+//! yet" diagnostic rather than panicking or emitting wrong code -- this
+//! is a walking skeleton to prove the CLI/dispatch plumbing
+//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real
+//! backend. Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
+//! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
+//! `tutorial/05_loops.bcl`, and `tutorial/06_select_case.bcl` --
+//! `tutorial/07_functions.bcl` itself still needs `require`d library
+//! functions and BASIC intrinsic calls (`LEN`/`MID$`/`ASC`/`CHR$`) this
+//! backend doesn't support yet, even though plain user-defined functions
+//! now work.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -38,55 +52,294 @@
 //! explicitly at the byte offsets `records.rs` already computes for the
 //! BASIC backend, the same offsets both backends should share.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{
-    BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, PrintToken, Program,
-    Statement, TypeSuffix, UnaryOp,
+    BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, ParamMode,
+    PrintToken, Program, Statement, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
-pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
-    if !program.functions.is_empty() {
-        return Err(vec![unsupported(
-            "functions/procedures are not supported by the minimal C backend yet",
-        )]);
+/// One user-defined function's C-callable shape, built by
+/// `build_function_table` before any codegen runs -- looked up by
+/// `Expr::Call` sites (in `render_numeric_expr`/`render_string_expr`) via
+/// `fn_key`, same (name, suffix) keying `codegen_basic::same_ident` uses,
+/// since a call site's own suffix is part of its identifier syntax and
+/// must match the declaration's exactly.
+struct FnSig {
+    /// The real C function's name (see `function_c_name`) -- distinct from
+    /// `c_var_name`'s `bv_...` namespace so a function and a variable that
+    /// happen to share a BASIC name can never collide as C identifiers.
+    c_name: String,
+    is_string: bool,
+    /// Only meaningful when `!is_string`.
+    is_float: bool,
+    params: Vec<FnParam>,
+}
+
+struct FnParam {
+    /// The C identifier used for this parameter *inside the function
+    /// body* -- for a string parameter, that's the local buffer holding
+    /// the function's own byval copy, NOT the raw incoming pointer
+    /// parameter (see `emit_function_def`'s copy-in preamble).
+    c_name: String,
+    is_string: bool,
+    /// Only meaningful when `!is_string`.
+    is_float: bool,
+}
+
+type FunctionTable = HashMap<(String, Option<TypeSuffix>), FnSig>;
+
+/// The lookup key for a function table entry, or an `Expr::Call` site --
+/// case-insensitive name plus suffix, matching `codegen_basic::same_ident`
+/// (a bare `PartialEq`/`Hash` derive on `BasicIdent` would be
+/// case-*sensitive*, which is wrong for BASIC identifiers).
+fn fn_key(ident: &BasicIdent) -> (String, Option<TypeSuffix>) {
+    (ident.name.to_ascii_lowercase(), ident.suffix)
+}
+
+/// The C identifier a BASCAL function maps to. Same `bf_<tag>_<name>`
+/// shape as `c_var_name`'s `bv_<tag>_<name>`, but its own prefix -- a
+/// function and a variable sharing a BASIC name (legal, since they're
+/// different namespaces in BASIC) must never collide as C identifiers.
+fn function_c_name(ident: &BasicIdent) -> String {
+    let tag = match ident.suffix {
+        Some(TypeSuffix::Integer) => 'i',
+        Some(TypeSuffix::Long) => 'l',
+        Some(TypeSuffix::Single) => 'f',
+        Some(TypeSuffix::Double) => 'd',
+        Some(TypeSuffix::String) => 's',
+        None => 'i',
+    };
+    format!("bf_{tag}_{}", ident.name.to_ascii_lowercase())
+}
+
+/// Validates every function's shape up front and builds the lookup table
+/// `render_numeric_expr`/`render_string_expr` use for `Expr::Call`.
+/// Deliberately narrow, same "reject rather than emit wrong code" policy
+/// as everywhere else in this backend: **procedures** (no return value)
+/// aren't supported yet (only functions are -- see the module doc
+/// comment), neither are `byref` or array parameters (real
+/// pass-by-reference/array-decay semantics are a real chunk of work,
+/// deferred), and a function whose body doesn't end with an explicit
+/// `return` on its last top-level statement is rejected outright rather
+/// than guessing a fallback value -- unlike the BASIC backend (which can
+/// fall back on "whatever the shared result variable last held," matching
+/// real MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C
+/// function falling off the end without `return`-ing a value is undefined
+/// behavior, not a defined-if-surprising fallback.
+fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionTable, String> {
+    let mut table = FunctionTable::new();
+    for func in functions {
+        if func.is_procedure {
+            return Err(format!(
+                "procedure `{}` isn't supported by the minimal C backend yet -- only functions \
+                 (declared with a return value) are",
+                func.name
+            ));
+        }
+        let is_string = func.name.suffix == Some(TypeSuffix::String);
+        let numeric = func.name.suffix.and_then(numeric_c_type);
+        if !is_string && numeric.is_none() {
+            return Err(format!(
+                "function `{}` isn't supported by the minimal C backend yet -- give it an \
+                 explicit numeric or string return type suffix",
+                func.name
+            ));
+        }
+        let mut params = Vec::with_capacity(func.params.len());
+        for param in &func.params {
+            if param.mode != ParamMode::ByVal {
+                return Err(format!(
+                    "`byref` parameters aren't supported by the minimal C backend yet (`{}`'s \
+                     parameter `{}`) -- only byval scalar parameters are",
+                    func.name, param.name
+                ));
+            }
+            if param.axes.is_some() {
+                return Err(format!(
+                    "array parameters aren't supported by the minimal C backend yet (`{}`'s \
+                     parameter `{}`)",
+                    func.name, param.name
+                ));
+            }
+            let Some(suffix) = param.name.suffix else {
+                return Err(format!(
+                    "parameter `{}` of `{}` isn't supported by the minimal C backend yet -- give \
+                     it an explicit type suffix",
+                    param.name, func.name
+                ));
+            };
+            let param_is_string = suffix == TypeSuffix::String;
+            let param_numeric = numeric_c_type(suffix);
+            if !param_is_string && param_numeric.is_none() {
+                return Err(format!(
+                    "parameter `{}` of `{}` isn't supported by the minimal C backend yet",
+                    param.name, func.name
+                ));
+            }
+            params.push(FnParam {
+                c_name: c_var_name(&param.name, suffix),
+                is_string: param_is_string,
+                is_float: param_numeric.is_some_and(|(_, f)| f),
+            });
+        }
+        if !body_always_returns(&func.body) {
+            return Err(format!(
+                "function `{}` isn't supported by the minimal C backend yet -- its body must \
+                 end with an explicit `return` as its last top-level statement (the minimal C \
+                 backend doesn't attempt to reproduce BASIC's undefined-fallthrough behavior)",
+                func.name
+            ));
+        }
+        table.insert(
+            fn_key(&func.name),
+            FnSig {
+                c_name: function_c_name(&func.name),
+                is_string,
+                is_float: numeric.is_some_and(|(_, f)| f),
+                params,
+            },
+        );
     }
+    Ok(table)
+}
+
+/// Proves a function body always reaches a `return` on every path -- see
+/// `build_function_table`'s doc comment for why this is enforced rather
+/// than falling back to a default value. Only looks at the last
+/// non-comment/blank statement (same "trailing" convention as
+/// `ends_with_end`): if control reaches past everything before it, this
+/// is the statement that decides the outcome, so nothing earlier can
+/// matter. A plain `return` trivially qualifies; an `if`/`else` or
+/// `select case`/`case else` qualifies only when *every* branch
+/// (recursively) does too, and only when an `else`/`case else` is even
+/// present -- an `if` with no `else` can always fall through. `for`/
+/// `while`/`do` never qualify on their own (a loop might run zero times,
+/// or `exit` before ever returning), matching every tutorial-07-style
+/// function in practice: they all put their own trailing `return` after
+/// the loop rather than relying on one inside it.
+fn body_always_returns(body: &[Statement]) -> bool {
+    let last = body.iter().rev().find(|s| {
+        !matches!(s, Statement::BlankLine | Statement::BlockComment(_))
+            && !matches!(s, Statement::Raw(text) if text.trim_start().starts_with('\''))
+    });
+    match last {
+        Some(Statement::Return { .. }) => true,
+        Some(Statement::If { then_body, else_body, .. }) => {
+            !else_body.is_empty() && body_always_returns(then_body) && body_always_returns(else_body)
+        }
+        Some(Statement::SelectCase { cases, else_body, .. }) => {
+            !else_body.is_empty()
+                && cases.iter().all(|clause| body_always_returns(&clause.body))
+                && body_always_returns(else_body)
+        }
+        _ => false,
+    }
+}
+
+/// Collects every identifier named by a `global` declaration anywhere in
+/// `body` (any nesting depth) -- mirrors
+/// `codegen_basic::collect_global_decl_names`'s recursive walk, adapted to
+/// return full `BasicIdent`s (suffix included) rather than just name
+/// strings, since the caller (`emit_function_def`) needs the suffix to
+/// register each one in the right (numeric vs. string) global-variable
+/// map.
+fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
+    for stmt in body {
+        match stmt {
+            Statement::GlobalDecl(ident) => out.push(ident.clone()),
+            Statement::If { then_body, else_body, .. } => {
+                collect_global_decl_idents(then_body, out);
+                collect_global_decl_idents(else_body, out);
+            }
+            Statement::For { body, .. } | Statement::While { body, .. } => {
+                collect_global_decl_idents(body, out);
+            }
+            Statement::Do { body, .. } => collect_global_decl_idents(body, out),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    collect_global_decl_idents(&case.body, out);
+                }
+                collect_global_decl_idents(else_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
+    let functions =
+        build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
 
     // BASIC variables "spring into existence on first use" -- there's no
     // separate declaration step to hook into, so every scalar variable
-    // touched anywhere in the program (by `dim`, an assignment target, or
-    // a read) is collected up front and declared, zero-initialized (for a
+    // touched anywhere at top level (by `dim`, an assignment target, or a
+    // read) is collected up front and declared, zero-initialized (for a
     // string, that means an all-zero buffer -- a valid, empty C string),
-    // at the very top of `main`, regardless of where it's first mentioned
-    // in source order. This pass is deliberately infallible -- it only
-    // ever *adds* a declaration for a variable shape it understands;
-    // anything it doesn't (arrays, ...) is silently skipped here and
-    // reported as a real error later, when `emit_statement`/
-    // `render_numeric_expr`/`render_string_expr` actually tries to use it.
+    // at file scope, regardless of where it's first mentioned in source
+    // order. A top-level BASCAL variable IS a real global in exactly the
+    // sense a BASIC one is, so file-scope `static` storage (visible to
+    // every function, not just `main`) is the correct C shape for it --
+    // unlike a function's own locals (see `emit_function_def`), which stay
+    // genuinely scoped to that one C function, no name-mangling needed,
+    // since C's own lexical scoping already gives BASCAL's
+    // local-unless-declared-`global` function semantics for free. Also
+    // folds in every variable named by a `global` declaration inside any
+    // function body, even one no top-level statement ever touches --
+    // otherwise it would never get a file-scope declaration to refer to at
+    // all. This pass is deliberately infallible -- it only ever *adds* a
+    // declaration for a variable shape it understands; anything it doesn't
+    // (arrays, ...) is silently skipped here and reported as a real error
+    // later, when `emit_statement`/`render_numeric_expr`/
+    // `render_string_expr` actually tries to use it.
     let mut numeric_vars = BTreeMap::new();
     let mut string_vars = BTreeSet::new();
     for statement in &program.statements {
         collect_vars_in_statement(statement, &mut numeric_vars, &mut string_vars);
     }
-
-    let mut body = String::new();
-    for (c_name, c_type) in &numeric_vars {
-        body.push_str(&format!("    {c_type} {c_name} = 0;\n"));
-    }
-    for c_name in &string_vars {
-        body.push_str(&format!("    char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"));
-    }
-    if !numeric_vars.is_empty() || !string_vars.is_empty() {
-        body.push('\n');
+    for func in &program.functions {
+        let mut globals = Vec::new();
+        collect_global_decl_idents(&func.body, &mut globals);
+        for ident in &globals {
+            register_var(ident, &mut numeric_vars, &mut string_vars);
+        }
     }
 
     let mut needs_math = false;
     let mut needs_string = false;
     let mut temp_counter = 0;
+
+    let mut prototypes = String::new();
+    let mut function_defs = String::new();
+    for func in &program.functions {
+        let sig = &functions[&fn_key(&func.name)];
+        prototypes.push_str(&function_signature(func, sig));
+        prototypes.push_str(";\n");
+        emit_function_def(
+            func,
+            sig,
+            &functions,
+            &mut function_defs,
+            &mut needs_math,
+            &mut needs_string,
+            &mut temp_counter,
+        )
+        .map_err(|message| vec![unsupported(&message)])?;
+    }
+
+    let mut body = String::new();
     for statement in &program.statements {
-        emit_statement(statement, &mut body, &mut needs_math, &mut needs_string, &mut temp_counter)
-            .map_err(|message| vec![unsupported(&message)])?;
+        emit_statement(
+            statement,
+            &mut body,
+            &mut needs_math,
+            &mut needs_string,
+            &mut temp_counter,
+            &functions,
+            None,
+        )
+        .map_err(|message| vec![unsupported(&message)])?;
     }
     // `Statement::End` already emits its own `return 0;` -- only add the
     // implicit fallthrough one when the program didn't already end with an
@@ -106,7 +359,140 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if needs_string {
         includes.push_str("#include <string.h>\n");
     }
-    Ok(format!("{includes}\nint main(void) {{\n{}}}\n", reindent_c_body(&body)))
+
+    let mut globals_decl = String::new();
+    for (c_name, c_type) in &numeric_vars {
+        globals_decl.push_str(&format!("static {c_type} {c_name} = 0;\n"));
+    }
+    for c_name in &string_vars {
+        globals_decl.push_str(&format!("static char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"));
+    }
+
+    let mut out = includes;
+    out.push('\n');
+    if !globals_decl.is_empty() {
+        out.push_str(&globals_decl);
+        out.push('\n');
+    }
+    if !prototypes.is_empty() {
+        out.push_str(&prototypes);
+        out.push('\n');
+    }
+    out.push_str(&function_defs);
+    out.push_str(&format!("int main(void) {{\n{}}}\n", reindent_c_body(&body)));
+    Ok(out)
+}
+
+/// One function's C prototype/definition header -- `<ret> <name>(<params>)`,
+/// no trailing `;`/body, shared by the forward-declaration pass and
+/// `emit_function_def` so the two can never drift out of sync with each
+/// other. A string-returning function is actually `void`-returning in C
+/// (see the module doc comment/`emit_function_def`): its BASCAL return
+/// value comes out through an extra trailing `char* bcc_out` parameter
+/// instead, matching the buffer-out convention already used by every
+/// other string value in this backend. A string parameter's C parameter
+/// is `const char*` named `<c_name>_in` -- not `<c_name>` itself -- because
+/// the function body needs its own byval-copied local under the plain
+/// `<c_name>` (see `emit_function_def`'s copy-in preamble): aliasing the
+/// parameter directly would let the callee mutate the caller's buffer,
+/// breaking byval semantics.
+fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
+    let ret_type = if sig.is_string {
+        "void"
+    } else {
+        numeric_c_type(func.name.suffix.expect("validated by build_function_table"))
+            .expect("validated by build_function_table")
+            .0
+    };
+    let mut params: Vec<String> = func
+        .params
+        .iter()
+        .zip(&sig.params)
+        .map(|(param, fp)| {
+            if fp.is_string {
+                format!("const char* {}_in", fp.c_name)
+            } else {
+                let suffix = param.name.suffix.expect("validated by build_function_table");
+                let (c_type, _) =
+                    numeric_c_type(suffix).expect("validated by build_function_table");
+                format!("{c_type} {}", fp.c_name)
+            }
+        })
+        .collect();
+    if sig.is_string {
+        params.push("char* bcc_out".to_string());
+    }
+    let params_text = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+    format!("{ret_type} {}({params_text})", sig.c_name)
+}
+
+/// Emits one function's full C definition -- signature (via
+/// `function_signature`) plus `{ ...body... }`.
+///
+/// The body's own local variables are collected the same way `generate`
+/// collects `main`'s (every scalar touched anywhere in the body), but
+/// then two categories are subtracted before declaring them: this
+/// function's own parameters (already declared by the signature -- for a
+/// string parameter, `c_name` denotes its byval-copy local, declared and
+/// initialized from the incoming `<c_name>_in` pointer right here, before
+/// any other local) and every name this function declared `global` (see
+/// `collect_global_decl_idents`) -- those already have a file-scope
+/// declaration from `generate`, and declaring a same-named local here
+/// would shadow it instead of referring to it, breaking the whole point
+/// of `global`.
+fn emit_function_def(
+    func: &FunctionDef,
+    sig: &FnSig,
+    functions: &FunctionTable,
+    out: &mut String,
+    needs_math: &mut bool,
+    needs_string: &mut bool,
+    temp_counter: &mut usize,
+) -> Result<(), String> {
+    let mut numeric_locals = BTreeMap::new();
+    let mut string_locals = BTreeSet::new();
+    for stmt in &func.body {
+        collect_vars_in_statement(stmt, &mut numeric_locals, &mut string_locals);
+    }
+    let mut global_idents = Vec::new();
+    collect_global_decl_idents(&func.body, &mut global_idents);
+    let global_keys: BTreeSet<String> = global_idents
+        .iter()
+        .filter_map(|ident| ident.suffix.map(|suffix| c_var_name(ident, suffix)))
+        .collect();
+    let param_keys: BTreeSet<String> = sig.params.iter().map(|p| p.c_name.clone()).collect();
+    numeric_locals.retain(|k, _| !param_keys.contains(k) && !global_keys.contains(k));
+    string_locals.retain(|k| !param_keys.contains(k) && !global_keys.contains(k));
+
+    let mut body = String::new();
+    for fp in &sig.params {
+        if fp.is_string {
+            body.push_str(&format!("    char {0}[{STRING_BUFFER_SIZE}];\n", fp.c_name));
+            body.push_str(&format!(
+                "    snprintf({0}, sizeof({0}), \"%s\", {0}_in);\n",
+                fp.c_name
+            ));
+        }
+    }
+    for (c_name, c_type) in &numeric_locals {
+        body.push_str(&format!("    {c_type} {c_name} = 0;\n"));
+    }
+    for c_name in &string_locals {
+        body.push_str(&format!("    char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"));
+    }
+    if sig.params.iter().any(|p| p.is_string) || !numeric_locals.is_empty()
+        || !string_locals.is_empty()
+    {
+        body.push('\n');
+    }
+
+    for stmt in &func.body {
+        emit_statement(stmt, &mut body, needs_math, needs_string, temp_counter, functions, Some(sig))?;
+    }
+
+    out.push_str(&function_signature(func, sig));
+    out.push_str(&format!(" {{\n{}}}\n\n", reindent_c_body(&body)));
+    Ok(())
 }
 
 /// Re-indents an already-fully-generated C body per its actual nesting
@@ -308,6 +694,17 @@ fn collect_vars_in_statement(
                 collect_vars_in_statement(stmt, numeric_out, string_out);
             }
         }
+        // A function body's own `return <expr>`/bare `return`/procedure
+        // call -- irrelevant at top level (`main` has none of these), but
+        // this same function also walks function bodies (see
+        // `emit_function_def`), where they do appear. `GlobalDecl` itself
+        // needs no arm here: `collect_global_decl_idents` handles it
+        // separately, and this function's own generic identifier-read
+        // handling (`Statement::Ident`... there is none, reads only ever
+        // happen inside an expression) never sees a bare `global x%`
+        // statement as a variable use in the first place.
+        Statement::Return { value } => collect_vars_in_expr(value, numeric_out, string_out),
+        Statement::ExprStmt(expr) => collect_vars_in_expr(expr, numeric_out, string_out),
         _ => {}
     }
 }
@@ -323,6 +720,25 @@ fn collect_vars_in_expr(
         Expr::Binary { left, right, .. } => {
             collect_vars_in_expr(left, numeric_out, string_out);
             collect_vars_in_expr(right, numeric_out, string_out);
+        }
+        Expr::Call { args, .. } => {
+            for arg in args {
+                collect_vars_in_expr(arg, numeric_out, string_out);
+            }
+        }
+        // A single-argument (or zero-argument) function call parses as
+        // `Expr::ArrayRef`, not `Expr::Call` -- see `make_paren_ident_expr`
+        // in `parser.rs`, same ambiguity `codegen_basic::collect_call_sites`
+        // documents and checks both shapes for. Collecting `indices`'
+        // variable reads unconditionally (without checking whether `name`
+        // is actually a known function) is safe either way: if this
+        // really is a plain array reference instead (still unsupported by
+        // this backend), the extra collected variable is harmless --
+        // codegen will reject the array access itself later regardless.
+        Expr::ArrayRef { indices, .. } => {
+            for idx in indices {
+                collect_vars_in_expr(idx, numeric_out, string_out);
+            }
         }
         _ => {}
     }
@@ -352,11 +768,13 @@ fn emit_statement(
     needs_math: &mut bool,
     needs_string: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
+    current_function: Option<&FnSig>,
 ) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
             let (prelude, mut format, args, needs_newline) =
-                render_print_tokens(tokens, needs_math, temp_counter)?;
+                render_print_tokens(tokens, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -389,7 +807,7 @@ fn emit_statement(
             )),
         },
         Statement::Assignment { target: Expr::Ident(name), value } => {
-            emit_assignment(name, value, out, needs_math, temp_counter)
+            emit_assignment(name, value, out, needs_math, temp_counter, functions)
         }
         // Real MBASIC/BASCOM has no CONST statement at all -- `const` in
         // `.bcl` source is purely a naming/intent signal to the reader
@@ -397,7 +815,7 @@ fn emit_statement(
         // codegen ever runs), so it codegens exactly like an ordinary
         // assignment, same as the BASIC backend's own treatment of it.
         Statement::Const { name, value } => {
-            emit_assignment(name, value, out, needs_math, temp_counter)
+            emit_assignment(name, value, out, needs_math, temp_counter, functions)
         }
         // Unlike the BASIC backend, which has to transpile `if`/`elseif`/
         // `else` into a GOTO/label chain (real MBASIC/BASCOM has no block
@@ -414,17 +832,17 @@ fn emit_statement(
         // `reindent_c_body`, rather than this function tracking depth
         // itself.
         Statement::If { condition, then_body, else_body } => {
-            let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
+            let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));
             for stmt in then_body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
             }
             if else_body.is_empty() {
                 out.push_str("    }\n");
             } else {
                 out.push_str("    } else {\n");
                 for stmt in else_body {
-                    emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                    emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
                 }
                 out.push_str("    }\n");
             }
@@ -454,13 +872,13 @@ fn emit_statement(
                 ));
             };
             let loop_var = c_var_name(var, suffix);
-            let (start_text, start_is_float) = render_numeric_expr(start, needs_math)?;
+            let (start_text, start_is_float) = render_numeric_expr(start, needs_math, functions)?;
             let start_text = coerce_numeric(start_text, start_is_float, target_is_float, needs_math);
-            let (end_text, end_is_float) = render_numeric_expr(end, needs_math)?;
+            let (end_text, end_is_float) = render_numeric_expr(end, needs_math, functions)?;
             let end_text = coerce_numeric(end_text, end_is_float, target_is_float, needs_math);
             let step_text = match step {
                 Some(step_expr) => {
-                    let (text, is_float) = render_numeric_expr(step_expr, needs_math)?;
+                    let (text, is_float) = render_numeric_expr(step_expr, needs_math, functions)?;
                     coerce_numeric(text, is_float, target_is_float, needs_math)
                 }
                 None => "1".to_string(),
@@ -475,7 +893,7 @@ fn emit_statement(
                  {loop_var} >= {limit}; {loop_var} += {step_var}) {{\n"
             ));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -485,10 +903,10 @@ fn emit_statement(
         // (nonzero), same "0 is false, anything else is true" rule C
         // already uses natively, no BASIC-specific semantics to bridge.
         Statement::While { condition, body } => {
-            let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
+            let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
             out.push_str(&format!("    while ({cond_text}) {{\n"));
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
             }
             out.push_str("    }\n");
             Ok(())
@@ -507,13 +925,13 @@ fn emit_statement(
         Statement::Do { condition, body, post_condition } => {
             out.push_str("    while (1) {\n");
             if let Some(cond) = condition {
-                out.push_str(&emit_do_guard(cond, needs_math)?);
+                out.push_str(&emit_do_guard(cond, needs_math, functions)?);
             }
             for stmt in body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
             }
             if let Some(cond) = post_condition {
-                out.push_str(&emit_do_guard(cond, needs_math)?);
+                out.push_str(&emit_do_guard(cond, needs_math, functions)?);
             }
             out.push_str("    }\n");
             Ok(())
@@ -530,11 +948,58 @@ fn emit_statement(
             out.push_str("    break;\n");
             Ok(())
         }
+        // A pure compile-time directive, not a runtime statement: it just
+        // tells `emit_function_def`'s local-variable collection which
+        // names to exclude from this function's own locals (see
+        // `collect_global_decl_idents`), so the plain identifier used
+        // anywhere else in the body naturally resolves to the file-scope
+        // global of the same name via ordinary C lexical scoping -- no
+        // per-use rewriting needed here at all.
+        Statement::GlobalDecl(_) => Ok(()),
         // `select case` compiles to a native C `if`/`else if`/`else`
         // chain, same "no labels needed" story as `if`/`elseif`/`else`
         // above -- see `emit_select_case`.
         Statement::SelectCase { expr, cases, else_body } => {
-            emit_select_case(expr, cases, else_body, out, needs_math, needs_string, temp_counter)
+            emit_select_case(
+                expr,
+                cases,
+                else_body,
+                out,
+                needs_math,
+                needs_string,
+                temp_counter,
+                functions,
+                current_function,
+            )
+        }
+        // Real C's own return-by-value works here directly: a numeric
+        // return coerces the value the same way a plain assignment would
+        // (`coerce_numeric` -- BASIC rounds a narrowing return the same
+        // as any other narrowing assignment); a string return writes into
+        // the synthesized `bcc_out` trailing parameter (see
+        // `function_signature`) via `snprintf`, then `return;` bare,
+        // since the underlying C function is actually `void` for a
+        // string-returning BASCAL function.
+        Statement::Return { value } => {
+            let Some(sig) = current_function else {
+                return Err(
+                    "`return` outside of a function isn't supported by the minimal C backend"
+                        .to_string(),
+                );
+            };
+            if sig.is_string {
+                let (prelude, text) = render_string_expr(value, needs_math, temp_counter, functions)?;
+                for line in prelude {
+                    out.push_str(&line);
+                }
+                out.push_str(&format!("    snprintf(bcc_out, {STRING_BUFFER_SIZE}, \"%s\", {text});\n"));
+                out.push_str("    return;\n");
+            } else {
+                let (text, is_float) = render_numeric_expr(value, needs_math, functions)?;
+                let coerced = coerce_numeric(text, is_float, sig.is_float, needs_math);
+                out.push_str(&format!("    return {coerced};\n"));
+            }
+            Ok(())
         }
         Statement::BlankLine => {
             out.push('\n');
@@ -558,8 +1023,10 @@ fn emit_statement(
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, and assignment/`const` \
-             of scalar variables (%, &, !, #, $) are implemented so far"
+             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, and \
+             assignment/`const` of scalar variables (%, &, !, #, $) are implemented so far \
+             (a bare procedure-call statement -- discarding a function's return value, or \
+             calling a `procedure` -- isn't supported yet either)"
         )),
     }
 }
@@ -601,17 +1068,18 @@ fn emit_assignment(
     out: &mut String,
     needs_math: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
 ) -> Result<(), String> {
     match name.suffix {
         Some(suffix) if numeric_c_type(suffix).is_some() => {
             let (_, target_is_float) = numeric_c_type(suffix).unwrap();
-            let (value_text, value_is_float) = render_numeric_expr(value, needs_math)?;
+            let (value_text, value_is_float) = render_numeric_expr(value, needs_math, functions)?;
             let coerced = coerce_numeric(value_text, value_is_float, target_is_float, needs_math);
             out.push_str(&format!("    {} = {coerced};\n", c_var_name(name, suffix)));
             Ok(())
         }
         Some(TypeSuffix::String) => {
-            let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter)?;
+            let (prelude, value_text) = render_string_expr(value, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -633,8 +1101,8 @@ fn emit_assignment(
 /// `until` condition (exit once true) -- shared by `Statement::Do`'s
 /// pre-check and post-check cases (see its own comment for why both map
 /// onto the same `while (1) { ...guards...; body; ...guards... }` shape).
-fn emit_do_guard(cond: &DoCondition, needs_math: &mut bool) -> Result<String, String> {
-    let (cond_text, _) = render_numeric_expr(&cond.expr, needs_math)?;
+fn emit_do_guard(cond: &DoCondition, needs_math: &mut bool, functions: &FunctionTable) -> Result<String, String> {
+    let (cond_text, _) = render_numeric_expr(&cond.expr, needs_math, functions)?;
     Ok(if cond.is_while {
         format!("    if (!({cond_text})) break;\n")
     } else {
@@ -668,6 +1136,8 @@ fn emit_select_case(
     needs_math: &mut bool,
     needs_string: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
+    current_function: Option<&FnSig>,
 ) -> Result<(), String> {
     let is_string = is_string_expr(expr);
     let temp = format!("bt_sel_{temp_counter}");
@@ -675,14 +1145,14 @@ fn emit_select_case(
 
     out.push_str("    {\n");
     if is_string {
-        let (prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+        let (prelude, text) = render_string_expr(expr, needs_math, temp_counter, functions)?;
         for line in prelude {
             out.push_str(&line);
         }
         out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
         out.push_str(&format!("    snprintf({temp}, sizeof({temp}), \"%s\", {text});\n"));
     } else {
-        let (text, is_float) = render_numeric_expr(expr, needs_math)?;
+        let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
         let c_type = if is_float { "double" } else { "int" };
         out.push_str(&format!("    {c_type} {temp} = {text};\n"));
     }
@@ -698,26 +1168,27 @@ fn emit_select_case(
                 needs_math,
                 needs_string,
                 temp_counter,
+                functions,
             )?);
         }
         let joined = conds.join(" || ");
         let keyword = if i == 0 { "if" } else { "} else if" };
         out.push_str(&format!("    {keyword} ({joined}) {{\n"));
         for stmt in &clause.body {
-            emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
         }
     }
     if !cases.is_empty() {
         if !else_body.is_empty() {
             out.push_str("    } else {\n");
             for stmt in else_body {
-                emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+                emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
             }
         }
         out.push_str("    }\n");
     } else {
         for stmt in else_body {
-            emit_statement(stmt, out, needs_math, needs_string, temp_counter)?;
+            emit_statement(stmt, out, needs_math, needs_string, temp_counter, functions, current_function)?;
         }
     }
     out.push_str("    }\n");
@@ -741,10 +1212,11 @@ fn render_case_value_cond(
     needs_math: &mut bool,
     needs_string: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
 ) -> Result<String, String> {
     match value {
         CaseValue::Single(expr) if is_string => {
-            let (prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+            let (prelude, text) = render_string_expr(expr, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -752,7 +1224,7 @@ fn render_case_value_cond(
             Ok(format!("(strcmp({temp}, {text}) == 0)"))
         }
         CaseValue::Single(expr) => {
-            let (text, _) = render_numeric_expr(expr, needs_math)?;
+            let (text, _) = render_numeric_expr(expr, needs_math, functions)?;
             Ok(format!("({temp} == {text})"))
         }
         CaseValue::Range { .. } if is_string => Err(
@@ -761,8 +1233,8 @@ fn render_case_value_cond(
                 .to_string(),
         ),
         CaseValue::Range { from, to } => {
-            let (from_text, _) = render_numeric_expr(from, needs_math)?;
-            let (to_text, _) = render_numeric_expr(to, needs_math)?;
+            let (from_text, _) = render_numeric_expr(from, needs_math, functions)?;
+            let (to_text, _) = render_numeric_expr(to, needs_math, functions)?;
             Ok(format!("({temp} >= {from_text} && {temp} <= {to_text})"))
         }
         CaseValue::Is { .. } if is_string => Err(
@@ -771,7 +1243,7 @@ fn render_case_value_cond(
                 .to_string(),
         ),
         CaseValue::Is { op, value } => {
-            let (text, _) = render_numeric_expr(value, needs_math)?;
+            let (text, _) = render_numeric_expr(value, needs_math, functions)?;
             let c_op = match op {
                 BinaryOp::Eq => "==",
                 BinaryOp::Ne => "!=",
@@ -804,6 +1276,17 @@ fn is_string_expr(expr: &Expr) -> bool {
         Expr::Binary { op: BinaryOp::Add, left, right } => {
             is_string_expr(left) || is_string_expr(right)
         }
+        // A single-argument (or zero-argument) function call parses as
+        // `Expr::ArrayRef`, not `Expr::Call` -- see `make_paren_ident_expr`
+        // in `parser.rs`. Whether `name` is *actually* a known function
+        // (vs. a genuine, unsupported array) isn't checked here -- same as
+        // the `Expr::Call` arm below, which doesn't check either -- that
+        // verification happens in `render_numeric_expr`/`render_string_expr`,
+        // which do have the function table and can give a real "not a known
+        // function" error; this only decides which of the two to route to.
+        Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => {
+            name.suffix == Some(TypeSuffix::String)
+        }
         _ => false,
     }
 }
@@ -826,6 +1309,57 @@ fn is_string_expr(expr: &Expr) -> bool {
 /// supports arrays -- a flat `char[256][N]` string array is the case where
 /// per-element right-sizing would actually matter -- but not before then.
 const STRING_BUFFER_SIZE: usize = 256;
+
+/// Renders a call to a string-returning user-defined function as an
+/// expression -- shared by `render_string_expr`'s `Expr::Call` and
+/// `Expr::ArrayRef` arms (see `is_string_expr`'s comment for why a
+/// single-argument call parses as the latter). A string-returning
+/// function is actually `void` in C, its BASCAL return value coming out
+/// through a trailing `char* bcc_out` parameter instead of a real C
+/// return value (see `function_signature`) -- so calling one as an
+/// expression needs a prelude: a fresh temp buffer, plus the call itself
+/// writing into it, exactly the same "materialize into a temp, use the
+/// temp as the expression's value" shape `+` (concatenation) uses.
+fn render_string_call(
+    name: &BasicIdent,
+    args: &[Expr],
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+) -> Result<(Vec<String>, String), String> {
+    let sig = functions.get(&fn_key(name)).ok_or_else(|| {
+        format!(
+            "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
+             functions with a byval scalar signature are callable so far (no built-in BASIC \
+             intrinsics like LEN$/MID$/CHR$ yet)"
+        )
+    })?;
+    if args.len() != sig.params.len() {
+        return Err(format!(
+            "`{name}` expects {} argument(s), got {}",
+            sig.params.len(),
+            args.len()
+        ));
+    }
+    let mut prelude = Vec::new();
+    let mut arg_texts = Vec::with_capacity(args.len());
+    for (arg, param) in args.iter().zip(&sig.params) {
+        if param.is_string {
+            let (arg_prelude, text) = render_string_expr(arg, needs_math, temp_counter, functions)?;
+            prelude.extend(arg_prelude);
+            arg_texts.push(text);
+        } else {
+            let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
+            arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
+        }
+    }
+    let temp = format!("bt_s_{temp_counter}");
+    *temp_counter += 1;
+    prelude.push(format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+    arg_texts.push(temp.clone());
+    prelude.push(format!("    {}({});\n", sig.c_name, arg_texts.join(", ")));
+    Ok((prelude, temp))
+}
 
 /// Renders a string expression tree as C expression text usable as a
 /// `char*` argument (an `snprintf`/`printf` `%s` argument, an assignment
@@ -850,6 +1384,7 @@ fn render_string_expr(
     expr: &Expr,
     needs_math: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
 ) -> Result<(Vec<String>, String), String> {
     match expr {
         Expr::String(s) => Ok((Vec::new(), format!("\"{}\"", escape_c_string_literal(s)))),
@@ -857,8 +1392,8 @@ fn render_string_expr(
             Ok((Vec::new(), c_var_name(ident, TypeSuffix::String)))
         }
         Expr::Binary { op: BinaryOp::Add, left, right } if is_string_expr(left) || is_string_expr(right) => {
-            let (mut prelude, left_text) = render_string_expr(left, needs_math, temp_counter)?;
-            let (right_prelude, right_text) = render_string_expr(right, needs_math, temp_counter)?;
+            let (mut prelude, left_text) = render_string_expr(left, needs_math, temp_counter, functions)?;
+            let (right_prelude, right_text) = render_string_expr(right, needs_math, temp_counter, functions)?;
             prelude.extend(right_prelude);
             let temp = format!("bt_s_{temp_counter}");
             *temp_counter += 1;
@@ -868,9 +1403,30 @@ fn render_string_expr(
             ));
             Ok((prelude, temp))
         }
+        // A string-returning function is actually `void` in C, its BASCAL
+        // return value coming out through a trailing `char* bcc_out`
+        // parameter instead of a real C return value (see
+        // `function_signature`) -- so calling one as an *expression* needs
+        // a prelude: a fresh temp buffer, plus the call itself writing
+        // into it, exactly the same "materialize into a temp, use the
+        // temp as the expression's value" shape `+` (concatenation) above
+        // already uses.
+        // A single-argument (or zero-argument) call to a string-returning
+        // function parses as `Expr::ArrayRef`, not `Expr::Call` -- see
+        // `make_paren_ident_expr` in `parser.rs`/`is_string_expr`'s own
+        // comment -- so both shapes route to the same rendering.
+        Expr::Call { name, args } if name.suffix == Some(TypeSuffix::String) => {
+            render_string_call(name, args, needs_math, temp_counter, functions)
+        }
+        Expr::ArrayRef { name, indices }
+            if name.suffix == Some(TypeSuffix::String) && functions.contains_key(&fn_key(name)) =>
+        {
+            render_string_call(name, indices, needs_math, temp_counter, functions)
+        }
         _ => Err(
             "the minimal C backend's string expressions only support string literals, string \
-             scalar variables ($), and + (concatenation) of them so far"
+             scalar variables ($), + (concatenation), and calls to user-defined BASCAL \
+             functions so far"
                 .to_string(),
         ),
     }
@@ -896,6 +1452,7 @@ fn render_print_tokens(
     tokens: &[PrintToken],
     needs_math: &mut bool,
     temp_counter: &mut usize,
+    functions: &FunctionTable,
 ) -> Result<(Vec<String>, String, Vec<String>, bool), String> {
     let mut prelude = Vec::new();
     let mut format = String::new();
@@ -908,14 +1465,15 @@ fn render_print_tokens(
                 format.push_str(&escape_c_format_text(s));
             }
             PrintToken::Expr(expr) if is_string_expr(expr) => {
-                let (expr_prelude, text) = render_string_expr(expr, needs_math, temp_counter)?;
+                let (expr_prelude, text) =
+                    render_string_expr(expr, needs_math, temp_counter, functions)?;
                 prelude.extend(expr_prelude);
                 needs_newline = true;
                 format.push_str("%s");
                 args.push(text);
             }
             PrintToken::Expr(expr) => {
-                let (text, is_float) = render_numeric_expr(expr, needs_math)?;
+                let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
                 needs_newline = true;
                 format.push_str(if is_float { "%g" } else { "%d" });
                 args.push(text);
@@ -952,7 +1510,41 @@ fn render_print_tokens(
 /// `needs_math` is set whenever generated code calls into `<math.h>` (so
 /// far: `\`/`MOD` via `round()`, `^` via `pow()`), so the caller knows to
 /// add that `#include` -- most programs won't need it.
-fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bool), String> {
+fn render_numeric_call(
+    name: &BasicIdent,
+    args: &[Expr],
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+) -> Result<(String, bool), String> {
+    let sig = functions.get(&fn_key(name)).ok_or_else(|| {
+        format!(
+            "`{name}` isn't supported by the minimal C backend yet -- only user-defined BASCAL \
+             functions with a byval scalar signature are callable so far (no built-in BASIC \
+             intrinsics like LEN/MID$/CHR$ yet)"
+        )
+    })?;
+    if sig.is_string {
+        return Err(format!("`{name}` returns a string, not a number, so it can't be used here"));
+    }
+    if args.len() != sig.params.len() {
+        return Err(format!(
+            "`{name}` expects {} argument(s), got {}",
+            sig.params.len(),
+            args.len()
+        ));
+    }
+    let mut arg_texts = Vec::with_capacity(args.len());
+    for (arg, param) in args.iter().zip(&sig.params) {
+        if param.is_string {
+            arg_texts.push(render_prelude_free_string_arg(arg)?);
+        } else {
+            let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
+            arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
+        }
+    }
+    Ok((format!("{}({})", sig.c_name, arg_texts.join(", ")), sig.is_float))
+}
+fn render_numeric_expr(expr: &Expr, needs_math: &mut bool, functions: &FunctionTable) -> Result<(String, bool), String> {
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
@@ -964,12 +1556,12 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             )),
         },
         Expr::Unary { op: UnaryOp::Neg, expr } => {
-            let (inner, is_float) = render_numeric_expr(expr, needs_math)?;
+            let (inner, is_float) = render_numeric_expr(expr, needs_math, functions)?;
             Ok((format!("-({inner})"), is_float))
         }
         Expr::Binary { left, op: op @ (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul), right } => {
-            let (left_text, left_float) = render_numeric_expr(left, needs_math)?;
-            let (right_text, right_float) = render_numeric_expr(right, needs_math)?;
+            let (left_text, left_float) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, right_float) = render_numeric_expr(right, needs_math, functions)?;
             let c_op = match op {
                 BinaryOp::Add => "+",
                 BinaryOp::Sub => "-",
@@ -989,8 +1581,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // a real behavioral gap, just not a memory-safety one, and not
         // addressed here.
         Expr::Binary { left, op: BinaryOp::Div, right } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             Ok((format!("((double){left_text} / (double){right_text})"), true))
         }
         // Real MBASIC/BASCOM's `\`: each operand is rounded to the nearest
@@ -1012,8 +1604,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // fitting in `long`/`int`) isn't specially detected, same as `/`'s
         // division-by-zero gap above.
         Expr::Binary { left, op: BinaryOp::IntDiv, right } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             *needs_math = true;
             Ok((
                 format!(
@@ -1035,8 +1627,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // "Division by zero" error instead -- not addressed here, same
         // category of gap as `/`'s and `\`'s.
         Expr::Binary { left, op: BinaryOp::Mod, right } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             *needs_math = true;
             Ok((
                 format!(
@@ -1057,8 +1649,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // addressed here, same category as the other operators' noted
         // gaps above.
         Expr::Binary { left, op: BinaryOp::Pow, right } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             *needs_math = true;
             Ok((format!("pow((double){left_text}, (double){right_text})"), true))
         }
@@ -1076,8 +1668,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             op: op @ (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge),
             right,
         } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             let c_op = match op {
                 BinaryOp::Eq => "==",
                 BinaryOp::Ne => "!=",
@@ -1113,8 +1705,8 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
             op: op @ (BinaryOp::And | BinaryOp::Or | BinaryOp::Xor),
             right,
         } => {
-            let (left_text, _) = render_numeric_expr(left, needs_math)?;
-            let (right_text, _) = render_numeric_expr(right, needs_math)?;
+            let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
+            let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
             *needs_math = true;
             let c_op = match op {
                 BinaryOp::And => "&",
@@ -1134,16 +1726,48 @@ fn render_numeric_expr(expr: &Expr, needs_math: &mut bool) -> Result<(String, bo
         // point of this exact example, since it surprises anyone expecting
         // C-style `!`). Same round-to-integer step as AND/OR/XOR above.
         Expr::Unary { op: UnaryOp::Not, expr } => {
-            let (inner, _) = render_numeric_expr(expr, needs_math)?;
+            let (inner, _) = render_numeric_expr(expr, needs_math, functions)?;
             *needs_math = true;
             Ok((format!("((int)(~(long)round((double){inner})))"), false))
+        }
+        // A call to a user-defined numeric-returning BASCAL function --
+        // and a single-argument (or zero-argument) one parses as
+        // `Expr::ArrayRef`, not `Expr::Call` (see `make_paren_ident_expr`
+        // in `parser.rs`/`is_string_expr`'s own comment), so both shapes
+        // route to the same rendering, `render_numeric_call`.
+        Expr::Call { name, args } => render_numeric_call(name, args, needs_math, functions),
+        Expr::ArrayRef { name, indices } if functions.contains_key(&fn_key(name)) => {
+            render_numeric_call(name, indices, needs_math, functions)
         }
         _ => Err(
             "this expression isn't supported in a numeric context by the minimal C backend yet \
              -- render_numeric_expr only covers numeric literals, numeric scalar variables (%, \
-             &, !, #), arithmetic, comparisons, and AND/OR/XOR/NOT (a string variable is a type \
-             error here, not just unimplemented -- see render_string_expr for string \
-             expressions); calls and arrays aren't supported in either context yet"
+             &, !, #), arithmetic, comparisons, AND/OR/XOR/NOT, and function calls (a string \
+             variable is a type error here, not just unimplemented -- see render_string_expr \
+             for string expressions); arrays aren't supported in either context yet"
+                .to_string(),
+        ),
+    }
+}
+
+/// A string argument to a function called from a *numeric* context
+/// (`render_numeric_expr`'s own `Expr::Call` arm) -- restricted to the two
+/// shapes that need no prelude of their own (a plain literal or a bare
+/// `$`-suffixed variable read), since `render_numeric_expr` has no prelude
+/// mechanism to route setup code (e.g. a concatenation's temp buffer)
+/// through. A string-returning function called from a *string* context
+/// doesn't have this restriction -- see `render_string_expr`'s own
+/// `Expr::Call` arm, which does have a prelude to work with.
+fn render_prelude_free_string_arg(expr: &Expr) -> Result<String, String> {
+    match expr {
+        Expr::String(s) => Ok(format!("\"{}\"", escape_c_string_literal(s))),
+        Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
+            Ok(c_var_name(ident, TypeSuffix::String))
+        }
+        _ => Err(
+            "a string argument to a function called from a numeric context must be a plain \
+             string literal or string variable (no concatenation or nested calls) -- not \
+             supported by the minimal C backend yet"
                 .to_string(),
         ),
     }

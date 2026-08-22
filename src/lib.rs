@@ -4205,6 +4205,120 @@ end
         );
     }
 
+    #[test]
+    fn c_target_supports_functions_with_byval_numeric_params_and_return() {
+        // `a%`/`b%`'s 2-argument call parses as `Expr::Call` directly; a
+        // real C function/call is the natural translation, unlike the
+        // BASIC backend's GOSUB-against-shared-globals approach -- no
+        // result variable, no label, just `int bf_i_max(...) { ... }`.
+        let source = "print max%(4, 9)\nend\n";
+        let program = "function max%(a%, b%)\n    if a% > b% then\n        return a%\n    \
+                        else\n        return b%\n    end if\nend function\n";
+        let output = compile_source_via_c_target(&format!("{program}{source}"));
+        assert!(
+            output.contains("int bf_i_max(int bv_i_a, int bv_i_b) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("return bv_i_a;"), "unexpected output:\n{output}");
+        assert!(output.contains("printf(\"%d\\n\", bf_i_max(4, 9));"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_functions_with_one_or_zero_arguments_parse_as_arrayref_not_call() {
+        // A single-argument (or zero-argument) call to a suffixed function
+        // name is syntactically ambiguous with array indexing, so the
+        // parser produces `Expr::ArrayRef`, not `Expr::Call`, for both
+        // shapes (see `make_paren_ident_expr` in parser.rs) -- codegen
+        // must disambiguate using the function table, not just match on
+        // `Expr::Call`.
+        let source = "print addOne%(10)\nprint one%()\nend\n";
+        let program = "function addOne%(x%)\n    return x% + 1\nend function\n\
+                        function one%()\n    return 1\nend function\n";
+        let output = compile_source_via_c_target(&format!("{program}{source}"));
+        assert!(output.contains("bf_i_addone(10)"), "unexpected output:\n{output}");
+        assert!(output.contains("bf_i_one()"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn c_target_supports_string_returning_functions_with_byval_copy_semantics() {
+        // A string-returning function is `void` in C with a trailing
+        // `char* bcc_out` parameter (see `function_signature`); a byval
+        // string parameter gets its own local buffer copied in from a
+        // `..._in` pointer parameter at the top of the body, so
+        // reassigning it inside the function can't corrupt the caller's
+        // buffer.
+        let source = "print repeat$(\"ab\", 3)\nend\n";
+        let program = "function repeat$(text$, n%)\n    acc$ = \"\"\n    for i% = 1 to n%\n    \
+                        acc$ = acc$ + text$\n    end for\n    return acc$\nend function\n";
+        let output = compile_source_via_c_target(&format!("{program}{source}"));
+        assert!(
+            output.contains("void bf_s_repeat(const char* bv_s_text_in, int bv_i_n, char* bcc_out) {"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(bv_s_text, sizeof(bv_s_text), \"%s\", bv_s_text_in);"),
+            "byval string parameter must get its own local copy:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(bcc_out, 256, \"%s\", bv_s_acc);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bf_s_repeat(\"ab\", 3, bt_s_"),
+            "call site should pass a fresh temp buffer as the out-param:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_functions_share_globals_via_the_global_keyword() {
+        // `global x%` inside a function body means: don't declare a local
+        // named `x%` here (see `emit_function_def`'s exclusion set) -- the
+        // plain identifier then resolves to the file-scope `static`
+        // global of the same name via ordinary C lexical scoping, no
+        // per-use rewriting needed.
+        let source = "total% = 0\ndummy% = addToTotal%(10)\ndummy% = addToTotal%(5)\n\
+                       print total%\nend\n";
+        let program = "function addToTotal%(x%)\n    global total%\n    total% = total% + x%\n    return total%\nend function\n";
+        let output = compile_source_via_c_target(&format!("{program}{source}"));
+        assert!(output.contains("static int bv_i_total = 0;"), "unexpected output:\n{output}");
+        assert!(
+            !output.contains("int bf_i_addtototal(int bv_i_x) {\n    int bv_i_total"),
+            "a `global`-declared name must not also be declared as a local:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_procedures() {
+        let source = "procedure sayHi()\n    print \"hi\"\nend procedure\nsayHi()\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("procedure") && d.message.contains("only functions")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_byref_parameters() {
+        let source = "function bump%(byref x%)\n    x% = x% + 1\n    return x%\nend function\n\
+                       n% = 5\nprint bump%(n%)\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("byref")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_a_function_body_that_might_not_return() {
+        let source = "function maybe%(x%)\n    if x% > 0 then\n        return x%\n    end if\nend function\n\
+                       print maybe%(5)\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("must end with an explicit `return`")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
     /// Helper for the C-backend tests above: writes `source` (with a
     /// `program` header prepended) to a temp file and compiles it under
     /// `Target::C`, panicking with the diagnostics on failure.
@@ -4219,5 +4333,16 @@ end
                 diagnostics.into_iter().map(|d| d.to_string()).collect::<String>()
             )
         })
+    }
+
+    /// Same as `compile_source_via_c_target`, but for a negative test:
+    /// returns the diagnostics from a compile that's expected to fail,
+    /// panicking if it unexpectedly succeeds instead.
+    fn compile_source_via_c_target_err(source: &str) -> Vec<Diagnostic> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("numeric_print.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+        let options = CompileOptions { target: Target::C, ..CompileOptions::new() };
+        compile_file(&path, &options).expect_err("should not compile")
     }
 }
