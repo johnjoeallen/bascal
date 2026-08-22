@@ -2050,6 +2050,172 @@ end
         );
     }
 
+    // ── sequential file handle DSL ──────────────────────────────────────
+
+    #[test]
+    fn sequential_file_handle_opens_writes_reads_and_closes() {
+        let source = r#"file scores = open("scores.csv") for output
+scores.write("Ada", 98.5)
+scores.close()
+
+file scores2 = open("scores.csv") for input
+while not scores2.eof()
+    scores2.read(name$, score!)
+    print name$; ": "; score!
+end while
+scores2.close()
+end
+"#;
+        let output = compile_source("seq.bcl", source).expect("should compile");
+        assert!(
+            output.contains(r#"OPEN "scores.csv" FOR OUTPUT AS #1"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(r#"WRITE #1, "Ada", 98.5"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("CLOSE #1"), "unexpected output:\n{output}");
+        assert!(
+            output.contains(r#"OPEN "scores.csv" FOR INPUT AS #2"#),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("NOT (EOF(2))"),
+            "`.eof()` should compile straight to the real EOF() builtin:\n{output}"
+        );
+        assert!(
+            output.contains("INPUT #2, name$, score!"),
+            "unexpected output:\n{output}"
+        );
+        assert!(output.contains("CLOSE #2"), "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn sequential_file_channel_numbers_are_allocated_automatically() {
+        // Two sequential handles and a record file in one program should
+        // never collide on a channel number, same guarantee the record
+        // DSL alone already gives.
+        let source = r#"record Student
+    id: int16
+end record
+
+file a = open("a.csv") for output
+file db as Student = open("db.dat")
+file b = open("b.csv") for input
+end
+"#;
+        let output = compile_source("chan.bcl", source).expect("should compile");
+        assert!(output.contains(r#"OPEN "a.csv" FOR OUTPUT AS #1"#));
+        assert!(output.contains(r#"OPEN "db.dat" FOR RANDOM AS #2"#));
+        assert!(output.contains(r#"OPEN "b.csv" FOR INPUT AS #3"#));
+    }
+
+    #[test]
+    fn sequential_file_read_rejects_a_file_not_opened_for_input() {
+        let source = r#"file scores = open("scores.csv") for output
+scores.read(name$)
+end
+"#;
+        let diagnostics =
+            compile_source("bad.bcl", source).expect_err("read on an output file should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("needs `scores` opened `for input`") && msg.contains("for output"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn sequential_file_eof_rejects_a_file_not_opened_for_input() {
+        let source = r#"file scores = open("scores.csv") for output
+while not scores.eof()
+end while
+end
+"#;
+        let diagnostics =
+            compile_source("bad.bcl", source).expect_err("eof on an output file should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("needs `scores` opened `for input`"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn sequential_methods_reject_a_record_file() {
+        let source = r#"record Student
+    id: int16
+end record
+
+file db as Student = open("db.dat")
+db.read(x%)
+end
+"#;
+        let diagnostics =
+            compile_source("bad.bcl", source).expect_err("read on a record file should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("`db` is a record file"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn record_dsl_methods_reject_a_sequential_file() {
+        let source = r#"file scores = open("scores.csv") for output
+scores.close()
+end
+"#;
+        // `.close()` is valid on either kind -- confirm it still works here
+        // rather than rejecting a sequential file, unlike `[i]`/`.field`.
+        let output = compile_source("ok.bcl", source).expect("close should work on any file");
+        assert!(output.contains("CLOSE #1"));
+
+        let source = r#"file scores = open("scores.csv") for output
+let s = scores[1]
+end
+"#;
+        let diagnostics = compile_source("bad.bcl", source)
+            .expect_err("record-only indexing on a sequential file should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("is a sequential file") && msg.contains("not a record file"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn sequential_write_and_read_are_statement_only() {
+        let source = r#"file scores = open("scores.csv") for output
+dim x%
+x% = scores.write("a")
+end
+"#;
+        let diagnostics = compile_source("bad.bcl", source)
+            .expect_err("`.write(...)` used as a value should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("may only be used as a standalone statement"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
     // ── stdlib functions ────────────────────────────────────────────────
     //
     // LTRIM$, RTRIM$, UCASE$, and LCASE$ aren't real MBASIC/BASCOM 2.00

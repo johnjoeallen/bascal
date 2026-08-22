@@ -270,8 +270,12 @@ impl Parser {
     fn parse_file_decl(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("file")?;
         let var = BasicIdent::parse(&self.expect_ident("expected file variable name")?);
-        self.expect_keyword("as")?;
-        let record_type = self.expect_ident("expected record type name after `as`")?;
+        let record_type = if self.check_keyword("as") {
+            self.advance();
+            Some(self.expect_ident("expected record type name after `as`")?)
+        } else {
+            None
+        };
         self.expect(TokenKind::Eq, "expected `=` in file declaration")?;
         if !self.check_keyword("open") {
             return Err(self.error("expected `open(...)` in file declaration"));
@@ -280,11 +284,38 @@ impl Parser {
         self.expect(TokenKind::LParen, "expected `(` after `open`")?;
         let path = self.parse_expr(0)?;
         self.expect(TokenKind::RParen, "expected `)` after file path")?;
+        // The record form (`file db as Student = open(...)`) always means
+        // random access, with no `for ...` to write -- its width comes from
+        // the record type instead. The plain sequential-handle form has no
+        // record type to infer a mode from, so it's the one place this
+        // sugar needs `for input/output/append` spelled out, same as raw
+        // `open ... for ...` would.
+        let mode = if record_type.is_none() {
+            self.expect_keyword("for")?;
+            let mode = if self.check_keyword("input") {
+                self.advance();
+                OpenMode::Input
+            } else if self.check_keyword("output") {
+                self.advance();
+                OpenMode::Output
+            } else if self.check_keyword("append") {
+                self.advance();
+                OpenMode::Append
+            } else {
+                return Err(self.error(
+                    "expected `input`, `output`, or `append` after `for` in file declaration",
+                ));
+            };
+            Some(mode)
+        } else {
+            None
+        };
         self.consume_line_end()?;
         Ok(Statement::FileDecl {
             var,
             record_type,
             path,
+            mode,
         })
     }
 
@@ -2217,10 +2248,31 @@ mod tests {
                 var,
                 record_type,
                 path,
+                mode,
             } => {
                 assert_eq!(var.name, "db");
-                assert_eq!(record_type, "Student");
+                assert_eq!(record_type.as_deref(), Some("Student"));
                 assert!(matches!(path, Expr::String(s) if s == "students.dat"));
+                assert_eq!(*mode, None);
+            }
+            other => panic!("expected FileDecl, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_sequential_file_decl() {
+        let program = parse("file scores = open(\"scores.csv\") for output\nend\n");
+        match &program.statements[0] {
+            Statement::FileDecl {
+                var,
+                record_type,
+                path,
+                mode,
+            } => {
+                assert_eq!(var.name, "scores");
+                assert_eq!(*record_type, None);
+                assert!(matches!(path, Expr::String(s) if s == "scores.csv"));
+                assert_eq!(*mode, Some(OpenMode::Output));
             }
             other => panic!("expected FileDecl, got {other:?}"),
         }

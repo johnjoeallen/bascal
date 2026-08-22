@@ -225,13 +225,17 @@ pub enum Statement {
         channel: Expr,
         len: Option<Expr>,
     },
-    /// `file <var> as <RecordType> = open(<path>)` — high-level record/file
-    /// DSL sugar. Always eliminated by `records::lower` before codegen runs;
-    /// see src/records.rs.
+    /// `file <var> as <RecordType> = open(<path>)` (`record_type: Some`,
+    /// `mode: None`) or `file <var> = open(<path>) for input/output/append`
+    /// (`record_type: None`, `mode: Some`) — high-level record/file DSL
+    /// sugar, either the random-access record form or the plain sequential
+    /// file-handle form. Always eliminated by `records::lower` before
+    /// codegen runs; see src/records.rs.
     FileDecl {
         var: BasicIdent,
-        record_type: String,
+        record_type: Option<String>,
         path: Expr,
+        mode: Option<OpenMode>,
     },
     LineInput {
         channel: Expr,

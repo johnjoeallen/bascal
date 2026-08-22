@@ -1,7 +1,12 @@
 // Tutorial 10 — File Input and Output
 //
-// BASCAL supports sequential file I/O through open, close, and the
-// file-channel variants of print, input, line input, and write.
+// This tutorial writes the *same* sequential file twice. Part 1 uses raw
+// BASIC file statements directly. Part 2 uses BASCAL's file-handle DSL,
+// which transpiles to exactly the same primitives, minus having to pick a
+// channel number and repeat it at every open/write/read/close. Read Part
+// 1 first; the comments in Part 2 explain what the DSL is buying you.
+//
+// ---- Part 1 primitives ----
 //
 // open filename$ for input  as #n   — read existing file
 // open filename$ for output as #n   — create or overwrite
@@ -18,6 +23,10 @@ program files
 
 csvFile$ = "tutorial_scores.csv"
 
+/* ============================================================ */
+/* Part 1 — sequential files, written by hand                   */
+/* ============================================================ */
+
 /* Write three records */
 open csvFile$ for output as #1
 write #1, "Alice", 95, "pass"
@@ -31,7 +40,7 @@ write #1, "Dave", 88, "pass"
 close #1
 
 /* Read and print every record */
-print "All records in " + csvFile$ + ":"
+print "Part 1 (hand-written) -- all records in " + csvFile$ + ":"
 open csvFile$ for input as #1
 while eof(1) = 0
     input #1, name$, score%, result$
@@ -40,12 +49,55 @@ end while
 close #1
 
 /* Read the file line by line using line input */
-print "Raw lines:"
+print "Part 1 (hand-written) -- raw lines:"
 open csvFile$ for input as #1
 while eof(1) = 0
     line input #1, line$
     print "  " + line$
 end while
 close #1
+
+/* ============================================================ */
+/* Part 2 — the same file, through the file-handle DSL           */
+/* ============================================================ */
+
+// file <var> = open(<path>) for output/input/append
+//   Opens a file the same way `open ... for ... as #n` does, except the
+//   compiler picks the channel number for you and remembers it under
+//   <var> — no #1/#2 to keep straight by hand, and no risk of two open
+//   files quietly sharing a number.
+//
+// <var>.write(expr, ...)   — WRITE #n, expr, ...
+// <var>.read(var, ...)     — INPUT #n, var, ...     (only valid `for input`)
+// <var>.eof()               — EOF(n) <> 0             (only valid `for input`)
+// <var>.close()             — CLOSE #n                (valid either way)
+//
+// A `.read()`/`.eof()` on a file not opened `for input` -- or a
+// `.write()` on one not opened `for output`/`for append` -- is a
+// transpile-time error, the same way a misspelled record field is: the
+// compiler already knows which direction the file goes, so it checks
+// for you instead of failing at runtime against real data.
+
+file out = open(csvFile$) for output
+out.write("Alice", 95, "pass")
+out.write("Bob", 54, "fail")
+out.write("Carol", 78, "pass")
+out.close()
+
+file appended = open(csvFile$) for append
+appended.write("Dave", 88, "pass")
+appended.close()
+
+print "Part 2 (file-handle DSL) -- all records in " + csvFile$ + ":"
+file dbFile = open(csvFile$) for input
+while not dbFile.eof()
+    dbFile.read(name$, score%, result$)
+    print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
+end while
+dbFile.close()
+
+// `line input`/`print #` don't have DSL sugar yet -- fall back to the
+// raw form from Part 1 for those; the DSL only replaces `open`, `write`,
+// `input`, `eof()`, and `close` so far.
 
 end

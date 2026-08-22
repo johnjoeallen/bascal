@@ -2,18 +2,18 @@
 <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 6</p><h1>Data that outlives a run</h1></div></header>
 <main class="chapter-main book-width"><h2>Two shapes of persistent data</h2><p>Some data is naturally a stream: lines of text, written once and read back in order. Other data is naturally a table: fixed-size records you want to reach by number, without reading everything before them. BASCAL supports both. Sequential files use the same statements as classic BASIC; random-access data has a structured form of its own, described below.</p><h2>Sequential files</h2><pre><code>const scoreFile$ = "scores.csv"
 
-open scoreFile$ for output as #1
-write #1, "Ada", 98.5
-write #1, "Grace", 92.0
-close #1
+file scores = open(scoreFile$) for output
+scores.write("Ada", 98.5)
+scores.write("Grace", 92.0)
+scores.close()
 
-open scoreFile$ for input as #1
-while eof(1) = 0
-    input #1, name$, score!
+file readScores = open(scoreFile$) for input
+while not readScores.eof()
+    readScores.read(name$, score!)
     print name$; ": "; score!
 end while
-close #1
-</code></pre><p><code>open ... for output</code> creates a file and truncates it if it already exists; <code>for append</code> adds to the end instead. <code>write #</code> stores each value in a quoted, comma-separated form that <code>input #</code> reads back exactly, including strings that themselves contain commas. Every file you open needs a matching <code>close</code>; a file number can be reused for a different file once its predecessor is closed.</p><h2>Describe the data first</h2><p>For fixed-size random-access data, BASCAL lets you express the record layout in the program instead of tracking byte offsets by hand. The compiler takes care of the target’s <code>FIELD</code>, conversion, and <code>GET</code>/<code>PUT</code> sequence.</p><pre><code>record Student
+readScores.close()
+</code></pre><p><code>file &lt;var&gt; = open(&lt;path&gt;) for output</code> creates a file and truncates it if it already exists; <code>for append</code> adds to the end instead; <code>for input</code> opens an existing one for reading. The compiler picks the channel number itself — nothing about it appears in the source — so <code>&lt;var&gt;.write(...)</code>, <code>&lt;var&gt;.read(...)</code>, and <code>&lt;var&gt;.eof()</code> never need one either. <code>write</code> stores each value in a quoted, comma-separated form that <code>read</code> reads back exactly, including strings that themselves contain commas. <code>&lt;var&gt;.close()</code> closes the file exactly like closing any other open channel — the same method works on a record file too.</p><p>A file’s declared direction is enforced when the program is compiled: calling <code>.read(...)</code> or <code>.eof()</code> on a file opened <code>for output</code>, or <code>.write(...)</code> on one opened <code>for input</code>, is rejected before it ever reaches a real file — the same kind of mistake real BASIC would only catch once something went wrong at runtime.</p><h2>Describe the data first</h2><p>For fixed-size random-access data, BASCAL lets you express the record layout in the program instead of tracking byte offsets by hand. The compiler takes care of the target’s <code>FIELD</code>, conversion, and <code>GET</code>/<code>PUT</code> sequence.</p><pre><code>record Student
     id:      int16
     name:    string(20)
     score:   float64

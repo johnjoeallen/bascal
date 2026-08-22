@@ -67,7 +67,20 @@ struct RecordType {
 #[derive(Clone)]
 struct FileInfo {
     channel: i64,
-    record_type: String,
+    kind: FileKind,
+}
+
+/// What a `file` variable actually is: the random-access record/file DSL
+/// (`file db as Student = open(...)`), or a plain sequential file handle
+/// (`file scores = open(...) for output`). Tracking the sequential form's
+/// `OpenMode` lets `.write(...)`/`.read(...)`/`.eof()` be rejected at
+/// compile time against the wrong direction of file -- reading from a
+/// file opened `for output`, say -- the same way the record DSL already
+/// catches a misspelled or missing field before it ever reaches disk.
+#[derive(Clone)]
+enum FileKind {
+    Record(String),
+    Sequential(OpenMode),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -156,8 +169,9 @@ impl Lowerer {
                 var,
                 record_type,
                 path,
+                mode,
             } => {
-                self.lower_file_decl(var, record_type, path, out);
+                self.lower_file_decl(var, record_type, path, mode, out);
             }
             Statement::Assignment { target, value } => {
                 self.lower_assignment(target, value, out);
@@ -566,8 +580,9 @@ impl Lowerer {
     fn lower_file_decl(
         &mut self,
         var: BasicIdent,
-        record_type: String,
+        record_type: Option<String>,
         path: Expr,
+        mode: Option<OpenMode>,
         out: &mut Vec<Statement>,
     ) {
         let path = self.rewrite_expr(path).0;
@@ -579,6 +594,43 @@ impl Lowerer {
             ));
             return;
         }
+
+        let Some(record_type) = record_type else {
+            // `file scores = open(...) for output/input/append` -- the
+            // plain sequential-handle form. No FIELD layout involved at
+            // all; `.write(...)`/`.read(...)`/`.eof()`/`.close()` lower
+            // straight to the channel number this allocates.
+            let mode = mode.expect("parser only omits `record_type` alongside a `mode`");
+            let channel = self.next_channel;
+            self.next_channel += 1;
+            let mode_word = match mode {
+                OpenMode::Input => "input",
+                OpenMode::Output => "output",
+                OpenMode::Append => "append",
+                OpenMode::Random | OpenMode::Binary => {
+                    unreachable!("the file/open DSL sugar never parses a random/binary mode")
+                }
+            };
+            out.push(Statement::Raw(format!(
+                "' file {} = open(...) for {mode_word}",
+                var.name
+            )));
+            self.files.insert(
+                var_key,
+                FileInfo {
+                    channel,
+                    kind: FileKind::Sequential(mode),
+                },
+            );
+            out.push(Statement::Open {
+                mode,
+                file: path,
+                channel: Expr::Integer(channel),
+                len: None,
+            });
+            return;
+        };
+
         let type_key = record_type.to_ascii_lowercase();
         let Some(rec) = self.records.get(&type_key).cloned() else {
             self.diagnostics.push(Diagnostic::error(
@@ -601,7 +653,7 @@ impl Lowerer {
             var_key,
             FileInfo {
                 channel,
-                record_type: record_type.clone(),
+                kind: FileKind::Record(record_type.clone()),
             },
         );
 
@@ -968,13 +1020,39 @@ impl Lowerer {
 
     fn lower_expr_stmt(&mut self, expr: Expr, out: &mut Vec<Statement>) {
         if let Expr::MethodCall { base, method, args } = &expr {
-            if method.eq_ignore_ascii_case("close") && args.is_empty() {
-                if let Expr::Ident(var) = base.as_ref() {
-                    let var = var.clone();
-                    if let Some((channel, _rec, _type_name)) = self.lookup_file(&var) {
+            if let Expr::Ident(var) = base.as_ref() {
+                let var = var.clone();
+                if method.eq_ignore_ascii_case("close") && args.is_empty() {
+                    if let Some(channel) = self.lookup_any_file_channel(&var) {
                         out.push(Statement::Raw(format!("' {}.close()", var.name)));
                         out.push(Statement::Close {
                             channel: Expr::Integer(channel),
+                        });
+                    }
+                    return;
+                }
+                if method.eq_ignore_ascii_case("write") {
+                    if let Some(channel) =
+                        self.lookup_sequential_file(&var, "write", &[OpenMode::Output, OpenMode::Append])
+                    {
+                        let exprs = args.iter().cloned().map(|e| self.rewrite_expr(e).0).collect();
+                        out.push(Statement::Raw(format!("' {}.write(...)", var.name)));
+                        out.push(Statement::Write {
+                            channel: Expr::Integer(channel),
+                            exprs,
+                        });
+                    }
+                    return;
+                }
+                if method.eq_ignore_ascii_case("read") {
+                    if let Some(channel) =
+                        self.lookup_sequential_file(&var, "read", &[OpenMode::Input])
+                    {
+                        let vars = args.iter().cloned().map(|e| self.rewrite_expr(e).0).collect();
+                        out.push(Statement::Raw(format!("' {}.read(...)", var.name)));
+                        out.push(Statement::InputFile {
+                            channel: Expr::Integer(channel),
+                            vars,
                         });
                     }
                     return;
@@ -996,13 +1074,97 @@ impl Lowerer {
             ));
             return None;
         };
-        let type_key = info.record_type.to_ascii_lowercase();
+        let FileKind::Record(record_type) = info.kind else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`{}` is a sequential file (`open(...) for input/output/append`), not a \
+                     record file -- `file[i]`/`.field` operations need `file {} as <RecordType> \
+                     = open(...)` instead",
+                    var.name, var.name
+                ),
+            ));
+            return None;
+        };
+        let type_key = record_type.to_ascii_lowercase();
         let rec = self
             .records
             .get(&type_key)
             .cloned()
             .expect("file's record type was validated at declaration time");
-        Some((info.channel, rec, info.record_type))
+        Some((info.channel, rec, record_type))
+    }
+
+    /// The channel any declared `file` variable was allocated -- record or
+    /// sequential alike. Used by `.close()`, which is valid on either kind.
+    fn lookup_any_file_channel(&mut self, var: &BasicIdent) -> Option<i64> {
+        let key = var.name.to_ascii_lowercase();
+        let Some(info) = self.files.get(&key) else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!("`{}` is not a declared `file`", var.name),
+            ));
+            return None;
+        };
+        Some(info.channel)
+    }
+
+    /// The channel and mode of a *sequential* `file` variable, for
+    /// `.write(...)`/`.read(...)`/`.eof()`. Rejects a record file (those
+    /// use `file[i]`/`.field`/`let`, never these methods) and a mode
+    /// mismatch (`.read(...)` on a file opened `for output`, etc.) at
+    /// compile time, the same way the record DSL already rejects a
+    /// misspelled field before it ever reaches disk.
+    fn lookup_sequential_file(
+        &mut self,
+        var: &BasicIdent,
+        method: &str,
+        allowed_modes: &[OpenMode],
+    ) -> Option<i64> {
+        let key = var.name.to_ascii_lowercase();
+        let Some(info) = self.files.get(&key).cloned() else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!("`{}` is not a declared `file`", var.name),
+            ));
+            return None;
+        };
+        let FileKind::Sequential(mode) = info.kind else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`.{method}()` needs a sequential file -- `{}` is a record file (`file {} \
+                     as <RecordType> = open(...)`)",
+                    var.name, var.name
+                ),
+            ));
+            return None;
+        };
+        if !allowed_modes.contains(&mode) {
+            let mode_word = |m: OpenMode| match m {
+                OpenMode::Input => "input",
+                OpenMode::Output => "output",
+                OpenMode::Append => "append",
+                OpenMode::Random | OpenMode::Binary => unreachable!(
+                    "the file/open DSL sugar never parses a random/binary mode"
+                ),
+            };
+            let expected = allowed_modes
+                .iter()
+                .map(|m| mode_word(*m))
+                .collect::<Vec<_>>()
+                .join(" or ");
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`.{method}()` needs `{}` opened `for {expected}`, but it was opened `for {}`",
+                    var.name,
+                    mode_word(mode)
+                ),
+            ));
+            return None;
+        }
+        Some(info.channel)
     }
 
     fn buffer_ident(&mut self, file_var: &str, field_name: &str) -> BasicIdent {
@@ -1162,11 +1324,35 @@ impl Lowerer {
                 ));
                 (Expr::Integer(0), None)
             }
-            Expr::MethodCall { method, .. } => {
+            Expr::MethodCall { base, method, args } => {
+                if method.eq_ignore_ascii_case("eof") && args.is_empty() {
+                    if let Expr::Ident(var) = base.as_ref() {
+                        let var = var.clone();
+                        if let Some(channel) =
+                            self.lookup_sequential_file(&var, "eof", &[OpenMode::Input])
+                        {
+                            return (
+                                Expr::Call {
+                                    name: BasicIdent::parse("eof"),
+                                    args: vec![Expr::Integer(channel)],
+                                },
+                                None,
+                            );
+                        }
+                        return (Expr::Integer(0), None);
+                    }
+                }
                 if method.eq_ignore_ascii_case("close") {
                     self.diagnostics.push(Diagnostic::error(
                         generated_pos(),
                         "`.close()` may only be used as a standalone statement".to_string(),
+                    ));
+                } else if method.eq_ignore_ascii_case("write")
+                    || method.eq_ignore_ascii_case("read")
+                {
+                    self.diagnostics.push(Diagnostic::error(
+                        generated_pos(),
+                        format!("`.{method}(...)` may only be used as a standalone statement"),
                     ));
                 } else {
                     self.diagnostics.push(Diagnostic::error(
