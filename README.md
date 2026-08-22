@@ -8,13 +8,13 @@
 *A fun project, built mostly to see what's possible — not really meant for
 building a real 2026 application. See [the origin story](https://johnjoeallen.github.io/bascal/origin.html).*
 
-**[Browse the website](https://johnjoeallen.github.io/bascal/)** — tutorials,
-side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual/).
+BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC,
+via the `bcc` transpiler command.
 
-BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
-The transpiler command is `bcc`. See the
-[full language manual](https://johnjoeallen.github.io/bascal/manual/) on the
-website for the complete reference.
+**[Browse the website](https://johnjoeallen.github.io/bascal/)** for
+tutorials, side-by-side syntax comparisons, and the full
+[language manual](https://johnjoeallen.github.io/bascal/manual/) — the
+complete language reference lives there, not in this repo.
 
 BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:
@@ -68,6 +68,10 @@ the raw-BASIC equivalent, not just another option.
 ```bash
 env -u RUSTC_WRAPPER cargo build
 ```
+
+Generated `basic`-target output runs under any QB-compatible compiler, e.g.
+FreeBASIC's QB mode: `fbc -lang qb output.bas -x binary` (see the
+[Examples](#examples) below for full worked runs).
 
 ## Release Packages
 
@@ -204,13 +208,6 @@ full attribution and porting notes.
 cargo run -- tutorial/card_catalog.bcl
 fbc -lang qb tutorial/card_catalog.bas -x tmp/card_catalog
 ./tmp/card_catalog   # interactive -- follow the on-screen menu
-```
-
-## Run With FreeBASIC
-
-```bash
-fbc -lang qb examples/sort_driver.bas -x tmp/sort_driver
-./tmp/sort_driver
 ```
 
 ## Tests
