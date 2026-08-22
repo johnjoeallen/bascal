@@ -10,7 +10,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 // as safe passthrough builtins the target dialect provides would be wrong.
 // BASCAL provides its own implementations instead, as an ordinary
 // require-able library; see `lib::stdlib_search_roots`.
-const BASIC_BUILTINS: &[&str] = &[
+pub(crate) const BASIC_BUILTINS: &[&str] = &[
     // Type-suffixed single-arg — parser creates Expr::ArrayRef for these
     "str", "chr", "hex", "oct", "space", "environ", "command", "trim",
     // Multi-arg string (Expr::Call, but include for completeness)

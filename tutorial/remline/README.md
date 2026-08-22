@@ -19,7 +19,7 @@ simple:
 ## Build
 
 ```bash
-cargo run -- examples/remline/remline.bcl -L examples/remline -o output/remline/remline.bas
+cargo run -- examples/remline/remline.bcl -L examples/remline -o output/remline/
 ```
 
 ## Run

@@ -16,8 +16,8 @@ struct Cli {
     #[arg(value_name = "input.bcl")]
     input: PathBuf,
 
-    /// Output path. A directory (existing, or written with a trailing `/` even if it doesn't exist yet) gets an auto-named file inside it; anything else is the output file path. Default: input with .bas/.c extension, same directory as input
-    #[arg(short = 'o', value_name = "PATH")]
+    /// Output directory -- existing, or written with a trailing `/` even if it doesn't exist yet. The output file is auto-named inside it (input's stem plus .bas/.c); an exact output file path is not accepted here. Default: input with .bas/.c extension, same directory as input
+    #[arg(short = 'o', value_name = "DIR")]
     output: Option<PathBuf>,
 
     /// Add a library search directory for `require` resolution (repeatable)
@@ -51,6 +51,14 @@ struct Cli {
     /// Backend to generate code for: `basic` (the original, complete backend) or `C` (an experimental native-C backend). Case-insensitive; `c` also works. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
+
+    /// Require every variable to be dim'd/declare'd before use (Pascal-style) -- opt-in, and not part of BASCAL's BASIC superset when on. Rejects the compile if any variable is used without one. Checked only against this program's own source, never a required library's
+    #[arg(long)]
+    strict_vars: bool,
+
+    /// Same check as --strict-vars, but prints findings to stderr as warnings instead of failing the compile. Ignored if --strict-vars is also given
+    #[arg(long)]
+    strict_vars_warn: bool,
 }
 
 const DEFAULT_TARGET_HELP: &str = "\
@@ -156,16 +164,15 @@ fn resolve_default_target() -> Target {
     Target::Basic
 }
 
-/// The `-o` value's *effective* output path: if it names a directory
-/// (already exists as one, or is written with a trailing path separator
-/// even if it doesn't exist yet -- `-o out/` for output that hasn't been
-/// generated before), the actual output file goes inside it, auto-named
+/// The `-o` value's *effective* output path. `-o` only ever names a
+/// directory -- already existing as one, or written with a trailing path
+/// separator even if it doesn't exist yet (`-o out/` for output that
+/// hasn't been generated before) -- never an exact file path to spell out
+/// by hand. The actual output file goes inside that directory, auto-named
 /// the same way an omitted `-o` would name it (input's stem plus the
-/// target's extension) -- not a raw file path the caller has to spell out
-/// themselves. Otherwise (no trailing separator, and not an existing
-/// directory) `-o` is still an exact file path, same as before -- this is
-/// purely additive, not a breaking change to existing `-o exact/path.bas`
-/// usage.
+/// target's extension). Anything that doesn't look like a directory (no
+/// trailing separator, and not an existing directory) is rejected outright
+/// rather than silently reinterpreted as a literal file path.
 fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
     let Some(output) = &cli.output else {
         return Ok(default_output_path(cli.input.as_path(), target));
@@ -177,7 +184,12 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
             .to_string_lossy()
             .ends_with(std::path::MAIN_SEPARATOR);
     if !looks_like_dir {
-        return Ok(output.clone());
+        return Err(format!(
+            "error: -o must name a directory -- got {} -- point it at an existing directory, \
+             or write a trailing `/` for one that doesn't exist yet (e.g. `-o build/`); the \
+             output file's own name is always inferred from the input file",
+            output.display()
+        ));
     }
     let default_name = default_output_path(cli.input.as_path(), target);
     let file_name = default_name.file_name().ok_or_else(|| {
@@ -228,6 +240,8 @@ fn run(cli: Cli) -> Result<(), String> {
         libraries: cli.libraries,
         line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
         target,
+        strict_vars: cli.strict_vars,
+        strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
     };
     let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
@@ -437,6 +451,8 @@ mod tests {
             binary: false,
             run: false,
             target: None,
+            strict_vars: false,
+            strict_vars_warn: false,
         }
     }
 
@@ -463,13 +479,14 @@ mod tests {
     }
 
     #[test]
-    fn resolve_output_path_treats_a_plain_path_as_an_exact_file() {
+    fn resolve_output_path_rejects_a_plain_path_that_does_not_look_like_a_directory() {
         let cli = cli_with_output(
             PathBuf::from("input.bcl"),
             Some(PathBuf::from("exact/output.bas")),
         );
-        let resolved = resolve_output_path(&cli, Target::Basic).unwrap();
-        assert_eq!(resolved, PathBuf::from("exact/output.bas"));
+        let err = resolve_output_path(&cli, Target::Basic)
+            .expect_err("-o must name a directory, not an exact file path");
+        assert!(err.contains("-o must name a directory"), "unexpected: {err}");
     }
 
     #[test]

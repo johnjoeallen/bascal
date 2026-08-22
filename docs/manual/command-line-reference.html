@@ -36,7 +36,7 @@
   </nav>
 
   <div class="prose">
-<pre><code>bcc input.bcl [-o output.bas] [-L dir] [-l library]
+<pre><code>bcc input.bcl [-o dir/] [-L dir] [-l library]
               [--line-numbers | --sparse-line-numbers] [--clean | -c]
               [--binary | -b] [--run | -r] [--target | -t basic|C]</code></pre>
 <table>
@@ -54,9 +54,9 @@
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>-o path</code></td>
+<td><code>-o dir</code></td>
 <td></td>
-<td>Output path. If <code>path</code> names a directory (already exists as one, or is written with a trailing <code>/</code> even if it doesn't exist yet), the output file goes inside it, auto-named the same way an omitted <code>-o</code> would; otherwise it's the output file path. Default (no <code>-o</code> at all): source path with <code>.bas</code> (or <code>.c</code>, under <code>--target C</code>) extension in the same directory.</td>
+<td>Output directory -- already exists as one, or is written with a trailing <code>/</code> even if it doesn't exist yet. The output file is auto-named inside it (source's own name with <code>.bas</code>, or <code>.c</code> under <code>--target C</code>) -- <code>-o</code> does not accept an exact output file path. Default (no <code>-o</code> at all): same directory as the source.</td>
 </tr>
 <tr class="even">
 <td><code>-L dir</code></td>

@@ -219,14 +219,34 @@ fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
     assert_branch_targets_are_numeric(&output, path);
 }
 
+/// `output_path` names the exact file `bcc` is expected to produce --
+/// `-o` itself only ever accepts a directory (auto-naming the file inside
+/// it from the input's own stem), so this passes `output_path`'s parent
+/// directory instead and relies on that auto-naming landing on exactly
+/// `output_path`, which it always does here since every caller already
+/// names it `<input stem>.bas`.
 fn compile_with_cli(source_path: &Path, output_path: &Path, extra_args: &[&str]) {
-    if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent)
-            .unwrap_or_else(|err| panic!("failed to create {}: {err}", parent.display()));
-    }
+    let parent = output_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", parent.display()));
+    let mut dir_arg = parent.as_os_str().to_owned();
+    dir_arg.push("/");
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_bcc"));
-    command.arg(source_path).arg("-o").arg(output_path);
+    // Every current caller of this helper runs the result through `fbc`,
+    // so it always needs BASIC output -- explicit rather than relying on
+    // `bcc`'s own ambient default-target resolution (BASCAL_TARGET / a
+    // dev's own ~/.config/bascal/config), which a machine set to `C` by
+    // default would otherwise silently break this against.
+    command
+        .arg(source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("basic");
     for arg in extra_args {
         command.arg(arg);
     }

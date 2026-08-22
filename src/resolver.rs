@@ -5,6 +5,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
+    reject_functions_shadowing_builtins(program, &mut diagnostics);
     reject_duplicate_functions(program, &mut diagnostics);
     reject_call_cycles(program, &mut diagnostics);
     reject_missing_returns(program, &mut diagnostics);
@@ -72,6 +73,39 @@ fn collect_global_decls(body: &[Statement], out: &mut Vec<BasicIdent>) {
                 collect_global_decls(else_body, out);
             }
             _ => {}
+        }
+    }
+}
+
+/// A `function`/`procedure` named the same (case-insensitively, ignoring
+/// its type suffix -- `sqr%` and `sqr$` both collide with `SQR`, the same
+/// way real BASIC's own suffix-independent intrinsic dispatch works) as one
+/// of the real BASIC builtins that pass straight through with no `require`
+/// (see `codegen_basic::BASIC_BUILTINS`) would either silently shadow the
+/// builtin everywhere it's called, or the reverse -- neither is ever what
+/// the program meant, since a genuinely intended override already has the
+/// right tool (`com.bascal.stdlib`'s own require-based library functions,
+/// see `standard-library.html`), so this is rejected outright rather than
+/// left to whichever resolution order the codegen happens to pick.
+fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let builtins: HashSet<&str> = crate::codegen_basic::BASIC_BUILTINS.iter().copied().collect();
+    for function in &program.functions {
+        let base_name = function.name.name.to_ascii_lowercase();
+        if builtins.contains(base_name.as_str()) {
+            let kind = if function.is_procedure {
+                "procedure"
+            } else {
+                "function"
+            };
+            diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "{kind} `{}` has the same name as the built-in `{}` -- a program can't \
+                     override a BASIC builtin, name it something else",
+                    function.name,
+                    base_name.to_ascii_uppercase()
+                ),
+            ));
         }
     }
 }
@@ -634,6 +668,436 @@ fn same_ident(left: &BasicIdent, right: &BasicIdent) -> bool {
 
 fn generated_pos() -> SourcePos {
     SourcePos::new("<validation>", 1, 1)
+}
+
+// ── --strict-vars / --strict-vars-warn ──────────────────────────────────
+//
+// Pascal-style mandatory declaration, opt-in only (see `CompileOptions::
+// strict_vars`/`strict_vars_warn`). Run on the *root program's own*,
+// pre-`records::lower` AST -- the caller (`compile_file`) is responsible
+// for passing in only the root file's own statements/functions, never a
+// `require`d library's (BASCAL's own `com.bascal.stdlib` isn't written
+// this way, and shouldn't have to be just because the importing program
+// turned this on) and never the DSL-lowered form (which invents its own
+// buffer/scalar variables that were never meant to be `dim`'d by hand).
+//
+// A name is valid without a matching `dim`/`declare` if it's a `const`, a
+// `for` loop's own counter, a function/procedure parameter, a raw `FIELD`
+// buffer variable, a known callable (a program function or a real BASIC
+// builtin -- `Expr::Call`/`Expr::ArrayRef` used in call position, or a
+// bare zero-arg builtin like `ERR`/`DATE$`), or the target of a `let`/
+// `file`/`record` DSL binding (those are their own declaration forms,
+// validated separately by `records::lower`, and out of scope here since
+// this check runs *before* lowering).
+
+type VarKey = (String, Option<TypeSuffix>);
+
+fn var_key(ident: &BasicIdent) -> VarKey {
+    (ident.name.to_ascii_lowercase(), ident.suffix)
+}
+
+/// Checks `program` (see this section's own doc comment for exactly which
+/// AST this must be) and returns every undeclared-variable finding, as
+/// errors if `warn_only` is false or warnings if `warn_only` is true --
+/// the caller decides whether that means failing the compile or just
+/// printing them (see `compile_file`).
+pub fn check_strict_vars(program: &Program, warn_only: bool) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    // A `require`d function is never actually in `program.functions` here --
+    // this runs on the root file's own parse, before `require`/`import` get
+    // resolved and merged in (see this section's own doc comment) -- so its
+    // *name* is approximated from its dotted path's last segment instead
+    // (`com.bascal.stdlib.ucase` -> `ucase`), matching the filename
+    // convention `required_symbol_to_path` itself relies on. A library that
+    // broke that convention (defining a differently-named function than its
+    // own path's last segment) would be misjudged here, but every real
+    // library in this repo -- `com.bascal.stdlib.*` included -- follows it.
+    let known_callables: HashSet<String> = program
+        .functions
+        .iter()
+        .map(|f| f.name.name.to_ascii_lowercase())
+        .chain(
+            crate::codegen_basic::BASIC_BUILTINS
+                .iter()
+                .map(|s| s.to_string()),
+        )
+        .chain(program.declarations.iter().map(|decl| {
+            let symbol = match decl {
+                DependencyDecl::Require(s) | DependencyDecl::Import(s) => s,
+            };
+            symbol
+                .raw
+                .rsplit('.')
+                .next()
+                .unwrap_or(&symbol.raw)
+                .to_ascii_lowercase()
+        }))
+        .collect();
+
+    let mut top_level_declared = HashSet::new();
+    collect_declarations(&program.statements, &mut top_level_declared);
+    check_var_uses(
+        &program.statements,
+        &top_level_declared,
+        &known_callables,
+        warn_only,
+        &mut diagnostics,
+    );
+
+    for function in &program.functions {
+        let mut declared = HashSet::new();
+        for param in &function.params {
+            declared.insert(var_key(&param.name));
+        }
+        collect_declarations(&function.body, &mut declared);
+        let mut globals = Vec::new();
+        collect_global_decls(&function.body, &mut globals);
+        for global in &globals {
+            declared.insert(var_key(global));
+        }
+        check_var_uses(
+            &function.body,
+            &declared,
+            &known_callables,
+            warn_only,
+            &mut diagnostics,
+        );
+    }
+
+    diagnostics
+}
+
+/// Collects every name `dim`/`declare`, `const`, a `for` loop's own
+/// counter, or a raw `FIELD` statement introduces, recursing into every
+/// nested statement body -- but *not* into `program.functions`, which the
+/// caller (`check_strict_vars`) walks separately with its own declared-name
+/// set, matching BASCAL's real function-local-by-default scoping (see
+/// tutorial 14: a name inside a function/procedure is local unless
+/// promoted with `global`).
+fn collect_declarations(statements: &[Statement], declared: &mut HashSet<VarKey>) {
+    for stmt in statements {
+        match stmt {
+            Statement::Dim { name, .. } | Statement::Const { name, .. } => {
+                declared.insert(var_key(name));
+            }
+            Statement::For { var, body, .. } => {
+                declared.insert(var_key(var));
+                collect_declarations(body, declared);
+            }
+            Statement::Field { fields, .. } => {
+                for (_, name) in fields {
+                    declared.insert(var_key(name));
+                }
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_declarations(then_body, declared);
+                collect_declarations(else_body, declared);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_declarations(body, declared);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_declarations(&case.body, declared);
+                }
+                collect_declarations(else_body, declared);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn check_var_uses(
+    statements: &[Statement],
+    declared: &HashSet<VarKey>,
+    known_callables: &HashSet<String>,
+    warn_only: bool,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let mut check = |expr: &Expr| {
+        let ident = match expr {
+            Expr::Ident(ident) => ident,
+            Expr::ArrayRef { name, .. } => name,
+            _ => return,
+        };
+        if known_callables.contains(&ident.name.to_ascii_lowercase()) {
+            return;
+        }
+        if declared.contains(&var_key(ident)) {
+            return;
+        }
+        let make = if warn_only {
+            Diagnostic::warning
+        } else {
+            Diagnostic::error
+        };
+        diagnostics.push(make(
+            generated_pos(),
+            format!(
+                "`{ident}` is used without a `dim`/`declare` -- --strict-vars requires every \
+                 variable to be declared before use (a misspelled name is the usual cause)"
+            ),
+        ));
+    };
+    walk_statements_exprs(statements, &mut check);
+}
+
+fn walk_statements_exprs(statements: &[Statement], f: &mut dyn FnMut(&Expr)) {
+    for stmt in statements {
+        walk_statement_exprs(stmt, f);
+    }
+}
+
+fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
+    match statement {
+        Statement::Dim { sizes, .. } => sizes.iter().for_each(|e| walk_expr(e, f)),
+        Statement::Assignment { target, value } => {
+            walk_expr(target, f);
+            walk_expr(value, f);
+        }
+        Statement::MidAssign {
+            target,
+            start,
+            len,
+            value,
+        } => {
+            walk_expr(target, f);
+            walk_expr(start, f);
+            if let Some(len) = len {
+                walk_expr(len, f);
+            }
+            walk_expr(value, f);
+        }
+        Statement::Print { tokens }
+        | Statement::Lprint(tokens)
+        | Statement::PrintFile { tokens, .. } => {
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    walk_expr(e, f);
+                }
+            }
+        }
+        Statement::PrintUsing { format, tokens } | Statement::LprintUsing { format, tokens } => {
+            walk_expr(format, f);
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    walk_expr(e, f);
+                }
+            }
+        }
+        Statement::PrintFileUsing {
+            channel,
+            format,
+            tokens,
+        } => {
+            walk_expr(channel, f);
+            walk_expr(format, f);
+            for t in tokens {
+                if let PrintToken::Expr(e) = t {
+                    walk_expr(e, f);
+                }
+            }
+        }
+        Statement::Open { file, channel, .. } => {
+            walk_expr(file, f);
+            walk_expr(channel, f);
+        }
+        Statement::FileDecl { path, .. } => walk_expr(path, f),
+        Statement::LineInput { channel, target } => {
+            walk_expr(channel, f);
+            walk_expr(target, f);
+        }
+        Statement::Close { channel } | Statement::Restore(Some(channel)) => walk_expr(channel, f),
+        Statement::Kill { file } => walk_expr(file, f),
+        Statement::Name { from, to } => {
+            walk_expr(from, f);
+            walk_expr(to, f);
+        }
+        Statement::Return { value } => walk_expr(value, f),
+        Statement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            walk_expr(condition, f);
+            walk_statements_exprs(then_body, f);
+            walk_statements_exprs(else_body, f);
+        }
+        Statement::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
+            walk_expr(start, f);
+            walk_expr(end, f);
+            if let Some(step) = step {
+                walk_expr(step, f);
+            }
+            walk_statements_exprs(body, f);
+        }
+        Statement::While { condition, body } => {
+            walk_expr(condition, f);
+            walk_statements_exprs(body, f);
+        }
+        Statement::ExprStmt(expr) => walk_expr(expr, f),
+        Statement::Do {
+            condition,
+            body,
+            post_condition,
+        } => {
+            if let Some(c) = condition {
+                walk_expr(&c.expr, f);
+            }
+            walk_statements_exprs(body, f);
+            if let Some(c) = post_condition {
+                walk_expr(&c.expr, f);
+            }
+        }
+        Statement::Randomize(Some(e)) => walk_expr(e, f),
+        Statement::Swap(a, b) => {
+            walk_expr(a, f);
+            walk_expr(b, f);
+        }
+        Statement::Poke { address, value } | Statement::Out { port: address, value } => {
+            walk_expr(address, f);
+            walk_expr(value, f);
+        }
+        Statement::Goto(e) | Statement::Gosub(e) => walk_expr(e, f),
+        Statement::OnErrorGoto { target } => walk_expr(target, f),
+        Statement::ErrorStmt { code } => walk_expr(code, f),
+        Statement::Resume(ResumeTarget::Line(e)) => walk_expr(e, f),
+        Statement::Input { vars, .. } | Statement::Read(vars) => {
+            vars.iter().for_each(|e| walk_expr(e, f))
+        }
+        Statement::InputFile { channel, vars } => {
+            walk_expr(channel, f);
+            vars.iter().for_each(|e| walk_expr(e, f));
+        }
+        Statement::Data(values) => values.iter().for_each(|e| walk_expr(e, f)),
+        Statement::Const { value, .. } => walk_expr(value, f),
+        Statement::Write { channel, exprs } => {
+            walk_expr(channel, f);
+            exprs.iter().for_each(|e| walk_expr(e, f));
+        }
+        Statement::SelectCase {
+            expr,
+            cases,
+            else_body,
+        } => {
+            walk_expr(expr, f);
+            for case in cases {
+                for value in &case.values {
+                    match value {
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => walk_expr(e, f),
+                        CaseValue::Range { from, to } => {
+                            walk_expr(from, f);
+                            walk_expr(to, f);
+                        }
+                    }
+                }
+                walk_statements_exprs(&case.body, f);
+            }
+            walk_statements_exprs(else_body, f);
+        }
+        Statement::Locate { row, col } => {
+            walk_expr(row, f);
+            walk_expr(col, f);
+        }
+        Statement::Color { fg, bg } => {
+            walk_expr(fg, f);
+            if let Some(bg) = bg {
+                walk_expr(bg, f);
+            }
+        }
+        Statement::OnBranch { expr, targets, .. } => {
+            walk_expr(expr, f);
+            targets.iter().for_each(|e| walk_expr(e, f));
+        }
+        Statement::Field { channel, fields, .. } => {
+            walk_expr(channel, f);
+            fields.iter().for_each(|(w, _)| walk_expr(w, f));
+        }
+        Statement::Get {
+            channel,
+            record,
+            var,
+            ..
+        }
+        | Statement::Put {
+            channel,
+            record,
+            var,
+            ..
+        } => {
+            walk_expr(channel, f);
+            if let Some(record) = record {
+                walk_expr(record, f);
+            }
+            if let Some(var) = var {
+                walk_expr(var, f);
+            }
+        }
+        Statement::Lset { value, .. } | Statement::Rset { value, .. } => walk_expr(value, f),
+        Statement::Seek { channel, position } => {
+            walk_expr(channel, f);
+            walk_expr(position, f);
+        }
+        Statement::OptionBase(e) => walk_expr(e, f),
+        Statement::Width { channel, cols } => {
+            if let Some(channel) = channel {
+                walk_expr(channel, f);
+            }
+            walk_expr(cols, f);
+        }
+        Statement::Erase(_)
+        | Statement::End
+        | Statement::Stop
+        | Statement::Cls
+        | Statement::Beep
+        | Statement::Clear
+        | Statement::System
+        | Statement::Exit
+        | Statement::Restore(None)
+        | Statement::ReturnVoid
+        | Statement::GlobalDecl(_)
+        | Statement::Raw(_)
+        | Statement::BlockComment(_)
+        | Statement::Label(_)
+        | Statement::Randomize(None)
+        | Statement::Resume(_)
+        | Statement::BlankLine => {}
+    }
+}
+
+fn walk_expr(expr: &Expr, f: &mut dyn FnMut(&Expr)) {
+    f(expr);
+    match expr {
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {
+        }
+        Expr::ArrayRef { indices, .. } => indices.iter().for_each(|e| walk_expr(e, f)),
+        Expr::Call { args, .. } => args.iter().for_each(|e| walk_expr(e, f)),
+        Expr::Unary { expr, .. } => walk_expr(expr, f),
+        Expr::Binary { left, right, .. } => {
+            walk_expr(left, f);
+            walk_expr(right, f);
+        }
+        Expr::FileIndex { index, .. } => walk_expr(index, f),
+        Expr::FieldAccess { base, .. } => walk_expr(base, f),
+        Expr::MethodCall { base, args, .. } => {
+            walk_expr(base, f);
+            args.iter().for_each(|e| walk_expr(e, f));
+        }
+        Expr::RecordLit { fields, .. } => fields.iter().for_each(|(_, e)| walk_expr(e, f)),
+    }
 }
 
 // TODO: Add source-location carrying AST nodes so validation diagnostics can

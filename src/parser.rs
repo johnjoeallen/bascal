@@ -397,7 +397,7 @@ impl Parser {
         }
         if self.check_keyword("def") && self.check_next_keyword("fn") {
             self.parse_def_fn()
-        } else if self.check_keyword("dim") {
+        } else if self.check_dim_keyword() {
             self.parse_dim()
         } else if self.check_keyword("file") {
             self.parse_file_decl()
@@ -603,7 +603,7 @@ impl Parser {
     }
 
     fn parse_dim(&mut self) -> ParseResult<Statement> {
-        self.expect_keyword("dim")?;
+        self.expect_dim_keyword()?;
         let (name, is_array, sizes) = self.parse_dim_one()?;
         // `dim a%, b%(10), c%` -- each comma-separated name is its own
         // declaration; queue the rest and return the first so every caller
@@ -2012,6 +2012,24 @@ impl Parser {
         }
     }
 
+    /// `dim`/`declare` are interchangeable spellings of the same
+    /// declaration statement -- `declare` reads better for the Pascal-
+    /// leaning `--strict-vars` mode (see `resolver::reject_undeclared_
+    /// variables`), but neither one implies or requires the other; either
+    /// spelling works regardless of `--strict-vars`.
+    fn check_dim_keyword(&self) -> bool {
+        self.check_keyword("dim") || self.check_keyword("declare")
+    }
+
+    fn expect_dim_keyword(&mut self) -> ParseResult<()> {
+        if self.check_dim_keyword() {
+            self.advance();
+            Ok(())
+        } else {
+            Err(self.error("expected `dim` or `declare`"))
+        }
+    }
+
     fn check_keyword(&self, keyword: &str) -> bool {
         matches!(&self.current().kind, TokenKind::Ident(value) if keyword_eq(value, keyword))
     }
@@ -2238,6 +2256,20 @@ mod tests {
         assert_eq!(rec.fields[1].ty, RecordFieldType::Str(20));
         assert_eq!(rec.fields[2].name, "score");
         assert_eq!(rec.fields[2].ty, RecordFieldType::Float64);
+    }
+
+    #[test]
+    fn declare_is_an_interchangeable_synonym_for_dim() {
+        let dim_program = parse("dim x%, y%(20)\nend\n");
+        let declare_program = parse("declare x%, y%(20)\nend\n");
+        assert_eq!(dim_program.statements, declare_program.statements);
+        match &declare_program.statements[0] {
+            Statement::Dim { name, is_array, .. } => {
+                assert_eq!(name.name, "x");
+                assert!(!is_array);
+            }
+            other => panic!("expected Dim, got {other:?}"),
+        }
     }
 
     #[test]

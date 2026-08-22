@@ -30,6 +30,21 @@ pub struct CompileOptions {
     /// today; `Target::C` always fails with a "not supported" diagnostic
     /// (see `codegen_c::generate`).
     pub target: Target,
+    /// Pascal-style mandatory variable declaration, opt-in and off by
+    /// default -- turning it on is *not* a superset of BASIC any more, so
+    /// it never applies unless asked for. An identifier used as a plain
+    /// scalar/array variable (not a call, not a builtin) that was never
+    /// introduced by `dim`/`declare`, `const`, a `for` loop's own counter,
+    /// or a function/procedure parameter is rejected. Checked only against
+    /// the root program's own statements and functions -- never a
+    /// `require`d library's, which may not itself be written this way (see
+    /// `resolver::check_strict_vars`). Mutually exclusive in effect with
+    /// `strict_vars_warn`; if both are set, this one wins.
+    pub strict_vars: bool,
+    /// Same check as `strict_vars`, but every finding is printed to stderr
+    /// as a warning instead of failing the compile -- for trying strict
+    /// mode against an existing program without committing to it yet.
+    pub strict_vars_warn: bool,
 }
 
 impl CompileOptions {
@@ -39,6 +54,8 @@ impl CompileOptions {
             libraries: Vec::new(),
             line_numbers: false,
             target: Target::Basic,
+            strict_vars: false,
+            strict_vars_warn: false,
         }
     }
 }
@@ -76,6 +93,33 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         }
     }
     let options = &options;
+
+    if options.strict_vars || options.strict_vars_warn {
+        // Checked against the root file's own parse, on its own -- not the
+        // merged `program` below, whose `require`d functions (BASCAL's own
+        // `com.bascal.stdlib` included) were never written to satisfy this,
+        // and not the DSL-lowered form, which invents buffer/scalar
+        // variables no one is expected to `dim` by hand. See resolver.rs's
+        // own `check_strict_vars` doc comment.
+        let source = fs::read_to_string(input).map_err(|err| {
+            vec![Diagnostic::error(
+                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+                format!("failed to read source file: {err}"),
+            )]
+        })?;
+        let root_only = parse_source(input.display().to_string(), &source)?;
+        let findings = resolver::check_strict_vars(&root_only, options.strict_vars_warn);
+        if options.strict_vars {
+            if !findings.is_empty() {
+                return Err(findings);
+            }
+        } else {
+            for finding in &findings {
+                eprintln!("{finding}");
+            }
+        }
+    }
+
     let mut visited = HashSet::new();
     let mut program = load_program_recursive(input, true, options, &mut visited)?;
 
@@ -1060,6 +1104,156 @@ END
             .map(|d| d.to_string())
             .collect::<String>();
         assert!(msg.contains("the `common` keyword has been removed"));
+    }
+
+    #[test]
+    fn function_cannot_shadow_a_builtin() {
+        let source = "function sqr%(x%)\n    return x% * x%\nend function\nprint sqr%(4)\nend\n";
+        let diagnostics =
+            compile_source("shadow.bcl", source).expect_err("shadowing SQR should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("same name as the built-in `SQR`"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn procedure_cannot_shadow_a_builtin() {
+        let source = "procedure len(s$)\n    print s$\nend procedure\nlen(\"hi\")\nend\n";
+        let diagnostics =
+            compile_source("shadow2.bcl", source).expect_err("shadowing LEN should fail");
+        let msg = diagnostics
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(
+            msg.contains("same name as the built-in `LEN`"),
+            "unexpected diagnostics: {msg}"
+        );
+    }
+
+    #[test]
+    fn ordinary_function_names_are_unaffected_by_the_builtin_check() {
+        let source = "function larger%(a%, b%)\n    if a% > b% then\n        return a%\n    end if\n    return b%\nend function\nprint larger%(1, 2)\nend\n";
+        compile_source("ok.bcl", source).expect("a non-colliding function name should compile");
+    }
+
+    // ── --strict-vars / --strict-vars-warn ──────────────────────────────
+
+    #[test]
+    fn strict_vars_rejects_an_undeclared_variable() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("typo.bcl");
+        std::fs::write(
+            &path,
+            "program typo\ndim score%\nscore% = 10\nprint scroe%\nend\n",
+        )
+        .unwrap();
+
+        let options = CompileOptions {
+            strict_vars: true,
+            ..CompileOptions::new()
+        };
+        let result = compile_file(&path, &options);
+        assert!(result.is_err(), "a misspelled, undeclared name should fail");
+        let msg = result
+            .unwrap_err()
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect::<String>();
+        assert!(msg.contains("`scroe%` is used without a"), "unexpected: {msg}");
+    }
+
+    #[test]
+    fn strict_vars_accepts_dim_declare_const_for_and_params() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("clean.bcl");
+        std::fs::write(
+            &path,
+            "program clean\n\
+             declare score%, y%(20)\n\
+             dim total%\n\
+             const bonus% = 5\n\
+             score% = 10\n\
+             y%(1) = 5\n\
+             total% = score% + y%(1) + bonus%\n\
+             for i% = 1 to 5\n\
+             \x20   print i%\n\
+             end for\n\
+             function double%(n%)\n\
+             \x20   declare result%\n\
+             \x20   result% = n% * 2\n\
+             \x20   return result%\n\
+             end function\n\
+             print double%(total%)\n\
+             end\n",
+        )
+        .unwrap();
+
+        let options = CompileOptions {
+            strict_vars: true,
+            ..CompileOptions::new()
+        };
+        compile_file(&path, &options).expect(
+            "dim/declare'd names, const, a for-loop counter, and a parameter should all pass",
+        );
+    }
+
+    #[test]
+    fn strict_vars_ignores_a_required_librarys_own_body() {
+        // com.bascal.stdlib.ucase itself doesn't dim its locals -- turning
+        // on --strict-vars for a program that merely requires it should
+        // never fail because of that library's own internals.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("uses_stdlib.bcl");
+        std::fs::write(
+            &path,
+            "program usesstdlib\n\
+             require com.bascal.stdlib.ucase\n\
+             dim s$\n\
+             s$ = \"hello\"\n\
+             print ucase$(s$)\n\
+             end\n",
+        )
+        .unwrap();
+
+        let options = CompileOptions {
+            strict_vars: true,
+            ..CompileOptions::new()
+        };
+        compile_file(&path, &options)
+            .expect("a required stdlib call should not be misread as an undeclared variable");
+    }
+
+    #[test]
+    fn strict_vars_warn_prints_but_does_not_fail() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("typo2.bcl");
+        std::fs::write(
+            &path,
+            "program typo2\ndim score%\nscore% = 10\nprint scroe%\nend\n",
+        )
+        .unwrap();
+
+        let options = CompileOptions {
+            strict_vars_warn: true,
+            ..CompileOptions::new()
+        };
+        compile_file(&path, &options)
+            .expect("--strict-vars-warn should still succeed despite the finding");
+    }
+
+    #[test]
+    fn without_strict_vars_an_undeclared_variable_is_fine() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("implicit.bcl");
+        std::fs::write(&path, "program implicit\nx% = 5\nprint x%\nend\n").unwrap();
+        compile_file(&path, &CompileOptions::new())
+            .expect("implicit variable creation must still work when strict_vars is off");
     }
 
     #[test]
