@@ -25,10 +25,10 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), eight BASIC intrinsics
+//! single-precision -- see `effective_suffix`), nine BASIC intrinsics
 //! implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`,
-//! `STR$`, `VAL` (see `render_numeric_call`/`render_string_call`/
-//! `MID_HELPER`) -- and
+//! `STR$`, `VAL`, `INSTR` (see `render_numeric_call`/`render_string_call`/
+//! `MID_HELPER`/`INSTR_HELPER`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
@@ -178,6 +178,9 @@ struct BuiltinUsage {
     /// `file_io.used`, for unrelated reasons -- this flag covers a
     /// program that calls `VAL` without using any random-access I/O.
     needs_stdlib_h: bool,
+    /// Set by `INSTR`, whose C translation calls the `bcc_instr` helper
+    /// (see `INSTR_HELPER`), which itself needs `strstr` from `<string.h>`.
+    needs_instr_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -185,6 +188,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_string_h: false,
         needs_ring_buffer_helpers: false,
         needs_stdlib_h: false,
+        needs_instr_helper: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -195,6 +199,10 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                     usage.needs_ring_buffer_helpers = true;
                 }
                 "val" => usage.needs_stdlib_h = true,
+                "instr" => {
+                    usage.needs_string_h = true;
+                    usage.needs_instr_helper = true;
+                }
                 _ => {}
             }
         }
@@ -299,6 +307,15 @@ const COLOR_HELPER: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 
 /// it (parses it into the target variable) before the next one runs; there
 /// is never a live reference to a stale read left lying around.
 const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_read_line(void) {\n    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {\n        bcc_input_buf[0] = 0;\n        return;\n    }\n    bcc_input_buf[strcspn(bcc_input_buf, \"\\r\\n\")] = 0;\n}\n\n";
+
+/// `INSTR(s$, needle$)` -- the 1-based position of the first match, or 0.
+/// Scoped to this 2-argument form only, matching what `docs/language/
+/// arrays-and-strings.html` documents -- real BASCOM's optional leading
+/// `start%` argument (`INSTR(start%, s$, needle$)`) isn't implemented,
+/// since nothing in this repo exercises it. `strstr` already does the
+/// actual search; this just converts its pointer result to BASIC's
+/// 1-based index convention (or 0 for "not found", instead of C's `NULL`).
+const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -1017,6 +1034,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     out.push('\n');
     if builtin_usage.needs_ring_buffer_helpers {
         out.push_str(MID_HELPER);
+    }
+    if builtin_usage.needs_instr_helper {
+        out.push_str(INSTR_HELPER);
     }
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
@@ -3285,6 +3305,15 @@ fn render_numeric_call(
     if name.name.eq_ignore_ascii_case("val") && args.len() == 1 {
         let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
         return Ok((format!("atof({s})"), true));
+    }
+    // `INSTR(s$, needle$)` -- the 1-based position of the first match, or
+    // 0 for no match (see `INSTR_HELPER`). Only this 2-argument form is
+    // supported -- see `INSTR_HELPER`'s own doc comment for why the
+    // 3-argument start-position form is deliberately out of scope.
+    if name.name.eq_ignore_ascii_case("instr") && args.len() == 2 {
+        let s = render_prelude_free_string_arg(&args[0], needs_math, functions)?;
+        let needle = render_prelude_free_string_arg(&args[1], needs_math, functions)?;
+        return Ok((format!("bcc_instr({s}, {needle})"), false));
     }
     // `CVI`/`CVL`/`CVS`/`CVD` unpack a `FIELD`'d variable's raw bytes
     // (see `FILE_IO_HELPER`'s `bcc_cvX` helpers and `Statement::Lset`'s
