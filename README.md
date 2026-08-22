@@ -12,8 +12,10 @@ building a real 2026 application. See [the origin story](https://johnjoeallen.gi
 side-by-side syntax comparisons, and the full [language manual](https://johnjoeallen.github.io/bascal/manual/).
 
 BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC.
-The transpiler command is `bcc`.  See [MANUAL.md](MANUAL.md) for the full
-language reference.
+The transpiler command is `bcc`. See the
+[full language manual](https://johnjoeallen.github.io/bascal/manual/) on the
+website for the complete reference; [MANUAL.md](MANUAL.md) in this repo is
+just a short pointer to it.
 
 BASCAL keeps BASIC's global symbol model while adding enough structure to make
 larger programs practical:
@@ -46,7 +48,8 @@ larger programs practical:
   `db[i] = { ... }` / `db[i] = ?{ ... }` (partial), `let s = db[i]`,
   `db[i].field = value`, `db[i] = s`, and `db.close()`, all transpiled to plain
   `FIELD`/`PUT`/`GET`/`LSET`/`MKx`/`CVx` — see
-  [MANUAL.md](MANUAL.md#record-files) and
+  [Record Files](https://johnjoeallen.github.io/bascal/manual/record-files.html)
+  in the manual and
   [`tutorial/15_random_and_record_files.bcl`](tutorial/15_random_and_record_files.bcl)
 
 Everything is still global. Path-style names are dependency selectors, not
@@ -97,220 +100,32 @@ additional roots searched in order.
 
 ## Backends
 
-BASCAL has two code generators, selected with `--target`:
-
-- **`basic`** (default) — BASCAL's original and only complete target: plain
-  1980s Microsoft BASIC/BASCOM, described throughout this README. Everything
-  above applies to this backend.
-- **`c`** — a native C backend, **just getting started**, aiming to
-  produce native Linux/macOS/Win32 binaries directly (via `gcc`) without
-  going through a BASIC compiler at all — while the BASCOM-compatible
-  `basic` target keeps gating what language features BASCAL adds, so both
-  backends stay able to express the same language. Four tutorials
-  compile end to end today:
-  [`tutorial/01_hello.bcl`](tutorial/01_hello.bcl),
-  [`tutorial/03_arithmetic.bcl`](tutorial/03_arithmetic.bcl),
-  [`tutorial/04_conditions.bcl`](tutorial/04_conditions.bcl), and
-  [`tutorial/05_loops.bcl`](tutorial/05_loops.bcl) — see each one's `.c`
-  counterpart for its output.
-
-  Currently supported: `print`, `end`, `dim`, `const`, `if`/`elseif`/
-  `else`/`end if` (block, single-line, and nested — C has native
-  `if`/`else`, so this is a direct structural translation, unlike the
-  `basic` target, which has to transpile to a GOTO/label chain since real
-  MBASIC/BASCOM has no block `IF`), `for`/`next`, `while`/`wend`, every
-  `do`/`loop` pre-/post-check variant, and `exit` (a plain C `break;` --
-  C's native loops already give it the right "innermost enclosing loop"
-  target for free, unlike the BASIC backend, which needs its own
-  loop_exit_stack since real MBASIC/BASCOM's loops are GOTO chains with
-  no native break), scalar variables — both numeric (`%`/`&`/`!`/`#`) and
-  string (`$`) — matching BASIC's spring-into-existence-zero-initialized
-  semantics (every variable touched anywhere is declared once at the top
-  of `main`), every arithmetic operator (`+ - * / \ MOD ^`), every
-  comparison operator (`= <> < <= > >=`, evaluating to BASIC's own
-  `-1`/`0`, not C's `1`/`0`), every bitwise/logical operator (`AND OR XOR
-  NOT` — genuinely bitwise, not short-circuit booleans: C's
-  `&`/`|`/`^`/`~` are correct here, not `&&`/`||`/`!`, since real
-  MBASIC/BASCOM has no short-circuit boolean primitive at all), and
-  string concatenation (`+`). Anything else (arrays, functions, calls...)
-  reports a "not supported yet" diagnostic rather than emitting wrong
-  code.
-
-  A narrowing numeric assignment (a float/double-valued expression
-  assigned into an integer-suffixed variable, e.g. `n% = n% / 2`) rounds,
-  matching real MBASIC/BASCOM's own `CINT()`-style conversion (confirmed
-  directly against real BASCOM: `N% = 27 / 2` gives `14`, not `13`) --
-  not C's own implicit truncating conversion, which would silently give
-  a different, wrong answer. A `for` loop's start/end/step are each
-  captured into their own temp exactly once, at loop entry, matching
-  BASIC's own "evaluated once, not re-read every iteration" semantics --
-  a naive C `for` whose condition directly re-reads a variable the body
-  mutates would behave differently.
-
-  Every operator needed its exact BASIC semantics tracked down first, not
-  assumed to be "the same as the C operator" — e.g. `/` gets explicit
-  `(double)` casts so it stays true division even between two integers
-  (plain C `int / int` truncates); `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` round
-  each operand first via `round()` (verified against the GW-BASIC
-  Reference Manual, and `round()`'s ties-away-from-zero tie-break
-  confirmed directly against a genuine, period-accurate IBM Personal
-  Computer BASIC Compiler 2.00 under dosbox-x — `2.5 \ 1 = 3`,
-  `2.5 AND 3 = 3`, matching `round()` and disagreeing with e.g.
-  round-half-to-even or plain truncation; see
-  `scripts/fetch-ibm-basic-compiler.sh` /
-  [test-fixtures/README.md](test-fixtures/README.md) if you want to check
-  this or other real-BASCOM claims yourself, the same fixture the `basic`
-  target's own dosbox-x conformance suite (see [Tests](#tests)) uses),
-  then apply C's native `/`, `%`, `&`, `|`, `^`, or `~`; `^` (exponent)
-  maps to `pow()` from `<math.h>`. String variables
-  are fixed-size buffers (`char[256]`) — real BASIC strings are
-  dynamically sized, which this backend doesn't attempt — written
-  exclusively via `snprintf` (safely truncates an over-long value, never
-  overflows), never `strcpy`/`strcat`. `%`/`&` (BASIC's 16-bit integer and
-  32-bit long) are collapsed to the same plain C `int`.
+BASCAL has two code generators, selected with `--target`: **`basic`**
+(default) — the original, complete target, plain 1980s Microsoft
+BASIC/BASCOM — and **`c`**, an experimental native-C backend aiming to
+produce native Linux/macOS/Win32 binaries directly, with no BASIC
+compiler involved. Full detail on both — exactly what `--target c`
+supports today, and every BASIC-vs-C semantic decision behind it — lives
+on the website's
+[Backends](https://johnjoeallen.github.io/bascal/manual/command-line-reference.html#backends)
+section, kept current there rather than duplicated here.
 
 ## Dependencies
 
-`require` and `import` recursively load `.bcl` files and merge their functions
-into the generated output. The two keywords are equivalent.
-
-Dots become directory separators:
-
-```
-require com.bascal.sort.bubbleSort  →  com/bascal/sort/bubbleSort.bcl
-```
-
-The input file's directory is always searched first; additional roots are added
-with `-L`:
-
-```bash
-bcc input.bcl -L ./libs -L ./vendor
-```
+`require`/`import` recursively load `.bcl` files by dotted path (dots
+become directory separators, e.g. `com.bascal.sort.bubbleSort` →
+`com/bascal/sort/bubbleSort.bcl`), searched first in the input file's own
+directory, then any `-L` roots in order. See the manual's
+[Dependencies](https://johnjoeallen.github.io/bascal/manual/dependencies-require-and-import.html)
+chapter for the full module-convention rules.
 
 ## Shared COMMON
 
-In 1980s BASIC, multi-program systems used `COMMON` to declare shared variable
-slots that survive a `CHAIN` into the next program. Every chained program had to
-declare an **identical** `COMMON` list or variables would land in the wrong
-slots.
-
-BASCAL coordinates this with shared files. A shared file contains only `dim`
-declarations — every variable in it is COMMON by default, no separate keyword
-needed — and any program that names it with `shared` receives those
-declarations verbatim at the top of its generated `.bas` output.
-
-**Shared file `arcade.bcl`:**
-
-```
-' Shared state for the ARCADE programs.
-shared arcade
-
-dim score%
-dim level%
-dim playerName$
-dim hiScore%
-```
-
-**Program files:**
-
-```
-program menu shared arcade
-
-INPUT "Your name: "; playerName$
-score% = 0
-level% = 1
-' CHAIN "game.bas"
-END
-```
-
-```
-program game shared arcade
-
-score% = score% + 50 * level%
-PRINT "Score: " + STR$(score%)
-' CHAIN "menu.bas"
-END
-```
-
-Both transpile to `.bas` files that open with the same block:
-
-```
-COMMON score%, level%, playerName$
-COMMON hiScore%
-```
-
-Rules:
-- Every `.bcl` file must declare exactly one of `program`, `library`, or
-  `shared` as its first non-comment line.
-- A shared file may contain only `dim` declarations (and comments).
-  Functions, statements, and `require` are rejected.
-- A `shared <name>` header is illegal in any file that isn't a shared file.
-- A file can't have more than one of `program`/`library`/`shared`.
-- A `program` declaration (with or without `shared`) is illegal in library
-  modules — those declare `library name` instead, and only a `library`
-  file may be `require`d/`import`ed.
-
-## Generated BASIC Shape
-
-Functions are transpiled to global parameter/result variables plus `GOSUB`.
-Every parameter is copied in before the call; `byref` copies the result back
-out afterward too (`byval`, the default, doesn't). Array parameters support
-any number of dimensions, matched against how the callee's body indexes
-them — a mismatch is a transpile-time error.
-
-Only `GOTO` / `GOSUB` target lines receive line numbers (sparse mode). Use
-`--line-numbers` for every line.
-
-Source blank lines are preserved in the output. Multiple consecutive blank lines
-are folded to one. Generated array-copy blocks are surrounded by blank lines.
-
-Example BASCAL:
-
-```
-function add%(left%, right%)
-    return left% + right%
-end function
-
-total% = add%(10, 20)
-PRINT total%
-END
-```
-
-Generated output:
-
-```
-' BASCAL generated BASIC
-' Functions are transpiled to global variables, labels, and GOSUB
-
-add_left% = 10
-add_right% = 20
-GOSUB 10
-total% = add_result%
-PRINT total%
-END
-
-' function add%(left%, right%)
-10 add_result% = add_left% + add_right%
-    RETURN
-' end function add%
-```
-
-## Condition Transpilation
-
-`if` and `while` conditions use `(cond) = 0` to invert, not `NOT`. This is
-intentional: BASIC's `NOT` is bitwise, so `NOT 1 = -2` (still truthy), which
-breaks programmer-boolean values like `swapped% = 1`. The `= 0` test treats
-any non-zero as truthy, matching expected semantics.
-
-## Recursive Functions
-
-BASCAL does not support recursion, direct or indirect. Functions and
-procedures are transpiled to `GOSUB` against shared global parameter
-storage, not a real call stack, so any cycle in the call graph — a
-function calling itself, or a longer chain that eventually calls back into
-where it started — overwrites in-flight parameters. The transpiler checks
-the whole call graph and rejects any cycle at transpile time. Use an
-explicit stack array to simulate recursion.
+`shared` files coordinate `COMMON` across chained (`CHAIN`) programs —
+every variable `dim`ed in a shared file becomes `COMMON`, verbatim, at
+the top of every program that names it. See the manual's
+[Shared COMMON](https://johnjoeallen.github.io/bascal/manual/shared-common.html)
+chapter for a full worked example and the file-declaration rules.
 
 ## Repository Layout
 
@@ -425,5 +240,5 @@ env -u RUSTC_WRAPPER cargo test
   function's already-resolved array parameter); a call site whose size is a
   genuine runtime value (e.g. `DIM data%(n%)` where `n%` came from `INPUT`)
   needs an explicit capacity written on the parameter instead of `?`. See
-  [Array Parameter Storage Capacity](MANUAL.md#array-parameter-storage-capacity)
+  [Array Parameter Storage Capacity](https://johnjoeallen.github.io/bascal/manual/arrays.html#array-parameter-storage-capacity)
   in the manual.
