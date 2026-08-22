@@ -234,7 +234,6 @@ env -u RUSTC_WRAPPER cargo test
 
 ## Current Limits
 
-- No library archive format.
 - An array parameter's shared storage is `DIM`ed once, sized to the largest
   array any call site ever passes it. The transpiler infers that size itself
   from every call site's `DIM` bounds (literal, `const`, or another
