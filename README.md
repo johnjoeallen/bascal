@@ -8,8 +8,13 @@
 *A fun project, built mostly to see what's possible — not really meant for
 building a real 2026 application. See [the origin story](https://johnjoeallen.github.io/bascal/origin.html).*
 
-BASCAL translates structured `.bcl` source into plain 1980s Microsoft BASIC,
-via the `bcc` transpiler command.
+The `bcc` transpiler translates structured `.bcl` source into an intermediate
+language that can then be compiled into a runnable binary. Two backends are
+available, selected with `--target`: `basic` (default) — plain 1980s
+Microsoft BASIC, compiled with a period BASIC compiler like BASCOM or
+FreeBASIC's QB-compatible mode — is fully functional; `c` — native C,
+compiled directly with `gcc`, no BASIC compiler involved — is an
+experimental backend still under development.
 
 **[Browse the website](https://johnjoeallen.github.io/bascal/)** for
 tutorials, side-by-side syntax comparisons, and the full
