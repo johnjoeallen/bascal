@@ -5180,6 +5180,38 @@ end
     }
 
     #[test]
+    fn c_target_supports_right() {
+        let source = "dim s$\ns$ = \"Hello, World!\"\nprint right$(s$, 6)\nprint right$(s$, 100)\nprint right$(s$, 0)\nprint right$(\"BASCAL\", 3)\nend\n";
+        let output = compile_source_via_c_target(source);
+        // Regression check: RIGHT$ needs the same MID_HELPER block (for
+        // bcc_mid) and <string.h> (for strlen inside render_right_call)
+        // that MID$/LEFT$ already pull in via scan_builtin_usage --
+        // missing either produces C that fails to *compile*, not
+        // something `compile_source_via_c_target`'s own success check
+        // alone would catch (it only inspects generated source text).
+        assert!(
+            output.contains("#include <string.h>"),
+            "RIGHT$ needs <string.h> for strlen:\n{output}"
+        );
+        assert!(
+            output.contains("static const char* bcc_mid("),
+            "RIGHT$ needs the MID_HELPER block for bcc_mid:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "bcc_mid(bv_s_s, (int)strlen(bv_s_s) - (6) + 1, 6)"
+            ),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains(
+                "bcc_mid(\"BASCAL\", (int)strlen(\"BASCAL\") - (3) + 1, 3)"
+            ),
+            "a string literal argument should be passed straight through:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_val() {
         let source = "dim s$, n%\ns$ = \"42abc\"\nn% = val(s$)\nprint n%\nprint val(\"3.14\")\nprint val(\"not a number\")\nend\n";
         let output = compile_source_via_c_target(source);
