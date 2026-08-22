@@ -106,7 +106,85 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if needs_string {
         includes.push_str("#include <string.h>\n");
     }
-    Ok(format!("{includes}\nint main(void) {{\n{body}}}\n"))
+    Ok(format!("{includes}\nint main(void) {{\n{}}}\n", reindent_c_body(&body)))
+}
+
+/// Re-indents an already-fully-generated C body per its actual nesting
+/// depth. Every `emit_*`/`render_*` function above pushes each of its own
+/// lines flush against the same flat 4-space prefix, regardless of how
+/// deeply nested the construct producing it is -- threading an indent-depth
+/// counter through every one of those call sites (`emit_statement` alone
+/// recurses into itself from five different arms) would be a lot of
+/// mechanical churn for a purely cosmetic property. Doing it as one pass
+/// over the finished text instead, walking `{`/`}` block structure line by
+/// line, gets the same result far more cheaply: a line starting with `}`
+/// dedents *before* printing (so it lines up with the construct it closes,
+/// e.g. `} else {`), otherwise it prints at the current depth; then the
+/// line's own net brace balance (`brace_delta`) updates depth for the next
+/// line. Depth starts at 1 -- every line here is already inside `main`'s
+/// own `{ ... }`, added by `generate`'s caller after this returns.
+///
+/// Two things a naive version of this would get wrong: a `{`/`}` inside a
+/// C string literal (a `print`ed BASCAL string can itself contain either
+/// character, e.g. `print "{x}"` becomes `printf("{x}\n")`) must not be
+/// mistaken for block structure -- `brace_delta` tracks string-literal
+/// state (respecting `\"`/`\\` escapes) to skip those. And a whole-line
+/// `//` comment (every comment this backend emits is one -- see
+/// `Statement::BlockComment`/`Statement::Raw`) is skipped outright rather
+/// than scanned for braces/quotes: comment text is arbitrary BASIC source
+/// text, not C, and could contain an unbalanced `{`, `}`, or `"` of its
+/// own that would otherwise desync every line indented after it.
+fn reindent_c_body(raw: &str) -> String {
+    let mut depth: usize = 1;
+    let mut out = String::with_capacity(raw.len());
+    for raw_line in raw.lines() {
+        let content = raw_line.trim();
+        if content.is_empty() {
+            out.push('\n');
+            continue;
+        }
+        if content.starts_with("//") {
+            out.push_str(&"    ".repeat(depth));
+            out.push_str(content);
+            out.push('\n');
+            continue;
+        }
+        let leading_close = content.starts_with('}');
+        let print_depth = if leading_close { depth.saturating_sub(1) } else { depth };
+        out.push_str(&"    ".repeat(print_depth));
+        out.push_str(content);
+        out.push('\n');
+        depth = (depth as isize + brace_delta(content)).max(0) as usize;
+    }
+    out
+}
+
+/// Net `{`/`}` balance of one already-generated C line, ignoring either
+/// character where it instead appears inside a C string literal (`"..."`,
+/// respecting `\"`/`\\` escapes) -- see `reindent_c_body`.
+fn brace_delta(line: &str) -> isize {
+    let mut delta = 0isize;
+    let mut in_string = false;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if in_string {
+            match c {
+                '\\' => {
+                    chars.next();
+                }
+                '"' => in_string = false,
+                _ => {}
+            }
+        } else {
+            match c {
+                '"' => in_string = true,
+                '{' => delta += 1,
+                '}' => delta -= 1,
+                _ => {}
+            }
+        }
+    }
+    delta
 }
 
 /// The C identifier a BASIC scalar variable maps to. Prefixed (`bv_...`,
@@ -329,10 +407,12 @@ fn emit_statement(
         // nested `Statement::If` inside `else_body`, which the recursive
         // `emit_statement` call below just walks into naturally, producing
         // (harmless, if not maximally idiomatic) `} else {\n if (...) {`
-        // nesting rather than a flat `else if` chain. Body statements are
-        // NOT re-indented per nesting level (still flush against the same
-        // base indent as everything else) -- purely cosmetic, not a
-        // correctness gap.
+        // nesting rather than a flat `else if` chain. Every line pushed
+        // here (like everywhere else in this file) is flush against the
+        // same flat indent regardless of nesting depth -- `generate`
+        // re-indents the whole body in one pass afterward, see
+        // `reindent_c_body`, rather than this function tracking depth
+        // itself.
         Statement::If { condition, then_body, else_body } => {
             let (cond_text, _) = render_numeric_expr(condition, needs_math)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));

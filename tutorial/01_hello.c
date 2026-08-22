@@ -2,10 +2,10 @@
 
 int main(void) {
     // Tutorial 1 — Hello, World
-    // 
+    //
     // The simplest BASCAL program.  print writes a line to the screen.
     // END marks the bottom of the main program body; every program needs one.
-    // 
+    //
     // Three comment styles are available:
     // '  single-line (BASIC style, passed through to generated output)
     // // single-line (C style, same behaviour as ')

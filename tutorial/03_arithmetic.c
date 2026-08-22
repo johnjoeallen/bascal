@@ -8,12 +8,12 @@ int main(void) {
     int bv_i_x = 0;
 
     // Tutorial 3 — Operators and Expressions
-    // 
+    //
     // Arithmetic:   +  -  *  /  \  MOD  ^
     // Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)
     // Logical:      AND  OR  NOT  XOR  (bitwise — see note below)
     // String:       + concatenates strings
-    // 
+    //
     // Precedence (highest first):
     // ^                 exponentiation (right-associative)
     // unary -           negation
@@ -26,7 +26,7 @@ int main(void) {
     // AND               bitwise AND
     // OR                bitwise OR
     // XOR               bitwise XOR
-    // 
+    //
     // IMPORTANT: NOT is bitwise, so NOT 1 = -2, not 0.
     // Test for false with (expr) = 0, not NOT expr.
 
@@ -59,7 +59,7 @@ int main(void) {
     // Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
     bv_i_x = 7;
     if (((int)((long)round((double)(-(bv_i_x > 0))) & (long)round((double)(-(bv_i_x < 10)))))) {
-    printf("%dis in 1..9\n", bv_i_x);
+        printf("%dis in 1..9\n", bv_i_x);
     }
     printf("%d (expect 5 — 110 XOR 011 = 101)\n", ((int)((long)round((double)6) ^ (long)round((double)3))));
 

@@ -4090,7 +4090,7 @@ end
         );
         assert!(output.contains("while ((-(bv_i_j < 3))) {"), "unexpected output:\n{output}");
         assert!(
-            output.contains("while (1) {\n    if (!((-(bv_i_k < 3)))) break;"),
+            output.contains("while (1) {\n        if (!((-(bv_i_k < 3)))) break;"),
             "unexpected output:\n{output}"
         );
         assert!(output.contains("    break;\n"), "unexpected output:\n{output}");
