@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 6 — SELECT CASE
+30 ' Tutorial — SELECT CASE
 40 ' 
 50 ' SELECT CASE tests one expression against multiple patterns.  The
 60 ' compiler evaluates the expression once, stores it in a temporary

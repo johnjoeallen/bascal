@@ -13,7 +13,7 @@
 
 <header class="hero compact">
   <div class="wrap">
-    <h1>13. Shared COMMON</h1>
+    <h1>Shared COMMON</h1>
     <p class="tagline">A COMMON block, declared once in a shared file, emitted verbatim into every program that references it.</p>
   </div>
 </header>
@@ -69,7 +69,7 @@ count% = count% + 1
     <details>
       <summary><code>tutorial/13_shared/state.bcl</code></summary>
       <pre><code>/*
- * Shared file for Tutorial 13 — COMMON / CHAIN.
+ * Shared file for Tutorial — COMMON / CHAIN.
  *
  * `shared state` declares this file as the shared-variables file itself,
  * named `state` (matching this filename, state.bcl). Every program that
@@ -93,7 +93,7 @@ declare label$
     </details>
     <details>
       <summary><code>tutorial/13_shared/start.bcl</code></summary>
-      <pre><code>// Tutorial 13 — Shared COMMON, program 1 of 2
+      <pre><code>// Tutorial — Shared COMMON, program 1 of 2
 //
 // "program name shared sharedname" tells bcc to load sharedname.bcl and
 // emit its COMMON declarations at the very top of the generated output.
@@ -128,7 +128,7 @@ end
     </details>
     <details>
       <summary><code>tutorial/13_shared/show.bcl</code></summary>
-      <pre><code>// Tutorial 13 — Shared COMMON, program 2 of 2
+      <pre><code>// Tutorial — Shared COMMON, program 2 of 2
 //
 // This program references the same shared file as start.bcl.  Its
 // generated BASIC will begin with the same COMMON block, so count% and
@@ -157,7 +157,7 @@ end
 <!-- END generated source embed -->
 
   <p class="crumbs">
-    <a href="12_require.html">&larr; 12. Require and Multi-File Projects</a> &nbsp;&middot;&nbsp; <a href="14_procedures.html">14. Procedures &rarr;</a>
+    <a href="12_require.html">&larr; Require and Multi-File Projects</a> &nbsp;&middot;&nbsp; <a href="14_procedures.html">Procedures &rarr;</a>
   </p>
 </main>
 

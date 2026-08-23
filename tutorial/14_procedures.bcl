@@ -1,4 +1,4 @@
-// Tutorial 14 — Procedures
+// Tutorial — Procedures
 //
 // A procedure is like a function but returns no value.  Declare it with
 // PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.

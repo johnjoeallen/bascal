@@ -7,7 +7,7 @@ static int bv_i_n = 0;
 static int bv_i_x = 0;
 
 int main(void) {
-    // Tutorial 3 — Operators and Expressions
+    // Tutorial — Operators and Expressions
     //
     // Arithmetic:   +  -  *  /  \  MOD  ^
     // Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)

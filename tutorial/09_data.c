@@ -15,7 +15,7 @@ static char bv_s_capital[6][256] = {0};
 static char bv_s_country[6][256] = {0};
 
 int main(void) {
-    // Tutorial 9 — data, read, restore, swap, randomize
+    // Tutorial — data, read, restore, swap, randomize
     //
     // data embeds literal values directly in the program.  read consumes
     // them in sequence.  restore rewinds the pointer so data can be read

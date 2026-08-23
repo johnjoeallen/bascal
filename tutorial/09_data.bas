@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 9 — data, read, restore, swap, randomize
+30 ' Tutorial — data, read, restore, swap, randomize
 40 ' 
 50 ' data embeds literal values directly in the program.  read consumes
 60 ' them in sequence.  restore rewinds the pointer so data can be read

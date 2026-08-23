@@ -1,4 +1,4 @@
-// Tutorial 9 — data, read, restore, swap, randomize
+// Tutorial — data, read, restore, swap, randomize
 //
 // data embeds literal values directly in the program.  read consumes
 // them in sequence.  restore rewinds the pointer so data can be read

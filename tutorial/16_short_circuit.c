@@ -16,7 +16,7 @@ int bf_i_ispositive(int bv_i_n) {
 }
 
 int main(void) {
-    // Tutorial 16 — Short-Circuit && and ||
+    // Tutorial — Short-Circuit && and ||
     //
     // Classic BASIC's AND/OR are bitwise and always evaluate both sides -- there
     // is no short-circuit primitive in the generated BASIC at all. && and ||

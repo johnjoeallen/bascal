@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 1 — Hello, World
+30 ' Tutorial — Hello, World
 40 ' 
 50 ' The simplest BASCAL program.  print writes a line to the screen.
 60 ' END marks the bottom of the main program body; every program needs one.

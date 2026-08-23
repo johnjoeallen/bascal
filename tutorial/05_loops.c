@@ -8,7 +8,7 @@ static int bv_i_p = 0;
 static int bv_i_steps = 0;
 
 int main(void) {
-    // Tutorial 5 — Loops: for, WHILE, DO
+    // Tutorial — Loops: for, WHILE, DO
     //
     // BASCAL provides three loop constructs:
     //

@@ -1,4 +1,4 @@
-// Tutorial 3 — Operators and Expressions
+// Tutorial — Operators and Expressions
 //
 // Arithmetic:   +  -  *  /  \  MOD  ^
 // Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)

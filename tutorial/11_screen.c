@@ -3,7 +3,7 @@
 #include "bcc_runtime.h"
 
 int main(void) {
-    // Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
+    // Tutorial — Screen I/O: cls, locate, color, beep, lprint
     //
     // These statements control the terminal display and connected hardware.
     // They map directly to the same-named BASCOM statements.

@@ -10,7 +10,7 @@ static char bv_s_firstcountry[256] = {0};
 static char bv_s_secondcountry[256] = {0};
 
 int main(void) {
-    // Tutorial 17 — Labels and Error Handling
+    // Tutorial — Labels and Error Handling
     //
     // BASCAL manages line numbers itself -- goto, gosub, on error goto, resume,
     // restore, and on ... goto / on ... gosub can never target a raw line

@@ -7,7 +7,7 @@ static int bv_i_count = 0;
 static char bv_s_label[256] = {0};
 
 int main(void) {
-    // Tutorial 13 — Shared COMMON, program 1 of 2
+    // Tutorial — Shared COMMON, program 1 of 2
     //
     // "program name shared sharedname" tells bcc to load sharedname.bcl and
     // emit its COMMON declarations at the very top of the generated output.

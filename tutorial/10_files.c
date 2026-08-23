@@ -13,7 +13,7 @@ static char bv_s_name[256] = {0};
 static char bv_s_result[256] = {0};
 
 int main(void) {
-    // Tutorial 10 — File Input and Output
+    // Tutorial — File Input and Output
     //
     // This tutorial writes the *same* sequential file twice. Part 1 uses raw
     // BASIC file statements directly. Part 2 uses BASCAL's file-handle DSL,

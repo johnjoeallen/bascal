@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 16 — Short-Circuit && and ||
+30 ' Tutorial — Short-Circuit && and ||
 40 ' 
 50 ' Classic BASIC's AND/OR are bitwise and always evaluate both sides -- there
 60 ' is no short-circuit primitive in the generated BASIC at all. && and ||

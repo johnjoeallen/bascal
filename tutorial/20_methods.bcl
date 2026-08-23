@@ -1,4 +1,4 @@
-// Tutorial 20 — Scalar methods
+// Tutorial — Scalar methods
 //
 // A method has a typed scalar receiver, written after `method`, and a typed
 // result suffix on its name. The receiver is available as self%/self!/self$

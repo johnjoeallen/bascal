@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 17 — Labels and Error Handling
+30 ' Tutorial — Labels and Error Handling
 40 ' 
 50 ' BASCAL manages line numbers itself -- goto, gosub, on error goto, resume,
 60 ' restore, and on ... goto / on ... gosub can never target a raw line

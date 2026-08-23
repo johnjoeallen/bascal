@@ -20,7 +20,7 @@
 150 ' data% -- array to search; byval, since minimum% only reads it
 
 160 ' data% -- array to measure; byval, since rangeOf% only reads it
-170 ' Tutorial 12 — REQUIRE and multi-file projects
+170 ' Tutorial — REQUIRE and multi-file projects
 180 ' 
 190 ' REQUIRE loads another .bcl file and merges its functions into the
 200 ' generated output.  The path is dot-separated and maps to a file:

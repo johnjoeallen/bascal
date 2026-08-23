@@ -2,7 +2,7 @@
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 30 COMMON count%, label$
 
-40 ' Tutorial 13 — Shared COMMON, program 2 of 2
+40 ' Tutorial — Shared COMMON, program 2 of 2
 50 ' 
 60 ' This program references the same shared file as start.bcl.  Its
 70 ' generated BASIC will begin with the same COMMON block, so count% and

@@ -1,4 +1,4 @@
-// Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
+// Tutorial — Random-Access Files: hand-written, then with the record/file DSL
 //
 // This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
 // random-access file primitives directly. Part 2 uses BASCAL's `record`/

@@ -7,7 +7,7 @@
 60 ' ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
 70 ' via ordinary-call syntax resolving to this same declaration.
 
-80 ' Tutorial 20 — Scalar methods
+80 ' Tutorial — Scalar methods
 90 '
 100 ' A method has a typed scalar receiver, written after `method`, and a typed
 110 ' result suffix on its name. The receiver is available as self%/self!/self$

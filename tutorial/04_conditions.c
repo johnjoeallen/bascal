@@ -10,7 +10,7 @@ static int bv_i_x = 0;
 static char bv_s_grade[256] = {0};
 
 int main(void) {
-    // Tutorial 4 — Conditions: IF / ELSEIF / ELSE / END IF
+    // Tutorial — Conditions: IF / ELSEIF / ELSE / END IF
     //
     // BASCAL supports multi-line block IF statements.  The compiler transpiles
     // them to numeric goto targets so the generated BASIC is compatible with

@@ -2,7 +2,7 @@
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 30 COMMON count%, label$
 
-40 ' Tutorial 13 — Shared COMMON, program 1 of 2
+40 ' Tutorial — Shared COMMON, program 1 of 2
 50 ' 
 60 ' "program name shared sharedname" tells bcc to load sharedname.bcl and
 70 ' emit its COMMON declarations at the very top of the generated output.

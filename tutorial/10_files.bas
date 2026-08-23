@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 10 — File Input and Output
+30 ' Tutorial — File Input and Output
 40 ' 
 50 ' This tutorial writes the *same* sequential file twice. Part 1 uses raw
 60 ' BASIC file statements directly. Part 2 uses BASCAL's file-handle DSL,

@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
+30 ' Tutorial — Screen I/O: cls, locate, color, beep, lprint
 40 ' 
 50 ' These statements control the terminal display and connected hardware.
 60 ' They map directly to the same-named BASCOM statements.

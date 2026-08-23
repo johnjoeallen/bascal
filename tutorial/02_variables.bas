@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 2 — Variables and Constants
+30 ' Tutorial — Variables and Constants
 40 ' 
 50 ' Every name in BASCAL ends with a type suffix that tells the runtime
 60 ' how to store the value:

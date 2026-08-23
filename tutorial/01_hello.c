@@ -1,7 +1,7 @@
 #include <stdio.h>
 
 int main(void) {
-    // Tutorial 1 — Hello, World
+    // Tutorial — Hello, World
     //
     // The simplest BASCAL program.  print writes a line to the screen.
     // END marks the bottom of the main program body; every program needs one.

@@ -48,7 +48,7 @@ void bf_s_trimmed(const char* bv_s_s_in, char* bcc_out) {
 }
 
 int main(void) {
-    // Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
+    // Tutorial — Random-Access Files: hand-written, then with the record/file DSL
     //
     // This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
     // random-access file primitives directly. Part 2 uses BASCAL's `record`/

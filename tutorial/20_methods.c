@@ -90,7 +90,7 @@ int main(void) {
     // ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     // via ordinary-call syntax resolving to this same declaration.
 
-    // Tutorial 20 — Scalar methods
+    // Tutorial — Scalar methods
     //
     // A method has a typed scalar receiver, written after `method`, and a typed
     // result suffix on its name. The receiver is available as self%/self!/self$

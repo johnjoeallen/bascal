@@ -47,7 +47,7 @@
 420 ' the *error code itself* has a message, when really this is a lookup
 430 ' table keyed by that code. Stays an ordinary function.
 
-440 ' Tutorial 18 — Standard library functions
+440 ' Tutorial — Standard library functions
 450 ' 
 460 ' com.bascal.stdlib is an ordinary require-able library, resolved the same
 470 ' way as com.bascal.sort in tutorial 12 -- but bcc always adds its home

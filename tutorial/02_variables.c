@@ -13,7 +13,7 @@ static char bv_s_greeting[256] = {0};
 static char bv_s_playername[256] = {0};
 
 int main(void) {
-    // Tutorial 2 — Variables and Constants
+    // Tutorial — Variables and Constants
     //
     // Every name in BASCAL ends with a type suffix that tells the runtime
     // how to store the value:

@@ -174,7 +174,7 @@ int main(void) {
     // ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
     // via ordinary-call syntax resolving to this same declaration.
 
-    // Tutorial 7 — Functions
+    // Tutorial — Functions
     //
     // A BASCAL function is declared with FUNCTION ... END FUNCTION.
     // The function name carries the return type suffix.  Parameters

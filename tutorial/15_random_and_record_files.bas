@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 15 — Random-Access Files: hand-written, then with the record/file DSL
+30 ' Tutorial — Random-Access Files: hand-written, then with the record/file DSL
 40 ' 
 50 ' This tutorial writes the *same* program twice. Part 1 uses BASIC's raw
 60 ' random-access file primitives directly. Part 2 uses BASCAL's `record`/

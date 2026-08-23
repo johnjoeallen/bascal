@@ -4,7 +4,7 @@
 30 ' Storage for array parameters, sized to fit every call site
 40 DIM fillrangeArr0%(5)
 
-50 ' Tutorial 14 — Procedures
+50 ' Tutorial — Procedures
 60 ' 
 70 ' A procedure is like a function but returns no value.  Declare it with
 80 ' PROCEDURE ... END PROCEDURE.  The name must not carry a type suffix.

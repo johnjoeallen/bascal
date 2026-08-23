@@ -1,5 +1,5 @@
 /*
- * Shared file for Tutorial 13 — COMMON / CHAIN.
+ * Shared file for Tutorial — COMMON / CHAIN.
  *
  * `shared state` declares this file as the shared-variables file itself,
  * named `state` (matching this filename, state.bcl). Every program that

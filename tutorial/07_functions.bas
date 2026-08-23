@@ -13,7 +13,7 @@
 110 ' ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
 120 ' via ordinary-call syntax resolving to this same declaration.
 
-130 ' Tutorial 7 — Functions
+130 ' Tutorial — Functions
 140 ' 
 150 ' A BASCAL function is declared with FUNCTION ... END FUNCTION.
 160 ' The function name carries the return type suffix.  Parameters

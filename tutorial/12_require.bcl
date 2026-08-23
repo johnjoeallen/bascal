@@ -1,4 +1,4 @@
-// Tutorial 12 — REQUIRE and multi-file projects
+// Tutorial — REQUIRE and multi-file projects
 //
 // REQUIRE loads another .bcl file and merges its functions into the
 // generated output.  The path is dot-separated and maps to a file:

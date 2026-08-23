@@ -74,7 +74,7 @@ int bf_i_printarray(int* bv_i_arr_in, int bv_i_arr_len0) {
 }
 
 int main(void) {
-    // Tutorial 8 — Arrays
+    // Tutorial — Arrays
     //
     // dim name%(size) declares a 1-D array of size+1 elements, indexed 0..size.
     // dim name%(rows, cols) declares a 2-D array; more dimensions are allowed.

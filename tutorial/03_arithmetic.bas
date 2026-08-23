@@ -1,7 +1,7 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial 3 — Operators and Expressions
+30 ' Tutorial — Operators and Expressions
 40 ' 
 50 ' Arithmetic:   +  -  *  /  \  MOD  ^
 60 ' Comparison:   =  <>  <  <=  >  >=   (result: -1 true, 0 false)

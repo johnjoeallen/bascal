@@ -6,7 +6,7 @@
 50 DIM indexofArr0%(6)
 60 DIM printarrayArr0%(6)
 
-70 ' Tutorial 8 — Arrays
+70 ' Tutorial — Arrays
 80 ' 
 90 ' dim name%(size) declares a 1-D array of size+1 elements, indexed 0..size.
 100 ' dim name%(rows, cols) declares a 2-D array; more dimensions are allowed.

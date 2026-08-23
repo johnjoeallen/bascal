@@ -7,7 +7,7 @@ static int bv_i_count = 0;
 static char bv_s_label[256] = {0};
 
 int main(void) {
-    // Tutorial 13 — Shared COMMON, program 2 of 2
+    // Tutorial — Shared COMMON, program 2 of 2
     //
     // This program references the same shared file as start.bcl.  Its
     // generated BASIC will begin with the same COMMON block, so count% and

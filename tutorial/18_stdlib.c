@@ -239,7 +239,7 @@ int main(void) {
     // the *error code itself* has a message, when really this is a lookup
     // table keyed by that code. Stays an ordinary function.
 
-    // Tutorial 18 — Standard library functions
+    // Tutorial — Standard library functions
     //
     // com.bascal.stdlib is an ordinary require-able library, resolved the same
     // way as com.bascal.sort in tutorial 12 -- but bcc always adds its home

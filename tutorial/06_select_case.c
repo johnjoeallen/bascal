@@ -7,7 +7,7 @@ static int bv_i_temp = 0;
 static char bv_s_day[256] = {0};
 
 int main(void) {
-    // Tutorial 6 — SELECT CASE
+    // Tutorial — SELECT CASE
     //
     // SELECT CASE tests one expression against multiple patterns.  The
     // compiler evaluates the expression once, stores it in a temporary
