@@ -1,9 +1,11 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use bcc::{compile_file, default_output_path, CompileOptions, Target};
+use bcc::{
+    compile_file_with_runtime, default_output_path, CompileOptions, Target, C_RUNTIME_FILE_NAME,
+};
 use clap::Parser;
 
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
@@ -243,16 +245,33 @@ fn run(cli: Cli) -> Result<(), String> {
         strict_vars: cli.strict_vars,
         strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
     };
-    let basic = compile_file(&cli.input, &options).map_err(|diagnostics| {
-        diagnostics
-            .into_iter()
-            .map(|diagnostic| diagnostic.to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    })?;
+    let (generated, runtime) =
+        compile_file_with_runtime(&cli.input, &options).map_err(|diagnostics| {
+            diagnostics
+                .into_iter()
+                .map(|diagnostic| diagnostic.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
 
-    fs::write(&output_path, &basic)
+    fs::write(&output_path, &generated)
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
+
+    // `Target::C` only: the paired `bcc_runtime.h` the app file's own
+    // `#include` line pulls in (see `codegen_c::GeneratedC`'s own doc
+    // comment) -- written as a sibling of the app file, same fixed name
+    // every time, so `gcc`'s own same-directory `#include "..."` lookup
+    // finds it with no extra include-path flag needed. `None` means this
+    // particular program needs no runtime helper at all, in which case no
+    // sibling file is written (and none was `#include`d either).
+    if let Some(runtime) = runtime {
+        let runtime_path = output_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(C_RUNTIME_FILE_NAME);
+        fs::write(&runtime_path, &runtime)
+            .map_err(|err| format!("error: failed to write {}: {err}", runtime_path.display()))?;
+    }
 
     if want_binary {
         let built = invoke_binary(target, &output_path)?;
