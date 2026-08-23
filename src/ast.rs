@@ -1,4 +1,39 @@
 use std::fmt;
+use std::ops::Deref;
+
+use crate::diagnostics::SourcePos;
+
+/// A parsed statement together with the source position of its first
+/// token -- populated once, at `Parser::parse_statement`'s single dispatch
+/// point (see parser.rs), so every diagnostic that complains about a
+/// statement can point at a real `file:line:column` instead of a
+/// placeholder. `Deref`s to the wrapped `Statement` so call sites that only
+/// care about the statement's shape can keep matching on it directly
+/// (`match &stmt.kind { .. }` or, via `Deref`, `match &*stmt { .. }`)
+/// without threading position through every helper by hand.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Stmt {
+    pub kind: Statement,
+    pub pos: SourcePos,
+}
+
+impl Stmt {
+    pub fn new(kind: Statement, pos: SourcePos) -> Self {
+        Self { kind, pos }
+    }
+
+    pub fn pos(&self) -> &SourcePos {
+        &self.pos
+    }
+}
+
+impl Deref for Stmt {
+    type Target = Statement;
+
+    fn deref(&self) -> &Statement {
+        &self.kind
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
@@ -18,7 +53,7 @@ pub struct Program {
     /// this is purely the internal representation codegen emits as `COMMON`
     /// lines.
     pub common: Vec<CommonBlock>,
-    pub statements: Vec<Statement>,
+    pub statements: Vec<Stmt>,
     pub functions: Vec<FunctionDef>,
     pub records: Vec<RecordDef>,
 }
@@ -79,8 +114,14 @@ pub struct PathSymbol {
 pub struct FunctionDef {
     pub name: BasicIdent,
     pub params: Vec<Param>,
-    pub body: Vec<Statement>,
+    pub body: Vec<Stmt>,
     pub is_procedure: bool,
+    /// Source position of the `function`/`procedure` keyword that starts
+    /// this declaration -- lets resolver diagnostics about the function as
+    /// a whole (duplicate name, shadowing a builtin, missing return,
+    /// recursion, unsafe error handler) point at its declaration instead of
+    /// a placeholder position.
+    pub pos: SourcePos,
 }
 
 /// A declared parameter and its passing mode. Unmarked source (`arr%`)
@@ -291,23 +332,23 @@ pub enum Statement {
     },
     If {
         condition: Expr,
-        then_body: Vec<Statement>,
-        else_body: Vec<Statement>,
+        then_body: Vec<Stmt>,
+        else_body: Vec<Stmt>,
     },
     For {
         var: BasicIdent,
         start: Expr,
         end: Expr,
         step: Option<Expr>,
-        body: Vec<Statement>,
+        body: Vec<Stmt>,
     },
     While {
         condition: Expr,
-        body: Vec<Statement>,
+        body: Vec<Stmt>,
     },
     Do {
         condition: Option<DoCondition>,
-        body: Vec<Statement>,
+        body: Vec<Stmt>,
         post_condition: Option<DoCondition>,
     },
     ExprStmt(Expr),
@@ -420,7 +461,7 @@ pub enum Statement {
     SelectCase {
         expr: Expr,
         cases: Vec<CaseClause>,
-        else_body: Vec<Statement>,
+        else_body: Vec<Stmt>,
     },
     Locate {
         row: Expr,
@@ -460,7 +501,7 @@ pub struct DoCondition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CaseClause {
     pub values: Vec<CaseValue>,
-    pub body: Vec<Statement>,
+    pub body: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
