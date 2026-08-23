@@ -53,7 +53,7 @@ method$ pad$(width%)
 end method</code></pre>
 <p>Scalar calls require parentheses and may be chained; each result determines the receiver type of the next call:</p>
 <pre><code>result$ = name$.capitalize().pad(20)</code></pre>
-<p>The parser and resolver check receiver types, duplicate declarations, reserved built-in names, and unknown methods. Both targets lower methods to ordinary typed calls: BASIC uses global parameter/result variables and <code>GOSUB</code>, while C uses typed parameters and temporaries.</p>
+<p>The parser and resolver check receiver types, duplicate declarations, reserved built-in names, and unknown methods. Both targets transpile methods to ordinary typed calls: BASIC uses global parameter/result variables and <code>GOSUB</code>, while C uses typed parameters and temporaries.</p>
 <h3 id="parameter-defaults">Parameter Defaults</h3>
 <p>A trailing scalar <code>byval</code> parameter may specify a default with <code>=</code>. Callers may then omit it; BASCAL supplies the value at the call site.</p>
 <pre><code>const defaultGreeting$ = &quot;Hello&quot;
