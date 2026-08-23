@@ -1100,5 +1100,320 @@ fn walk_expr(expr: &Expr, f: &mut dyn FnMut(&Expr)) {
     }
 }
 
+// ── legacy-form deprecation warnings ─────────────────────────────────────
+//
+// BASCAL stays a superset of classic BASIC: every legacy form below keeps
+// compiling exactly as before. But where a legacy form has a direct BASCAL
+// structured equivalent, `check_legacy_forms` names it as an advisory
+// warning, steering new/edited source toward the structured spelling
+// without breaking existing programs (see issue #2 / CLAUDE.md's own
+// framing of "guiding new source toward BASCAL structured syntax"). Always
+// on -- these are warnings, never errors, so the caller (`compile_source`/
+// `compile_file`) just prints them and keeps going.
+//
+// Run on the fully merged, lowered `Program` (after `records::lower`), not
+// the root file's raw parse -- unlike `check_strict_vars` above, the
+// `FIELD` check here depends on `records::lower` having already turned
+// `file ... as ... = open(...)` into a `FIELD` with `record_type: Some`,
+// which is exactly what distinguishes it from a hand-written `FIELD`.
+
+/// Three legacy forms are recognised, each with an unambiguous BASCAL
+/// equivalent:
+///   - `ON ... GOTO`/`ON ... GOSUB` computed branching -- `SELECT CASE`.
+///   - a chain of at least two `IF ... THEN GOTO` / `ELSEIF ... THEN GOTO`
+///     links used purely to dispatch to different labels -- `SELECT CASE`.
+///     A single, unchained `IF cond THEN GOTO label` is left alone: that's
+///     an ordinary early-exit/error-check branch, not a dispatch table.
+///   - a `GOTO` back to a label already seen earlier in the same body --
+///     a hand-wired loop -- `DO ... LOOP` / `WHILE ... END WHILE`.
+///   - a hand-typed `FIELD` statement (`record_type: None` -- see
+///     `Statement::Field`'s own doc comment) -- `record`/`file`.
+pub fn check_legacy_forms(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    check_legacy_forms_in_body(&program.statements, &mut diagnostics);
+    for function in &program.functions {
+        check_legacy_forms_in_body(&function.body, &mut diagnostics);
+    }
+    diagnostics
+}
+
+fn check_legacy_forms_in_body(body: &[Statement], diagnostics: &mut Vec<Diagnostic>) {
+    let mut seen_labels: HashSet<String> = HashSet::new();
+    walk_legacy_forms(body, &mut seen_labels, diagnostics);
+}
+
+/// Depth of a pure `IF/ELSEIF ... THEN GOTO` dispatch chain rooted at
+/// `stmt` -- `Some(n)` for an `If` whose `then_body` is exactly one `GOTO`
+/// and whose `else_body` is either empty, exactly one `GOTO`, or another
+/// such chain (`n` counts the links); `None` if `stmt` isn't an `If`, or
+/// its body holds anything but bare `GOTO`s.
+fn goto_if_chain_depth(stmt: &Statement) -> Option<usize> {
+    let Statement::If {
+        then_body,
+        else_body,
+        ..
+    } = stmt
+    else {
+        return None;
+    };
+    if !matches!(then_body.as_slice(), [Statement::Goto(_)]) {
+        return None;
+    }
+    match else_body.as_slice() {
+        [] | [Statement::Goto(_)] => Some(1),
+        [nested @ Statement::If { .. }] => goto_if_chain_depth(nested).map(|d| d + 1),
+        _ => None,
+    }
+}
+
+fn walk_legacy_forms(
+    statements: &[Statement],
+    seen_labels: &mut HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in statements {
+        // Computed once per `If` and reused below: a chain reported as a
+        // dispatch warning (depth >= 2) has nothing further worth
+        // recursing into (then_body/else_body only hold bare GOTOs and the
+        // chained `If`s already covered by the depth count) -- but a lone
+        // `IF cond THEN GOTO label` (depth == 1, not itself warned about as
+        // a "chain") still needs its `GOTO` visited normally, since that's
+        // exactly the shape a hand-wired backward-jump loop takes.
+        let chain_depth = matches!(stmt, Statement::If { .. })
+            .then(|| goto_if_chain_depth(stmt))
+            .flatten();
+
+        match stmt {
+            Statement::Label(name) => {
+                seen_labels.insert(name.to_ascii_lowercase());
+            }
+            Statement::OnBranch { is_gosub, .. } => {
+                let legacy = if *is_gosub { "ON ... GOSUB" } else { "ON ... GOTO" };
+                diagnostics.push(Diagnostic::warning(
+                    generated_pos(),
+                    format!(
+                        "`{legacy}` is a legacy computed-branch dispatch with a direct BASCAL \
+                         equivalent -- prefer `SELECT CASE`, which expresses the same dispatch \
+                         without a positional branch-target list"
+                    ),
+                ));
+            }
+            Statement::If { .. } if chain_depth.is_some_and(|d| d >= 2) => {
+                diagnostics.push(Diagnostic::warning(
+                    generated_pos(),
+                    "this `IF ... THEN GOTO` / `ELSEIF ... THEN GOTO` chain dispatches to \
+                     different labels by condition -- prefer `SELECT CASE`, BASCAL's structured \
+                     equivalent for the same dispatch"
+                        .to_string(),
+                ));
+            }
+            Statement::Goto(Expr::Ident(ident))
+                if seen_labels.contains(&ident.name.to_ascii_lowercase()) =>
+            {
+                diagnostics.push(Diagnostic::warning(
+                    generated_pos(),
+                    format!(
+                        "`GOTO {ident}` jumps back to a label already seen earlier in this \
+                         block -- this is a hand-wired loop with a direct BASCAL equivalent -- \
+                         prefer `DO ... LOOP` or `WHILE ... END WHILE`"
+                    ),
+                ));
+            }
+            Statement::Field {
+                record_type: None, ..
+            } => {
+                diagnostics.push(Diagnostic::warning(
+                    generated_pos(),
+                    "hand-written `FIELD` bookkeeping has a direct BASCAL equivalent -- a \
+                     `record ... end record` + `file ... as ... = open(...)` declaration \
+                     expresses the same random-access layout without manually tracking \
+                     FIELD/LSET/GET/PUT offsets"
+                        .to_string(),
+                ));
+            }
+            _ => {}
+        }
+
+        match stmt {
+            // A reported dispatch chain (depth >= 2) has nothing left to
+            // recurse into -- see the comment on `chain_depth` above.
+            Statement::If { .. } if chain_depth.is_some_and(|d| d >= 2) => {}
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                walk_legacy_forms(then_body, seen_labels, diagnostics);
+                walk_legacy_forms(else_body, seen_labels, diagnostics);
+            }
+            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => {
+                walk_legacy_forms(body, seen_labels, diagnostics);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    walk_legacy_forms(&case.body, seen_labels, diagnostics);
+                }
+                walk_legacy_forms(else_body, seen_labels, diagnostics);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod legacy_form_tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse(source: &str) -> Program {
+        let tokens = Lexer::new("test.bcl", source).lex();
+        Parser::new("test.bcl".to_string(), tokens)
+            .parse_program()
+            .expect("source should parse")
+    }
+
+    fn messages(source: &str) -> Vec<String> {
+        check_legacy_forms(&parse(source))
+            .into_iter()
+            .map(|d| d.message)
+            .collect()
+    }
+
+    #[test]
+    fn on_goto_is_flagged() {
+        let msgs = messages("on x goto first, second\nfirst:\nsecond:\nend\n");
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("SELECT CASE"), "{}", msgs[0]);
+        assert!(msgs[0].contains("ON ... GOTO"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn on_gosub_is_flagged() {
+        let msgs = messages("on x gosub first, second\nfirst:\nreturn\nsecond:\nreturn\nend\n");
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("ON ... GOSUB"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn single_if_then_goto_is_not_flagged_as_a_dispatch_chain() {
+        // A lone early-exit/error-check branch, not a dispatch table.
+        let msgs = messages("if eof(1) then goto donereading\ndonereading:\nend\n");
+        assert!(
+            msgs.is_empty(),
+            "a single unchained IF...THEN GOTO shouldn't be flagged: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn chained_if_elseif_then_goto_dispatch_is_flagged() {
+        let source = r#"if x = 1 then
+goto one
+elseif x = 2 then
+goto two
+else
+goto other
+end if
+one:
+print "one"
+goto done
+two:
+print "two"
+goto done
+other:
+print "other"
+done:
+end
+"#;
+        let msgs = messages(source);
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("SELECT CASE"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn backward_goto_to_an_earlier_label_is_flagged_as_a_hand_wired_loop() {
+        let source = "mainloop:\nx = x + 1\nif x < 10 then goto mainloop\nend\n";
+        let msgs = messages(source);
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("GOTO mainloop"), "{}", msgs[0]);
+        assert!(msgs[0].contains("DO ... LOOP"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn forward_goto_to_a_later_label_is_not_flagged() {
+        let source = "if x = 1 then goto skip\nprint \"not skipped\"\nskip:\nend\n";
+        let msgs = messages(source);
+        assert!(
+            msgs.is_empty(),
+            "a forward jump isn't a loop: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn structured_loops_and_select_case_are_never_flagged() {
+        let source = r#"for i = 1 to 5
+print i
+end for
+
+x = 1
+do while x < 5
+x = x + 1
+end do
+
+select case x
+case 1
+print "one"
+case else
+print "other"
+end select
+end
+"#;
+        assert!(messages(source).is_empty());
+    }
+
+    #[test]
+    fn record_file_dsl_is_not_flagged_after_lowering() {
+        // Mirrors the check's real call site in lib.rs: `check_legacy_forms`
+        // runs on the post-`records::lower` program, where DSL-synthesized
+        // `FIELD` statements carry `record_type: Some(..)` -- unlike a
+        // hand-typed `FIELD`, which leaves it `None` (see `Statement::
+        // Field`'s own doc comment).
+        let source = r#"record Item
+    name: string(10)
+end record
+
+file items as Item = open("probe.dat")
+
+items[1] = { name: "widget" }
+items.close()
+end
+"#;
+        let (lowered, _) = crate::records::lower(parse(source)).expect("should lower");
+        let msgs: Vec<String> = check_legacy_forms(&lowered)
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert!(
+            msgs.is_empty(),
+            "record/file DSL usage shouldn't be flagged as hand-written FIELD bookkeeping: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn hand_written_field_is_flagged() {
+        let source = r#"open "data.dat" for random as #1 len = 10
+field #1, 10 as buf$
+close #1
+end
+"#;
+        let msgs = messages(source);
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("FIELD"), "{}", msgs[0]);
+        assert!(msgs[0].contains("record"), "{}", msgs[0]);
+    }
+}
+
 // TODO: Add source-location carrying AST nodes so validation diagnostics can
 // point at the exact function declaration or call expression.

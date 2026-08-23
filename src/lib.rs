@@ -75,6 +75,7 @@ pub fn compile_source(
     let (mut program, synthesized_buffer_names) = records::lower(program)?;
     inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
+    print_legacy_form_warnings(&program);
     let conflicts = codegen::check_generated_name_conflicts(&program);
     if !conflicts.is_empty() {
         return Err(conflicts);
@@ -139,6 +140,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let (mut program, synthesized_buffer_names) = records::lower(program)?;
     inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
+    print_legacy_form_warnings(&program);
     match options.target {
         Target::Basic => CodeGenerator::new()
             .with_line_numbers(options.line_numbers)
@@ -204,6 +206,18 @@ fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Ve
             });
     program.functions.push(function);
     Ok(())
+}
+
+/// Prints every legacy-form finding from `resolver::check_legacy_forms` to
+/// stderr as a warning -- advisory only, so unlike `resolver::validate`
+/// this never turns into an `Err`; a legacy BASIC form with a BASCAL
+/// equivalent still compiles, it just gets named so new/edited source can
+/// be steered toward the structured spelling (see resolver.rs's own doc
+/// comment on `check_legacy_forms`).
+fn print_legacy_form_warnings(program: &ast::Program) {
+    for finding in resolver::check_legacy_forms(program) {
+        eprintln!("{finding}");
+    }
 }
 
 fn program_uses_mid_assign(program: &ast::Program) -> bool {

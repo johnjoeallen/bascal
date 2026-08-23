@@ -81,7 +81,16 @@ print &quot;reached&quot;</code></pre>
 <p>Computed branch: the integer expression selects the <em>n</em>th target (1-based). Each target is a label, not a line number.</p>
 <pre><code>ON choice% GOTO firstCase, secondCase, thirdCase
 ON mode%   GOSUB modeIdle, modeRun, modeError</code></pre>
-<p>If the expression evaluates to 0 or exceeds the number of targets, execution continues with the next statement.</p>
+<p>If the expression evaluates to 0 or exceeds the number of targets, execution continues with the next statement. Still accepted, but see <a href="#legacy-form-warnings">Legacy-Form Warnings</a> below — <code>select case</code> expresses the same dispatch structurally.</p>
+<h3 id="legacy-form-warnings">Legacy-Form Warnings</h3>
+<p>BASCAL stays a strict superset of classic BASIC — every legacy form on this page keeps compiling exactly as it always has. But a few of them have a direct, unambiguous BASCAL structured equivalent, and <code>bcc</code> names it as an advisory warning printed to stderr (never a compile error) whenever it sees one, to steer new or edited source toward the structured spelling:</p>
+<ul>
+<li><code>ON ... GOTO</code> / <code>ON ... GOSUB</code> — prefer <code>select case</code>.</li>
+<li>a chain of two or more <code>IF ... THEN GOTO</code> / <code>ELSEIF ... THEN GOTO</code> links, each branching to a different label — prefer <code>select case</code>. A single, unchained <code>IF cond THEN GOTO label</code> (an ordinary early-exit/error-check branch) is left alone.</li>
+<li>a <code>GOTO</code> back to a label already seen earlier in the same block — a hand-wired loop — prefer <code>do ... loop</code> or <code>while ... end while</code>.</li>
+<li>a hand-typed <code>FIELD</code> statement — prefer the <a href="record-files.html"><code>record</code>/<code>file</code></a> DSL, which expresses the same random-access layout without manually tracking <code>FIELD</code>/<code>LSET</code>/<code>GET</code>/<code>PUT</code> offsets.</li>
+</ul>
+<p>Nothing else on this page is warned about — <code>GOTO</code>/<code>GOSUB</code> to a label, labels themselves, and <code>ON ERROR GOTO</code>/<code>RESUME</code>/<code>ERROR</code> have no BASCAL structured equivalent, so they're accepted silently.</p>
 <h3 id="on-error-goto-resume-error">ON ERROR GOTO / RESUME / ERROR</h3>
 <p>MS-BASIC structured error handling: trap runtime errors, handle them, and resume execution.</p>
 <h4 id="on-error-goto">ON ERROR GOTO</h4>
