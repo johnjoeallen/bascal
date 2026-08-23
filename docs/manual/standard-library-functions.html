@@ -36,6 +36,18 @@
   </nav>
 
   <div class="prose">
+<h3 id="classic-basic-functions">Classic BASIC functions</h3>
+<p>BASCAL recognises the classic BASIC functions below without a declaration or <code>require</code>. The <code>basic</code> target passes them through to the target compiler. The <code>c</code> target implements the subset listed in <a href="command-line-reference.html#backends">Backends</a>; use that section when a program must run on both targets.</p>
+<table>
+<thead><tr><th>Group</th><th>Functions</th></tr></thead>
+<tbody>
+<tr><td>Text and conversion</td><td><code>LEN</code>, <code>ASC</code>, <code>CHR$</code>, <code>LEFT$</code>, <code>RIGHT$</code>, <code>MID$</code>, <code>INSTR</code>, <code>STR$</code>, <code>VAL</code>, <code>STRING$</code>, <code>SPACE$</code>, <code>HEX$</code>, <code>OCT$</code>, <code>FORMAT$</code>, <code>TRIM$</code>, <code>INPUT$</code>, <code>CINT</code>, <code>CLNG</code>, <code>CSNG</code>, <code>CDBL</code></td></tr>
+<tr><td>Math and random numbers</td><td><code>SQR</code>, <code>ABS</code>, <code>INT</code>, <code>FIX</code>, <code>SGN</code>, <code>SIN</code>, <code>COS</code>, <code>TAN</code>, <code>ATN</code>, <code>LOG</code>, <code>EXP</code>, <code>RND</code></td></tr>
+<tr><td>Files, system, arrays, and printing</td><td><code>EOF</code>, <code>LOF</code>, <code>LOC</code>, <code>POS</code>, <code>CSRLIN</code>, <code>FREEFILE</code>, <code>FRE</code>, <code>LPOS</code>, <code>DATE$</code>, <code>TIME$</code>, <code>TIMER</code>, <code>INKEY$</code>, <code>ENVIRON$</code>, <code>COMMAND$</code>, <code>PEEK</code>, <code>INP</code>, <code>VARPTR</code>, <code>UBOUND</code>, <code>LBOUND</code>, <code>IIF</code>, <code>TAB</code>, <code>SPC</code></td></tr>
+<tr><td>Random-access records</td><td><code>MKI$</code>, <code>MKL$</code>, <code>MKS$</code>, <code>MKD$</code>, <code>CVI</code>, <code>CVL</code>, <code>CVS</code>, <code>CVD</code></td></tr>
+</tbody>
+</table>
+<p><code>SIN</code>, <code>COS</code>, <code>TAN</code>, and <code>ATN</code> use radians. <code>LOG</code> is the natural logarithm. <code>RANDOMIZE</code> is the companion statement that seeds <code>RND</code>.</p>
 <h3 id="mid-assignment">MID$ assignment</h3>
 <pre><code>MID$(target$, start[, len]) = replacement$</code></pre>
 <p>A same-length splice into <code>target$</code>, which keeps its original length — not a value-producing expression, and not the same thing as <code>MID$(...)</code> used to <em>read</em> a substring. <code>target$</code> must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).</p>
