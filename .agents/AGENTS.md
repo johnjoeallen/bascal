@@ -6,3 +6,4 @@
 - Example BASCAL sources live in `examples/` and are the source of truth for transpiler tests.
 - Generated `.bas` output belongs in `output/`.
 - Temporary compiled binaries belong in `tmp/`.
+- Do not use the term “lowering”; use “transpile” or “transpiles” instead.
