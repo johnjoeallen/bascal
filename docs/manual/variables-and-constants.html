@@ -50,8 +50,8 @@ end function</code></pre>
 <p>BASIC builtin functions (<code>UCASE$</code>, <code>STR$</code>, <code>LEN</code>, etc.) are always recognised as callables and are never treated as local variables.</p>
 <p>Variables do not require pre-declaration; they come into existence on first assignment. Use <code>DIM</code> (or its synonym <code>DECLARE</code>) to declare arrays or to make intent clear. Compiling with <a href="command-line-reference.html">the <code>--strict-vars</code> flag</a> turns that requirement on for real, rejecting any scalar/array variable used without a matching <code>DIM</code>/<code>DECLARE</code> (a <code>CONST</code>, a <code>FOR</code> loop's own counter, and a function/procedure parameter all still count) — useful as a safety net against a misspelled name silently becoming a new, separately-zeroed variable, but opt-in, since it's no longer a strict superset of BASIC once it's on.</p>
 <h3 id="dim">DIM</h3>
-<p>Declares an array or a simple variable. <code>declare</code> is an interchangeable synonym for <code>dim</code> — they parse to exactly the same statement and generate identical output; use whichever reads better, and freely mix both spellings within one program.</p>
-<pre><code>dim playerName$
+<p>Declares an array or a simple variable. <code>declare</code> is an interchangeable synonym for <code>dim</code> — they parse to exactly the same statement and generate identical output. A reasonable convention: <code>declare</code> for a plain scalar (it reads as "declare this variable"), <code>dim</code> for an array (it keeps BASIC's own "dimension this array" sense) — but nothing enforces the split, and both spellings freely mix within one program.</p>
+<pre><code>declare playerName$
 dim scores%(100)       &#39; 1-D: 101 elements, scores%(0) .. scores%(100)
 dim grid%(9, 9)        &#39; 2-D: 10×10 grid, grid%(row, col)
 dim cube%(3, 4, 5)     &#39; 3-D: up to 8 dimensions supported</code></pre>

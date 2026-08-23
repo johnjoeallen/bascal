@@ -74,10 +74,12 @@ count% = count% + 1
  * `shared state` declares this file as the shared-variables file itself,
  * named `state` (matching this filename, state.bcl). Every program that
  * begins with "program name shared state" receives an identical COMMON
- * block at the top of its generated BASIC, built from the `dim`
+ * block at the top of its generated BASIC, built from the `declare`
  * declarations below -- so the listed variables are shared across
  * CHAINed programs in a multi-program application. Variables here are
- * COMMON by default; there's no separate keyword to opt in.
+ * COMMON by default; there's no separate keyword to opt in. `declare` is
+ * an interchangeable synonym for `dim` -- used here since both variables
+ * are scalars, not arrays.
  *
  * This file shares a counter and a label between two programs:
  *   start.bcl  — initialises and increments the counter
@@ -85,8 +87,8 @@ count% = count% + 1
  */
 shared state
 
-dim count%
-dim label$
+declare count%
+declare label$
 </code></pre>
     </details>
     <details>

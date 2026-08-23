@@ -21,7 +21,7 @@ handler:
 continue:
     print "recovered"
 </code></pre><p>Inside the handler, the no-suffix pseudo-variables <code>err</code> and <code>erl</code> hold the failing error code and line. <code>resume</code> retries the statement that failed; <code>resume next</code> skips it and continues with the one after; <code>resume label</code> — shown above — jumps somewhere else entirely, the usual shape when the failing statement can’t simply be retried. <code>on error goto 0</code> disables the trap, letting an error terminate the program again. A program can also raise or re-raise one deliberately with <code>error code%</code>.</p><h2>Shipping small constant tables with <code>data</code></h2><p>Classic BASIC’s <code>data</code>/<code>read</code> pair embeds a small constant table directly in the program instead of a separate file, useful for exactly the kind of fixed lookup table a record file would be overkill for.</p><pre><code>dim country$(2), capital$(2)
-dim i%
+declare i%
 
 for i% = 0 to 2
     read country$(i%), capital$(i%)

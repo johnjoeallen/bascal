@@ -51,8 +51,8 @@
  */
 shared state
 
-dim count%
-dim label$</code></pre>
+declare count%
+declare label$</code></pre>
 <p>Rules for shared files: - The <code>shared &lt;name&gt;</code> header is mandatory, and its name must match the filename the transpiler resolved it as (<code>state.bcl</code> → <code>shared state</code>). - Only <code>dim</code> declarations, blank lines, and comments are allowed. - <code>require</code>, <code>function</code>, executable statements, and <code>program</code>/<code>library</code> declarations are all rejected with a diagnostic error. - The shared file must contain at least one <code>dim</code> declaration. - A file may declare at most one of <code>program</code>, <code>library</code>, or <code>shared</code> — a shared file can't also be an ordinary program or library module.</p>
 <h3 id="dim-declaration">DIM Declaration</h3>
 <pre><code>shared state
@@ -69,8 +69,8 @@ dim scores%()</code></pre>
 <p><strong><code>state.bcl</code></strong> (shared file):</p>
 <pre><code>shared state
 
-dim count%
-dim label$</code></pre>
+declare count%
+declare label$</code></pre>
 <p><strong><code>start.bcl</code></strong> (program 1):</p>
 <pre><code>program start shared state
 

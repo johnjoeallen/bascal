@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Arrays and Strings — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
 <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 4</p><h1>Arrays and strings</h1></div></header>
 <main class="chapter-main book-width"><h2>A fixed collection, declared once</h2><p><code>dim</code> gives an array a name and a shape. Classic BASIC has no usable <code>REDIM</code> for compiled programs, so an array’s size stays fixed for the program’s lifetime.</p><pre><code>dim scores%(30)
-dim i%, total%
+declare i%, total%
 
 for i% = 0 to 30
     scores%(i%) = i% * 2
@@ -11,7 +11,7 @@ end for
 print "elements: "; sizeof(scores%)
 print "total: "; total%
 </code></pre><p><code>dim scores%(30)</code> declares indices 0 through 30: 31 elements. <code>sizeof(scores%)</code> reads the bound, so a loop does not need to repeat it. Every array is indexed from base 0 — <code>OPTION BASE</code> is rejected outright as a transpile-time error under both targets, not something to reach for. A second axis works the same way: <code>dim grid%(2, 2)</code>; use <code>sizeof(grid%, 0)</code> or <code>sizeof(grid%, 1)</code>. <code>declare</code> is another spelling of <code>dim</code>.</p><p>A scalar normally needs no declaration because BASIC creates it on first use. <code>--strict-vars</code> requires declarations and catches misspelled names, at the cost of no longer being a strict superset of BASIC.</p><h2>Passing an array without losing its size</h2><p>A function parameter accepts an array of unknown size by using <code>?</code> for each axis. BASCAL works out the storage needed from all call sites and makes the real bound available through <code>sizeof</code>.</p><pre><code>function sumArr%(byref arr%(?))
-    dim i%, total%
+    declare i%, total%
     for i% = 0 to sizeof(arr%)
         total% = total% + arr%(i%)
     end for
@@ -22,7 +22,7 @@ dim values%(4)
 values%(0) = 10
 values%(1) = 20
 print sumArr%(values%)
-</code></pre><p>Pass an array with its bare name—never <code>()</code> and never a separately typed count. <code>byval</code>, the default, copies the array in. <code>byref</code> copies it in and copies changes back after the call, because classic BASIC has no direct reference to the caller’s array. Use <code>byref</code> only when the function changes the array.</p><h2>Strings are text, not character arrays</h2><p>A BASCAL string is a single value with the <code>$</code> suffix, not an array indexed by character. <code>+</code> joins strings; built-in functions read and rebuild substrings.</p><pre><code>dim name$
+</code></pre><p>Pass an array with its bare name—never <code>()</code> and never a separately typed count. <code>byval</code>, the default, copies the array in. <code>byref</code> copies it in and copies changes back after the call, because classic BASIC has no direct reference to the caller’s array. Use <code>byref</code> only when the function changes the array.</p><h2>Strings are text, not character arrays</h2><p>A BASCAL string is a single value with the <code>$</code> suffix, not an array indexed by character. <code>+</code> joins strings; built-in functions read and rebuild substrings.</p><pre><code>declare name$
 name$ = "Ada Lovelace"
 print left$(name$, 3) + " " + mid$(name$, 5, 8)
 print instr(name$, "Love")

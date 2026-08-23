@@ -13,31 +13,33 @@
 120 ' &   long      — 32-bit signed integer
 130 ' 
 140 ' All variables are global.  They spring into existence on first use;
-150 ' dim is needed only for arrays or when you want to be explicit.
-160 ' 
-170 ' const names a value that cannot change.  Use it for magic numbers
-180 ' so the intent is clear and the value lives in one place.
+150 ' dim (or its synonym declare) is needed only for arrays or when you
+160 ' want to be explicit -- declare tends to read better for a plain
+170 ' scalar, dim for an array.
+180 ' 
+190 ' const names a value that cannot change.  Use it for magic numbers
+200 ' so the intent is clear and the value lives in one place.
 
-190 maxscore% = 100
-200 passmark% = 60
-210 appname$ = "Grade Checker"
-220 taxrate! = 0.2
+210 maxscore% = 100
+220 passmark% = 60
+230 appname$ = "Grade Checker"
+240 taxrate! = 0.2
 
-230 ' Variable assignment uses =
-240 playername$ = "Alice"
-250 score% = 87
-260 temperature! = 36.6
+250 ' Variable assignment uses =
+260 playername$ = "Alice"
+270 score% = 87
+280 temperature! = 36.6
 
-270 ' print mixes strings and numbers directly with ; (no str$() needed)
-280 PRINT appname$
-290 PRINT "Player:      "; playername$
-300 PRINT "Score:       "; score%; "/ "; maxscore%
-310 PRINT "Pass mark:   "; passmark%
-320 PRINT "Temperature: "; temperature!
-330 PRINT "Tax rate:    "; taxrate!
+290 ' print mixes strings and numbers directly with ; (no str$() needed)
+300 PRINT appname$
+310 PRINT "Player:      "; playername$
+320 PRINT "Score:       "; score%; "/ "; maxscore%
+330 PRINT "Pass mark:   "; passmark%
+340 PRINT "Temperature: "; temperature!
+350 PRINT "Tax rate:    "; taxrate!
 
-340 ' str$() is still available when you need to build a string value
-350 greeting$ = "Score is " + STR$(score%)
-360 PRINT greeting$
+360 ' str$() is still available when you need to build a string value
+370 greeting$ = "Score is " + STR$(score%)
+380 PRINT greeting$
 
-370 END
+390 END

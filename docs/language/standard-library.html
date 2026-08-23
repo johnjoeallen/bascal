@@ -8,7 +8,7 @@ require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase
 require com.bascal.stdlib.error
 
-dim s$
+declare s$
 s$ = "  hello world  "
 print ucase$(rtrim$(ltrim$(s$)))
 </code></pre><p><code>ltrim$(s$)</code> removes leading spaces and <code>rtrim$(s$)</code> removes trailing spaces. <code>ucase$(s$)</code> changes <code>a</code>–<code>z</code> to uppercase, while <code>lcase$(s$)</code> changes <code>A</code>–<code>Z</code> to lowercase; other characters are unchanged. <code>error$(code%)</code> turns a classic BASIC error number into a readable message, such as <code>error$(53)</code> returning <code>"File not found"</code>.</p><p>These modules live under <code>com.bascal.stdlib</code> and use the same dependency rules as any other library. BASCAL also adds its internal <code>midAssign</code> helper automatically when you use the statement form of <code>mid$</code>; you never need to require it yourself.</p><p>For signatures, examples, and target details, see the manual’s <a href="../manual/standard-library-functions.html">Standard Library Functions</a> chapter.</p><nav class="chapter-nav"><a href="errors-labels-and-data.html">← Errors, labels, and embedded data</a><a href="running-and-combining-programs.html">Running and combining programs →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>

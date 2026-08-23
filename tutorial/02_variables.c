@@ -25,7 +25,9 @@ int main(void) {
     // &   long      — 32-bit signed integer
     //
     // All variables are global.  They spring into existence on first use;
-    // dim is needed only for arrays or when you want to be explicit.
+    // dim (or its synonym declare) is needed only for arrays or when you
+    // want to be explicit -- declare tends to read better for a plain
+    // scalar, dim for an array.
     //
     // const names a value that cannot change.  Use it for magic numbers
     // so the intent is clear and the value lives in one place.

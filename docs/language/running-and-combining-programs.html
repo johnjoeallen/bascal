@@ -11,8 +11,8 @@ print "  BASCAL DEMO  "
 beep
 </code></pre><p><code>cls</code> clears the screen; <code>color foreground, background</code> sets text colors from the classic CGA palette (0–15 foreground, 0–7 background); <code>locate row, col</code> positions the cursor (both 1-based); <code>beep</code> sounds the terminal bell. <code>lprint</code> sends output to the line printer instead of the screen, using the same argument list as <code>print</code>.</p><h2>Linking separately run programs together</h2><p>Classic BASIC has a way for one program to hand off to another without either one going through disk I/O to pass data along: a <code>COMMON</code> block of variables, shared by name between programs that agree to declare it the same way, combined with <code>CHAIN</code> to actually transfer control. BASCAL structures the shared declaration itself, in its own small file.</p><pre><code>' state.bcl
 shared state
-dim count%
-dim label$
+declare count%
+declare label$
 </code></pre><pre><code>' start.bcl
 program start shared state
 count% = 1

@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Values, Names, and Expressions — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
 <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 2</p><h1>Values, names, and expressions</h1></div></header>
 <main class="chapter-main book-width"><h2>Type is part of the name</h2><p>BASCAL follows the classic BASIC convention: a suffix says what a variable holds. Use <code>%</code> for integers, <code>$</code> for strings, <code>!</code> for single-precision numbers, <code>#</code> for doubles, and <code>&amp;</code> for long integers. A variable needs no declaration to use — like classic BASIC, it springs into existence the first time you assign it — but <code>dim</code> (or its synonym <code>declare</code>) states its type up front, which a plain scalar assignment leaves the reader to work out from the suffix alone.</p><pre><code>const taxRate! = .23
-dim quantity%, description$, subtotal!
+declare quantity%, description$, subtotal!
 
 quantity% = 3
 description$ = "notebooks"
