@@ -5640,78 +5640,124 @@ fn cv_unpack_fn(name: &BasicIdent) -> Option<&'static str> {
     }
 }
 
+/// Shared by `sizeof`/`LBOUND`/`UBOUND` (see `render_numeric_call`'s own
+/// call site): validates `args[0]` is a known array and `args.get(1)`
+/// names one of its real axes (a literal integer, defaulting to `0` for a
+/// 1-D array; required and checked in range for 2-D+), then resolves that
+/// axis's raw bound as C expression text.
+///
+/// For a real top-level `dim`'d array this is `info.bounds[axis]`, a
+/// compile-time-known literal. For one of the *current function's own
+/// array parameters* (see `function_scoped_table`) there's no
+/// compile-time-known bound at all -- the same function body is reused by
+/// every call site, each of which can pass a differently-sized array -- so
+/// its synthetic `ArrayInfo` carries the hidden `<c_name>_len0` runtime
+/// parameter instead (see `ArrayInfo::runtime_len`'s own doc comment).
+/// That parameter holds the real element *count* directly (set at the
+/// call site by `render_call_args`/`apply_byval_array_capacities` as
+/// `bound + 1`), so recovering the raw bound from it needs subtracting 1
+/// back off.
+///
+/// `UBOUND` uses this value directly; `sizeof` adds 1 back to it (see
+/// `render_numeric_call`'s own `sizeof` arm); `LBOUND` ignores it entirely
+/// and always resolves to the literal `0` (`OPTION BASE` is rejected
+/// outright -- see GitHub issue #50) -- but still needs the same
+/// validation, so an unknown array or a bad axis is still a clear error
+/// rather than a silently-wrong `0`.
+fn resolve_array_bound_for_builtin(
+    builtin_name: &str,
+    args: &[Expr],
+    functions: &FunctionTable,
+) -> Result<String, String> {
+    let Expr::Ident(array_name) = &args[0] else {
+        return Err(format!(
+            "`{builtin_name}` expects an array name, e.g. `{builtin_name}(arr%)` or \
+             `{builtin_name}(grid%, 1)`"
+        ));
+    };
+    let key = array_c_name(array_name);
+    let info = functions.arrays.get(&key).ok_or_else(|| {
+        format!("`{array_name}` isn't a known array, so `{builtin_name}` can't determine its size")
+    })?;
+    let axis = match args.get(1) {
+        Some(Expr::Integer(n)) => *n as usize,
+        Some(_) => {
+            return Err(format!(
+                "the axis argument to `{builtin_name}` must be a literal integer"
+            ))
+        }
+        None if info.bounds.len() == 1 => 0,
+        None => {
+            return Err(format!(
+                "`{array_name}` has {} dimensions -- {builtin_name} needs an axis argument, e.g. \
+                 `{builtin_name}({array_name}, 0)`",
+                info.bounds.len()
+            ))
+        }
+    };
+    if axis >= info.bounds.len() {
+        return Err(format!(
+            "`{array_name}` only has {} dimension{} -- axis {axis} doesn't exist",
+            info.bounds.len(),
+            if info.bounds.len() == 1 { "" } else { "s" }
+        ));
+    }
+    if let Some(runtime) = info.runtime_len.as_ref().and_then(|v| v.get(axis)) {
+        return Ok(format!("({runtime} - 1)"));
+    }
+    Ok(info.bounds[axis].to_string())
+}
+
 fn render_numeric_call(
     name: &BasicIdent,
     args: &[Expr],
     needs_math: &mut bool,
     functions: &FunctionTable,
 ) -> Result<(String, bool), String> {
-    // `sizeof(arr%)` / `sizeof(grid%, axis)` -- a `dim`-declared array's
-    // element count along one axis (`bounds[axis] + 1`, real BASIC's own
-    // inclusive-bound convention -- see `ArrayInfo`), resolved directly
-    // to a literal integer at compile time (this backend only tracks
-    // arrays whose bounds are already compile-time-known -- see
-    // `resolve_array_bound_literal` -- so there's never a runtime value
-    // to compute here at all, unlike `--target basic`'s own `sizeof`,
-    // which sometimes has to read back a captured runtime bound). `axis`
-    // defaults to `0` for a 1-D array; a higher-rank array requires it
-    // explicitly, matching the manual's own documented `sizeof` rules.
-    if name.name.eq_ignore_ascii_case("sizeof") && (1..=2).contains(&args.len()) {
-        let Expr::Ident(array_name) = &args[0] else {
-            return Err(
-                "`sizeof` expects an array name, e.g. `sizeof(arr%)` or `sizeof(grid%, 1)`"
-                    .to_string(),
-            );
-        };
-        let key = array_c_name(array_name);
-        let info = functions.arrays.get(&key).ok_or_else(|| {
-            format!("`{array_name}` isn't a known array, so `sizeof` can't determine its size")
-        })?;
-        let axis = match args.get(1) {
-            Some(Expr::Integer(n)) => *n as usize,
-            Some(_) => {
-                return Err("the axis argument to `sizeof` must be a literal integer".to_string())
-            }
-            None if info.bounds.len() == 1 => 0,
-            None => {
-                return Err(format!(
-                    "`{array_name}` has {} dimensions -- sizeof needs an axis argument, e.g. \
-                     `sizeof({array_name}, 0)`",
-                    info.bounds.len()
-                ))
-            }
-        };
-        if axis >= info.bounds.len() {
+    // `sizeof(arr%)` / `LBOUND(arr%)` / `UBOUND(arr%)`, and their `, axis`
+    // forms -- see `resolve_array_bound_for_builtin`'s own doc comment for
+    // the shared resolution all three build on. `OPTION BASE` is rejected
+    // outright (see GitHub issue #50), so `LBOUND` is always the literal
+    // `0`; `--target c` doesn't support `OPTION BASE` at all regardless.
+    if let Some(builtin_name) = ["sizeof", "lbound", "ubound"]
+        .into_iter()
+        .find(|b| name.name.eq_ignore_ascii_case(b))
+    {
+        if !(1..=2).contains(&args.len()) {
             return Err(format!(
-                "`{array_name}` only has {} dimension{} -- axis {axis} doesn't exist",
-                info.bounds.len(),
-                if info.bounds.len() == 1 { "" } else { "s" }
+                "`{builtin_name}` expects an array name, e.g. `{builtin_name}(arr%)` or \
+                 `{builtin_name}(grid%, 1)`"
             ));
         }
-        // `sizeof()` returns the array's real element *count* along this
-        // axis, not the raw `DIM` bound `info.bounds` holds -- real
-        // BASIC's own inclusive-bound convention means a `DIM arr%(N)`
-        // axis holds `N + 1` elements (indices `0..=N`), matching
-        // `--target basic`'s `resolve_sizeof` (this assumes the default
-        // `OPTION BASE 0` -- see GitHub issue #44 for the separate,
-        // not-yet-tracked question of how `OPTION BASE 1` should shift
-        // this; `--target c` doesn't support `OPTION BASE` at all yet).
-        //
-        // An array *parameter* (see `function_scoped_table`) has no
-        // compile-time-known bound at all -- the same function body is
-        // reused by every call site, each of which can pass a
-        // differently-sized array -- so its synthetic `ArrayInfo` carries
-        // the hidden `<c_name>_len0` runtime parameter instead (see
-        // `ArrayInfo::runtime_len`'s own doc comment). That parameter
-        // already holds the real element count directly (set at the call
-        // site by `render_call_args`/`apply_byval_array_capacities` as
-        // `bound + 1`, for the same reason), so `sizeof()` on a parameter
-        // just reads it back with no further arithmetic.
-        if let Some(runtime) = info.runtime_len.as_ref().and_then(|v| v.get(axis)) {
-            return Ok((runtime.clone(), false));
+        if builtin_name == "lbound" {
+            // Still validated below (unknown array / bad axis), just
+            // discards the resolved bound -- see
+            // `resolve_array_bound_for_builtin`'s own doc comment.
+            resolve_array_bound_for_builtin(builtin_name, args, functions)?;
+            return Ok(("0".to_string(), false));
         }
-        let bound = info.bounds[axis];
-        return Ok(((bound + 1).to_string(), false));
+        let bound = resolve_array_bound_for_builtin(builtin_name, args, functions)?;
+        if builtin_name == "ubound" {
+            return Ok((bound, false));
+        }
+        // `sizeof()` returns the array's real element *count* along this
+        // axis, not the raw bound `resolve_array_bound_for_builtin`
+        // (and `UBOUND`) give back -- real BASIC's own inclusive-bound
+        // convention means a `DIM arr%(N)` axis holds `N + 1` elements
+        // (indices `0..=N`), matching `--target basic`'s own
+        // `resolve_sizeof`. Adding 1 to an already-resolved integer
+        // literal keeps the common case's generated code a plain literal
+        // rather than a `(4 + 1)` expression; a runtime bound (an array
+        // parameter's own hidden `_len0 - 1`, see
+        // `resolve_array_bound_for_builtin`) still needs the arithmetic
+        // spelled out.
+        return Ok((
+            match bound.parse::<i64>() {
+                Ok(n) => (n + 1).to_string(),
+                Err(_) => format!("({bound} + 1)"),
+            },
+            false,
+        ));
     }
     // `LEN(s$)` -- `strlen`, cast to `int` so it prints under `%d` like
     // every other integer result here rather than a possibly-64-bit
