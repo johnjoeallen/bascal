@@ -700,6 +700,25 @@ end
     }
 
     #[test]
+    fn basic_target_lowers_scalar_method_calls_and_chains() {
+        let source = r#"method$ capitalize$()
+    return self$
+end method
+
+method$ pad$(width%)
+    return self$
+end method
+
+result$ = name$.capitalize().pad(20)
+end
+"#;
+        let output = compile_source("methods.bcl", source).expect("methods should lower to BASIC");
+        assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
+        assert!(output.contains("GOSUB"), "{output}");
+        assert!(output.contains("result$ = padResult0$"), "{output}");
+    }
+
+    #[test]
     fn fixed_parameter_defaults_reject_dynamic_and_non_trailing_values() {
         let dynamic = r#"function choose%(value% = timer)
     return value%
@@ -1173,6 +1192,51 @@ END
             output.contains("quicksortData0%(quicksortWall0%) = quicksortData0%(quicksortQHigh0%)")
         );
         assert!(output.contains("GOSUB "));
+    }
+
+    #[test]
+    fn basic_target_lowers_methods_from_required_libraries() {
+        let dir = tempfile::tempdir().expect("temp directory");
+        let lib_dir = dir.path().join("com/example");
+        fs::create_dir_all(&lib_dir).expect("library directory");
+        fs::write(
+            lib_dir.join("text.bcl"),
+            "library com.example.text\nmethod$ capitalize$()\nreturn self$\nend method\n",
+        )
+        .expect("library source");
+        let input = dir.path().join("main.bcl");
+        fs::write(
+            &input,
+            "program main\nrequire com.example.text\nresult$ = name$.capitalize()\nend\n",
+        )
+        .expect("program source");
+        let output = compile_file(&input, &CompileOptions::new()).expect("required method should compile");
+        assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
+        assert!(output.contains("result$ = capitalizeResult0$"), "{output}");
+        let mut c_options = CompileOptions::new();
+        c_options.target = Target::C;
+        let (c_output, _) = compile_file_with_runtime(&input, &c_options)
+            .expect("required method should compile for C");
+        assert!(c_output.contains("bf_s_capitalize"), "{c_output}");
+    }
+
+    #[test]
+    fn c_target_lowers_scalar_method_calls_and_chains() {
+        let source = r#"method$ capitalize$()
+    return self$
+end method
+
+method! negate!()
+    return -self!
+end method
+
+result$ = name$.capitalize()
+answer! = value!.negate()
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("bf_s_capitalize_s(bv_s_name"), "{output}");
+        assert!(output.contains("bf_f_negate_f(bv_f_value"), "{output}");
     }
 
     #[test]

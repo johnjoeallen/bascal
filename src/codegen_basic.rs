@@ -3348,12 +3348,13 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
             collect_names_from_expr(right, names);
         }
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) => {}
-        Expr::FileIndex { .. }
-        | Expr::FieldAccess { .. }
-        | Expr::MethodCall { .. }
-        | Expr::ScalarMethodCall { .. }
+        Expr::FileIndex { .. } | Expr::FieldAccess { .. } | Expr::MethodCall { .. }
         | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
+        }
+        Expr::ScalarMethodCall { base, args, .. } => {
+            collect_names_from_expr(base, names);
+            for arg in args { collect_names_from_expr(arg, names); }
         }
     }
 }

@@ -159,6 +159,7 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// `fn_key`, same (name, suffix) keying `codegen_basic::same_ident` uses,
 /// since a call site's own suffix is part of its identifier syntax and
 /// must match the declaration's exactly.
+#[derive(Clone)]
 struct FnSig {
     /// The real C function's name (see `function_c_name`) -- distinct from
     /// `c_var_name`'s `bv_...` namespace so a function and a variable that
@@ -171,8 +172,10 @@ struct FnSig {
     /// Only meaningful when `!is_string && !is_void`.
     is_float: bool,
     params: Vec<FnParam>,
+    result_suffix: Option<TypeSuffix>,
 }
 
+#[derive(Clone)]
 struct FnParam {
     /// The C identifier used for this parameter *inside the function
     /// body* -- for a string parameter, that's the local buffer holding
@@ -183,6 +186,7 @@ struct FnParam {
     /// Only meaningful when `!is_string`.
     is_float: bool,
     default: Option<Expr>,
+    suffix: TypeSuffix,
 }
 
 type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
@@ -220,6 +224,7 @@ type ArrayTable = HashMap<String, ArrayInfo>;
 /// single identifier lookup has to check both tables together anyway.
 struct FunctionTable {
     funcs: FunctionMap,
+    methods: HashMap<(TypeSuffix, String), FnSig>,
     arrays: ArrayTable,
 }
 
@@ -230,6 +235,17 @@ impl FunctionTable {
 
     fn contains_key(&self, key: &(String, Option<TypeSuffix>)) -> bool {
         self.funcs.contains_key(key)
+    }
+
+    fn method(&self, receiver: TypeSuffix, name: &str) -> Option<&FnSig> {
+        self.methods.get(&(receiver, name.to_ascii_lowercase()))
+    }
+
+    fn signature_for(&self, func: &FunctionDef) -> Option<&FnSig> {
+        match func.receiver {
+            Some(receiver) => self.method(receiver, &func.name.name),
+            None => self.get(&fn_key(&func.name)),
+        }
     }
 }
 
@@ -1450,8 +1466,9 @@ fn apply_field_layouts_before_functions(
 /// real MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C
 /// function falling off the end without `return`-ing a value is undefined
 /// behavior, not a defined-if-surprising fallback.
-fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String> {
+fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashMap<(TypeSuffix, String), FnSig>), String> {
     let mut table = FunctionMap::new();
+    let mut methods = HashMap::new();
     for func in functions {
         // A `procedure` never carries a type suffix (enforced by the
         // parser) and has no return type at all -- a real `void` C
@@ -1470,7 +1487,16 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
                 func.name
             ));
         }
-        let mut params = Vec::with_capacity(func.params.len());
+        let mut params = Vec::with_capacity(func.params.len() + usize::from(func.receiver.is_some()));
+        if let Some(receiver) = func.receiver {
+            params.push(FnParam {
+                c_name: c_var_name(&BasicIdent { name: "self".to_string(), suffix: Some(receiver) }, receiver),
+                is_string: receiver == TypeSuffix::String,
+                is_float: numeric_c_type(receiver).is_some_and(|(_, f)| f),
+                default: None,
+                suffix: receiver,
+            });
+        }
         for param in &func.params {
             if param.mode != ParamMode::ByVal {
                 return Err(format!(
@@ -1506,6 +1532,7 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
                 is_string: param_is_string,
                 is_float: param_numeric.is_some_and(|(_, f)| f),
                 default: param.default.clone(),
+                suffix,
             });
         }
         // A procedure may fall through to its end with no explicit
@@ -1520,18 +1547,34 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
                 func.name
             ));
         }
-        table.insert(
-            fn_key(&func.name),
-            FnSig {
-                c_name: function_c_name(&func.name),
+        let sig = FnSig {
+                c_name: func.receiver.map_or_else(
+                    || function_c_name(&func.name),
+                    |receiver| format!("{}_{}", function_c_name(&func.name), type_tag(receiver)),
+                ),
                 is_void: func.is_procedure,
                 is_string,
                 is_float: numeric.is_some_and(|(_, f)| f),
                 params,
-            },
-        );
+                result_suffix: func.name.suffix,
+            };
+        if let Some(receiver) = func.receiver {
+            methods.insert((receiver, func.name.name.to_ascii_lowercase()), sig);
+        } else {
+            table.insert(fn_key(&func.name), sig);
+        }
     }
-    Ok(table)
+    Ok((table, methods))
+}
+
+fn type_tag(suffix: TypeSuffix) -> char {
+    match suffix {
+        TypeSuffix::Integer => 'i',
+        TypeSuffix::Long => 'l',
+        TypeSuffix::Single => 'f',
+        TypeSuffix::Double => 'd',
+        TypeSuffix::String => 's',
+    }
 }
 
 fn call_args_with_defaults<'a>(sig: &'a FnSig, args: &'a [Expr], name: &BasicIdent) -> Result<Vec<&'a Expr>, String> {
@@ -1651,12 +1694,12 @@ pub(crate) struct GeneratedC {
 }
 
 pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
-    let funcs =
+    let (funcs, methods) =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
     let int_consts = collect_top_level_int_consts(&program.statements);
     let arrays = collect_array_declarations(&program.statements, &int_consts)
         .map_err(|message| vec![unsupported(&message)])?;
-    let functions = FunctionTable { funcs, arrays };
+    let functions = FunctionTable { funcs, methods, arrays };
     let known_layouts = known_record_layouts(program);
     let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
         channel_fields: HashMap::new(),
@@ -1748,7 +1791,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut prototypes = String::new();
     let mut function_defs = String::new();
     for func in &program.functions {
-        let sig = &functions[&fn_key(&func.name)];
+        let sig = functions.signature_for(func).expect("function table should contain declaration");
         prototypes.push_str(&function_signature(func, sig));
         prototypes.push_str(";\n");
         emit_function_def(
@@ -2015,20 +2058,15 @@ fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
             .expect("validated by build_function_table")
             .0
     };
-    let mut params: Vec<String> = func
+    let mut params: Vec<String> = sig
         .params
         .iter()
-        .zip(&sig.params)
-        .map(|(param, fp)| {
+        .enumerate()
+        .map(|(_index, fp)| {
             if fp.is_string {
                 format!("const char* {}_in", fp.c_name)
             } else {
-                let suffix = param
-                    .name
-                    .suffix
-                    .expect("validated by build_function_table");
-                let (c_type, _) =
-                    numeric_c_type(suffix).expect("validated by build_function_table");
+                let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
                 format!("{c_type} {}", fp.c_name)
             }
         })
@@ -2565,6 +2603,12 @@ fn collect_vars_in_expr(
         Expr::ArrayRef { indices, .. } => {
             for idx in indices {
                 collect_vars_in_expr(idx, numeric_out, string_out);
+            }
+        }
+        Expr::ScalarMethodCall { base, args, .. } => {
+            collect_vars_in_expr(base, numeric_out, string_out);
+            for arg in args {
+                collect_vars_in_expr(arg, numeric_out, string_out);
             }
         }
         _ => {}
@@ -3229,7 +3273,7 @@ fn emit_statement(
                 if index > 0 {
                     format.push(',');
                 }
-                if is_string_expr(expr) {
+                if is_string_expr_with_functions(expr, functions) {
                     let (expr_prelude, text) =
                         render_string_expr(expr, needs_math, temp_counter, functions)?;
                     prelude.extend(expr_prelude);
@@ -4497,7 +4541,7 @@ fn emit_select_case(
     gosub_id: &mut usize,
     ctx: &mut ErrorDataCtx,
 ) -> Result<(), String> {
-    let is_string = is_string_expr(expr);
+    let is_string = is_string_expr_with_functions(expr, functions);
     let temp = format!("bt_sel_{temp_counter}");
     *temp_counter += 1;
 
@@ -4689,6 +4733,33 @@ fn is_string_expr(expr: &Expr) -> bool {
     }
 }
 
+fn is_string_expr_with_functions(expr: &Expr, functions: &FunctionTable) -> bool {
+    match expr {
+        Expr::ScalarMethodCall { base, method, .. } => scalar_method_result(functions, base, method) == Some(TypeSuffix::String),
+        Expr::Binary { op: BinaryOp::Add, left, right } =>
+            is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions),
+        _ => is_string_expr(expr),
+    }
+}
+
+fn scalar_expr_suffix(expr: &Expr, functions: &FunctionTable) -> Option<TypeSuffix> {
+    match expr {
+        Expr::String(_) => Some(TypeSuffix::String),
+        Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
+        Expr::Float(_) => Some(TypeSuffix::Single),
+        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => Some(effective_suffix(id.suffix)),
+        Expr::Unary { expr, .. } => scalar_expr_suffix(expr, functions),
+        Expr::Binary { left, .. } => scalar_expr_suffix(left, functions),
+        Expr::ScalarMethodCall { base, method, .. } => scalar_method_result(functions, base, method),
+        _ => None,
+    }
+}
+
+fn scalar_method_result(functions: &FunctionTable, base: &Expr, method: &str) -> Option<TypeSuffix> {
+    let receiver = scalar_expr_suffix(base, functions)?;
+    functions.method(receiver, method)?.result_suffix
+}
+
 /// Every string variable/temporary is a fixed-size buffer -- real BASIC
 /// strings are dynamically sized (heap-allocated, grow/shrink freely),
 /// which this minimal backend doesn't attempt to replicate. `snprintf` is
@@ -4852,6 +4923,39 @@ fn render_string_call(
 /// whole chain -- more buffers than strictly necessary, but simple and
 /// correct, consistent with this backend's other "correct over clever"
 /// choices.
+fn render_string_method_call(
+    base: &Expr,
+    method: &str,
+    args: &[Expr],
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+) -> Result<(Vec<String>, String), String> {
+    let receiver = scalar_expr_suffix(base, functions).ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
+    let sig = functions.method(receiver, method).ok_or_else(|| format!("unknown method `.{method}()`"))?;
+    if !sig.is_string { return Err(format!("method `.{method}()` does not return a string")); }
+    let mut call_args = Vec::with_capacity(args.len() + 1);
+    call_args.push(base.clone());
+    call_args.extend(args.iter().cloned());
+    let call_args = call_args_with_defaults(sig, &call_args, &BasicIdent::parse(method))?;
+    let mut prelude = Vec::new();
+    let mut text = Vec::new();
+    for (arg, param) in call_args.into_iter().zip(&sig.params) {
+        if param.is_string {
+            let (p, t) = render_string_expr(arg, needs_math, temp_counter, functions)?;
+            prelude.extend(p); text.push(t);
+        } else {
+            let (t, f) = render_numeric_expr(arg, needs_math, functions)?;
+            text.push(coerce_numeric(t, f, param.is_float, needs_math));
+        }
+    }
+    let temp = format!("bt_s_{temp_counter}"); *temp_counter += 1;
+    prelude.push(format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+    text.push(temp.clone());
+    prelude.push(format!("    {}({});\n", sig.c_name, text.join(", ")));
+    Ok((prelude, temp))
+}
+
 fn render_string_expr(
     expr: &Expr,
     needs_math: &mut bool,
@@ -4867,7 +4971,7 @@ fn render_string_expr(
             op: BinaryOp::Add,
             left,
             right,
-        } if is_string_expr(left) || is_string_expr(right) => {
+        } if is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions) => {
             let (mut prelude, left_text) =
                 render_string_expr(left, needs_math, temp_counter, functions)?;
             let (right_prelude, right_text) =
@@ -4921,6 +5025,9 @@ fn render_string_expr(
             let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
             Ok((Vec::new(), c_expr))
         }
+        Expr::ScalarMethodCall { base, method, args } => {
+            render_string_method_call(base, method, args, needs_math, temp_counter, functions)
+        }
         _ => Err(
             "the minimal C backend's string expressions only support string literals, string \
              scalar variables ($), + (concatenation), and calls to user-defined BASCAL \
@@ -4962,7 +5069,7 @@ fn render_print_tokens(
                 needs_newline = true;
                 format.push_str(&escape_c_format_text(s));
             }
-            PrintToken::Expr(expr) if is_string_expr(expr) => {
+            PrintToken::Expr(expr) if is_string_expr_with_functions(expr, functions) => {
                 let (expr_prelude, text) =
                     render_string_expr(expr, needs_math, temp_counter, functions)?;
                 prelude.extend(expr_prelude);
@@ -5303,6 +5410,31 @@ fn render_numeric_call(
         sig.is_float,
     ))
 }
+fn render_numeric_method_call(
+    base: &Expr,
+    method: &str,
+    args: &[Expr],
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+) -> Result<(String, bool), String> {
+    let receiver = scalar_expr_suffix(base, functions).ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
+    let sig = functions.method(receiver, method).ok_or_else(|| format!("unknown method `.{method}()`"))?;
+    if sig.is_string || sig.is_void { return Err(format!("method `.{method}()` does not return a number")); }
+    let mut call_args = Vec::with_capacity(args.len() + 1);
+    call_args.push(base.clone()); call_args.extend(args.iter().cloned());
+    let call_args = call_args_with_defaults(sig, &call_args, &BasicIdent::parse(method))?;
+    let mut text = Vec::new();
+    for (arg, param) in call_args.into_iter().zip(&sig.params) {
+        if param.is_string {
+            text.push(render_prelude_free_string_arg(arg, needs_math, functions)?);
+        } else {
+            let (t, f) = render_numeric_expr(arg, needs_math, functions)?;
+            text.push(coerce_numeric(t, f, param.is_float, needs_math));
+        }
+    }
+    Ok((format!("{}({})", sig.c_name, text.join(", ")), sig.is_float))
+}
+
 fn render_numeric_expr(
     expr: &Expr,
     needs_math: &mut bool,
@@ -5504,7 +5636,7 @@ fn render_numeric_expr(
             // shapes `render_prelude_free_string_arg` covers, since this
             // function has nowhere to route a prelude a fuller string
             // expression (`+` concatenation) would need.
-            if is_string_expr(left) || is_string_expr(right) {
+            if is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions) {
                 let l = render_prelude_free_string_arg(left, needs_math, functions)?;
                 let r = render_prelude_free_string_arg(right, needs_math, functions)?;
                 return Ok((format!("(-(strcmp({l}, {r}) {c_op} 0))"), false));
@@ -5619,6 +5751,9 @@ fn render_numeric_expr(
                 .element_type
                 .is_some_and(|(_, f)| f);
             Ok((c_expr, is_float))
+        }
+        Expr::ScalarMethodCall { base, method, args } => {
+            render_numeric_method_call(base, method, args, needs_math, functions)
         }
         // A call to a user-defined numeric-returning BASCAL function --
         // and a single-argument (or zero-argument) one parses as
