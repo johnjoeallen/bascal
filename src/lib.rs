@@ -835,6 +835,105 @@ end
     }
 
     #[test]
+    fn same_named_function_and_method_are_rejected() {
+        // GitHub issue #41: a method is conceptually a function with its
+        // receiver as an implicit first parameter, so declaring both is a
+        // duplicate declaration, not a valid "dual calling convention".
+        let source = "method$ ltrim$()\n    return self$\nend method\n\
+                       function ltrim$(s$)\n    return s$\nend function\nend\n";
+        let err = compile_source("fn_method_collision.bcl", source)
+            .expect_err("a function and method sharing a name should be rejected");
+        assert!(
+            err.iter().any(|d| {
+                d.message.contains("declared as both a function and a method")
+            }),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn ordinary_call_syntax_resolves_to_a_method() {
+        // The other half of #41: since a same-named function is now
+        // disallowed, ordinary-call syntax (ltrim$(s$)) must resolve
+        // straight to the method declaration instead, with the first
+        // argument filling the receiver.
+        let source = r#"method$ ltrim$()
+    i% = 1
+    while i% <= LEN(self$) && MID$(self$, i%, 1) = " "
+        i% = i% + 1
+    end while
+    return MID$(self$, i%)
+end method
+
+print ltrim$("   hi")
+print "   hi2".ltrim()
+end
+"#;
+        let basic = compile_source("ordinary_to_method.bcl", source).expect("should compile");
+        assert!(
+            basic.matches("GOSUB").count() >= 2,
+            "both the ordinary call and the method call should GOSUB the same body:\n{basic}"
+        );
+        assert!(
+            !basic.to_ascii_lowercase().contains("ltrim$(\""),
+            "the ordinary call should be lowered to a GOSUB, not left as a literal call:\n{basic}"
+        );
+
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bf_s_ltrim"), "{c}");
+    }
+
+    #[test]
+    fn ordinary_call_with_mismatched_receiver_type_does_not_silently_resolve_to_a_method() {
+        // A real, pre-existing bug this session found while implementing
+        // the fallback above: codegen_basic.rs's own `function_info` used
+        // to match a call site to *any* FunctionInfo by name+suffix,
+        // methods included, with zero type checking on the receiver --
+        // `ltrim$(n%)` (n% an Integer, ltrim$ a String-receiver method)
+        // compiled and ran with no diagnostic at all, silently assigning
+        // n% into ltrim's string `self` param. Fixed via
+        // `ordinary_function_info`, which excludes methods from that
+        // lookup -- the real, type-checked fallback lives entirely in
+        // records.rs's `try_ordinary_call_as_method` now. A mismatched
+        // call falls through to the same "unknown function" passthrough
+        // any genuinely-undeclared identifier already gets under
+        // --target basic (trusting the real BASIC compiler to catch it),
+        // and a hard resolver-level error under --target c.
+        let source = "method$ ltrim$()\n    return self$\nend method\n\
+                       n% = 5\nprint ltrim$(n%)\nend\n";
+        let basic = compile_source("mismatched_receiver.bcl", source).expect("should compile");
+        assert!(
+            !basic.contains("ltrimSelf0$ = n%"),
+            "a numeric argument must never be silently assigned into ltrim's string self:\n{basic}"
+        );
+
+        let c_err = compile_source_via_c_target_err(source);
+        assert!(!c_err.is_empty(), "the C target should reject the mismatched call outright");
+    }
+
+    #[test]
+    fn two_functions_differing_only_by_suffix_get_distinct_labels() {
+        // The root cause behind both tests above: two functions/methods
+        // sharing a bare name used to collide on the same generated GOSUB
+        // label (`FunctionInfo::label` was keyed on the bare name alone),
+        // regardless of whether either was a method at all -- confirmed via
+        // real fbc execution: `print foo%(5)` actually ran `foo$`'s body.
+        let source = "function foo%(x%)\n    return x% + 1\nend function\n\
+                       function foo$(x%)\n    return \"n=\" + str$(x%)\nend function\n\
+                       print foo%(5)\nprint foo$(5)\nend\n";
+        let output = compile_source("distinct_labels.bcl", source).expect("should compile");
+        let gosub_targets: Vec<&str> = output
+            .lines()
+            .filter_map(|l| l.trim_start().strip_prefix("GOSUB "))
+            .collect();
+        assert_eq!(gosub_targets.len(), 2, "expected two GOSUB call sites:\n{output}");
+        assert_ne!(
+            gosub_targets[0], gosub_targets[1],
+            "foo% and foo$ must GOSUB different labels, not collide on the same one:\n{output}"
+        );
+    }
+
+    #[test]
     fn fixed_parameter_defaults_reject_dynamic_and_non_trailing_values() {
         let dynamic = r#"function choose%(value% = timer)
     return value%

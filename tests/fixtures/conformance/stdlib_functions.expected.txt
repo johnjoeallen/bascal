@@ -8,6 +8,11 @@
 []
 ABCXYZ123!
 abcxyz123!
+[hi]
+[hi]
+ABCXYZ123!
+abcxyz123!
+[padded]
 File not found
 Division by zero
 Error  9999

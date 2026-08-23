@@ -1027,7 +1027,7 @@ impl CodeGenerator {
             }
         }
         if let Some((name, args)) = callable_expr(expr_stmt) {
-            if let Some(info) = self.function_info(name).cloned() {
+            if let Some(info) = self.ordinary_function_info(name).cloned() {
                 self.emit_call_statement(&info, args, current_function);
                 return;
             }
@@ -1257,7 +1257,7 @@ impl CodeGenerator {
                 (Vec::new(), emitted)
             }
             Expr::ArrayRef { name, indices } => {
-                if let Some(info) = self.function_info(name).cloned() {
+                if let Some(info) = self.ordinary_function_info(name).cloned() {
                     let call = self.call_lines(&info, indices, current_function);
                     return (call, info.result.as_basic());
                 }
@@ -1317,7 +1317,7 @@ impl CodeGenerator {
                         }
                     };
                 }
-                if let Some(info) = self.function_info(name).cloned() {
+                if let Some(info) = self.ordinary_function_info(name).cloned() {
                     (
                         self.call_lines(&info, args, current_function),
                         info.result.as_basic(),
@@ -1742,6 +1742,27 @@ impl CodeGenerator {
             .find(|function| same_ident(&function.source_name, name))
     }
 
+    /// Same lookup as `function_info`, but excluding methods
+    /// (`receiver.is_some()`) -- used wherever an *ordinary* call site
+    /// (`Expr::Call`/`Expr::ArrayRef`, or a bare call statement) is being
+    /// resolved, so a method never gets matched here with zero type
+    /// checking on its receiver (`function_info` alone would happily match
+    /// a method by name+suffix and hand its whole indices/args list
+    /// straight to `call_lines`, silently binding the first argument to
+    /// `self` regardless of its actual type -- confirmed: `ltrim$(n%)`,
+    /// `n%` an Integer, compiled and ran with no diagnostic at all before
+    /// this fix, assigning `n%` into `ltrim`'s string `self` param).
+    /// `records::Lowerer::try_ordinary_call_as_method` is the one, real,
+    /// type-checked path from ordinary-call syntax to a method now -- it
+    /// runs before this codegen pass ever sees the program, rewriting an
+    /// eligible call into a genuine `Expr::ScalarMethodCall`, which this
+    /// function never needs to see at all.
+    fn ordinary_function_info(&self, name: &BasicIdent) -> Option<&FunctionInfo> {
+        self.functions
+            .iter()
+            .find(|function| function.receiver.is_none() && same_ident(&function.source_name, name))
+    }
+
     fn method_info(&self, receiver: TypeSuffix, name: &str) -> Option<&FunctionInfo> {
         self.functions.iter().find(|function| {
             function.receiver == Some(receiver) && function.source_name.name.eq_ignore_ascii_case(name)
@@ -2075,7 +2096,7 @@ impl FunctionInfo {
         Self {
             source_name: function.name.clone(),
             stem: stem.clone(),
-            label: format!("FN_{stem}"),
+            label: function_label(&stem, function.name.suffix, function.receiver),
             result,
             params,
             param_ranks,
@@ -3092,6 +3113,49 @@ fn mid_assign_helper_ident() -> BasicIdent {
 /// Always uses the indexed form `preferredStem0`, `1`, … so that allocated
 /// names are visually distinct from bare global names and can never coincide
 /// with an unindexed global even if no collision exists today.
+/// A short, alphanumeric-only tag distinguishing one type suffix from
+/// another in a generated GOSUB label (see `function_label`) -- `allocate_unique`
+/// already keeps ordinary variable names apart this way via the real BASIC
+/// suffix character embedded in `BasicIdent::as_basic()`'s own rendering,
+/// but a label is plain emitted text (`self.line(&format!("{}:", info.label))`
+/// in `emit_function_def`), not a `BasicIdent`, so it needs its own safe
+/// (non-`%`/`$`/`!`/`#`/`&`) tag instead.
+fn label_suffix_tag(suffix: TypeSuffix) -> &'static str {
+    match suffix {
+        TypeSuffix::Integer => "i",
+        TypeSuffix::Long => "l",
+        TypeSuffix::Single => "f",
+        TypeSuffix::Double => "d",
+        TypeSuffix::String => "s",
+    }
+}
+
+/// The GOSUB label a function/procedure/method's own body starts at --
+/// keyed by `stem` (the base name alone) *plus* the result suffix and (for
+/// a method) the receiver, so two functions/methods that only differ by
+/// suffix and/or receiver never collide on the same label. Two ordinary
+/// functions differing only by suffix (`function foo%(x%)` / `function
+/// foo$(x%)`) used to collide this way -- both got `FN_foo`, and whichever
+/// claimed it last silently won every call site, with no diagnostic at
+/// all (confirmed via real `fbc` execution: `print foo%(5)` actually ran
+/// `foo$`'s body). A procedure has no result suffix at all
+/// (`function.name.suffix` is `None`), so its label is keyed on the bare
+/// stem alone -- safe, since `reject_duplicate_functions` already rejects
+/// two procedures (or a procedure and a function, which real BASIC's own
+/// name resolution can't tell apart either) sharing one name.
+fn function_label(stem: &str, suffix: Option<TypeSuffix>, receiver: Option<TypeSuffix>) -> String {
+    let mut label = format!("FN_{stem}");
+    if let Some(suffix) = suffix {
+        label.push('_');
+        label.push_str(label_suffix_tag(suffix));
+    }
+    if let Some(receiver) = receiver {
+        label.push_str("_of_");
+        label.push_str(label_suffix_tag(receiver));
+    }
+    label
+}
+
 fn allocate_unique(
     preferred_stem: &str,
     suffix: Option<TypeSuffix>,

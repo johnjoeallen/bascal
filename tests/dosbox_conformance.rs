@@ -248,6 +248,32 @@ fn stdlib_functions_match_real_bascom() {
     );
 }
 
+/// GitHub issue #41: com.bascal.stdlib's ltrim$/rtrim$/ucase$/lcase$ are
+/// now declared as scalar methods, with error$ staying an ordinary
+/// function -- `stdlib_functions.bcl` exercises both the ordinary-call
+/// form (which now resolves to the method declaration, filling self$ with
+/// the first argument -- see `records::Lowerer::try_ordinary_call_as_method`)
+/// and the chained method-call form, checked against the same golden file
+/// `stdlib_functions_match_real_bascom` already uses.
+#[test]
+fn stdlib_functions_match_c_target() {
+    let work_dir = std::env::temp_dir().join("bascal-c-target-stdlib-functions");
+    let _ = fs::remove_dir_all(&work_dir);
+    let actual = compile_run_c_target_in("stdlib_functions", &work_dir);
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/stdlib_functions.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "C target output for com.bascal.stdlib no longer matches the golden \
+         expectation at {}",
+        expected_path.display()
+    );
+}
+
 #[test]
 fn self_referential_string_concatenation_matches_real_bascom() {
     require_fixture!();
