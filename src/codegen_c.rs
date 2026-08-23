@@ -5688,15 +5688,14 @@ fn render_numeric_call(
                 if info.bounds.len() == 1 { "" } else { "s" }
             ));
         }
-        // `sizeof()` returns the array's own declared *bound* (its
-        // top index -- `docs/manual/arrays.html#sizeof`'s own
-        // `dim data%(9)` / `sizeof(data%) = 9` example), matching
-        // `--target basic`'s `resolve_axis_bound`/`resolve_sizeof`
-        // exactly -- NOT the element count (`bound + 1`, real BASIC's own
-        // inclusive-bound convention) that a real C array's storage needs
-        // (see the top-level globals loop and `emit_function_def`'s
-        // `byval` copy-in buffer, both of which still want `bound + 1`
-        // for that reason).
+        // `sizeof()` returns the array's real element *count* along this
+        // axis, not the raw `DIM` bound `info.bounds` holds -- real
+        // BASIC's own inclusive-bound convention means a `DIM arr%(N)`
+        // axis holds `N + 1` elements (indices `0..=N`), matching
+        // `--target basic`'s `resolve_sizeof` (this assumes the default
+        // `OPTION BASE 0` -- see GitHub issue #44 for the separate,
+        // not-yet-tracked question of how `OPTION BASE 1` should shift
+        // this; `--target c` doesn't support `OPTION BASE` at all yet).
         //
         // An array *parameter* (see `function_scoped_table`) has no
         // compile-time-known bound at all -- the same function body is
@@ -5704,17 +5703,15 @@ fn render_numeric_call(
         // differently-sized array -- so its synthetic `ArrayInfo` carries
         // the hidden `<c_name>_len0` runtime parameter instead (see
         // `ArrayInfo::runtime_len`'s own doc comment). That parameter
-        // itself holds the real element *count* (`bound + 1`, set at the
-        // call site by `render_call_args`/`apply_byval_array_capacities`,
-        // and needed as a count there for the `byval` copy-in loop and
-        // capacity checks) -- so `sizeof()` on a parameter has to
-        // subtract 1 back off it to recover the same bound a real
-        // top-level `dim`'d array would report directly.
+        // already holds the real element count directly (set at the call
+        // site by `render_call_args`/`apply_byval_array_capacities` as
+        // `bound + 1`, for the same reason), so `sizeof()` on a parameter
+        // just reads it back with no further arithmetic.
         if let Some(runtime) = info.runtime_len.as_ref().and_then(|v| v.get(axis)) {
-            return Ok((format!("({runtime} - 1)"), false));
+            return Ok((runtime.clone(), false));
         }
         let bound = info.bounds[axis];
-        return Ok((bound.to_string(), false));
+        return Ok(((bound + 1).to_string(), false));
     }
     // `LEN(s$)` -- `strlen`, cast to `int` so it prints under `%d` like
     // every other integer result here rather than a possibly-64-bit
