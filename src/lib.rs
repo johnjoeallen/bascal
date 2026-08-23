@@ -2070,9 +2070,8 @@ end\n";
     }
 
     #[test]
-    fn option_base_and_erase() {
-        let source = r#"option base 1
-dim scores%(10)
+    fn erase_multiple_arrays() {
+        let source = r#"dim scores%(10)
 dim names$(10)
 dim grid%(4, 4)
 ' ... use arrays ...
@@ -2080,10 +2079,25 @@ erase scores%
 erase names$, grid%
 end
 "#;
-        let output = compile_source("ob.bcl", source).expect("should compile");
-        assert!(output.contains("OPTION BASE 1"));
+        let output = compile_source("erase.bcl", source).expect("should compile");
         assert!(output.contains("ERASE scores%"));
         assert!(output.contains("ERASE names$, grid%"));
+    }
+
+    #[test]
+    fn option_base_is_rejected() {
+        // OPTION BASE was never properly supported -- see GitHub issue #50.
+        for source in [
+            "option base 1\ndim scores%(10)\nend\n",
+            "option base 0\ndim scores%(10)\nend\n",
+        ] {
+            let err = compile_source("ob.bcl", source)
+                .expect_err("OPTION BASE should be rejected outright");
+            assert!(
+                err.iter().any(|d| d.message.contains("OPTION BASE")),
+                "unexpected diagnostics for {source:?}: {err:?}"
+            );
+        }
     }
 
     #[test]
