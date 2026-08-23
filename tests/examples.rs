@@ -158,6 +158,38 @@ fn freebasic_runs_mid_assign_edge_cases_when_available() {
 }
 
 #[test]
+fn freebasic_runs_self_referential_string_concatenation_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/string_self_concat.bcl");
+    let output_path = repo_root.join("output/string_self_concat.bas");
+
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/string_self_concat");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled string_self_concat");
+    assert!(
+        run.status.success(),
+        "compiled string_self_concat failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(
+        lines,
+        vec!["abcdefghij", "abcdefghij"],
+        "self-referential LEFT$/MID$/RIGHT$ concatenation produced unexpected output:\n{stdout}"
+    );
+}
+
+#[test]
 fn freebasic_runs_remline_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
         return;
