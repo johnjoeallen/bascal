@@ -23,7 +23,7 @@ pub struct Parser {
     // the next token, so callers that loop on `parse_statement()` (parse_block,
     // the top-level program loop, and a single-line `if`'s body) see the
     // extra statements as if they'd been parsed individually.
-    pending_statements: std::collections::VecDeque<Statement>,
+    pending_statements: std::collections::VecDeque<Stmt>,
 }
 
 impl Parser {
@@ -118,7 +118,8 @@ impl Parser {
                 }
             }
             if self.take_pending_blank() && !self.is_eof() {
-                statements.push(Statement::BlankLine);
+                let blank_pos = self.current_pos();
+                statements.push(Stmt::new(Statement::BlankLine, blank_pos));
             }
         }
 
@@ -164,6 +165,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> ParseResult<FunctionDef> {
+        let fn_pos = self.current_pos();
         self.expect_keyword("function")?;
         let name = BasicIdent::parse(&self.expect_ident("expected function name")?);
         self.expect(TokenKind::LParen, "expected `(` after function name")?;
@@ -184,10 +186,12 @@ impl Parser {
             params,
             body,
             is_procedure: false,
+            pos: fn_pos,
         })
     }
 
     fn parse_procedure(&mut self) -> ParseResult<FunctionDef> {
+        let fn_pos = self.current_pos();
         self.expect_keyword("procedure")?;
         let raw = self.expect_ident("expected procedure name")?;
         let name = BasicIdent::parse(&raw);
@@ -208,6 +212,7 @@ impl Parser {
             params,
             body,
             is_procedure: true,
+            pos: fn_pos,
         })
     }
 
@@ -375,7 +380,7 @@ impl Parser {
         Ok(items)
     }
 
-    fn parse_block(&mut self, ends: &[BlockEnd]) -> ParseResult<Vec<Statement>> {
+    fn parse_block(&mut self, ends: &[BlockEnd]) -> ParseResult<Vec<Stmt>> {
         let mut body = Vec::new();
         self.pending_blank = false;
         self.skip_newlines();
@@ -385,16 +390,29 @@ impl Parser {
                 body.push(self.parse_statement()?);
             }
             if self.take_pending_blank() && !self.at_any_block_end(ends) && !self.is_eof() {
-                body.push(Statement::BlankLine);
+                let blank_pos = self.current_pos();
+                body.push(Stmt::new(Statement::BlankLine, blank_pos));
             }
         }
         Ok(body)
     }
 
-    fn parse_statement(&mut self) -> ParseResult<Statement> {
+    /// Single dispatch point that turns a bare `Statement` into a
+    /// position-carrying `Stmt` -- every caller that builds up a `Vec<Stmt>`
+    /// (parse_block, the top-level program loop, a single-line `if`'s body)
+    /// goes through this, so every statement in the AST carries a real
+    /// source position without each of the ~60 `parse_xxx` functions having
+    /// to thread it through by hand.
+    fn parse_statement(&mut self) -> ParseResult<Stmt> {
         if let Some(stmt) = self.pending_statements.pop_front() {
             return Ok(stmt);
         }
+        let start_pos = self.current_pos();
+        let kind = self.parse_statement_kind()?;
+        Ok(Stmt::new(kind, start_pos))
+    }
+
+    fn parse_statement_kind(&mut self) -> ParseResult<Statement> {
         if self.check_keyword("def") && self.check_next_keyword("fn") {
             self.parse_def_fn()
         } else if self.check_dim_keyword() {
@@ -609,12 +627,16 @@ impl Parser {
         // declaration; queue the rest and return the first so every caller
         // that loops on `parse_statement()` sees them as separate statements.
         while self.eat(TokenKind::Comma) {
+            let dim_pos = self.current_pos();
             let (name, is_array, sizes) = self.parse_dim_one()?;
-            self.pending_statements.push_back(Statement::Dim {
-                name,
-                is_array,
-                sizes,
-            });
+            self.pending_statements.push_back(Stmt::new(
+                Statement::Dim {
+                    name,
+                    is_array,
+                    sizes,
+                },
+                dim_pos,
+            ));
         }
         self.consume_line_end()?;
         Ok(Statement::Dim {
@@ -1035,7 +1057,7 @@ impl Parser {
     /// Returns whether the stop was caused by an `else` still on this same
     /// line (vs. a real newline/EOF, where an `else` on the *next* line
     /// must not be mistaken for this if's else-clause).
-    fn parse_single_line_if_body(&mut self) -> ParseResult<(Vec<Statement>, bool)> {
+    fn parse_single_line_if_body(&mut self) -> ParseResult<(Vec<Stmt>, bool)> {
         self.single_line_if_depth += 1;
         let result = (|| {
             let mut body = Vec::new();
@@ -1060,7 +1082,12 @@ impl Parser {
         self.pos > 0 && matches!(self.tokens[self.pos - 1].kind, TokenKind::Newline)
     }
 
-    fn parse_elseif(&mut self) -> ParseResult<Statement> {
+    /// Constructs a nested `Statement::If` directly (an `elseif` chain
+    /// desugars into nested `If`s in `else_body`), bypassing
+    /// `parse_statement`'s single dispatch point -- so it captures its own
+    /// start position and wraps into a `Stmt` itself.
+    fn parse_elseif(&mut self) -> ParseResult<Stmt> {
+        let start_pos = self.current_pos();
         self.expect_keyword("elseif")?;
         let condition = self.parse_condition()?;
         self.expect_keyword("then")?;
@@ -1082,11 +1109,14 @@ impl Parser {
             self.consume_line_end()?;
             Vec::new()
         };
-        Ok(Statement::If {
-            condition,
-            then_body,
-            else_body,
-        })
+        Ok(Stmt::new(
+            Statement::If {
+                condition,
+                then_body,
+                else_body,
+            },
+            start_pos,
+        ))
     }
 
     fn parse_for(&mut self) -> ParseResult<Statement> {
@@ -2177,7 +2207,7 @@ mod tests {
         assert_eq!(program.functions.len(), 1);
         assert_eq!(program.functions[0].name.as_basic(), "add%");
         assert!(matches!(
-            program.functions[0].body[0],
+            program.functions[0].body[0].kind,
             Statement::Return { .. }
         ));
     }
@@ -2187,7 +2217,7 @@ mod tests {
         let program = parse(
             "if score% >= 90 then\n if score% > 95 then\n  PRINT \"A+\"\n end if\nelse\n PRINT \"Not A\"\nend if\n",
         );
-        assert!(matches!(program.statements[0], Statement::If { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::If { .. }));
     }
 
     #[test]
@@ -2205,10 +2235,10 @@ mod tests {
     fn parses_standalone_call_and_array_ref() {
         let program = parse("bubbleSort%(data%(), 10)\nvalue% = data%(i%)\n");
         assert!(matches!(
-            program.statements[0],
+            program.statements[0].kind,
             Statement::ExprStmt(Expr::Call { .. })
         ));
-        match &program.statements[1] {
+        match &*program.statements[1] {
             Statement::Assignment { value, .. } => {
                 assert!(matches!(value, Expr::ArrayRef { .. }));
             }
@@ -2221,10 +2251,10 @@ mod tests {
         let program = parse(
             "open inputFile$ for input as #1\nline input #1, line$\nprint #2, line$\nclose #1\n",
         );
-        assert!(matches!(program.statements[0], Statement::Open { .. }));
-        assert!(matches!(program.statements[1], Statement::LineInput { .. }));
-        assert!(matches!(program.statements[2], Statement::PrintFile { .. }));
-        assert!(matches!(program.statements[3], Statement::Close { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::Open { .. }));
+        assert!(matches!(program.statements[1].kind, Statement::LineInput { .. }));
+        assert!(matches!(program.statements[2].kind, Statement::PrintFile { .. }));
+        assert!(matches!(program.statements[3].kind, Statement::Close { .. }));
     }
 
     #[test]
@@ -2262,8 +2292,12 @@ mod tests {
     fn declare_is_an_interchangeable_synonym_for_dim() {
         let dim_program = parse("dim x%, y%(20)\nend\n");
         let declare_program = parse("declare x%, y%(20)\nend\n");
-        assert_eq!(dim_program.statements, declare_program.statements);
-        match &declare_program.statements[0] {
+        // Compare statement *shape* only -- `declare` is a longer keyword
+        // than `dim`, so the two programs' statements don't share column
+        // positions even though they parse to the same `Statement`s.
+        let kinds = |p: &Program| p.statements.iter().map(|s| s.kind.clone()).collect::<Vec<_>>();
+        assert_eq!(kinds(&dim_program), kinds(&declare_program));
+        match &*declare_program.statements[0] {
             Statement::Dim { name, is_array, .. } => {
                 assert_eq!(name.name, "x");
                 assert!(!is_array);
@@ -2275,7 +2309,7 @@ mod tests {
     #[test]
     fn parses_file_decl() {
         let program = parse("file db as Student = open(\"students.dat\")\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::FileDecl {
                 var,
                 record_type,
@@ -2294,7 +2328,7 @@ mod tests {
     #[test]
     fn parses_sequential_file_decl() {
         let program = parse("file scores = open(\"scores.csv\") for output\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::FileDecl {
                 var,
                 record_type,
@@ -2313,7 +2347,7 @@ mod tests {
     #[test]
     fn parses_file_index_expr() {
         let program = parse("let s = db[i]\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Assignment { value, .. } => {
                 assert!(matches!(value, Expr::FileIndex { .. }));
             }
@@ -2326,7 +2360,7 @@ mod tests {
         // db[i].field — the `.` follows `]`, so it must come through the
         // lexer's new standalone Dot token, not the glued-identifier path.
         let program = parse("db[i].score = 61.5\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Assignment { target, .. } => match target {
                 Expr::FieldAccess { base, field } => {
                     assert_eq!(field, "score");
@@ -2341,7 +2375,7 @@ mod tests {
     #[test]
     fn parses_dotted_field_access_and_method_call() {
         let program = parse("print s.id\ndb.close()\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Print { tokens } => match &tokens[0] {
                 PrintToken::Expr(Expr::FieldAccess { base, field }) => {
                     assert_eq!(field, "id");
@@ -2351,7 +2385,7 @@ mod tests {
             },
             other => panic!("expected print, got {other:?}"),
         }
-        match &program.statements[1] {
+        match &*program.statements[1] {
             Statement::ExprStmt(Expr::MethodCall { base, method, args }) => {
                 assert!(matches!(base.as_ref(), Expr::Ident(i) if i.name == "db"));
                 assert_eq!(method, "close");
@@ -2364,7 +2398,7 @@ mod tests {
     #[test]
     fn parses_record_literal() {
         let program = parse("db[1] = { id: 1, name: \"Alice\", score: 95.0 }\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Assignment { target, value } => {
                 assert!(matches!(target, Expr::FileIndex { .. }));
                 match value {
@@ -2385,7 +2419,7 @@ mod tests {
     #[test]
     fn parses_partial_record_literal() {
         let program = parse("db[1] = ?{ score: 88.0 }\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Assignment { value, .. } => match value {
                 Expr::RecordLit { fields, partial } => {
                     assert!(*partial);
@@ -2401,7 +2435,7 @@ mod tests {
     #[test]
     fn parses_for_downto_as_step_negative_one() {
         let program = parse("for i = 3 downto 1\nprint i\nend for\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::For {
                 start, end, step, ..
             } => {
@@ -2416,7 +2450,7 @@ mod tests {
     #[test]
     fn parses_double_amp_chain_as_left_folded_and_and() {
         let program = parse("if a > 0 && b > 0 && c > 0 then\nprint a\nend if\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If { condition, .. } => match condition {
                 Expr::Binary {
                     op: BinaryOp::AndAnd,
@@ -2447,7 +2481,7 @@ mod tests {
     #[test]
     fn parses_double_pipe_chain_as_or_or() {
         let program = parse("if a = 1 || a = 2 then\nprint a\nend if\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If { condition, .. } => {
                 assert!(matches!(
                     condition,
@@ -2474,7 +2508,7 @@ mod tests {
     #[test]
     fn not_still_applies_to_a_single_operand_of_a_double_amp_chain() {
         let program = parse("if not flag && b > 0 then\nprint b\nend if\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If { condition, .. } => match condition {
                 Expr::Binary {
                     op: BinaryOp::AndAnd,
@@ -2498,7 +2532,7 @@ mod tests {
     #[test]
     fn do_until_condition_supports_double_pipe_chain() {
         let program = parse("do until done || attempts >= 3\nprint 1\nend do\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Do {
                 condition: Some(cond),
                 ..
@@ -2519,8 +2553,8 @@ mod tests {
     #[test]
     fn parses_label_declaration_and_following_statement() {
         let program = parse("skip:\nprint \"after\"\nend\n");
-        assert!(matches!(&program.statements[0], Statement::Label(name) if name == "skip"));
-        assert!(matches!(program.statements[1], Statement::Print { .. }));
+        assert!(matches!(&*program.statements[0], Statement::Label(name) if name == "skip"));
+        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
     }
 
     #[test]
@@ -2528,18 +2562,18 @@ mod tests {
         // The label's own `:` doubles as the statement separator, so
         // `skip: print "hi"` puts both statements on one physical line.
         let program = parse("skip: print \"hi\"\nend\n");
-        assert!(matches!(&program.statements[0], Statement::Label(name) if name == "skip"));
-        assert!(matches!(program.statements[1], Statement::Print { .. }));
+        assert!(matches!(&*program.statements[0], Statement::Label(name) if name == "skip"));
+        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
     }
 
     #[test]
     fn goto_and_gosub_accept_label_targets() {
         let program = parse("goto there\ngosub there\nend\nthere:\nprint 1\n");
         assert!(
-            matches!(&program.statements[0], Statement::Goto(Expr::Ident(ident)) if ident.name == "there")
+            matches!(&*program.statements[0], Statement::Goto(Expr::Ident(ident)) if ident.name == "there")
         );
         assert!(
-            matches!(&program.statements[1], Statement::Gosub(Expr::Ident(ident)) if ident.name == "there")
+            matches!(&*program.statements[1], Statement::Gosub(Expr::Ident(ident)) if ident.name == "there")
         );
     }
 
@@ -2567,7 +2601,7 @@ mod tests {
     fn on_error_goto_zero_sentinel_is_still_allowed() {
         let program = parse("on error goto 0\nend\n");
         assert!(matches!(
-            &program.statements[0],
+            &*program.statements[0],
             Statement::OnErrorGoto {
                 target: Expr::Integer(0)
             }
@@ -2597,7 +2631,7 @@ mod tests {
     #[test]
     fn parses_do_loop_until_as_post_condition() {
         let program = parse("do\nprint 1\nloop until k% > 3\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Do {
                 condition,
                 post_condition: Some(cond),
@@ -2613,7 +2647,7 @@ mod tests {
     #[test]
     fn parses_do_loop_while_as_post_condition() {
         let program = parse("do\nprint 1\nloop while j% <= 3\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Do {
                 condition,
                 post_condition: Some(cond),
@@ -2629,7 +2663,7 @@ mod tests {
     #[test]
     fn parses_bare_do_loop_with_no_condition_at_all() {
         let program = parse("do\nn% = n% + 1\nloop\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Do {
                 condition,
                 post_condition,
@@ -2647,7 +2681,7 @@ mod tests {
         // The pre-existing `end`/`end do` terminator must keep working now
         // that `loop [while/until]` is a second valid terminator.
         let program = parse("do while k% <= 3\nprint k%\nend do\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::Do {
                 condition: Some(cond),
                 post_condition,
@@ -2666,13 +2700,13 @@ mod tests {
             "for i% = 1 to 5\nexit\nend for\nwhile 1\nexit\nend while\ndo\nexit\nend do\nend\n",
         );
         assert!(
-            matches!(&program.statements[0], Statement::For { body, .. } if matches!(body[0], Statement::Exit))
+            matches!(&*program.statements[0], Statement::For { body, .. } if matches!(body[0].kind, Statement::Exit))
         );
         assert!(
-            matches!(&program.statements[1], Statement::While { body, .. } if matches!(body[0], Statement::Exit))
+            matches!(&*program.statements[1], Statement::While { body, .. } if matches!(body[0].kind, Statement::Exit))
         );
         assert!(
-            matches!(&program.statements[2], Statement::Do { body, .. } if matches!(body[0], Statement::Exit))
+            matches!(&*program.statements[2], Statement::Do { body, .. } if matches!(body[0].kind, Statement::Exit))
         );
     }
 
@@ -2692,12 +2726,12 @@ mod tests {
     #[test]
     fn wend_closes_a_while_loop() {
         let program = parse("while p% < 10\nprint p%\nwend\nprint \"after\"\nend\n");
-        assert!(matches!(program.statements[0], Statement::While { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
         // The statement after `wend` must be a sibling of the while loop,
         // not part of its body -- this is exactly the case that silently
         // broke before `wend` was a recognized terminator.
-        assert!(matches!(program.statements[1], Statement::Print { .. }));
-        if let Statement::While { body, .. } = &program.statements[0] {
+        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
+        if let Statement::While { body, .. } = &*program.statements[0] {
             assert_eq!(
                 body.len(),
                 1,
@@ -2709,15 +2743,15 @@ mod tests {
     #[test]
     fn end_while_and_bare_end_still_work_alongside_wend() {
         let program = parse("while p% < 10\nprint p%\nend while\nend\n");
-        assert!(matches!(program.statements[0], Statement::While { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
         let program = parse("while p% < 10\nprint p%\nend\nend\n");
-        assert!(matches!(program.statements[0], Statement::While { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
     }
 
     #[test]
     fn single_line_if_needs_no_end_if() {
         let program = parse("if x% > 0 then print \"positive\"\nprint \"after\"\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If {
                 then_body,
                 else_body,
@@ -2730,13 +2764,13 @@ mod tests {
         }
         // The statement after the single-line if must be its sibling, not
         // absorbed into the then-body.
-        assert!(matches!(program.statements[1], Statement::Print { .. }));
+        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
     }
 
     #[test]
     fn single_line_if_supports_else_on_the_same_line() {
         let program = parse("if x% > 0 then print \"a\" else print \"b\"\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If {
                 then_body,
                 else_body,
@@ -2769,11 +2803,11 @@ mod tests {
         // that else misattributed to the first line's if.
         let program =
             parse("if x% > 0 then print \"a\"\nif y% > 0 then print \"b\" else print \"c\"\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If { else_body, .. } => assert!(else_body.is_empty()),
             other => panic!("expected if statement, got {other:?}"),
         }
-        match &program.statements[1] {
+        match &*program.statements[1] {
             Statement::If { else_body, .. } => assert_eq!(else_body.len(), 1),
             other => panic!("expected second if statement, got {other:?}"),
         }
@@ -2782,7 +2816,7 @@ mod tests {
     #[test]
     fn single_line_if_supports_colon_chained_statements() {
         let program = parse("if x% > 0 then y% = 1: z% = 2\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If { then_body, .. } => assert_eq!(then_body.len(), 2),
             other => panic!("expected if statement, got {other:?}"),
         }
@@ -2792,14 +2826,14 @@ mod tests {
     fn nested_single_line_if_resolves_dangling_else_to_the_innermost_if() {
         let program =
             parse("if a% = 1 then if b% = 2 then print \"both\" else print \"only a\"\nend\n");
-        match &program.statements[0] {
+        match &*program.statements[0] {
             Statement::If {
                 then_body,
                 else_body: outer_else,
                 ..
             } => {
                 assert!(outer_else.is_empty());
-                match &then_body[0] {
+                match &*then_body[0] {
                     Statement::If {
                         else_body: inner_else,
                         ..
@@ -2815,6 +2849,6 @@ mod tests {
     fn multiline_if_still_requires_end_if() {
         // A newline directly after `then` must still select the block form.
         let program = parse("if x% > 0 then\nprint \"positive\"\nend if\nend\n");
-        assert!(matches!(program.statements[0], Statement::If { .. }));
+        assert!(matches!(program.statements[0].kind, Statement::If { .. }));
     }
 }

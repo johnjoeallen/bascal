@@ -228,13 +228,13 @@ fn program_uses_mid_assign(program: &ast::Program) -> bool {
             .any(|f| statements_use_mid_assign(&f.body))
 }
 
-fn statements_use_mid_assign(statements: &[ast::Statement]) -> bool {
+fn statements_use_mid_assign(statements: &[ast::Stmt]) -> bool {
     statements.iter().any(statement_uses_mid_assign)
 }
 
-fn statement_uses_mid_assign(statement: &ast::Statement) -> bool {
+fn statement_uses_mid_assign(statement: &ast::Stmt) -> bool {
     use ast::Statement::*;
-    match statement {
+    match &statement.kind {
         MidAssign { .. } => true,
         If {
             then_body,
@@ -448,7 +448,7 @@ fn load_shared_file(
     // Every top-level `dim` becomes a CommonVar below -- a `shared <name>`
     // file's variables are COMMON by default, with no separate keyword to
     // opt in.
-    if program.statements.iter().any(|s| match s {
+    if program.statements.iter().any(|s| match &s.kind {
         ast::Statement::BlankLine
         | ast::Statement::BlockComment(_)
         | ast::Statement::Dim { .. } => false,
@@ -524,7 +524,7 @@ fn load_shared_file(
     let dim_vars: Vec<ast::CommonVar> = program
         .statements
         .iter()
-        .filter_map(|s| match s {
+        .filter_map(|s| match &s.kind {
             ast::Statement::Dim { name, is_array, .. } => Some(ast::CommonVar {
                 name: name.clone(),
                 is_array: *is_array,

@@ -148,7 +148,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
-    ParamMode, PrintToken, Program, RecordFieldType, ResumeTarget, Statement, TypeSuffix, UnaryOp,
+    ParamMode, PrintToken, Program, RecordFieldType, ResumeTarget, Statement, Stmt, TypeSuffix,
+    UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -754,9 +755,9 @@ fn apply_field_statement(
 /// gated on `record_type` being literally present on the FIELD statement
 /// itself (see `apply_field_statement`'s own note on `channel_record_type`).
 fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<bool>)> {
-    fn collect(statements: &[Statement], layouts: &mut HashMap<Vec<u32>, (String, Vec<bool>)>) {
+    fn collect(statements: &[Stmt], layouts: &mut HashMap<Vec<u32>, (String, Vec<bool>)>) {
         for statement in statements {
-            match statement {
+            match &statement.kind {
                 Statement::Field {
                     fields,
                     record_type: Some(name),
@@ -825,11 +826,11 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
 /// follow for theirs. `pred` is only ever asked about the statement
 /// itself, never its own nested body (an `if`'s `then_body`, a `for`'s
 /// `body`, ...) -- this function does that recursion once, centrally.
-fn program_has_statement(program: &Program, pred: &dyn Fn(&Statement) -> bool) -> bool {
-    fn walk(statements: &[Statement], pred: &dyn Fn(&Statement) -> bool) -> bool {
+fn program_has_statement(program: &Program, pred: &dyn Fn(&Stmt) -> bool) -> bool {
+    fn walk(statements: &[Stmt], pred: &dyn Fn(&Stmt) -> bool) -> bool {
         statements.iter().any(|statement| {
             pred(statement)
-                || match statement {
+                || match &statement.kind {
                     Statement::If {
                         then_body,
                         else_body,
@@ -859,12 +860,12 @@ fn program_has_statement(program: &Program, pred: &dyn Fn(&Statement) -> bool) -
 /// in, since that's what lets a plain incrementing counter (`gosub_id`)
 /// assign each GOSUB the same ID both here (implicitly, via position in
 /// the `0..gosub_count` range) and during real emission.
-fn count_gosubs(statements: &[Statement]) -> usize {
+fn count_gosubs(statements: &[Stmt]) -> usize {
     statements
         .iter()
         .map(|statement| {
-            let self_count = usize::from(matches!(statement, Statement::Gosub(_)));
-            let nested_count = match statement {
+            let self_count = usize::from(matches!(&**statement, Statement::Gosub(_)));
+            let nested_count = match &statement.kind {
                 Statement::If {
                     then_body,
                     else_body,
@@ -902,21 +903,21 @@ fn count_gosubs(statements: &[Statement]) -> usize {
 /// procedure body. Computed once, before emission starts (see
 /// `ErrorDataCtx`), the same "count now, assign IDs during real emission
 /// in the identical order" split `count_gosubs`/`gosub_id` already use.
-fn count_raise_sites(statements: &[Statement]) -> usize {
+fn count_raise_sites(statements: &[Stmt]) -> usize {
     statements
         .iter()
         .map(|statement| {
             let self_count = usize::from(
-                matches!(statement, Statement::ErrorStmt { .. })
+                matches!(&**statement, Statement::ErrorStmt { .. })
                     || matches!(
-                        statement,
+                        &**statement,
                         Statement::Open {
                             mode: OpenMode::Input,
                             ..
                         }
                     ),
             );
-            let nested_count = match statement {
+            let nested_count = match &statement.kind {
                 Statement::If {
                     then_body,
                     else_body,
@@ -951,17 +952,17 @@ fn count_raise_sites(statements: &[Statement]) -> usize {
 /// whichever label the *most recently executed* `ON ERROR GOTO` installed
 /// -- that's only known at runtime, not at the raise site's own,
 /// textually earlier, position.
-fn collect_on_error_handler_ids(statements: &[Statement]) -> HashMap<String, usize> {
+fn collect_on_error_handler_ids(statements: &[Stmt]) -> HashMap<String, usize> {
     let mut ids = HashMap::new();
     collect_on_error_handler_ids_into(statements, &mut ids);
     ids
 }
 
-fn collect_on_error_handler_ids_into(statements: &[Statement], ids: &mut HashMap<String, usize>) {
+fn collect_on_error_handler_ids_into(statements: &[Stmt], ids: &mut HashMap<String, usize>) {
     for statement in statements {
         if let Statement::OnErrorGoto {
             target: Expr::Ident(ident),
-        } = statement
+        } = &**statement
         {
             let key = ident.name.to_ascii_lowercase();
             if !ids.contains_key(&key) {
@@ -969,7 +970,7 @@ fn collect_on_error_handler_ids_into(statements: &[Statement], ids: &mut HashMap
                 ids.insert(key, next_id);
             }
         }
-        match statement {
+        match &statement.kind {
             Statement::If {
                 then_body,
                 else_body,
@@ -1007,11 +1008,11 @@ fn collect_on_error_handler_ids_into(statements: &[Statement], ids: &mut HashMap
 /// already do (lowercased name, suffix), matching how a `dim`'s size
 /// expression -- a bare `Expr::Ident` -- would reference it.
 fn collect_top_level_int_consts(
-    statements: &[Statement],
+    statements: &[Stmt],
 ) -> HashMap<(String, Option<TypeSuffix>), i64> {
     let mut consts = HashMap::new();
     for statement in statements {
-        if let Statement::Const { name, value } = statement {
+        if let Statement::Const { name, value } = &**statement {
             let literal = match value {
                 Expr::Integer(n) => Some(*n),
                 Expr::Unary {
@@ -1074,7 +1075,7 @@ fn resolve_array_bound_literal(
 /// (`Expr::ArrayRef`, `Statement::Assignment`'s array-target arm, ...)
 /// agree on the same name.
 fn collect_array_declarations(
-    statements: &[Statement],
+    statements: &[Stmt],
     consts: &HashMap<(String, Option<TypeSuffix>), i64>,
 ) -> Result<ArrayTable, String> {
     let mut arrays = ArrayTable::new();
@@ -1083,12 +1084,12 @@ fn collect_array_declarations(
 }
 
 fn collect_array_declarations_into(
-    statements: &[Statement],
+    statements: &[Stmt],
     consts: &HashMap<(String, Option<TypeSuffix>), i64>,
     arrays: &mut ArrayTable,
 ) -> Result<(), String> {
     for statement in statements {
-        match statement {
+        match &statement.kind {
             Statement::Dim {
                 name,
                 is_array: true,
@@ -1196,7 +1197,7 @@ fn render_data_item(expr: &Expr) -> Result<String, String> {
 /// `Statement::Restore`'s own arm), no runtime lookup needed, since a
 /// label always denotes a fixed position in program order.
 fn collect_data_items_and_labels(
-    statements: &[Statement],
+    statements: &[Stmt],
 ) -> Result<(Vec<String>, HashMap<String, usize>), String> {
     let mut items = Vec::new();
     let mut labels = HashMap::new();
@@ -1205,12 +1206,12 @@ fn collect_data_items_and_labels(
 }
 
 fn collect_data_items_and_labels_into(
-    statements: &[Statement],
+    statements: &[Stmt],
     items: &mut Vec<String>,
     labels: &mut HashMap<String, usize>,
 ) -> Result<(), String> {
     for statement in statements {
-        match statement {
+        match &statement.kind {
             Statement::Data(values) => {
                 for value in values {
                     items.push(render_data_item(value)?);
@@ -1302,11 +1303,11 @@ fn emit_raise_block(
 }
 
 fn program_uses_color(program: &Program) -> bool {
-    program_has_statement(program, &|s| matches!(s, Statement::Color { .. }))
+    program_has_statement(program, &|s| matches!(&**s, Statement::Color { .. }))
 }
 
 fn program_uses_input(program: &Program) -> bool {
-    program_has_statement(program, &|s| matches!(s, Statement::Input { .. }))
+    program_has_statement(program, &|s| matches!(&**s, Statement::Input { .. }))
 }
 
 /// Whether `program` has any `RANDOMIZE` at all -- decides whether
@@ -1314,7 +1315,7 @@ fn program_uses_input(program: &Program) -> bool {
 /// `RND` itself is ever called -- see `scan_builtin_usage`'s own
 /// `needs_stdlib_h` set for that half).
 fn program_uses_randomize(program: &Program) -> bool {
-    program_has_statement(program, &|s| matches!(s, Statement::Randomize(_)))
+    program_has_statement(program, &|s| matches!(&**s, Statement::Randomize(_)))
 }
 
 /// Whether `program` has a `RANDOMIZE` that needs `time(NULL)` -- bare
@@ -1324,9 +1325,9 @@ fn program_uses_randomize(program: &Program) -> bool {
 /// needs no `<time.h>` at all.
 fn program_uses_randomize_time(program: &Program) -> bool {
     program_has_statement(program, &|s| {
-        matches!(s, Statement::Randomize(None))
+        matches!(&**s, Statement::Randomize(None))
             || matches!(
-                s,
+                &**s,
                 Statement::Randomize(Some(Expr::Ident(ident)))
                     if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("timer")
             )
@@ -1343,13 +1344,13 @@ fn program_uses_randomize_time(program: &Program) -> bool {
 fn program_uses_sequential_file_io(program: &Program) -> bool {
     program_has_statement(program, &|s| {
         matches!(
-            s,
+            &**s,
             Statement::Write { .. }
                 | Statement::InputFile { .. }
                 | Statement::LineInput { .. }
                 | Statement::PrintFile { .. }
         ) || matches!(
-            s,
+            &**s,
             Statement::Open { mode, .. }
                 if !matches!(mode, OpenMode::Random | OpenMode::Binary)
         )
@@ -1393,9 +1394,9 @@ fn apply_field_layouts_before_functions(
     program: &Program,
     layout: &mut FileIoLayout,
 ) -> Result<(), String> {
-    fn walk(statements: &[Statement], layout: &mut FileIoLayout) -> Result<(), String> {
+    fn walk(statements: &[Stmt], layout: &mut FileIoLayout) -> Result<(), String> {
         for statement in statements {
-            match statement {
+            match &statement.kind {
                 Statement::Field {
                     channel,
                     fields,
@@ -1545,12 +1546,12 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
 /// or `exit` before ever returning), matching every tutorial-07-style
 /// function in practice: they all put their own trailing `return` after
 /// the loop rather than relying on one inside it.
-fn body_always_returns(body: &[Statement]) -> bool {
+fn body_always_returns(body: &[Stmt]) -> bool {
     let last = body.iter().rev().find(|s| {
-        !matches!(s, Statement::BlankLine | Statement::BlockComment(_))
-            && !matches!(s, Statement::Raw(text) if text.trim_start().starts_with('\''))
+        !matches!(&***s, Statement::BlankLine | Statement::BlockComment(_))
+            && !matches!(&***s, Statement::Raw(text) if text.trim_start().starts_with('\''))
     });
-    match last {
+    match last.map(|s| &s.kind) {
         Some(Statement::Return { .. }) => true,
         Some(Statement::If {
             then_body,
@@ -1579,9 +1580,9 @@ fn body_always_returns(body: &[Statement]) -> bool {
 /// strings, since the caller (`emit_function_def`) needs the suffix to
 /// register each one in the right (numeric vs. string) global-variable
 /// map.
-fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
+fn collect_global_decl_idents(body: &[Stmt], out: &mut Vec<BasicIdent>) {
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::GlobalDecl(ident) => out.push(ident.clone()),
             Statement::If {
                 then_body,
@@ -1695,7 +1696,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     // no `DATA` at all would otherwise fail with an opaque "undeclared
     // `bcc_read_data`" C compile error instead of a clear diagnostic here.
     if data_items.is_empty()
-        && program_has_statement(program, &|s| matches!(s, Statement::Read(_)))
+        && program_has_statement(program, &|s| matches!(&**s, Statement::Read(_)))
     {
         return Err(vec![unsupported(
             "`read` found but the program has no `data` items at all -- real BASIC's own \
@@ -1787,7 +1788,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     // dispatch would reference undeclared globals.
     let needs_error_handling = raise_site_count > 0
         || program_has_statement(program, &|s| {
-            matches!(s, Statement::OnErrorGoto { .. } | Statement::Resume(_))
+            matches!(&**s, Statement::OnErrorGoto { .. } | Statement::Resume(_))
         });
 
     // <math.h> is only pulled in when something (currently just `\`) needs
@@ -2290,11 +2291,11 @@ fn numeric_c_type(suffix: TypeSuffix) -> Option<(&'static str, bool)> {
 }
 
 fn collect_vars_in_statement(
-    statement: &Statement,
+    statement: &Stmt,
     numeric_out: &mut BTreeMap<String, &'static str>,
     string_out: &mut BTreeSet<String>,
 ) {
-    match statement {
+    match &statement.kind {
         Statement::Dim {
             name,
             is_array: false,
@@ -2538,7 +2539,7 @@ fn register_var(
 }
 
 fn emit_statement(
-    statement: &Statement,
+    statement: &Stmt,
     out: &mut String,
     needs_math: &mut bool,
     needs_string: &mut bool,
@@ -2560,7 +2561,7 @@ fn emit_statement(
     gosub_id: &mut usize,
     ctx: &mut ErrorDataCtx,
 ) -> Result<(), String> {
-    match statement {
+    match &statement.kind {
         Statement::Print { tokens } => {
             let (prelude, mut format, args, needs_newline) =
                 render_print_tokens(tokens, needs_math, temp_counter, functions)?;
@@ -3263,7 +3264,7 @@ fn emit_statement(
         // copy would silently truncate at, being null-terminated-string
         // machinery, not byte-buffer machinery.
         Statement::Lset { var, value } | Statement::Rset { var, value } => {
-            let is_rset = matches!(statement, Statement::Rset { .. });
+            let is_rset = matches!(&**statement, Statement::Rset { .. });
             let c_name = c_var_name(var, TypeSuffix::String);
             let Some(&width) = file_io.field_widths.get(&c_name) else {
                 return Err(format!(
@@ -4426,7 +4427,7 @@ fn emit_do_guard(
 fn emit_select_case(
     expr: &Expr,
     cases: &[CaseClause],
-    else_body: &[Statement],
+    else_body: &[Stmt],
     out: &mut String,
     needs_math: &mut bool,
     needs_string: &mut bool,
@@ -5764,15 +5765,15 @@ fn escape_c_format_text(value: &str) -> String {
 /// Same rule as `codegen_basic::ends_with_end`: the last statement that
 /// isn't a comment or blank line must be `end` for the program to already
 /// have emitted its own `return 0;`.
-fn ends_with_end(statements: &[Statement]) -> bool {
+fn ends_with_end(statements: &[Stmt]) -> bool {
     statements
         .iter()
         .rev()
         .find(|s| {
-            !matches!(s, Statement::BlankLine | Statement::BlockComment(_))
-                && !matches!(s, Statement::Raw(text) if text.trim_start().starts_with('\''))
+            !matches!(&***s, Statement::BlankLine | Statement::BlockComment(_))
+                && !matches!(&***s, Statement::Raw(text) if text.trim_start().starts_with('\''))
         })
-        .is_some_and(|s| matches!(s, Statement::End))
+        .is_some_and(|s| matches!(&**s, Statement::End))
 }
 
 fn unsupported(message: &str) -> Diagnostic {

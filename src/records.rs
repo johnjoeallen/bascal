@@ -155,7 +155,7 @@ impl Lowerer {
 
     // ── statement lowering ──────────────────────────────────────────────
 
-    fn lower_statements(&mut self, stmts: Vec<Statement>) -> Vec<Statement> {
+    fn lower_statements(&mut self, stmts: Vec<Stmt>) -> Vec<Stmt> {
         let mut out = Vec::new();
         for stmt in stmts {
             self.lower_statement(stmt, &mut out);
@@ -163,21 +163,34 @@ impl Lowerer {
         out
     }
 
-    fn lower_statement(&mut self, stmt: Statement, out: &mut Vec<Statement>) {
-        match stmt {
+    fn lower_statement(&mut self, stmt: Stmt, out: &mut Vec<Stmt>) {
+        let pos = stmt.pos.clone();
+        match stmt.kind {
+            // These three delegate to helpers that may synthesize several
+            // low-level statements from one high-level DSL statement (e.g.
+            // `file db as T = open(...)` -> a comment + `OPEN` + `FIELD`).
+            // All of them share the DSL statement's own position -- good
+            // enough for diagnostics, since none of resolver.rs's checks
+            // run on the DSL form (records::lower always runs first).
             Statement::FileDecl {
                 var,
                 record_type,
                 path,
                 mode,
             } => {
-                self.lower_file_decl(var, record_type, path, mode, out);
+                let mut raw = Vec::new();
+                self.lower_file_decl(var, record_type, path, mode, &mut raw);
+                out.extend(raw.into_iter().map(|s| Stmt::new(s, pos.clone())));
             }
             Statement::Assignment { target, value } => {
-                self.lower_assignment(target, value, out);
+                let mut raw = Vec::new();
+                self.lower_assignment(target, value, &mut raw);
+                out.extend(raw.into_iter().map(|s| Stmt::new(s, pos.clone())));
             }
             Statement::ExprStmt(expr) => {
-                self.lower_expr_stmt(expr, out);
+                let mut raw = Vec::new();
+                self.lower_expr_stmt(expr, &mut raw);
+                out.extend(raw.into_iter().map(|s| Stmt::new(s, pos.clone())));
             }
             Statement::If {
                 condition,
@@ -187,11 +200,14 @@ impl Lowerer {
                 let condition = self.rewrite_expr(condition).0;
                 let then_body = self.lower_statements(then_body);
                 let else_body = self.lower_statements(else_body);
-                out.push(Statement::If {
-                    condition,
-                    then_body,
-                    else_body,
-                });
+                out.push(Stmt::new(
+                    Statement::If {
+                        condition,
+                        then_body,
+                        else_body,
+                    },
+                    pos,
+                ));
             }
             Statement::For {
                 var,
@@ -204,18 +220,21 @@ impl Lowerer {
                 let end = self.rewrite_expr(end).0;
                 let step = step.map(|s| self.rewrite_expr(s).0);
                 let body = self.lower_statements(body);
-                out.push(Statement::For {
-                    var,
-                    start,
-                    end,
-                    step,
-                    body,
-                });
+                out.push(Stmt::new(
+                    Statement::For {
+                        var,
+                        start,
+                        end,
+                        step,
+                        body,
+                    },
+                    pos,
+                ));
             }
             Statement::While { condition, body } => {
                 let condition = self.rewrite_expr(condition).0;
                 let body = self.lower_statements(body);
-                out.push(Statement::While { condition, body });
+                out.push(Stmt::new(Statement::While { condition, body }, pos));
             }
             Statement::Do {
                 condition,
@@ -225,11 +244,14 @@ impl Lowerer {
                 let condition = condition.map(|c| self.rewrite_do_condition(c));
                 let body = self.lower_statements(body);
                 let post_condition = post_condition.map(|c| self.rewrite_do_condition(c));
-                out.push(Statement::Do {
-                    condition,
-                    body,
-                    post_condition,
-                });
+                out.push(Stmt::new(
+                    Statement::Do {
+                        condition,
+                        body,
+                        post_condition,
+                    },
+                    pos,
+                ));
             }
             Statement::SelectCase {
                 expr,
@@ -249,13 +271,16 @@ impl Lowerer {
                     })
                     .collect();
                 let else_body = self.lower_statements(else_body);
-                out.push(Statement::SelectCase {
-                    expr,
-                    cases,
-                    else_body,
-                });
+                out.push(Stmt::new(
+                    Statement::SelectCase {
+                        expr,
+                        cases,
+                        else_body,
+                    },
+                    pos,
+                ));
             }
-            other => out.push(self.rewrite_statement_exprs(other)),
+            other => out.push(Stmt::new(self.rewrite_statement_exprs(other), pos)),
         }
     }
 
@@ -1492,7 +1517,10 @@ fn trim_statements(
 
     let while_loop = Statement::While {
         condition,
-        body: vec![decrement],
+        // Synthesized bookkeeping, never user-written source -- no real
+        // position to report, so this inner statement gets the same
+        // placeholder `generated_pos()` records.rs's own diagnostics use.
+        body: vec![Stmt::new(decrement, generated_pos())],
     };
 
     let finalize = Statement::Assignment {

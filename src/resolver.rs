@@ -34,10 +34,10 @@ fn reject_global_shadows_param(program: &Program, diagnostics: &mut Vec<Diagnost
         let mut globals = Vec::new();
         collect_global_decls(&function.body, &mut globals);
 
-        for global in globals {
+        for (pos, global) in globals {
             if param_names.contains(&global.as_basic().to_ascii_lowercase()) {
                 diagnostics.push(Diagnostic::error(
-                    generated_pos(),
+                    pos,
                     format!(
                         "`global {}` in `{}` names a parameter of the same function -- \
                          the parameter always shadows it, so this declaration has no effect",
@@ -49,10 +49,14 @@ fn reject_global_shadows_param(program: &Program, diagnostics: &mut Vec<Diagnost
     }
 }
 
-fn collect_global_decls(body: &[Statement], out: &mut Vec<BasicIdent>) {
+/// Collects every `global <name>` declaration in `body` (recursing into
+/// every nested statement body), each paired with the source position of
+/// its own `Statement::GlobalDecl` -- callers that only care about the
+/// declared names (like `check_strict_vars`) can just ignore the position.
+fn collect_global_decls(body: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent)>) {
     for stmt in body {
-        match stmt {
-            Statement::GlobalDecl(ident) => out.push(ident.clone()),
+        match &stmt.kind {
+            Statement::GlobalDecl(ident) => out.push((stmt.pos.clone(), ident.clone())),
             Statement::If {
                 then_body,
                 else_body,
@@ -98,7 +102,7 @@ fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<
                 "function"
             };
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!(
                     "{kind} `{}` has the same name as the built-in `{}` -- a program can't \
                      override a BASIC builtin, name it something else",
@@ -116,7 +120,7 @@ fn reject_duplicate_functions(program: &Program, diagnostics: &mut Vec<Diagnosti
         let name = function.name.as_basic().to_ascii_lowercase();
         if !seen.insert(name) {
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!("duplicate function `{}`", function.name),
             ));
         }
@@ -185,7 +189,7 @@ fn reject_call_cycles(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
                             labeled.join(" -> ")
                         };
                         diagnostics.push(Diagnostic::error(
-                            generated_pos(),
+                            program.functions[path[start]].pos.clone(),
                             format!(
                                 "recursion is not supported: {chain} -- functions and \
                                  procedures transpile to shared global parameter storage, not \
@@ -227,7 +231,7 @@ fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) 
         }
         if !contains_return(&function.body) {
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!(
                     "implicit function return is not supported for `{}`; use `return`",
                     function.name
@@ -276,7 +280,7 @@ fn reject_unsafe_error_handler_procedures(program: &Program, diagnostics: &mut V
 
         if contains_return(&function.body) {
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!(
                     "`{}` cannot contain `return` -- it's the target of `on error goto`, \
                      which jumps to it with a raw GOTO, never a GOSUB, so a RETURN there has \
@@ -289,7 +293,7 @@ fn reject_unsafe_error_handler_procedures(program: &Program, diagnostics: &mut V
 
         if !diverges(&function.body) {
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!(
                     "`{}` doesn't end every path with `resume`/`resume next`/`resume <label>` \
                      (or `goto`/`end`) -- it's the target of `on error goto`, so falling off \
@@ -307,7 +311,7 @@ fn reject_unsafe_error_handler_procedures(program: &Program, diagnostics: &mut V
                 .any(|f| statements_call_function(&f.body, &function.name))
         {
             diagnostics.push(Diagnostic::error(
-                generated_pos(),
+                function.pos.clone(),
                 format!(
                     "`{}` is both an `on error goto` target and called like an ordinary \
                      procedure -- a procedure that safely handles the first can never return \
@@ -335,9 +339,9 @@ pub fn error_handler_targets(program: &Program) -> Vec<BasicIdent> {
     targets
 }
 
-fn collect_on_error_goto_targets(statements: &[Statement], out: &mut Vec<BasicIdent>) {
+fn collect_on_error_goto_targets(statements: &[Stmt], out: &mut Vec<BasicIdent>) {
     for stmt in statements {
-        match stmt {
+        match &stmt.kind {
             Statement::OnErrorGoto {
                 target: Expr::Ident(ident),
             } => out.push(ident.clone()),
@@ -371,12 +375,12 @@ fn collect_on_error_goto_targets(statements: &[Statement], out: &mut Vec<BasicId
 /// mandatory `case else` all diverge. Loops are never treated as diverging
 /// (they may not run, or may complete normally), so a handler ending in a
 /// loop still needs an explicit `resume`/`goto`/`end` after it.
-fn diverges(statements: &[Statement]) -> bool {
+fn diverges(statements: &[Stmt]) -> bool {
     let last = statements
         .iter()
         .rev()
-        .find(|s| !matches!(s, Statement::BlankLine));
-    match last {
+        .find(|s| !matches!(s.kind, Statement::BlankLine));
+    match last.map(|s| &s.kind) {
         Some(Statement::Resume(_)) | Some(Statement::Goto(_)) | Some(Statement::End) => true,
         Some(Statement::If {
             then_body,
@@ -390,14 +394,14 @@ fn diverges(statements: &[Statement]) -> bool {
     }
 }
 
-fn statements_call_function(statements: &[Statement], target: &BasicIdent) -> bool {
+fn statements_call_function(statements: &[Stmt], target: &BasicIdent) -> bool {
     statements
         .iter()
         .any(|statement| statement_calls_function(statement, target))
 }
 
-fn statement_calls_function(statement: &Statement, target: &BasicIdent) -> bool {
-    match statement {
+fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
+    match &statement.kind {
         Statement::Dim { sizes, .. } => sizes.iter().any(|e| expr_calls_function(e, target)),
         Statement::Assignment { target: lhs, value } => {
             expr_calls_function(lhs, target) || expr_calls_function(value, target)
@@ -644,8 +648,8 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
     }
 }
 
-fn contains_return(statements: &[Statement]) -> bool {
-    statements.iter().any(|statement| match statement {
+fn contains_return(statements: &[Stmt]) -> bool {
+    statements.iter().any(|statement| match &statement.kind {
         Statement::Return { .. } | Statement::ReturnVoid => true,
         Statement::If {
             then_body,
@@ -664,10 +668,6 @@ fn contains_return(statements: &[Statement]) -> bool {
 
 fn same_ident(left: &BasicIdent, right: &BasicIdent) -> bool {
     left.suffix == right.suffix && left.name.eq_ignore_ascii_case(&right.name)
-}
-
-fn generated_pos() -> SourcePos {
-    SourcePos::new("<validation>", 1, 1)
 }
 
 // ── --strict-vars / --strict-vars-warn ──────────────────────────────────
@@ -700,7 +700,8 @@ fn var_key(ident: &BasicIdent) -> VarKey {
 /// AST this must be) and returns every undeclared-variable finding, as
 /// errors if `warn_only` is false or warnings if `warn_only` is true --
 /// the caller decides whether that means failing the compile or just
-/// printing them (see `compile_file`).
+/// printing them (see `compile_file`). Each finding points at the real
+/// position of the statement that uses the undeclared name.
 pub fn check_strict_vars(program: &Program, warn_only: bool) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
@@ -753,7 +754,7 @@ pub fn check_strict_vars(program: &Program, warn_only: bool) -> Vec<Diagnostic> 
         collect_declarations(&function.body, &mut declared);
         let mut globals = Vec::new();
         collect_global_decls(&function.body, &mut globals);
-        for global in &globals {
+        for (_, global) in &globals {
             declared.insert(var_key(global));
         }
         check_var_uses(
@@ -775,9 +776,9 @@ pub fn check_strict_vars(program: &Program, warn_only: bool) -> Vec<Diagnostic> 
 /// set, matching BASCAL's real function-local-by-default scoping (see
 /// tutorial 14: a name inside a function/procedure is local unless
 /// promoted with `global`).
-fn collect_declarations(statements: &[Statement], declared: &mut HashSet<VarKey>) {
+fn collect_declarations(statements: &[Stmt], declared: &mut HashSet<VarKey>) {
     for stmt in statements {
-        match stmt {
+        match &stmt.kind {
             Statement::Dim { name, .. } | Statement::Const { name, .. } => {
                 declared.insert(var_key(name));
             }
@@ -815,13 +816,13 @@ fn collect_declarations(statements: &[Statement], declared: &mut HashSet<VarKey>
 }
 
 fn check_var_uses(
-    statements: &[Statement],
+    statements: &[Stmt],
     declared: &HashSet<VarKey>,
     known_callables: &HashSet<String>,
     warn_only: bool,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let mut check = |expr: &Expr| {
+    let mut check = |expr: &Expr, pos: &SourcePos| {
         let ident = match expr {
             Expr::Ident(ident) => ident,
             Expr::ArrayRef { name, .. } => name,
@@ -839,7 +840,7 @@ fn check_var_uses(
             Diagnostic::error
         };
         diagnostics.push(make(
-            generated_pos(),
+            pos.clone(),
             format!(
                 "`{ident}` is used without a `dim`/`declare` -- --strict-vars requires every \
                  variable to be declared before use (a misspelled name is the usual cause)"
@@ -849,18 +850,19 @@ fn check_var_uses(
     walk_statements_exprs(statements, &mut check);
 }
 
-fn walk_statements_exprs(statements: &[Statement], f: &mut dyn FnMut(&Expr)) {
+fn walk_statements_exprs(statements: &[Stmt], f: &mut dyn FnMut(&Expr, &SourcePos)) {
     for stmt in statements {
         walk_statement_exprs(stmt, f);
     }
 }
 
-fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
-    match statement {
-        Statement::Dim { sizes, .. } => sizes.iter().for_each(|e| walk_expr(e, f)),
+fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) {
+    let pos = &statement.pos;
+    match &statement.kind {
+        Statement::Dim { sizes, .. } => sizes.iter().for_each(|e| walk_expr(e, pos, f)),
         Statement::Assignment { target, value } => {
-            walk_expr(target, f);
-            walk_expr(value, f);
+            walk_expr(target, pos, f);
+            walk_expr(value, pos, f);
         }
         Statement::MidAssign {
             target,
@@ -868,27 +870,27 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
             len,
             value,
         } => {
-            walk_expr(target, f);
-            walk_expr(start, f);
+            walk_expr(target, pos, f);
+            walk_expr(start, pos, f);
             if let Some(len) = len {
-                walk_expr(len, f);
+                walk_expr(len, pos, f);
             }
-            walk_expr(value, f);
+            walk_expr(value, pos, f);
         }
         Statement::Print { tokens }
         | Statement::Lprint(tokens)
         | Statement::PrintFile { tokens, .. } => {
             for t in tokens {
                 if let PrintToken::Expr(e) = t {
-                    walk_expr(e, f);
+                    walk_expr(e, pos, f);
                 }
             }
         }
         Statement::PrintUsing { format, tokens } | Statement::LprintUsing { format, tokens } => {
-            walk_expr(format, f);
+            walk_expr(format, pos, f);
             for t in tokens {
                 if let PrintToken::Expr(e) = t {
-                    walk_expr(e, f);
+                    walk_expr(e, pos, f);
                 }
             }
         }
@@ -897,36 +899,38 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
             format,
             tokens,
         } => {
-            walk_expr(channel, f);
-            walk_expr(format, f);
+            walk_expr(channel, pos, f);
+            walk_expr(format, pos, f);
             for t in tokens {
                 if let PrintToken::Expr(e) = t {
-                    walk_expr(e, f);
+                    walk_expr(e, pos, f);
                 }
             }
         }
         Statement::Open { file, channel, .. } => {
-            walk_expr(file, f);
-            walk_expr(channel, f);
+            walk_expr(file, pos, f);
+            walk_expr(channel, pos, f);
         }
-        Statement::FileDecl { path, .. } => walk_expr(path, f),
+        Statement::FileDecl { path, .. } => walk_expr(path, pos, f),
         Statement::LineInput { channel, target } => {
-            walk_expr(channel, f);
-            walk_expr(target, f);
+            walk_expr(channel, pos, f);
+            walk_expr(target, pos, f);
         }
-        Statement::Close { channel } | Statement::Restore(Some(channel)) => walk_expr(channel, f),
-        Statement::Kill { file } => walk_expr(file, f),
+        Statement::Close { channel } | Statement::Restore(Some(channel)) => {
+            walk_expr(channel, pos, f)
+        }
+        Statement::Kill { file } => walk_expr(file, pos, f),
         Statement::Name { from, to } => {
-            walk_expr(from, f);
-            walk_expr(to, f);
+            walk_expr(from, pos, f);
+            walk_expr(to, pos, f);
         }
-        Statement::Return { value } => walk_expr(value, f),
+        Statement::Return { value } => walk_expr(value, pos, f),
         Statement::If {
             condition,
             then_body,
             else_body,
         } => {
-            walk_expr(condition, f);
+            walk_expr(condition, pos, f);
             walk_statements_exprs(then_body, f);
             walk_statements_exprs(else_body, f);
         }
@@ -937,70 +941,72 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
             body,
             ..
         } => {
-            walk_expr(start, f);
-            walk_expr(end, f);
+            walk_expr(start, pos, f);
+            walk_expr(end, pos, f);
             if let Some(step) = step {
-                walk_expr(step, f);
+                walk_expr(step, pos, f);
             }
             walk_statements_exprs(body, f);
         }
         Statement::While { condition, body } => {
-            walk_expr(condition, f);
+            walk_expr(condition, pos, f);
             walk_statements_exprs(body, f);
         }
-        Statement::ExprStmt(expr) => walk_expr(expr, f),
+        Statement::ExprStmt(expr) => walk_expr(expr, pos, f),
         Statement::Do {
             condition,
             body,
             post_condition,
         } => {
             if let Some(c) = condition {
-                walk_expr(&c.expr, f);
+                walk_expr(&c.expr, pos, f);
             }
             walk_statements_exprs(body, f);
             if let Some(c) = post_condition {
-                walk_expr(&c.expr, f);
+                walk_expr(&c.expr, pos, f);
             }
         }
-        Statement::Randomize(Some(e)) => walk_expr(e, f),
+        Statement::Randomize(Some(e)) => walk_expr(e, pos, f),
         Statement::Swap(a, b) => {
-            walk_expr(a, f);
-            walk_expr(b, f);
+            walk_expr(a, pos, f);
+            walk_expr(b, pos, f);
         }
         Statement::Poke { address, value } | Statement::Out { port: address, value } => {
-            walk_expr(address, f);
-            walk_expr(value, f);
+            walk_expr(address, pos, f);
+            walk_expr(value, pos, f);
         }
-        Statement::Goto(e) | Statement::Gosub(e) => walk_expr(e, f),
-        Statement::OnErrorGoto { target } => walk_expr(target, f),
-        Statement::ErrorStmt { code } => walk_expr(code, f),
-        Statement::Resume(ResumeTarget::Line(e)) => walk_expr(e, f),
+        Statement::Goto(e) | Statement::Gosub(e) => walk_expr(e, pos, f),
+        Statement::OnErrorGoto { target } => walk_expr(target, pos, f),
+        Statement::ErrorStmt { code } => walk_expr(code, pos, f),
+        Statement::Resume(ResumeTarget::Line(e)) => walk_expr(e, pos, f),
         Statement::Input { vars, .. } | Statement::Read(vars) => {
-            vars.iter().for_each(|e| walk_expr(e, f))
+            vars.iter().for_each(|e| walk_expr(e, pos, f))
         }
         Statement::InputFile { channel, vars } => {
-            walk_expr(channel, f);
-            vars.iter().for_each(|e| walk_expr(e, f));
+            walk_expr(channel, pos, f);
+            vars.iter().for_each(|e| walk_expr(e, pos, f));
         }
-        Statement::Data(values) => values.iter().for_each(|e| walk_expr(e, f)),
-        Statement::Const { value, .. } => walk_expr(value, f),
+        Statement::Data(values) => values.iter().for_each(|e| walk_expr(e, pos, f)),
+        Statement::Const { value, .. } => walk_expr(value, pos, f),
         Statement::Write { channel, exprs } => {
-            walk_expr(channel, f);
-            exprs.iter().for_each(|e| walk_expr(e, f));
+            walk_expr(channel, pos, f);
+            exprs.iter().for_each(|e| walk_expr(e, pos, f));
         }
         Statement::SelectCase {
             expr,
             cases,
             else_body,
         } => {
-            walk_expr(expr, f);
+            walk_expr(expr, pos, f);
             for case in cases {
                 for value in &case.values {
                     match value {
-                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => walk_expr(e, f),
+                        CaseValue::Single(e) | CaseValue::Is { value: e, .. } => {
+                            walk_expr(e, pos, f)
+                        }
                         CaseValue::Range { from, to } => {
-                            walk_expr(from, f);
-                            walk_expr(to, f);
+                            walk_expr(from, pos, f);
+                            walk_expr(to, pos, f);
                         }
                     }
                 }
@@ -1009,22 +1015,22 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
             walk_statements_exprs(else_body, f);
         }
         Statement::Locate { row, col } => {
-            walk_expr(row, f);
-            walk_expr(col, f);
+            walk_expr(row, pos, f);
+            walk_expr(col, pos, f);
         }
         Statement::Color { fg, bg } => {
-            walk_expr(fg, f);
+            walk_expr(fg, pos, f);
             if let Some(bg) = bg {
-                walk_expr(bg, f);
+                walk_expr(bg, pos, f);
             }
         }
         Statement::OnBranch { expr, targets, .. } => {
-            walk_expr(expr, f);
-            targets.iter().for_each(|e| walk_expr(e, f));
+            walk_expr(expr, pos, f);
+            targets.iter().for_each(|e| walk_expr(e, pos, f));
         }
         Statement::Field { channel, fields, .. } => {
-            walk_expr(channel, f);
-            fields.iter().for_each(|(w, _)| walk_expr(w, f));
+            walk_expr(channel, pos, f);
+            fields.iter().for_each(|(w, _)| walk_expr(w, pos, f));
         }
         Statement::Get {
             channel,
@@ -1038,25 +1044,25 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
             var,
             ..
         } => {
-            walk_expr(channel, f);
+            walk_expr(channel, pos, f);
             if let Some(record) = record {
-                walk_expr(record, f);
+                walk_expr(record, pos, f);
             }
             if let Some(var) = var {
-                walk_expr(var, f);
+                walk_expr(var, pos, f);
             }
         }
-        Statement::Lset { value, .. } | Statement::Rset { value, .. } => walk_expr(value, f),
+        Statement::Lset { value, .. } | Statement::Rset { value, .. } => walk_expr(value, pos, f),
         Statement::Seek { channel, position } => {
-            walk_expr(channel, f);
-            walk_expr(position, f);
+            walk_expr(channel, pos, f);
+            walk_expr(position, pos, f);
         }
-        Statement::OptionBase(e) => walk_expr(e, f),
+        Statement::OptionBase(e) => walk_expr(e, pos, f),
         Statement::Width { channel, cols } => {
             if let Some(channel) = channel {
-                walk_expr(channel, f);
+                walk_expr(channel, pos, f);
             }
-            walk_expr(cols, f);
+            walk_expr(cols, pos, f);
         }
         Statement::Erase(_)
         | Statement::End
@@ -1078,25 +1084,25 @@ fn walk_statement_exprs(statement: &Statement, f: &mut dyn FnMut(&Expr)) {
     }
 }
 
-fn walk_expr(expr: &Expr, f: &mut dyn FnMut(&Expr)) {
-    f(expr);
+fn walk_expr(expr: &Expr, pos: &SourcePos, f: &mut dyn FnMut(&Expr, &SourcePos)) {
+    f(expr, pos);
     match expr {
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {
         }
-        Expr::ArrayRef { indices, .. } => indices.iter().for_each(|e| walk_expr(e, f)),
-        Expr::Call { args, .. } => args.iter().for_each(|e| walk_expr(e, f)),
-        Expr::Unary { expr, .. } => walk_expr(expr, f),
+        Expr::ArrayRef { indices, .. } => indices.iter().for_each(|e| walk_expr(e, pos, f)),
+        Expr::Call { args, .. } => args.iter().for_each(|e| walk_expr(e, pos, f)),
+        Expr::Unary { expr, .. } => walk_expr(expr, pos, f),
         Expr::Binary { left, right, .. } => {
-            walk_expr(left, f);
-            walk_expr(right, f);
+            walk_expr(left, pos, f);
+            walk_expr(right, pos, f);
         }
-        Expr::FileIndex { index, .. } => walk_expr(index, f),
-        Expr::FieldAccess { base, .. } => walk_expr(base, f),
+        Expr::FileIndex { index, .. } => walk_expr(index, pos, f),
+        Expr::FieldAccess { base, .. } => walk_expr(base, pos, f),
         Expr::MethodCall { base, args, .. } => {
-            walk_expr(base, f);
-            args.iter().for_each(|e| walk_expr(e, f));
+            walk_expr(base, pos, f);
+            args.iter().for_each(|e| walk_expr(e, pos, f));
         }
-        Expr::RecordLit { fields, .. } => fields.iter().for_each(|(_, e)| walk_expr(e, f)),
+        Expr::RecordLit { fields, .. } => fields.iter().for_each(|(_, e)| walk_expr(e, pos, f)),
     }
 }
 
@@ -1137,7 +1143,7 @@ pub fn check_legacy_forms(program: &Program) -> Vec<Diagnostic> {
     diagnostics
 }
 
-fn check_legacy_forms_in_body(body: &[Statement], diagnostics: &mut Vec<Diagnostic>) {
+fn check_legacy_forms_in_body(body: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
     let mut seen_labels: HashSet<String> = HashSet::new();
     walk_legacy_forms(body, &mut seen_labels, diagnostics);
 }
@@ -1156,18 +1162,21 @@ fn goto_if_chain_depth(stmt: &Statement) -> Option<usize> {
     else {
         return None;
     };
-    if !matches!(then_body.as_slice(), [Statement::Goto(_)]) {
+    if !matches!(then_body.as_slice(), [s] if matches!(s.kind, Statement::Goto(_))) {
         return None;
     }
     match else_body.as_slice() {
-        [] | [Statement::Goto(_)] => Some(1),
-        [nested @ Statement::If { .. }] => goto_if_chain_depth(nested).map(|d| d + 1),
+        [] => Some(1),
+        [s] if matches!(s.kind, Statement::Goto(_)) => Some(1),
+        [nested] if matches!(nested.kind, Statement::If { .. }) => {
+            goto_if_chain_depth(&nested.kind).map(|d| d + 1)
+        }
         _ => None,
     }
 }
 
 fn walk_legacy_forms(
-    statements: &[Statement],
+    statements: &[Stmt],
     seen_labels: &mut HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -1179,18 +1188,18 @@ fn walk_legacy_forms(
         // `IF cond THEN GOTO label` (depth == 1, not itself warned about as
         // a "chain") still needs its `GOTO` visited normally, since that's
         // exactly the shape a hand-wired backward-jump loop takes.
-        let chain_depth = matches!(stmt, Statement::If { .. })
-            .then(|| goto_if_chain_depth(stmt))
+        let chain_depth = matches!(stmt.kind, Statement::If { .. })
+            .then(|| goto_if_chain_depth(&stmt.kind))
             .flatten();
 
-        match stmt {
+        match &stmt.kind {
             Statement::Label(name) => {
                 seen_labels.insert(name.to_ascii_lowercase());
             }
             Statement::OnBranch { is_gosub, .. } => {
                 let legacy = if *is_gosub { "ON ... GOSUB" } else { "ON ... GOTO" };
                 diagnostics.push(Diagnostic::warning(
-                    generated_pos(),
+                    stmt.pos.clone(),
                     format!(
                         "`{legacy}` is a legacy computed-branch dispatch with a direct BASCAL \
                          equivalent -- prefer `SELECT CASE`, which expresses the same dispatch \
@@ -1200,7 +1209,7 @@ fn walk_legacy_forms(
             }
             Statement::If { .. } if chain_depth.is_some_and(|d| d >= 2) => {
                 diagnostics.push(Diagnostic::warning(
-                    generated_pos(),
+                    stmt.pos.clone(),
                     "this `IF ... THEN GOTO` / `ELSEIF ... THEN GOTO` chain dispatches to \
                      different labels by condition -- prefer `SELECT CASE`, BASCAL's structured \
                      equivalent for the same dispatch"
@@ -1211,7 +1220,7 @@ fn walk_legacy_forms(
                 if seen_labels.contains(&ident.name.to_ascii_lowercase()) =>
             {
                 diagnostics.push(Diagnostic::warning(
-                    generated_pos(),
+                    stmt.pos.clone(),
                     format!(
                         "`GOTO {ident}` jumps back to a label already seen earlier in this \
                          block -- this is a hand-wired loop with a direct BASCAL equivalent -- \
@@ -1223,7 +1232,7 @@ fn walk_legacy_forms(
                 record_type: None, ..
             } => {
                 diagnostics.push(Diagnostic::warning(
-                    generated_pos(),
+                    stmt.pos.clone(),
                     "hand-written `FIELD` bookkeeping has a direct BASCAL equivalent -- a \
                      `record ... end record` + `file ... as ... = open(...)` declaration \
                      expresses the same random-access layout without manually tracking \
@@ -1234,7 +1243,7 @@ fn walk_legacy_forms(
             _ => {}
         }
 
-        match stmt {
+        match &stmt.kind {
             // A reported dispatch chain (depth >= 2) has nothing left to
             // recurse into -- see the comment on `chain_depth` above.
             Statement::If { .. } if chain_depth.is_some_and(|d| d >= 2) => {}
@@ -1415,5 +1424,126 @@ end
     }
 }
 
-// TODO: Add source-location carrying AST nodes so validation diagnostics can
-// point at the exact function declaration or call expression.
+#[cfg(test)]
+mod position_tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse(source: &str) -> Program {
+        let tokens = Lexer::new("test.bcl", source).lex();
+        Parser::new("test.bcl".to_string(), tokens)
+            .parse_program()
+            .expect("source should parse")
+    }
+
+    /// Every diagnostic in this module must point at a real line, never the
+    /// old `<validation>:1:1` placeholder -- see issue #27.
+    fn assert_real_pos(diags: &[Diagnostic]) {
+        for d in diags {
+            assert_ne!(
+                d.pos.filename, "<validation>",
+                "diagnostic still uses the placeholder position: {}",
+                d.message
+            );
+        }
+    }
+
+    #[test]
+    fn duplicate_function_points_at_the_second_declaration() {
+        let source = "function f(x)\nreturn x\nend function\nfunction f(y)\nreturn y\nend function\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let dup = diags
+            .iter()
+            .find(|d| d.message.contains("duplicate function"))
+            .expect("expected a duplicate-function diagnostic");
+        assert_eq!(dup.pos.line, 4, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn function_shadowing_builtin_points_at_its_declaration() {
+        let source = "\n\nfunction len(x)\nreturn x\nend function\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let shadow = diags
+            .iter()
+            .find(|d| d.message.contains("built-in"))
+            .expect("expected a shadowing diagnostic");
+        assert_eq!(shadow.pos.line, 3, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn recursive_call_points_at_the_function_declaration() {
+        let source = "\nfunction f(x)\nreturn f(x)\nend function\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let rec = diags
+            .iter()
+            .find(|d| d.message.contains("recursion"))
+            .expect("expected a recursion diagnostic");
+        assert_eq!(rec.pos.line, 2, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn missing_return_points_at_the_function_declaration() {
+        let source = "\n\n\nfunction f(x)\nprint x\nend function\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let missing = diags
+            .iter()
+            .find(|d| d.message.contains("implicit function return"))
+            .expect("expected a missing-return diagnostic");
+        assert_eq!(missing.pos.line, 4, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn global_shadowing_param_points_at_the_global_statement() {
+        let source = "procedure p(x)\n\n\nglobal x\nend procedure\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let shadow = diags
+            .iter()
+            .find(|d| d.message.contains("names a parameter"))
+            .expect("expected a global-shadows-param diagnostic");
+        assert_eq!(shadow.pos.line, 4, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn unsafe_error_handler_points_at_the_procedure_declaration() {
+        let source = "on error goto handler\n\nprocedure handler()\nreturn\nend procedure\nend\n";
+        let program = parse(source);
+        let diags = validate(&program).unwrap_err();
+        assert_real_pos(&diags);
+        let unsafe_handler = diags
+            .iter()
+            .find(|d| d.message.contains("cannot contain `return`"))
+            .expect("expected an unsafe-error-handler diagnostic");
+        assert_eq!(unsafe_handler.pos.line, 3, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn strict_vars_points_at_the_offending_statement() {
+        let source = "\n\nprint undeclaredvar\nend\n";
+        let program = parse(source);
+        let diags = check_strict_vars(&program, false);
+        assert_real_pos(&diags);
+        assert_eq!(diags.len(), 1, "diagnostics: {diags:?}");
+        assert_eq!(diags[0].pos.line, 3, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn legacy_form_points_at_the_offending_statement() {
+        let source = "\n\n\non x goto first, second\nfirst:\nsecond:\nend\n";
+        let program = parse(source);
+        let diags = check_legacy_forms(&program);
+        assert_real_pos(&diags);
+        assert_eq!(diags.len(), 1, "diagnostics: {diags:?}");
+        assert_eq!(diags[0].pos.line, 4, "diagnostics: {diags:?}");
+    }
+}

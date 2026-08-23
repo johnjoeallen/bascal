@@ -361,14 +361,14 @@ impl CodeGenerator {
         self.line(&format!("' end {kind} {}", lowered_name));
     }
 
-    fn statements(&mut self, statements: &[Statement], current_function: Option<&FunctionInfo>) {
+    fn statements(&mut self, statements: &[Stmt], current_function: Option<&FunctionInfo>) {
         for statement in statements {
             self.statement(statement, current_function);
         }
     }
 
-    fn statement(&mut self, statement: &Statement, current_function: Option<&FunctionInfo>) {
-        match statement {
+    fn statement(&mut self, statement: &Stmt, current_function: Option<&FunctionInfo>) {
+        match &statement.kind {
             Statement::Dim {
                 name,
                 is_array,
@@ -1097,8 +1097,8 @@ impl CodeGenerator {
     fn if_statement(
         &mut self,
         condition: &Expr,
-        then_body: &[Statement],
-        else_body: &[Statement],
+        then_body: &[Stmt],
+        else_body: &[Stmt],
         current_function: Option<&FunctionInfo>,
     ) {
         let id = self.next_label;
@@ -1132,7 +1132,7 @@ impl CodeGenerator {
         &mut self,
         expr: &Expr,
         cases: &[CaseClause],
-        else_body: &[Statement],
+        else_body: &[Stmt],
         current_function: Option<&FunctionInfo>,
     ) {
         let id = self.next_label;
@@ -1927,14 +1927,14 @@ impl FunctionInfo {
 /// find every array-element access to a given parameter, wherever it
 /// appears in a function body, so its declared rank can be inferred from
 /// how many indices it's actually used with.
-pub(crate) fn visit_body_exprs<'a>(body: &'a [Statement], f: &mut impl FnMut(&'a Expr)) {
+pub(crate) fn visit_body_exprs<'a>(body: &'a [Stmt], f: &mut impl FnMut(&'a Expr)) {
     for stmt in body {
         visit_statement_exprs(stmt, f);
     }
 }
 
-fn visit_statement_exprs<'a>(stmt: &'a Statement, f: &mut impl FnMut(&'a Expr)) {
-    match stmt {
+fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
+    match &stmt.kind {
         Statement::Dim { sizes, .. } => {
             for e in sizes {
                 visit_expr(e, f);
@@ -2333,15 +2333,15 @@ fn infer_param_ranks(
 /// Declared rank (number of DIM dimensions) of every array DIMed anywhere
 /// in `body`, lowercase name -> rank. `dim arr%()` (no bounds written) has
 /// no rank recorded here -- there's nothing to check it against.
-fn dim_ranks_in_body(body: &[Statement]) -> HashMap<String, usize> {
+fn dim_ranks_in_body(body: &[Stmt]) -> HashMap<String, usize> {
     let mut ranks = HashMap::new();
     collect_dim_ranks(body, &mut ranks);
     ranks
 }
 
-fn collect_dim_ranks(body: &[Statement], out: &mut HashMap<String, usize>) {
+fn collect_dim_ranks(body: &[Stmt], out: &mut HashMap<String, usize>) {
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::Dim {
                 name,
                 is_array,
@@ -2443,9 +2443,9 @@ fn const_eval(expr: &Expr, consts: &HashMap<String, Vec<Expr>>, depth: u32) -> O
 /// blocks), keyed by lowercase name. More than one definition under the
 /// same name is tracked (not merged) so `const_eval` can refuse to guess
 /// which one a reference means.
-fn collect_consts(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
+fn collect_consts(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>) {
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::Const { name, value } => {
                 out.entry(name.as_basic().to_ascii_lowercase())
                     .or_default()
@@ -2479,9 +2479,9 @@ fn collect_consts(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
 /// (recursing into nested blocks), keyed by lowercase name -- the same
 /// traversal as `collect_dim_ranks`, but keeping the bound expressions
 /// themselves instead of just their count.
-fn collect_dim_sizes(body: &[Statement], out: &mut HashMap<String, Vec<Expr>>) {
+fn collect_dim_sizes(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>) {
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::Dim {
                 name,
                 is_array,
@@ -2525,7 +2525,7 @@ fn collect_call_sites(
     function_names: &HashSet<String>,
 ) -> Vec<(Option<String>, BasicIdent, Vec<Expr>)> {
     let mut sites = Vec::new();
-    let mut scan = |scope: Option<String>, body: &[Statement]| {
+    let mut scan = |scope: Option<String>, body: &[Stmt]| {
         let mut visit = |e: &Expr| match e {
             Expr::Call { name, args }
                 if function_names.contains(&name.name.to_ascii_lowercase()) =>
@@ -2819,10 +2819,10 @@ fn infer_array_param_capacities(
         .collect()
 }
 
-fn collect_globals(body: &[Statement]) -> HashSet<String> {
+fn collect_globals(body: &[Stmt]) -> HashSet<String> {
     let mut globals = HashSet::new();
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::GlobalDecl(ident) => {
                 globals.insert(ident.as_basic().to_ascii_lowercase());
             }
@@ -2868,9 +2868,9 @@ fn collect_record_buffer_names(program: &Program) -> HashSet<String> {
     names
 }
 
-fn collect_record_buffer_names_in(stmts: &[Statement], names: &mut HashSet<String>) {
+fn collect_record_buffer_names_in(stmts: &[Stmt], names: &mut HashSet<String>) {
     for stmt in stmts {
-        match stmt {
+        match &stmt.kind {
             Statement::Field { fields, .. } => {
                 for (_, var) in fields {
                     names.insert(var.as_basic().to_ascii_lowercase());
@@ -2954,14 +2954,14 @@ fn collect_program_names(program: &Program) -> HashSet<String> {
     names
 }
 
-fn collect_names_from_stmts(stmts: &[Statement], names: &mut HashSet<String>) {
+fn collect_names_from_stmts(stmts: &[Stmt], names: &mut HashSet<String>) {
     for stmt in stmts {
         collect_names_from_stmt(stmt, names);
     }
 }
 
-fn collect_names_from_stmt(stmt: &Statement, names: &mut HashSet<String>) {
-    match stmt {
+fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
+    match &stmt.kind {
         Statement::Assignment { target, value } => {
             collect_names_from_expr(target, names);
             collect_names_from_expr(value, names);
@@ -3269,9 +3269,9 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
 /// These become global-scope names in the emitted BASIC, so they must be
 /// excluded from the "taken" set to avoid double-counting but we still need
 /// the bare name reserved.
-fn collect_global_decl_names(body: &[Statement], names: &mut HashSet<String>) {
+fn collect_global_decl_names(body: &[Stmt], names: &mut HashSet<String>) {
     for stmt in body {
-        match stmt {
+        match &stmt.kind {
             Statement::GlobalDecl(ident) => {
                 names.insert(ident.as_basic().to_ascii_lowercase());
             }
@@ -3439,20 +3439,20 @@ fn escape_string(value: &str) -> String {
     value.replace('"', "\"\"")
 }
 
-fn ends_with_end(statements: &[Statement]) -> bool {
+fn ends_with_end(statements: &[Stmt]) -> bool {
     statements
         .iter()
         .rev()
-        .find(|s| !matches!(s, Statement::BlankLine))
-        .is_some_and(|s| matches!(s, Statement::End))
+        .find(|s| !matches!(&***s, Statement::BlankLine))
+        .is_some_and(|s| matches!(&**s, Statement::End))
 }
 
-fn ends_with_return(statements: &[Statement]) -> bool {
+fn ends_with_return(statements: &[Stmt]) -> bool {
     statements
         .iter()
         .rev()
-        .find(|s| !matches!(s, Statement::BlankLine))
-        .is_some_and(|s| matches!(s, Statement::Return { .. } | Statement::ReturnVoid))
+        .find(|s| !matches!(&***s, Statement::BlankLine))
+        .is_some_and(|s| matches!(&**s, Statement::Return { .. } | Statement::ReturnVoid))
 }
 
 fn number_basic_lines(source: &str, full: bool) -> String {
