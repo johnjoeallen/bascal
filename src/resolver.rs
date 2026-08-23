@@ -13,6 +13,7 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_invalid_parameter_defaults(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
+    reject_option_base(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
@@ -170,6 +171,64 @@ fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<
                 ),
             ));
         }
+    }
+}
+
+/// `OPTION BASE` is accepted by the parser but was never properly
+/// supported: `--target basic` passes it straight through as text with no
+/// internal tracking of which base is active for which array, so array
+/// bounds/`sizeof()`/an array-parameter's copy loop all silently assume
+/// base 0 regardless -- concretely, a `dim`'d array under `OPTION BASE 1`
+/// passed as a function parameter reads/writes index 0 of it, which
+/// doesn't exist under that array's real base (confirmed: `fbc -exx`
+/// aborts with "out of bounds array access" on exactly this). `--target c`
+/// already rejects it as an unsupported statement. Rather than properly
+/// supporting a non-zero base -- which would mean threading it through
+/// every one of those call sites -- this rejects it outright, for both
+/// targets, with a clear diagnostic instead of a silent wrong answer or an
+/// opaque generated-code error.
+fn reject_option_base(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    fn walk(statements: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
+        for stmt in statements {
+            match &stmt.kind {
+                Statement::OptionBase(_) => {
+                    diagnostics.push(Diagnostic::error(
+                        stmt.pos.clone(),
+                        "`OPTION BASE` isn't supported -- BASCAL only supports the default \
+                         base-0 array indexing (see docs/manual/arrays.html); remove this \
+                         statement and declare every array under base 0"
+                            .to_string(),
+                    ));
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    walk(then_body, diagnostics);
+                    walk(else_body, diagnostics);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => {
+                    walk(body, diagnostics);
+                }
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        walk(&case.body, diagnostics);
+                    }
+                    walk(else_body, diagnostics);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    walk(&program.statements, diagnostics);
+    for function in &program.functions {
+        walk(&function.body, diagnostics);
     }
 }
 

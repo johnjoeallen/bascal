@@ -39,7 +39,7 @@
 <h3 id="declaration-2">Declaration</h3>
 <pre><code>DIM values%(100)    &#39; 101 elements: values%(0) .. values%(100)
 DIM names$(50)</code></pre>
-<p>Array indices run from 0 to <em>size</em> (i.e., <em>size</em>+1 elements in total, using BASIC's default <code>OPTION BASE 0</code>). <code>OPTION BASE 1</code> is not supported and is unlikely to ever be — see <a href="variables-and-constants.html#option-base">OPTION BASE</a> in Variables and Constants. Always declare arrays under the default base-0 indexing.</p>
+<p>Array indices run from 0 to <em>size</em> (i.e., <em>size</em>+1 elements in total). <code>OPTION BASE</code> is rejected outright — a transpile-time error under both targets — see <a href="variables-and-constants.html#option-base">OPTION BASE</a> in Variables and Constants. Every array is indexed from base 0.</p>
 <h3 id="access">Access</h3>
 <pre><code>values%(0) = 42
 PRINT values%(i%)</code></pre>
