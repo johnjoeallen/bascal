@@ -22,6 +22,7 @@ pub fn lower(
 ) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
     let mut lowerer = Lowerer::new();
     lowerer.build_record_table(&program.records);
+    lowerer.build_user_method_table(&program.functions);
 
     let statements = lowerer.lower_statements(program.statements);
     let functions = program
@@ -107,6 +108,17 @@ struct Lowerer {
     /// camelCased and should keep that case, while a user-typed one still
     /// gets BASCAL's normal lowercase normalization.
     synthesized_buffer_names: std::collections::HashSet<String>,
+    /// A user-declared `method$`/`method%`/... function's own declared
+    /// result type, keyed by (receiver suffix, lowercase method name) --
+    /// built once, up front, from `program.functions` (before it's moved
+    /// into per-function lowering) since `rewrite_expr`'s own
+    /// `Expr::ScalarMethodCall` arm needs a chain's inner receiver type
+    /// resolved *before* it can decide whether the outer `.method()` is one
+    /// of the built-in scalar methods (see `scalar_builtins.rs`) -- e.g. in
+    /// `s$.trim().left(3)`, resolving `.left()` needs `.trim()`'s own
+    /// declared result type, which only a user `method$` declaration (not
+    /// this pass) provides.
+    user_method_results: HashMap<(TypeSuffix, String), TypeSuffix>,
 }
 
 impl Lowerer {
@@ -118,6 +130,16 @@ impl Lowerer {
             next_channel: 1,
             diagnostics: Vec::new(),
             synthesized_buffer_names: std::collections::HashSet::new(),
+            user_method_results: HashMap::new(),
+        }
+    }
+
+    fn build_user_method_table(&mut self, functions: &[FunctionDef]) {
+        for function in functions {
+            let Some(receiver) = function.receiver else { continue };
+            let Some(result) = function.name.suffix else { continue };
+            self.user_method_results
+                .insert((receiver, function.name.name.to_ascii_lowercase()), result);
         }
     }
 
@@ -1389,9 +1411,126 @@ impl Lowerer {
             }
             Expr::ScalarMethodCall { base, method, args } => {
                 let (base, _) = self.rewrite_expr(*base);
-                let args = args.into_iter().map(|arg| self.rewrite_expr(arg).0).collect();
-                (Expr::ScalarMethodCall { base: Box::new(base), method, args }, None)
+                let args: Vec<Expr> = args.into_iter().map(|arg| self.rewrite_expr(arg).0).collect();
+                (self.rewrite_scalar_method_call(base, method, args), None)
             }
+        }
+    }
+
+    /// Rewrites `base.method(args)` into the equivalent ordinary call
+    /// (`method$(base, args...)`) when `method` names one of the built-in
+    /// scalar methods `scalar_builtins.rs` registers for `base`'s own
+    /// receiver type -- see that module's own doc comment for why this
+    /// reuses the ordinary-call codegen both backends already have,
+    /// instead of teaching `codegen_basic.rs`/`codegen_c.rs` a second,
+    /// built-in source of truth alongside their existing user-`method$`
+    /// lookups. `base`/`args` are already fully rewritten by the caller, so
+    /// a chain like `s$.trim().left(3)` resolves correctly regardless of
+    /// which half is user-defined (`.trim()`, left as `ScalarMethodCall`
+    /// here, resolved via `user_method_results`) vs. built-in (`.left()`,
+    /// rewritten here).
+    ///
+    /// Matches the parser's own `make_paren_ident_expr` convention
+    /// (parser.rs) for which shape a call becomes: `Expr::ArrayRef` only
+    /// when there are zero arguments, or the callee carries a type suffix
+    /// and there's exactly one. None of this registry's entries hit that
+    /// second case (every one whose rewritten call could have exactly one
+    /// total argument -- `len()`, `abs()`, `sqr()`, ... -- uses a
+    /// suffix-less `call_suffix: None`, matching real BASIC's own bare
+    /// `LEN`/`ABS`/`SQR`/...), so every rewrite here is `Expr::Call` in
+    /// practice; the check is still spelled out in full below rather than
+    /// hardcoded, so it stays correct if a future entry ever pairs a
+    /// suffix with a single argument.
+    ///
+    /// `method` not matching any built-in for this receiver leaves the node
+    /// as `Expr::ScalarMethodCall` unchanged -- resolver's own
+    /// `validate_one_scalar_method` still handles the "unknown method" and
+    /// "user-declared method" cases exactly as it does today.
+    fn rewrite_scalar_method_call(&mut self, base: Expr, method: String, args: Vec<Expr>) -> Expr {
+        let Some(receiver) = self.infer_scalar_suffix(&base) else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!("method receiver for `.{method}()` must be a scalar expression"),
+            ));
+            return Expr::Integer(0);
+        };
+        let Some(builtin) = crate::scalar_builtins::find(receiver, &method) else {
+            return Expr::ScalarMethodCall {
+                base: Box::new(base),
+                method,
+                args,
+            };
+        };
+        if args.len() < builtin.min_args || args.len() > builtin.max_args {
+            let expected = if builtin.min_args == builtin.max_args {
+                format!("{} argument(s)", builtin.min_args)
+            } else {
+                format!("{} to {} argument(s)", builtin.min_args, builtin.max_args)
+            };
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "`.{method}()` expects {expected}, got {}",
+                    args.len()
+                ),
+            ));
+            return Expr::Integer(0);
+        }
+        let name = BasicIdent {
+            name: builtin.method.to_string(),
+            suffix: builtin.call_suffix,
+        };
+        let mut call_args = Vec::with_capacity(args.len() + 1);
+        call_args.push(base);
+        call_args.extend(args);
+        // Exactly `make_paren_ident_expr`'s own disambiguation rule
+        // (parser.rs) -- a call with a type suffix and exactly one
+        // argument parses as `ArrayRef` in real source, so a synthesized
+        // one must match; every entry here that could ever reach exactly
+        // one total argument (`len`/`abs`/`sqr`/`sin`/`cos`/`tan`/`int`/
+        // `fix`/`sgn`, receiver alone) has `call_suffix: None`, so this
+        // always resolves to `Call` in practice -- still spelled out in
+        // full rather than assuming that, so it stays correct if a future
+        // registry entry ever pairs a suffix with a single argument.
+        if call_args.is_empty() || (name.suffix.is_some() && call_args.len() == 1) {
+            Expr::ArrayRef {
+                name,
+                indices: call_args,
+            }
+        } else {
+            Expr::Call {
+                name,
+                args: call_args,
+            }
+        }
+    }
+
+    /// A minimal scalar-type inference used only to pick the right
+    /// receiver family for `rewrite_scalar_method_call` -- not a full
+    /// expression-type checker. Mirrors `resolver::scalar_expr_type`'s own
+    /// shape (same literal/`Ident`/`Unary`/`Binary`/`Call`/`ArrayRef` arms,
+    /// same "bare/suffixless defaults to `Single`" convention already
+    /// established there), but reads a chained user-declared method's
+    /// result type from `user_method_results` (built once, up front --
+    /// see `build_user_method_table`) instead of scanning `program.functions`
+    /// live, since this pass no longer holds onto the whole `Program`.
+    fn infer_scalar_suffix(&self, expr: &Expr) -> Option<TypeSuffix> {
+        match expr {
+            Expr::String(_) => Some(TypeSuffix::String),
+            Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
+            Expr::Float(_) => Some(TypeSuffix::Single),
+            Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => {
+                Some(id.suffix.unwrap_or(TypeSuffix::Single))
+            }
+            Expr::Unary { expr, .. } => self.infer_scalar_suffix(expr),
+            Expr::Binary { left, .. } => self.infer_scalar_suffix(left),
+            Expr::ScalarMethodCall { base, method, .. } => {
+                let receiver = self.infer_scalar_suffix(base)?;
+                self.user_method_results
+                    .get(&(receiver, method.to_ascii_lowercase()))
+                    .copied()
+            }
+            _ => None,
         }
     }
 

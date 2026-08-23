@@ -48,6 +48,7 @@
 </tbody>
 </table>
 <p><code>SIN</code>, <code>COS</code>, <code>TAN</code>, and <code>ATN</code> use radians. <code>LOG</code> is the natural logarithm. <code>RANDOMIZE</code> is the companion statement that seeds <code>RND</code>.</p>
+<p><code>LEFT$</code>, <code>RIGHT$</code>, <code>MID$</code>, <code>LEN</code>, and <code>INSTR</code> (string receiver), and <code>ABS</code>, <code>SQR</code>, <code>SIN</code>, <code>COS</code>, <code>TAN</code>, <code>INT</code>, <code>FIX</code>, and <code>SGN</code> (any numeric receiver) are also callable as scalar methods with no declaration needed — <code>s$.left(3)</code> is exactly the same call as <code>LEFT$(s$, 3)</code>. See <a href="../language/functions-and-procedures.html#built-in-methods">Built-in methods</a> in the language book.</p>
 <h3 id="mid-assignment">MID$ assignment</h3>
 <pre><code>MID$(target$, start[, len]) = replacement$</code></pre>
 <p>A same-length splice into <code>target$</code>, which keeps its original length — not a value-producing expression, and not the same thing as <code>MID$(...)</code> used to <em>read</em> a substring. <code>target$</code> must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).</p>
