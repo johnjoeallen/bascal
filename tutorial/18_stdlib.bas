@@ -1,259 +1,304 @@
 10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Strips leading spaces from s$. Not a real MBASIC/BASCOM 2.00 builtin --
+30 ' Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
 40 ' verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
-50 ' BASCAL ships its own.
+50 ' BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+60 ' so a required stdlib call reads the same way as a built-in method call
+70 ' (docs/language/functions-and-procedures.html#built-in-methods). The
+80 ' ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+90 ' implicit first parameter, so ordinary-call syntax resolves straight to
+100 ' this same declaration, with no separate function needed (and no longer
+110 ' allowed: a function and a method sharing one name is a duplicate
+120 ' declaration, since they'd both claim the same callable identity).
 
-60 ' Strips trailing spaces from s$. Not a real MBASIC/BASCOM 2.00 builtin --
-70 ' verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
-80 ' BASCAL ships its own.
+130 ' Strips trailing spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
+140 ' verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
+150 ' BASCAL ships its own. Declared as a scalar method (see GitHub issue #41
+160 ' and ltrim.bcl's own doc comment for the reasoning) -- rtrim$(s$) still
+170 ' works via ordinary-call syntax resolving to this same declaration.
 
-90 ' Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-100 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+180 ' Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+190 ' against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+200 ' its own. Declared as a scalar method (see GitHub issue #41 and
+210 ' ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
+220 ' via ordinary-call syntax resolving to this same declaration.
 
-110 ' Lower-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-120 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+230 ' Lower-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+240 ' against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+250 ' its own. Declared as a scalar method (see GitHub issue #41 and
+260 ' ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
+270 ' via ordinary-call syntax resolving to this same declaration.
 
-130 ' Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
-140 ' and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
-150 ' returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
-160 ' ships a working implementation.
-170 ' 
-180 ' Covers the classic error codes an ON ERROR GOTO + ERR handler is
-190 ' realistically going to hit -- not the full table, but every code common
-200 ' enough to be worth a real message instead of falling through to the
-210 ' generic one.
+280 ' Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
+290 ' and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
+300 ' returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
+310 ' ships a working implementation.
+320 ' 
+330 ' Covers the classic error codes an ON ERROR GOTO + ERR handler is
+340 ' realistically going to hit -- not the full table, but every code common
+350 ' enough to be worth a real message instead of falling through to the
+360 ' generic one.
+370 ' 
+380 ' Deliberately NOT a scalar method (see GitHub issue #41, which asked for
+390 ' this decision to be recorded either way): code% is an opaque lookup key,
+400 ' not a value the call is naturally "operating on" the way ltrim$/rtrim$/
+410 ' ucase$/lcase$ operate on their string -- code%.error() would read as if
+420 ' the *error code itself* has a message, when really this is a lookup
+430 ' table keyed by that code. Stays an ordinary function.
 
-220 ' Tutorial 18 — Standard library functions
-230 ' 
-240 ' com.bascal.stdlib is an ordinary require-able library, resolved the same
-250 ' way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
-260 ' directory to the search path automatically, so no -L flag is needed to
-270 ' reach it. It exists because LTRIM$, RTRIM$, UCASE$, LCASE$, and ERROR$
-280 ' either aren't real MBASIC/BASCOM 2.00 builtins or don't work at runtime
-290 ' (verified against a real IBM Personal Computer BASIC Compiler 2.00 under
-300 ' dosbox-x) -- see the manual's "String and error-message functions"
-310 ' section (https://johnjoeallen.github.io/bascal/manual/) for the full
-320 ' story.
-330 ' 
-340 ' Run with:
-350 ' bcc tutorial/18_stdlib.bcl
+440 ' Tutorial 18 — Standard library functions
+450 ' 
+460 ' com.bascal.stdlib is an ordinary require-able library, resolved the same
+470 ' way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
+480 ' directory to the search path automatically, so no -L flag is needed to
+490 ' reach it. It exists because LTRIM$, RTRIM$, UCASE$, LCASE$, and ERROR$
+500 ' either aren't real MBASIC/BASCOM 2.00 builtins or don't work at runtime
+510 ' (verified against a real IBM Personal Computer BASIC Compiler 2.00 under
+520 ' dosbox-x) -- see the manual's "String and error-message functions"
+530 ' section (https://johnjoeallen.github.io/bascal/manual/) for the full
+540 ' story.
+550 ' 
+560 ' ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
+570 ' end method), using self$ in place of an explicit s$ parameter -- see
+580 ' the "Declare and call a method" chapter. A method's receiver is really
+590 ' just an implicit first parameter, so the ordinary call form below
+600 ' (ltrim$("...")) keeps working exactly as before: it resolves straight to
+610 ' the same method declaration, with the first argument filling self$. The
+620 ' method-call form (below, chained) is the same declaration too -- just
+630 ' written as "...".ltrim() instead. error$ stays an ordinary function: an
+640 ' error code is a lookup key, not a value the call is naturally "operating
+650 ' on" the way the others operate on their string.
+660 ' 
+670 ' Run with:
+680 ' bcc tutorial/18_stdlib.bcl
 
-360 ltrimS0$ = "   padded left"
-370 GOSUB 610
-380 PRINT ("[" + ltrimResult0$) + "]"
-390 rtrimS0$ = "padded right   "
-400 GOSUB 710
-410 PRINT ("[" + rtrimResult0$) + "]"
-420 ucaseS0$ = "shout this"
-430 GOSUB 810
-440 PRINT ucaseResult0$
-450 lcaseS0$ = "QUIET THIS DOWN"
-460 GOSUB 940
-470 PRINT lcaseResult0$
+690 ltrimSelf0$ = "   padded left"
+700 GOSUB 1050
+710 PRINT ("[" + ltrimResult0$) + "]"
+720 rtrimSelf0$ = "padded right   "
+730 GOSUB 1150
+740 PRINT ("[" + rtrimResult0$) + "]"
+750 ucaseSelf0$ = "shout this"
+760 GOSUB 1250
+770 PRINT ucaseResult0$
+780 lcaseSelf0$ = "QUIET THIS DOWN"
+790 GOSUB 1380
+800 PRINT lcaseResult0$
 
-480 ' ERROR$ maps a classic MBASIC/GW-BASIC/BASCOM error code to a message;
-490 ' pair it with ERR inside an ON ERROR GOTO handler in real code.
-500 errorCode0% = 53
-510 GOSUB 1070
-520 PRINT errorResult0$
-530 errorCode0% = 11
-540 GOSUB 1070
-550 PRINT errorResult0$
-560 errorCode0% = 9999
-570 GOSUB 1070
-580 PRINT errorResult0$
+810 ' Same four functions, called as chained methods instead.
+820 ltrimSelf0$ = "  padded both sides  "
+830 GOSUB 1050
+840 rtrimSelf0$ = ltrimResult0$
+850 GOSUB 1150
+860 PRINT ("[" + rtrimResult0$) + "]"
+870 ltrimSelf0$ = "  shout this too"
+880 GOSUB 1050
+890 ucaseSelf0$ = ltrimResult0$
+900 GOSUB 1250
+910 PRINT ucaseResult0$
 
-590 END
+920 ' ERROR$ maps a classic MBASIC/GW-BASIC/BASCOM error code to a message;
+930 ' pair it with ERR inside an ON ERROR GOTO handler in real code.
+940 errorCode0% = 53
+950 GOSUB 1510
+960 PRINT errorResult0$
+970 errorCode0% = 11
+980 GOSUB 1510
+990 PRINT errorResult0$
+1000 errorCode0% = 9999
+1010 GOSUB 1510
+1020 PRINT errorResult0$
 
-600 ' function ltrim$(s$)
-610     ltrimI0% = 1
-620     IF (ltrimI0% <= LEN(ltrimS0$)) = 0 THEN GOTO 660
-630     IF (MID$(ltrimS0$, ltrimI0%, 1) = " ") = 0 THEN GOTO 660
-640         ltrimI0% = ltrimI0% + 1
-650         GOTO 620
-660     REM END WHILE
-670     ltrimResult0$ = MID$(ltrimS0$, ltrimI0%)
-680     RETURN
-690 ' end function ltrim$
+1030 END
 
-700 ' function rtrim$(s$)
-710     rtrimI0% = LEN(rtrimS0$)
-720     IF (rtrimI0% > 0) = 0 THEN GOTO 760
-730     IF (MID$(rtrimS0$, rtrimI0%, 1) = " ") = 0 THEN GOTO 760
-740         rtrimI0% = rtrimI0% - 1
-750         GOTO 720
-760     REM END WHILE
-770     rtrimResult0$ = LEFT$(rtrimS0$, rtrimI0%)
-780     RETURN
-790 ' end function rtrim$
+1040 ' function ltrim$()
+1050     ltrimI0% = 1
+1060     IF (ltrimI0% <= LEN(ltrimSelf0$)) = 0 THEN GOTO 1100
+1070     IF (MID$(ltrimSelf0$, ltrimI0%, 1) = " ") = 0 THEN GOTO 1100
+1080         ltrimI0% = ltrimI0% + 1
+1090         GOTO 1060
+1100     REM END WHILE
+1110     ltrimResult0$ = MID$(ltrimSelf0$, ltrimI0%)
+1120     RETURN
+1130 ' end function ltrim$
 
-800 ' function ucase$(s$)
-810     ucaseOut0$ = ""
-820     FOR ucaseI0% = 1 TO LEN(ucaseS0$)
-830         ucaseC0% = ASC(MID$(ucaseS0$, ucaseI0%, 1))
-840         IF (ucaseC0% >= 97) = 0 THEN GOTO 870
-850         IF (ucaseC0% <= 122) = 0 THEN GOTO 870
-860             ucaseC0% = ucaseC0% - 32
-870         REM END IF
-880         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
-890     NEXT ucaseI0%
-900     ucaseResult0$ = ucaseOut0$
-910     RETURN
-920 ' end function ucase$
+1140 ' function rtrim$()
+1150     rtrimI0% = LEN(rtrimSelf0$)
+1160     IF (rtrimI0% > 0) = 0 THEN GOTO 1200
+1170     IF (MID$(rtrimSelf0$, rtrimI0%, 1) = " ") = 0 THEN GOTO 1200
+1180         rtrimI0% = rtrimI0% - 1
+1190         GOTO 1160
+1200     REM END WHILE
+1210     rtrimResult0$ = LEFT$(rtrimSelf0$, rtrimI0%)
+1220     RETURN
+1230 ' end function rtrim$
 
-930 ' function lcase$(s$)
-940     lcaseOut0$ = ""
-950     FOR lcaseI0% = 1 TO LEN(lcaseS0$)
-960         lcaseC0% = ASC(MID$(lcaseS0$, lcaseI0%, 1))
-970         IF (lcaseC0% >= 65) = 0 THEN GOTO 1000
-980         IF (lcaseC0% <= 90) = 0 THEN GOTO 1000
-990             lcaseC0% = lcaseC0% + 32
-1000         REM END IF
-1010         lcaseOut0$ = lcaseOut0$ + CHR$(lcaseC0%)
-1020     NEXT lcaseI0%
-1030     lcaseResult0$ = lcaseOut0$
-1040     RETURN
-1050 ' end function lcase$
+1240 ' function ucase$()
+1250     ucaseOut0$ = ""
+1260     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
+1270         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
+1280         IF (ucaseC0% >= 97) = 0 THEN GOTO 1310
+1290         IF (ucaseC0% <= 122) = 0 THEN GOTO 1310
+1300             ucaseC0% = ucaseC0% - 32
+1310         REM END IF
+1320         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
+1330     NEXT ucaseI0%
+1340     ucaseResult0$ = ucaseOut0$
+1350     RETURN
+1360 ' end function ucase$
 
-1060 ' function error$(code%)
-1070     BCCT6% = errorCode0%
-1080     IF (BCCT6% = 2) <> 0 THEN GOTO 1420
-1090     IF (BCCT6% = 3) <> 0 THEN GOTO 1450
-1100     IF (BCCT6% = 4) <> 0 THEN GOTO 1480
-1110     IF (BCCT6% = 5) <> 0 THEN GOTO 1510
-1120     IF (BCCT6% = 6) <> 0 THEN GOTO 1540
-1130     IF (BCCT6% = 7) <> 0 THEN GOTO 1570
-1140     IF (BCCT6% = 9) <> 0 THEN GOTO 1600
-1150     IF (BCCT6% = 10) <> 0 THEN GOTO 1630
-1160     IF (BCCT6% = 11) <> 0 THEN GOTO 1660
-1170     IF (BCCT6% = 13) <> 0 THEN GOTO 1690
-1180     IF (BCCT6% = 14) <> 0 THEN GOTO 1720
-1190     IF (BCCT6% = 19) <> 0 THEN GOTO 1750
-1200     IF (BCCT6% = 20) <> 0 THEN GOTO 1780
-1210     IF (BCCT6% = 24) <> 0 THEN GOTO 1810
-1220     IF (BCCT6% = 25) <> 0 THEN GOTO 1840
-1230     IF (BCCT6% = 27) <> 0 THEN GOTO 1870
-1240     IF (BCCT6% = 52) <> 0 THEN GOTO 1900
-1250     IF (BCCT6% = 53) <> 0 THEN GOTO 1930
-1260     IF (BCCT6% = 54) <> 0 THEN GOTO 1960
-1270     IF (BCCT6% = 55) <> 0 THEN GOTO 1990
-1280     IF (BCCT6% = 57) <> 0 THEN GOTO 2020
-1290     IF (BCCT6% = 58) <> 0 THEN GOTO 2050
-1300     IF (BCCT6% = 61) <> 0 THEN GOTO 2080
-1310     IF (BCCT6% = 62) <> 0 THEN GOTO 2110
-1320     IF (BCCT6% = 63) <> 0 THEN GOTO 2140
-1330     IF (BCCT6% = 64) <> 0 THEN GOTO 2170
-1340     IF (BCCT6% = 67) <> 0 THEN GOTO 2200
-1350     IF (BCCT6% = 68) <> 0 THEN GOTO 2230
-1360     IF (BCCT6% = 70) <> 0 THEN GOTO 2260
-1370     IF (BCCT6% = 71) <> 0 THEN GOTO 2290
-1380     IF (BCCT6% = 72) <> 0 THEN GOTO 2320
-1390     IF (BCCT6% = 75) <> 0 THEN GOTO 2350
-1400     IF (BCCT6% = 76) <> 0 THEN GOTO 2380
-1410     GOTO 2410
-1420         errorResult0$ = "Syntax error"
-1430         RETURN
-1440         GOTO 2430
-1450         errorResult0$ = "RETURN without GOSUB"
-1460         RETURN
-1470         GOTO 2430
-1480         errorResult0$ = "Out of DATA"
-1490         RETURN
-1500         GOTO 2430
-1510         errorResult0$ = "Illegal function call"
-1520         RETURN
-1530         GOTO 2430
-1540         errorResult0$ = "Overflow"
-1550         RETURN
-1560         GOTO 2430
-1570         errorResult0$ = "Out of memory"
-1580         RETURN
-1590         GOTO 2430
-1600         errorResult0$ = "Subscript out of range"
-1610         RETURN
-1620         GOTO 2430
-1630         errorResult0$ = "Duplicate Definition"
-1640         RETURN
-1650         GOTO 2430
-1660         errorResult0$ = "Division by zero"
-1670         RETURN
-1680         GOTO 2430
-1690         errorResult0$ = "Type mismatch"
-1700         RETURN
-1710         GOTO 2430
-1720         errorResult0$ = "Out of string space"
-1730         RETURN
-1740         GOTO 2430
-1750         errorResult0$ = "No RESUME"
-1760         RETURN
-1770         GOTO 2430
-1780         errorResult0$ = "RESUME without error"
-1790         RETURN
-1800         GOTO 2430
-1810         errorResult0$ = "Device timeout"
-1820         RETURN
-1830         GOTO 2430
-1840         errorResult0$ = "Device fault"
-1850         RETURN
-1860         GOTO 2430
-1870         errorResult0$ = "Out of paper"
-1880         RETURN
-1890         GOTO 2430
-1900         errorResult0$ = "Bad file number"
-1910         RETURN
-1920         GOTO 2430
-1930         errorResult0$ = "File not found"
-1940         RETURN
-1950         GOTO 2430
-1960         errorResult0$ = "Bad file mode"
-1970         RETURN
-1980         GOTO 2430
-1990         errorResult0$ = "File already open"
-2000         RETURN
-2010         GOTO 2430
-2020         errorResult0$ = "Device I/O error"
-2030         RETURN
-2040         GOTO 2430
-2050         errorResult0$ = "File already exists"
-2060         RETURN
-2070         GOTO 2430
-2080         errorResult0$ = "Disk full"
-2090         RETURN
-2100         GOTO 2430
-2110         errorResult0$ = "Input past end"
-2120         RETURN
-2130         GOTO 2430
-2140         errorResult0$ = "Bad record number"
-2150         RETURN
-2160         GOTO 2430
-2170         errorResult0$ = "Bad file name"
-2180         RETURN
-2190         GOTO 2430
-2200         errorResult0$ = "Too many files"
-2210         RETURN
-2220         GOTO 2430
-2230         errorResult0$ = "Device unavailable"
-2240         RETURN
-2250         GOTO 2430
-2260         errorResult0$ = "Disk write protected"
-2270         RETURN
-2280         GOTO 2430
-2290         errorResult0$ = "Disk not ready"
-2300         RETURN
-2310         GOTO 2430
-2320         errorResult0$ = "Disk media error"
-2330         RETURN
-2340         GOTO 2430
-2350         errorResult0$ = "Path/File access error"
-2360         RETURN
-2370         GOTO 2430
-2380         errorResult0$ = "Path not found"
-2390         RETURN
-2400         GOTO 2430
-2410         errorResult0$ = "Error " + STR$(errorCode0%)
-2420         RETURN
-2430     REM END SELECT
-2440     RETURN
-2450 ' end function error$
+1370 ' function lcase$()
+1380     lcaseOut0$ = ""
+1390     FOR lcaseI0% = 1 TO LEN(lcaseSelf0$)
+1400         lcaseC0% = ASC(MID$(lcaseSelf0$, lcaseI0%, 1))
+1410         IF (lcaseC0% >= 65) = 0 THEN GOTO 1440
+1420         IF (lcaseC0% <= 90) = 0 THEN GOTO 1440
+1430             lcaseC0% = lcaseC0% + 32
+1440         REM END IF
+1450         lcaseOut0$ = lcaseOut0$ + CHR$(lcaseC0%)
+1460     NEXT lcaseI0%
+1470     lcaseResult0$ = lcaseOut0$
+1480     RETURN
+1490 ' end function lcase$
+
+1500 ' function error$(code%)
+1510     BCCT6% = errorCode0%
+1520     IF (BCCT6% = 2) <> 0 THEN GOTO 1860
+1530     IF (BCCT6% = 3) <> 0 THEN GOTO 1890
+1540     IF (BCCT6% = 4) <> 0 THEN GOTO 1920
+1550     IF (BCCT6% = 5) <> 0 THEN GOTO 1950
+1560     IF (BCCT6% = 6) <> 0 THEN GOTO 1980
+1570     IF (BCCT6% = 7) <> 0 THEN GOTO 2010
+1580     IF (BCCT6% = 9) <> 0 THEN GOTO 2040
+1590     IF (BCCT6% = 10) <> 0 THEN GOTO 2070
+1600     IF (BCCT6% = 11) <> 0 THEN GOTO 2100
+1610     IF (BCCT6% = 13) <> 0 THEN GOTO 2130
+1620     IF (BCCT6% = 14) <> 0 THEN GOTO 2160
+1630     IF (BCCT6% = 19) <> 0 THEN GOTO 2190
+1640     IF (BCCT6% = 20) <> 0 THEN GOTO 2220
+1650     IF (BCCT6% = 24) <> 0 THEN GOTO 2250
+1660     IF (BCCT6% = 25) <> 0 THEN GOTO 2280
+1670     IF (BCCT6% = 27) <> 0 THEN GOTO 2310
+1680     IF (BCCT6% = 52) <> 0 THEN GOTO 2340
+1690     IF (BCCT6% = 53) <> 0 THEN GOTO 2370
+1700     IF (BCCT6% = 54) <> 0 THEN GOTO 2400
+1710     IF (BCCT6% = 55) <> 0 THEN GOTO 2430
+1720     IF (BCCT6% = 57) <> 0 THEN GOTO 2460
+1730     IF (BCCT6% = 58) <> 0 THEN GOTO 2490
+1740     IF (BCCT6% = 61) <> 0 THEN GOTO 2520
+1750     IF (BCCT6% = 62) <> 0 THEN GOTO 2550
+1760     IF (BCCT6% = 63) <> 0 THEN GOTO 2580
+1770     IF (BCCT6% = 64) <> 0 THEN GOTO 2610
+1780     IF (BCCT6% = 67) <> 0 THEN GOTO 2640
+1790     IF (BCCT6% = 68) <> 0 THEN GOTO 2670
+1800     IF (BCCT6% = 70) <> 0 THEN GOTO 2700
+1810     IF (BCCT6% = 71) <> 0 THEN GOTO 2730
+1820     IF (BCCT6% = 72) <> 0 THEN GOTO 2760
+1830     IF (BCCT6% = 75) <> 0 THEN GOTO 2790
+1840     IF (BCCT6% = 76) <> 0 THEN GOTO 2820
+1850     GOTO 2850
+1860         errorResult0$ = "Syntax error"
+1870         RETURN
+1880         GOTO 2870
+1890         errorResult0$ = "RETURN without GOSUB"
+1900         RETURN
+1910         GOTO 2870
+1920         errorResult0$ = "Out of DATA"
+1930         RETURN
+1940         GOTO 2870
+1950         errorResult0$ = "Illegal function call"
+1960         RETURN
+1970         GOTO 2870
+1980         errorResult0$ = "Overflow"
+1990         RETURN
+2000         GOTO 2870
+2010         errorResult0$ = "Out of memory"
+2020         RETURN
+2030         GOTO 2870
+2040         errorResult0$ = "Subscript out of range"
+2050         RETURN
+2060         GOTO 2870
+2070         errorResult0$ = "Duplicate Definition"
+2080         RETURN
+2090         GOTO 2870
+2100         errorResult0$ = "Division by zero"
+2110         RETURN
+2120         GOTO 2870
+2130         errorResult0$ = "Type mismatch"
+2140         RETURN
+2150         GOTO 2870
+2160         errorResult0$ = "Out of string space"
+2170         RETURN
+2180         GOTO 2870
+2190         errorResult0$ = "No RESUME"
+2200         RETURN
+2210         GOTO 2870
+2220         errorResult0$ = "RESUME without error"
+2230         RETURN
+2240         GOTO 2870
+2250         errorResult0$ = "Device timeout"
+2260         RETURN
+2270         GOTO 2870
+2280         errorResult0$ = "Device fault"
+2290         RETURN
+2300         GOTO 2870
+2310         errorResult0$ = "Out of paper"
+2320         RETURN
+2330         GOTO 2870
+2340         errorResult0$ = "Bad file number"
+2350         RETURN
+2360         GOTO 2870
+2370         errorResult0$ = "File not found"
+2380         RETURN
+2390         GOTO 2870
+2400         errorResult0$ = "Bad file mode"
+2410         RETURN
+2420         GOTO 2870
+2430         errorResult0$ = "File already open"
+2440         RETURN
+2450         GOTO 2870
+2460         errorResult0$ = "Device I/O error"
+2470         RETURN
+2480         GOTO 2870
+2490         errorResult0$ = "File already exists"
+2500         RETURN
+2510         GOTO 2870
+2520         errorResult0$ = "Disk full"
+2530         RETURN
+2540         GOTO 2870
+2550         errorResult0$ = "Input past end"
+2560         RETURN
+2570         GOTO 2870
+2580         errorResult0$ = "Bad record number"
+2590         RETURN
+2600         GOTO 2870
+2610         errorResult0$ = "Bad file name"
+2620         RETURN
+2630         GOTO 2870
+2640         errorResult0$ = "Too many files"
+2650         RETURN
+2660         GOTO 2870
+2670         errorResult0$ = "Device unavailable"
+2680         RETURN
+2690         GOTO 2870
+2700         errorResult0$ = "Disk write protected"
+2710         RETURN
+2720         GOTO 2870
+2730         errorResult0$ = "Disk not ready"
+2740         RETURN
+2750         GOTO 2870
+2760         errorResult0$ = "Disk media error"
+2770         RETURN
+2780         GOTO 2870
+2790         errorResult0$ = "Path/File access error"
+2800         RETURN
+2810         GOTO 2870
+2820         errorResult0$ = "Path not found"
+2830         RETURN
+2840         GOTO 2870
+2850         errorResult0$ = "Error " + STR$(errorCode0%)
+2860         RETURN
+2870     REM END SELECT
+2880     RETURN
+2890 ' end function error$

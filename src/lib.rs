@@ -1044,9 +1044,15 @@ END
 
     #[test]
     fn assigns_repeated_function_results_to_variables() {
-        let source = include_str!("../tutorial/07_functions.bcl");
+        // Real file compilation (not `compile_source` on raw text), since
+        // titleCase$ now calls .ucase()/.lcase() -- unlike an unresolved
+        // *ordinary* call (silently passed through as literal text, no
+        // require resolution needed), an unresolved *method* call is
+        // always strictly validated, so this needs `com.bascal.stdlib`'s
+        // require lines to actually resolve.
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
         let output =
-            compile_source("tutorial/07_functions.bcl", source).expect("sample should compile");
+            compile_file(&input, &CompileOptions::new()).expect("sample should compile");
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));

@@ -58,11 +58,11 @@ end function
 function scanKeywordRefs%(line$, keyword$)
     ul$  = upper$(line$)
     uk$  = upper$(keyword$)
-    pos% = INSTR(ul$, uk$)
+    pos% = ul$.instr(uk$)
     if pos% = 0 then
         return 0
     end if
-    after$ = trimLeft$(mid$(line$, pos% + len(keyword$)))
+    after$ = trimLeft$(line$.mid(pos% + keyword$.len()))
     ref%   = parseLineNumber%(after$)
     if ref% > 0 then
         addRef%(ref%)

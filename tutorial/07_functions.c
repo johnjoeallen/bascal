@@ -9,8 +9,8 @@ static int bv_i_runningtotal = 0;
 static char bv_s_a[256] = {0};
 static char bv_s_b[256] = {0};
 
-void bf_s_ucase(const char* bv_s_s_in, char* bcc_out);
-void bf_s_lcase(const char* bv_s_s_in, char* bcc_out);
+void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out);
+void bf_s_lcase_s(const char* bv_s_self_in, char* bcc_out);
 int bf_i_max(int bv_i_a, int bv_i_b);
 int bf_i_min(int bv_i_a, int bv_i_b);
 int bf_i_clamp(int bv_i_value, int bv_i_lo, int bv_i_hi);
@@ -20,18 +20,18 @@ int bf_i_sumto(int bv_i_n);
 int bf_i_productto(int bv_i_n);
 int bf_i_addtototal(int bv_i_x);
 
-void bf_s_ucase(const char* bv_s_s_in, char* bcc_out) {
-    char bv_s_s[256];
-    snprintf(bv_s_s, sizeof(bv_s_s), "%s", bv_s_s_in);
+void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
     int bv_i_c = 0;
     int bv_i_i = 0;
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
-    int bt_lim_0 = ((int)strlen(bv_s_s));
+    int bt_lim_0 = ((int)strlen(bv_s_self));
     int bt_step_0 = 1;
     for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
-        bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_s, bv_i_i, 1)[0]);
+        bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
         if (((-(bv_i_c >= 97)) && (-(bv_i_c <= 122)))) {
             bv_i_c = (bv_i_c - 32);
         }
@@ -43,18 +43,18 @@ void bf_s_ucase(const char* bv_s_s_in, char* bcc_out) {
     return;
 }
 
-void bf_s_lcase(const char* bv_s_s_in, char* bcc_out) {
-    char bv_s_s[256];
-    snprintf(bv_s_s, sizeof(bv_s_s), "%s", bv_s_s_in);
+void bf_s_lcase_s(const char* bv_s_self_in, char* bcc_out) {
+    char bv_s_self[256];
+    snprintf(bv_s_self, sizeof(bv_s_self), "%s", bv_s_self_in);
     int bv_i_c = 0;
     int bv_i_i = 0;
     char bv_s_out[256] = {0};
 
     snprintf(bv_s_out, sizeof(bv_s_out), "%s", "");
-    int bt_lim_2 = ((int)strlen(bv_s_s));
+    int bt_lim_2 = ((int)strlen(bv_s_self));
     int bt_step_2 = 1;
     for (bv_i_i = 1; bt_step_2 >= 0 ? bv_i_i <= bt_lim_2 : bv_i_i >= bt_lim_2; bv_i_i += bt_step_2) {
-        bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_s, bv_i_i, 1)[0]);
+        bv_i_c = ((int)(unsigned char)bcc_mid(bv_s_self, bv_i_i, 1)[0]);
         if (((-(bv_i_c >= 65)) && (-(bv_i_c <= 90)))) {
             bv_i_c = (bv_i_c + 32);
         }
@@ -119,9 +119,9 @@ void bf_s_titlecase(const char* bv_s_word_in, char* bcc_out) {
         return;
     }
     char bt_s_6[256];
-    bf_s_ucase(bcc_mid(bv_s_word, 1, 1), bt_s_6);
+    bf_s_ucase_s(bcc_mid(bv_s_word, 1, 1), bt_s_6);
     char bt_s_7[256];
-    bf_s_lcase(bcc_mid(bv_s_word, 2, 2147483647), bt_s_7);
+    bf_s_lcase_s(bcc_mid(bv_s_word, 2, 2147483647), bt_s_7);
     char bt_s_8[256];
     snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bt_s_6, bt_s_7);
     snprintf(bcc_out, 256, "%s", bt_s_8);
@@ -162,11 +162,17 @@ int bf_i_addtototal(int bv_i_x) {
 }
 
 int main(void) {
-    // Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-    // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+    // Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+    // against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+    // its own. Declared as a scalar method (see GitHub issue #41 and
+    // ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
+    // via ordinary-call syntax resolving to this same declaration.
 
-    // Lower-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-    // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+    // Lower-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+    // against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+    // its own. Declared as a scalar method (see GitHub issue #41 and
+    // ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
+    // via ordinary-call syntax resolving to this same declaration.
 
     // Tutorial 7 — Functions
     //

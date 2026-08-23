@@ -9,8 +9,8 @@ function parseLineNumber%(text$)
     digits$ = ""
     i% = 1
     done% = 0
-    while i% <= len(text$) and done% = 0
-        ch$ = mid$(text$, i%, 1)
+    while i% <= text$.len() and done% = 0
+        ch$ = text$.mid(i%, 1)
         if ch$ >= "0" and ch$ <= "9" then
             digits$ = digits$ + ch$
         else
@@ -18,7 +18,7 @@ function parseLineNumber%(text$)
         end if
         i% = i% + 1
     end while
-    if len(digits$) = 0 then
+    if digits$.len() = 0 then
         return 0
     end if
     return val(digits$)
@@ -29,19 +29,19 @@ function stripLineNumber$(text$)
     text$ = trimLeft$(text$)
     i% = 1
     done% = 0
-    while i% <= len(text$) and done% = 0
-        ch$ = mid$(text$, i%, 1)
+    while i% <= text$.len() and done% = 0
+        ch$ = text$.mid(i%, 1)
         if ch$ >= "0" and ch$ <= "9" then
             i% = i% + 1
         else
             done% = 1
         end if
     end while
-    if i% > len(text$) then
+    if i% > text$.len() then
         return ""
     end if
-    if mid$(text$, i%, 1) = " " then
+    if text$.mid(i%, 1) = " " then
         i% = i% + 1
     end if
-    return mid$(text$, i%)
+    return text$.mid(i%)
 end function
