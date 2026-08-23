@@ -2906,6 +2906,39 @@ end
     }
 
     #[test]
+    fn array_parameter_copy_loops_start_at_index_0_not_1() {
+        // Regression test for GitHub issue #39: the copy-in loop (and its
+        // byref copy-back counterpart) used to run `FOR ... = 1 TO bound`,
+        // silently dropping index 0 of both the source and destination
+        // arrays -- see `array_copy_lines` in codegen_basic.rs. A real
+        // top-level `dim`'d array is always indexed `0..=bound` (see
+        // `docs/manual/arrays.html`), so the copy must cover the same
+        // 0-based range, matching `--target c`'s own (always correct)
+        // `for (int bcc_i = 0; ...)` copy-in loop.
+        let source = r#"
+function zeroOut%(byref arr%(?))
+  for i% = 0 to sizeof(arr%) - 1
+    arr%(i%) = 0
+  end for
+  return 0
+end function
+
+dim data%(3)
+dummy% = zeroOut%(data%())
+end
+"#;
+        let output = compile_source("array_copy_index0.bcl", source).expect("should compile");
+        assert!(
+            output.lines().any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 0 TO ")),
+            "array copy loops should start at index 0, not 1:\n{output}"
+        );
+        assert!(
+            !output.lines().any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 1 TO ")),
+            "no array copy loop should start at index 1 (drops index 0):\n{output}"
+        );
+    }
+
+    #[test]
     fn byref_scalar_parameter_writes_back_to_caller() {
         let source = r#"
 procedure increment(byref n%)
