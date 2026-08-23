@@ -1,0 +1,59 @@
+// DESIGN MOCKUP — not accepted by the parser yet.
+//
+// This is the proposed C-port shape for tutorial/inventory.bcl. The
+// attempt/recover syntax is deliberately structured: a failed menu action
+// is abandoned and recovery continues after `end attempt`. It does not
+// reproduce arbitrary BASIC RESUME NEXT instruction-pointer behavior inside
+// a procedure.
+//
+// The BASIC backend would transpile this to ON ERROR GOTO plus a recovery
+// label and RESUME to that label. The C backend would propagate a status
+// value from the failed procedure and execute the recover block in the
+// caller.
+program inventoryAttemptRecover
+
+require com.bascal.stdlib.error
+
+// The existing Part record and inv file declarations remain unchanged.
+// The existing checkPart(), editRecord(), listAll(), addStock(),
+// subtractStock(), and reorderReport() procedures are unchanged too.
+
+procedure reportInventoryError(err%, erl%)
+    locate 25, 1
+    print "There has been an error on line" + str$(erl%) + ": " + error$(err%)
+    waitAnyKey()
+end procedure
+
+do
+    showMainMenu()
+    kp$ = readKey$()
+
+    attempt
+        select case kp$
+            case "1", "c", "C"
+                checkPart()
+            case "2", "e", "E"
+                editRecord()
+            case "3", "l", "L"
+                listAll()
+            case "4", "a", "A"
+                addStock()
+            case "5", "s", "S"
+                subtractStock()
+            case "6", "r", "R"
+                reorderReport()
+            case "7", "q", "Q"
+                quitFlag% = 1
+            case "8", "x", "X"
+                inv.close()
+                end
+        end select
+    recover err%, erl%
+        // Recovery abandons the complete menu action and resumes here,
+        // after the attempt block, with no dead procedure frame to revisit.
+        reportInventoryError(err%, erl%)
+    end attempt
+loop until quitFlag% = 1
+
+inv.close()
+end
