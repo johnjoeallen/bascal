@@ -3427,7 +3427,7 @@ fn array_copy_lines(
         format!("' {comment}: {source}() -> {destination}()"),
     ];
     for (level, (var, bound)) in loop_vars.iter().zip(bounds.iter()).enumerate() {
-        lines.push(format!("{}FOR {var} = 1 TO {bound}", "    ".repeat(level)));
+        lines.push(format!("{}FOR {var} = 0 TO {bound}", "    ".repeat(level)));
     }
     let index_list = loop_vars.join(", ");
     lines.push(format!(
