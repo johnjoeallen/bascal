@@ -1,0 +1,11 @@
+program stringSelfConcat
+
+dim value$
+
+value$ = "abcdefghij"
+value$ = left$(value$, 3) + mid$(value$, 4, 4) + right$(value$, 3)
+print value$
+
+value$ = left$(value$, 2) + mid$(value$, 3, 5) + right$(value$, 4)
+print value$
+end

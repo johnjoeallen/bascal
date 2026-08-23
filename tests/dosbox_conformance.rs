@@ -248,6 +248,24 @@ fn stdlib_functions_match_real_bascom() {
     );
 }
 
+#[test]
+fn self_referential_string_concatenation_matches_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("string_self_concat");
+    let expected_path = repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's output for self-referential LEFT$/MID$/RIGHT$ concatenation no longer \
+         matches the golden expectation at {}",
+        expected_path.display()
+    );
+}
+
 /// Compiles `fixture_name.bcl` to `--target c`, builds it with `gcc`, and
 /// runs the resulting binary with `work_dir` as its working directory
 /// (so a relative `OPEN "X.DAT"` reads/writes a file right there,
@@ -311,6 +329,24 @@ fn compile_run_c_target_in(fixture_name: &str, work_dir: &Path) -> String {
         String::from_utf8_lossy(&run_output.stderr)
     );
     String::from_utf8_lossy(&run_output.stdout).into_owned()
+}
+
+#[test]
+fn self_referential_string_concatenation_matches_c_target() {
+    let work_dir = std::env::temp_dir().join("bascal-c-target-string-self-concat");
+    let _ = fs::remove_dir_all(&work_dir);
+    let actual = compile_run_c_target_in("string_self_concat", &work_dir);
+    let expected_path = repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "C target output for self-referential LEFT$/MID$/RIGHT$ concatenation no longer \
+         matches the golden expectation at {}",
+        expected_path.display()
+    );
 }
 
 /// Same as `compile_link_run`, but runs inside an already-prepared
