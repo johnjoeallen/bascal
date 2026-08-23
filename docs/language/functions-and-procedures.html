@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Functions, Procedures, and Methods — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
+<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 5</p><h1>Functions, procedures, and methods</h1></div></header>
+<main class="chapter-main book-width"><h2>Name an operation</h2><p>A function calculates a typed result; a procedure performs an action. Keeping the distinction explicit makes call sites honest about whether a value comes back. A name is yours to choose freely, with one exception: it can’t be the same as a real BASIC builtin — <code>function sqr%(x%)</code> is rejected when the program is compiled, since neither silently shadowing <code>SQR</code> nor being shadowed by it was ever what the program meant.</p><pre><code>function larger%(left%, right%)
+    if left% &gt; right% then
+        return left%
+    end if
+    return right%
+end function
+
+procedure showTotal(amount!)
+    print "Total: "; amount!
+end procedure
+
+showTotal(larger%(4, 9))
+</code></pre><p>Parameters are passed by value unless you say <code>byref</code>. That default makes a call read as an input; use <code>byref</code> only when the caller’s variable is intentionally an output too.</p><h2>Declare and call a method</h2><p>A scalar method extends a BASIC scalar type instead of standing alone. A method declaration names its receiver type with the suffix on <code>method</code>. The method name carries its result suffix, and the receiver is available in the body as the matching implicit <code>self</code> value.</p><pre><code>method$ capitalize$()
+    return UCASE$(self$)
+end method
+
+name$ = "ada"
+result$ = name$.capitalize()</code></pre><p>Calls always use parentheses. Calls can chain when the previous result has the receiver type required by the next method:</p><pre><code>result$ = name$.capitalize().pad(20)</code></pre><p>The parser and resolver check receiver types, duplicate declarations, reserved built-in names, and unknown methods. Both targets transpile methods to ordinary typed calls: the BASIC target uses its global parameter/result variables and <code>GOSUB</code>, while the C target emits typed calls and result temporaries.</p><h2>Methods from libraries</h2><p>A required library’s methods work the same way as ones declared in the program: <code>require</code> the library, then call its methods through the same receiver syntax. They participate in the same compile-time receiver and result-type checks.</p><pre><code>require com.example.text
+
+result$ = name$.capitalize()</code></pre><nav class="chapter-nav"><a href="arrays-and-strings.html">← Arrays and strings</a><a href="libraries.html">Libraries →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
