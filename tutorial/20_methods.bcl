@@ -1,0 +1,48 @@
+// Tutorial 20 — Scalar methods
+//
+// A method has a typed scalar receiver, written after `method`, and a typed
+// result suffix on its name. The receiver is available as self%/self!/self$
+// in the body. Dot calls can chain when each result has the next receiver's
+// type. Methods transpile to ordinary typed calls for both backends.
+program methods
+
+require com.bascal.stdlib.ucase
+
+method$ shout$()
+    return self$.ucase() + "!"
+end method
+
+method$ surround$(left$, right$)
+    return left$ + self$ + right$
+end method
+
+method% clamp%(low%, high%)
+    if self% < low% then
+        return low%
+    elseif self% > high% then
+        return high%
+    end if
+    return self%
+end method
+
+method! percent!(rate!)
+    return self! * rate! / 100
+end method
+
+name$ = "bascal"
+result$ = name$.surround("[", "]")
+print result$
+shoutResult$ = name$.shout()
+length% = name$.left(5).len()
+print "length = "; length%
+
+score% = 125
+print "clamped score = "; score%.clamp(0, 100)
+
+price! = 80
+print "discount amount = "; price!.percent(15)
+
+firstThree$ = name$.left(3).ucase()
+print "first three = "; firstThree$
+
+end
