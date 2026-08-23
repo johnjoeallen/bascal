@@ -1608,7 +1608,32 @@ fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
     }
 }
 
-pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
+/// `generate`'s output, split into two pieces so a compiled program's own
+/// `.c` file only shows *its own* logic, never the runtime-support
+/// boilerplate (ring-buffer helpers, `GOSUB`/error-handling/`RANDOMIZE`/
+/// `DATA` state, record I/O helpers, `INSTR`/`SGN`/`RND`, screen-I/O ANSI
+/// helpers, ...) it happens to need -- see the module doc comment and
+/// GitHub issue #28.
+///
+/// `app` is the program's own `main`/`function`/`procedure` definitions
+/// and global variable declarations, plus whatever `#include`s (both
+/// system headers and, when `runtime` is non-empty, a single
+/// `#include "bcc_runtime.h"`) it needs. `runtime` is every `bcc_*`
+/// helper this particular program actually needs (same per-feature gating
+/// as before -- a program that doesn't need a given helper still doesn't
+/// get it), wrapped in its own include guard so it's safe to `#include`
+/// straight into `app` as a single translation unit -- no cross-file
+/// linkage changes needed, since `#include` is a textual paste before
+/// compilation ever starts. `runtime` is the empty string when the
+/// program needs no helpers at all (e.g. a program that only prints
+/// string literals) -- callers should skip writing/including a runtime
+/// file entirely in that case, and `app` has no `#include` line for it.
+pub(crate) struct GeneratedC {
+    pub(crate) app: String,
+    pub(crate) runtime: String,
+}
+
+pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
     let funcs =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
     let int_consts = collect_top_level_int_consts(&program.statements);
@@ -1865,25 +1890,28 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         }
     }
 
-    let mut out = includes;
-    out.push('\n');
+    // Every `bcc_*` runtime-support helper this program actually needs,
+    // gated exactly as before (see `GeneratedC`'s own doc comment) --
+    // pushed into its own accumulator, physically separate from `app`
+    // below, rather than `app` itself.
+    let mut runtime = String::new();
     if builtin_usage.needs_ring_buffer_helpers {
-        out.push_str(MID_HELPER);
+        runtime.push_str(MID_HELPER);
     }
     if builtin_usage.needs_instr_helper {
-        out.push_str(INSTR_HELPER);
+        runtime.push_str(INSTR_HELPER);
     }
     if builtin_usage.needs_sgn_helper {
-        out.push_str(SGN_HELPER);
+        runtime.push_str(SGN_HELPER);
     }
     if builtin_usage.needs_rnd_helper {
-        out.push_str(RND_HELPER);
+        runtime.push_str(RND_HELPER);
     }
     if gosub_count > 0 {
-        out.push_str(GOSUB_HELPER);
+        runtime.push_str(GOSUB_HELPER);
     }
     if needs_error_handling {
-        out.push_str(ERROR_HANDLING_GLOBALS);
+        runtime.push_str(ERROR_HANDLING_GLOBALS);
     }
     // `bcc_data`'s own declaration is generated here, not a plain `&str`
     // constant like `DATA_HELPER`, since its contents (`BCC_DATA_COUNT`
@@ -1893,40 +1921,60 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     // in the emitted C is satisfied regardless of C's own top-to-bottom
     // visibility rule for file-scope symbols.
     if !data_items.is_empty() {
-        out.push_str(&format!("#define BCC_DATA_COUNT {}\n", data_items.len()));
-        out.push_str(&format!(
+        runtime.push_str(&format!("#define BCC_DATA_COUNT {}\n", data_items.len()));
+        runtime.push_str(&format!(
             "static const char* bcc_data[BCC_DATA_COUNT] = {{ {} }};\n\n",
             data_items.join(", ")
         ));
-        out.push_str(DATA_HELPER);
+        runtime.push_str(DATA_HELPER);
     }
     if file_io.used {
-        out.push_str(FILE_IO_HELPER);
-        out.push_str(&file_io.helper_defs);
+        runtime.push_str(FILE_IO_HELPER);
+        runtime.push_str(&file_io.helper_defs);
     }
     if needs_seq_io {
-        out.push_str(SEQ_FILE_HELPER);
+        runtime.push_str(SEQ_FILE_HELPER);
     }
     if needs_color {
-        out.push_str(COLOR_HELPER);
+        runtime.push_str(COLOR_HELPER);
     }
     if needs_input {
-        out.push_str(INPUT_HELPER);
+        runtime.push_str(INPUT_HELPER);
+    }
+
+    let mut app = includes;
+    app.push('\n');
+    // Only pull in the runtime file when this program actually needs at
+    // least one helper from it -- e.g. a program that only prints string
+    // literals needs none, and gets no `#include` line and no sibling
+    // file at all (see `GeneratedC`'s own doc comment).
+    if !runtime.is_empty() {
+        app.push_str("#include \"bcc_runtime.h\"\n\n");
     }
     if !globals_decl.is_empty() {
-        out.push_str(&globals_decl);
-        out.push('\n');
+        app.push_str(&globals_decl);
+        app.push('\n');
     }
     if !prototypes.is_empty() {
-        out.push_str(&prototypes);
-        out.push('\n');
+        app.push_str(&prototypes);
+        app.push('\n');
     }
-    out.push_str(&function_defs);
-    out.push_str(&format!(
+    app.push_str(&function_defs);
+    app.push_str(&format!(
         "int main(void) {{\n{}}}\n",
         reindent_c_body(&body)
     ));
-    Ok(out)
+
+    // Wrapped in its own include guard so `#include "bcc_runtime.h"`
+    // above is always safe, even though nothing in this backend ever
+    // includes it twice today.
+    let runtime = if runtime.is_empty() {
+        String::new()
+    } else {
+        format!("#ifndef BCC_RUNTIME_H\n#define BCC_RUNTIME_H\n\n{runtime}#endif\n")
+    };
+
+    Ok(GeneratedC { app, runtime })
 }
 
 /// One function's C prototype/definition header -- `<ret> <name>(<params>)`,

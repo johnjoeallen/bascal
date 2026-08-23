@@ -261,17 +261,28 @@ fn compile_run_c_target_in(fixture_name: &str, work_dir: &Path) -> String {
         target: bcc::Target::C,
         ..bcc::CompileOptions::new()
     };
-    let c_source = bcc::compile_file(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
-        panic!(
-            "failed to compile {} to C: {diagnostics:#?}",
-            fixture_bcl.display()
-        )
-    });
+    let (c_source, runtime) =
+        bcc::compile_file_with_runtime(&fixture_bcl, &options).unwrap_or_else(|diagnostics| {
+            panic!(
+                "failed to compile {} to C: {diagnostics:#?}",
+                fixture_bcl.display()
+            )
+        });
 
     fs::create_dir_all(work_dir).expect("failed to create C-target work directory");
     let c_path = work_dir.join(format!("{fixture_name}.c"));
     fs::write(&c_path, &c_source)
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", c_path.display()));
+    // The app file's own `#include "bcc_runtime.h"` (see
+    // `bcc::compile_file_with_runtime`'s own doc comment) looks for it
+    // right alongside itself -- write it into the same `work_dir`, not
+    // named after this fixture, so that lookup resolves. Only written
+    // when this fixture actually needs at least one `bcc_*` helper.
+    if let Some(runtime) = runtime {
+        let runtime_path = work_dir.join(bcc::C_RUNTIME_FILE_NAME);
+        fs::write(&runtime_path, &runtime)
+            .unwrap_or_else(|err| panic!("failed to write {}: {err}", runtime_path.display()));
+    }
 
     let bin_path = work_dir.join(fixture_name);
     let gcc_output = Command::new("gcc")

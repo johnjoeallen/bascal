@@ -1,14 +1,6 @@
 #include <stdio.h>
 
-static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};
-static const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};
-
-static void bcc_color(int fg, int bg) {
-    printf("\x1b[%dm", bcc_ansi_fg[fg & 15]);
-    if (bg >= 0) {
-        printf("\x1b[%dm", bcc_ansi_bg[bg & 7]);
-    }
-}
+#include "bcc_runtime.h"
 
 int main(void) {
     // Tutorial 11 — Screen I/O: cls, locate, color, beep, lprint
