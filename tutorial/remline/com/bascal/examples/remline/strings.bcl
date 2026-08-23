@@ -11,10 +11,10 @@ require com.bascal.stdlib.ucase
 function trimLeft$(text$)
     /* Walk from the left until the first non-space character appears. */
     i% = 1
-    while i% <= len(text$)
-        ch$ = mid$(text$, i%, 1)
+    while i% <= text$.len()
+        ch$ = text$.mid(i%, 1)
         if ch$ <> " " then
-            return mid$(text$, i%)
+            return text$.mid(i%)
         end if
         i% = i% + 1
     end while
@@ -23,7 +23,7 @@ end function
 
 // text$ -- string to uppercase
 function upper$(text$)
-    return ucase$(text$)
+    return text$.ucase()
 end function
 
 // text$    -- string to test
@@ -33,8 +33,8 @@ function startsWithKeyword%(text$, keyword$)
     kw$ = keyword$
     t$  = upper$(t$)
     kw$ = upper$(kw$)
-    if len(t$) < len(kw$) then
+    if t$.len() < kw$.len() then
         return 0
     end if
-    return left$(t$, len(kw$)) = kw$
+    return t$.left(kw$.len()) = kw$
 end function

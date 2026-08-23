@@ -7,6 +7,13 @@
 // realistically going to hit -- not the full table, but every code common
 // enough to be worth a real message instead of falling through to the
 // generic one.
+//
+// Deliberately NOT a scalar method (see GitHub issue #41, which asked for
+// this decision to be recorded either way): code% is an opaque lookup key,
+// not a value the call is naturally "operating on" the way ltrim$/rtrim$/
+// ucase$/lcase$ operate on their string -- code%.error() would read as if
+// the *error code itself* has a message, when really this is a lookup
+// table keyed by that code. Stays an ordinary function.
 library error
 
 function error$(code%)

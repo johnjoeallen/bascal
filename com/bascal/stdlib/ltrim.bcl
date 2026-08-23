@@ -1,12 +1,19 @@
-// Strips leading spaces from s$. Not a real MBASIC/BASCOM 2.00 builtin --
+// Strips leading spaces from self$. Not a real MBASIC/BASCOM 2.00 builtin --
 // verified against a real IBM BASIC Compiler 2.00 under dosbox-x -- so
-// BASCAL ships its own.
+// BASCAL ships its own. Declared as a scalar method (see GitHub issue #41)
+// so a required stdlib call reads the same way as a built-in method call
+// (docs/language/functions-and-procedures.html#built-in-methods). The
+// ordinary call form (ltrim$(s$)) still works -- a method's receiver is an
+// implicit first parameter, so ordinary-call syntax resolves straight to
+// this same declaration, with no separate function needed (and no longer
+// allowed: a function and a method sharing one name is a duplicate
+// declaration, since they'd both claim the same callable identity).
 library ltrim
 
-function ltrim$(s$)
+method$ ltrim$()
     i% = 1
-    while i% <= LEN(s$) && MID$(s$, i%, 1) = " "
+    while i% <= LEN(self$) && MID$(self$, i%, 1) = " "
         i% = i% + 1
     end while
-    return MID$(s$, i%)
-end function
+    return MID$(self$, i%)
+end method

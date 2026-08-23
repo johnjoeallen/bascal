@@ -5,7 +5,7 @@
 //! `Program`, no `RecordDef`, `Statement::FileDecl`, or DSL `Expr` variant
 //! (`FileIndex`, `FieldAccess`, `MethodCall`, `RecordLit`) remains.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::codegen::camel_join;
@@ -119,6 +119,19 @@ struct Lowerer {
     /// declared result type, which only a user `method$` declaration (not
     /// this pass) provides.
     user_method_results: HashMap<(TypeSuffix, String), TypeSuffix>,
+    /// Every `(lowercase name, suffix)` pair already claimed by an ordinary
+    /// (non-method) function -- used by `rewrite_expr`'s `Expr::Call`/
+    /// `Expr::ArrayRef` arms to know when an ordinary call is safe to fall
+    /// back to a same-named method (see `try_ordinary_call_as_method`'s own
+    /// doc comment): the fallback must never hijack a name a real function
+    /// already legitimately owns. A real BASIC builtin (`BASIC_BUILTINS`)
+    /// is checked separately, suffix-independently, in
+    /// `try_ordinary_call_as_method` itself -- a builtin name is reserved
+    /// regardless of which suffix a call site happens to use (`sqr%` and
+    /// `sqr$` both collide with `SQR`, same rule
+    /// `reject_functions_shadowing_builtins` already enforces for user
+    /// declarations), unlike this set, which is genuinely suffix-specific.
+    known_ordinary_functions: HashSet<(String, Option<TypeSuffix>)>,
 }
 
 impl Lowerer {
@@ -131,10 +144,17 @@ impl Lowerer {
             diagnostics: Vec::new(),
             synthesized_buffer_names: std::collections::HashSet::new(),
             user_method_results: HashMap::new(),
+            known_ordinary_functions: HashSet::new(),
         }
     }
 
     fn build_user_method_table(&mut self, functions: &[FunctionDef]) {
+        for function in functions {
+            if function.receiver.is_none() {
+                self.known_ordinary_functions
+                    .insert((function.name.name.to_ascii_lowercase(), function.name.suffix));
+            }
+        }
         for function in functions {
             let Some(receiver) = function.receiver else { continue };
             let Some(result) = function.name.suffix else { continue };
@@ -1277,15 +1297,21 @@ impl Lowerer {
             Expr::String(_) => (expr, Some(FieldKind::Stringy)),
             Expr::Ident(_) => (expr, None),
             Expr::ArrayRef { name, indices } => {
-                let indices = indices
+                let indices: Vec<Expr> = indices
                     .into_iter()
                     .map(|e| self.rewrite_expr(e).0)
                     .collect();
-                (Expr::ArrayRef { name, indices }, None)
+                match self.try_ordinary_call_as_method(&name, indices) {
+                    Ok(rewritten) => (rewritten, None),
+                    Err(indices) => (Expr::ArrayRef { name, indices }, None),
+                }
             }
             Expr::Call { name, args } => {
-                let args = args.into_iter().map(|e| self.rewrite_expr(e).0).collect();
-                (Expr::Call { name, args }, None)
+                let args: Vec<Expr> = args.into_iter().map(|e| self.rewrite_expr(e).0).collect();
+                match self.try_ordinary_call_as_method(&name, args) {
+                    Ok(rewritten) => (rewritten, None),
+                    Err(args) => (Expr::Call { name, args }, None),
+                }
             }
             Expr::Unary { op, expr } => {
                 let (inner, kind) = self.rewrite_expr(*expr);
@@ -1532,6 +1558,60 @@ impl Lowerer {
             }
             _ => None,
         }
+    }
+
+    /// The mirror image of `rewrite_scalar_method_call`: an *ordinary* call
+    /// `name(arg0, arg1, ...)` resolves straight to a user-declared method
+    /// `method<T> name(...)` when no ordinary function or real BASIC
+    /// builtin already claims `name` (at this exact suffix, for a
+    /// function -- suffix-independently, for a builtin, matching
+    /// `reject_functions_shadowing_builtins`'s own rule) and `arg0`'s own
+    /// scalar type matches `T`. A method is conceptually a function with
+    /// its receiver as an implicit first parameter (per the resolver's own
+    /// `reject_scalar_methods`, which now rejects a program that declares
+    /// both), so `ltrim$(s$)` resolving to `method$ ltrim$()` with `s$` as
+    /// the receiver keeps the ordinary call syntax working with no
+    /// duplicate declaration needed.
+    ///
+    /// Returns `Ok(rewritten)` (an `Expr::ScalarMethodCall`, left for the
+    /// resolver's/codegen's existing user-method handling to process
+    /// exactly like a hand-written `s$.ltrim()` -- including its existing
+    /// argument-count validation, so a wrong number of *extra* arguments
+    /// here still gets a sensible error with no special-casing needed) when
+    /// the fallback applies, or `Err(args)` (the original arguments, handed
+    /// back unchanged so the caller can reassemble its own node) when it
+    /// doesn't -- `name` then stays whatever it already was
+    /// (`Expr::Call`/`Expr::ArrayRef`), and resolver's existing "unknown
+    /// function" diagnostics still fire correctly downstream.
+    fn try_ordinary_call_as_method(&self, name: &BasicIdent, args: Vec<Expr>) -> Result<Expr, Vec<Expr>> {
+        if args.is_empty() {
+            return Err(args);
+        }
+        let mut args = args;
+        let key = (name.name.to_ascii_lowercase(), name.suffix);
+        if self.known_ordinary_functions.contains(&key)
+            || crate::codegen_basic::BASIC_BUILTINS.contains(&key.0.as_str())
+        {
+            return Err(args);
+        }
+        let base = args.remove(0);
+        let Some(receiver) = self.infer_scalar_suffix(&base) else {
+            args.insert(0, base);
+            return Err(args);
+        };
+        let Some(&result) = self.user_method_results.get(&(receiver, key.0.clone())) else {
+            args.insert(0, base);
+            return Err(args);
+        };
+        if name.suffix != Some(result) {
+            args.insert(0, base);
+            return Err(args);
+        }
+        Ok(Expr::ScalarMethodCall {
+            base: Box::new(base),
+            method: name.name.clone(),
+            args,
+        })
     }
 
     fn resolve_field_access(&mut self, base: Expr, field: String) -> (Expr, Option<FieldKind>) {

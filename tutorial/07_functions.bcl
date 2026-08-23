@@ -63,10 +63,10 @@ function titleCase$(word$)
     // UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
     // against a real IBM BASIC Compiler 2.00 under dosbox-x), so this
     // requires BASCAL's own com.bascal.stdlib implementations above.
-    if len(word$) = 0 then
+    if word$.len() = 0 then
         return ""
     end if
-    return ucase$(left$(word$, 1)) + lcase$(mid$(word$, 2))
+    return word$.left(1).ucase() + word$.mid(2).lcase()
 end function
 
 /* Local variable scoping — each function has its own i% and acc% */

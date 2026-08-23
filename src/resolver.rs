@@ -249,6 +249,26 @@ fn reject_duplicate_functions(program: &Program, diagnostics: &mut Vec<Diagnosti
 }
 
 fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    // A method is conceptually a function with its receiver as an implicit
+    // first parameter -- see `records::Lowerer::rewrite_scalar_method_call`'s
+    // own mirror-image rewrite, which lets ordinary-call syntax
+    // (`ltrim$(s$)`) resolve straight to a method declaration
+    // (`method$ ltrim$()`) when no ordinary function of that name already
+    // exists. That means a program can never legitimately declare *both* an
+    // ordinary function and a method sharing the same (name, result suffix)
+    // -- they'd be two different, ambiguous implementations of what's
+    // supposed to be one callable identity, and (before this check existed)
+    // silently collided on the same generated GOSUB label under
+    // `--target basic`, with whichever declaration happened to be lowered
+    // last winning every call site -- confirmed via real `fbc` execution,
+    // no diagnostic at all.
+    let ordinary_functions: HashSet<(String, Option<TypeSuffix>)> = program
+        .functions
+        .iter()
+        .filter(|f| f.receiver.is_none())
+        .map(|f| (f.name.name.to_ascii_lowercase(), f.name.suffix))
+        .collect();
+
     let mut seen = HashSet::new();
     for function in &program.functions {
         let Some(receiver) = function.receiver else { continue };
@@ -257,6 +277,20 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
                 format!("duplicate method `{}.{}`", receiver, function.name),
+            ));
+        }
+        if ordinary_functions
+            .contains(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
+        {
+            diagnostics.push(Diagnostic::error(
+                function.pos.clone(),
+                format!(
+                    "`{}` is declared as both a function and a method -- a method's receiver \
+                     already fills the role of an ordinary function's first argument (calling \
+                     `{}(x)` resolves to the method with `x` as the receiver when no ordinary \
+                     function claims the name), so a program can't have both",
+                    function.name, function.name
+                ),
             ));
         }
         if function.params.iter().any(|p| {

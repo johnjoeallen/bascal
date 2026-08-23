@@ -1,15 +1,18 @@
-// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-// a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+// Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+// against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+// its own. Declared as a scalar method (see GitHub issue #41 and
+// ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
+// via ordinary-call syntax resolving to this same declaration.
 library ucase
 
-function ucase$(s$)
+method$ ucase$()
     out$ = ""
-    for i% = 1 to LEN(s$)
-        c% = ASC(MID$(s$, i%, 1))
+    for i% = 1 to LEN(self$)
+        c% = ASC(MID$(self$, i%, 1))
         if c% >= 97 && c% <= 122 then
             c% = c% - 32
         end if
         out$ = out$ + CHR$(c%)
     end for
     return out$
-end function
+end method
