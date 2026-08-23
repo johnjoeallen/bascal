@@ -136,6 +136,7 @@ struct FunctionInfo {
     /// pattern as `local_var_map`.
     local_array_bounds: RefCell<HashMap<String, Vec<String>>>,
     is_procedure: bool,
+    receiver: Option<TypeSuffix>,
     globals: HashSet<String>,
     // Cache of source-variable-key → allocated lowered BASIC name for locals in this function.
     // RefCell because ident() populates this lazily through a shared &FunctionInfo reference.
@@ -1013,6 +1014,18 @@ impl CodeGenerator {
     }
 
     fn expr_statement(&mut self, expr_stmt: &Expr, current_function: Option<&FunctionInfo>) {
+        if let Expr::ScalarMethodCall { base, method, args } = expr_stmt {
+            if let Some(receiver) = self.expr_receiver_type(base) {
+                if let Some(info) = self.method_info(receiver, method).cloned() {
+                    let mut call_args = Vec::with_capacity(args.len() + 1);
+                    call_args.push((**base).clone());
+                    call_args.extend(args.iter().cloned());
+                    let lines = self.call_lines(&info, &call_args, current_function);
+                    self.lines(lines);
+                    return;
+                }
+            }
+        }
         if let Some((name, args)) = callable_expr(expr_stmt) {
             if let Some(info) = self.function_info(name).cloned() {
                 self.emit_call_statement(&info, args, current_function);
@@ -1346,9 +1359,27 @@ impl CodeGenerator {
                 };
                 (prelude, format!("{left_r} {} {right_r}", binary_op(*op)))
             }
-            Expr::FileIndex { .. }
-            | Expr::FieldAccess { .. }
-            | Expr::MethodCall { .. }
+            Expr::ScalarMethodCall { base, method, args } => {
+                let Some(receiver) = self.expr_receiver_type(base) else {
+                    self.diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!("method receiver for `.{method}()` must be scalar"),
+                    ));
+                    return (Vec::new(), "0".to_string());
+                };
+                let Some(info) = self.method_info(receiver, method).cloned() else {
+                    self.diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!("unknown method `.{method}()`"),
+                    ));
+                    return (Vec::new(), "0".to_string());
+                };
+                let mut call_args = Vec::with_capacity(args.len() + 1);
+                call_args.push((**base).clone());
+                call_args.extend(args.iter().cloned());
+                (self.call_lines(&info, &call_args, current_function), info.result.as_basic())
+            }
+            Expr::FileIndex { .. } | Expr::FieldAccess { .. } | Expr::MethodCall { .. }
             | Expr::RecordLit { .. } => {
                 unreachable!("record/file DSL must be lowered before codegen")
             }
@@ -1442,6 +1473,24 @@ impl CodeGenerator {
                     "' warning: extra argument {} for {} ignored by current lowering",
                     index + 1,
                     info.source_name
+                ));
+            }
+        }
+
+        for (param, lowered) in info.params.iter().skip(args.len()) {
+            if let Some(default) = &param.default {
+                let (default_prelude, rendered_default) = self.expr(default, current_function);
+                lines.extend(default_prelude);
+                lines.push(format!("{} = {rendered_default}", lowered.as_basic()));
+            } else {
+                self.diagnostics.push(Diagnostic::error(
+                    SourcePos::new("<validation>", 1, 1),
+                    format!(
+                        "`{}` expects {} argument(s), got {}",
+                        info.source_name,
+                        info.params.len(),
+                        args.len()
+                    ),
                 ));
             }
         }
@@ -1679,6 +1728,29 @@ impl CodeGenerator {
             .find(|function| same_ident(&function.source_name, name))
     }
 
+    fn method_info(&self, receiver: TypeSuffix, name: &str) -> Option<&FunctionInfo> {
+        self.functions.iter().find(|function| {
+            function.receiver == Some(receiver) && function.source_name.name.eq_ignore_ascii_case(name)
+        })
+    }
+
+    fn expr_receiver_type(&self, expr: &Expr) -> Option<TypeSuffix> {
+        match expr {
+            Expr::String(_) => Some(TypeSuffix::String),
+            Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
+            Expr::Float(_) => Some(TypeSuffix::Single),
+            Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } =>
+                Some(id.suffix.unwrap_or(TypeSuffix::Single)),
+            Expr::Unary { expr, .. } => self.expr_receiver_type(expr),
+            Expr::Binary { left, .. } => self.expr_receiver_type(left),
+            Expr::ScalarMethodCall { base, method, .. } => {
+                let receiver = self.expr_receiver_type(base)?;
+                self.method_info(receiver, method)?.source_name.suffix
+            }
+            _ => None,
+        }
+    }
+
     /// Renders a `goto`/`gosub`/`on error goto`/`resume`/`on ... goto`/
     /// `on ... gosub` target. The parser only ever produces a bare label
     /// identifier here, or (for `on error goto` only) the integer `0`
@@ -1869,10 +1941,10 @@ impl FunctionInfo {
         taken: &mut HashSet<String>,
         known_callables: &HashSet<String>,
         diagnostics: &mut Vec<Diagnostic>,
-        param_capacities: Vec<Vec<i64>>,
+        mut param_capacities: Vec<Vec<i64>>,
     ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
-        let params = function
+        let mut params: Vec<(Param, BasicIdent)> = function
             .params
             .iter()
             .map(|param| {
@@ -1882,8 +1954,8 @@ impl FunctionInfo {
                 (param.clone(), lowered)
             })
             .collect();
-        let param_ranks = infer_param_ranks(function, known_callables, diagnostics);
-        let param_bound_vars: Vec<Vec<String>> = function
+        let mut param_ranks = infer_param_ranks(function, known_callables, diagnostics);
+        let mut param_bound_vars: Vec<Vec<String>> = function
             .params
             .iter()
             .zip(param_ranks.iter())
@@ -1900,6 +1972,21 @@ impl FunctionInfo {
                 None => Vec::new(),
             })
             .collect();
+        if let Some(receiver) = function.receiver {
+            let self_param = Param {
+                name: BasicIdent { name: "self".to_string(), suffix: Some(receiver) },
+                mode: ParamMode::ByVal,
+                default: None,
+                axes: None,
+            };
+            let preferred = camel_join(&[&stem, "self"]);
+            let lowered = allocate_unique(&preferred, Some(receiver), taken);
+            taken.insert(lowered.as_basic().to_ascii_lowercase());
+            params.insert(0, (self_param, lowered));
+            param_ranks.insert(0, None);
+            param_bound_vars.insert(0, Vec::new());
+            param_capacities.insert(0, Vec::new());
+        }
         let local_array_ranks = dim_ranks_in_body(&function.body);
         let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
@@ -1916,6 +2003,7 @@ impl FunctionInfo {
             local_array_ranks,
             local_array_bounds: RefCell::new(HashMap::new()),
             is_procedure: function.is_procedure,
+            receiver: function.receiver,
             globals,
             local_var_map: RefCell::new(HashMap::new()),
         }
@@ -2222,6 +2310,10 @@ fn visit_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
             for e in args {
                 visit_expr(e, f);
             }
+        }
+        Expr::ScalarMethodCall { base, args, .. } => {
+            visit_expr(base, f);
+            for e in args { visit_expr(e, f); }
         }
         Expr::RecordLit { fields, .. } => {
             for (_, e) in fields {
@@ -3259,6 +3351,7 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
         Expr::FileIndex { .. }
         | Expr::FieldAccess { .. }
         | Expr::MethodCall { .. }
+        | Expr::ScalarMethodCall { .. }
         | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
         }
@@ -3575,6 +3668,7 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
         Expr::FileIndex { .. }
         | Expr::FieldAccess { .. }
         | Expr::MethodCall { .. }
+        | Expr::ScalarMethodCall { .. }
         | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
         }

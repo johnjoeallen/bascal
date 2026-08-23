@@ -116,6 +116,9 @@ pub struct FunctionDef {
     pub params: Vec<Param>,
     pub body: Vec<Stmt>,
     pub is_procedure: bool,
+    /// The scalar receiver type for a `method$`/`method%` declaration.
+    /// Methods otherwise share function bodies and return syntax.
+    pub receiver: Option<TypeSuffix>,
     /// Source position of the `function`/`procedure` keyword that starts
     /// this declaration -- lets resolver diagnostics about the function as
     /// a whole (duplicate name, shadowing a builtin, missing return,
@@ -130,6 +133,10 @@ pub struct FunctionDef {
 pub struct Param {
     pub name: BasicIdent,
     pub mode: ParamMode,
+    /// An optional fixed value supplied when a caller omits this trailing
+    /// scalar parameter. Validation restricts defaults to literals or
+    /// top-level constants.
+    pub default: Option<Expr>,
     /// Declared array axes: `None` for a scalar parameter (bare name, no
     /// parens). `Some(axes)` for an array parameter, one entry per
     /// dimension -- `name(?)` is `Some(vec![None])`, `name(?, ?)` is
@@ -558,6 +565,13 @@ pub enum Expr {
     /// `db.close()` — record/file DSL sugar (currently the only recognized
     /// method is `close`; any other method is rejected during lowering).
     MethodCall {
+        base: Box<Expr>,
+        method: String,
+        args: Vec<Expr>,
+    },
+    /// A scalar extension-method call. Kept separate from `MethodCall`,
+    /// which is the existing record/file DSL syntax.
+    ScalarMethodCall {
         base: Box<Expr>,
         method: String,
         args: Vec<Expr>,

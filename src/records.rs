@@ -1387,6 +1387,11 @@ impl Lowerer {
                 }
                 (Expr::Integer(0), None)
             }
+            Expr::ScalarMethodCall { base, method, args } => {
+                let (base, _) = self.rewrite_expr(*base);
+                let args = args.into_iter().map(|arg| self.rewrite_expr(arg).0).collect();
+                (Expr::ScalarMethodCall { base: Box::new(base), method, args }, None)
+            }
         }
     }
 

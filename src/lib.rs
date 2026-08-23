@@ -674,6 +674,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn trailing_fixed_parameter_defaults_are_inserted_at_call_sites() {
+        let source = r#"const punctuation$ = "!"
+
+function decorate$(text$, suffix$ = punctuation$)
+    return text$ + suffix$
+end function
+
+procedure announce(text$, suffix$ = "!")
+    print text$ + suffix$
+end procedure
+
+result$ = decorate$("hello")
+announce("ready")
+print result$
+end
+"#;
+        let basic = compile_source("defaults.bcl", source).expect("defaults should compile");
+        assert!(basic.contains("decorateSuffix0$ = punctuation$"), "{basic}");
+        assert!(basic.contains("announceSuffix0$ = \"!\""), "{basic}");
+
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bf_s_decorate(\"hello\", bv_s_punctuation,"), "{c}");
+        assert!(c.contains("bf_i_announce(\"ready\", \"!\");"), "{c}");
+    }
+
+    #[test]
+    fn fixed_parameter_defaults_reject_dynamic_and_non_trailing_values() {
+        let dynamic = r#"function choose%(value% = timer)
+    return value%
+end function
+end
+"#;
+        let dynamic_error = compile_source("dynamic_default.bcl", dynamic)
+            .expect_err("a dynamic default must be rejected");
+        assert!(dynamic_error.iter().any(|d| d.message.contains("literal or a top-level `const`")));
+
+        let non_trailing = r#"function choose%(first% = 1, second%)
+    return first% + second%
+end function
+end
+"#;
+        let trailing_error = compile_source("non_trailing_default.bcl", non_trailing)
+            .expect_err("a required parameter after a default must be rejected");
+        assert!(trailing_error.iter().any(|d| d.message.contains("required but follows")));
+
+        let signed = r#"function offset%(value% = -1)
+    return value%
+end function
+print offset%()
+end
+"#;
+        compile_source("signed_default.bcl", signed)
+            .expect("a signed numeric literal is a fixed default");
+    }
+
+    #[test]
     fn compiles_sort_driver_sample() {
         let source = include_str!("../tutorial/sort_driver.bcl");
         let output =

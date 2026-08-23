@@ -182,6 +182,7 @@ struct FnParam {
     is_string: bool,
     /// Only meaningful when `!is_string`.
     is_float: bool,
+    default: Option<Expr>,
 }
 
 type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
@@ -1504,6 +1505,7 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
                 c_name: c_var_name(&param.name, suffix),
                 is_string: param_is_string,
                 is_float: param_numeric.is_some_and(|(_, f)| f),
+                default: param.default.clone(),
             });
         }
         // A procedure may fall through to its end with no explicit
@@ -1530,6 +1532,20 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String
         );
     }
     Ok(table)
+}
+
+fn call_args_with_defaults<'a>(sig: &'a FnSig, args: &'a [Expr], name: &BasicIdent) -> Result<Vec<&'a Expr>, String> {
+    if args.len() > sig.params.len() {
+        return Err(format!("`{name}` expects {} argument(s), got {}", sig.params.len(), args.len()));
+    }
+    let mut result: Vec<&Expr> = args.iter().collect();
+    for param in sig.params.iter().skip(args.len()) {
+        let Some(default) = &param.default else {
+            return Err(format!("`{name}` expects {} argument(s), got {}", sig.params.len(), args.len()));
+        };
+        result.push(default);
+    }
+    Ok(result)
 }
 
 /// Proves a function body always reaches a `return` on every path -- see
@@ -3521,16 +3537,10 @@ fn emit_statement(
                      to a known BASCAL function/procedure is supported as a standalone statement"
                 )
             })?;
-            if args.len() != sig.params.len() {
-                return Err(format!(
-                    "`{name}` expects {} argument(s), got {}",
-                    sig.params.len(),
-                    args.len()
-                ));
-            }
+            let call_args = call_args_with_defaults(sig, args, name)?;
             let mut prelude = Vec::new();
-            let mut arg_texts = Vec::with_capacity(args.len());
-            for (arg, param) in args.iter().zip(&sig.params) {
+            let mut arg_texts = Vec::with_capacity(call_args.len());
+            for (arg, param) in call_args.into_iter().zip(&sig.params) {
                 if param.is_string {
                     let (arg_prelude, text) =
                         render_string_expr(arg, needs_math, temp_counter, functions)?;
@@ -4802,16 +4812,10 @@ fn render_string_call(
              intrinsics like LEN/ASC/CHR$/MID$/LEFT$/RIGHT$ are, and are already handled above)"
         )
     })?;
-    if args.len() != sig.params.len() {
-        return Err(format!(
-            "`{name}` expects {} argument(s), got {}",
-            sig.params.len(),
-            args.len()
-        ));
-    }
+    let call_args = call_args_with_defaults(sig, args, name)?;
     let mut prelude = Vec::new();
-    let mut arg_texts = Vec::with_capacity(args.len());
-    for (arg, param) in args.iter().zip(&sig.params) {
+    let mut arg_texts = Vec::with_capacity(call_args.len());
+    for (arg, param) in call_args.into_iter().zip(&sig.params) {
         if param.is_string {
             let (arg_prelude, text) = render_string_expr(arg, needs_math, temp_counter, functions)?;
             prelude.extend(arg_prelude);
@@ -5284,15 +5288,9 @@ fn render_numeric_call(
             "`{name}` returns a string, not a number, so it can't be used here"
         ));
     }
-    if args.len() != sig.params.len() {
-        return Err(format!(
-            "`{name}` expects {} argument(s), got {}",
-            sig.params.len(),
-            args.len()
-        ));
-    }
-    let mut arg_texts = Vec::with_capacity(args.len());
-    for (arg, param) in args.iter().zip(&sig.params) {
+    let call_args = call_args_with_defaults(sig, args, name)?;
+    let mut arg_texts = Vec::with_capacity(call_args.len());
+    for (arg, param) in call_args.into_iter().zip(&sig.params) {
         if param.is_string {
             arg_texts.push(render_prelude_free_string_arg(arg, needs_math, functions)?);
         } else {

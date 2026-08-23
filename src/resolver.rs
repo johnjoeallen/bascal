@@ -7,8 +7,10 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     reject_functions_shadowing_builtins(program, &mut diagnostics);
     reject_duplicate_functions(program, &mut diagnostics);
+    reject_scalar_methods(program, &mut diagnostics);
     reject_call_cycles(program, &mut diagnostics);
     reject_missing_returns(program, &mut diagnostics);
+    reject_invalid_parameter_defaults(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
 
@@ -17,6 +19,60 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     } else {
         Err(diagnostics)
     }
+}
+
+fn reject_invalid_parameter_defaults(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let fixed_consts: HashSet<String> = program
+        .statements
+        .iter()
+        .filter_map(|stmt| match &stmt.kind {
+            Statement::Const { name, value } if is_fixed_default_value(value) => {
+                Some(name.as_basic().to_ascii_lowercase())
+            }
+            _ => None,
+        })
+        .collect();
+
+    for function in &program.functions {
+        let mut optional_seen = false;
+        for param in &function.params {
+            match &param.default {
+                Some(default) => {
+                    optional_seen = true;
+                    let fixed = is_fixed_default_value(default)
+                        || matches!(default, Expr::Ident(name) if fixed_consts.contains(&name.as_basic().to_ascii_lowercase()));
+                    if !fixed {
+                        diagnostics.push(Diagnostic::error(
+                            function.pos.clone(),
+                            format!(
+                                "default value for parameter `{}` of `{}` must be a literal or a top-level `const`",
+                                param.name, function.name
+                            ),
+                        ));
+                    }
+                }
+                None if optional_seen => diagnostics.push(Diagnostic::error(
+                    function.pos.clone(),
+                    format!(
+                        "parameter `{}` of `{}` is required but follows a parameter with a default value",
+                        param.name, function.name
+                    ),
+                )),
+                None => {}
+            }
+        }
+    }
+}
+
+fn is_fixed_default_value(expr: &Expr) -> bool {
+    matches!(expr, Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_))
+        || matches!(
+            expr,
+            Expr::Unary {
+                op: UnaryOp::Neg,
+                expr,
+            } if matches!(expr.as_ref(), Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_))
+        )
 }
 
 /// `global x` inside a function that also has a parameter named `x` is
@@ -94,6 +150,9 @@ fn collect_global_decls(body: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent)>) {
 fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     let builtins: HashSet<&str> = crate::codegen_basic::BASIC_BUILTINS.iter().copied().collect();
     for function in &program.functions {
+        if function.receiver.is_some() {
+            continue;
+        }
         let base_name = function.name.name.to_ascii_lowercase();
         if builtins.contains(base_name.as_str()) {
             let kind = if function.is_procedure {
@@ -117,6 +176,9 @@ fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<
 fn reject_duplicate_functions(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     let mut seen = HashSet::new();
     for function in &program.functions {
+        if function.receiver.is_some() {
+            continue;
+        }
         let name = function.name.as_basic().to_ascii_lowercase();
         if !seen.insert(name) {
             diagnostics.push(Diagnostic::error(
@@ -126,6 +188,84 @@ fn reject_duplicate_functions(program: &Program, diagnostics: &mut Vec<Diagnosti
         }
     }
 }
+
+fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let mut seen = HashSet::new();
+    for function in &program.functions {
+        let Some(receiver) = function.receiver else { continue };
+        let key = (receiver, function.name.name.to_ascii_lowercase());
+        if !seen.insert(key) {
+            diagnostics.push(Diagnostic::error(
+                function.pos.clone(),
+                format!("duplicate method `{}.{}`", receiver, function.name),
+            ));
+        }
+        if function.params.iter().any(|p| {
+            p.name.name.eq_ignore_ascii_case("self") && p.name.suffix == Some(receiver)
+        }) {
+            diagnostics.push(Diagnostic::error(
+                function.pos.clone(),
+                format!("method `{}` reserves implicit receiver `self{receiver}`", function.name),
+            ));
+        }
+    }
+
+    for function in &program.functions {
+        let Some(receiver) = function.receiver else { continue };
+        let key = function.name.name.to_ascii_lowercase();
+        if crate::codegen_basic::BASIC_BUILTINS.iter().any(|b| *b == key) {
+            diagnostics.push(Diagnostic::error(
+                function.pos.clone(),
+                format!("method name `{}` is reserved for built-in scalar methods", function.name),
+            ));
+        }
+        validate_scalar_method_calls(&function.body, program, diagnostics, receiver);
+    }
+    walk_statements_exprs(&program.statements, &mut |expr, pos| {
+        validate_one_scalar_method(expr, program, diagnostics, pos)
+    });
+}
+
+fn validate_scalar_method_calls(body: &[Stmt], program: &Program, diagnostics: &mut Vec<Diagnostic>, _receiver: TypeSuffix) {
+    for stmt in body {
+        walk_statements_exprs(std::slice::from_ref(stmt), &mut |expr, pos| {
+            validate_one_scalar_method(expr, program, diagnostics, pos)
+        });
+    }
+}
+
+fn validate_one_scalar_method(expr: &Expr, program: &Program, diagnostics: &mut Vec<Diagnostic>, pos: &SourcePos) {
+    let Expr::ScalarMethodCall { base, method, .. } = expr else { return };
+    let Some(receiver) = scalar_expr_type(base, program) else {
+        diagnostics.push(Diagnostic::error(pos.clone(), format!("method receiver for `.{method}()` must be a scalar expression")));
+        return;
+    };
+    if !program.functions.iter().any(|f| f.receiver == Some(receiver) && f.name.name.eq_ignore_ascii_case(method)) {
+        diagnostics.push(Diagnostic::error(pos.clone(), format!("unknown method `.{method}()` for receiver type `{receiver}`")));
+    }
+}
+
+fn scalar_expr_type(expr: &Expr, program: &Program) -> Option<TypeSuffix> {
+    match expr {
+        Expr::String(_) => Some(TypeSuffix::String),
+        Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
+        Expr::Float(_) => Some(TypeSuffix::Single),
+        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } =>
+            Some(id.suffix.unwrap_or(TypeSuffix::Single)),
+        Expr::Unary { expr, .. } => scalar_expr_type(expr, program),
+        Expr::Binary { left, .. } => scalar_expr_type(left, program),
+        Expr::ScalarMethodCall { base, method, .. } => {
+            let recv = scalar_expr_type(base, program)?;
+            program.functions.iter().find_map(|f| {
+                (f.receiver == Some(recv) && f.name.name.eq_ignore_ascii_case(method))
+                    .then_some(f.name.suffix)
+                    .flatten()
+            })
+        }
+        _ => None,
+    }
+}
+
 
 /// Rejects any recursive call cycle -- direct (a function calling itself)
 /// or indirect (`f%` calls `g%` calls `f%`, or a longer chain). Functions
@@ -642,6 +782,9 @@ fn expr_calls_function(expr: &Expr, target: &BasicIdent) -> bool {
         Expr::MethodCall { base, args, .. } => {
             expr_calls_function(base, target) || args.iter().any(|a| expr_calls_function(a, target))
         }
+        Expr::ScalarMethodCall { base, args, .. } => {
+            expr_calls_function(base, target) || args.iter().any(|a| expr_calls_function(a, target))
+        }
         Expr::RecordLit { fields, .. } => {
             fields.iter().any(|(_, e)| expr_calls_function(e, target))
         }
@@ -1102,6 +1245,10 @@ fn walk_expr(expr: &Expr, pos: &SourcePos, f: &mut dyn FnMut(&Expr, &SourcePos))
             walk_expr(base, pos, f);
             args.iter().for_each(|e| walk_expr(e, pos, f));
         }
+        Expr::ScalarMethodCall { base, args, .. } => {
+            walk_expr(base, pos, f);
+            args.iter().for_each(|e| walk_expr(e, pos, f));
+        }
         Expr::RecordLit { fields, .. } => fields.iter().for_each(|(_, e)| walk_expr(e, pos, f)),
     }
 }
@@ -1304,6 +1451,21 @@ mod legacy_form_tests {
         let msgs = messages("on x gosub first, second\nfirst:\nreturn\nsecond:\nreturn\nend\n");
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
         assert!(msgs[0].contains("ON ... GOSUB"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn scalar_methods_resolve_by_receiver_and_result_type() {
+        let program = parse(
+            "method$ capitalize$()\nreturn self$\nend method\nmethod$ pad$(n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n",
+        );
+        assert!(validate(&program).is_ok(), "{:?}", validate(&program));
+    }
+
+    #[test]
+    fn unknown_scalar_methods_are_rejected() {
+        let program = parse("s$ = name$.missing()\nend\n");
+        let diagnostics = validate(&program).expect_err("unknown method should fail");
+        assert!(diagnostics.iter().any(|d| d.message.contains("unknown method")));
     }
 
     #[test]

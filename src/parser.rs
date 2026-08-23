@@ -109,6 +109,8 @@ impl Parser {
                 functions.push(self.parse_function()?);
             } else if self.check_keyword("procedure") {
                 functions.push(self.parse_procedure()?);
+            } else if self.check_method_keyword() {
+                functions.push(self.parse_method()?);
             } else if self.check_keyword("record") {
                 records.push(self.parse_record_def()?);
             } else {
@@ -186,6 +188,7 @@ impl Parser {
             params,
             body,
             is_procedure: false,
+            receiver: None,
             pos: fn_pos,
         })
     }
@@ -212,8 +215,33 @@ impl Parser {
             params,
             body,
             is_procedure: true,
+            receiver: None,
             pos: fn_pos,
         })
+    }
+
+    fn check_method_keyword(&self) -> bool {
+        matches!(&self.current().kind, TokenKind::Ident(raw) if BasicIdent::parse(raw).name.eq_ignore_ascii_case("method"))
+    }
+
+    fn parse_method(&mut self) -> ParseResult<FunctionDef> {
+        let fn_pos = self.current_pos();
+        let receiver = BasicIdent::parse(&self.expect_ident("expected method receiver type")?)
+            .suffix
+            .ok_or_else(|| self.error("method declarations need a receiver suffix, e.g. `method$`"))?;
+        let name = BasicIdent::parse(&self.expect_ident("expected method name")?);
+        if name.suffix.is_none() {
+            return Err(self.error("method names need a result type suffix"));
+        }
+        self.expect(TokenKind::LParen, "expected `(` after method name")?;
+        let params = self.parse_param_list()?;
+        self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
+        self.consume_line_end()?;
+        let body = self.parse_block(&[BlockEnd::EndMethod])?;
+        self.expect_keyword("end")?;
+        self.expect_keyword("method")?;
+        self.consume_line_end()?;
+        Ok(FunctionDef { name, params, body, is_procedure: false, receiver: Some(receiver), pos: fn_pos })
     }
 
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
@@ -372,7 +400,18 @@ impl Parser {
             } else {
                 None
             };
-            items.push(Param { name, mode, axes });
+            let default = if self.eat(TokenKind::Eq) {
+                if axes.is_some() {
+                    return Err(self.error("array parameters cannot have default values"));
+                }
+                if mode == ParamMode::ByRef {
+                    return Err(self.error("`byref` parameters cannot have default values"));
+                }
+                Some(self.parse_expr(0)?)
+            } else {
+                None
+            };
+            items.push(Param { name, mode, default, axes });
             if !self.eat(TokenKind::Comma) {
                 break;
             }
@@ -1854,10 +1893,10 @@ impl Parser {
             let member = self.expect_ident("expected field or method name after `.`")?;
             if self.eat(TokenKind::LParen) {
                 let args = self.parse_expr_list_until_rparen()?;
-                left = Expr::MethodCall {
-                    base: Box::new(left),
-                    method: member,
-                    args,
+                left = if is_scalar_receiver(&left) {
+                    Expr::ScalarMethodCall { base: Box::new(left), method: member, args }
+                } else {
+                    Expr::MethodCall { base: Box::new(left), method: member, args }
                 };
             } else {
                 left = Expr::FieldAccess {
@@ -2022,6 +2061,7 @@ impl Parser {
             BlockEnd::EndProcedure => {
                 self.check_keyword("end") && self.check_next_keyword("procedure")
             }
+            BlockEnd::EndMethod => self.check_keyword("end") && self.check_next_keyword("method"),
             BlockEnd::ForEnd => self.check_keyword("end") && self.check_next_keyword("for"),
             BlockEnd::WhileEnd => self.check_keyword("end") && self.check_next_keyword("while"),
             BlockEnd::Wend => self.check_keyword("wend"),
@@ -2147,6 +2187,15 @@ impl Parser {
     }
 }
 
+fn is_scalar_receiver(expr: &Expr) -> bool {
+    match expr {
+        Expr::String(_) | Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) => true,
+        Expr::Ident(ident) | Expr::Call { name: ident, .. } => ident.suffix.is_some(),
+        Expr::ScalarMethodCall { .. } => true,
+        _ => false,
+    }
+}
+
 fn make_paren_ident_expr(ident: BasicIdent, args: Vec<Expr>) -> Expr {
     if args.is_empty() || (ident.suffix.is_some() && args.len() == 1) {
         Expr::ArrayRef {
@@ -2179,6 +2228,7 @@ enum BlockEnd {
     EndIf,
     EndFunction,
     EndProcedure,
+    EndMethod,
     ForEnd,
     WhileEnd,
     Wend,
@@ -2850,5 +2900,23 @@ mod tests {
         // A newline directly after `then` must still select the block form.
         let program = parse("if x% > 0 then\nprint \"positive\"\nend if\nend\n");
         assert!(matches!(program.statements[0].kind, Statement::If { .. }));
+    }
+
+    #[test]
+    fn parses_scalar_method_declarations_and_chained_calls() {
+        let program = parse("method$ capitalize$()\nreturn self$\nend method\nmethod$ pad$(n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n");
+        assert_eq!(program.functions.len(), 2);
+        assert_eq!(program.functions[0].receiver, Some(TypeSuffix::String));
+        assert_eq!(program.functions[0].name.as_basic(), "capitalize$");
+        match &*program.statements[0] {
+            Statement::Assignment { value, .. } => match value {
+                Expr::ScalarMethodCall { base, method, .. } => {
+                    assert_eq!(method, "pad");
+                    assert!(matches!(base.as_ref(), Expr::ScalarMethodCall { method, .. } if method == "capitalize"));
+                }
+                other => panic!("expected scalar method chain, got {other:?}"),
+            },
+            other => panic!("expected assignment, got {other:?}"),
+        }
     }
 }
