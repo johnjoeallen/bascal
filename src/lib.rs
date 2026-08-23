@@ -5560,6 +5560,149 @@ end
     }
 
     #[test]
+    fn c_target_supports_on_error_goto_and_error_and_err() {
+        let source = "on error goto h\nerror 53\ngoto after\nh:\nprint err\nresume next\nafter:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bcc_err = 0;")
+                && output.contains("static int bcc_on_error_target = -1;")
+                && output.contains("static int bcc_in_handler = 0;")
+                && output.contains("static int bcc_resume_id = -1;"),
+            "ON ERROR GOTO needs the ERROR_HANDLING_GLOBALS block:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_on_error_target = 0;"),
+            "ON ERROR GOTO h should install h as handler 0:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_raise_retry_0: ;")
+                && output.contains("bcc_err = 53;")
+                && output.contains("bcc_resume_id = 0;")
+                && output.contains("case 0: goto bcc_lbl_h;")
+                && output.contains("bcc_raise_after_0: ;"),
+            "ERROR 53 should be a raise site dispatching to handler 0:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", bcc_err)"),
+            "bare ERR should read bcc_err, not an ordinary variable:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_on_error_goto_0_disables_the_trap() {
+        let source = "on error goto 0\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_on_error_target = -1;"),
+            "ON ERROR GOTO 0 should disable the trap, not target a handler:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_resume_same_dispatches_to_the_raise_sites_retry_label() {
+        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume\nafter:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("switch (bcc_resume_id) {") && output.contains("case 0: goto bcc_raise_retry_0;"),
+            "bare RESUME should dispatch back to the raise site's own retry label:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_in_handler = 0;"),
+            "RESUME should clear bcc_in_handler so a later error can trap again:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_resume_next_dispatches_to_the_raise_sites_after_label() {
+        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume next\nafter:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("switch (bcc_resume_id) {") && output.contains("case 0: goto bcc_raise_after_0;"),
+            "RESUME NEXT should dispatch to the raise site's own after-label:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_resume_label_jumps_directly_with_no_dispatch() {
+        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume after\nafter:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_in_handler = 0;\n    goto bcc_lbl_after;"),
+            "RESUME <label> should jump directly to the label, no runtime dispatch needed:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_open_for_input_raises_error_53_on_a_missing_file() {
+        let source =
+            "on error goto h\nopen \"missing.dat\" for input as #1\ngoto after\nh:\nprint err\nresume next\nafter:\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("if (!bcc_files[0]) {") && output.contains("bcc_err = 53;"),
+            "a failed sequential OPEN FOR INPUT should raise error 53:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_error_handling_statements_inside_a_procedure() {
+        for stmt in ["on error goto h", "error 5", "resume next"] {
+            let source = format!("procedure p()\n    {stmt}\nend procedure\np()\nh:\nend\n");
+            let diagnostics = compile_source_via_c_target_err(&source);
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("function/procedure")),
+                "`{stmt}` inside a procedure should be rejected: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn c_target_supports_data_read_and_restore() {
+        let source = "read a$, b%\nprint a$\nprint b%\nrestore\nread c$\nprint c$\nend\ndata \"hello\", 42\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_DATA_COUNT 2")
+                && output.contains("static const char* bcc_data[BCC_DATA_COUNT] = { \"hello\", \"42\" };"),
+            "DATA items should be flattened into one static array:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(bv_s_a, sizeof(bv_s_a), \"%s\", bcc_read_data());"),
+            "READ into a string var should copy bcc_read_data()'s text:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_b = atoi(bcc_read_data());"),
+            "READ into a numeric var should parse bcc_read_data()'s text:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_data_ptr = 0;"),
+            "bare RESTORE should rewind to the start:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_restore_to_a_label_rewinds_to_that_labels_data() {
+        let source =
+            "read first$\nrestore second\nread other$\nprint first$\nprint other$\nend\ndata \"a\"\nsecond:\ndata \"b\"\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_data_ptr = 1;"),
+            "RESTORE second should resolve to the compile-time item count before that label \
+             (1 item -- \"a\" -- precedes it):\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_read_when_the_program_has_no_data() {
+        let source = "dim x%\nread x%\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("no `data` items")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_cls_and_beep() {
         let source = "cls\nbeep\nend\n";
         let output = compile_source_via_c_target(source);

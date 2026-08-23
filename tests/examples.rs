@@ -59,6 +59,67 @@ fn freebasic_runs_sort_driver_when_available() {
     }
 }
 
+/// End-to-end confirmation for issue #10's Phase 2 acceptance criterion:
+/// `tutorial/17_labels_and_error_handling.bcl` (GOTO/labels, GOSUB/RETURN,
+/// `ON ERROR GOTO`/`RESUME`/`ERR`, and label-targeted `RESTORE`) compiles
+/// *and runs correctly* under `--target c`, not just transpiles -- gcc-
+/// compiled and executed here, the same bar `freebasic_runs_sort_driver_
+/// when_available` already holds the `basic` target to via `fbc`. Skipped
+/// (not failed) when `gcc` isn't available, matching that test's own
+/// skip-if-unavailable convention.
+#[test]
+fn gcc_runs_labels_and_error_handling_tutorial_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tutorial/17_labels_and_error_handling.bcl");
+    let output_dir = repo_root.join("output/c_target_error_handling");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(status.success(), "bcc failed to compile/build {source_path:?} under --target C");
+
+    let executable_path = repo_root.join("tmp/17_labels_and_error_handling");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled labels_and_error_handling binary");
+    assert!(
+        run.status.success(),
+        "compiled labels_and_error_handling binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    for expected in [
+        "reached via goto",
+        "inside the gosub'd subroutine",
+        "back after gosub",
+        "caught error 53: does_not_exist.dat not found",
+        "first read: France",
+        "after restore secondBatch: Japan",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "missing {expected:?} in stdout:\n{stdout}"
+        );
+    }
+}
+
 #[test]
 fn freebasic_runs_mid_assign_edge_cases_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {

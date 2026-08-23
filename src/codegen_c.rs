@@ -40,7 +40,28 @@
 //! own `return` -- built on a small return-address-ID stack, since C's
 //! `goto` has no "remember where to resume" of its own; see
 //! `Statement::Gosub`'s own doc comment for why it's scoped to top-level
-//! code); twenty-five BASIC intrinsics implemented natively -- `LEN`,
+//! code); `on error goto label`/`on error goto 0`, `resume`/`resume
+//! next`/`resume label`, `error code`, and bare `err`/`erl` (see
+//! `ErrorDataCtx`/`emit_raise_block` -- the same return-address-ID-stack
+//! idea as `gosub`/`return`, just read in the opposite direction: a raise
+//! site's ID is written when it fires and read back later by whichever
+//! `resume` handles it, rather than a `gosub`'s ID being written at the
+//! call and read immediately by its own `return`; also top-level-code-only
+//! for the identical reason. A label handler target only -- a `procedure`
+//! target, which real BASIC also allows, isn't supported yet. A failed
+//! sequential `open ... for input` now raises real BASIC's own error 53
+//! this way too, instead of silently leaving a `NULL` `FILE*` behind (see
+//! `Statement::Open`'s `OpenMode::Input` arm). `erl` reads a stable
+//! per-raise-site ID, not a real BASIC line number -- this backend
+//! doesn't track BASIC line numbers at all, a real, documented
+//! divergence); `data`/`read`/`restore` (see
+//! `collect_data_items_and_labels`/`DATA_HELPER` -- scalar targets only,
+//! no array reads; a `data` item must be a literal number or string;
+//! `restore label` resolves to a fixed item-count position at compile
+//! time, no runtime lookup needed -- works inside a `function`/
+//! `procedure` body too, unlike the error-handling trio, since
+//! `bcc_data`/`bcc_data_ptr` are plain file-scope globals reachable from
+//! anywhere); twenty-five BASIC intrinsics implemented natively -- `LEN`,
 //! `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`, `STR$`, `VAL`, `INSTR`, `SQR`,
 //! `ABS`, `INT`, `FIX`, `SGN`, `CINT`, `CLNG`, `CSNG`, `CDBL`, `SIN`,
 //! `COS`, `TAN`, `ATN`, `LOG`, `EXP`, `RND` (see
@@ -63,24 +84,27 @@
 //! optional prompt -- see `INPUT_HELPER`); and screen I/O: `cls`,
 //! `locate row, col`, `color fg[, bg]`, and `beep` (see `COLOR_HELPER`).
 //! NOT yet supported: arrays, entirely -- no `dim name(n)`, indexing, or
-//! array parameters; `byref` parameters (byval-only so far); a `function`
-//! body that doesn't provably `return` on every path (see
-//! `body_always_returns` -- a `procedure` has no such requirement);
-//! `on error goto`/`resume`/`err`/`erl` (needs a resumable-execution model
-//! on top of the same return-address-stack technique `gosub`/`return`
-//! already use); `gosub`/bare `return` used inside a `function`/
-//! `procedure` body (unlike `label`/`goto`, which work there fine); and a
+//! array parameters, which also rules out an array-target `read`; `byref`
+//! parameters (byval-only so far); a `function` body that doesn't
+//! provably `return` on every path (see `body_always_returns` -- a
+//! `procedure` has no such requirement); a `procedure` as an `on error
+//! goto` target (a label target is supported -- see above); a
 //! `FIELD`/`OPEN`/`GET`/`PUT` channel or `FIELD` width that isn't a
-//! literal integer -- all rejected with a diagnostic rather than guessed
-//! at. Recursion (direct or indirect) is rejected at the resolver level
-//! before codegen ever runs, for every target, not just this one.
-//! Everything else (`on ... goto`/`on ... gosub`, `data`/`read`/
-//! `restore`, `mid$` statement-form assignment, `swap`, `poke`/`out`,
-//! `print using`, arrays, ...) reports a "not supported yet" diagnostic
-//! rather than panicking or emitting wrong code -- this is a deliberately
-//! minimal backend, not a complete one; see the GitHub issue tracker's
-//! `c-target` label for the current, itemized list. Tutorials that
-//! compile end to end today: `tutorial/01_hello.bcl`,
+//! literal integer; and `gosub`/`on error goto`/`resume`/`error` used
+//! inside a `function`/`procedure` body (`label`/`goto`/`read`/`restore`
+//! all work there fine -- only the return-address-ID-stack techniques are
+//! scoped to top-level code, since a `return` inside a function/procedure
+//! body always means that callable's own return, leaving no unambiguous
+//! "this GOSUB's/raise site's own RETURN/RESUME" to dispatch to) -- all
+//! rejected with a diagnostic rather than guessed at. Recursion (direct
+//! or indirect) is rejected at the resolver level before codegen ever
+//! runs, for every target, not just this one. Everything else (`on ...
+//! goto`/`on ... gosub`, `mid$` statement-form assignment, `swap`,
+//! `poke`/`out`, `print using`, arrays, ...) reports a "not supported
+//! yet" diagnostic rather than panicking or emitting wrong code -- this
+//! is a deliberately minimal backend, not a complete one; see the GitHub
+//! issue tracker's `c-target` label for the current, itemized list.
+//! Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
 //! `tutorial/02_variables.bcl`, `tutorial/03_arithmetic.bcl`,
 //! `tutorial/04_conditions.bcl`, `tutorial/05_loops.bcl`,
 //! `tutorial/06_select_case.bcl`, `tutorial/07_functions.bcl` (including
@@ -88,14 +112,14 @@
 //! `ucase$`/`lcase$`), `tutorial/10_files.bcl`, `tutorial/11_screen.bcl`,
 //! `tutorial/13_shared/start.bcl` + `tutorial/13_shared/show.bcl`,
 //! `tutorial/15_random_and_record_files.bcl` (both its hand-written Part 1
-//! and DSL-based Part 2), and `tutorial/18_stdlib.bcl` -- each gcc-compiled
-//! and run, not just transpiled (see `docs/manual/command-line-reference.html#backends`
-//! for the up to date list). `tutorial/08_arrays.bcl`, `09_data.bcl`,
-//! `12_require.bcl` (its required library takes an array parameter),
-//! `14_procedures.bcl` (byref array params),
-//! `16_short_circuit.bcl`, `17_labels_and_error_handling.bcl` (`on error
-//! goto`), and `19_inventory.bcl` still don't, blocked by the gaps listed
-//! above.
+//! and DSL-based Part 2), `tutorial/17_labels_and_error_handling.bcl`, and
+//! `tutorial/18_stdlib.bcl` -- each gcc-compiled and run, not just
+//! transpiled (see `docs/manual/command-line-reference.html#backends` for
+//! the up to date list). `tutorial/08_arrays.bcl`, `09_data.bcl` (array
+//! reads), `12_require.bcl` (its required library takes an array
+//! parameter), `14_procedures.bcl` (byref array params),
+//! `16_short_circuit.bcl`, and `19_inventory.bcl` still don't, blocked by
+//! the gaps listed above.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
@@ -113,7 +137,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
-    ParamMode, PrintToken, Program, RecordFieldType, Statement, TypeSuffix, UnaryOp,
+    ParamMode, PrintToken, Program, RecordFieldType, ResumeTarget, Statement, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -397,6 +421,27 @@ const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 
 /// `Statement::Randomize`'s own handling in `emit_statement`) reseeds the
 /// same underlying `rand()` stream via `srand()`.
 const RND_HELPER: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
+
+/// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
+/// `emit_raise_block`'s own doc comment for how these four are used.
+/// `bcc_err` is `ERR`; `bcc_resume_id` doubles as `ERL` (see
+/// `render_numeric_expr`'s `Expr::Ident` arm).
+const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\n\n";
+
+/// `DATA`/`READ`/`RESTORE`'s runtime state: `bcc_data` (declared
+/// separately, right before this, with the program's actual literal
+/// items -- see `collect_data_items_and_labels`/`generate`'s own
+/// `data_array_decl`) is one flat, program-order array of every `DATA`
+/// item's raw text, `BCC_DATA_COUNT` items long; `bcc_data_ptr` is the
+/// single global read cursor real BASIC's own `READ`/`RESTORE` share.
+/// `bcc_read_data` is `READ`'s only access to it -- out-of-DATA is a
+/// plain fatal exit (real BASIC's own error 4, "Out of DATA", but not
+/// routed through `emit_raise_block`'s trappable-error machinery: no
+/// tutorial or test here needs a *recoverable* out-of-DATA, and every
+/// raise site there is a fixed, known program position `RESUME`/`RESUME
+/// NEXT` can jump back to by ID, which an arbitrary `READ` call site
+/// would need its own ID for too -- deliberately not attempted).
+const DATA_HELPER: &str = "static int bcc_data_ptr = 0;\n\nstatic const char* bcc_read_data(void) {\n    if (bcc_data_ptr >= BCC_DATA_COUNT) {\n        fprintf(stderr, \"Out of DATA\\n\");\n        exit(1);\n    }\n    return bcc_data[bcc_data_ptr++];\n}\n\n";
 
 /// `GOSUB`/`RETURN`'s runtime state: a return-address stack, exactly how a
 /// real BASIC interpreter itself implements GOSUB (push where to resume,
@@ -779,6 +824,260 @@ fn count_gosubs(statements: &[Statement]) -> usize {
         .sum()
 }
 
+/// Total number of *raise sites* in `statements`, walking the same nesting
+/// shape `count_gosubs` does -- an explicit `ERROR <code>` statement, or a
+/// sequential `OPEN ... FOR INPUT` (whose C translation now checks for a
+/// failed `fopen` and raises real BASIC's own error 53, "file not found",
+/// instead of silently leaving a NULL `FILE*` behind -- see
+/// `Statement::Open`'s own `OpenMode::Input` arm). Only top-level
+/// statements are counted, matching `ON ERROR GOTO`/`RESUME`/`ERROR`'s own
+/// top-level-only restriction (see `Statement::OnErrorGoto`'s doc
+/// comment): a raise site needs `RESUME`/`RESUME NEXT` to be able to jump
+/// back to it by ID, and `RESUME` itself is rejected inside a function/
+/// procedure body. Computed once, before emission starts (see
+/// `ErrorDataCtx`), the same "count now, assign IDs during real emission
+/// in the identical order" split `count_gosubs`/`gosub_id` already use.
+fn count_raise_sites(statements: &[Statement]) -> usize {
+    statements
+        .iter()
+        .map(|statement| {
+            let self_count = usize::from(
+                matches!(statement, Statement::ErrorStmt { .. })
+                    || matches!(
+                        statement,
+                        Statement::Open {
+                            mode: OpenMode::Input,
+                            ..
+                        }
+                    ),
+            );
+            let nested_count = match statement {
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_raise_sites(then_body) + count_raise_sites(else_body),
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => count_raise_sites(body),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    cases
+                        .iter()
+                        .map(|case| count_raise_sites(&case.body))
+                        .sum::<usize>()
+                        + count_raise_sites(else_body)
+                }
+                _ => 0,
+            };
+            self_count + nested_count
+        })
+        .sum()
+}
+
+/// Every distinct `ON ERROR GOTO <label>` target in `statements` (`ON
+/// ERROR GOTO 0`, the disable sentinel, is a numeric literal, not an
+/// identifier, so it's naturally excluded), assigned a stable integer ID
+/// in first-seen program order -- used both by `ON ERROR GOTO` itself
+/// (`bcc_on_error_target = <id>`) and by every raise site's own `switch
+/// (bcc_on_error_target) { case <id>: goto bcc_lbl_<label>; ... }` (see
+/// `emit_raise_block`), since a raise site has no other way to jump to
+/// whichever label the *most recently executed* `ON ERROR GOTO` installed
+/// -- that's only known at runtime, not at the raise site's own,
+/// textually earlier, position.
+fn collect_on_error_handler_ids(statements: &[Statement]) -> HashMap<String, usize> {
+    let mut ids = HashMap::new();
+    collect_on_error_handler_ids_into(statements, &mut ids);
+    ids
+}
+
+fn collect_on_error_handler_ids_into(statements: &[Statement], ids: &mut HashMap<String, usize>) {
+    for statement in statements {
+        if let Statement::OnErrorGoto {
+            target: Expr::Ident(ident),
+        } = statement
+        {
+            let key = ident.name.to_ascii_lowercase();
+            if !ids.contains_key(&key) {
+                let next_id = ids.len();
+                ids.insert(key, next_id);
+            }
+        }
+        match statement {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_on_error_handler_ids_into(then_body, ids);
+                collect_on_error_handler_ids_into(else_body, ids);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_on_error_handler_ids_into(body, ids),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_on_error_handler_ids_into(&case.body, ids);
+                }
+                collect_on_error_handler_ids_into(else_body, ids);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Renders one `DATA` item's literal text as a quoted C string -- `READ`
+/// converts it to its target variable's actual type at read time (`atoi`/
+/// `atof` for a numeric target, a plain copy for a string one), exactly
+/// the same "raw text in, target decides the type" convention `INPUT`
+/// already uses for `bcc_input_buf` (see `Statement::Input`'s own arm) --
+/// so a `DATA` item's own type never has to be tracked separately at all.
+/// Only literal shapes are accepted: `Expr::String`, `Expr::Integer`,
+/// `Expr::Float`, and a negative `Expr::Unary { op: Neg, .. }` wrapping
+/// one of the two numeric kinds -- real BASIC's own `DATA` items are
+/// always literals, never a general expression.
+fn render_data_item(expr: &Expr) -> Result<String, String> {
+    match expr {
+        Expr::String(s) => Ok(format!("\"{}\"", escape_c_string_literal(s))),
+        Expr::Integer(n) => Ok(format!("\"{n}\"")),
+        Expr::Float(f) => Ok(format!("\"{f:?}\"")),
+        Expr::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } => match expr.as_ref() {
+            Expr::Integer(n) => Ok(format!("\"-{n}\"")),
+            Expr::Float(f) => Ok(format!("\"-{f:?}\"")),
+            _ => Err(
+                "DATA items aren't supported by the minimal C backend yet -- only literal \
+                 numbers and strings are"
+                    .to_string(),
+            ),
+        },
+        _ => Err(
+            "DATA items aren't supported by the minimal C backend yet -- only literal numbers \
+             and strings are"
+                .to_string(),
+        ),
+    }
+}
+
+/// Walks `statements` in the same textual/execution order `count_gosubs`/
+/// `count_raise_sites` already recurse in, collecting every `DATA` item's
+/// rendered text (flattened across every `DATA` statement in the program,
+/// in order -- real BASIC's own single global read pointer walks exactly
+/// this sequence) and, for every `Label`, the item count seen so far --
+/// `RESTORE <label>` resolves directly to this count at compile time (see
+/// `Statement::Restore`'s own arm), no runtime lookup needed, since a
+/// label always denotes a fixed position in program order.
+fn collect_data_items_and_labels(
+    statements: &[Statement],
+) -> Result<(Vec<String>, HashMap<String, usize>), String> {
+    let mut items = Vec::new();
+    let mut labels = HashMap::new();
+    collect_data_items_and_labels_into(statements, &mut items, &mut labels)?;
+    Ok((items, labels))
+}
+
+fn collect_data_items_and_labels_into(
+    statements: &[Statement],
+    items: &mut Vec<String>,
+    labels: &mut HashMap<String, usize>,
+) -> Result<(), String> {
+    for statement in statements {
+        match statement {
+            Statement::Data(values) => {
+                for value in values {
+                    items.push(render_data_item(value)?);
+                }
+            }
+            Statement::Label(name) => {
+                labels.insert(name.to_ascii_lowercase(), items.len());
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_data_items_and_labels_into(then_body, items, labels)?;
+                collect_data_items_and_labels_into(else_body, items, labels)?;
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
+                collect_data_items_and_labels_into(body, items, labels)?;
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_data_items_and_labels_into(&case.body, items, labels)?;
+                }
+                collect_data_items_and_labels_into(else_body, items, labels)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Threaded through `emit_statement`/`emit_select_case` alongside the
+/// GOSUB machinery (`gosub_count`/`gosub_id`), bundled into one struct
+/// instead of three more bare parameters: `handler_ids` and `data_labels`
+/// are read-only precomputed tables shared, unchanged, by every call site
+/// (top-level and every function/procedure body alike -- see
+/// `collect_on_error_handler_ids`/`collect_data_items_and_labels`);
+/// `raise_site_count`/`raise_id` are the `ON ERROR GOTO` analogue of
+/// `gosub_count`/`gosub_id` -- `raise_site_count` is the precomputed total
+/// (`count_raise_sites`), `raise_id` a live counter incremented once per
+/// raise site actually emitted, in the same order `count_raise_sites`
+/// walks in. Both are `0`/thrown away for a function/procedure body's own
+/// pass, since a raise site can only ever be top-level code (see
+/// `Statement::OnErrorGoto`'s own doc comment).
+struct ErrorDataCtx<'a> {
+    handler_ids: &'a HashMap<String, usize>,
+    raise_site_count: usize,
+    raise_id: usize,
+    data_labels: &'a HashMap<String, usize>,
+}
+
+/// Emits the shared "an error just occurred" block a raise site (`ERROR`
+/// or a failed sequential `OPEN ... FOR INPUT`) drops into: record the
+/// code and which site raised (`bcc_resume_id` -- also what `ERL` reads,
+/// see `render_numeric_expr`'s `Expr::Ident` arm; a real, documented
+/// divergence from real BASIC's own line number, since this backend
+/// doesn't track BASIC line numbers at all), then either escalate to a
+/// fatal, uncaught-error exit (no handler installed, or already inside
+/// one -- real BASIC has no nested-trap recovery either) or dispatch to
+/// whichever label the most recently executed `ON ERROR GOTO` installed.
+/// `handler_ids` empty means the program has no `ON ERROR GOTO` at all --
+/// the `switch` below then has no cases and is unreachable in practice
+/// (`bcc_on_error_target` can only ever be `-1`), but still valid,
+/// warning-free C.
+fn emit_raise_block(
+    out: &mut String,
+    err_code_text: &str,
+    raise_id: usize,
+    handler_ids: &HashMap<String, usize>,
+) {
+    out.push_str(&format!("    bcc_err = {err_code_text};\n"));
+    out.push_str(&format!("    bcc_resume_id = {raise_id};\n"));
+    out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
+    out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
+    out.push_str("        exit(1);\n");
+    out.push_str("    }\n");
+    out.push_str("    bcc_in_handler = 1;\n");
+    out.push_str("    switch (bcc_on_error_target) {\n");
+    let mut sorted: Vec<(&String, &usize)> = handler_ids.iter().collect();
+    sorted.sort_by_key(|(_, id)| **id);
+    for (label, id) in sorted {
+        out.push_str(&format!("    case {id}: goto bcc_lbl_{label};\n"));
+    }
+    out.push_str("    }\n");
+}
+
 fn program_uses_color(program: &Program) -> bool {
     program_has_statement(program, &|s| matches!(s, Statement::Color { .. }))
 }
@@ -1152,6 +1451,31 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     apply_field_layouts_before_functions(program, &mut function_view)
         .map_err(|message| vec![unsupported(&message)])?;
 
+    // Precomputed once, shared read-only by both the function-body pass
+    // below and the real top-level pass further down -- see
+    // `ErrorDataCtx`'s own doc comment. `raise_site_count` is a plain
+    // `usize`, not part of the shared table, since only the real
+    // top-level pass ever assigns raise-site IDs (`ON ERROR GOTO`/
+    // `RESUME`/`ERROR` are rejected outright inside a function/procedure
+    // body -- see `Statement::OnErrorGoto`'s own arm in `emit_statement`).
+    let on_error_handler_ids = collect_on_error_handler_ids(&program.statements);
+    let (data_items, data_labels) = collect_data_items_and_labels(&program.statements)
+        .map_err(|message| vec![unsupported(&message)])?;
+    let raise_site_count = count_raise_sites(&program.statements);
+
+    // `bcc_data`/`bcc_read_data` (see `DATA_HELPER`) are only declared
+    // below when `data_items` is non-empty -- a `READ` in a program with
+    // no `DATA` at all would otherwise fail with an opaque "undeclared
+    // `bcc_read_data`" C compile error instead of a clear diagnostic here.
+    if data_items.is_empty()
+        && program_has_statement(program, &|s| matches!(s, Statement::Read(_)))
+    {
+        return Err(vec![unsupported(
+            "`read` found but the program has no `data` items at all -- real BASIC's own \
+             \"Out of DATA\" error, caught here at compile time instead",
+        )]);
+    }
+
     let mut prototypes = String::new();
     let mut function_defs = String::new();
     for func in &program.functions {
@@ -1167,6 +1491,8 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut needs_string,
             &mut temp_counter,
             &mut function_view,
+            &on_error_handler_ids,
+            &data_labels,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -1185,6 +1511,12 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
 
     let gosub_count = count_gosubs(&program.statements);
     let mut gosub_id: usize = 0;
+    let mut ctx = ErrorDataCtx {
+        handler_ids: &on_error_handler_ids,
+        raise_site_count,
+        raise_id: 0,
+        data_labels: &data_labels,
+    };
     let mut body = String::new();
     for statement in &program.statements {
         emit_statement(
@@ -1198,6 +1530,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &mut file_io,
             gosub_count,
             &mut gosub_id,
+            &mut ctx,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -1216,6 +1549,19 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         builtin_usage.needs_seq_file_helper || program_uses_sequential_file_io(program);
     let needs_randomize = program_uses_randomize(program);
     let needs_randomize_time = program_uses_randomize_time(program);
+    // A raise site (`ERROR`, or a sequential `OPEN ... FOR INPUT` that can
+    // now fail with error 53) always needs the error-handling globals,
+    // whether or not the program actually installs a handler (an
+    // un-trapped raise still needs `bcc_on_error_target`/`bcc_in_handler`
+    // to know it's un-trapped -- see `emit_raise_block`). `ON ERROR GOTO`/
+    // `RESUME` alone (no raise site at all) is a degenerate but valid
+    // program -- the trap would just never fire -- so it's covered here
+    // too, or `bcc_on_error_target = ...`/the `switch (bcc_resume_id)`
+    // dispatch would reference undeclared globals.
+    let needs_error_handling = raise_site_count > 0
+        || program_has_statement(program, &|s| {
+            matches!(s, Statement::OnErrorGoto { .. } | Statement::Resume(_))
+        });
 
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, <string.h> only when a string `select case` needs
@@ -1236,12 +1582,20 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if file_io.used {
         includes.push_str("#include <stdint.h>\n");
         includes.push_str("#include <stdlib.h>\n");
-    } else if builtin_usage.needs_stdlib_h || needs_input || needs_randomize {
+    } else if builtin_usage.needs_stdlib_h
+        || needs_input
+        || needs_randomize
+        || needs_error_handling
+        || !data_items.is_empty()
+    {
         // `input`'s numeric targets parse via `atoi`/`atof` (see
         // `INPUT_HELPER`'s call site in `emit_statement`); `RANDOMIZE`
         // needs `srand()` (see `Statement::Randomize`'s own handling in
         // `emit_statement`), independent of whether `RND` itself
-        // (`builtin_usage.needs_stdlib_h`) is ever called.
+        // (`builtin_usage.needs_stdlib_h`) is ever called; an untrapped
+        // raise site's fatal path needs `exit()` (see `emit_raise_block`);
+        // `READ`'s numeric targets parse via `atoi`/`atof` too, and
+        // `DATA_HELPER`'s own out-of-DATA path needs `exit()`.
         includes.push_str("#include <stdlib.h>\n");
     }
     if needs_randomize_time {
@@ -1274,6 +1628,24 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if gosub_count > 0 {
         out.push_str(GOSUB_HELPER);
+    }
+    if needs_error_handling {
+        out.push_str(ERROR_HANDLING_GLOBALS);
+    }
+    // `bcc_data`'s own declaration is generated here, not a plain `&str`
+    // constant like `DATA_HELPER`, since its contents (`BCC_DATA_COUNT`
+    // and every item) come from the program's actual `DATA` statements
+    // (see `collect_data_items_and_labels`) -- declared right before
+    // `DATA_HELPER`, which references both by name, so declaration order
+    // in the emitted C is satisfied regardless of C's own top-to-bottom
+    // visibility rule for file-scope symbols.
+    if !data_items.is_empty() {
+        out.push_str(&format!("#define BCC_DATA_COUNT {}\n", data_items.len()));
+        out.push_str(&format!(
+            "static const char* bcc_data[BCC_DATA_COUNT] = {{ {} }};\n\n",
+            data_items.join(", ")
+        ));
+        out.push_str(DATA_HELPER);
     }
     if file_io.used {
         out.push_str(FILE_IO_HELPER);
@@ -1377,6 +1749,8 @@ fn emit_function_def(
     needs_string: &mut bool,
     temp_counter: &mut usize,
     file_io: &mut FileIoLayout,
+    handler_ids: &HashMap<String, usize>,
+    data_labels: &HashMap<String, usize>,
 ) -> Result<(), String> {
     let mut numeric_locals = BTreeMap::new();
     let mut string_locals = BTreeSet::new();
@@ -1422,8 +1796,23 @@ fn emit_function_def(
     // doc comment) -- a function/procedure body never legally reaches the
     // GOSUB arm's `gosub_id`/`gosub_count` reads at all, since it errors
     // out immediately whenever `current_function` is `Some` (always true
-    // here), so a throwaway `0`/local counter is safe.
+    // here), so a throwaway `0`/local counter is safe. Same story for
+    // `ON ERROR GOTO`/`RESUME`/`ERROR` and `ctx.raise_id`/
+    // `ctx.raise_site_count` -- all three are rejected outright inside a
+    // function/procedure body too (see their own arms in `emit_statement`),
+    // so `raise_site_count: 0`/a throwaway `raise_id` counter is safe.
+    // `handler_ids`/`data_labels` are real, though, not thrown away: `READ`/
+    // `RESTORE` (unlike the error-handling trio) work fine inside a
+    // function/procedure body, since `bcc_data`/`bcc_data_ptr` are plain
+    // file-scope globals reachable from anywhere -- `RESTORE <label>`
+    // there needs the real label table to resolve correctly.
     let mut unused_gosub_id: usize = 0;
+    let mut ctx = ErrorDataCtx {
+        handler_ids,
+        raise_site_count: 0,
+        raise_id: 0,
+        data_labels,
+    };
     for stmt in &func.body {
         emit_statement(
             stmt,
@@ -1436,6 +1825,7 @@ fn emit_function_def(
             file_io,
             0,
             &mut unused_gosub_id,
+            &mut ctx,
         )?;
     }
 
@@ -1750,6 +2140,19 @@ fn collect_vars_in_statement(
                 register_var(var, numeric_out, string_out);
             }
         }
+        Statement::Read(vars) => {
+            for var in vars {
+                collect_vars_in_expr(var, numeric_out, string_out);
+            }
+        }
+        // `ON ERROR GOTO`/`RESUME`'s own targets are label names, not
+        // variables (`OnErrorGoto`'s `Expr::Integer(0)` sentinel isn't
+        // one either) -- neither needs an arm here, falling through to
+        // the catch-all below. `ERROR <code>`'s code *can* be a real
+        // variable (`error err` re-raises the current one -- `err` itself
+        // is skipped by `register_var`'s own guard, not specially handled
+        // here).
+        Statement::ErrorStmt { code } => collect_vars_in_expr(code, numeric_out, string_out),
         _ => {}
     }
 }
@@ -1794,6 +2197,16 @@ fn register_var(
     numeric_out: &mut BTreeMap<String, &'static str>,
     string_out: &mut BTreeSet<String>,
 ) {
+    // Bare `ERR`/`ERL` are system pseudo-variables (see
+    // `render_numeric_expr`'s `Expr::Ident` arm), not ordinary globals --
+    // registering one here would declare a same-named, always-zero shadow
+    // that every read/write of the real `bcc_err`/`bcc_resume_id` state
+    // would silently miss instead.
+    if ident.suffix.is_none()
+        && (ident.name.eq_ignore_ascii_case("err") || ident.name.eq_ignore_ascii_case("erl"))
+    {
+        return;
+    }
     match ident.suffix {
         Some(TypeSuffix::String) => {
             string_out.insert(c_var_name(ident, TypeSuffix::String));
@@ -1831,6 +2244,7 @@ fn emit_statement(
     // where GOSUB is rejected outright before either is ever read.
     gosub_count: usize,
     gosub_id: &mut usize,
+    ctx: &mut ErrorDataCtx,
 ) -> Result<(), String> {
     match statement {
         Statement::Print { tokens } => {
@@ -2004,6 +2418,7 @@ fn emit_statement(
                     file_io,
                     gosub_count,
                     gosub_id,
+                    ctx,
                 )?;
             }
             if else_body.is_empty() {
@@ -2022,6 +2437,7 @@ fn emit_statement(
                         file_io,
                         gosub_count,
                         gosub_id,
+                        ctx,
                     )?;
                 }
                 out.push_str("    }\n");
@@ -2086,6 +2502,7 @@ fn emit_statement(
                     file_io,
                     gosub_count,
                     gosub_id,
+                    ctx,
                 )?;
             }
             out.push_str("    }\n");
@@ -2110,6 +2527,7 @@ fn emit_statement(
                     file_io,
                     gosub_count,
                     gosub_id,
+                    ctx,
                 )?;
             }
             out.push_str("    }\n");
@@ -2147,6 +2565,7 @@ fn emit_statement(
                     file_io,
                     gosub_count,
                     gosub_id,
+                    ctx,
                 )?;
             }
             if let Some(cond) = post_condition {
@@ -2217,6 +2636,33 @@ fn emit_statement(
                     out.push_str(&format!(
                         "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
                     ));
+                }
+                // A missing file for `INPUT` mode raises real BASIC's own
+                // error 53 ("file not found") -- but only at top level,
+                // where `ON ERROR GOTO`/`RESUME` (and so a raise site's
+                // own retry/skip labels -- see `ctx.raise_id`) are
+                // actually supported (see `Statement::OnErrorGoto`'s own
+                // doc comment); inside a function/procedure body this
+                // still just leaves a `NULL` `FILE*` behind on failure,
+                // the same pre-existing unchecked-range-style gap as
+                // before this raise mechanism existed at all.
+                OpenMode::Input if current_function.is_none() => {
+                    let id = ctx.raise_id;
+                    ctx.raise_id += 1;
+                    out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"r\");\n"
+                    ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    let mut raise = String::new();
+                    emit_raise_block(&mut raise, "53", id, ctx.handler_ids);
+                    for line in raise.lines() {
+                        out.push_str("    ");
+                        out.push_str(line);
+                        out.push('\n');
+                    }
+                    out.push_str("    }\n");
+                    out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
                 }
                 OpenMode::Input => {
                     out.push_str(&format!(
@@ -2533,6 +2979,7 @@ fn emit_statement(
             file_io,
             gosub_count,
             gosub_id,
+            ctx,
         ),
         // Real C's own return-by-value works here directly: a numeric
         // return coerces the value the same way a plain assignment would
@@ -2722,14 +3169,16 @@ fn emit_statement(
             out.push_str(&format!("    // {comment}\n"));
             Ok(())
         }
-        // `label:`/`goto label` -- Phase 1 of raw BASIC's label-based
-        // control flow (see the C-target labels/GOTO tracking issue):
+        // `label:`/`goto label` -- raw BASIC's label-based control flow:
         // close to a 1:1 mapping onto C's own `goto`/label, since both
-        // languages have the identical primitive. `gosub`/`return` and
-        // `on error goto`/`resume` need a real "remember where to resume"
-        // execution model C's `goto` doesn't give for free, so they're
-        // deliberately still unsupported (falling through to the generic
-        // error below) -- a separate, larger piece of work.
+        // languages have the identical primitive. `gosub`/`return` (see
+        // `GOSUB_HELPER`) and `on error goto`/`resume` (see
+        // `ErrorDataCtx`/`emit_raise_block`) both need a real "remember
+        // where to resume" execution model C's `goto` doesn't give for
+        // free -- both built on the same return-address-ID-stack idea,
+        // just with the roles reversed (GOSUB pushes an ID *forward* to a
+        // fixed RETURN dispatch; a raise site's ID instead gets read
+        // *backward* by a later RESUME).
         //
         // The label name gets the same `bcc_lbl_`-prefixed, lowercased
         // treatment `c_var_name` gives variables: C labels live in their
@@ -2772,9 +3221,9 @@ fn emit_statement(
         // `TIMER`'s own real-elapsed-time reading, the closest available
         // stand-in for "vary run to run" without a prompt). `TIMER` itself
         // is recognized here by bare identifier name, not evaluated as an
-        // ordinary variable -- like every other zero-arg pseudo-variable
-        // (`ERR`/`ERL`/`DATE$`/...), it isn't otherwise supported by this
-        // backend yet.
+        // ordinary variable -- like `ERR`/`ERL` (see `render_numeric_expr`'s
+        // own `Expr::Ident` arm), just not itself readable as a value yet,
+        // unlike those two.
         Statement::Randomize(seed) => {
             let is_timer = matches!(
                 seed,
@@ -2791,6 +3240,188 @@ fn emit_statement(
             }
             Ok(())
         }
+        // `ON ERROR GOTO <label>`/`ON ERROR GOTO 0` -- installs/disables
+        // the error trap (see `ErrorDataCtx`/`emit_raise_block`). Scoped
+        // to top-level code only, same restriction (and the same reason)
+        // `GOSUB` already has -- `RESUME`'s own dispatch below needs a
+        // fixed, known set of raise sites to jump back to, which only
+        // exists for top-level code (see `count_raise_sites`'s own doc
+        // comment). A `procedure` target -- real BASIC also allows one,
+        // reached with a plain `GOTO`, never a `GOSUB` (see the manual's
+        // own `ON ERROR GOTO` section) -- isn't supported here yet; only
+        // a label is.
+        Statement::OnErrorGoto { target } => {
+            if current_function.is_some() {
+                return Err(
+                    "`on error goto` isn't supported inside a function/procedure body by the \
+                     minimal C backend yet -- only at top level"
+                        .to_string(),
+                );
+            }
+            match target {
+                Expr::Integer(0) => {
+                    out.push_str("    bcc_on_error_target = -1;\n");
+                    Ok(())
+                }
+                Expr::Ident(ident) if functions.contains_key(&fn_key(ident)) => Err(format!(
+                    "`on error goto {ident}` targets a `procedure` -- only a label target is \
+                     supported by the minimal C backend yet"
+                )),
+                Expr::Ident(ident) => {
+                    let id = ctx
+                        .handler_ids
+                        .get(&ident.name.to_ascii_lowercase())
+                        .copied()
+                        .expect("every ON ERROR GOTO target was already collected into handler_ids by collect_on_error_handler_ids");
+                    out.push_str(&format!("    bcc_on_error_target = {id};\n"));
+                    Ok(())
+                }
+                _ => Err(
+                    "`on error goto`'s target isn't supported by the minimal C backend yet -- \
+                     only a label name or `0` is"
+                        .to_string(),
+                ),
+            }
+        }
+        // `RESUME`/`RESUME NEXT`/`RESUME <label>` -- see `ErrorDataCtx`'s
+        // own doc comment for `ctx.raise_id`'s role, and
+        // `Statement::ErrorStmt`/`Statement::Open`'s `OpenMode::Input` arm
+        // for where a `bcc_raise_retry_<id>:`/`bcc_raise_after_<id>:`
+        // label pair actually comes from. `RESUME`/`RESUME NEXT` dispatch
+        // to whichever site raised via a `switch` on the live
+        // `bcc_resume_id` global (set by that site's own `emit_raise_block`
+        // call, read here, possibly much later in the emitted source, once
+        // the handler body actually runs) -- `RESUME <label>` needs no
+        // such dispatch, its target is a fixed label known at compile
+        // time. All three clear `bcc_in_handler`, real BASIC's own "the
+        // trap can fire again" reset, regardless of where they resume to.
+        Statement::Resume(kind) => {
+            if current_function.is_some() {
+                return Err(
+                    "`resume` isn't supported inside a function/procedure body by the minimal C \
+                     backend yet -- only at top level"
+                        .to_string(),
+                );
+            }
+            match kind {
+                ResumeTarget::Same | ResumeTarget::Next => {
+                    out.push_str("    bcc_in_handler = 0;\n");
+                    out.push_str("    switch (bcc_resume_id) {\n");
+                    for id in 0..ctx.raise_site_count {
+                        let label = if matches!(kind, ResumeTarget::Same) {
+                            format!("bcc_raise_retry_{id}")
+                        } else {
+                            format!("bcc_raise_after_{id}")
+                        };
+                        out.push_str(&format!("    case {id}: goto {label};\n"));
+                    }
+                    out.push_str("    default: break;\n");
+                    out.push_str("    }\n");
+                    Ok(())
+                }
+                ResumeTarget::Line(Expr::Ident(ident)) => {
+                    out.push_str("    bcc_in_handler = 0;\n");
+                    out.push_str(&format!(
+                        "    goto bcc_lbl_{};\n",
+                        ident.name.to_ascii_lowercase()
+                    ));
+                    Ok(())
+                }
+                ResumeTarget::Line(_) => Err(
+                    "`resume`'s target isn't supported by the minimal C backend yet -- only a \
+                     bare label name is (enforced at parse time, so this shouldn't be reachable)"
+                        .to_string(),
+                ),
+            }
+        }
+        // `ERROR <code>` -- triggers a runtime error as if it occurred
+        // naturally (see `emit_raise_block`). `code` can be any numeric
+        // expression, most commonly `err` itself, to re-raise an error a
+        // handler decided it can't actually handle (see the manual's own
+        // "typical pattern" example).
+        Statement::ErrorStmt { code } => {
+            if current_function.is_some() {
+                return Err(
+                    "`error` isn't supported inside a function/procedure body by the minimal C \
+                     backend yet -- only at top level"
+                        .to_string(),
+                );
+            }
+            let (code_text, code_is_float) = render_numeric_expr(code, needs_math, functions)?;
+            let code_text = coerce_numeric(code_text, code_is_float, false, needs_math);
+            let id = ctx.raise_id;
+            ctx.raise_id += 1;
+            out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
+            emit_raise_block(out, &code_text, id, ctx.handler_ids);
+            out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+            Ok(())
+        }
+        // `DATA` items are pure compile-time literals, already fully
+        // flattened into the static `bcc_data` array by
+        // `collect_data_items_and_labels` before emission ever starts --
+        // nothing left to emit here at the statement's own textual
+        // position (`READ`/`RESTORE` are what actually touch `bcc_data`/
+        // `bcc_data_ptr` at runtime).
+        Statement::Data(_) => Ok(()),
+        // `READ var[, ...]` -- pulls the next item(s) from the shared
+        // `bcc_data`/`bcc_data_ptr` cursor (see `DATA_HELPER`), converting
+        // each item's raw text to its target's actual type exactly the
+        // way keyboard `INPUT` already converts `bcc_input_buf` (see
+        // `Statement::Input`'s own arm) -- a `DATA` item's own type is
+        // never tracked separately at all.
+        Statement::Read(vars) => {
+            for var in vars {
+                let Expr::Ident(ident) = var else {
+                    return Err(
+                        "READ's targets aren't supported by the minimal C backend yet -- only \
+                         bare scalar variables are"
+                            .to_string(),
+                    );
+                };
+                if ident.suffix == Some(TypeSuffix::String) {
+                    let c_name = c_var_name(ident, TypeSuffix::String);
+                    out.push_str(&format!(
+                        "    snprintf({c_name}, sizeof({c_name}), \"%s\", bcc_read_data());\n"
+                    ));
+                } else {
+                    let suffix = effective_suffix(ident.suffix);
+                    let c_name = c_var_name(ident, suffix);
+                    let (_, is_float) = numeric_c_type(suffix)
+                        .expect("effective_suffix never returns TypeSuffix::String");
+                    if is_float {
+                        out.push_str(&format!("    {c_name} = atof(bcc_read_data());\n"));
+                    } else {
+                        out.push_str(&format!("    {c_name} = atoi(bcc_read_data());\n"));
+                    }
+                }
+            }
+            Ok(())
+        }
+        // `RESTORE`/`RESTORE <label>` -- rewinds `bcc_data_ptr` to the
+        // start, or to the item count `collect_data_items_and_labels`
+        // already computed for that label at compile time -- a fixed
+        // position in program order, so (unlike `ON ERROR GOTO`'s target)
+        // this needs no runtime dispatch at all, just a literal integer.
+        Statement::Restore(target) => match target {
+            None => {
+                out.push_str("    bcc_data_ptr = 0;\n");
+                Ok(())
+            }
+            Some(Expr::Ident(ident)) => {
+                let index = ctx
+                    .data_labels
+                    .get(&ident.name.to_ascii_lowercase())
+                    .copied()
+                    .ok_or_else(|| format!("`restore {ident}`: no such label"))?;
+                out.push_str(&format!("    bcc_data_ptr = {index};\n"));
+                Ok(())
+            }
+            Some(_) => Err(
+                "RESTORE's target isn't supported by the minimal C backend yet -- only a bare \
+                 label name is (enforced at parse time, so this shouldn't be reachable)"
+                    .to_string(),
+            ),
+        },
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
@@ -3369,6 +4000,7 @@ fn emit_select_case(
     file_io: &mut FileIoLayout,
     gosub_count: usize,
     gosub_id: &mut usize,
+    ctx: &mut ErrorDataCtx,
 ) -> Result<(), String> {
     let is_string = is_string_expr(expr);
     let temp = format!("bt_sel_{temp_counter}");
@@ -3419,6 +4051,7 @@ fn emit_select_case(
                 file_io,
                 gosub_count,
                 gosub_id,
+                ctx,
             )?;
         }
     }
@@ -3437,6 +4070,7 @@ fn emit_select_case(
                     file_io,
                     gosub_count,
                     gosub_id,
+                    ctx,
                 )?;
             }
         }
@@ -3454,6 +4088,7 @@ fn emit_select_case(
                 file_io,
                 gosub_count,
                 gosub_id,
+                ctx,
             )?;
         }
     }
@@ -4129,6 +4764,22 @@ fn render_numeric_expr(
     match expr {
         Expr::Integer(n) => Ok((n.to_string(), false)),
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
+        // `ERR`/`ERL`, bare (no type suffix) -- real BASIC's own
+        // system pseudo-variables, holding the last raised error's code
+        // and (for `ERL`) the BASIC line number it occurred at. This
+        // backend doesn't track BASIC line numbers at all, so `ERL`
+        // reads `bcc_resume_id` instead -- a stable per-raise-site ID,
+        // not a real line number, but still one distinct value per
+        // raise site (see `emit_raise_block`'s own doc comment for the
+        // full divergence). Checked before the generic `Expr::Ident` arm
+        // below, which would otherwise treat either name as an ordinary
+        // (always-zero) variable -- see `register_var`'s matching skip.
+        Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("err") => {
+            Ok(("bcc_err".to_string(), false))
+        }
+        Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("erl") => {
+            Ok(("bcc_resume_id".to_string(), false))
+        }
         Expr::Ident(ident) => {
             let suffix = effective_suffix(ident.suffix);
             match numeric_c_type(suffix) {
