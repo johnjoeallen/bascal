@@ -70,10 +70,7 @@ end for</code></pre>
 <pre><code>dim a%, b%(3), c$</code></pre>
 <p>This is exactly equivalent to writing three separate <code>dim</code> statements — <code>dim a%</code>, then <code>dim b%(3)</code>, then <code>dim c$</code> — and generates one <code>DIM</code> line per name in the output.</p>
 <h3 id="option-base">OPTION BASE</h3>
-<p>Sets the default lower bound for all subsequently declared arrays. Must be placed before any <code>DIM</code> statements it is meant to affect.</p>
-<pre><code>option base 0   &#39; arrays start at index 0 (default)
-option base 1   &#39; arrays start at index 1</code></pre>
-<p>With <code>OPTION BASE 1</code>, <code>dim scores%(10)</code> allocates 10 elements indexed 1..10 instead of 11 elements indexed 0..10.</p>
+<p><strong><code>OPTION BASE</code> is not supported and is unlikely to ever be.</strong> The parser accepts <code>option base 0</code>/<code>option base 1</code> and the BASIC target passes it through, but that support is known-buggy — array parameter passing and <code>sizeof()</code> don't correctly account for a non-zero base (see the manual's tracked issues) — and the C target rejects it outright as a transpile-time error. Declare every array under the default base-0 indexing and don't rely on <code>OPTION BASE 1</code>; it is not part of BASCAL's supported surface and there's no plan to make it one.</p>
 <h3 id="erase">ERASE</h3>
 <p>Do not use <code>ERASE</code> to release and re-declare an array in compiled classic BASIC. BASCOM-family compilers keep the array's declaration fixed, so a later <code>DIM</code> is rejected. Keep the original fixed-size array instead.</p>
 <pre><code>dim bigTable%(1000, 200)
