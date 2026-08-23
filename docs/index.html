@@ -49,6 +49,7 @@
     <a href="language/">Language Book</a>
     <a href="manual/">Manual</a>
     <a href="tutorials/">Tutorials</a>
+    <a href="examples.html">Examples</a>
     <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
   </div>
 </nav>
@@ -521,7 +522,7 @@ end for</code></pre>
 NEXT i%</code></pre>
         </div>
       </div>
-      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still transpiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See the <a href="https://github.com/johnjoeallen/bascal/blob/main/README.md#condition-transpilation">Condition Transpilation</a> note in the README for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade-off — it's just the newest place BASCAL makes it.</p>
+      <p class="note">Multiline <code>if</code>/<code>else if</code>/<code>else</code> is not an exception — it still transpiles to the nested <code>IF (cond) = 0 THEN GOTO ...</code> chain seen inside the <code>FOR</code> body above. See <a href="manual/generated-basic-shape.html#if-transpilation">If Transpilation</a> in the manual for why BASCAL inverts with <code>= 0</code> instead of BASIC's bitwise <code>NOT</code>. The record/file syntax below follows that same GOTO-chain trade-off — it's just the newest place BASCAL makes it.</p>
     </div>
   </section>
 

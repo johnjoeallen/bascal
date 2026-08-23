@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Examples — BASCAL</title>
+<meta name="description" content="Three real, worked BASCAL programs: a recursive-require sort driver, a real-world REMLINE line-number cleaner, and a flagship record/file DSL card catalog.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+</head>
+<body>
+
+<header class="hero compact">
+  <div class="wrap">
+    <h1>Examples</h1>
+    <p class="tagline">Three complete, worked BASCAL programs, each exercising a different corner of the language.</p>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="./" class="current">Home</a>
+    <a href="manual/">Manual</a>
+    <a href="tutorials/">Tutorials</a>
+    <a href="https://github.com/johnjoeallen/bascal">GitHub</a>
+    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button>
+  </div>
+</nav>
+
+<main class="wrap">
+  <p class="crumbs"><a href="./">Home</a> / Examples</p>
+
+  <div class="prose">
+    <p>The <a href="tutorials/">tutorials</a> introduce BASCAL one construct at a time.
+    These three programs are complete, runnable applications instead — each one
+    picking a real task to exercise a different part of the language end to end.</p>
+  </div>
+
+  <div class="snippet">
+    <h3>Sort driver</h3>
+    <p class="note"><a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/sort_driver.bcl"><code>tutorial/sort_driver.bcl</code></a> exercises recursive <code>require</code>, array argument passing, and timing: it fills 5000 reverse-sorted elements (worst case for comparison sorts) and runs four sort implementations — bubble, shaker, shell, and quick — each pulled in from <a href="https://github.com/johnjoeallen/bascal/tree/main/tutorial/com/bascal/sort"><code>tutorial/com/bascal/sort</code></a> by dotted path.</p>
+    <pre><code>bcc tutorial/sort_driver.bcl
+fbc -lang qb tutorial/sort_driver.bas -x tmp/sort_driver
+./tmp/sort_driver</code></pre>
+    <p class="note">Expected output (timings vary by machine):</p>
+    <pre><code>Bubble sort time (ms):       ~200
+Bubble: OK
+Shaker sort time (ms):       ~180
+Shaker: OK
+Shell sort time (ms):        ~1
+Shell: OK
+Quick sort time (ms):        ~1
+Quick: OK</code></pre>
+  </div>
+
+  <div class="snippet">
+    <h3>REMLINE</h3>
+    <p class="note"><a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/remline/remline.bcl"><code>tutorial/remline/remline.bcl</code></a> is a real-world BASCAL program inspired by old BASIC line-number utilities. It analyses a line-numbered BASIC program and removes unnecessary line numbers while preserving every line that's still a real jump target — parsing, reference collection, and string helpers each arrive through their own <code>require</code>. It reads <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/remline/sample/input.bas"><code>tutorial/remline/sample/input.bas</code></a> and writes the cleaned listing to <code>tutorial/remline/sample/output.bas</code>.</p>
+    <pre><code>bcc tutorial/remline/remline.bcl -L tutorial/remline
+fbc -lang qb tutorial/remline/remline.bas -x tmp/remline
+./tmp/remline
+diff -u tutorial/remline/sample/expected.bas tutorial/remline/sample/output.bas</code></pre>
+    <p class="note">A clean run produces no diff output — <code>output.bas</code> matches the checked-in <code>expected.bas</code> exactly.</p>
+  </div>
+
+  <div class="snippet">
+    <h3>Card catalog</h3>
+    <p class="note"><a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/card_catalog.bcl"><code>tutorial/card_catalog.bcl</code></a> is the flagship <a href="manual/record-files.html">record/file DSL</a> example: two record types (<code>Header</code>, <code>Entry</code>) sharing one random-access file, and five <code>procedure</code>s (<code>addItem</code>, <code>listAll</code>, <code>searchByAuthor</code>, <code>searchByAuthorTitle</code>, <code>deleteItem</code>) that each read and write those records from inside their own body — exercising record/file access from procedure scope, not just top-level code. A <code>mainMenu</code> procedure drives them from an interactive, <code>INPUT</code>-based menu loop. It's adapted from <code>CLERK.BAS</code>, a 1983 card-catalog manager by Carlos A. Lujan S.; see the comment header in the source for the full attribution and porting notes.</p>
+    <pre><code>bcc tutorial/card_catalog.bcl
+fbc -lang qb tutorial/card_catalog.bas -x tmp/card_catalog
+./tmp/card_catalog   # interactive -- follow the on-screen menu</code></pre>
+  </div>
+
+  <div class="prose">
+    <p>Looking for the shared-<code>COMMON</code>/<code>CHAIN</code> example instead? See
+    <a href="tutorials/13_shared.html">Tutorial 13, Shared COMMON</a> — two
+    programs coordinating score, level, and player state across a
+    <code>CHAIN</code>.</p>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    BASCAL is licensed under the
+    <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.
+    Source, manual, and tutorials live at
+    <a href="https://github.com/johnjoeallen/bascal">github.com/johnjoeallen/bascal</a>.
+  </div>
+</footer>
+
+<script src="bcl-highlight.js"></script>
+<script src="theme-toggle.js"></script>
+</body>
+</html>

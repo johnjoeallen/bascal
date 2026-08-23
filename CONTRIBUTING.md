@@ -3,12 +3,22 @@
 ## Building and testing
 
 ```bash
-cargo build
+env -u RUSTC_WRAPPER cargo build
 env -u RUSTC_WRAPPER cargo test
 ```
 
-See `README.md`'s [Tests](README.md#tests) section for what the standard
-suite covers.
+The standard test suite:
+
+- Unit-tests for lexer, parser, validation, and function transpilation
+- Transpiles every driver-style `tutorial/**/*.bcl` file (excluding `com/`
+  dependency trees) and writes `.bas` output alongside the source
+- If `fbc` is installed, compiles and runs `sort_driver` and `remline`
+  end-to-end
+- If `dosbox-x` is installed *and* `test-fixtures/ibm-basic-compiler/` has
+  been populated (see below), compiles conformance fixtures against the
+  real IBM BASIC Compiler 2.00 and diffs its output against checked-in
+  golden expectations. Opt-in and local by default — skipped cleanly
+  otherwise.
 
 ## Optional: real-BASCOM conformance tests
 
@@ -64,3 +74,18 @@ Fixtures live in `tests/fixtures/conformance/*.bcl`, each paired with a
 produce when run under real BASCOM. Keep fixtures small, deterministic (no
 `TIMER`-seeded randomness, no wall-clock-dependent output), and focused on
 one behavior, the same way the existing fixture is scoped.
+
+## Repository layout
+
+```
+src/        Rust transpiler source
+tutorial/   BASCAL tutorials and worked examples (.bas/.c generated alongside each .bcl)
+tmp/        temporary compiled binaries (git-ignored)
+```
+
+## Release packages
+
+GitHub Actions builds release packages from `.github/workflows/packages.yml`.
+Run the **Packages** workflow manually to produce downloadable artifacts, or
+push a `v*` tag such as `v0.1.0` to attach the Debian `.deb`, RPM, Linux
+`.tar.gz`, and Windows `.zip` packages to a GitHub Release.
