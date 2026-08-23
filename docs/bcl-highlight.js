@@ -14,7 +14,7 @@
     "for", "to", "downto", "step", "next",
     "while", "wend", "do", "loop", "until", "exit",
     "select", "case", "is",
-    "function", "procedure", "return",
+    "function", "procedure", "method", "return",
     "record", "field", "file", "open", "close", "get", "put",
     "lset", "rset", "seek",
     "goto", "gosub", "on", "error", "resume",
