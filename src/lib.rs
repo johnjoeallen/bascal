@@ -6007,20 +6007,22 @@ end
 
     #[test]
     fn c_target_supports_sizeof_1d_and_2d() {
+        // `sizeof` returns the array's own declared bound -- the same
+        // value `dim` used -- not the element count, matching
+        // `docs/manual/arrays.html#sizeof`'s own `dim data%(9)` /
+        // `sizeof(data%) = 9` example and `--target basic`'s
+        // `resolve_axis_bound` exactly (see `render_numeric_call`'s
+        // `sizeof` arm in codegen_c.rs).
         let source =
             "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("printf(\"%d\\n\", 5)"),
-            "sizeof(arr%(4)) should resolve to the literal 5 (0..=4):\n{output}"
+            output.contains("printf(\"%d\\n\", 9)"),
+            "sizeof(grid%(9, 4), 0) should resolve to the literal 9:\n{output}"
         );
         assert!(
-            output.contains("printf(\"%d\\n\", 10)"),
-            "sizeof(grid%(9, 4), 0) should resolve to the literal 10:\n{output}"
-        );
-        assert!(
-            output.contains("printf(\"%d\\n\", 5)") && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
-            "sizeof(grid%(9, 4), 1) should also resolve to 5:\n{output}"
+            output.contains("printf(\"%d\\n\", 4)") && output.matches("printf(\"%d\\n\", 4)").count() >= 2,
+            "sizeof(arr%(4)) and sizeof(grid%(9, 4), 1) should both resolve to the literal 4:\n{output}"
         );
     }
 
@@ -6215,13 +6217,119 @@ end
     }
 
     #[test]
-    fn c_target_rejects_byref_parameters() {
+    fn c_target_supports_byref_scalar_parameters() {
+        // A `byref` scalar parameter compiles to a real C pointer, with
+        // copy-in/copy-out around it -- see `FnParam::by_ref`'s doc
+        // comment in codegen_c.rs. The C function itself takes `int*`, and
+        // the call site passes the caller's variable's address.
         let source = "function bump%(byref x%)\n    x% = x% + 1\n    return x%\nend function\n\
                        n% = 5\nprint bump%(n%)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bf_i_bump(int* bv_i_x_in)"),
+            "byref scalar parameter should compile to a pointer:\n{output}"
+        );
+        assert!(
+            output.contains("int bv_i_x = *bv_i_x_in;"),
+            "byref scalar parameter should copy in from the pointer:\n{output}"
+        );
+        assert!(
+            output.contains("*bv_i_x_in = bv_i_x;"),
+            "byref scalar parameter should copy its result back out through the pointer:\n{output}"
+        );
+        assert!(
+            output.contains("bf_i_bump(&bv_i_n)"),
+            "the call site should pass the caller's variable's address:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_byref_scalar_argument_must_be_a_plain_variable() {
+        let source = "function bump%(byref x%)\n    x% = x% + 1\n    return x%\nend function\n\
+                       print bump%(5)\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("byref")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("byref") && d.message.contains("plain variable")),
             "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_byval_array_parameters() {
+        // A `byval` array parameter copies the caller's array into a
+        // local buffer before the call -- writes inside the function
+        // never reach the caller's own storage.
+        let source = "function firstDoubled%(arr%(?))\n    arr%(0) = arr%(0) * 2\n    \
+                       return arr%(0)\nend function\n\
+                       dim data%(2)\n\
+                       data%(0) = 5\n\
+                       print firstDoubled%(data%)\n\
+                       print data%(0)\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("_len0"),
+            "array parameter should carry a hidden element-count parameter:\n{output}"
+        );
+        assert!(
+            output.contains("for (int bcc_i = 0;"),
+            "byval array parameter should copy the caller's array into a local buffer:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_byref_array_parameters() {
+        // A `byref` array parameter passes the caller's array by real
+        // pointer, natively -- no copy in, no copy back needed, and
+        // mutations are visible to the caller immediately.
+        let source = "function doubleFirst%(byref arr%(?))\n    arr%(0) = arr%(0) * 2\n    \
+                       return 0\nend function\n\
+                       dim data%(2)\n\
+                       data%(0) = 5\n\
+                       dummy% = doubleFirst%(data%)\n\
+                       print data%(0)\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("for (int bcc_i = 0;"),
+            "byref array parameter shouldn't need a copy-in loop at all:\n{output}"
+        );
+        assert!(
+            output.contains("bf_i_doublefirst(bv_i_data,"),
+            "byref array argument should pass the real array pointer directly:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_a_local_array_dimd_inside_a_function_body() {
+        // A `dim` inside a function/procedure body (not top-level) needs
+        // its own real local C array declared in that function's own
+        // prologue -- see `collect_array_declarations`'s call site in
+        // `generate` and `function_scoped_table`'s own doc comment. This
+        // is exactly the shape `tutorial/com/bascal/sort/quickSort.bcl`
+        // needs for its explicit partition-bounds stack (`sLow%`/
+        // `sHigh%`), which `tutorial/sort_driver.bcl` depends on.
+        let source = "function useLocal%(byref arr%(?))\n    \
+                       dim scratch%(3)\n    \
+                       scratch%(0) = 10\n    \
+                       scratch%(3) = 20\n    \
+                       arr%(0) = scratch%(0) + scratch%(3)\n    \
+                       return 0\nend function\n\
+                       dim data%(2)\n\
+                       dummy% = useLocal%(data%)\n\
+                       print data%(0)\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("int bv_i_scratch[4]"),
+            "a local `dim scratch%(3)` should declare a true 4-element C local array \
+             inside the function body:\n{output}"
+        );
+        assert!(
+            !output.contains("static int bv_i_scratch"),
+            "a local array must not be hoisted to file scope like a top-level `dim`:\n{output}"
         );
     }
 
@@ -6319,6 +6427,42 @@ end
         };
         compile_file(&input, &options)
             .unwrap_or_else(|d| panic!("tutorial/07_functions.bcl should compile to C: {d:?}"));
+    }
+
+    #[test]
+    fn c_target_compiles_arrays_tutorial() {
+        // Byval/byref array parameters, `sizeof`, and 2-D arrays --
+        // verified correct end to end with gcc separately (matches
+        // `--target basic`'s own real output once `--target basic`'s own
+        // array-parameter-copy issue, filed separately, is accounted
+        // for); this locks in that it keeps compiling.
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/08_arrays.bcl");
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
+        compile_file(&input, &options)
+            .unwrap_or_else(|d| panic!("tutorial/08_arrays.bcl should compile to C: {d:?}"));
+    }
+
+    #[test]
+    fn c_target_compiles_sort_driver_sample() {
+        // Exercises `byref` array parameters, `byref` scalar parameters
+        // (indirectly, via `bubbleSort%`/`shakerSort%`/`shellSort%`/
+        // `quickSort%`'s own `byref data%(?)`), and a local (non-top-
+        // level) `dim`'d array inside a function body --
+        // `quickSort%`'s own explicit partition-bounds stack
+        // (`sLow%(64)`/`sHigh%(64)`). Verified correct end to end with
+        // gcc separately (all four sorts report OK on both a 50- and a
+        // 5000-element reverse-sorted input); this locks in that it
+        // keeps compiling.
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
+        let options = CompileOptions {
+            target: Target::C,
+            ..CompileOptions::new()
+        };
+        compile_file(&input, &options)
+            .unwrap_or_else(|d| panic!("tutorial/sort_driver.bcl should compile to C: {d:?}"));
     }
 
     #[test]

@@ -9,7 +9,7 @@ function shellSort%(byref data%(?))
     /* Normalize the count through a required helper so this file has its own */
     /* dependency chain. */
     count% = touch%(sizeof(data%))
-    gap% = count% / 2
+    gap% = count% \ 2
 
     /* Repeatedly insertion-sort elements that are gap positions apart. */
     while gap% > 0
@@ -28,7 +28,7 @@ function shellSort%(byref data%(?))
             i% = i% + 1
         end while
 
-        gap% = gap% / 2
+        gap% = gap% \ 2
     end while
 
     return 0

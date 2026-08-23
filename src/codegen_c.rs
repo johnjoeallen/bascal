@@ -178,15 +178,63 @@ struct FnSig {
 #[derive(Clone)]
 struct FnParam {
     /// The C identifier used for this parameter *inside the function
-    /// body* -- for a string parameter, that's the local buffer holding
-    /// the function's own byval copy, NOT the raw incoming pointer
-    /// parameter (see `emit_function_def`'s copy-in preamble).
+    /// body* -- for a byval string parameter, that's the local buffer
+    /// holding the function's own byval copy, NOT the raw incoming pointer
+    /// parameter (see `emit_function_def`'s copy-in preamble); same story
+    /// for a byref string/array parameter's own local (see `by_ref`'s doc
+    /// comment).
     c_name: String,
     is_string: bool,
     /// Only meaningful when `!is_string`.
     is_float: bool,
     default: Option<Expr>,
     suffix: TypeSuffix,
+    /// `byref` (real BASCAL, not this backend's own pointer plumbing) --
+    /// compiles to a real C pointer parameter named `<c_name>_in`, plus
+    /// copy-in/copy-out around it: a scalar gets a local `<c_name>` copied
+    /// in from `*<c_name>_in` at function entry and written back to
+    /// `*<c_name>_in` at every `return` (see `emit_byref_scalar_copyback`);
+    /// an array needs no such round trip at all -- a real pointer already
+    /// gives the callee live read/write access to the caller's own
+    /// storage, so `array`'s own by-ref case just uses the incoming
+    /// pointer directly, under the plain, un-suffixed `<c_name>` (see
+    /// `emit_function_def`/`function_signature`). Meaningless combined
+    /// with a `byval` array parameter, which is always copied in
+    /// regardless of this flag's *absence* there -- `array` doesn't carry
+    /// its own separate by-ref flag since this one already means the same
+    /// thing for both a scalar and an array parameter.
+    by_ref: bool,
+    /// `Some` for an array parameter (`arr%(?)`/`arr%(100)`) -- `None` for
+    /// an ordinary scalar. Only rank-1 numeric arrays are supported (see
+    /// `build_function_table`); every array parameter also gets a hidden
+    /// second C parameter, `<c_name>_len0`, carrying its real element
+    /// count at that call site (see `function_signature`) -- `sizeof(...)`
+    /// inside the function body reads it back (see `ArrayInfo::runtime_len`
+    /// and the per-function-extended `FunctionTable` `emit_function_def`
+    /// builds for exactly this purpose).
+    array: Option<ArrayParamInfo>,
+}
+
+/// An array parameter's own extra bookkeeping -- see `FnParam::array`'s
+/// doc comment for the byref/byval split.
+#[derive(Clone)]
+struct ArrayParamInfo {
+    /// The parameter's own explicit literal capacity (`arr%(100)` -- one
+    /// more than the declared bound, matching `ArrayInfo::bounds`' own
+    /// inclusive-bound convention), or `None` for an inferred `arr%(?)`
+    /// one -- see `apply_byval_array_capacities`, which fills in
+    /// `byval_capacity` from this (or, when this is `None`, from the
+    /// largest call site it can resolve).
+    declared_capacity: Option<i64>,
+    /// The fixed size of the local C array a `byval` array parameter's
+    /// own copy-in buffer is declared with (see `emit_function_def`) --
+    /// `0` (never read) for a `byref` array parameter, which uses the
+    /// caller's own storage directly instead of copying into a local
+    /// buffer at all. Filled in by `apply_byval_array_capacities`, once,
+    /// right after `build_function_table` runs (which can only see a
+    /// parameter's own declared axis, not the call sites that decide an
+    /// inferred `?` axis's real capacity).
+    byval_capacity: i64,
 }
 
 type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
@@ -201,12 +249,28 @@ type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
 /// Scoped deliberately narrow, matching this backend's usual style: only
 /// top-level arrays with a literal-or-const-literal size in every
 /// dimension are tracked at all -- see `resolve_array_bound_literal`.
+#[derive(Clone)]
 struct ArrayInfo {
     bounds: Vec<i64>,
     /// `None` for a string array (`char[.][STRING_BUFFER_SIZE]` elements);
     /// `Some((c_type, is_float))` for a numeric one -- the same pair
     /// `numeric_c_type` gives that scalar suffix.
     element_type: Option<(&'static str, bool)>,
+    /// `None` for a genuine top-level `dim`'d array -- `bounds` really is a
+    /// compile-time constant there, so `sizeof(...)` just reads it
+    /// directly (see `render_numeric_call`). `Some` only for a synthetic
+    /// `ArrayInfo` `emit_function_def`/the call-emission sites register
+    /// (per function, see `FunctionTable`'s own doc comment on the
+    /// per-function-extended table) standing in for one of *that
+    /// function's own* array parameters: the real element count along
+    /// each axis isn't a compile-time constant at all there (the same
+    /// function body is reused by every call site, which can each pass a
+    /// differently-sized array), so this instead names the hidden
+    /// `<c_name>_len0`-style runtime C parameter carrying it -- one
+    /// string per axis, same order as `bounds` (which, in this case,
+    /// holds only a dummy per-axis placeholder value; only their `len()`
+    /// -- the rank -- is real).
+    runtime_len: Option<Vec<String>>,
 }
 
 type ArrayTable = HashMap<String, ArrayInfo>;
@@ -255,6 +319,159 @@ impl std::ops::Index<&(String, Option<TypeSuffix>)> for FunctionTable {
     fn index(&self, key: &(String, Option<TypeSuffix>)) -> &FnSig {
         &self.funcs[key]
     }
+}
+
+/// Builds the *per-function* extended `FunctionTable` a function/procedure
+/// with its own array parameter and/or local (non-top-level) `dim`'d
+/// array needs while its own body is being emitted (see `generate`'s own
+/// call site) -- `None` when `sig` has no array parameter and `func.body`
+/// has no local array `dim` either, the common case, so the caller can
+/// skip the clone entirely.
+///
+/// The extension is one synthetic `ArrayInfo` per array parameter, plus
+/// `local_arrays` (every local `dim name(...)` array `collect_array_declarations`
+/// finds in this function's own body -- see `generate`'s call site), all
+/// keyed the same way a real top-level `dim`'d array already is (its own
+/// `c_name`) -- once inserted, every existing array-aware lookup
+/// (`render_lvalue`, `render_numeric_expr`/`render_string_expr`'s
+/// `Expr::ArrayRef`/`Expr::Call` arms, `render_array_index_expr`,
+/// `sizeof(...)` in `render_numeric_call`) treats a reference to the
+/// parameter's or local array's own name exactly like a reference to a
+/// real top-level array, with no changes to any of them: reading/writing
+/// an indexed element already just needs to know the element's C type and
+/// the array's rank, both given here (directly from `local_arrays` for a
+/// local array -- it already has a real compile-time bound, same as a
+/// top-level one), and `sizeof(...)` already just needs *some* string to
+/// substitute for the element count, which `ArrayInfo::runtime_len` gives
+/// as the hidden `<c_name>_len0` parameter `function_signature` declares
+/// for every array parameter (see its own doc comment) -- correct for
+/// `byval` (the local copy always holds exactly that many real elements)
+/// and `byref` alike (the caller's own real array always does too). A
+/// local array's own `runtime_len` is always `None`, same as a top-level
+/// one -- its bound is a compile-time literal either way.
+///
+/// A same-named collision between a local array and a top-level one or an
+/// array parameter is resolved by `extend`'s own last-write-wins
+/// semantics (the local array's own entry, inserted last, wins) --
+/// harmless in practice: the two live in genuinely separate C scopes (a
+/// real top-level `static` array vs. this function's own true C local),
+/// so shadowing the lookup for the duration of this function's own body
+/// is exactly the right BASIC scoping behavior anyway.
+///
+/// Cloning `functions.funcs` here (rather than threading a second,
+/// `arrays`-only table through every call site that already takes
+/// `functions: &FunctionTable`) keeps this scoped to a single call site --
+/// see `FnParam`'s own doc comment for the fuller design rationale.
+fn function_scoped_table(
+    functions: &FunctionTable,
+    sig: &FnSig,
+    local_arrays: &ArrayTable,
+) -> Option<FunctionTable> {
+    if !sig.params.iter().any(|p| p.array.is_some()) && local_arrays.is_empty() {
+        return None;
+    }
+    let mut arrays = functions.arrays.clone();
+    for param in &sig.params {
+        if param.array.is_none() {
+            continue;
+        }
+        arrays.insert(
+            param.c_name.clone(),
+            ArrayInfo {
+                bounds: vec![0],
+                element_type: Some(("int", param.is_float)),
+                runtime_len: Some(vec![format!("{}_len0", param.c_name)]),
+            },
+        );
+    }
+    arrays.extend(local_arrays.iter().map(|(k, v)| (k.clone(), v.clone())));
+    Some(FunctionTable {
+        funcs: functions.funcs.clone(),
+        methods: functions.methods.clone(),
+        arrays,
+    })
+}
+
+/// Renders one user-function/procedure call's whole argument list against
+/// its own `FnParam` signature -- shared by the three call-emission sites
+/// (`render_numeric_call`, `render_string_call`, and the bare
+/// `Statement::ExprStmt` call statement), each of which used to inline an
+/// almost-identical loop before every one of them also needed to handle
+/// `byref`/array parameters.
+///
+/// A plain `byval` scalar parameter is unchanged from before: the argument
+/// expression is rendered normally (any prelude it needs is collected and
+/// returned). A `byref` scalar parameter's argument must be a bare
+/// variable (matching real BASIC's own byref/byval rule, `docs/manual/
+/// arrays.html#byref-byval` -- there's nowhere else to write the result
+/// back to): its address is passed for a numeric one, or the plain buffer
+/// name for a string one (already a `char*`, so no `&` -- taking its
+/// address would instead give a `char(*)[256]`, the wrong pointer type
+/// entirely). An array parameter's argument (`byval` or `byref` alike)
+/// must be a bare reference to a *known* array -- either a real top-level
+/// `dim`'d one, or (when this call site itself lives inside another
+/// function's body) that function's own array parameter, thanks to the
+/// per-function-extended `FunctionTable` `function_scoped_table` builds
+/// (see its own doc comment) -- and renders to *two* C arguments: the
+/// array's own name (already a real C array, which decays to a pointer
+/// exactly like a `byref`/`byval` parameter's own incoming one expects)
+/// and its real element count (a compile-time literal for a real `dim`'d
+/// array, or the forwarded `<c_name>_len0` hidden parameter for a
+/// forwarded array parameter -- see `ArrayInfo::runtime_len`).
+fn render_call_args(
+    args: &[&Expr],
+    params: &[FnParam],
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+) -> Result<(Vec<String>, Vec<String>), String> {
+    let mut prelude = Vec::new();
+    let mut arg_texts = Vec::with_capacity(args.len());
+    for (&arg, param) in args.iter().zip(params) {
+        if param.array.is_some() {
+            let Expr::Ident(ident) = arg else {
+                return Err(
+                    "an array argument isn't supported by the minimal C backend yet -- only a \
+                     bare array name is"
+                        .to_string(),
+                );
+            };
+            let key = array_c_name(ident);
+            let info = functions.arrays.get(&key).ok_or_else(|| {
+                format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
+            })?;
+            let len_text = info
+                .runtime_len
+                .as_ref()
+                .and_then(|v| v.first())
+                .cloned()
+                .unwrap_or_else(|| (info.bounds[0] + 1).to_string());
+            arg_texts.push(key);
+            arg_texts.push(len_text);
+        } else if param.by_ref {
+            let Expr::Ident(ident) = arg else {
+                return Err(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to"
+                        .to_string(),
+                );
+            };
+            if param.is_string {
+                arg_texts.push(c_var_name(ident, TypeSuffix::String));
+            } else {
+                let suffix = effective_suffix(ident.suffix);
+                arg_texts.push(format!("&{}", c_var_name(ident, suffix)));
+            }
+        } else if param.is_string {
+            let (arg_prelude, text) = render_string_expr(arg, needs_math, temp_counter, functions)?;
+            prelude.extend(arg_prelude);
+            arg_texts.push(text);
+        } else {
+            let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
+            arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
+        }
+    }
+    Ok((prelude, arg_texts))
 }
 
 /// The lookup key for a function table entry, or an `Expr::Call` site --
@@ -393,6 +610,123 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         crate::codegen_basic::visit_body_exprs(&func.body, &mut visit);
     }
     usage
+}
+
+/// Every `Expr::Call`/`Expr::ArrayRef` site in the whole program -- top
+/// level plus every function/procedure body -- as `(callee name, argument
+/// list)` pairs, regardless of which of the two shapes parsed it (a
+/// zero- or one-argument call always parses as `Expr::ArrayRef`, not
+/// `Expr::Call` -- see `is_known_callable`'s own doc comment): used by
+/// `apply_byval_array_capacities`, which filters these down to just the
+/// ones actually calling a function with a `byval` array parameter.
+fn collect_call_sites(program: &Program) -> Vec<(BasicIdent, Vec<Expr>)> {
+    let mut sites: Vec<(BasicIdent, Vec<Expr>)> = Vec::new();
+    let mut visit = |expr: &Expr| match expr {
+        Expr::Call { name, args } => sites.push((name.clone(), args.clone())),
+        Expr::ArrayRef { name, indices } => sites.push((name.clone(), indices.clone())),
+        _ => {}
+    };
+    crate::codegen_basic::visit_body_exprs(&program.statements, &mut visit);
+    for func in &program.functions {
+        crate::codegen_basic::visit_body_exprs(&func.body, &mut visit);
+    }
+    sites
+}
+
+/// Fills in `byval_capacity` on every `byval` array parameter's
+/// `ArrayParamInfo` (see its own doc comment) -- the fixed size of the
+/// local C array `emit_function_def` copies the caller's array into. Run
+/// once, right after `build_function_table`, before any codegen: a
+/// `byref` array parameter is skipped entirely (it has no local buffer to
+/// size at all -- see `FnParam::by_ref`'s doc comment).
+///
+/// Deliberately narrow, mirroring `codegen_basic::infer_array_param_capacities`'s
+/// own call-site scan but far simpler: only a call site whose argument is
+/// a bare reference to a *top-level* `dim`'d array (`arrays`, this
+/// backend's only concept of "a compile-time-known array size" -- see the
+/// module doc comment) is understood. An explicit capacity
+/// (`arr%(100)`) is used as-is (still cross-checked against every
+/// resolvable call site, the same compile-time-provable overflow check
+/// `codegen_basic` does); an inferred one (`arr%(?)`) needs at least one
+/// resolvable call site, and every call site to that parameter must
+/// resolve -- an unresolvable one (an expression, or a forwarded array
+/// parameter from another function) is rejected outright rather than
+/// silently under-sizing the buffer, since there would be no way to prove
+/// the buffer is big enough.
+fn apply_byval_array_capacities(
+    funcs: &mut FunctionMap,
+    program: &Program,
+    arrays: &ArrayTable,
+) -> Result<(), String> {
+    let call_sites = collect_call_sites(program);
+    let keys: Vec<(String, Option<TypeSuffix>)> = funcs.keys().cloned().collect();
+    for key in keys {
+        let param_count = funcs[&key].params.len();
+        for idx in 0..param_count {
+            let (needs_capacity, declared) = match &funcs[&key].params[idx].array {
+                Some(arr) if !funcs[&key].params[idx].by_ref => (true, arr.declared_capacity),
+                _ => (false, None),
+            };
+            if !needs_capacity {
+                continue;
+            }
+            let mut max_actual: Option<i64> = None;
+            let mut any_site = false;
+            let mut any_unresolved = false;
+            for (name, args) in &call_sites {
+                if fn_key(name) != key {
+                    continue;
+                }
+                let Some(arg) = args.get(idx) else {
+                    continue;
+                };
+                any_site = true;
+                match arg {
+                    Expr::Ident(arg_ident) => match arrays.get(&array_c_name(arg_ident)) {
+                        Some(info) => {
+                            let actual = info.bounds[0] + 1;
+                            max_actual = Some(max_actual.map_or(actual, |m: i64| m.max(actual)));
+                            if let Some(cap) = declared {
+                                if actual > cap {
+                                    return Err(format!(
+                                        "a call to `{name}` passes {actual} elements to its \
+                                         array parameter, but its storage is only sized for \
+                                         {cap} -- give it a bigger explicit capacity"
+                                    ));
+                                }
+                            }
+                        }
+                        None => any_unresolved = true,
+                    },
+                    _ => any_unresolved = true,
+                }
+            }
+            let capacity = match declared {
+                Some(cap) => cap,
+                None if any_site && !any_unresolved => max_actual.unwrap_or(1),
+                None => {
+                    return Err(format!(
+                        "can't automatically size `{name}`'s storage for its array parameter -- \
+                         at least one call site (or none at all) can't be resolved to a \
+                         top-level array at compile time. Give it an explicit capacity instead \
+                         of `?`, e.g. `(100)`",
+                        name = key.0
+                    ));
+                }
+            };
+            funcs
+                .get_mut(&key)
+                .unwrap()
+                .params
+                .get_mut(idx)
+                .unwrap()
+                .array
+                .as_mut()
+                .unwrap()
+                .byval_capacity = capacity.max(1);
+        }
+    }
+    Ok(())
 }
 
 /// `bcc_mid`/`bcc_chr` -- `MID$`/`LEFT$` and `CHR$` -- both return
@@ -1142,6 +1476,7 @@ fn collect_array_declarations_into(
                     ArrayInfo {
                         bounds,
                         element_type,
+                        runtime_len: None,
                     },
                 );
             }
@@ -1457,15 +1792,21 @@ fn apply_field_layouts_before_functions(
 /// Deliberately narrow, same "reject rather than emit wrong code" policy
 /// as everywhere else in this backend: **procedures** (no return value)
 /// aren't supported yet (only functions are -- see the module doc
-/// comment), neither are `byref` or array parameters (real
-/// pass-by-reference/array-decay semantics are a real chunk of work,
-/// deferred), and a function whose body doesn't end with an explicit
-/// `return` on its last top-level statement is rejected outright rather
-/// than guessing a fallback value -- unlike the BASIC backend (which can
-/// fall back on "whatever the shared result variable last held," matching
-/// real MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C
-/// function falling off the end without `return`-ing a value is undefined
-/// behavior, not a defined-if-surprising fallback.
+/// comment); `byref` scalar parameters compile to a real C pointer plus
+/// copy-in/copy-out (see `FnParam::by_ref`); an array parameter is
+/// supported too, but only a rank-1 numeric one (`arr%(?)`/`arr%(100)`) --
+/// a higher rank needs its inner axes' capacities fixed at compile time to
+/// give the parameter's real C pointer type a shape at all (real C allows
+/// only the outermost dimension of a multi-dimensional array parameter to
+/// vary), which no BASCAL tutorial or test here actually needs, so it's
+/// left unattempted; a string array parameter is rejected the same way. A
+/// function whose body doesn't end with an explicit `return` on its last
+/// top-level statement is rejected outright rather than guessing a
+/// fallback value -- unlike the BASIC backend (which can fall back on
+/// "whatever the shared result variable last held," matching real
+/// MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C function
+/// falling off the end without `return`-ing a value is undefined behavior,
+/// not a defined-if-surprising fallback.
 fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashMap<(TypeSuffix, String), FnSig>), String> {
     let mut table = FunctionMap::new();
     let mut methods = HashMap::new();
@@ -1495,22 +1836,49 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashM
                 is_float: numeric_c_type(receiver).is_some_and(|(_, f)| f),
                 default: None,
                 suffix: receiver,
+                by_ref: false,
+                array: None,
             });
         }
         for param in &func.params {
-            if param.mode != ParamMode::ByVal {
-                return Err(format!(
-                    "`byref` parameters aren't supported by the minimal C backend yet (`{}`'s \
-                     parameter `{}`) -- only byval scalar parameters are",
-                    func.name, param.name
-                ));
-            }
-            if param.axes.is_some() {
-                return Err(format!(
-                    "array parameters aren't supported by the minimal C backend yet (`{}`'s \
-                     parameter `{}`)",
-                    func.name, param.name
-                ));
+            let by_ref = param.mode == ParamMode::ByRef;
+            if let Some(axes) = &param.axes {
+                if axes.len() != 1 {
+                    return Err(format!(
+                        "array parameters with more than one dimension aren't supported by the \
+                         minimal C backend yet (`{}`'s parameter `{}` has {} dimensions)",
+                        func.name,
+                        param.name,
+                        axes.len()
+                    ));
+                }
+                let Some(suffix) = param.name.suffix else {
+                    return Err(format!(
+                        "array parameter `{}` of `{}` isn't supported by the minimal C backend \
+                         yet -- give it an explicit numeric type suffix",
+                        param.name, func.name
+                    ));
+                };
+                let Some((_, is_float)) = numeric_c_type(suffix) else {
+                    return Err(format!(
+                        "string array parameters aren't supported by the minimal C backend yet \
+                         (`{}`'s parameter `{}`) -- only numeric array parameters are",
+                        func.name, param.name
+                    ));
+                };
+                params.push(FnParam {
+                    c_name: c_var_name(&param.name, suffix),
+                    is_string: false,
+                    is_float,
+                    default: None,
+                    suffix,
+                    by_ref,
+                    array: Some(ArrayParamInfo {
+                        declared_capacity: axes[0].map(|n| n + 1),
+                        byval_capacity: 0,
+                    }),
+                });
+                continue;
             }
             let Some(suffix) = param.name.suffix else {
                 return Err(format!(
@@ -1533,6 +1901,8 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashM
                 is_float: param_numeric.is_some_and(|(_, f)| f),
                 default: param.default.clone(),
                 suffix,
+                by_ref,
+                array: None,
             });
         }
         // A procedure may fall through to its end with no explicit
@@ -1694,10 +2064,12 @@ pub(crate) struct GeneratedC {
 }
 
 pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
-    let (funcs, methods) =
+    let (mut funcs, methods) =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
     let int_consts = collect_top_level_int_consts(&program.statements);
     let arrays = collect_array_declarations(&program.statements, &int_consts)
+        .map_err(|message| vec![unsupported(&message)])?;
+    apply_byval_array_capacities(&mut funcs, program, &arrays)
         .map_err(|message| vec![unsupported(&message)])?;
     let functions = FunctionTable { funcs, methods, arrays };
     let known_layouts = known_record_layouts(program);
@@ -1747,6 +2119,18 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
             register_var(ident, &mut numeric_vars, &mut string_vars);
         }
     }
+    // A bare array name used as a call argument (`printArray%(data%)`) is,
+    // syntactically, just `Expr::Ident("data%")` -- indistinguishable, to
+    // `collect_vars_in_statement`'s own expression walk, from an ordinary
+    // scalar read, since it has no idea `arrays` (built above) even exists.
+    // Left alone, that would register a same-named *scalar* global
+    // alongside the real array declaration below -- two conflicting C
+    // declarations for the same identifier. Array names always win here:
+    // a real `dim`'d array already gets its own declaration, so any
+    // same-named scalar entry only this pass's own blind spot could have
+    // produced is dropped.
+    numeric_vars.retain(|k, _| !functions.arrays.contains_key(k));
+    string_vars.retain(|k| !functions.arrays.contains_key(k));
 
     let mut needs_math = false;
     let mut needs_string = false;
@@ -1794,10 +2178,25 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         let sig = functions.signature_for(func).expect("function table should contain declaration");
         prototypes.push_str(&function_signature(func, sig));
         prototypes.push_str(";\n");
+        // A function/procedure with its own array parameter(s) needs a
+        // *per-function* extended `FunctionTable` while its own body is
+        // being emitted -- see `function_scoped_table`'s own doc comment
+        // for why (in short: it registers each such parameter into the
+        // same `arrays` lookup `render_lvalue`/`render_numeric_expr`/
+        // `sizeof(...)` already use for a real top-level `dim`'d array,
+        // so indexing/`sizeof` on a parameter "just works" with no extra
+        // threading through any of those). Every other function still
+        // uses the shared, un-extended `functions` table -- cheap to
+        // check, since most functions have no array parameter at all.
+        let local_arrays = collect_array_declarations(&func.body, &int_consts)
+            .map_err(|message| vec![unsupported(&message)])?;
+        let scoped_table = function_scoped_table(&functions, sig, &local_arrays);
+        let table_for_body = scoped_table.as_ref().unwrap_or(&functions);
         emit_function_def(
             func,
             sig,
-            &functions,
+            table_for_body,
+            &local_arrays,
             &mut function_defs,
             &mut needs_math,
             &mut needs_string,
@@ -2044,12 +2443,27 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
 /// (see the module doc comment/`emit_function_def`): its BASCAL return
 /// value comes out through an extra trailing `char* bcc_out` parameter
 /// instead, matching the buffer-out convention already used by every
-/// other string value in this backend. A string parameter's C parameter
-/// is `const char*` named `<c_name>_in` -- not `<c_name>` itself -- because
-/// the function body needs its own byval-copied local under the plain
-/// `<c_name>` (see `emit_function_def`'s copy-in preamble): aliasing the
-/// parameter directly would let the callee mutate the caller's buffer,
-/// breaking byval semantics.
+/// other string value in this backend.
+///
+/// A byval string parameter's C parameter is `const char*` named
+/// `<c_name>_in` -- not `<c_name>` itself -- because the function body
+/// needs its own byval-copied local under the plain `<c_name>` (see
+/// `emit_function_def`'s copy-in preamble): aliasing the parameter
+/// directly would let the callee mutate the caller's buffer, breaking
+/// byval semantics. A `byref` scalar parameter (numeric or string) is
+/// named `<c_name>_in` for the identical reason, just one level removed:
+/// it's a real C pointer (`T*`/`char*`), and the body still needs its own
+/// plain-named local to read/write normally -- copied in from `*<c_name>_in`
+/// at function entry and written back at every `return` (see
+/// `emit_byref_scalar_copyback`). An array parameter (`byval` or `byref`
+/// alike) gets a second, hidden `int <c_name>_len0` parameter carrying its
+/// real element count (see `FnParam::array`'s own doc comment); its first
+/// parameter is named `<c_name>_in` only for `byval` (which, like a byval
+/// string, still needs its own local copy -- see `emit_function_def`) --
+/// a `byref` array parameter has no local copy to alias away from at all
+/// (a real pointer already gives the callee live access to the caller's
+/// own storage), so its incoming pointer is simply named `<c_name>`
+/// directly, used as-is throughout the body.
 fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
     let ret_type = if sig.is_void || sig.is_string {
         "void"
@@ -2058,19 +2472,30 @@ fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
             .expect("validated by build_function_table")
             .0
     };
-    let mut params: Vec<String> = sig
-        .params
-        .iter()
-        .enumerate()
-        .map(|(_index, fp)| {
+    let mut params: Vec<String> = Vec::new();
+    for fp in &sig.params {
+        if fp.array.is_some() {
+            let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
+            let pointer_name = if fp.by_ref {
+                fp.c_name.clone()
+            } else {
+                format!("{}_in", fp.c_name)
+            };
+            params.push(format!("{c_type}* {pointer_name}, int {}_len0", fp.c_name));
+        } else if fp.by_ref {
             if fp.is_string {
-                format!("const char* {}_in", fp.c_name)
+                params.push(format!("char* {}_in", fp.c_name));
             } else {
                 let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
-                format!("{c_type} {}", fp.c_name)
+                params.push(format!("{c_type}* {}_in", fp.c_name));
             }
-        })
-        .collect();
+        } else if fp.is_string {
+            params.push(format!("const char* {}_in", fp.c_name));
+        } else {
+            let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
+            params.push(format!("{c_type} {}", fp.c_name));
+        }
+    }
     if sig.is_string {
         params.push("char* bcc_out".to_string());
     }
@@ -2100,6 +2525,7 @@ fn emit_function_def(
     func: &FunctionDef,
     sig: &FnSig,
     functions: &FunctionTable,
+    local_arrays: &ArrayTable,
     out: &mut String,
     needs_math: &mut bool,
     needs_string: &mut bool,
@@ -2125,12 +2551,44 @@ fn emit_function_def(
 
     let mut body = String::new();
     for fp in &sig.params {
-        if fp.is_string {
+        if let Some(arr) = &fp.array {
+            // A `byref` array parameter needs no local buffer at all -- its
+            // incoming pointer, named plainly `<c_name>` (see
+            // `function_signature`), already gives live read/write access
+            // to the caller's own storage, exactly matching real BASIC's
+            // own byref array semantics. A `byval` one gets its own local
+            // copy, sized to fit the largest call site this program could
+            // resolve (see `apply_byval_array_capacities`), filled in from
+            // the incoming pointer up to its real element count (the
+            // hidden `<c_name>_len0` parameter) -- so later writes inside
+            // the function body never reach the caller's own array.
+            if !fp.by_ref {
+                let (c_type, _) =
+                    numeric_c_type(fp.suffix).expect("validated by build_function_table");
+                body.push_str(&format!(
+                    "    {c_type} {0}[{1}] = {{0}};\n",
+                    fp.c_name, arr.byval_capacity
+                ));
+                body.push_str(&format!(
+                    "    for (int bcc_i = 0; bcc_i < {0}_len0; bcc_i++) {{ {0}[bcc_i] = \
+                     {0}_in[bcc_i]; }}\n",
+                    fp.c_name
+                ));
+            }
+        } else if fp.is_string {
             body.push_str(&format!("    char {0}[{STRING_BUFFER_SIZE}];\n", fp.c_name));
             body.push_str(&format!(
                 "    snprintf({0}, sizeof({0}), \"%s\", {0}_in);\n",
                 fp.c_name
             ));
+        } else if fp.by_ref {
+            // A `byref` scalar parameter's own copy-in: the body reads/
+            // writes the plain local `<c_name>` completely normally (no
+            // dereferencing anywhere else in this file needs to change at
+            // all) -- `emit_byref_scalar_copyback` writes it back through
+            // `<c_name>_in` at every `return`.
+            let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
+            body.push_str(&format!("    {c_type} {0} = *{0}_in;\n", fp.c_name));
         }
     }
     for (c_name, c_type) in &numeric_locals {
@@ -2141,9 +2599,35 @@ fn emit_function_def(
             "    char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"
         ));
     }
-    if sig.params.iter().any(|p| p.is_string)
+    // A local `dim name(...)` array -- declared as a real true-C-local
+    // array, right here, exactly like `numeric_locals`/`string_locals`
+    // above (never hoisted to file scope the way a top-level `dim`'d one
+    // is -- see `collect_array_declarations`'s own doc comment and
+    // `generate`'s call site). Sorted by name for the same deterministic-
+    // output reason the top-level globals loop already is.
+    let mut sorted_local_arrays: Vec<(&String, &ArrayInfo)> = local_arrays.iter().collect();
+    sorted_local_arrays.sort_by_key(|(name, _)| name.as_str());
+    for (c_name, info) in &sorted_local_arrays {
+        let dims: String = info
+            .bounds
+            .iter()
+            .map(|bound| format!("[{}]", bound + 1))
+            .collect();
+        match info.element_type {
+            Some((c_type, _)) => {
+                body.push_str(&format!("    {c_type} {c_name}{dims} = {{0}};\n"));
+            }
+            None => {
+                body.push_str(&format!(
+                    "    char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {{0}};\n"
+                ));
+            }
+        }
+    }
+    if sig.params.iter().any(|p| p.is_string || p.array.is_some() || p.by_ref)
         || !numeric_locals.is_empty()
         || !string_locals.is_empty()
+        || !sorted_local_arrays.is_empty()
     {
         body.push('\n');
     }
@@ -2185,9 +2669,50 @@ fn emit_function_def(
         )?;
     }
 
+    // Covers a `procedure`'s implicit fallthrough return (no explicit
+    // trailing `return` at all -- see `Statement::ReturnVoid`'s own arm in
+    // `emit_statement`, which only handles an *explicit* one, wherever it
+    // appears in the body). A `function`, by contrast, always ends with an
+    // explicit `return` on every path (enforced by `body_always_returns`
+    // in `build_function_table`), so this is unreachable there -- still
+    // harmless to emit (plain `gcc`, with no `-Wall`/`-Werror`, doesn't
+    // reject or even warn about trailing unreachable code -- see
+    // `invoke_gcc` in `main.rs`), and simpler than trying to prove it's
+    // dead first just to skip it.
+    emit_byref_scalar_copyback(sig, &mut body);
+
     out.push_str(&function_signature(func, sig));
     out.push_str(&format!(" {{\n{}}}\n\n", reindent_c_body(&body)));
     Ok(())
+}
+
+/// Writes every `byref` *scalar* parameter's current value back through
+/// its own incoming pointer (`<c_name>_in`) -- the other half of the
+/// copy-in/copy-out convention `emit_function_def`'s own prologue sets up
+/// (see `FnParam::by_ref`'s doc comment). Called at every real exit point
+/// of a function/procedure body: `Statement::Return`'s own arm, the
+/// `current_function.is_some()` branch of `Statement::ReturnVoid`'s own
+/// arm (a `procedure`'s explicit bare `return`, wherever in the body it
+/// appears), and once more at the very end of `emit_function_def` itself
+/// (a `procedure`'s *implicit* fallthrough return -- see its own call
+/// site's comment). A `byref` *array* parameter needs no such copyback at
+/// all -- it was never copied into a local buffer in the first place (see
+/// `emit_function_def`'s own prologue), so every write already landed
+/// directly in the caller's own storage, live, the moment it happened.
+fn emit_byref_scalar_copyback(sig: &FnSig, out: &mut String) {
+    for fp in &sig.params {
+        if fp.array.is_some() || !fp.by_ref {
+            continue;
+        }
+        if fp.is_string {
+            out.push_str(&format!(
+                "    snprintf({0}_in, {STRING_BUFFER_SIZE}, \"%s\", {0});\n",
+                fp.c_name
+            ));
+        } else {
+            out.push_str(&format!("    *{0}_in = {0};\n", fp.c_name));
+        }
+    }
 }
 
 /// Re-indents an already-fully-generated C body per its actual nesting
@@ -3469,10 +3994,12 @@ fn emit_statement(
                 out.push_str(&format!(
                     "    snprintf(bcc_out, {STRING_BUFFER_SIZE}, \"%s\", {text});\n"
                 ));
+                emit_byref_scalar_copyback(sig, out);
                 out.push_str("    return;\n");
             } else {
                 let (text, is_float) = render_numeric_expr(value, needs_math, functions)?;
                 let coerced = coerce_numeric(text, is_float, sig.is_float, needs_math);
+                emit_byref_scalar_copyback(sig, out);
                 out.push_str(&format!("    return {coerced};\n"));
             }
             Ok(())
@@ -3513,6 +4040,10 @@ fn emit_statement(
                 out.push_str("    }\n");
                 return Ok(());
             }
+            emit_byref_scalar_copyback(
+                current_function.expect("checked by the `is_none()` branch above"),
+                out,
+            );
             out.push_str("    return;\n");
             Ok(())
         }
@@ -3582,19 +4113,8 @@ fn emit_statement(
                 )
             })?;
             let call_args = call_args_with_defaults(sig, args, name)?;
-            let mut prelude = Vec::new();
-            let mut arg_texts = Vec::with_capacity(call_args.len());
-            for (arg, param) in call_args.into_iter().zip(&sig.params) {
-                if param.is_string {
-                    let (arg_prelude, text) =
-                        render_string_expr(arg, needs_math, temp_counter, functions)?;
-                    prelude.extend(arg_prelude);
-                    arg_texts.push(text);
-                } else {
-                    let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
-                    arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
-                }
-            }
+            let (prelude, mut arg_texts) =
+                render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -4884,18 +5404,8 @@ fn render_string_call(
         )
     })?;
     let call_args = call_args_with_defaults(sig, args, name)?;
-    let mut prelude = Vec::new();
-    let mut arg_texts = Vec::with_capacity(call_args.len());
-    for (arg, param) in call_args.into_iter().zip(&sig.params) {
-        if param.is_string {
-            let (arg_prelude, text) = render_string_expr(arg, needs_math, temp_counter, functions)?;
-            prelude.extend(arg_prelude);
-            arg_texts.push(text);
-        } else {
-            let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
-            arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
-        }
-    }
+    let (mut prelude, mut arg_texts) =
+        render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
     let temp = format!("bt_s_{temp_counter}");
     *temp_counter += 1;
     prelude.push(format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
@@ -5171,14 +5681,40 @@ fn render_numeric_call(
                 ))
             }
         };
-        let Some(bound) = info.bounds.get(axis) else {
+        if axis >= info.bounds.len() {
             return Err(format!(
                 "`{array_name}` only has {} dimension{} -- axis {axis} doesn't exist",
                 info.bounds.len(),
                 if info.bounds.len() == 1 { "" } else { "s" }
             ));
-        };
-        return Ok(((bound + 1).to_string(), false));
+        }
+        // `sizeof()` returns the array's own declared *bound* (its
+        // top index -- `docs/manual/arrays.html#sizeof`'s own
+        // `dim data%(9)` / `sizeof(data%) = 9` example), matching
+        // `--target basic`'s `resolve_axis_bound`/`resolve_sizeof`
+        // exactly -- NOT the element count (`bound + 1`, real BASIC's own
+        // inclusive-bound convention) that a real C array's storage needs
+        // (see the top-level globals loop and `emit_function_def`'s
+        // `byval` copy-in buffer, both of which still want `bound + 1`
+        // for that reason).
+        //
+        // An array *parameter* (see `function_scoped_table`) has no
+        // compile-time-known bound at all -- the same function body is
+        // reused by every call site, each of which can pass a
+        // differently-sized array -- so its synthetic `ArrayInfo` carries
+        // the hidden `<c_name>_len0` runtime parameter instead (see
+        // `ArrayInfo::runtime_len`'s own doc comment). That parameter
+        // itself holds the real element *count* (`bound + 1`, set at the
+        // call site by `render_call_args`/`apply_byval_array_capacities`,
+        // and needed as a count there for the `byval` copy-in loop and
+        // capacity checks) -- so `sizeof()` on a parameter has to
+        // subtract 1 back off it to recover the same bound a real
+        // top-level `dim`'d array would report directly.
+        if let Some(runtime) = info.runtime_len.as_ref().and_then(|v| v.get(axis)) {
+            return Ok((format!("({runtime} - 1)"), false));
+        }
+        let bound = info.bounds[axis];
+        return Ok((bound.to_string(), false));
     }
     // `LEN(s$)` -- `strlen`, cast to `int` so it prints under `%d` like
     // every other integer result here rather than a possibly-64-bit
@@ -5398,7 +5934,43 @@ fn render_numeric_call(
     let call_args = call_args_with_defaults(sig, args, name)?;
     let mut arg_texts = Vec::with_capacity(call_args.len());
     for (arg, param) in call_args.into_iter().zip(&sig.params) {
-        if param.is_string {
+        if param.array.is_some() {
+            let Expr::Ident(ident) = arg else {
+                return Err(
+                    "an array argument isn't supported by the minimal C backend yet -- only a \
+                     bare array name is"
+                        .to_string(),
+                );
+            };
+            let key = array_c_name(ident);
+            let info = functions.arrays.get(&key).ok_or_else(|| {
+                format!(
+                    "`{ident}` isn't a known array, so it can't be passed as an array argument"
+                )
+            })?;
+            let len_text = info
+                .runtime_len
+                .as_ref()
+                .and_then(|v| v.first())
+                .cloned()
+                .unwrap_or_else(|| (info.bounds[0] + 1).to_string());
+            arg_texts.push(key);
+            arg_texts.push(len_text);
+        } else if param.by_ref {
+            let Expr::Ident(ident) = arg else {
+                return Err(
+                    "a `byref` parameter was called with an argument that isn't a plain \
+                     variable -- byref requires somewhere to write the result back to"
+                        .to_string(),
+                );
+            };
+            if param.is_string {
+                arg_texts.push(c_var_name(ident, TypeSuffix::String));
+            } else {
+                let suffix = effective_suffix(ident.suffix);
+                arg_texts.push(format!("&{}", c_var_name(ident, suffix)));
+            }
+        } else if param.is_string {
             arg_texts.push(render_prelude_free_string_arg(arg, needs_math, functions)?);
         } else {
             let (text, is_float) = render_numeric_expr(arg, needs_math, functions)?;
