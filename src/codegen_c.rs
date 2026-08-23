@@ -23,47 +23,79 @@
 //! variables (real C function-local scope -- no name-mangling needed,
 //! unlike the BASIC backend's GOSUB-against-shared-globals approach), and
 //! `global` to opt into reading/writing a top-level variable instead (see
-//! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
-//! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), twenty-five BASIC
-//! intrinsics implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`,
-//! `LEFT$`, `RIGHT$`, `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`,
-//! `SGN`, `CINT`, `CLNG`, `CSNG`, `CDBL`, `SIN`, `COS`, `TAN`, `ATN`,
-//! `LOG`, `EXP`, `RND` (see `render_numeric_call`/`render_string_call`/
-//! `MID_HELPER`/`INSTR_HELPER`/`SGN_HELPER`/`RND_HELPER`) -- plus
-//! `RANDOMIZE` (a statement, not an expression; see `Statement::Randomize`'s
-//! own handling in `emit_statement`) -- and
-//! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
-//! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
-//! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
+//! `build_function_table`/`emit_function_def`); `procedure` declarations
+//! too (a real `void` C function reusing the same machinery as `function`
+//! -- its body may fall through with no explicit `return`, matching real
+//! BASIC's implicit `RETURN` for `PROCEDURE`), and a bare call statement
+//! (calling a `procedure`, or discarding a `function`'s return value); a
+//! suffixless (default-typed) numeric variable (real MBASIC/BASCOM's own
+//! unoverridden default, single-precision -- see `effective_suffix`);
+//! `require`/`import` cross-file resolution (needed no C-backend-specific
+//! work at all -- `lib.rs`'s own resolution already merges a required
+//! file's functions/procedures into `Program.functions` before either
+//! backend's codegen ever runs); `label:`/`goto label` (a direct 1:1
+//! mapping onto C's own `goto`/label -- works inside a `function`/
+//! `procedure` body too, not just at top level) and top-level-only BASIC
+//! `gosub label`/bare `return` (distinct from a `function`/`procedure`'s
+//! own `return` -- built on a small return-address-ID stack, since C's
+//! `goto` has no "remember where to resume" of its own; see
+//! `Statement::Gosub`'s own doc comment for why it's scoped to top-level
+//! code); twenty-five BASIC intrinsics implemented natively -- `LEN`,
+//! `ASC`, `CHR$`, `MID$`, `LEFT$`, `RIGHT$`, `STR$`, `VAL`, `INSTR`, `SQR`,
+//! `ABS`, `INT`, `FIX`, `SGN`, `CINT`, `CLNG`, `CSNG`, `CDBL`, `SIN`,
+//! `COS`, `TAN`, `ATN`, `LOG`, `EXP`, `RND` (see
+//! `render_numeric_call`/`render_string_call`/`MID_HELPER`/
+//! `INSTR_HELPER`/`SGN_HELPER`/`RND_HELPER`) -- plus the statement form
+//! `RANDOMIZE` (see `Statement::Randomize`'s own handling in
+//! `emit_statement`); random-access record I/O: `OPEN ... FOR
+//! RANDOM`/`BINARY`, `CLOSE`, `FIELD`, `GET`/`PUT` (whole-record form
+//! only), `LSET`/`RSET`, and `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/
+//! `CVS`/`CVD` (see
 //! `FileIoLayout`/`apply_field_statement`/`emit_get_or_put`/`FILE_IO_HELPER`
 //! -- two real, documented divergences from real MBASIC/BASCOM live
 //! there: `MKS$`/`MKD$`/`CVS`/`CVD` use plain IEEE 754 instead of real
 //! BASIC's Microsoft Binary Format, and multi-byte values are packed in
-//! the host's native byte order, assumed little-endian). NOT yet
-//! supported: `procedure` (no return value), `byref`/array parameters, a
-//! function body that doesn't provably `return` on every path (see
-//! `body_always_returns`), sequential file I/O (`OPEN FOR
-//! INPUT`/`OUTPUT`/`APPEND`), and a `FIELD`/`OPEN`/`GET`/`PUT` channel or
-//! `FIELD` width that isn't a literal integer -- all rejected with a
-//! diagnostic rather than guessed at. Recursion (direct or indirect) is
-//! rejected at the resolver level before codegen ever runs, for every
-//! target, not just this one. Everything else (other statement kinds,
-//! arrays, any BASIC intrinsic beyond the six above) reports a "not
-//! supported yet" diagnostic rather than panicking or emitting wrong code
-//! -- this is a walking skeleton to prove the CLI/dispatch plumbing
-//! (`Target::C`, `--target c`, `invoke_gcc`) end-to-end, not a real
-//! backend. Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
-//! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
-//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`,
-//! `tutorial/07_functions.bcl` (including its two `require`d
-//! `com.bascal.stdlib` library functions, `ucase$`/`lcase$` -- library
-//! merging itself needed no C-backend-specific work at all, since
-//! `lib.rs`'s `require`/`import` resolution already merges a required
-//! file's functions into `Program.functions` before either backend's
-//! codegen ever runs), and `tutorial/15_random_and_record_files.bcl`
-//! (both its hand-written Part 1 and DSL-based Part 2 -- gcc-compiled
-//! and run, every value matches).
+//! the host's native byte order, assumed little-endian); sequential file
+//! I/O: `OPEN ... FOR INPUT`/`OUTPUT`/`APPEND`, `CLOSE`, `PRINT #`,
+//! `WRITE #`/`INPUT #` (a matched quoted, comma-separated format each can
+//! read back), `LINE INPUT #`, and `EOF(#ch)` (see `SEQ_FILE_HELPER`);
+//! interactive `INPUT` (one bare scalar variable per statement, with an
+//! optional prompt -- see `INPUT_HELPER`); and screen I/O: `cls`,
+//! `locate row, col`, `color fg[, bg]`, and `beep` (see `COLOR_HELPER`).
+//! NOT yet supported: arrays, entirely -- no `dim name(n)`, indexing, or
+//! array parameters; `byref` parameters (byval-only so far); a `function`
+//! body that doesn't provably `return` on every path (see
+//! `body_always_returns` -- a `procedure` has no such requirement);
+//! `on error goto`/`resume`/`err`/`erl` (needs a resumable-execution model
+//! on top of the same return-address-stack technique `gosub`/`return`
+//! already use); `gosub`/bare `return` used inside a `function`/
+//! `procedure` body (unlike `label`/`goto`, which work there fine); and a
+//! `FIELD`/`OPEN`/`GET`/`PUT` channel or `FIELD` width that isn't a
+//! literal integer -- all rejected with a diagnostic rather than guessed
+//! at. Recursion (direct or indirect) is rejected at the resolver level
+//! before codegen ever runs, for every target, not just this one.
+//! Everything else (`on ... goto`/`on ... gosub`, `data`/`read`/
+//! `restore`, `mid$` statement-form assignment, `swap`, `poke`/`out`,
+//! `print using`, arrays, ...) reports a "not supported yet" diagnostic
+//! rather than panicking or emitting wrong code -- this is a deliberately
+//! minimal backend, not a complete one; see the GitHub issue tracker's
+//! `c-target` label for the current, itemized list. Tutorials that
+//! compile end to end today: `tutorial/01_hello.bcl`,
+//! `tutorial/02_variables.bcl`, `tutorial/03_arithmetic.bcl`,
+//! `tutorial/04_conditions.bcl`, `tutorial/05_loops.bcl`,
+//! `tutorial/06_select_case.bcl`, `tutorial/07_functions.bcl` (including
+//! its two `require`d `com.bascal.stdlib` library functions,
+//! `ucase$`/`lcase$`), `tutorial/10_files.bcl`, `tutorial/11_screen.bcl`,
+//! `tutorial/13_shared/start.bcl` + `tutorial/13_shared/show.bcl`,
+//! `tutorial/15_random_and_record_files.bcl` (both its hand-written Part 1
+//! and DSL-based Part 2), and `tutorial/18_stdlib.bcl` -- each gcc-compiled
+//! and run, not just transpiled (see `docs/manual/command-line-reference.html#backends`
+//! for the up to date list). `tutorial/08_arrays.bcl`, `09_data.bcl`,
+//! `12_require.bcl` (its required library takes an array parameter),
+//! `14_procedures.bcl` (byref array params),
+//! `16_short_circuit.bcl`, `17_labels_and_error_handling.bcl` (`on error
+//! goto`), and `19_inventory.bcl` still don't, blocked by the gaps listed
+//! above.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a
