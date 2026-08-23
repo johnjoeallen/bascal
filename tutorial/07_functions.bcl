@@ -11,6 +11,11 @@
 // Functions cannot recurse, directly or indirectly (parameters would be
 // overwritten) -- the compiler checks the whole call graph and rejects
 // any cycle.  Use an explicit stack array for recursive algorithms.
+//
+// Scalar methods are typed functions with an implicit receiver.  Calls use
+// dot syntax and can chain: word$.left(1).ucase().  The existing titleCase$
+// function below demonstrates this form; methods transpile to ordinary
+// calls for both targets.
 program functions
 
 require com.bascal.stdlib.ucase

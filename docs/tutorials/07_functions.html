@@ -61,6 +61,16 @@ function addToTotal%(x%)
     return runningTotal%
 end function</code></pre>
     </div>
+    <div class="snippet">
+      <h3>Scalar methods and chaining</h3>
+      <p>A method is a typed function with an implicit scalar receiver named <code>self</code>. Calls use a dot and parentheses; the result can become the receiver of the next method.</p>
+      <pre><code>method$ shout$()
+    return self$ + "!"
+end method
+
+print "  hello  ".ltrim().rtrim().ucase().shout()</code></pre>
+      <p>Built-in methods such as <code>left</code>, <code>mid</code>, <code>len</code>, <code>abs</code>, and <code>sin</code> use the same syntax. Methods transpile to ordinary typed calls for both targets; they do not create runtime objects.</p>
+    </div>
 
 
   <!-- BEGIN generated source embed (scripts/embed-tutorial-sources.py) -->
@@ -80,6 +90,11 @@ end function</code></pre>
 // Functions cannot recurse, directly or indirectly (parameters would be
 // overwritten) -- the compiler checks the whole call graph and rejects
 // any cycle.  Use an explicit stack array for recursive algorithms.
+//
+// Scalar methods are typed functions with an implicit receiver.  Calls use
+// dot syntax and can chain: word$.left(1).ucase().  The existing titleCase$
+// function below demonstrates this form; methods transpile to ordinary
+// calls for both targets.
 program functions
 
 require com.bascal.stdlib.ucase
@@ -132,10 +147,10 @@ function titleCase$(word$)
     // UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
     // against a real IBM BASIC Compiler 2.00 under dosbox-x), so this
     // requires BASCAL's own com.bascal.stdlib implementations above.
-    if len(word$) = 0 then
+    if word$.len() = 0 then
         return ""
     end if
-    return ucase$(left$(word$, 1)) + lcase$(mid$(word$, 2))
+    return word$.left(1).ucase() + word$.mid(2).lcase()
 end function
 
 /* Local variable scoping — each function has its own i% and acc% */
@@ -207,242 +222,248 @@ end
       <pre><code>10 ' BASCAL generated BASIC
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-40 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+30 ' Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+40 ' against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+50 ' its own. Declared as a scalar method (see GitHub issue #41 and
+60 ' ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
+70 ' via ordinary-call syntax resolving to this same declaration.
 
-50 ' Lower-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-60 ' a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+80 ' Lower-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
+90 ' against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
+100 ' its own. Declared as a scalar method (see GitHub issue #41 and
+110 ' ltrim.bcl's own doc comment for the reasoning) -- lcase$(s$) still works
+120 ' via ordinary-call syntax resolving to this same declaration.
 
-70 ' Tutorial 7 — Functions
-80 ' 
-90 ' A BASCAL function is declared with FUNCTION ... END FUNCTION.
-100 ' The function name carries the return type suffix.  Parameters
-110 ' also carry type suffixes.  Every function must reach a RETURN.
-120 ' 
-130 ' Variables declared inside a function are local by default: the compiler
-140 ' prefixes them with the function name.  To access a global variable from
-150 ' inside a function, declare it with:  global varname
-160 ' 
-170 ' Functions cannot recurse, directly or indirectly (parameters would be
-180 ' overwritten) -- the compiler checks the whole call graph and rejects
-190 ' any cycle.  Use an explicit stack array for recursive algorithms.
+130 ' Tutorial 7 — Functions
+140 '
+150 ' A BASCAL function is declared with FUNCTION ... END FUNCTION.
+160 ' The function name carries the return type suffix.  Parameters
+170 ' also carry type suffixes.  Every function must reach a RETURN.
+180 '
+190 ' Variables declared inside a function are local by default: the compiler
+200 ' prefixes them with the function name.  To access a global variable from
+210 ' inside a function, declare it with:  global varname
+220 '
+230 ' Functions cannot recurse, directly or indirectly (parameters would be
+240 ' overwritten) -- the compiler checks the whole call graph and rejects
+250 ' any cycle.  Use an explicit stack array for recursive algorithms.
 
-200 ' Integer arithmetic functions
-210 ' a% -- first value to compare
-220 ' b% -- second value to compare
+260 ' Integer arithmetic functions
+270 ' a% -- first value to compare
+280 ' b% -- second value to compare
 
-230 ' a% -- first value to compare
-240 ' b% -- second value to compare
+290 ' a% -- first value to compare
+300 ' b% -- second value to compare
 
-250 ' value% -- number to constrain
-260 ' lo%    -- lower bound, inclusive
-270 ' hi%    -- upper bound, inclusive
+310 ' value% -- number to constrain
+320 ' lo%    -- lower bound, inclusive
+330 ' hi%    -- upper bound, inclusive
 
-280 ' String functions
-290 ' text$ -- string to repeat
-300 ' n%    -- number of times to repeat it
+340 ' String functions
+350 ' text$ -- string to repeat
+360 ' n%    -- number of times to repeat it
 
-310 ' word$ -- string to title-case
+370 ' word$ -- string to title-case
 
-320 ' Local variable scoping — each function has its own i% and acc%
-330 ' n% -- upper bound of the sum, inclusive
+380 ' Local variable scoping — each function has its own i% and acc%
+390 ' n% -- upper bound of the sum, inclusive
 
-340 ' n% -- upper bound of the product, inclusive
+400 ' n% -- upper bound of the product, inclusive
 
-350 ' Global variable accessed inside a function with the global keyword
-360 runningtotal% = 0
+410 ' Global variable accessed inside a function with the global keyword
+420 runningtotal% = 0
 
-370 ' x% -- amount to add to the running total
+430 ' x% -- amount to add to the running total
 
-380 ' --- Exercise the functions ---
+440 ' --- Exercise the functions ---
 
-390 ' print mixes string labels and numeric results directly with ;
-400 maxA0% = 4
-410 maxB0% = 9
-420 GOSUB 1320
-430 PRINT "max(4, 9) = "; maxResult0%
-440 minA0% = 4
-450 minB0% = 9
-460 GOSUB 1420
-470 PRINT "min(4, 9) = "; minResult0%
-480 clampValue0% = 15
-490 clampLo0% = 1
-500 clampHi0% = 10
-510 GOSUB 1520
-520 PRINT "clamp(15,1,10) = "; clampResult0%
-530 clampValue0% = -3
-540 clampLo0% = 1
-550 clampHi0% = 10
-560 GOSUB 1520
-570 PRINT "clamp(-3,1,10) = "; clampResult0%
-580 clampValue0% = 7
-590 clampLo0% = 1
-600 clampHi0% = 10
-610 GOSUB 1520
-620 PRINT "clamp(7,1,10)  = "; clampResult0%
+450 ' print mixes string labels and numeric results directly with ;
+460 maxA0% = 4
+470 maxB0% = 9
+480 GOSUB 1380
+490 PRINT "max(4, 9) = "; maxResult0%
+500 minA0% = 4
+510 minB0% = 9
+520 GOSUB 1480
+530 PRINT "min(4, 9) = "; minResult0%
+540 clampValue0% = 15
+550 clampLo0% = 1
+560 clampHi0% = 10
+570 GOSUB 1580
+580 PRINT "clamp(15,1,10) = "; clampResult0%
+590 clampValue0% = -3
+600 clampLo0% = 1
+610 clampHi0% = 10
+620 GOSUB 1580
+630 PRINT "clamp(-3,1,10) = "; clampResult0%
+640 clampValue0% = 7
+650 clampLo0% = 1
+660 clampHi0% = 10
+670 GOSUB 1580
+680 PRINT "clamp(7,1,10)  = "; clampResult0%
 
-630 repeatText0$ = "ab"
-640 repeatN0% = 4
-650 GOSUB 1630
-660 PRINT repeatResult0$
-670 titlecaseWord0$ = "bASCAL"
-680 GOSUB 1720
-690 PRINT titlecaseResult0$
+690 repeatText0$ = "ab"
+700 repeatN0% = 4
+710 GOSUB 1690
+720 PRINT repeatResult0$
+730 titlecaseWord0$ = "bASCAL"
+740 GOSUB 1780
+750 PRINT titlecaseResult0$
 
-700 ' Functions chained in expressions
-710 maxA0% = 0
-720 maxB0% = -5
-730 GOSUB 1320
-740 minA0% = maxResult0%
-750 minB0% = 100
-760 GOSUB 1420
-770 lo% = minResult0%
-780 PRINT "lo = "; lo%
+760 ' Functions chained in expressions
+770 maxA0% = 0
+780 maxB0% = -5
+790 GOSUB 1380
+800 minA0% = maxResult0%
+810 minB0% = 100
+820 GOSUB 1480
+830 lo% = minResult0%
+840 PRINT "lo = "; lo%
 
-790 ' Calling the same function twice — each result is captured separately
-800 repeatText0$ = "x"
-810 repeatN0% = 3
-820 GOSUB 1630
-830 a$ = repeatResult0$
-840 repeatText0$ = "y"
-850 repeatN0% = 2
-860 GOSUB 1630
-870 b$ = repeatResult0$
-880 PRINT a$; " "; b$
+850 ' Calling the same function twice — each result is captured separately
+860 repeatText0$ = "x"
+870 repeatN0% = 3
+880 GOSUB 1690
+890 a$ = repeatResult0$
+900 repeatText0$ = "y"
+910 repeatN0% = 2
+920 GOSUB 1690
+930 b$ = repeatResult0$
+940 PRINT a$; " "; b$
 
-890 ' Local scoping: sumTo% and productTo% each use i% without conflict
-900 sumtoN0% = 5
-910 GOSUB 1880
-920 PRINT "sumTo(5)     = "; sumtoResult0%
-930 producttoN0% = 5
-940 GOSUB 1970
-950 PRINT "productTo(5) = "; producttoResult0%
+950 ' Local scoping: sumTo% and productTo% each use i% without conflict
+960 sumtoN0% = 5
+970 GOSUB 1940
+980 PRINT "sumTo(5)     = "; sumtoResult0%
+990 producttoN0% = 5
+1000 GOSUB 2030
+1010 PRINT "productTo(5) = "; producttoResult0%
 
-960 ' Global variable shared across calls
-970 addtototalX0% = 10
-980 GOSUB 2060
-990 dummy% = addtototalResult0%
-1000 addtototalX0% = 5
-1010 GOSUB 2060
-1020 dummy% = addtototalResult0%
-1030 PRINT "runningTotal = "; runningtotal%
+1020 ' Global variable shared across calls
+1030 addtototalX0% = 10
+1040 GOSUB 2120
+1050 dummy% = addtototalResult0%
+1060 addtototalX0% = 5
+1070 GOSUB 2120
+1080 dummy% = addtototalResult0%
+1090 PRINT "runningTotal = "; runningtotal%
 
-1040 END
+1100 END
 
-1050 ' function ucase$(s$)
-1060     ucaseOut0$ = ""
-1070     FOR ucaseI0% = 1 TO LEN(ucaseS0$)
-1080         ucaseC0% = ASC(MID$(ucaseS0$, ucaseI0%, 1))
-1090         IF (ucaseC0% &gt;= 97) = 0 THEN GOTO 1120
-1100         IF (ucaseC0% &lt;= 122) = 0 THEN GOTO 1120
-1110             ucaseC0% = ucaseC0% - 32
-1120         REM END IF
-1130         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
-1140     NEXT ucaseI0%
-1150     ucaseResult0$ = ucaseOut0$
-1160     RETURN
-1170 ' end function ucase$
+1110 ' function ucase$()
+1120     ucaseOut0$ = ""
+1130     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
+1140         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
+1150         IF (ucaseC0% &gt;= 97) = 0 THEN GOTO 1180
+1160         IF (ucaseC0% &lt;= 122) = 0 THEN GOTO 1180
+1170             ucaseC0% = ucaseC0% - 32
+1180         REM END IF
+1190         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
+1200     NEXT ucaseI0%
+1210     ucaseResult0$ = ucaseOut0$
+1220     RETURN
+1230 ' end function ucase$
 
-1180 ' function lcase$(s$)
-1190     lcaseOut0$ = ""
-1200     FOR lcaseI0% = 1 TO LEN(lcaseS0$)
-1210         lcaseC0% = ASC(MID$(lcaseS0$, lcaseI0%, 1))
-1220         IF (lcaseC0% &gt;= 65) = 0 THEN GOTO 1250
-1230         IF (lcaseC0% &lt;= 90) = 0 THEN GOTO 1250
-1240             lcaseC0% = lcaseC0% + 32
-1250         REM END IF
-1260         lcaseOut0$ = lcaseOut0$ + CHR$(lcaseC0%)
-1270     NEXT lcaseI0%
-1280     lcaseResult0$ = lcaseOut0$
-1290     RETURN
-1300 ' end function lcase$
+1240 ' function lcase$()
+1250     lcaseOut0$ = ""
+1260     FOR lcaseI0% = 1 TO LEN(lcaseSelf0$)
+1270         lcaseC0% = ASC(MID$(lcaseSelf0$, lcaseI0%, 1))
+1280         IF (lcaseC0% &gt;= 65) = 0 THEN GOTO 1310
+1290         IF (lcaseC0% &lt;= 90) = 0 THEN GOTO 1310
+1300             lcaseC0% = lcaseC0% + 32
+1310         REM END IF
+1320         lcaseOut0$ = lcaseOut0$ + CHR$(lcaseC0%)
+1330     NEXT lcaseI0%
+1340     lcaseResult0$ = lcaseOut0$
+1350     RETURN
+1360 ' end function lcase$
 
-1310 ' function max%(a%, b%)
-1320     IF (maxA0% &gt; maxB0%) = 0 THEN GOTO 1360
-1330         maxResult0% = maxA0%
-1340         RETURN
-1350         GOTO 1380
-1360         maxResult0% = maxB0%
-1370         RETURN
-1380     REM END IF
-1390     RETURN
-1400 ' end function max%
+1370 ' function max%(a%, b%)
+1380     IF (maxA0% &gt; maxB0%) = 0 THEN GOTO 1420
+1390         maxResult0% = maxA0%
+1400         RETURN
+1410         GOTO 1440
+1420         maxResult0% = maxB0%
+1430         RETURN
+1440     REM END IF
+1450     RETURN
+1460 ' end function max%
 
-1410 ' function min%(a%, b%)
-1420     IF (minA0% &lt; minB0%) = 0 THEN GOTO 1460
-1430         minResult0% = minA0%
-1440         RETURN
-1450         GOTO 1480
-1460         minResult0% = minB0%
-1470         RETURN
-1480     REM END IF
-1490     RETURN
-1500 ' end function min%
+1470 ' function min%(a%, b%)
+1480     IF (minA0% &lt; minB0%) = 0 THEN GOTO 1520
+1490         minResult0% = minA0%
+1500         RETURN
+1510         GOTO 1540
+1520         minResult0% = minB0%
+1530         RETURN
+1540     REM END IF
+1550     RETURN
+1560 ' end function min%
 
-1510 ' function clamp%(value%, lo%, hi%)
-1520     ' Constrain value to [lo, hi].
-1530     minA0% = clampValue0%
-1540     minB0% = clampHi0%
-1550     GOSUB 1420
-1560     maxA0% = clampLo0%
-1570     maxB0% = minResult0%
-1580     GOSUB 1320
-1590     clampResult0% = maxResult0%
-1600     RETURN
-1610 ' end function clamp%
+1570 ' function clamp%(value%, lo%, hi%)
+1580     ' Constrain value to [lo, hi].
+1590     minA0% = clampValue0%
+1600     minB0% = clampHi0%
+1610     GOSUB 1480
+1620     maxA0% = clampLo0%
+1630     maxB0% = minResult0%
+1640     GOSUB 1380
+1650     clampResult0% = maxResult0%
+1660     RETURN
+1670 ' end function clamp%
 
-1620 ' function repeat$(text$, n%)
-1630     ' Concatenate text$ with itself n times.
-1640     repeatAcc0$ = ""
-1650     FOR repeatI0% = 1 TO repeatN0%
-1660         repeatAcc0$ = repeatAcc0$ + repeatText0$
-1670     NEXT repeatI0%
-1680     repeatResult0$ = repeatAcc0$
-1690     RETURN
-1700 ' end function repeat$
+1680 ' function repeat$(text$, n%)
+1690     ' Concatenate text$ with itself n times.
+1700     repeatAcc0$ = ""
+1710     FOR repeatI0% = 1 TO repeatN0%
+1720         repeatAcc0$ = repeatAcc0$ + repeatText0$
+1730     NEXT repeatI0%
+1740     repeatResult0$ = repeatAcc0$
+1750     RETURN
+1760 ' end function repeat$
 
-1710 ' function titlecase$(word$)
-1720     ' Capitalise first letter, lowercase remainder.
-1730     ' UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
-1740     ' against a real IBM BASIC Compiler 2.00 under dosbox-x), so this
-1750     ' requires BASCAL's own com.bascal.stdlib implementations above.
-1760     IF (LEN(titlecaseWord0$) = 0) = 0 THEN GOTO 1790
-1770         titlecaseResult0$ = ""
-1780         RETURN
-1790     REM END IF
-1800     ucaseS0$ = LEFT$(titlecaseWord0$, 1)
-1810     GOSUB 1060
-1820     lcaseS0$ = MID$(titlecaseWord0$, 2)
-1830     GOSUB 1190
-1840     titlecaseResult0$ = ucaseResult0$ + lcaseResult0$
-1850     RETURN
-1860 ' end function titlecase$
+1770 ' function titlecase$(word$)
+1780     ' Capitalise first letter, lowercase remainder.
+1790     ' UCASE$/LCASE$ aren't real MBASIC/BASCOM 2.00 builtins (verified
+1800     ' against a real IBM BASIC Compiler 2.00 under dosbox-x), so this
+1810     ' requires BASCAL's own com.bascal.stdlib implementations above.
+1820     IF (LEN(titlecaseWord0$) = 0) = 0 THEN GOTO 1850
+1830         titlecaseResult0$ = ""
+1840         RETURN
+1850     REM END IF
+1860     ucaseSelf0$ = LEFT$(titlecaseWord0$, 1)
+1870     GOSUB 1120
+1880     lcaseSelf0$ = MID$(titlecaseWord0$, 2)
+1890     GOSUB 1250
+1900     titlecaseResult0$ = ucaseResult0$ + lcaseResult0$
+1910     RETURN
+1920 ' end function titlecase$
 
-1870 ' function sumto%(n%)
-1880     ' i% and acc% are local to sumTo%.
-1890     sumtoAcc0% = 0
-1900     FOR sumtoI0% = 1 TO sumtoN0%
-1910         sumtoAcc0% = sumtoAcc0% + sumtoI0%
-1920     NEXT sumtoI0%
-1930     sumtoResult0% = sumtoAcc0%
-1940     RETURN
-1950 ' end function sumto%
+1930 ' function sumto%(n%)
+1940     ' i% and acc% are local to sumTo%.
+1950     sumtoAcc0% = 0
+1960     FOR sumtoI0% = 1 TO sumtoN0%
+1970         sumtoAcc0% = sumtoAcc0% + sumtoI0%
+1980     NEXT sumtoI0%
+1990     sumtoResult0% = sumtoAcc0%
+2000     RETURN
+2010 ' end function sumto%
 
-1960 ' function productto%(n%)
-1970     ' i% and acc% here are independent of sumTo%'s i% and acc%.
-1980     producttoAcc0% = 1
-1990     FOR producttoI0% = 1 TO producttoN0%
-2000         producttoAcc0% = producttoAcc0% * producttoI0%
-2010     NEXT producttoI0%
-2020     producttoResult0% = producttoAcc0%
-2030     RETURN
-2040 ' end function productto%
+2020 ' function productto%(n%)
+2030     ' i% and acc% here are independent of sumTo%'s i% and acc%.
+2040     producttoAcc0% = 1
+2050     FOR producttoI0% = 1 TO producttoN0%
+2060         producttoAcc0% = producttoAcc0% * producttoI0%
+2070     NEXT producttoI0%
+2080     producttoResult0% = producttoAcc0%
+2090     RETURN
+2100 ' end function productto%
 
-2050 ' function addtototal%(x%)
-2060     runningtotal% = runningtotal% + addtototalX0%
-2070     addtototalResult0% = runningtotal%
-2080     RETURN
-2090 ' end function addtototal%
+2110 ' function addtototal%(x%)
+2120     runningtotal% = runningtotal% + addtototalX0%
+2130     addtototalResult0% = runningtotal%
+2140     RETURN
+2150 ' end function addtototal%
 </code></pre>
     </details>
     <p class="lede">View on GitHub: <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl">tutorial/07_functions.bcl</a>, <a href="https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bas">tutorial/07_functions.bas</a>.</p>
