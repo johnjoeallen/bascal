@@ -7,6 +7,7 @@ pub mod lexer;
 pub mod parser;
 pub mod records;
 pub mod resolver;
+mod scalar_builtins;
 
 use std::collections::HashSet;
 use std::fs;
@@ -716,6 +717,121 @@ end
         assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
         assert!(output.contains("GOSUB"), "{output}");
         assert!(output.contains("result$ = padResult0$"), "{output}");
+    }
+
+    #[test]
+    fn builtin_scalar_methods_rewrite_to_ordinary_calls() {
+        // GitHub issue #38: real BASIC intrinsics (left/right/mid/len/instr,
+        // abs/sqr/sin/cos/tan/int/fix/sgn) are callable as scalar methods,
+        // resolved by rewriting to the equivalent ordinary call
+        // (records.rs's own `rewrite_scalar_method_call`) rather than
+        // teaching either codegen backend a second lookup path.
+        let source = r#"s$ = "  hello world  "
+n% = -5
+print s$.left(7)
+print s$.right(7)
+print s$.mid(3, 5)
+print s$.mid(3)
+print s$.len()
+print s$.instr("world")
+print n%.abs()
+print n%.sqr()
+print n%.sin()
+print n%.cos()
+print n%.tan()
+print n%.int()
+print n%.fix()
+print n%.sgn()
+end
+"#;
+        let basic = compile_source("builtin_methods.bcl", source).expect("should compile");
+        for expected in [
+            "LEFT$(s$, 7)",
+            "RIGHT$(s$, 7)",
+            "MID$(s$, 3, 5)",
+            "MID$(s$, 3)",
+            "LEN(s$)",
+            "INSTR(s$, \"world\")",
+            "ABS(n%)",
+            "SQR(n%)",
+            "SIN(n%)",
+            "COS(n%)",
+            "TAN(n%)",
+            "INT(n%)",
+            "FIX(n%)",
+            "SGN(n%)",
+        ] {
+            assert!(
+                basic.contains(&format!("PRINT {expected}")),
+                "missing `PRINT {expected}`:\n{basic}"
+            );
+        }
+        assert!(
+            !basic.to_ascii_lowercase().contains(".left")
+                && !basic.to_ascii_lowercase().contains(".abs"),
+            "no dot-call syntax should survive into generated BASIC:\n{basic}"
+        );
+
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_mid(bv_s_s, 3, 5)"), "{c}");
+        assert!(c.contains("fabs((double)(bv_i_n))"), "{c}");
+        assert!(c.contains("sqrt((double)(bv_i_n))"), "{c}");
+        assert!(c.contains("bcc_sgn((double)(bv_i_n))"), "{c}");
+    }
+
+    #[test]
+    fn builtin_scalar_method_chains_with_a_user_declared_method() {
+        // A chain may mix a user-declared method with a built-in one in
+        // either order -- resolving `.left()`'s receiver type when it
+        // follows a user method, and resolving a user method's receiver
+        // type when it follows a built-in one, both need the base's real
+        // result type, not just its own syntactic shape.
+        let source = r#"method$ shout$()
+    return self$ + "!"
+end method
+
+s$ = "hi"
+print s$.shout().left(2)
+print s$.left(1).shout()
+end
+"#;
+        let output = compile_source("builtin_chain.bcl", source).expect("should compile");
+        assert!(output.contains("PRINT LEFT$(shoutResult0$, 2)"), "{output}");
+        assert!(output.contains("shoutSelf0$ = LEFT$(s$, 1)"), "{output}");
+    }
+
+    #[test]
+    fn builtin_scalar_method_wrong_arg_count_is_rejected() {
+        let source = "s$ = \"hi\"\nprint s$.left()\nend\n";
+        let err = compile_source("builtin_arity.bcl", source)
+            .expect_err("wrong arg count for a built-in method should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains(".left()") && d.message.contains("expects 1 argument")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_scalar_method_is_still_rejected_after_builtin_lowering() {
+        let source = "s$ = \"hi\"\nprint s$.nope()\nend\n";
+        let err = compile_source("builtin_unknown.bcl", source)
+            .expect_err("a genuinely unknown method should still be rejected");
+        assert!(
+            err.iter().any(|d| d.message.contains("unknown method")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn builtin_method_names_stay_reserved_from_user_redeclaration() {
+        let source = "method$ left$(n%)\n    return self$\nend method\nend\n";
+        let err = compile_source("builtin_reserved.bcl", source)
+            .expect_err("a built-in method name should still be reserved");
+        assert!(
+            err.iter().any(|d| d.message.contains("reserved for built-in scalar methods")),
+            "unexpected diagnostics: {err:?}"
+        );
     }
 
     #[test]

@@ -249,6 +249,45 @@ fn freebasic_runs_self_referential_string_concatenation_when_available() {
     );
 }
 
+/// Third leg of GitHub issue #38's own explicit ask (FreeBASIC, real
+/// BASCOM 2.00, and C) -- the other two live in `tests/dosbox_conformance.rs`
+/// (`builtin_scalar_methods_match_real_bascom`/`_match_c_target`), all three
+/// checked against the same golden file.
+#[test]
+fn freebasic_runs_builtin_scalar_methods_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/builtin_scalar_methods.bcl");
+    let output_path = repo_root.join("output/builtin_scalar_methods.bas");
+
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/builtin_scalar_methods");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled builtin_scalar_methods");
+    assert!(
+        run.status.success(),
+        "compiled builtin_scalar_methods failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let expected = fs::read_to_string(
+        repo_root.join("tests/fixtures/conformance/builtin_scalar_methods.expected.txt"),
+    )
+    .expect("expected output should be readable");
+    let actual = String::from_utf8_lossy(&run.stdout);
+    assert_eq!(
+        normalize_newlines(&actual),
+        normalize_newlines(&expected),
+        "FreeBASIC output for built-in scalar methods should match the golden expectation"
+    );
+}
+
 #[test]
 fn freebasic_runs_remline_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {

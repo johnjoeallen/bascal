@@ -349,6 +349,51 @@ fn self_referential_string_concatenation_matches_c_target() {
     );
 }
 
+/// GitHub issue #38: real BASIC intrinsics (`left`/`right`/`mid`/`len`/
+/// `instr`, `abs`/`sqr`/`sin`/`cos`/`tan`/`int`/`fix`/`sgn`) callable as
+/// scalar methods (`s$.left(3)`), resolved by rewriting to the identical
+/// ordinary call rather than teaching either backend a second lookup path
+/// (see `scalar_builtins.rs`) -- so this is really testing that the
+/// rewrite produces exactly the same real-BASIC-recognized syntax a
+/// hand-written ordinary call would.
+#[test]
+fn builtin_scalar_methods_match_real_bascom() {
+    require_fixture!();
+
+    let actual = compile_link_run("builtin_scalar_methods");
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/builtin_scalar_methods.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "real BASCOM's output for built-in scalar methods no longer matches the \
+         golden expectation at {}",
+        expected_path.display()
+    );
+}
+
+#[test]
+fn builtin_scalar_methods_match_c_target() {
+    let work_dir = std::env::temp_dir().join("bascal-c-target-builtin-scalar-methods");
+    let _ = fs::remove_dir_all(&work_dir);
+    let actual = compile_run_c_target_in("builtin_scalar_methods", &work_dir);
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/builtin_scalar_methods.expected.txt");
+    let expected = fs::read_to_string(&expected_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
+
+    assert_eq!(
+        normalize(&actual),
+        normalize(&expected),
+        "C target output for built-in scalar methods no longer matches the \
+         golden expectation at {}",
+        expected_path.display()
+    );
+}
+
 /// Same as `compile_link_run`, but runs inside an already-prepared
 /// `work_dir` instead of creating (and wiping) its own -- needed for the
 /// cross-target file-compatibility tests below, where a data file one

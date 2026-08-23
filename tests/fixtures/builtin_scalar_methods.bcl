@@ -1,0 +1,43 @@
+// Conformance fixture: built-in scalar methods (GitHub issue #38) --
+// exercises every method the registry supports. Numeric results are
+// wrapped in STR$() (like com.bascal.stdlib's own conformance fixture)
+// so PRINT's raw-numeric spacing -- which differs between the BASIC
+// targets (leading/trailing padding) and the C target's plain printf --
+// never leaks into the comparison; only STR$()'s own formatting does,
+// which both backends already keep in sync. Every numeric input is
+// chosen so the result is exact -- no float-precision drift across
+// BASCOM/FreeBASIC/C.
+program builtinScalarMethods
+
+s$ = "  hello world  "
+print s$.left(7)
+print s$.right(7)
+print s$.mid(3, 5)
+print s$.mid(3, 3)
+print "[" + str$(s$.len()) + "]"
+print "[" + str$(s$.instr("world")) + "]"
+
+n% = -5
+print "[" + str$(n%.abs()) + "]"
+print "[" + str$(n%.sgn()) + "]"
+
+sixteen% = 16
+print "[" + str$(sixteen%.sqr()) + "]"
+
+zero% = 0
+print "[" + str$(zero%.sin()) + "]"
+print "[" + str$(zero%.cos()) + "]"
+print "[" + str$(zero%.tan()) + "]"
+
+f! = 3.7
+print "[" + str$(f!.int()) + "]"
+print "[" + str$(f!.fix()) + "]"
+
+' Chaining a built-in onto a built-in, and a built-in onto a user method.
+method$ shout$()
+    return self$ + "!"
+end method
+print "[" + str$(s$.left(5).len()) + "]"
+print s$.left(2).shout()
+
+end
