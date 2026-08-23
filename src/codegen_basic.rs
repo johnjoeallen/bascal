@@ -1879,8 +1879,26 @@ impl CodeGenerator {
             ));
         }
 
-        self.resolve_axis_bound(name, axis, current_function)
-            .ok_or_else(|| format!("could not determine the size of `{name}`"))
+        let bound = self
+            .resolve_axis_bound(name, axis, current_function)
+            .ok_or_else(|| format!("could not determine the size of `{name}`"))?;
+        // `sizeof` returns the array's real element *count* along this
+        // axis, not the raw `DIM` bound `resolve_axis_bound` gives back --
+        // real BASIC's own inclusive-bound convention means a `DIM
+        // arr%(N)` axis holds `N + 1` elements (indices `0..=N`), so the
+        // bound itself is one short of the count. (This assumes the
+        // default `OPTION BASE 0` -- see GitHub issue #44 for the
+        // separate, not-yet-tracked question of how `OPTION BASE 1`
+        // should shift this.) Adding 1 to an already-resolved integer
+        // literal keeps the common case's generated code a plain literal
+        // rather than a `(9 + 1)` expression; a captured runtime bound
+        // (a variable name, from a non-literal `DIM` size -- see
+        // `resolve_axis_bound`'s own doc comment) still needs the
+        // arithmetic spelled out.
+        Ok(match bound.parse::<i64>() {
+            Ok(n) => (n + 1).to_string(),
+            Err(_) => format!("({bound} + 1)"),
+        })
     }
 
     fn render_print_tokens(
