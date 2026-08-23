@@ -184,7 +184,7 @@ fn freebasic_runs_self_referential_string_concatenation_when_available() {
     let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
     assert_eq!(
         lines,
-        vec!["abcdefghij", "abcdefgghij"],
+        vec!["abcdefghij", "abcdefgghij", "[ij]abcdefg", "fg-a-fghij"],
         "self-referential LEFT$/MID$/RIGHT$ concatenation produced unexpected output:\n{stdout}"
     );
 }

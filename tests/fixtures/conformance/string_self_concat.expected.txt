@@ -1,2 +1,4 @@
 abcdefghij
 abcdefgghij
+[ij]abcdefg
+fg-a-fghij

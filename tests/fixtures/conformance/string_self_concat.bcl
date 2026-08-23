@@ -8,4 +8,12 @@ print value$
 
 value$ = left$(value$, 2) + mid$(value$, 3, 5) + right$(value$, 4)
 print value$
+
+value$ = "abcdefghij"
+value$ = "[" + right$(value$, 2) + "]" + left$(value$, 4) + mid$(value$, 5, 3)
+print value$
+
+value$ = "abcdefghij"
+value$ = mid$(value$, 6, 2) + "-" + left$(value$, 1) + "-" + right$(value$, 5)
+print value$
 end
