@@ -157,19 +157,19 @@ end function</code></pre>
 <pre><code>IF sumarrArrDim00% &gt; 100 THEN PRINT &quot;runtime error: ...&quot; : STOP</code></pre>
 <p>This is a backstop, not the primary defense — a call site whose size <em>is</em> a transpile-time constant and provably too big for its capacity is already rejected at transpile time, before generated BASIC exists to run at all. The runtime check exists for the one case that's genuinely unprovable ahead of time: a capacity chosen to comfortably cover today's inputs that a later, larger runtime value turns out to exceed.</p>
 <h3 id="sizeof"><code>sizeof()</code></h3>
-<p><code>sizeof(name)</code> returns a <code>dim</code>ed array's size, resolved entirely at transpile time — it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:</p>
+<p><code>sizeof(name)</code> returns a <code>dim</code>ed array's real element count along an axis — one more than the bound written in its own <code>DIM</code>, matching real BASIC's inclusive-bound convention (<code>dim arr%(N)</code> holds <code>N + 1</code> elements, indices <code>0..=N</code>) — resolved entirely at transpile time; it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:</p>
 <pre><code>dim data%(9)
-print sizeof(data%)   &#39; 9 -- same value used in the dim</code></pre>
+print sizeof(data%)   &#39; 10 -- one more than the bound used in the dim</code></pre>
 <p>For 2-D or higher, the axis is required — <code>sizeof(name, axis)</code>, zero-based in the same order as the array's own <code>DIM</code>:</p>
 <pre><code>dim grid%(2, 2)
-print sizeof(grid%, 0)   &#39; 2 -- first DIM bound
-print sizeof(grid%, 1)   &#39; 2 -- second DIM bound</code></pre>
+print sizeof(grid%, 0)   &#39; 3 -- first DIM bound's element count
+print sizeof(grid%, 1)   &#39; 3 -- second DIM bound's element count</code></pre>
 <p>The axis must be a literal integer — it selects which frozen value to substitute at transpile time, not something computed at runtime.</p>
 <p><strong>What "resolved at transpile time" means in practice:</strong> if the bound is a literal, <code>sizeof</code> just re-emits that literal. If it's an expression (a variable, a <code>const</code>, anything not a bare number), the transpiler captures its value into a hidden variable right at the <code>dim</code> site, and <code>sizeof</code> always reads that captured value — never the live variable, which might change afterward:</p>
 <pre><code>n% = 5
 dim data%(n%)
 n% = 99
-print sizeof(data%)   &#39; 5 -- the value dim actually used, not the later 99</code></pre>
+print sizeof(data%)   &#39; 6 -- one more than the value dim actually used, not the later 99</code></pre>
 <p><strong>Inside a function, <code>sizeof</code> on one of the function's own array parameters works differently</strong> — there's no local <code>dim</code> to freeze a value from, since the array parameter's real size depends on whatever the caller happens to pass. There's no manually declared count parameter to read either: every array parameter's bounds are carried automatically, one hidden transpiler-generated variable per axis, set by the caller (from the real argument array's own resolved bounds) immediately before the call. <code>sizeof(grid%, 0)</code> inside <code>sumGrid%</code>'s own body just reads that hidden variable back:</p>
 <pre><code>function sumGrid%(byref grid%(?, ?))
     total% = 0

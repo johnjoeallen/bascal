@@ -3318,8 +3318,8 @@ end
 "#;
         let output = compile_source("sizeof_1d.bcl", source).expect("should compile");
         assert!(
-            output.contains("PRINT 9"),
-            "sizeof should resolve to the literal bound:\n{output}"
+            output.contains("PRINT 10"),
+            "sizeof should resolve to the element count (bound + 1):\n{output}"
         );
         assert!(
             !output.to_ascii_lowercase().contains("sizeof"),
@@ -3337,12 +3337,12 @@ end
 "#;
         let output = compile_source("sizeof_2d.bcl", source).expect("should compile");
         assert!(
-            output.contains("PRINT 2"),
-            "axis 0 should resolve to the first DIM bound:\n{output}"
+            output.contains("PRINT 3"),
+            "axis 0 should resolve to the first DIM bound's element count:\n{output}"
         );
         assert!(
-            output.contains("PRINT 3"),
-            "axis 1 should resolve to the second DIM bound:\n{output}"
+            output.contains("PRINT 4"),
+            "axis 1 should resolve to the second DIM bound's element count:\n{output}"
         );
     }
 
@@ -3366,8 +3366,8 @@ end
             "a non-literal bound should be captured into a temp right at DIM time:\n{output}"
         );
         assert!(
-            output.contains("PRINT BCCT1%"),
-            "sizeof should read back the frozen temp, not the live variable:\n{output}"
+            output.contains("PRINT (BCCT1% + 1)"),
+            "sizeof should read back the frozen temp's element count, not the live variable:\n{output}"
         );
         // The frozen capture must appear before the later reassignment.
         let capture_pos = output.find("BCCT1% = n%").unwrap();
@@ -3402,14 +3402,14 @@ end
 "#;
         let output = compile_source("sizeof_param.bcl", source).expect("should compile");
         assert!(
-            output.contains("TO sumgridGridDim00% - 1"),
-            "sizeof(grid%, 0) inside the body should read the auto-injected bound variable \
-             directly:\n{output}"
+            output.contains("TO (sumgridGridDim00% + 1) - 1"),
+            "sizeof(grid%, 0) inside the body should read the auto-injected bound variable's \
+             element count:\n{output}"
         );
         assert!(
-            output.contains("TO sumgridGridDim10% - 1"),
-            "sizeof(grid%, 1) inside the body should read the auto-injected bound variable \
-             directly:\n{output}"
+            output.contains("TO (sumgridGridDim10% + 1) - 1"),
+            "sizeof(grid%, 1) inside the body should read the auto-injected bound variable's \
+             element count:\n{output}"
         );
         assert!(
             output.contains("sumgridGridDim00% = 2") && output.contains("sumgridGridDim10% = 2"),
@@ -6040,22 +6040,27 @@ end
 
     #[test]
     fn c_target_supports_sizeof_1d_and_2d() {
-        // `sizeof` returns the array's own declared bound -- the same
-        // value `dim` used -- not the element count, matching
-        // `docs/manual/arrays.html#sizeof`'s own `dim data%(9)` /
-        // `sizeof(data%) = 9` example and `--target basic`'s
-        // `resolve_axis_bound` exactly (see `render_numeric_call`'s
-        // `sizeof` arm in codegen_c.rs).
+        // `sizeof` returns the array's real element count along an axis
+        // (`bound + 1`, real BASIC's own inclusive-bound convention --
+        // `dim arr%(4)` holds 5 elements, indices 0..=4), under the
+        // default `OPTION BASE 0` -- matching `--target basic`'s own
+        // `resolve_sizeof` (see `render_numeric_call`'s `sizeof` arm in
+        // codegen_c.rs; GitHub issue #44 tracks the separate question of
+        // `OPTION BASE 1`, not supported by `--target c` at all yet).
         let source =
             "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains("printf(\"%d\\n\", 9)"),
-            "sizeof(grid%(9, 4), 0) should resolve to the literal 9:\n{output}"
+            output.contains("printf(\"%d\\n\", 5)"),
+            "sizeof(arr%(4)) should resolve to the literal 5 (0..=4):\n{output}"
         );
         assert!(
-            output.contains("printf(\"%d\\n\", 4)") && output.matches("printf(\"%d\\n\", 4)").count() >= 2,
-            "sizeof(arr%(4)) and sizeof(grid%(9, 4), 1) should both resolve to the literal 4:\n{output}"
+            output.contains("printf(\"%d\\n\", 10)"),
+            "sizeof(grid%(9, 4), 0) should resolve to the literal 10:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", 5)") && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
+            "sizeof(grid%(9, 4), 1) should also resolve to 5:\n{output}"
         );
     }
 
