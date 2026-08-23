@@ -3685,26 +3685,26 @@ fn emit_statement(
         // `SEQ_FILE_HELPER`) rather than always `stdin`, and straight into
         // the target's own buffer -- no shared scratch buffer needed, since
         // there's nothing further to parse out of a whole line the way
-        // `INPUT #`'s comma-delimited fields need. Scoped to a bare string
-        // variable target, matching keyboard `INPUT`'s own restriction.
+        // `INPUT #`'s comma-delimited fields need. The target can be a
+        // bare string variable or a `dim`'d string array's own indexed
+        // element (see `render_lvalue`, the same lvalue resolution
+        // `Statement::Read`/`Statement::Swap` already use) -- either way
+        // `sizeof(...)` on the resulting C lvalue is correct as-is: a
+        // scalar string variable is a `char[STRING_BUFFER_SIZE]` local,
+        // and a string array element indexes into a
+        // `char[.][STRING_BUFFER_SIZE]` array, so `arr[i]` is itself a
+        // `char[STRING_BUFFER_SIZE]`.
         Statement::LineInput { channel, target } => {
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
-            let Expr::Ident(ident) = target else {
+            let (c_expr, element_type) = render_lvalue(target, needs_math, functions)?;
+            if element_type.is_some() {
                 return Err(
-                    "LINE INPUT #'s target isn't supported by the minimal C backend yet -- only \
-                     a bare string variable is"
-                        .to_string(),
-                );
-            };
-            if ident.suffix != Some(TypeSuffix::String) {
-                return Err(
-                    "LINE INPUT # requires a string (`$`-suffixed) variable".to_string(),
+                    "LINE INPUT # requires a string (`$`-suffixed) target".to_string(),
                 );
             }
-            let c_name = c_var_name(ident, TypeSuffix::String);
             out.push_str(&format!(
-                "    bcc_line_input_file(bcc_files[{idx}], {c_name}, sizeof({c_name}));\n"
+                "    bcc_line_input_file(bcc_files[{idx}], {c_expr}, sizeof({c_expr}));\n"
             ));
             Ok(())
         }
