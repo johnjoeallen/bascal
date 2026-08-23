@@ -4327,10 +4327,10 @@ resume next
 
     #[test]
     fn c_target_rejects_unsupported_statements_with_a_diagnostic() {
-        // Array `dim` isn't part of the minimal C backend's supported
-        // surface yet (only scalar `dim` is) -- this must fail with a
-        // clear diagnostic, not panic or silently emit wrong C.
-        let source = "dim x%(5)\nend\n";
+        // PRINT USING isn't part of the minimal C backend's supported
+        // surface yet -- this must fail with a clear diagnostic, not
+        // panic or silently emit wrong C.
+        let source = "print using \"###\"; 5\nend\n";
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("unsupported.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
@@ -5699,6 +5699,153 @@ end
         assert!(
             diagnostics.iter().any(|d| d.message.contains("no `data` items")),
             "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_1d_numeric_array_declaration_indexing_and_assignment() {
+        let source = "dim scores%(5)\nscores%(0) = 10\nscores%(1) = scores%(0) + 5\nprint scores%(1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bv_i_scores[6] = {0};"),
+            "dim scores%(5) should declare 6 elements (0..=5), zero-initialized:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_scores[(0)] = 10;"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_scores[(1)] = (bv_i_scores[(0)] + 5);"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", bv_i_scores[(1)])"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_string_array_declaration_indexing_and_assignment() {
+        let source = "dim country$(2)\ncountry$(0) = \"France\"\nprint country$(0)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(&format!(
+                "static char bv_s_country[3][{}] = {{0}};",
+                256
+            )),
+            "dim country$(2) should declare 3 string elements:\n{output}"
+        );
+        assert!(
+            output.contains("snprintf(bv_s_country[(0)], sizeof(bv_s_country[(0)]), \"%s\", \"France\");"),
+            "a string array element can't be assigned via plain =, needs snprintf:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%s\\n\", bv_s_country[(0)])"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_2d_array_declaration_and_indexing() {
+        let source = "dim grid%(2, 2)\ngrid%(1, 1) = 7\nprint grid%(1, 1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bv_i_grid[3][3] = {0};"),
+            "dim grid%(2, 2) should declare a native 3x3 C array, no manual flattening:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_grid[(1)][(1)] = 7;")
+                && output.contains("printf(\"%d\\n\", bv_i_grid[(1)][(1)])"),
+            "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_array_bound_accepts_a_top_level_int_const() {
+        // tutorial/09_data.bcl's own shape: `const numCapitals% = 5` then
+        // `dim country$(numCapitals%)` -- a real C array needs a literal
+        // size, so the const's own integer value must be recovered at
+        // compile time, not treated as a runtime-only variable read.
+        let source = "const n% = 5\ndim arr%(n%)\narr%(0) = 1\nprint arr%(0)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("static int bv_i_arr[6] = {0};"),
+            "the array bound should resolve the const's literal value (5), giving 6 elements:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_a_non_literal_array_bound() {
+        let source = "dim n%\nn% = 5\ndim arr%(n%)\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("compile-time-known size")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_sizeof_1d_and_2d() {
+        let source =
+            "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("printf(\"%d\\n\", 5)"),
+            "sizeof(arr%(4)) should resolve to the literal 5 (0..=4):\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", 10)"),
+            "sizeof(grid%(9, 4), 0) should resolve to the literal 10:\n{output}"
+        );
+        assert!(
+            output.contains("printf(\"%d\\n\", 5)") && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
+            "sizeof(grid%(9, 4), 1) should also resolve to 5:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_sizeof_without_an_axis_on_a_multidim_array_is_an_error() {
+        let source = "dim grid%(9, 9)\nprint sizeof(grid%)\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("sizeof needs an axis argument")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_swap_of_scalars_and_array_elements() {
+        let source = "dim a%, b%\na% = 1\nb% = 2\nswap a%, b%\ndim arr$(2)\narr$(0) = \"x\"\narr$(1) = \"y\"\nswap arr$(0), arr$(1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("int bt_swap_0 = bv_i_a;")
+                && output.contains("bv_i_a = bv_i_b;")
+                && output.contains("bv_i_b = bt_swap_0;"),
+            "scalar SWAP should use a real temp, no aliasing:\n{output}"
+        );
+        assert!(
+            output.contains("char bt_swap_1[")
+                && output.contains(
+                    "snprintf(bv_s_arr[(0)], sizeof(bv_s_arr[(0)]), \"%s\", bv_s_arr[(1)]);"
+                ),
+            "a string array element SWAP should go through a temp buffer + snprintf, not plain \
+             assignment (C arrays can't be assigned with =):\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_read_into_an_array_element() {
+        let source = "dim country$(1)\nread country$(0), country$(1)\nprint country$(0)\nend\ndata \"France\", \"Japan\"\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains(
+                "snprintf(bv_s_country[(0)], sizeof(bv_s_country[(0)]), \"%s\", bcc_read_data());"
+            ),
+            "READ into a string array element should snprintf bcc_read_data()'s text:\n{output}"
         );
     }
 

@@ -11,7 +11,13 @@
 //! `const`, assignment/reading of *scalar* variables (numeric: `%`/`&`/
 //! `!`/`#`; string: `$`, fixed-size `char[256]` buffers written only via
 //! `snprintf`, never `strcpy`/`strcat` -- see
-//! `STRING_BUFFER_SIZE`/`render_string_expr`), `+` string concatenation,
+//! `STRING_BUFFER_SIZE`/`render_string_expr`); `dim`-declared arrays too
+//! (a real, native multi-dimensional C array -- see `ArrayInfo`/
+//! `collect_array_declarations` -- but only with a literal or top-level-
+//! `const`-literal bound in every dimension, since a real C array needs a
+//! compile-time-known size), indexed reads/writes, and `sizeof(arr%)`/
+//! `sizeof(grid%, axis)`; `swap` of two scalars or array elements (see
+//! `render_lvalue`); `+` string concatenation,
 //! `if`/`elseif`/`else`/`end if` (including the single-line form, and
 //! nesting), `for`/`next`, `while`/`wend`, every `do`/`loop` pre-/
 //! post-check variant, `exit` (maps to a plain C `break;` -- C's native
@@ -83,42 +89,47 @@
 //! interactive `INPUT` (one bare scalar variable per statement, with an
 //! optional prompt -- see `INPUT_HELPER`); and screen I/O: `cls`,
 //! `locate row, col`, `color fg[, bg]`, and `beep` (see `COLOR_HELPER`).
-//! NOT yet supported: arrays, entirely -- no `dim name(n)`, indexing, or
-//! array parameters, which also rules out an array-target `read`; `byref`
-//! parameters (byval-only so far); a `function` body that doesn't
-//! provably `return` on every path (see `body_always_returns` -- a
-//! `procedure` has no such requirement); a `procedure` as an `on error
-//! goto` target (a label target is supported -- see above); a
-//! `FIELD`/`OPEN`/`GET`/`PUT` channel or `FIELD` width that isn't a
-//! literal integer; and `gosub`/`on error goto`/`resume`/`error` used
-//! inside a `function`/`procedure` body (`label`/`goto`/`read`/`restore`
-//! all work there fine -- only the return-address-ID-stack techniques are
-//! scoped to top-level code, since a `return` inside a function/procedure
-//! body always means that callable's own return, leaving no unambiguous
-//! "this GOSUB's/raise site's own RETURN/RESUME" to dispatch to) -- all
-//! rejected with a diagnostic rather than guessed at. Recursion (direct
-//! or indirect) is rejected at the resolver level before codegen ever
-//! runs, for every target, not just this one. Everything else (`on ...
-//! goto`/`on ... gosub`, `mid$` statement-form assignment, `swap`,
-//! `poke`/`out`, `print using`, arrays, ...) reports a "not supported
-//! yet" diagnostic rather than panicking or emitting wrong code -- this
-//! is a deliberately minimal backend, not a complete one; see the GitHub
-//! issue tracker's `c-target` label for the current, itemized list.
-//! Tutorials that compile end to end today: `tutorial/01_hello.bcl`,
-//! `tutorial/02_variables.bcl`, `tutorial/03_arithmetic.bcl`,
-//! `tutorial/04_conditions.bcl`, `tutorial/05_loops.bcl`,
-//! `tutorial/06_select_case.bcl`, `tutorial/07_functions.bcl` (including
-//! its two `require`d `com.bascal.stdlib` library functions,
-//! `ucase$`/`lcase$`), `tutorial/10_files.bcl`, `tutorial/11_screen.bcl`,
+//! NOT yet supported: array parameters (`byref` or `byval`) -- passing a
+//! whole array into a `function`/`procedure` is a separate wall from
+//! declaring/indexing one at all, which *is* supported (see above); a
+//! `dim` array bound that isn't a literal or a top-level `const` with an
+//! integer-literal value (see `resolve_array_bound_literal` -- a real C
+//! array needs a compile-time-known size, unlike real BASIC's own `dim
+//! arr%(n%)` for a runtime-computed `n%`); `byref` scalar parameters
+//! (byval-only so far); a `function` body that doesn't provably `return`
+//! on every path (see `body_always_returns` -- a `procedure` has no such
+//! requirement); a `procedure` as an `on error goto` target (a label
+//! target is supported -- see above); a `FIELD`/`OPEN`/`GET`/`PUT`
+//! channel or `FIELD` width that isn't a literal integer; and
+//! `gosub`/`on error goto`/`resume`/`error` used inside a `function`/
+//! `procedure` body (`label`/`goto`/`read`/`restore` all work there fine
+//! -- only the return-address-ID-stack techniques are scoped to top-level
+//! code, since a `return` inside a function/procedure body always means
+//! that callable's own return, leaving no unambiguous "this GOSUB's/raise
+//! site's own RETURN/RESUME" to dispatch to) -- all rejected with a
+//! diagnostic rather than guessed at. Recursion (direct or indirect) is
+//! rejected at the resolver level before codegen ever runs, for every
+//! target, not just this one. Everything else (`on ... goto`/`on ...
+//! gosub`, `mid$` statement-form assignment, `poke`/`out`, `print using`,
+//! ...) reports a "not supported yet" diagnostic rather than panicking or
+//! emitting wrong code -- this is a deliberately minimal backend, not a
+//! complete one; see the GitHub issue tracker's `c-target` label for the
+//! current, itemized list. Tutorials that compile end to end today:
+//! `tutorial/01_hello.bcl`, `tutorial/02_variables.bcl`,
+//! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
+//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`,
+//! `tutorial/07_functions.bcl` (including its two `require`d
+//! `com.bascal.stdlib` library functions, `ucase$`/`lcase$`),
+//! `tutorial/09_data.bcl`, `tutorial/10_files.bcl`, `tutorial/11_screen.bcl`,
 //! `tutorial/13_shared/start.bcl` + `tutorial/13_shared/show.bcl`,
 //! `tutorial/15_random_and_record_files.bcl` (both its hand-written Part 1
-//! and DSL-based Part 2), `tutorial/17_labels_and_error_handling.bcl`, and
-//! `tutorial/18_stdlib.bcl` -- each gcc-compiled and run, not just
-//! transpiled (see `docs/manual/command-line-reference.html#backends` for
-//! the up to date list). `tutorial/08_arrays.bcl`, `09_data.bcl` (array
-//! reads), `12_require.bcl` (its required library takes an array
-//! parameter), `14_procedures.bcl` (byref array params),
-//! `16_short_circuit.bcl`, and `19_inventory.bcl` still don't, blocked by
+//! and DSL-based Part 2), `tutorial/16_short_circuit.bcl`,
+//! `tutorial/17_labels_and_error_handling.bcl`, and `tutorial/18_stdlib.bcl`
+//! -- each gcc-compiled and run, not just transpiled (see
+//! `docs/manual/command-line-reference.html#backends` for the up to date
+//! list). `tutorial/08_arrays.bcl`, `12_require.bcl` (its required library
+//! takes an array parameter), `14_procedures.bcl` (byref array params), and
+//! `19_inventory.bcl` still don't, blocked by
 //! the gaps listed above.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
@@ -172,7 +183,61 @@ struct FnParam {
     is_float: bool,
 }
 
-type FunctionTable = HashMap<(String, Option<TypeSuffix>), FnSig>;
+type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
+
+/// A `dim`-declared array's compile-time-known shape: `bounds` holds one
+/// *inclusive* bound per axis, in declaration order (real BASIC's own
+/// `dim arr%(N)` convention -- `N+1` elements, indexed `0..=N`; see
+/// `docs/manual/variables-and-constants.html#option-base`), so a given
+/// axis's element count is always `bounds[axis] + 1`. `is_string` picks
+/// `char[.][STRING_BUFFER_SIZE]` vs. a numeric element type at declaration
+/// time (see `collect_array_declarations`'s own call site in `generate`).
+/// Scoped deliberately narrow, matching this backend's usual style: only
+/// top-level arrays with a literal-or-const-literal size in every
+/// dimension are tracked at all -- see `resolve_array_bound_literal`.
+struct ArrayInfo {
+    bounds: Vec<i64>,
+    /// `None` for a string array (`char[.][STRING_BUFFER_SIZE]` elements);
+    /// `Some((c_type, is_float))` for a numeric one -- the same pair
+    /// `numeric_c_type` gives that scalar suffix.
+    element_type: Option<(&'static str, bool)>,
+}
+
+type ArrayTable = HashMap<String, ArrayInfo>;
+
+/// Everything `Expr::Call`/`Expr::ArrayRef` resolution needs to know about
+/// names declared elsewhere in the program: `funcs` is the original
+/// per-BASCAL-function signature table (see `build_function_table`),
+/// `arrays` is `dim`-declared arrays (see `collect_array_declarations`).
+/// Bundled into one struct, rather than a second parameter threaded
+/// through every `render_numeric_expr`/`render_string_expr`/... call site
+/// (dozens of them, most several calls deep), since every caller that
+/// already has a `functions: &FunctionTable` in scope needs `arrays` at
+/// exactly the same points it needs `funcs` -- `Expr::ArrayRef`'s own
+/// parse-time ambiguity (see `is_known_callable`'s doc comment) means a
+/// single identifier lookup has to check both tables together anyway.
+struct FunctionTable {
+    funcs: FunctionMap,
+    arrays: ArrayTable,
+}
+
+impl FunctionTable {
+    fn get(&self, key: &(String, Option<TypeSuffix>)) -> Option<&FnSig> {
+        self.funcs.get(key)
+    }
+
+    fn contains_key(&self, key: &(String, Option<TypeSuffix>)) -> bool {
+        self.funcs.contains_key(key)
+    }
+}
+
+impl std::ops::Index<&(String, Option<TypeSuffix>)> for FunctionTable {
+    type Output = FnSig;
+
+    fn index(&self, key: &(String, Option<TypeSuffix>)) -> &FnSig {
+        &self.funcs[key]
+    }
+}
 
 /// The lookup key for a function table entry, or an `Expr::Call` site --
 /// case-insensitive name plus suffix, matching `codegen_basic::same_ident`
@@ -931,6 +996,164 @@ fn collect_on_error_handler_ids_into(statements: &[Statement], ids: &mut HashMap
 
 /// Renders one `DATA` item's literal text as a quoted C string -- `READ`
 /// converts it to its target variable's actual type at read time (`atoi`/
+/// Every top-level `const` in `statements` whose value is a plain integer
+/// literal (`const n% = 5`) or its negation (`const n% = -5`) -- real
+/// BASCAL `const`s aren't compile-time-folded anywhere else in this
+/// codebase (see `Statement::Const`'s own handling in `emit_statement`,
+/// which just codegens it as an ordinary assignment), but a `dim`'s own
+/// array-bound expression needs an actual compile-time integer, since a
+/// real C array's size has to be one -- this is the one place that
+/// integer value gets recovered. Keyed the same way `fn_key`/`var_key`
+/// already do (lowercased name, suffix), matching how a `dim`'s size
+/// expression -- a bare `Expr::Ident` -- would reference it.
+fn collect_top_level_int_consts(
+    statements: &[Statement],
+) -> HashMap<(String, Option<TypeSuffix>), i64> {
+    let mut consts = HashMap::new();
+    for statement in statements {
+        if let Statement::Const { name, value } = statement {
+            let literal = match value {
+                Expr::Integer(n) => Some(*n),
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                } => match expr.as_ref() {
+                    Expr::Integer(n) => Some(-n),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(n) = literal {
+                consts.insert((name.name.to_ascii_lowercase(), name.suffix), n);
+            }
+        }
+    }
+    consts
+}
+
+/// Resolves one `dim` array-bound expression to a compile-time `i64` --
+/// either a literal integer, or a bare reference to a top-level `const`
+/// with an integer-literal value (see `collect_top_level_int_consts`;
+/// `tutorial/09_data.bcl`'s own `dim country$(numCapitals%)`, where
+/// `numCapitals%` is exactly such a `const`, is why the second form
+/// matters, not just the first). Nothing else is supported -- a runtime-
+/// computed bound (real BASIC's own `dim arr%(n%)` for a plain variable
+/// `n%` set at runtime) has no fixed C array size to declare, and this
+/// backend doesn't attempt a dynamic-allocation fallback.
+fn resolve_array_bound_literal(
+    expr: &Expr,
+    consts: &HashMap<(String, Option<TypeSuffix>), i64>,
+) -> Result<i64, String> {
+    match expr {
+        Expr::Integer(n) => Ok(*n),
+        Expr::Ident(ident) => consts
+            .get(&(ident.name.to_ascii_lowercase(), ident.suffix))
+            .copied()
+            .ok_or_else(|| {
+                format!(
+                    "`dim`'s array bound `{ident}` isn't supported by the minimal C backend yet \
+                     -- only a literal integer or a top-level `const` with an integer-literal \
+                     value is (a real C array needs a compile-time-known size)"
+                )
+            }),
+        _ => Err(
+            "`dim`'s array bound isn't supported by the minimal C backend yet -- only a literal \
+             integer or a top-level `const` with an integer-literal value is (a real C array \
+             needs a compile-time-known size)"
+                .to_string(),
+        ),
+    }
+}
+
+/// Every top-level `dim name(...)` array declaration in `statements`,
+/// resolved to its compile-time shape (see `ArrayInfo`) -- walks the same
+/// nested control-flow shapes `count_gosubs`/`count_raise_sites` already
+/// do, though no BASCAL tutorial or test here actually nests one. Keyed
+/// by the same C identifier `c_var_name` would give the array's own
+/// scalar elements, so declaration and every later indexed read/write
+/// (`Expr::ArrayRef`, `Statement::Assignment`'s array-target arm, ...)
+/// agree on the same name.
+fn collect_array_declarations(
+    statements: &[Statement],
+    consts: &HashMap<(String, Option<TypeSuffix>), i64>,
+) -> Result<ArrayTable, String> {
+    let mut arrays = ArrayTable::new();
+    collect_array_declarations_into(statements, consts, &mut arrays)?;
+    Ok(arrays)
+}
+
+fn collect_array_declarations_into(
+    statements: &[Statement],
+    consts: &HashMap<(String, Option<TypeSuffix>), i64>,
+    arrays: &mut ArrayTable,
+) -> Result<(), String> {
+    for statement in statements {
+        match statement {
+            Statement::Dim {
+                name,
+                is_array: true,
+                sizes,
+            } => {
+                let is_string = name.suffix == Some(TypeSuffix::String);
+                let suffix = effective_suffix(name.suffix);
+                let element_type = if is_string { None } else { numeric_c_type(suffix) };
+                if !is_string && element_type.is_none() {
+                    return Err(format!(
+                        "`dim {name}` isn't supported by the minimal C backend yet -- only \
+                         numeric or string array elements (%, &, !, #, $) are"
+                    ));
+                }
+                let mut bounds = Vec::with_capacity(sizes.len());
+                for size in sizes {
+                    let bound = resolve_array_bound_literal(size, consts)?;
+                    if bound < 0 {
+                        return Err(format!("`dim {name}`'s array bound can't be negative"));
+                    }
+                    bounds.push(bound);
+                }
+                let c_name = c_var_name(
+                    name,
+                    if is_string {
+                        TypeSuffix::String
+                    } else {
+                        suffix
+                    },
+                );
+                arrays.insert(
+                    c_name,
+                    ArrayInfo {
+                        bounds,
+                        element_type,
+                    },
+                );
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_array_declarations_into(then_body, consts, arrays)?;
+                collect_array_declarations_into(else_body, consts, arrays)?;
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
+                collect_array_declarations_into(body, consts, arrays)?;
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_array_declarations_into(&case.body, consts, arrays)?;
+                }
+                collect_array_declarations_into(else_body, consts, arrays)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// `atof` for a numeric target, a plain copy for a string one), exactly
 /// the same "raw text in, target decides the type" convention `INPUT`
 /// already uses for `bcc_input_buf` (see `Statement::Input`'s own arm) --
@@ -1225,8 +1448,8 @@ fn apply_field_layouts_before_functions(
 /// real MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C
 /// function falling off the end without `return`-ing a value is undefined
 /// behavior, not a defined-if-surprising fallback.
-fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionTable, String> {
-    let mut table = FunctionTable::new();
+fn build_function_table(functions: &[FunctionDef]) -> Result<FunctionMap, String> {
+    let mut table = FunctionMap::new();
     for func in functions {
         // A `procedure` never carries a type suffix (enforced by the
         // parser) and has no return type at all -- a real `void` C
@@ -1386,8 +1609,12 @@ fn collect_global_decl_idents(body: &[Statement], out: &mut Vec<BasicIdent>) {
 }
 
 pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
-    let functions =
+    let funcs =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
+    let int_consts = collect_top_level_int_consts(&program.statements);
+    let arrays = collect_array_declarations(&program.statements, &int_consts)
+        .map_err(|message| vec![unsupported(&message)])?;
+    let functions = FunctionTable { funcs, arrays };
     let known_layouts = known_record_layouts(program);
     let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
         channel_fields: HashMap::new(),
@@ -1610,6 +1837,32 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         globals_decl.push_str(&format!(
             "static char {c_name}[{STRING_BUFFER_SIZE}] = {{0}};\n"
         ));
+    }
+    // `dim`-declared arrays -- a real, native multi-dimensional C array
+    // (`int grid[10][10]`, not a manually-flattened, hand-strided single
+    // dimension), one `[N + 1]` per axis matching real BASIC's own
+    // inclusive-bound convention (see `ArrayInfo`'s own doc comment).
+    // Sorted by name for the same deterministic-output reason
+    // `numeric_vars`/`string_vars` already are (`BTreeMap`/`BTreeSet`
+    // there; `arrays` is a plain `HashMap`, so sorted here instead).
+    let mut sorted_arrays: Vec<(&String, &ArrayInfo)> = functions.arrays.iter().collect();
+    sorted_arrays.sort_by_key(|(name, _)| name.as_str());
+    for (c_name, info) in sorted_arrays {
+        let dims: String = info
+            .bounds
+            .iter()
+            .map(|bound| format!("[{}]", bound + 1))
+            .collect();
+        match info.element_type {
+            Some((c_type, _)) => {
+                globals_decl.push_str(&format!("static {c_type} {c_name}{dims} = {{0}};\n"));
+            }
+            None => {
+                globals_decl.push_str(&format!(
+                    "static char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {{0}};\n"
+                ));
+            }
+        }
     }
 
     let mut out = includes;
@@ -1953,6 +2206,67 @@ fn c_var_name(ident: &BasicIdent, suffix: TypeSuffix) -> String {
         TypeSuffix::String => 's',
     };
     format!("bv_{tag}_{}", ident.name.to_ascii_lowercase())
+}
+
+/// The `functions.arrays` lookup key for a `dim`-declared array's own
+/// name -- `c_var_name` with the same is-it-a-string-suffix choice
+/// `collect_array_declarations_into` made when it first declared this
+/// array, so a later indexed read/write agrees with the declaration on
+/// exactly which key names it.
+fn array_c_name(ident: &BasicIdent) -> String {
+    let suffix = if ident.suffix == Some(TypeSuffix::String) {
+        TypeSuffix::String
+    } else {
+        effective_suffix(ident.suffix)
+    };
+    c_var_name(ident, suffix)
+}
+
+/// Renders `name(idx1[, idx2, ...])` -- a `dim`-declared array's own
+/// indexed element -- as the matching native C indexing expression
+/// (`bv_i_name[idx1][idx2]`, real C multi-dimensional indexing, not
+/// manual stride arithmetic -- see the array declaration itself in
+/// `generate`). Used identically for a read (`render_numeric_expr`/
+/// `render_string_expr`'s own `Expr::ArrayRef` arms) and a write
+/// (`Statement::Assignment`'s array-target arm) -- both just need the
+/// same lvalue-shaped C expression text. Each index is coerced to `int`
+/// via a narrowing cast, matching real BASIC's own array subscripts
+/// (always evaluated as integers); out-of-declared-bounds indexing isn't
+/// checked at either compile or run time, the same unchecked-range-style
+/// gap this backend already accepts everywhere else (see `ASC`'s own
+/// doc comment in `render_numeric_call`).
+fn render_array_index_expr(
+    name: &BasicIdent,
+    indices: &[Expr],
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+) -> Result<String, String> {
+    let key = array_c_name(name);
+    let info = functions
+        .arrays
+        .get(&key)
+        .expect("caller already checked functions.arrays.contains_key(&array_c_name(name))");
+    if indices.len() != info.bounds.len() {
+        return Err(format!(
+            "`{name}` is a {}-dimensional array, but this reference has {} index/indices",
+            info.bounds.len(),
+            indices.len()
+        ));
+    }
+    let mut out = key;
+    for index in indices {
+        let (index_text, index_is_float) = render_numeric_expr(index, needs_math, functions)?;
+        let index_text = if index_is_float {
+            *needs_math = true;
+            format!("((int)round((double)({index_text})))")
+        } else {
+            format!("({index_text})")
+        };
+        out.push('[');
+        out.push_str(&index_text);
+        out.push(']');
+    }
+    Ok(out)
 }
 
 /// The C type and `printf`/`render_numeric_expr` float-ness for a numeric
@@ -2372,6 +2686,47 @@ fn emit_statement(
                      variables (%, &, !, #, $) are"
                 ))
             }
+        }
+        // `dim` of an array is likewise a no-op here -- its C declaration
+        // was already hoisted into `generate`'s globals (see
+        // `collect_array_declarations`/`ArrayInfo`), which also already
+        // validated its shape (element type, literal-or-const bounds), so
+        // reaching this arm at all means it's known-good.
+        Statement::Dim {
+            is_array: true, ..
+        } => Ok(()),
+        // `arr%(i%) = value` / `country$(i%) = value` -- an indexed
+        // write into a `dim`-declared array (see `ArrayInfo`). Real C
+        // multi-dimensional indexing (`arr[i]`, `grid[r][c]`) needs no
+        // manual stride arithmetic, same as a read (see
+        // `render_array_index_expr`). A string element can't be assigned
+        // via plain `=` (C arrays don't support whole-array assignment),
+        // so it goes through the same `snprintf` convention every other
+        // string write in this backend already uses.
+        Statement::Assignment {
+            target: Expr::ArrayRef { name, indices },
+            value,
+        } if functions.arrays.contains_key(&array_c_name(name)) => {
+            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
+            let info = &functions.arrays[&array_c_name(name)];
+            if info.element_type.is_none() {
+                let (prelude, text) =
+                    render_string_expr(value, needs_math, temp_counter, functions)?;
+                for line in prelude {
+                    out.push_str(&line);
+                }
+                out.push_str(&format!(
+                    "    snprintf({c_expr}, sizeof({c_expr}), \"%s\", {text});\n"
+                ));
+            } else {
+                let (value_text, value_is_float) =
+                    render_numeric_expr(value, needs_math, functions)?;
+                let target_is_float = info.element_type.is_some_and(|(_, f)| f);
+                let value_text =
+                    coerce_numeric(value_text, value_is_float, target_is_float, needs_math);
+                out.push_str(&format!("    {c_expr} = {value_text};\n"));
+            }
+            Ok(())
         }
         Statement::Assignment {
             target: Expr::Ident(name),
@@ -3369,29 +3724,23 @@ fn emit_statement(
         // way keyboard `INPUT` already converts `bcc_input_buf` (see
         // `Statement::Input`'s own arm) -- a `DATA` item's own type is
         // never tracked separately at all.
+        // Each target's own C expression and element type come from the
+        // same `render_lvalue` a scalar-or-array-element `SWAP`
+        // operand already uses -- `READ`'s targets are exactly that same
+        // shape (a bare scalar variable, or a `dim`-declared array's own
+        // indexed element, e.g. `read country$(i%), capital$(i%)`).
         Statement::Read(vars) => {
             for var in vars {
-                let Expr::Ident(ident) = var else {
-                    return Err(
-                        "READ's targets aren't supported by the minimal C backend yet -- only \
-                         bare scalar variables are"
-                            .to_string(),
-                    );
-                };
-                if ident.suffix == Some(TypeSuffix::String) {
-                    let c_name = c_var_name(ident, TypeSuffix::String);
-                    out.push_str(&format!(
-                        "    snprintf({c_name}, sizeof({c_name}), \"%s\", bcc_read_data());\n"
-                    ));
-                } else {
-                    let suffix = effective_suffix(ident.suffix);
-                    let c_name = c_var_name(ident, suffix);
-                    let (_, is_float) = numeric_c_type(suffix)
-                        .expect("effective_suffix never returns TypeSuffix::String");
-                    if is_float {
-                        out.push_str(&format!("    {c_name} = atof(bcc_read_data());\n"));
-                    } else {
-                        out.push_str(&format!("    {c_name} = atoi(bcc_read_data());\n"));
+                let (c_expr, element_type) = render_lvalue(var, needs_math, functions)?;
+                match element_type {
+                    None => out.push_str(&format!(
+                        "    snprintf({c_expr}, sizeof({c_expr}), \"%s\", bcc_read_data());\n"
+                    )),
+                    Some((_, true)) => {
+                        out.push_str(&format!("    {c_expr} = atof(bcc_read_data());\n"))
+                    }
+                    Some((_, false)) => {
+                        out.push_str(&format!("    {c_expr} = atoi(bcc_read_data());\n"))
                     }
                 }
             }
@@ -3422,12 +3771,99 @@ fn emit_statement(
                     .to_string(),
             ),
         },
+        // `SWAP a, b` -- exchanges two lvalues (bare scalar variables, or
+        // a `dim`-declared array's own indexed element -- see
+        // `render_lvalue`) without a caller-visible temp. A numeric
+        // swap goes through a real C temp of one side's own type (mixed
+        // numeric types -- e.g. an `%` and a `!` -- still work, since C
+        // freely converts between them on assignment, same simplification
+        // `Statement::Swap`'s two sides get everywhere else in this
+        // backend); a string swap can't use plain `=` at all (C arrays
+        // don't support whole-array assignment), so it goes through a
+        // temp `char[STRING_BUFFER_SIZE]` buffer and three `snprintf`
+        // copies instead, the same convention every other string write in
+        // this backend already uses.
+        Statement::Swap(a, b) => {
+            let (a_expr, a_type) = render_lvalue(a, needs_math, functions)?;
+            let (b_expr, b_type) = render_lvalue(b, needs_math, functions)?;
+            let temp = format!("bt_swap_{temp_counter}");
+            *temp_counter += 1;
+            match (a_type, b_type) {
+                (None, None) => {
+                    out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+                    out.push_str(&format!(
+                        "    snprintf({temp}, sizeof({temp}), \"%s\", {a_expr});\n"
+                    ));
+                    out.push_str(&format!(
+                        "    snprintf({a_expr}, sizeof({a_expr}), \"%s\", {b_expr});\n"
+                    ));
+                    out.push_str(&format!(
+                        "    snprintf({b_expr}, sizeof({b_expr}), \"%s\", {temp});\n"
+                    ));
+                    Ok(())
+                }
+                (Some((c_type, _)), Some(_)) => {
+                    out.push_str(&format!("    {c_type} {temp} = {a_expr};\n"));
+                    out.push_str(&format!("    {a_expr} = {b_expr};\n"));
+                    out.push_str(&format!("    {b_expr} = {temp};\n"));
+                    Ok(())
+                }
+                _ => Err(
+                    "SWAP's two operands must be the same kind (both string, or both numeric)"
+                        .to_string(),
+                ),
+            }
+        }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
              function/procedure call, and assignment/`const` of scalar variables (%, &, !, #, \
              $) are implemented so far"
         )),
+    }
+}
+
+/// One assignable target, rendered as a C lvalue expression -- a bare
+/// scalar variable, or a `dim`-declared array's own indexed element (see
+/// `render_array_index_expr`) -- alongside its element type (`None` for
+/// string, `Some((c_type, is_float))` for numeric). Shared by `SWAP`'s two
+/// operands (so `Statement::Swap` can pick the right temp/swap strategy
+/// for both together) and `READ`'s own targets (`read country$(i%),
+/// capital$(i%)` needs exactly this same shape).
+fn render_lvalue(
+    expr: &Expr,
+    needs_math: &mut bool,
+    functions: &FunctionTable,
+) -> Result<(String, Option<(&'static str, bool)>), String> {
+    match expr {
+        Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
+            Ok((c_var_name(ident, TypeSuffix::String), None))
+        }
+        Expr::Ident(ident) => {
+            let suffix = effective_suffix(ident.suffix);
+            let element_type = numeric_c_type(suffix).ok_or_else(|| {
+                format!(
+                    "`{ident}` isn't supported by the minimal C backend yet -- only numeric or \
+                     string scalar variables are"
+                )
+            })?;
+            Ok((c_var_name(ident, suffix), Some(element_type)))
+        }
+        // A 2+-index array element parses as `Expr::Call`, not
+        // `Expr::ArrayRef` -- see the identical arm's own comment in
+        // `render_numeric_expr`.
+        Expr::ArrayRef { name, indices } | Expr::Call { name, args: indices }
+            if functions.arrays.contains_key(&array_c_name(name)) =>
+        {
+            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
+            let element_type = functions.arrays[&array_c_name(name)].element_type;
+            Ok((c_expr, element_type))
+        }
+        _ => Err(
+            "this target isn't supported by the minimal C backend yet -- only a bare scalar \
+             variable or a dim'd array element is"
+                .to_string(),
+        ),
     }
 }
 
@@ -4404,6 +4840,17 @@ fn render_string_expr(
         // function parses as `Expr::ArrayRef`, not `Expr::Call` -- see
         // `make_paren_ident_expr` in `parser.rs`/`is_string_expr`'s own
         // comment -- so both shapes route to the same rendering.
+        // `grid$(r%, c%)` -- a multi-dimensional string array read; see
+        // the identical numeric-context arm's own comment in
+        // `render_numeric_expr` for why 2+ indices parse as `Expr::Call`,
+        // not `Expr::ArrayRef`.
+        Expr::Call { name, args }
+            if name.suffix == Some(TypeSuffix::String)
+                && functions.arrays.contains_key(&array_c_name(name)) =>
+        {
+            let c_expr = render_array_index_expr(name, args, needs_math, functions)?;
+            Ok((Vec::new(), c_expr))
+        }
         Expr::Call { name, args } if name.suffix == Some(TypeSuffix::String) => {
             render_string_call(name, args, needs_math, temp_counter, functions)
         }
@@ -4411,6 +4858,15 @@ fn render_string_expr(
             if name.suffix == Some(TypeSuffix::String) && is_known_callable(name, functions) =>
         {
             render_string_call(name, indices, needs_math, temp_counter, functions)
+        }
+        // `country$(i%)` -- a `dim`-declared string array's own indexed
+        // element (see `ArrayInfo`/`render_array_index_expr`). Checked
+        // after the function-call arm above (`is_known_callable`), same
+        // precedence `Expr::ArrayRef`'s own doc comment elsewhere in this
+        // file already establishes for the numeric case.
+        Expr::ArrayRef { name, indices } if functions.arrays.contains_key(&array_c_name(name)) => {
+            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
+            Ok((Vec::new(), c_expr))
         }
         _ => Err(
             "the minimal C backend's string expressions only support string literals, string \
@@ -4520,6 +4976,50 @@ fn render_numeric_call(
     needs_math: &mut bool,
     functions: &FunctionTable,
 ) -> Result<(String, bool), String> {
+    // `sizeof(arr%)` / `sizeof(grid%, axis)` -- a `dim`-declared array's
+    // element count along one axis (`bounds[axis] + 1`, real BASIC's own
+    // inclusive-bound convention -- see `ArrayInfo`), resolved directly
+    // to a literal integer at compile time (this backend only tracks
+    // arrays whose bounds are already compile-time-known -- see
+    // `resolve_array_bound_literal` -- so there's never a runtime value
+    // to compute here at all, unlike `--target basic`'s own `sizeof`,
+    // which sometimes has to read back a captured runtime bound). `axis`
+    // defaults to `0` for a 1-D array; a higher-rank array requires it
+    // explicitly, matching the manual's own documented `sizeof` rules.
+    if name.name.eq_ignore_ascii_case("sizeof") && (1..=2).contains(&args.len()) {
+        let Expr::Ident(array_name) = &args[0] else {
+            return Err(
+                "`sizeof` expects an array name, e.g. `sizeof(arr%)` or `sizeof(grid%, 1)`"
+                    .to_string(),
+            );
+        };
+        let key = array_c_name(array_name);
+        let info = functions.arrays.get(&key).ok_or_else(|| {
+            format!("`{array_name}` isn't a known array, so `sizeof` can't determine its size")
+        })?;
+        let axis = match args.get(1) {
+            Some(Expr::Integer(n)) => *n as usize,
+            Some(_) => {
+                return Err("the axis argument to `sizeof` must be a literal integer".to_string())
+            }
+            None if info.bounds.len() == 1 => 0,
+            None => {
+                return Err(format!(
+                    "`{array_name}` has {} dimensions -- sizeof needs an axis argument, e.g. \
+                     `sizeof({array_name}, 0)`",
+                    info.bounds.len()
+                ))
+            }
+        };
+        let Some(bound) = info.bounds.get(axis) else {
+            return Err(format!(
+                "`{array_name}` only has {} dimension{} -- axis {axis} doesn't exist",
+                info.bounds.len(),
+                if info.bounds.len() == 1 { "" } else { "s" }
+            ));
+        };
+        return Ok(((bound + 1).to_string(), false));
+    }
     // `LEN(s$)` -- `strlen`, cast to `int` so it prints under `%d` like
     // every other integer result here rather than a possibly-64-bit
     // `size_t`. `ASC(s$)` -- the ASCII code of the first character;
@@ -5057,18 +5557,57 @@ fn render_numeric_expr(
         // this same zero-argument shape, so it needs the same routing
         // even though it's never in `functions` (that table only holds
         // BASCAL-defined `function`/`procedure` declarations).
+        // `grid%(r%, c%)` -- a multi-dimensional (2+ index) array read.
+        // Real function-call syntax and 2+-argument array indexing are
+        // syntactically identical, so a 2+-index array reference parses
+        // as a plain `Expr::Call`, not `Expr::ArrayRef` -- unlike the
+        // single/zero-index case, which is genuinely ambiguous with a
+        // call at parse time (see `make_paren_ident_expr` in
+        // `parser.rs`) and so parses as `Expr::ArrayRef` instead, handled
+        // below. Checked before the real call arm right after, same
+        // function-wins-the-ambiguity precedence as that arm's own.
+        Expr::Call { name, args } if functions.arrays.contains_key(&array_c_name(name)) => {
+            let c_expr = render_array_index_expr(name, args, needs_math, functions)?;
+            let is_float = functions.arrays[&array_c_name(name)]
+                .element_type
+                .is_some_and(|(_, f)| f);
+            Ok((c_expr, is_float))
+        }
+        // A call to a user-defined numeric-returning BASCAL function --
+        // and a single-argument (or zero-argument) one parses as
+        // `Expr::ArrayRef`, not `Expr::Call` (see `make_paren_ident_expr`
+        // in `parser.rs`/`is_string_expr`'s own comment), so both shapes
+        // route to the same rendering, `render_numeric_call`. `RND()`
+        // (real BASIC's own zero-argument spelling, equivalent to
+        // `RND(1)` -- see `RND_HELPER`) is the one *builtin* that can take
+        // this same zero-argument shape, so it needs the same routing
+        // even though it's never in `functions` (that table only holds
+        // BASCAL-defined `function`/`procedure` declarations).
         Expr::Call { name, args } => render_numeric_call(name, args, needs_math, functions),
         Expr::ArrayRef { name, indices }
             if functions.contains_key(&fn_key(name)) || name.name.eq_ignore_ascii_case("rnd") =>
         {
             render_numeric_call(name, indices, needs_math, functions)
         }
+        // `arr%(i%)` -- a `dim`-declared numeric array's own indexed
+        // element (see `ArrayInfo`/`render_array_index_expr`). Checked
+        // after the function-call arm above -- a same-named `function`/
+        // `RND` always wins the ambiguity, matching
+        // `codegen_basic::expr`'s own identical precedence for real
+        // BASIC array syntax (indistinguishable from a call there too).
+        Expr::ArrayRef { name, indices } if functions.arrays.contains_key(&array_c_name(name)) => {
+            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
+            let is_float = functions.arrays[&array_c_name(name)]
+                .element_type
+                .is_some_and(|(_, f)| f);
+            Ok((c_expr, is_float))
+        }
         _ => Err(
             "this expression isn't supported in a numeric context by the minimal C backend yet \
              -- render_numeric_expr only covers numeric literals, numeric scalar variables (%, \
-             &, !, #), arithmetic, comparisons, AND/OR/XOR/NOT, and function calls (a string \
-             variable is a type error here, not just unimplemented -- see render_string_expr \
-             for string expressions); arrays aren't supported in either context yet"
+             &, !, #), arithmetic, comparisons, AND/OR/XOR/NOT, function calls, and dim'd array \
+             elements (a string variable is a type error here, not just unimplemented -- see \
+             render_string_expr for string expressions)"
                 .to_string(),
         ),
     }
@@ -5155,10 +5694,26 @@ fn render_prelude_free_string_arg(
                 format!("bcc_stri({text})")
             })
         }
+        // `country$(i%)` / a 2+-index `grid$(r%, c%)` (the latter parses
+        // as `Expr::Call`, not `Expr::ArrayRef` -- see the identical
+        // arm's own comment in `render_numeric_expr`) -- a `dim`-declared
+        // string array's own indexed element (see `ArrayInfo`), the same
+        // shape a string comparison (`country$(i%) > country$(i% + 1)`,
+        // `strcmp`'s own operands -- see this function's own call site
+        // above) needs just as much as a plain string variable does.
+        Expr::ArrayRef { name, indices } | Expr::Call { name, args: indices }
+            if functions
+                .arrays
+                .get(&array_c_name(name))
+                .is_some_and(|info| info.element_type.is_none()) =>
+        {
+            render_array_index_expr(name, indices, needs_math, functions)
+        }
         _ => Err(
             "a string argument to a function called from a numeric context must be a plain \
-             string literal, string variable, or CHR$/MID$/LEFT$/STR$ call (no concatenation or \
-             user-defined function calls) -- not supported by the minimal C backend yet"
+             string literal, string variable, dim'd string array element, or \
+             CHR$/MID$/LEFT$/STR$ call (no concatenation or user-defined function calls) -- not \
+             supported by the minimal C backend yet"
                 .to_string(),
         ),
     }
