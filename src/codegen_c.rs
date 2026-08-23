@@ -25,12 +25,14 @@
 //! `global` to opt into reading/writing a top-level variable instead (see
 //! `build_function_table`/`emit_function_def`), a suffixless (default-typed)
 //! numeric variable (real MBASIC/BASCOM's own unoverridden default,
-//! single-precision -- see `effective_suffix`), twenty-four BASIC
+//! single-precision -- see `effective_suffix`), twenty-five BASIC
 //! intrinsics implemented natively -- `LEN`, `ASC`, `CHR$`, `MID$`,
 //! `LEFT$`, `RIGHT$`, `STR$`, `VAL`, `INSTR`, `SQR`, `ABS`, `INT`, `FIX`,
 //! `SGN`, `CINT`, `CLNG`, `CSNG`, `CDBL`, `SIN`, `COS`, `TAN`, `ATN`,
-//! `LOG`, `EXP` (see `render_numeric_call`/`render_string_call`/
-//! `MID_HELPER`/`INSTR_HELPER`/`SGN_HELPER`) -- and
+//! `LOG`, `EXP`, `RND` (see `render_numeric_call`/`render_string_call`/
+//! `MID_HELPER`/`INSTR_HELPER`/`SGN_HELPER`/`RND_HELPER`) -- plus
+//! `RANDOMIZE` (a statement, not an expression; see `Statement::Randomize`'s
+//! own handling in `emit_statement`) -- and
 //! random-access record I/O: `OPEN ... FOR RANDOM`/`BINARY`, `CLOSE`,
 //! `FIELD`, `GET`/`PUT` (whole-record form only), `LSET`/`RSET`, and
 //! `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD` (see
@@ -193,6 +195,11 @@ struct BuiltinUsage {
     /// `SGN_HELPER`) -- `SQR`/`ABS`/`INT`/`FIX` need no helper of their
     /// own, just `<math.h>` (already covered by `needs_math`).
     needs_sgn_helper: bool,
+    /// Set by `RND`, whose C translation calls the `bcc_rnd` helper (see
+    /// `RND_HELPER`), which itself needs `rand()` from `<stdlib.h>` --
+    /// folded into the same `needs_stdlib_h` gate `VAL`'s `atof` already
+    /// sets, since both live behind the same include.
+    needs_rnd_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -203,6 +210,7 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_instr_helper: false,
         needs_seq_file_helper: false,
         needs_sgn_helper: false,
+        needs_rnd_helper: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -219,6 +227,10 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                 }
                 "eof" => usage.needs_seq_file_helper = true,
                 "sgn" => usage.needs_sgn_helper = true,
+                "rnd" => {
+                    usage.needs_stdlib_h = true;
+                    usage.needs_rnd_helper = true;
+                }
                 _ => {}
             }
         }
@@ -337,6 +349,22 @@ const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* need
 /// does this (unlike `SQR`/`ABS`/`INT`/`FIX`, which map straight onto
 /// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
 const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
+
+/// `RND(x)` -- real BASIC's argument-selects-behavior convention: `x < 0`
+/// reseeds the sequence from `x` and returns the first draw of that new,
+/// deterministic sequence (so the same negative `x` always reproduces the
+/// same value); `x == 0` repeats the value `RND` last returned, drawing
+/// nothing new; `x > 0` (including the omitted/no-arg call, which
+/// `render_numeric_call` passes through as a literal `1.0`) draws and
+/// returns the next value in the sequence. Built on C's own `rand()`, not
+/// a from-scratch PRNG -- a real, documented divergence from real
+/// MBASIC/BASCOM, same category as `MKS$`/`CVS`'s IEEE-754-vs-MBF gap
+/// (see `FILE_IO_HELPER`'s own doc comment): the exact sequence of values
+/// `RND` produces here will never match real BASCOM's, only the
+/// documented argument semantics above. `RANDOMIZE` (see
+/// `Statement::Randomize`'s own handling in `emit_statement`) reseeds the
+/// same underlying `rand()` stream via `srand()`.
+const RND_HELPER: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
 
 /// `GOSUB`/`RETURN`'s runtime state: a return-address stack, exactly how a
 /// real BASIC interpreter itself implements GOSUB (push where to resume,
@@ -725,6 +753,30 @@ fn program_uses_color(program: &Program) -> bool {
 
 fn program_uses_input(program: &Program) -> bool {
     program_has_statement(program, &|s| matches!(s, Statement::Input { .. }))
+}
+
+/// Whether `program` has any `RANDOMIZE` at all -- decides whether
+/// `generate()` needs `<stdlib.h>` for `srand()` (independent of whether
+/// `RND` itself is ever called -- see `scan_builtin_usage`'s own
+/// `needs_stdlib_h` set for that half).
+fn program_uses_randomize(program: &Program) -> bool {
+    program_has_statement(program, &|s| matches!(s, Statement::Randomize(_)))
+}
+
+/// Whether `program` has a `RANDOMIZE` that needs `time(NULL)` -- bare
+/// `RANDOMIZE` or `RANDOMIZE TIMER` (see `Statement::Randomize`'s own
+/// handling in `emit_statement` for why both fall back to the same
+/// time-based seed) -- as opposed to `RANDOMIZE <numeric seed>`, which
+/// needs no `<time.h>` at all.
+fn program_uses_randomize_time(program: &Program) -> bool {
+    program_has_statement(program, &|s| {
+        matches!(s, Statement::Randomize(None))
+            || matches!(
+                s,
+                Statement::Randomize(Some(Expr::Ident(ident)))
+                    if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("timer")
+            )
+    })
 }
 
 /// Whether `program` uses sequential file I/O anywhere -- decides whether
@@ -1130,6 +1182,8 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let needs_input = program_uses_input(program);
     let needs_seq_io =
         builtin_usage.needs_seq_file_helper || program_uses_sequential_file_io(program);
+    let needs_randomize = program_uses_randomize(program);
+    let needs_randomize_time = program_uses_randomize_time(program);
 
     // <math.h> is only pulled in when something (currently just `\`) needs
     // round() from it, <string.h> only when a string `select case` needs
@@ -1150,10 +1204,16 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if file_io.used {
         includes.push_str("#include <stdint.h>\n");
         includes.push_str("#include <stdlib.h>\n");
-    } else if builtin_usage.needs_stdlib_h || needs_input {
+    } else if builtin_usage.needs_stdlib_h || needs_input || needs_randomize {
         // `input`'s numeric targets parse via `atoi`/`atof` (see
-        // `INPUT_HELPER`'s call site in `emit_statement`).
+        // `INPUT_HELPER`'s call site in `emit_statement`); `RANDOMIZE`
+        // needs `srand()` (see `Statement::Randomize`'s own handling in
+        // `emit_statement`), independent of whether `RND` itself
+        // (`builtin_usage.needs_stdlib_h`) is ever called.
         includes.push_str("#include <stdlib.h>\n");
+    }
+    if needs_randomize_time {
+        includes.push_str("#include <time.h>\n");
     }
 
     let mut globals_decl = String::new();
@@ -1176,6 +1236,9 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     }
     if builtin_usage.needs_sgn_helper {
         out.push_str(SGN_HELPER);
+    }
+    if builtin_usage.needs_rnd_helper {
+        out.push_str(RND_HELPER);
     }
     if gosub_count > 0 {
         out.push_str(GOSUB_HELPER);
@@ -2664,6 +2727,38 @@ fn emit_statement(
             ));
             Ok(())
         }
+        // `RANDOMIZE` reseeds the same `rand()` stream `RND` draws from
+        // (see `RND_HELPER`). Real BASIC's three forms: a numeric seed
+        // (`RANDOMIZE 99`) reseeds deterministically -- straight to
+        // `srand()`, same as `RND`'s own negative-argument case, just
+        // without negating first (`RANDOMIZE`'s seed is already whatever
+        // value the caller wants `srand()` to see). Bare `RANDOMIZE` real
+        // BASIC prompts interactively for a seed -- not attempted here, no
+        // interactive-input model exists in this backend yet -- so this
+        // and `RANDOMIZE TIMER` both fall back to the same time-based
+        // seed, a real, documented divergence for the bare form (matching
+        // `TIMER`'s own real-elapsed-time reading, the closest available
+        // stand-in for "vary run to run" without a prompt). `TIMER` itself
+        // is recognized here by bare identifier name, not evaluated as an
+        // ordinary variable -- like every other zero-arg pseudo-variable
+        // (`ERR`/`ERL`/`DATE$`/...), it isn't otherwise supported by this
+        // backend yet.
+        Statement::Randomize(seed) => {
+            let is_timer = matches!(
+                seed,
+                Some(Expr::Ident(ident)) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("timer")
+            );
+            match seed {
+                None => out.push_str("    srand((unsigned int)time(NULL));\n"),
+                Some(_) if is_timer => out.push_str("    srand((unsigned int)time(NULL));\n"),
+                Some(expr) => {
+                    let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
+                    let text = coerce_numeric(text, is_float, false, needs_math);
+                    out.push_str(&format!("    srand((unsigned int)({text}));\n"));
+                }
+            }
+            Ok(())
+        }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
@@ -3870,6 +3965,20 @@ fn render_numeric_call(
         *needs_math = true;
         return Ok((format!("bcc_sgn((double)({inner}))"), false));
     }
+    // `RND`/`RND(x)` -- see `RND_HELPER`'s own doc comment for the
+    // argument-selects-behavior semantics `bcc_rnd` implements. The
+    // no-argument call is real BASIC's own shorthand for `RND(1)` -- "draw
+    // the next value" -- so it's passed through as a literal `1.0`, no
+    // different from a caller spelling out `RND(1)` themselves.
+    if name.name.eq_ignore_ascii_case("rnd") && args.len() <= 1 {
+        let arg = if let Some(first) = args.first() {
+            let (inner, _) = render_numeric_expr(first, needs_math, functions)?;
+            format!("(double)({inner})")
+        } else {
+            "1.0".to_string()
+        };
+        return Ok((format!("bcc_rnd({arg})"), true));
+    }
     // `CINT(x)`/`CLNG(x)` -- round to the nearest integer (real BASIC's
     // own rounding, not truncation -- unlike `FIX`), the same
     // round-to-`int` shape `coerce_numeric` already gives any
@@ -4259,9 +4368,16 @@ fn render_numeric_expr(
         // and a single-argument (or zero-argument) one parses as
         // `Expr::ArrayRef`, not `Expr::Call` (see `make_paren_ident_expr`
         // in `parser.rs`/`is_string_expr`'s own comment), so both shapes
-        // route to the same rendering, `render_numeric_call`.
+        // route to the same rendering, `render_numeric_call`. `RND()`
+        // (real BASIC's own zero-argument spelling, equivalent to
+        // `RND(1)` -- see `RND_HELPER`) is the one *builtin* that can take
+        // this same zero-argument shape, so it needs the same routing
+        // even though it's never in `functions` (that table only holds
+        // BASCAL-defined `function`/`procedure` declarations).
         Expr::Call { name, args } => render_numeric_call(name, args, needs_math, functions),
-        Expr::ArrayRef { name, indices } if functions.contains_key(&fn_key(name)) => {
+        Expr::ArrayRef { name, indices }
+            if functions.contains_key(&fn_key(name)) || name.name.eq_ignore_ascii_case("rnd") =>
+        {
             render_numeric_call(name, indices, needs_math, functions)
         }
         _ => Err(

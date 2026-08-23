@@ -5393,6 +5393,82 @@ end
     }
 
     #[test]
+    fn c_target_supports_rnd() {
+        let source = "print rnd(1)\nprint rnd(0)\nprint rnd(-5)\nprint rnd()\nend\n";
+        let output = compile_source_via_c_target(source);
+        // Regression check, same category as SGN/INSTR above: bcc_rnd is a
+        // genuine helper function (plus its bcc_rnd_last state), not an
+        // inline expression -- a missing RND_HELPER splice would fail to
+        // *compile*, not just look wrong in generated source text.
+        assert!(
+            output.contains("static double bcc_rnd("),
+            "RND needs the RND_HELPER block for bcc_rnd:\n{output}"
+        );
+        assert!(
+            output.contains("#include <stdlib.h>"),
+            "RND needs <stdlib.h> for rand()/srand():\n{output}"
+        );
+        assert!(
+            output.contains("bcc_rnd((double)(1))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_rnd((double)(0))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_rnd((double)(-(5)))"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_rnd(1.0)"),
+            "the no-argument RND() call should pass through as a literal 1.0, real BASIC's own \
+             shorthand for \"draw the next value\":\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_omits_rnd_helper_when_rnd_is_never_used() {
+        let source = "print \"hi\"\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            !output.contains("bcc_rnd"),
+            "the RND helper shouldn't be emitted when `rnd` is never called:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_randomize_with_a_numeric_seed() {
+        let source = "randomize 42\nprint rnd(1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("srand((unsigned int)(42));"),
+            "unexpected output:\n{output}"
+        );
+        assert!(
+            !output.contains("#include <time.h>"),
+            "a numeric-seed RANDOMIZE needs no time.h -- only bare RANDOMIZE/RANDOMIZE TIMER \
+             do:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_bare_randomize_and_randomize_timer() {
+        let source = "randomize\nrandomize timer\nprint rnd(1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert_eq!(
+            output.matches("srand((unsigned int)time(NULL));").count(),
+            2,
+            "both bare RANDOMIZE and RANDOMIZE TIMER should reseed from the current time, the \
+             closest available stand-in for real BASIC's interactive seed prompt:\n{output}"
+        );
+        assert!(
+            output.contains("#include <time.h>"),
+            "RANDOMIZE/RANDOMIZE TIMER need <time.h> for time():\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_supports_labels_and_goto() {
         let source = "dim i%\ni% = 0\ntop:\ni% = i% + 1\nif i% < 3 then goto top\ngoto skip\nprint \"unreachable\"\nskip:\nprint \"done\"\nend\n";
         let output = compile_source_via_c_target(source);
