@@ -20,7 +20,7 @@ building a real 2026 application. See
 [language book](https://johnjoeallen.github.io/bascal/language/), tutorials,
 worked examples, side-by-side syntax comparisons, and the full
 [language manual](https://johnjoeallen.github.io/bascal/manual/) — the
-complete language reference lives there, not in this repo.
+complete language reference, not duplicated here in the README.
 
 ## Licence and generated programs
 
