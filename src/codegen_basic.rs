@@ -1283,14 +1283,28 @@ impl CodeGenerator {
                 )
             }
             Expr::Call { name, args } => {
-                if name.name.eq_ignore_ascii_case("sizeof") {
+                let array_bound_builtin = ["sizeof", "lbound", "ubound"]
+                    .iter()
+                    .find(|builtin| name.name.eq_ignore_ascii_case(builtin));
+                if let Some(&builtin_name) = array_bound_builtin {
                     let resolved = match args.first() {
                         Some(Expr::Ident(array_name)) if args.len() <= 2 => {
-                            self.resolve_sizeof(array_name, args.get(1), current_function)
+                            match builtin_name {
+                                "lbound" => {
+                                    self.resolve_lbound(array_name, args.get(1), current_function)
+                                }
+                                "ubound" => {
+                                    self.resolve_ubound(array_name, args.get(1), current_function)
+                                }
+                                _ => {
+                                    self.resolve_sizeof(array_name, args.get(1), current_function)
+                                }
+                            }
                         }
-                        _ => Err("sizeof expects an array name, e.g. `sizeof(arr%)` or \
-                             `sizeof(grid%, 1)`"
-                            .to_string()),
+                        _ => Err(format!(
+                            "{builtin_name} expects an array name, e.g. `{builtin_name}(arr%)` \
+                             or `{builtin_name}(grid%, 1)`"
+                        )),
                     };
                     return match resolved {
                         Ok(text) => (Vec::new(), text),
@@ -1845,10 +1859,23 @@ impl CodeGenerator {
             .cloned()
     }
 
-    /// Resolves `sizeof(name)` / `sizeof(name, axis)` to the text that
-    /// should replace the call in generated code.
-    fn resolve_sizeof(
+    /// Shared by `sizeof`/`LBOUND`/`UBOUND`: validates `name` is a known
+    /// array and `axis_expr` names one of its real axes (a literal
+    /// integer, defaulting to `0` for a 1-D array; required and checked
+    /// in range for 2-D+), then resolves that axis's raw `DIM` bound the
+    /// same way `resolve_axis_bound` always has -- a real top-level
+    /// array's literal-or-captured-at-DIM-time bound, or (inside a
+    /// function, for one of its own array parameters) the hidden
+    /// auto-injected bound variable the caller sets immediately before
+    /// `GOSUB`. `UBOUND` exposes this value directly; `sizeof` adds 1 to
+    /// it (see `resolve_sizeof`'s own doc comment); `LBOUND` ignores it
+    /// entirely and always resolves to the literal `0` (see
+    /// `resolve_lbound`'s own doc comment) -- but still needs the same
+    /// validation, so an unknown array or a bad axis is still a clear
+    /// error rather than a silently-wrong `0`.
+    fn resolve_array_bound_for_builtin(
         &self,
+        builtin_name: &str,
         name: &BasicIdent,
         axis_expr: Option<&Expr>,
         current_function: Option<&FunctionInfo>,
@@ -1856,19 +1883,21 @@ impl CodeGenerator {
         let rank = self
             .resolve_array_rank(name, current_function)
             .ok_or_else(|| {
-                format!("`{name}` isn't a known array, so `sizeof` can't determine its size")
+                format!("`{name}` isn't a known array, so `{builtin_name}` can't determine its size")
             })?;
 
         let axis = match axis_expr {
             Some(Expr::Integer(n)) => *n as usize,
             Some(_) => {
-                return Err("the axis argument to `sizeof` must be a literal integer".to_string())
+                return Err(format!(
+                    "the axis argument to `{builtin_name}` must be a literal integer"
+                ))
             }
             None if rank == 1 => 0,
             None => {
                 return Err(format!(
-                    "`{name}` has {rank} dimensions -- sizeof needs an axis argument, e.g. \
-                     `sizeof({name}, 0)`"
+                    "`{name}` has {rank} dimensions -- {builtin_name} needs an axis argument, \
+                     e.g. `{builtin_name}({name}, 0)`"
                 ))
             }
         };
@@ -1879,22 +1908,56 @@ impl CodeGenerator {
             ));
         }
 
-        let bound = self
-            .resolve_axis_bound(name, axis, current_function)
-            .ok_or_else(|| format!("could not determine the size of `{name}`"))?;
-        // `sizeof` returns the array's real element *count* along this
-        // axis, not the raw `DIM` bound `resolve_axis_bound` gives back --
-        // real BASIC's own inclusive-bound convention means a `DIM
-        // arr%(N)` axis holds `N + 1` elements (indices `0..=N`), so the
-        // bound itself is one short of the count. (This assumes the
-        // default `OPTION BASE 0` -- see GitHub issue #44 for the
-        // separate, not-yet-tracked question of how `OPTION BASE 1`
-        // should shift this.) Adding 1 to an already-resolved integer
-        // literal keeps the common case's generated code a plain literal
-        // rather than a `(9 + 1)` expression; a captured runtime bound
-        // (a variable name, from a non-literal `DIM` size -- see
-        // `resolve_axis_bound`'s own doc comment) still needs the
-        // arithmetic spelled out.
+        self.resolve_axis_bound(name, axis, current_function)
+            .ok_or_else(|| format!("could not determine the size of `{name}`"))
+    }
+
+    /// Resolves `UBOUND(name)` / `UBOUND(name, axis)` -- the array's real
+    /// declared bound along an axis (its highest valid index), exactly
+    /// the value `resolve_array_bound_for_builtin` gives back.
+    fn resolve_ubound(
+        &self,
+        name: &BasicIdent,
+        axis_expr: Option<&Expr>,
+        current_function: Option<&FunctionInfo>,
+    ) -> Result<String, String> {
+        self.resolve_array_bound_for_builtin("UBOUND", name, axis_expr, current_function)
+    }
+
+    /// Resolves `LBOUND(name)` / `LBOUND(name, axis)` -- always the
+    /// literal `0`, since BASCAL only supports base-0 array indexing
+    /// (`OPTION BASE` is rejected outright -- see GitHub issue #50). Still
+    /// runs the same array-known/axis-valid validation
+    /// `resolve_array_bound_for_builtin` does for `UBOUND`/`sizeof`, so
+    /// `LBOUND(nope%)` is a clear error, not a silently-wrong `0`.
+    fn resolve_lbound(
+        &self,
+        name: &BasicIdent,
+        axis_expr: Option<&Expr>,
+        current_function: Option<&FunctionInfo>,
+    ) -> Result<String, String> {
+        self.resolve_array_bound_for_builtin("LBOUND", name, axis_expr, current_function)?;
+        Ok("0".to_string())
+    }
+
+    /// Resolves `sizeof(name)` / `sizeof(name, axis)` to the text that
+    /// should replace the call in generated code -- the array's real
+    /// element *count* along this axis, i.e. `UBOUND(name, axis) + 1`
+    /// (real BASIC's own inclusive-bound convention: a `DIM arr%(N)` axis
+    /// holds `N + 1` elements, indices `0..=N`, so the bound alone is one
+    /// short of the count). Adding 1 to an already-resolved integer
+    /// literal keeps the common case's generated code a plain literal
+    /// rather than a `(9 + 1)` expression; a captured runtime bound (a
+    /// variable name, from a non-literal `DIM` size, or an array
+    /// parameter's own hidden bound variable) still needs the arithmetic
+    /// spelled out.
+    fn resolve_sizeof(
+        &self,
+        name: &BasicIdent,
+        axis_expr: Option<&Expr>,
+        current_function: Option<&FunctionInfo>,
+    ) -> Result<String, String> {
+        let bound = self.resolve_ubound(name, axis_expr, current_function)?;
         Ok(match bound.parse::<i64>() {
             Ok(n) => (n + 1).to_string(),
             Err(_) => format!("({bound} + 1)"),

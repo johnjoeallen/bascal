@@ -3602,6 +3602,65 @@ end
     }
 
     #[test]
+    fn lbound_and_ubound_resolve_alongside_sizeof() {
+        // GitHub issue #49: LBOUND/UBOUND share the exact resolution
+        // sizeof() already has -- UBOUND is the raw DIM bound sizeof()
+        // adds 1 to; LBOUND is always the literal 0 (OPTION BASE is
+        // rejected outright -- see #50).
+        let source = "dim data%(9)\ndim grid%(2, 3)\n\
+                       print lbound(data%)\nprint ubound(data%)\n\
+                       print lbound(grid%, 0)\nprint ubound(grid%, 0)\n\
+                       print lbound(grid%, 1)\nprint ubound(grid%, 1)\nend\n";
+        let output = compile_source("lbound_ubound.bcl", source).expect("should compile");
+        let printed: Vec<&str> = output
+            .lines()
+            .filter(|l| l.trim_start().starts_with("PRINT"))
+            .map(|l| l.trim_start().trim_start_matches("PRINT").trim())
+            .collect();
+        assert_eq!(printed, vec!["0", "9", "0", "2", "0", "3"], "unexpected output:\n{output}");
+    }
+
+    #[test]
+    fn ubound_on_own_array_parameter_reads_the_auto_injected_bound() {
+        let source = r#"
+function sumGrid%(byref grid%(?, ?))
+  total% = 0
+  for r% = 0 to ubound(grid%, 0)
+    for c% = 0 to ubound(grid%, 1)
+      total% = total% + grid%(r%, c%)
+    end for
+  end for
+  return total%
+end function
+
+dim g%(2, 2)
+print sumGrid%(g%)
+end
+"#;
+        let output = compile_source("ubound_param.bcl", source).expect("should compile");
+        assert!(
+            output.contains("TO sumgridGridDim00%") && !output.contains("TO (sumgridGridDim00%"),
+            "ubound(grid%, 0) inside the body should read the auto-injected bound variable \
+             directly, with no extra arithmetic:\n{output}"
+        );
+    }
+
+    #[test]
+    fn lbound_and_ubound_on_unknown_array_are_rejected() {
+        for call in ["lbound(nope%)", "ubound(nope%)"] {
+            let source = format!("print {call}\nend\n");
+            let err = compile_source("lb_ub_unknown.bcl", &source)
+                .expect_err("lbound/ubound on an unrecognized array should be rejected");
+            assert!(
+                err.iter()
+                    .any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
+                "error must name the unresolvable array for {call}: {:?}",
+                err
+            );
+        }
+    }
+
+    #[test]
     fn arrays_with_literal_bounds_generate_no_freeze_overhead() {
         // A literal DIM bound is already usable as-is -- freezing it into a
         // temp would just be a needless extra line, sizeof() or auto-
@@ -6172,11 +6231,11 @@ end
     fn c_target_supports_sizeof_1d_and_2d() {
         // `sizeof` returns the array's real element count along an axis
         // (`bound + 1`, real BASIC's own inclusive-bound convention --
-        // `dim arr%(4)` holds 5 elements, indices 0..=4), under the
-        // default `OPTION BASE 0` -- matching `--target basic`'s own
-        // `resolve_sizeof` (see `render_numeric_call`'s `sizeof` arm in
-        // codegen_c.rs; GitHub issue #44 tracks the separate question of
-        // `OPTION BASE 1`, not supported by `--target c` at all yet).
+        // `dim arr%(4)` holds 5 elements, indices 0..=4) -- matching
+        // `--target basic`'s own `resolve_sizeof` (see
+        // `render_numeric_call`'s `sizeof` arm in codegen_c.rs). `OPTION
+        // BASE` is rejected outright (see GitHub issue #50), so this is
+        // the only supported indexing.
         let source =
             "dim arr%(4)\ndim grid%(9, 4)\nprint sizeof(arr%)\nprint sizeof(grid%, 0)\nprint sizeof(grid%, 1)\nend\n";
         let output = compile_source_via_c_target(source);
@@ -6191,6 +6250,47 @@ end
         assert!(
             output.contains("printf(\"%d\\n\", 5)") && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
             "sizeof(grid%(9, 4), 1) should also resolve to 5:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_lbound_and_ubound_1d_and_2d() {
+        // GitHub issue #49: LBOUND/UBOUND share the exact resolution
+        // sizeof() already has -- UBOUND is the raw DIM bound sizeof()
+        // adds 1 to; LBOUND is always the literal 0.
+        let source = "dim arr%(4)\ndim grid%(9, 4)\n\
+                       print lbound(arr%)\nprint ubound(arr%)\n\
+                       print lbound(grid%, 0)\nprint ubound(grid%, 0)\n\
+                       print lbound(grid%, 1)\nprint ubound(grid%, 1)\nend\n";
+        let output = compile_source_via_c_target(source);
+        for expected in [0, 4, 0, 9, 0, 4] {
+            assert!(
+                output.contains(&format!("printf(\"%d\\n\", {expected})")),
+                "missing printf(\"%d\\n\", {expected}):\n{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn c_target_ubound_on_own_array_parameter_reads_the_hidden_len0_directly() {
+        let source = "function firstUbound%(arr%(?))\n    return ubound(arr%)\nend function\n\
+                       dim data%(9)\nprint firstUbound%(data%)\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("return (bv_i_arr_len0 - 1);"),
+            "ubound(arr%) on a parameter should read its hidden _len0 minus 1:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_lbound_on_unknown_array_is_rejected() {
+        let source = "print lbound(nope%)\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
+            "unexpected diagnostics: {diagnostics:?}"
         );
     }
 
