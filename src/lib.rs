@@ -6870,6 +6870,33 @@ end
     }
 
     #[test]
+    fn c_target_supports_line_input_into_an_array_element() {
+        // GitHub issue #29: `LINE INPUT #` used to reject any target that
+        // wasn't a bare string variable -- `render_lvalue` (already used
+        // by `READ`/`SWAP`) also accepts a `dim`'d string array's own
+        // indexed element, which `tutorial/remline/...transform.bcl`
+        // needs (`LINE INPUT #1, rawLine$(lineCount%)`).
+        let source = "dim line$(4)\nopen \"f.txt\" for input as #1\ni% = 0\nline input #1, line$(i%)\nclose #1\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_line_input_file(bcc_files[0], bv_s_line[(bv_i_i)], sizeof(bv_s_line[(bv_i_i)]));"),
+            "LINE INPUT # should target the array element directly:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_rejects_line_input_into_a_numeric_array_element() {
+        let source = "dim n%(4)\nopen \"f.txt\" for input as #1\ni% = 0\nline input #1, n%(i%)\nclose #1\nend\n";
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("LINE INPUT # requires a string")),
+            "unexpected diagnostics: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn c_target_omits_seq_file_helper_when_sequential_io_is_never_used() {
         let source = "print \"hi\"\nend\n";
         let output = compile_source_via_c_target(source);

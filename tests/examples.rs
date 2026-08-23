@@ -120,6 +120,66 @@ fn gcc_runs_labels_and_error_handling_tutorial_under_c_target_when_available() {
     }
 }
 
+/// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
+/// `dim`'d string array element (`rawLine$(lineCount%)` in
+/// `tutorial/remline/com/bascal/examples/remline/transform.bcl`) now
+/// compiles and runs correctly under `--target c`, producing output
+/// identical to `--target basic`'s own (see
+/// `freebasic_runs_remline_when_available`'s matching assertion against
+/// the same `tutorial/remline/sample/expected.bas` fixture).
+#[test]
+fn gcc_runs_remline_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tutorial/remline/remline.bcl");
+    let sample_output_path = repo_root.join("tutorial/remline/sample/output.bas");
+    let output_dir = repo_root.join("output/c_target_remline");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let _ = fs::remove_file(&sample_output_path);
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("-L")
+        .arg("tutorial/remline")
+        .arg("--clean")
+        .arg("--binary")
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(status.success(), "bcc failed to compile/build {source_path:?} under --target C");
+
+    let executable_path = repo_root.join("tmp/remline");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled remline binary");
+    assert!(
+        run.status.success(),
+        "compiled remline binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let expected = fs::read_to_string(repo_root.join("tutorial/remline/sample/expected.bas"))
+        .expect("expected output should be readable");
+    let actual = fs::read_to_string(&sample_output_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", sample_output_path.display()));
+    assert_eq!(
+        normalize_newlines(&actual),
+        normalize_newlines(&expected),
+        "remline output under --target c should match the sample expectation"
+    );
+}
+
 #[test]
 fn freebasic_runs_mid_assign_edge_cases_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
