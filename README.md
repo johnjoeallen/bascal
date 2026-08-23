@@ -12,9 +12,9 @@ The `bcc` transpiler translates structured `.bcl` source into an intermediate
 language that can then be compiled into a runnable binary. Two backends are
 available, selected with `--target`: `basic` (default) — plain 1980s
 Microsoft BASIC, compiled with a period BASIC compiler like BASCOM or
-FreeBASIC's QB-compatible mode — is fully functional; `C` — native C,
-compiled directly with `gcc`, no BASIC compiler involved — is an
-experimental backend still under development.
+FreeBASIC's QB-compatible mode — and `C` — native C, compiled directly with
+`gcc`, with no BASIC compiler involved — are both almost complete. The C
+backend's small number of remaining limits are documented in the manual.
 
 **[Browse the website](https://johnjoeallen.github.io/bascal/)** for
 tutorials, side-by-side syntax comparisons, and the full
@@ -125,15 +125,22 @@ echo "target=C" > ~/.config/bascal/config
 
 ## Backends
 
-BASCAL has two code generators, selected with `--target`: **`basic`**
-(default) — the original, complete target, plain 1980s Microsoft
-BASIC/BASCOM — and **`C`**, an experimental native-C backend aiming to
-produce native Linux/macOS/Win32 binaries directly, with no BASIC
-compiler involved. Full detail on both — exactly what `--target C`
-supports today, and every BASIC-vs-C semantic decision behind it — lives
+BASCAL has two almost-complete code generators, selected with `--target`:
+**`basic`** (default) — plain 1980s Microsoft BASIC/BASCOM — and **`C`**,
+which produces native Linux/macOS/Win32 binaries directly with no BASIC
+compiler involved. Full detail on both — including the remaining C limits and
+the BASIC-vs-C semantic decisions — lives
 on the website's
 [Backends](https://johnjoeallen.github.io/bascal/manual/command-line-reference.html#backends)
 section, kept current there rather than duplicated here.
+
+## Licence and generated programs
+
+BASCAL itself is GPLv3. Its [output exception](LICENSE-OUTPUT-EXCEPTION.md)
+means that BASCAL source programs, generated BASIC or C, compiled binaries,
+and C runtime-support functions included in those binaries are not subject to
+the GPLv3 solely because BASCAL produced them. You may license them as you see
+fit.
 
 ## Dependencies
 
