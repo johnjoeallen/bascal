@@ -1,5 +1,7 @@
 # BASCAL — Agent Instructions
 
+See also [AGENTS.md](AGENTS.md) for terminology and other agent conventions.
+
 ## Releasing
 
 When the user says **"release"** (or "cut a release", "tag a release", etc.):
