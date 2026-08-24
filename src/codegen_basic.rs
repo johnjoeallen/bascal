@@ -241,7 +241,7 @@ impl CodeGenerator {
             .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
             .collect();
 
-        self.line("' BASCAL generated BASIC");
+        self.line("' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE");
         self.line("' Functions are transpiled to global variables, labels, and GOSUB");
 
         for block in &program.common {
@@ -1313,6 +1313,30 @@ impl CodeGenerator {
         self.indent += 1;
         self.line(&format!("{pending_name} = ERR"));
         if let Some(catch) = catch {
+            // `catch err%(53, 76), erl%` (GitHub issue #76): a non-empty
+            // filter list checks ERR *before* binding anything or running
+            // the catch body at all -- a miss skips straight to `finally`
+            // with `pending_name` still `= ERR` from above, so it
+            // auto-rethrows exactly the way an explicit `throw` already
+            // does (see the doc comment at the bottom of this function for
+            // that shared finally-exit rethrow). An empty filter list (the
+            // ordinary, pre-#76 `catch err%, erl%` shape) keeps the exact
+            // unconditional `RESUME` this always emitted, byte-for-byte.
+            if !catch.error_filter.is_empty() {
+                let matched_label = format!("TRY_{id:04}_MATCHED");
+                let mut prelude_lines = Vec::new();
+                let mut condition_parts = Vec::new();
+                for filter_expr in &catch.error_filter {
+                    let (prelude, code) = self.expr(filter_expr, current_function);
+                    prelude_lines.extend(prelude);
+                    condition_parts.push(format!("(ERR = {code})"));
+                }
+                self.lines(prelude_lines);
+                let condition = condition_parts.join(" OR ");
+                self.line(&format!("IF {condition} THEN GOTO {matched_label}"));
+                self.line(&format!("RESUME {finally_label}"));
+                self.line(&format!("{matched_label}:"));
+            }
             let err_name = self.ident(&catch.err_var, current_function);
             let erl_name = self.ident(&catch.erl_var, current_function);
             self.line(&format!("{err_name} = ERR"));
@@ -2578,6 +2602,9 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
         } => {
             visit_body_exprs(try_body, f);
             if let Some(catch) = catch {
+                for filter_expr in &catch.error_filter {
+                    visit_expr(filter_expr, f);
+                }
                 visit_body_exprs(&catch.body, f);
             }
             visit_body_exprs(finally_body, f);
@@ -3628,6 +3655,9 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
             collect_names_from_stmts(try_body, names);
             if let Some(catch) = catch {
                 names.insert(catch.err_var.as_basic().to_ascii_lowercase());
+                for filter_expr in &catch.error_filter {
+                    collect_names_from_expr(filter_expr, names);
+                }
                 names.insert(catch.erl_var.as_basic().to_ascii_lowercase());
                 if let Some(source_var) = &catch.source_var {
                     names.insert(source_var.as_basic().to_ascii_lowercase());

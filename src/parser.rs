@@ -1332,6 +1332,23 @@ impl Parser {
             let err_var = BasicIdent::parse(
                 &self.expect_ident("expected error-code variable after `catch`")?,
             );
+            // `catch err%(53, 76), erl%` (GitHub issue #76): an optional
+            // parenthesized, comma-separated filter list attached directly
+            // to `err_var`, restricting which raised error codes this
+            // `catch` handles at all.
+            let error_filter = if self.eat(TokenKind::LParen) {
+                let mut codes = vec![self.parse_expr(0)?];
+                while self.eat(TokenKind::Comma) {
+                    codes.push(self.parse_expr(0)?);
+                }
+                self.expect(
+                    TokenKind::RParen,
+                    "expected `)` after catch's error-code filter list",
+                )?;
+                codes
+            } else {
+                Vec::new()
+            };
             self.expect(
                 TokenKind::Comma,
                 "expected `,` between `catch`'s two variables",
@@ -1354,7 +1371,13 @@ impl Parser {
             };
             self.consume_line_end()?;
             let body = self.parse_block(&[BlockEnd::Finally, BlockEnd::EndTry])?;
-            Some(TryCatchHandler { err_var, erl_var, source_var, body })
+            Some(TryCatchHandler {
+                err_var,
+                error_filter,
+                erl_var,
+                source_var,
+                body,
+            })
         } else {
             None
         };
@@ -2812,6 +2835,43 @@ mod tests {
         assert!(errs
             .iter()
             .any(|d| d.message.contains("must be a string variable")));
+    }
+
+    #[test]
+    fn parses_try_catch_with_error_code_filter() {
+        let program = parse("try\nerror 11\ncatch e%(53, 76), l%\nprint e%\nend try\nend\n");
+        match &*program.statements[0] {
+            Statement::TryCatch { catch, .. } => {
+                let catch = catch.as_ref().expect("catch should be present");
+                assert_eq!(catch.error_filter.len(), 2);
+                assert!(matches!(catch.error_filter[0], Expr::Integer(53)));
+                assert!(matches!(catch.error_filter[1], Expr::Integer(76)));
+            }
+            other => panic!("expected try/catch statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_try_catch_without_error_code_filter_leaves_it_empty() {
+        let program = parse("try\nerror 11\ncatch e%, l%\nprint e%\nend try\nend\n");
+        match &*program.statements[0] {
+            Statement::TryCatch { catch, .. } => {
+                let catch = catch.as_ref().expect("catch should be present");
+                assert!(catch.error_filter.is_empty());
+            }
+            other => panic!("expected try/catch statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn catch_error_filter_requires_closing_paren() {
+        let tokens =
+            Lexer::new("test.bcl", "try\nerror 11\ncatch e%(53, l%\nend try\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for an unterminated filter list");
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("expected `)` after catch's error-code filter list")));
     }
 
     #[test]

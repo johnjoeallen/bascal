@@ -7336,6 +7336,80 @@ end
     }
 
     #[test]
+    fn catch_without_error_filter_emits_byte_for_byte_the_same_output() {
+        // GitHub issue #76: an empty filter list (the ordinary, pre-#76
+        // `catch err%, erl%` shape) must not change a single byte of
+        // existing output.
+        let source = r#"try
+    error 11
+catch e%, l%
+    print e%
+end try
+end
+"#;
+        let with_feature = compile_source("no_filter.bcl", source)
+            .expect("catch without a filter should compile");
+        assert!(!with_feature.contains("MATCHED"), "{with_feature}");
+        assert!(!with_feature.contains("IF (ERR"), "{with_feature}");
+    }
+
+    #[test]
+    fn catch_error_filter_only_runs_the_body_on_a_matching_code() {
+        // GitHub issue #76: `catch err%(53, 76), erl%` -- the BASIC target
+        // checks ERR against the filter before binding anything or
+        // running the catch body at all.
+        let source = r#"try
+    error 11
+catch e%(53, 76), l%
+    print e%
+end try
+end
+"#;
+        let basic = compile_source("issue_76.bcl", source)
+            .expect("catch's error-code filter should compile");
+        assert!(basic.contains("IF (ERR = 53) OR (ERR = 76) THEN GOTO"), "{basic}");
+    }
+
+    #[test]
+    fn catch_error_filter_auto_rethrows_a_mismatch_after_finally() {
+        // GitHub issue #76: a raised code that doesn't match the filter
+        // skips the catch body and auto-rethrows -- immediately if there's
+        // no finally, or (as here) after finally runs, via the exact same
+        // `pending`-flag rethrow path an explicit `throw` already uses.
+        let source = r#"try
+    error 99
+catch e%(53), l%
+    print "unreachable"
+finally
+    print "cleanup"
+end try
+end
+"#;
+        let basic = compile_source("issue_76_finally.bcl", source)
+            .expect("catch's error-code filter with finally should compile");
+        assert!(basic.contains("IF (ERR = 53) THEN GOTO"), "{basic}");
+        assert!(basic.contains("PRINT \"cleanup\""), "{basic}");
+        assert!(basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"), "{basic}");
+    }
+
+    #[test]
+    fn catch_error_filter_is_supported_under_c_target() {
+        // GitHub issue #76: on the C backend, a mismatch sets the same
+        // `pending` flag `throw` uses and jumps straight to `finally`.
+        let source = r#"try
+    open "missing.dat" for input as #1
+catch e%(53, 76), l%
+    print e%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("if (!((bcc_err == 53) || (bcc_err == 76))) {"), "{c}");
+        assert!(c.contains("bcc_try_0_pending = 1;"), "{c}");
+        assert!(c.contains("goto bcc_try_0_finally;"), "{c}");
+    }
+
+    #[test]
     fn try_catch_finally_runs_cleanup_on_both_paths() {
         let source = r#"try
     error 11

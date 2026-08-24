@@ -586,7 +586,7 @@ fn compile_example(path: &Path, tutorial_dir: &Path, output_dir: &Path) {
         .unwrap_or_else(|err| panic!("failed to write {}: {err}", output_path.display()));
 
     assert!(
-        output.contains("' BASCAL generated BASIC\n"),
+        output.contains("' BASCAL generated BASIC -- DO NOT EDIT"),
         "{} should produce generated BASIC",
         path.display()
     );

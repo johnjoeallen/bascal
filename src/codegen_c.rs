@@ -3085,7 +3085,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         runtime_body.push_str(INPUT_BODY);
     }
 
-    let mut app = includes;
+    let mut app = String::from(
+        "// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE\n",
+    );
+    app.push_str(&includes);
     app.push('\n');
     if !runtime_state.is_empty() {
         app.push_str(&runtime_state);
@@ -3878,6 +3881,9 @@ fn collect_vars_in_statement(
             }
             if let Some(catch) = catch {
                 register_var(&catch.err_var, numeric_out, string_out);
+                for filter_expr in &catch.error_filter {
+                    collect_vars_in_expr(filter_expr, numeric_out, string_out);
+                }
                 register_var(&catch.erl_var, numeric_out, string_out);
                 if let Some(source_var) = &catch.source_var {
                     register_var(source_var, numeric_out, string_out);
@@ -5666,6 +5672,25 @@ fn emit_statement(
             out.push_str("    bcc_in_handler = 0;\n");
             out.push_str("    bcc_on_error_target = -1;\n");
             if let Some(catch) = catch {
+                // `catch err%(53, 76), erl%` (GitHub issue #76): a miss
+                // skips straight to `finally` with `pending_name` set,
+                // exactly the path a bare `throw` inside this catch would
+                // already take -- auto-rethrowing after `finally` runs (or
+                // immediately, if there's none). An empty filter list (the
+                // ordinary, pre-#76 shape) emits nothing here at all.
+                if !catch.error_filter.is_empty() {
+                    let mut conditions = Vec::new();
+                    for filter_expr in &catch.error_filter {
+                        let (code_text, code_is_float) =
+                            render_numeric_expr(filter_expr, needs_math, functions)?;
+                        let code_text = coerce_numeric(code_text, code_is_float, false, needs_math);
+                        conditions.push(format!("(bcc_err == {code_text})"));
+                    }
+                    out.push_str(&format!("    if (!({})) {{\n", conditions.join(" || ")));
+                    out.push_str(&format!("        {pending_name} = 1;\n"));
+                    out.push_str(&format!("        goto {finally_label};\n"));
+                    out.push_str("    }\n");
+                }
                 let err_c = c_var_name(&catch.err_var, effective_suffix(catch.err_var.suffix));
                 let erl_c = c_var_name(&catch.erl_var, effective_suffix(catch.erl_var.suffix));
                 out.push_str(&format!("    {err_c} = bcc_err;\n"));

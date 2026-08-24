@@ -330,6 +330,11 @@ impl Lowerer {
                 let try_body = self.lower_statements(try_body);
                 let catch = catch.map(|catch| TryCatchHandler {
                     err_var: catch.err_var,
+                    error_filter: catch
+                        .error_filter
+                        .into_iter()
+                        .map(|e| self.rewrite_expr(e).0)
+                        .collect(),
                     erl_var: catch.erl_var,
                     source_var: catch.source_var,
                     body: self.lower_statements(catch.body),

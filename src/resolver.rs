@@ -794,9 +794,13 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
             ..
         } => {
             statements_call_function(try_body, target)
-                || catch
-                    .as_ref()
-                    .is_some_and(|catch| statements_call_function(&catch.body, target))
+                || catch.as_ref().is_some_and(|catch| {
+                    catch
+                        .error_filter
+                        .iter()
+                        .any(|e| expr_calls_function(e, target))
+                        || statements_call_function(&catch.body, target)
+                })
                 || statements_call_function(finally_body, target)
         }
         Statement::Locate { row, col } => {
@@ -1300,6 +1304,9 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         } => {
             walk_statements_exprs(try_body, f);
             if let Some(catch) = catch {
+                for filter_expr in &catch.error_filter {
+                    walk_expr(filter_expr, pos, f);
+                }
                 walk_statements_exprs(&catch.body, f);
             }
             walk_statements_exprs(finally_body, f);

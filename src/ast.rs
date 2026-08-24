@@ -526,6 +526,16 @@ pub enum Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TryCatchHandler {
     pub err_var: BasicIdent,
+    /// Optional error-code filter attached directly to `err_var`
+    /// (`catch err%(53, 76), erl%`, GitHub issue #76): the `catch` body
+    /// only runs when the raised error's code matches one of these
+    /// (numeric, not necessarily literal) expressions. Empty means
+    /// "match anything" -- bare `catch err%, erl%`, unchanged from before
+    /// this existed. On no match, `catch`'s body is skipped and the error
+    /// auto-rethrows: immediately if there's no `finally`, or after
+    /// `finally` runs if there is one -- the same propagation path a bare
+    /// `throw` already uses.
+    pub error_filter: Vec<Expr>,
     pub erl_var: BasicIdent,
     /// Optional third `catch` binding (`catch err%, erl%, source$`):
     /// the original BASCAL source filename the raising statement came
