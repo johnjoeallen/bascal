@@ -23,14 +23,16 @@ For code that should run on both targets, use structured `try`/`catch`/`finally`
 ```bascal
 try
     checkPart()
-catch err%, erl%, source$
+catch err%(53, 55), erl%, source$
     print "error "; err%; " at "; source$; ":"; erl%
 finally
     closePart()
 end try
 ```
 
-`err%`, `erl%`, and `source$` are ordinary locals scoped to the `catch` block; they are not the ambient `err`/`erl` pseudo-variables. `source$` identifies the `.bcl` source file that raised the error. `catch` is optional when only cleanup is needed: an unhandled error is re-raised after `finally` runs. There is no `resume`: a failed action is always abandoned, never resumed partway through a procedure.
+`err%`, `erl%`, and `source$` are ordinary locals scoped to the `catch` block; they are not the ambient `err`/`erl` pseudo-variables. `source$` identifies the `.bcl` source file that raised the error.
+
+The optional parenthesized list after the error-code variable filters the codes this handler accepts: `catch err%(53, 55), erl%, source$` handles only errors 53 and 55. The expressions in the list need not be literals. If a code does not match, the catch body is skipped and the error is re-raised after `finally` (or immediately if there is no `finally`). `catch` is optional when only cleanup is needed. There is no `resume`: a failed action is always abandoned, never resumed partway through a procedure.
 
 On the BASIC target, `try`/`catch`/`finally` transpiles to real `ON ERROR GOTO`/`RESUME <label>`. On the C target, a raise reaches the owning `catch` when it occurs in the `try` block or in a procedure/function called from it, including when that function call is part of a larger expression such as `x% = boom%() + 1`. Tries may be nested: each `finally` runs before an unhandled error reaches the enclosing `catch` or escapes its function. A catch that completes normally suppresses its error; bare `throw` rethrows it after that finally block, while `throw n` throws error `n`.
 
