@@ -10,6 +10,80 @@
 // label and RESUME to that label. The C backend would propagate a status
 // value from the failed procedure and execute the catch block in the
 // caller.
+//
+// Proposed shape for that C-side propagation: every generated (and
+// wrapper/stdlib) function and procedure returns a small struct bundling
+// its real value alongside a status code --
+//   typedef struct { int status; int    value; } bcc_result_int;
+//   typedef struct { int status; long   value; } bcc_result_long;
+//   typedef struct { int status; float  value; } bcc_result_single;
+//   typedef struct { int status; double value; } bcc_result_double;
+//   typedef struct { int status; }               bcc_result_void;
+// (a `procedure`, and any function whose payload already goes out through
+// the existing `bcc_out` string parameter, use bcc_result_void). Every call
+// site's handling is decided purely by lexical context, no whole-program
+// reachability analysis needed: inside a `try`, a nonzero status `goto`s
+// its catch label; inside a function/procedure with no enclosing `try`, it
+// `return`s the whole struct upward unchanged; at true top level with
+// nothing further to propagate to (main, outside any `try`), it falls into
+// the same fatal exit(1) path `emit_raise_block` already uses today for an
+// uncaught error.
+//
+// The real cost of doing this uniformly: a call can no longer sit inline
+// inside an arbitrary expression the way it does today (`x = someFunc(1) +
+// 2`), because its status has to be checked the instant it returns, before
+// anything downstream of it runs. Every call, everywhere in the program --
+// not just ones inside a `try` -- needs hoisting to its own statement-level
+// temp first:
+//   bcc_result_int bcc_tmp2 = someFunc(1);
+//   if (bcc_tmp2.status) return (bcc_result_double){ .status = bcc_tmp2.status };
+//   x = bcc_tmp2.value + 2;
+// That's an ANF-style flattening pass over every expression containing a
+// call, program-wide -- not something scoped to try/catch alone.
+//
+// err% and erl% in `catch err%, erl%` are ordinary locals scoped to the
+// catch block, not aliases for BASIC's ambient (readable-anywhere) ERR/ERL.
+// They're assigned once, at the top of the generated catch block, from
+// whatever the runtime captured when the error was raised, and go out of
+// scope at `end try`. This means the C backend never needs to expose its
+// internal error-status globals outside of that one assignment.
+//
+// Those internal globals (bcc_err/bcc_resume_id, already file-scope statics
+// -- see ERROR_HANDLING_GLOBALS in codegen_c.rs) stay global rather than
+// becoming locals threaded through each raise site: a try block can be
+// entered/failed from several different raise sites via goto, and one of
+// them writing straight into a per-catch local (rather than a global) would
+// make that local's own declaration+initializer something a *different*
+// raise site's goto could land past unset -- the same declaration/goto
+// ordering hazard that ordinary user-declared locals avoid by being hoisted
+// to the top of the enclosing C function with a `= 0` initializer (see
+// `emit_function_def` in codegen_c.rs), before any goto in that function --
+// including today's `on error goto`/`resume` -- can run. err%/erl% get the
+// analogous fix: the values live in globals, always-initialized and
+// writable from any raise site with no declaration for a goto to jump past,
+// and the catch (and any future `finally`) block copies them into its own
+// locals as its first statement, regardless of which raise site got there.
+//
+// bcc_resume_id (see ERROR_HANDLING_GLOBALS/emit_raise_block in
+// codegen_c.rs) is a per-raise-site integer ID, not a real BASIC line
+// number -- this backend never tracks those. It does two jobs today: it's
+// what ERL reads, and it's the switch key plain top-level RESUME/RESUME
+// NEXT dispatch on to `goto` straight back to that site's own
+// bcc_raise_retry_<id>/bcc_raise_after_<id> label, literally resuming
+// execution at the failed statement. That second job only works because
+// on error goto raise sites are restricted to top-level code today -- the
+// raise site and its handler are the same C function, so a goto back is
+// legal. A try's raise can happen many call frames deep (checkPart() ->
+// some helper -> some deeper helper), and by the time its status has
+// bubbled up through bcc_result_void returns to the frame holding `catch`,
+// every one of those inner C stack frames is already gone -- there's no
+// goto that could land back inside checkPart() mid-statement even in
+// principle, since C has no cross-function jump at all. So erl% inside
+// `catch` can only ever be informational, exactly like reading ERL is --
+// resume/resume next genuinely cannot be offered inside a catch block.
+// That's what this file's own opening paragraph already commits to (no
+// arbitrary RESUME NEXT instruction-pointer behavior); bcc_resume_id's
+// call-frame-based dispatch is the concrete reason why.
 program inventoryTryCatch
 
 require com.bascal.stdlib.error
