@@ -1,8 +1,14 @@
 // DESIGN MOCKUP -- not yet the real inventory.bcl case study (that
 // migration is tracked separately, GitHub issue #66, blocked on this file
-// stabilizing). try/catch itself is real now: the parser, resolver, and
-// --target basic backend all accept it (issue #60). --target C still
-// rejects it outright with a clear "not supported yet" error -- see below.
+// stabilizing). try/catch itself is real now, on both targets (issue
+// #60), but with a real gap on --target C: it only catches a raise from
+// try_body's own top-level statements (error, or a failed sequential
+// open ... for input) -- the same raise sites on error goto already
+// supports, and restricted the same way (rejected inside a function/
+// procedure body). A raise from inside a *called* procedure (checkPart(),
+// editRecord(), ... -- what this actual case study needs) still isn't
+// caught on --target C; that needs the struct-return propagation
+// proposed further down, still unimplemented.
 //
 // This is the proposed C-port shape for tutorial/inventory.bcl. The
 // try/catch syntax is deliberately structured: a failed menu action is
@@ -12,9 +18,11 @@
 //
 // The BASIC backend transpiles this to ON ERROR GOTO plus a recovery
 // label and RESUME to that label (implemented -- see codegen_basic.rs's
-// own `try_catch`). The C backend would propagate a status value from the
-// failed procedure and execute the catch block in the caller (not yet
-// implemented -- see the struct-return proposal further down).
+// own `try_catch`). The C backend reuses that same ON ERROR GOTO/bcc_err/
+// bcc_erl machinery for its own restricted top-level-only support (see
+// codegen_c.rs's own `Statement::TryCatch` arm in `emit_statement`) --
+// the full status-propagation version for calls into procedures is the
+// struct-return proposal below, not yet implemented.
 //
 // Proposed shape for that C-side propagation: every generated (and
 // wrapper/stdlib) function and procedure returns a small struct bundling

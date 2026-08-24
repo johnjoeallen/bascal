@@ -7329,7 +7329,13 @@ end
     }
 
     #[test]
-    fn try_catch_is_rejected_by_the_c_backend_with_a_clear_message() {
+    fn try_catch_transpiles_to_on_error_goto_dispatch_under_c_target() {
+        // GitHub issue #60: `try`/`catch` on the C backend, restricted to
+        // top-level raise sites (same restriction `on error goto` already
+        // has) -- reuses the existing bcc_on_error_target/bcc_err/bcc_erl
+        // machinery instead of the full struct-return propagation
+        // proposed in tutorial/inventory_try_catch.draft for raises deep
+        // inside a called procedure.
         let source = r#"try
     error 11
 catch e%, l%
@@ -7337,10 +7343,57 @@ catch e%, l%
 end try
 end
 "#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_on_error_target = 0;"), "{c}");
+        assert!(c.contains("bcc_err = 11;"), "{c}");
+        assert!(c.contains("bcc_on_error_target = -1;"), "{c}");
+        assert!(c.contains("bcc_try_0_catch: ;"), "{c}");
+        assert!(c.contains("bcc_in_handler = 0;"), "{c}");
+        assert!(c.contains("bv_i_e = bcc_err;"), "{c}");
+        assert!(c.contains("bv_i_l = bcc_erl;"), "{c}");
+        assert!(c.contains("bcc_try_0_end: ;"), "{c}");
+    }
+
+    #[test]
+    fn try_catch_is_rejected_inside_a_function_under_c_target() {
+        let source = r#"function f%()
+    try
+        error 11
+    catch e%, l%
+        return e%
+    end try
+    return 0
+end function
+x% = f%()
+end
+"#;
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(diagnostics.iter().any(|d| d
             .message
-            .contains("`try`/`catch` isn't supported by the minimal C backend")));
+            .contains("`try`/`catch` isn't supported inside a function/procedure body")));
+    }
+
+    #[test]
+    fn nested_try_catch_is_rejected() {
+        let source = r#"try
+    try
+        error 11
+    catch e2%, l2%
+        print "inner"
+    end try
+catch e%, l%
+    print "outer"
+end try
+end
+"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested_try.bcl");
+        std::fs::write(&path, format!("program p\n{source}")).unwrap();
+        let diagnostics = compile_file(&path, &CompileOptions::new())
+            .expect_err("nested try/catch should be rejected");
+        assert!(diagnostics.iter().any(|d| d
+            .message
+            .contains("can't contain another `try`/`catch`")));
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a

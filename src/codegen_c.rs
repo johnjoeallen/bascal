@@ -1221,6 +1221,11 @@ fn program_has_statement(program: &Program, pred: &dyn Fn(&Stmt) -> bool) -> boo
                     Statement::SelectCase {
                         cases, else_body, ..
                     } => cases.iter().any(|case| walk(&case.body, pred)) || walk(else_body, pred),
+                    Statement::TryCatch {
+                        try_body,
+                        catch_body,
+                        ..
+                    } => walk(try_body, pred) || walk(catch_body, pred),
                     _ => false,
                 }
         })
@@ -1262,6 +1267,11 @@ fn count_gosubs(statements: &[Stmt]) -> usize {
                         .sum::<usize>()
                         + count_gosubs(else_body)
                 }
+                Statement::TryCatch {
+                    try_body,
+                    catch_body,
+                    ..
+                } => count_gosubs(try_body) + count_gosubs(catch_body),
                 _ => 0,
             };
             self_count + nested_count
@@ -1313,6 +1323,50 @@ fn count_raise_sites(statements: &[Stmt]) -> usize {
                         .map(|case| count_raise_sites(&case.body))
                         .sum::<usize>()
                         + count_raise_sites(else_body)
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch_body,
+                    ..
+                } => count_raise_sites(try_body) + count_raise_sites(catch_body),
+                _ => 0,
+            };
+            self_count + nested_count
+        })
+        .sum()
+}
+
+/// Total number of top-level `try`/`catch` blocks in `statements`,
+/// walking the same nesting shape `count_raise_sites` does -- but never
+/// descending into a `try`/`catch`'s own `try_body`/`catch_body` looking
+/// for *more* `try`/`catch` blocks, since `resolver::reject_nested_try_
+/// catch` already guarantees there can't be any there. Used only to size
+/// `generate`'s own `dispatch_labels` up front; `Statement::TryCatch`'s
+/// own arm in `emit_statement` assigns the matching id to each one during
+/// real emission, via `ctx.try_id`, in this same left-to-right, depth-
+/// first order.
+fn count_try_catch_blocks(statements: &[Stmt]) -> usize {
+    statements
+        .iter()
+        .map(|statement| {
+            let self_count = usize::from(matches!(&**statement, Statement::TryCatch { .. }));
+            let nested_count = match &statement.kind {
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => count_try_catch_blocks(then_body) + count_try_catch_blocks(else_body),
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => count_try_catch_blocks(body),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    cases
+                        .iter()
+                        .map(|case| count_try_catch_blocks(&case.body))
+                        .sum::<usize>()
+                        + count_try_catch_blocks(else_body)
                 }
                 _ => 0,
             };
@@ -1368,6 +1422,14 @@ fn collect_on_error_handler_ids_into(statements: &[Stmt], ids: &mut HashMap<Stri
                     collect_on_error_handler_ids_into(&case.body, ids);
                 }
                 collect_on_error_handler_ids_into(else_body, ids);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
+                collect_on_error_handler_ids_into(try_body, ids);
+                collect_on_error_handler_ids_into(catch_body, ids);
             }
             _ => {}
         }
@@ -1529,6 +1591,14 @@ fn collect_array_declarations_into(
                 }
                 collect_array_declarations_into(else_body, consts, arrays)?;
             }
+            Statement::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
+                collect_array_declarations_into(try_body, consts, arrays)?;
+                collect_array_declarations_into(catch_body, consts, arrays)?;
+            }
             _ => {}
         }
     }
@@ -1621,6 +1691,14 @@ fn collect_data_items_and_labels_into(
                 }
                 collect_data_items_and_labels_into(else_body, items, labels)?;
             }
+            Statement::TryCatch {
+                try_body,
+                catch_body,
+                ..
+            } => {
+                collect_data_items_and_labels_into(try_body, items, labels)?;
+                collect_data_items_and_labels_into(catch_body, items, labels)?;
+            }
             _ => {}
         }
     }
@@ -1640,10 +1718,25 @@ fn collect_data_items_and_labels_into(
 /// walks in. Both are `0`/thrown away for a function/procedure body's own
 /// pass, since a raise site can only ever be top-level code (see
 /// `Statement::OnErrorGoto`'s own doc comment).
+///
+/// `dispatch_labels` is `emit_raise_block`'s own switch table: index `id`
+/// is the `goto` target for `bcc_on_error_target == id`, named handlers
+/// first (`handler_ids`, sorted by id) then every top-level `try`/`catch`
+/// block appended right after, so a `try`'s own id is always
+/// `handler_ids.len() + <its position among try/catch blocks>` -- see
+/// `generate`'s own construction of this `Vec`. `try_id` is a live
+/// counter over that same try/catch id range, the `Statement::TryCatch`
+/// analogue of `raise_id`, seeded at `handler_ids.len()` so the first
+/// `try`/`catch` emitted gets exactly the id `dispatch_labels` reserved
+/// for it. Empty/thrown away for a function/procedure body's own pass,
+/// since `try`/`catch` (like the rest of this error-handling family) is
+/// top-level-only.
 struct ErrorDataCtx<'a> {
     handler_ids: &'a HashMap<String, usize>,
+    dispatch_labels: &'a [String],
     raise_site_count: usize,
     raise_id: usize,
+    try_id: usize,
     data_labels: &'a HashMap<String, usize>,
 }
 
@@ -1659,16 +1752,17 @@ struct ErrorDataCtx<'a> {
 /// escalate to a fatal, uncaught-error exit (no handler installed, or
 /// already inside one -- real BASIC has no nested-trap recovery either) or
 /// dispatch to whichever label the most recently executed `ON ERROR GOTO`
-/// installed. `handler_ids` empty means the program has no `ON ERROR GOTO`
-/// at all -- the `switch` below then has no cases and is unreachable in
-/// practice (`bcc_on_error_target` can only ever be `-1`), but still
-/// valid, warning-free C.
+/// (or the currently active `try`/`catch`) installed. `dispatch_labels`
+/// empty means the program has no `ON ERROR GOTO`/`try`/`catch` at all --
+/// the `switch` below then has no cases and is unreachable in practice
+/// (`bcc_on_error_target` can only ever be `-1`), but still valid,
+/// warning-free C.
 fn emit_raise_block(
     out: &mut String,
     err_code_text: &str,
     raise_id: usize,
     err_line: usize,
-    handler_ids: &HashMap<String, usize>,
+    dispatch_labels: &[String],
 ) {
     out.push_str(&format!("    bcc_err = {err_code_text};\n"));
     out.push_str(&format!("    bcc_resume_id = {raise_id};\n"));
@@ -1679,10 +1773,8 @@ fn emit_raise_block(
     out.push_str("    }\n");
     out.push_str("    bcc_in_handler = 1;\n");
     out.push_str("    switch (bcc_on_error_target) {\n");
-    let mut sorted: Vec<(&String, &usize)> = handler_ids.iter().collect();
-    sorted.sort_by_key(|(_, id)| **id);
-    for (label, id) in sorted {
-        out.push_str(&format!("    case {id}: goto bcc_lbl_{label};\n"));
+    for (id, label) in dispatch_labels.iter().enumerate() {
+        out.push_str(&format!("    case {id}: goto {label};\n"));
     }
     out.push_str("    }\n");
 }
@@ -1811,6 +1903,14 @@ fn apply_field_layouts_before_functions(
                         walk(&case.body, layout)?;
                     }
                     walk(else_body, layout)?;
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch_body,
+                    ..
+                } => {
+                    walk(try_body, layout)?;
+                    walk(catch_body, layout)?;
                 }
                 _ => {}
             }
@@ -2188,6 +2288,27 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         .map_err(|message| vec![unsupported(&message)])?;
     let raise_site_count = count_raise_sites(&program.statements);
 
+    // `emit_raise_block`'s own switch table: named `ON ERROR GOTO` targets
+    // first (sorted by id, matching `on_error_handler_ids`), then one
+    // entry per top-level `try`/`catch` block, in the same left-to-right,
+    // depth-first program order `Statement::TryCatch`'s own arm in
+    // `emit_statement` assigns `ctx.try_id` in -- see `ErrorDataCtx`'s own
+    // doc comment for why a `try`'s id is always `on_error_handler_ids.
+    // len() + <its position among try/catch blocks>`.
+    let try_catch_count = count_try_catch_blocks(&program.statements);
+    let dispatch_labels: Vec<String> = {
+        let mut sorted: Vec<(&String, &usize)> = on_error_handler_ids.iter().collect();
+        sorted.sort_by_key(|(_, id)| **id);
+        let mut labels: Vec<String> = sorted
+            .into_iter()
+            .map(|(name, _)| format!("bcc_lbl_{name}"))
+            .collect();
+        for i in 0..try_catch_count {
+            labels.push(format!("bcc_try_{}_catch", on_error_handler_ids.len() + i));
+        }
+        labels
+    };
+
     // `bcc_data`/`bcc_read_data` (see `DATA_HELPER`) are only declared
     // below when `data_items` is non-empty -- a `READ` in a program with
     // no `DATA` at all would otherwise fail with an opaque "undeclared
@@ -2254,8 +2375,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut gosub_id: usize = 0;
     let mut ctx = ErrorDataCtx {
         handler_ids: &on_error_handler_ids,
+        dispatch_labels: &dispatch_labels,
         raise_site_count,
         raise_id: 0,
+        try_id: on_error_handler_ids.len(),
         data_labels: &data_labels,
     };
     let mut body = String::new();
@@ -2691,10 +2814,10 @@ fn emit_function_def(
     // GOSUB arm's `gosub_id`/`gosub_count` reads at all, since it errors
     // out immediately whenever `current_function` is `Some` (always true
     // here), so a throwaway `0`/local counter is safe. Same story for
-    // `ON ERROR GOTO`/`RESUME`/`ERROR` and `ctx.raise_id`/
-    // `ctx.raise_site_count` -- all three are rejected outright inside a
-    // function/procedure body too (see their own arms in `emit_statement`),
-    // so `raise_site_count: 0`/a throwaway `raise_id` counter is safe.
+    // `ON ERROR GOTO`/`RESUME`/`ERROR`/`try`/`catch` and `ctx.raise_id`/
+    // `ctx.raise_site_count`/`ctx.try_id`/`ctx.dispatch_labels` -- all are
+    // rejected outright inside a function/procedure body too (see their
+    // own arms in `emit_statement`), so throwaway values are safe.
     // `handler_ids`/`data_labels` are real, though, not thrown away: `READ`/
     // `RESTORE` (unlike the error-handling trio) work fine inside a
     // function/procedure body, since `bcc_data`/`bcc_data_ptr` are plain
@@ -2703,8 +2826,10 @@ fn emit_function_def(
     let mut unused_gosub_id: usize = 0;
     let mut ctx = ErrorDataCtx {
         handler_ids,
+        dispatch_labels: &[],
         raise_site_count: 0,
         raise_id: 0,
+        try_id: 0,
         data_labels,
     };
     for stmt in &func.body {
@@ -3149,6 +3274,28 @@ fn collect_vars_in_statement(
         // is skipped by `register_var`'s own guard, not specially handled
         // here).
         Statement::ErrorStmt { code } => collect_vars_in_expr(code, numeric_out, string_out),
+        // `err_var`/`erl_var` are hoisted like any other local (see
+        // `emit_function_def`'s own doc comment on why every local is
+        // declared, zero-initialized, at the top of its enclosing C
+        // function rather than where first assigned) -- codegen_c.rs's
+        // own `Statement::TryCatch` arm in `emit_statement` only ever
+        // *assigns* them, at the top of the generated catch block; this
+        // is what makes them exist as declared C locals at all.
+        Statement::TryCatch {
+            try_body,
+            err_var,
+            erl_var,
+            catch_body,
+        } => {
+            for stmt in try_body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+            register_var(err_var, numeric_out, string_out);
+            register_var(erl_var, numeric_out, string_out);
+            for stmt in catch_body {
+                collect_vars_in_statement(stmt, numeric_out, string_out);
+            }
+        }
         _ => {}
     }
 }
@@ -3698,7 +3845,7 @@ fn emit_statement(
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
                     let mut raise = String::new();
-                    emit_raise_block(&mut raise, "53", id, statement.pos.line, ctx.handler_ids);
+                    emit_raise_block(&mut raise, "53", id, statement.pos.line, ctx.dispatch_labels);
                     for line in raise.lines() {
                         out.push_str("    ");
                         out.push_str(line);
@@ -4384,7 +4531,7 @@ fn emit_statement(
             let id = ctx.raise_id;
             ctx.raise_id += 1;
             out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-            emit_raise_block(out, &code_text, id, statement.pos.line, ctx.handler_ids);
+            emit_raise_block(out, &code_text, id, statement.pos.line, ctx.dispatch_labels);
             out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
             Ok(())
         }
@@ -4491,19 +4638,86 @@ fn emit_statement(
                 ),
             }
         }
-        // `try`/`catch` (issue #60) isn't implemented for `--target C` yet --
-        // see `tutorial/inventory_try_catch.draft`'s own header comment for
-        // the proposed shape (a bcc_result_* struct-return propagation
-        // convention through every generated/wrapper function, requiring
-        // an ANF-style flattening of any expression containing a call).
-        // The BASIC backend already supports it in full (transpiles
-        // straight onto `ON ERROR GOTO`/`RESUME <label>`).
-        Statement::TryCatch { .. } => Err(
-            "`try`/`catch` isn't supported by the minimal C backend yet -- see \
-             tutorial/inventory_try_catch.draft and GitHub issue #60; `--target basic` already \
-             supports it"
-                .to_string(),
-        ),
+        // `try`/`catch` (issue #60), restricted to top-level code, exactly
+        // like the rest of the `ON ERROR GOTO` family it's built on. A
+        // full struct-return propagation convention letting a raise deep
+        // inside a called procedure reach a `try` in its caller (see
+        // `tutorial/inventory_try_catch.draft`) is still unimplemented --
+        // this only catches a raise from `try_body`'s own top-level
+        // statements (`error`, or a failed sequential `open ... for
+        // input`), the same raise sites `on error goto` already supports.
+        //
+        // Reuses that exact machinery: `bcc_on_error_target` is installed
+        // to this try's own id (`ctx.try_id`, reserved up front by
+        // `generate`'s `dispatch_labels` -- see `ErrorDataCtx`'s own doc
+        // comment) before `try_body`, disabled again after it completes
+        // normally, then a plain `goto` skips the catch block entirely.
+        // `bcc_in_handler` is cleared directly (a plain global this
+        // backend fully controls, unlike real BASIC's own trap state,
+        // which only `RESUME` can clear -- see codegen_basic.rs's
+        // `try_catch` for why *that* backend needs `RESUME <label>`
+        // instead of a bare `goto` here).
+        Statement::TryCatch {
+            try_body,
+            err_var,
+            erl_var,
+            catch_body,
+        } => {
+            if current_function.is_some() {
+                return Err(
+                    "`try`/`catch` isn't supported inside a function/procedure body by the \
+                     minimal C backend yet -- only at top level"
+                        .to_string(),
+                );
+            }
+            let id = ctx.try_id;
+            ctx.try_id += 1;
+            let catch_label = format!("bcc_try_{id}_catch");
+            let end_label = format!("bcc_try_{id}_end");
+
+            out.push_str(&format!("    bcc_on_error_target = {id};\n"));
+            for stmt in try_body {
+                emit_statement(
+                    stmt,
+                    out,
+                    needs_math,
+                    needs_string,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    file_io,
+                    gosub_count,
+                    gosub_id,
+                    ctx,
+                )?;
+            }
+            out.push_str("    bcc_on_error_target = -1;\n");
+            out.push_str(&format!("    goto {end_label};\n"));
+
+            out.push_str(&format!("    {catch_label}: ;\n"));
+            out.push_str("    bcc_in_handler = 0;\n");
+            let err_c = c_var_name(err_var, effective_suffix(err_var.suffix));
+            let erl_c = c_var_name(erl_var, effective_suffix(erl_var.suffix));
+            out.push_str(&format!("    {err_c} = bcc_err;\n"));
+            out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
+            for stmt in catch_body {
+                emit_statement(
+                    stmt,
+                    out,
+                    needs_math,
+                    needs_string,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    file_io,
+                    gosub_count,
+                    gosub_id,
+                    ctx,
+                )?;
+            }
+            out.push_str(&format!("    {end_label}: ;\n"));
+            Ok(())
+        }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
