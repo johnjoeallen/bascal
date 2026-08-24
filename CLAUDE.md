@@ -6,10 +6,11 @@ See also [AGENTS.md](AGENTS.md) for terminology conventions.
 
 ## What this is
 
-BASCAL (`bcc`) is a Rust CLI that transpiles structured `.bcl` source (a
-Pascal-inspired superset of classic Microsoft BASIC) into either plain
-1980s Microsoft BASIC (`--target basic`, the complete/default backend) or
-experimental native C (`--target C`, narrow and still growing).
+BASCAL source files use the `.bcl` extension: a Pascal-inspired, structured
+superset of classic Microsoft BASIC. `bcc`, BASCAL's Rust CLI, transpiles
+that `.bcl` source into either plain 1980s Microsoft BASIC (`--target
+basic`, the complete/default backend) or experimental native C (`--target
+C`, narrow and still growing).
 
 ## Commands
 
