@@ -22,6 +22,12 @@ def main() -> None:
             "../../LICENSE-OUTPUT-EXCEPTION.md",
             "https://github.com/johnjoeallen/bascal/blob/main/LICENSE-OUTPUT-EXCEPTION.md",
         )
+        if page == ROOT / "docs" / "language" / "index.md":
+            text = re.sub(
+                r'(<span class="chapter-number">.*?</span>)(<span class="chapter-title">.*?</span><span class="chapter-summary">.*?</span>)',
+                r'\1<span>\2</span>',
+                text,
+            )
         page.write_text(text)
 
 
