@@ -786,6 +786,14 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
                 })
                 || statements_call_function(else_body, target)
         }
+        Statement::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => {
+            statements_call_function(try_body, target)
+                || statements_call_function(catch_body, target)
+        }
         Statement::Locate { row, col } => {
             expr_calls_function(row, target) || expr_calls_function(col, target)
         }
@@ -898,6 +906,11 @@ fn contains_return(statements: &[Stmt]) -> bool {
         Statement::SelectCase {
             cases, else_body, ..
         } => cases.iter().any(|c| contains_return(&c.body)) || contains_return(else_body),
+        Statement::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => contains_return(try_body) || contains_return(catch_body),
         _ => false,
     })
 }
@@ -1045,6 +1058,17 @@ fn collect_declarations(statements: &[Stmt], declared: &mut HashSet<VarKey>) {
                     collect_declarations(&case.body, declared);
                 }
                 collect_declarations(else_body, declared);
+            }
+            Statement::TryCatch {
+                try_body,
+                err_var,
+                erl_var,
+                catch_body,
+            } => {
+                collect_declarations(try_body, declared);
+                declared.insert(var_key(err_var));
+                declared.insert(var_key(erl_var));
+                collect_declarations(catch_body, declared);
             }
             _ => {}
         }
@@ -1249,6 +1273,14 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
                 walk_statements_exprs(&case.body, f);
             }
             walk_statements_exprs(else_body, f);
+        }
+        Statement::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => {
+            walk_statements_exprs(try_body, f);
+            walk_statements_exprs(catch_body, f);
         }
         Statement::Locate { row, col } => {
             walk_expr(row, pos, f);

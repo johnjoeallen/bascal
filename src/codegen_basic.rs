@@ -968,6 +968,14 @@ impl CodeGenerator {
             } => {
                 self.select_case(expr, cases, else_body, current_function);
             }
+            Statement::TryCatch {
+                try_body,
+                err_var,
+                erl_var,
+                catch_body,
+            } => {
+                self.try_catch(try_body, err_var, erl_var, catch_body, current_function);
+            }
             Statement::Locate { row, col } => {
                 let (row_prelude, row) = self.expr(row, current_function);
                 let (col_prelude, col) = self.expr(col, current_function);
@@ -1207,6 +1215,51 @@ impl CodeGenerator {
 
         self.line(&format!("{end_label}:"));
         self.line("REM END SELECT");
+    }
+
+    /// `try ... catch err%, erl% ... end try` -- see `Statement::TryCatch`'s
+    /// own doc comment for the semantics. Transpiles straight onto real
+    /// BASIC's own `ON ERROR GOTO`/`RESUME <label>`: the catch label is a
+    /// synthetic one like `if_statement`/`select_case`'s own, not a named
+    /// procedure, so none of `resolver::validate`'s named-error-handler-
+    /// target rules apply here. `RESUME <label>` (not a plain `GOTO`) at
+    /// the end of the catch body is required, not stylistic -- a bare
+    /// `GOTO` out of a handler leaves BASIC's own "currently trapping"
+    /// state set, so a *later*, unrelated error elsewhere in the program
+    /// would silently fail to trap at all (verified under dosbox-x; see
+    /// tutorial/17_labels_and_error_handling.bcl's matching comment).
+    fn try_catch(
+        &mut self,
+        try_body: &[Stmt],
+        err_var: &BasicIdent,
+        erl_var: &BasicIdent,
+        catch_body: &[Stmt],
+        current_function: Option<&FunctionInfo>,
+    ) {
+        let id = self.next_label;
+        self.next_label += 1;
+        let catch_label = format!("TRY_{id:04}_CATCH");
+        let end_label = format!("TRY_{id:04}_END");
+
+        self.line(&format!("ON ERROR GOTO {catch_label}"));
+        self.indent += 1;
+        self.statements(try_body, current_function);
+        self.indent -= 1;
+        self.line("ON ERROR GOTO 0");
+        self.line(&format!("GOTO {end_label}"));
+
+        self.line(&format!("{catch_label}:"));
+        self.indent += 1;
+        let err_name = self.ident(err_var, current_function);
+        let erl_name = self.ident(erl_var, current_function);
+        self.line(&format!("{err_name} = ERR"));
+        self.line(&format!("{erl_name} = ERL"));
+        self.statements(catch_body, current_function);
+        self.line(&format!("RESUME {end_label}"));
+        self.indent -= 1;
+
+        self.line(&format!("{end_label}:"));
+        self.line("REM END TRY");
     }
 
     fn case_value_cond(
@@ -2336,6 +2389,14 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
             }
             visit_body_exprs(else_body, f);
         }
+        Statement::TryCatch {
+            try_body,
+            catch_body,
+            ..
+        } => {
+            visit_body_exprs(try_body, f);
+            visit_body_exprs(catch_body, f);
+        }
         Statement::Locate { row, col } => {
             visit_expr(row, f);
             visit_expr(col, f);
@@ -3321,6 +3382,17 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
                 collect_names_from_stmts(&case.body, names);
             }
             collect_names_from_stmts(else_body, names);
+        }
+        Statement::TryCatch {
+            try_body,
+            err_var,
+            erl_var,
+            catch_body,
+        } => {
+            collect_names_from_stmts(try_body, names);
+            names.insert(err_var.as_basic().to_ascii_lowercase());
+            names.insert(erl_var.as_basic().to_ascii_lowercase());
+            collect_names_from_stmts(catch_body, names);
         }
         Statement::ExprStmt(e) => collect_names_from_expr(e, names),
         Statement::Return { value } => collect_names_from_expr(value, names),

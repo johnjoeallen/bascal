@@ -382,6 +382,24 @@ pub enum Statement {
         target: Expr,
     },
     Resume(ResumeTarget),
+    /// `try ... catch err%, erl% ... end try` -- structured error recovery
+    /// (issue #60): a failed statement anywhere in `try_body` abandons the
+    /// rest of it and runs `catch_body` once, then execution continues
+    /// after `end try` -- never back inside `try_body`. `err_var`/
+    /// `erl_var` are ordinary locals scoped to `catch_body` alone (not
+    /// aliases for the ambient `err`/`erl` pseudo-variables `on error
+    /// goto` uses), populated once at catch-entry with the error code and
+    /// (for the C backend) the real `.bcl` source line the failure raised
+    /// from. Unlike `on error goto`, `try`/`catch` offers no `resume`
+    /// equivalent at all -- see `tutorial/inventory_try_catch.draft`'s own
+    /// header comment for why arbitrary resume-at-the-failure-point
+    /// behavior isn't reproduced here.
+    TryCatch {
+        try_body: Vec<Stmt>,
+        err_var: BasicIdent,
+        erl_var: BasicIdent,
+        catch_body: Vec<Stmt>,
+    },
     ErrorStmt {
         code: Expr,
     },

@@ -4491,6 +4491,19 @@ fn emit_statement(
                 ),
             }
         }
+        // `try`/`catch` (issue #60) isn't implemented for `--target C` yet --
+        // see `tutorial/inventory_try_catch.draft`'s own header comment for
+        // the proposed shape (a bcc_result_* struct-return propagation
+        // convention through every generated/wrapper function, requiring
+        // an ANF-style flattening of any expression containing a call).
+        // The BASIC backend already supports it in full (transpiles
+        // straight onto `ON ERROR GOTO`/`RESUME <label>`).
+        Statement::TryCatch { .. } => Err(
+            "`try`/`catch` isn't supported by the minimal C backend yet -- see \
+             tutorial/inventory_try_catch.draft and GitHub issue #60; `--target basic` already \
+             supports it"
+                .to_string(),
+        ),
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
              `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \

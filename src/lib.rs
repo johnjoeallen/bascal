@@ -7305,6 +7305,44 @@ end
         );
     }
 
+    #[test]
+    fn try_catch_transpiles_to_on_error_goto_and_resume() {
+        // GitHub issue #60: `try`/`catch` on the BASIC backend, straight
+        // onto ON ERROR GOTO/RESUME <label> -- see codegen_basic.rs's own
+        // `try_catch` doc comment for why a plain GOTO out of the catch
+        // body wouldn't do (it'd leave BASIC's own "currently trapping"
+        // state set for the rest of the program).
+        let source = r#"try
+    error 11
+catch e%, l%
+    print "caught " + str$(e%) + " at " + str$(l%)
+end try
+print "done"
+end
+"#;
+        let basic = compile_source("try_catch.bcl", source).expect("try/catch should compile");
+        assert!(basic.contains("ON ERROR GOTO"), "{basic}");
+        assert!(basic.contains("ERROR 11"), "{basic}");
+        assert!(basic.contains("e% = ERR"), "{basic}");
+        assert!(basic.contains("l% = ERL"), "{basic}");
+        assert!(basic.contains("RESUME"), "{basic}");
+    }
+
+    #[test]
+    fn try_catch_is_rejected_by_the_c_backend_with_a_clear_message() {
+        let source = r#"try
+    error 11
+catch e%, l%
+    print e%
+end try
+end
+"#;
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(diagnostics.iter().any(|d| d
+            .message
+            .contains("`try`/`catch` isn't supported by the minimal C backend")));
+    }
+
     /// Helper for the C-backend tests above: writes `source` (with a
     /// `program` header prepended) to a temp file and compiles it under
     /// `Target::C`, panicking with the diagnostics on failure.

@@ -322,6 +322,24 @@ impl Lowerer {
                     pos,
                 ));
             }
+            Statement::TryCatch {
+                try_body,
+                err_var,
+                erl_var,
+                catch_body,
+            } => {
+                let try_body = self.lower_statements(try_body);
+                let catch_body = self.lower_statements(catch_body);
+                out.push(Stmt::new(
+                    Statement::TryCatch {
+                        try_body,
+                        err_var,
+                        erl_var,
+                        catch_body,
+                    },
+                    pos,
+                ));
+            }
             other => out.push(Stmt::new(self.rewrite_statement_exprs(other), pos)),
         }
     }
@@ -636,7 +654,8 @@ impl Lowerer {
             | Statement::For { .. }
             | Statement::While { .. }
             | Statement::Do { .. }
-            | Statement::SelectCase { .. } => {
+            | Statement::SelectCase { .. }
+            | Statement::TryCatch { .. } => {
                 unreachable!("handled directly in lower_statement")
             }
         }

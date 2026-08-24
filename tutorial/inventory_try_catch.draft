@@ -1,4 +1,8 @@
-// DESIGN MOCKUP — not accepted by the parser yet.
+// DESIGN MOCKUP -- not yet the real inventory.bcl case study (that
+// migration is tracked separately, GitHub issue #66, blocked on this file
+// stabilizing). try/catch itself is real now: the parser, resolver, and
+// --target basic backend all accept it (issue #60). --target C still
+// rejects it outright with a clear "not supported yet" error -- see below.
 //
 // This is the proposed C-port shape for tutorial/inventory.bcl. The
 // try/catch syntax is deliberately structured: a failed menu action is
@@ -6,10 +10,11 @@
 // arbitrary BASIC RESUME NEXT instruction-pointer behavior inside a
 // procedure.
 //
-// The BASIC backend would transpile this to ON ERROR GOTO plus a recovery
-// label and RESUME to that label. The C backend would propagate a status
-// value from the failed procedure and execute the catch block in the
-// caller.
+// The BASIC backend transpiles this to ON ERROR GOTO plus a recovery
+// label and RESUME to that label (implemented -- see codegen_basic.rs's
+// own `try_catch`). The C backend would propagate a status value from the
+// failed procedure and execute the catch block in the caller (not yet
+// implemented -- see the struct-return proposal further down).
 //
 // Proposed shape for that C-side propagation: every generated (and
 // wrapper/stdlib) function and procedure returns a small struct bundling

@@ -508,6 +508,8 @@ impl Parser {
             self.parse_do()
         } else if self.check_keyword("select") && self.check_next_keyword("case") {
             self.parse_select_case()
+        } else if self.check_keyword("try") {
+            self.parse_try_catch()
         } else if self.check_keyword("end") {
             self.parse_end_statement()
         } else if self.check_keyword("exit") {
@@ -1226,6 +1228,7 @@ impl Parser {
             || self.check_keyword("while")
             || self.check_keyword("for")
             || self.check_keyword("do")
+            || self.check_keyword("try")
         {
             return Err(self.error("unexpected block terminator"));
         }
@@ -1309,6 +1312,38 @@ impl Parser {
             expr,
             cases,
             else_body,
+        })
+    }
+
+    /// `try ... catch err%, erl% ... end try` -- see `Statement::TryCatch`'s
+    /// own doc comment for the semantics. `err_var`/`erl_var` are parsed
+    /// exactly like a `for` loop variable (`BasicIdent::parse` over a bare
+    /// identifier token) -- ordinary suffixed identifiers, not a fixed
+    /// `err`/`erl` spelling; resolver/codegen pick the value up from
+    /// whatever names are actually written here.
+    fn parse_try_catch(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("try")?;
+        self.consume_line_end()?;
+        let try_body = self.parse_block(&[BlockEnd::Catch])?;
+        self.expect_keyword("catch")?;
+        let err_var =
+            BasicIdent::parse(&self.expect_ident("expected error-code variable after `catch`")?);
+        self.expect(
+            TokenKind::Comma,
+            "expected `,` between `catch`'s two variables",
+        )?;
+        let erl_var =
+            BasicIdent::parse(&self.expect_ident("expected error-line variable after `catch`")?);
+        self.consume_line_end()?;
+        let catch_body = self.parse_block(&[BlockEnd::EndTry])?;
+        self.expect_keyword("end")?;
+        self.expect_keyword("try")?;
+        self.consume_line_end()?;
+        Ok(Statement::TryCatch {
+            try_body,
+            err_var,
+            erl_var,
+            catch_body,
         })
     }
 
@@ -2070,6 +2105,8 @@ impl Parser {
             BlockEnd::Loop => self.check_keyword("loop"),
             BlockEnd::Case => self.check_keyword("case"),
             BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),
+            BlockEnd::Catch => self.check_keyword("catch"),
+            BlockEnd::EndTry => self.check_keyword("end") && self.check_next_keyword("try"),
         }
     }
 
@@ -2237,6 +2274,8 @@ enum BlockEnd {
     Loop,
     Case,
     EndSelect,
+    Catch,
+    EndTry,
 }
 
 #[cfg(test)]
@@ -2676,6 +2715,37 @@ mod tests {
         assert!(errs
             .iter()
             .any(|d| d.message.contains("must be a label, not a line number")));
+    }
+
+    #[test]
+    fn parses_try_catch() {
+        let program = parse("try\nerror 11\ncatch e%, l%\nprint e%\nend try\nend\n");
+        match &*program.statements[0] {
+            Statement::TryCatch {
+                try_body,
+                err_var,
+                erl_var,
+                catch_body,
+            } => {
+                assert_eq!(try_body.len(), 1);
+                assert_eq!(err_var.name, "e");
+                assert_eq!(err_var.suffix, Some(TypeSuffix::Integer));
+                assert_eq!(erl_var.name, "l");
+                assert_eq!(erl_var.suffix, Some(TypeSuffix::Integer));
+                assert_eq!(catch_body.len(), 1);
+            }
+            other => panic!("expected try/catch statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn try_catch_requires_two_catch_variables() {
+        let tokens = Lexer::new("test.bcl", "try\nerror 11\ncatch e%\nend try\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for a single catch variable");
+        assert!(errs.iter().any(|d| d
+            .message
+            .contains("expected `,` between `catch`'s two variables")));
     }
 
     #[test]
