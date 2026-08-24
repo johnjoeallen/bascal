@@ -161,8 +161,7 @@ procedure showMainMenu()
     print tab(tabCol%) "5......S)ubtract stock"
     print tab(tabCol%) "6......R)eorder Report"
     print
-    print tab(tabCol%) "7......Q)uit to BASIC"
-    print tab(tabCol%) "8......eX)it to system"
+    print tab(tabCol%) "7......eX)it to system"
 end procedure
 
 procedure showBadPartNumber()
@@ -490,7 +489,7 @@ initializeInventoryFileIfNew()
 do
     showMainMenu()
     kp$ = readKey$()
-    if instr("12345678cCeElLaAsSrRqQxX", kp$) <> 0 then
+    if instr("1234567cCeElLaAsSrRxX", kp$) <> 0 then
         // BASCAL-ism: `select case` replaces fhb's chain of eight
         // `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
         // (his 770-840) with one multi-way dispatch.
@@ -518,11 +517,15 @@ do
                     subtractStock()
                 case "6", "r", "R"
                     reorderReport()
-                case "7", "q", "Q"
-                    quitFlag% = 1
-                case "8", "x", "X"
+                case "7", "x", "X"
                     // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
-                    // matching fhb's own `90 CLOSE:SYSTEM`.
+                    // matching fhb's own `90 CLOSE:SYSTEM`. fhb's original
+                    // also had a separate "Quit to BASIC" option (his own
+                    // 7, returning to the interpreter's command prompt
+                    // rather than exiting to DOS) -- dropped here: a
+                    // compiled program has no interpreter to return to,
+                    // so it was never anything but a second spelling of
+                    // this same close-and-exit action.
                     inv.close()
                     system
             end select
@@ -530,10 +533,7 @@ do
             reportInventoryError(err%, erl%)
         end try
     end if
-loop until quitFlag% = 1
-
-inv.close()
-END
+loop
 
 // -------------------- Error handling --------------------
 // err%/erl% are ordinary locals scoped to the `catch` block above, not

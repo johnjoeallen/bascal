@@ -262,8 +262,10 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
     // Keystrokes: "1" selects "check a part" (INKEY$, one raw byte);
     // "1\n" is the part-number INPUT line (1 is still an empty slot,
     // since initializeInventoryFileIfNew() just populated it); "x"
-    // dismisses the "press any key" prompt; "q" quits back out of the
-    // main menu loop.
+    // dismisses the "press any key" prompt; a second "x" exits (option 7,
+    // eXit to system -- the old separate "Quit to BASIC" option 7/Q was
+    // dropped, since it meant nothing for a compiled program with no
+    // interpreter to return to).
     let mut child = Command::new(&executable_path)
         .current_dir(dir.path())
         .stdin(Stdio::piped())
@@ -275,7 +277,7 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
         .stdin
         .take()
         .expect("child stdin should be piped")
-        .write_all(b"11\nxq")
+        .write_all(b"11\nxx")
         .expect("failed to write keystrokes to inventory binary");
     let run = child
         .wait_with_output()
