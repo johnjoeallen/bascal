@@ -1,6 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn is_library_path(path: &Path) -> bool {
     path.components()
@@ -209,6 +210,107 @@ end
     // convention, so this is "caught " + " 11" + " at " + " 5".
     assert!(stdout.contains("caught  11 at  5"), "{stdout}");
     assert!(stdout.contains("after"), "{stdout}");
+}
+
+/// End-to-end confirmation that the real case-study program (issue #66's
+/// try/catch migration) actually runs correctly under `--target C`, not
+/// just compiles -- exercising the full chain landed to get it there:
+/// try/catch propagation through checkPart()/editRecord()/etc. (#60),
+/// `TAB`/`SPC`/`STOP`/`SYSTEM`, a real non-blocking `INKEY$` that doesn't
+/// break `INPUT`'s own buffered reads on the same stdin (`bcc_inkey`'s
+/// own doc comment), a top-level `const` correctly readable from inside
+/// a procedure (`collect_top_level_const_c_names` -- `partCount%` was
+/// reading as `0` inside `showMainMenu()`/`initializeInventoryFileIfNew()`
+/// before that fix), and `initializeInventoryFileIfNew()` itself
+/// (pre-populating a brand-new `inven.dat` so it doesn't have to be
+/// supplied by hand). Skipped (not failed) when `gcc` isn't available,
+/// matching this file's other C-target tests.
+#[test]
+fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tutorial/inventory.bcl");
+    let dir = tempfile::tempdir().unwrap();
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/inventory");
+    // Run from a fresh temp dir (not the repo root) so the freshly
+    // written inven.dat lands there instead of polluting the repo.
+    // Keystrokes: "1" selects "check a part" (INKEY$, one raw byte);
+    // "1\n" is the part-number INPUT line (1 is still an empty slot,
+    // since initializeInventoryFileIfNew() just populated it); "x"
+    // dismisses the "press any key" prompt; "q" quits back out of the
+    // main menu loop.
+    let mut child = Command::new(&executable_path)
+        .current_dir(dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn compiled inventory binary");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"11\nxq")
+        .expect("failed to write keystrokes to inventory binary");
+    let run = child
+        .wait_with_output()
+        .expect("failed to run compiled inventory binary");
+    assert!(
+        run.status.success(),
+        "compiled inventory binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("Inventory Program"), "{stdout}");
+    // `str$` matches real BASIC's own leading-space-for-non-negative
+    // convention: "L)ist all" + " 100" + "parts".
+    assert!(stdout.contains("L)ist all 100parts"), "{stdout}");
+    assert!(stdout.contains("Input part number"), "{stdout}");
+    assert!(
+        stdout.contains("Part number 1is still a null entry at this time"),
+        "{stdout}"
+    );
+
+    let inven_dat = dir.path().join("inven.dat");
+    let metadata = fs::metadata(&inven_dat)
+        .unwrap_or_else(|err| panic!("expected {} to exist: {err}", inven_dat.display()));
+    // 100 records * 39 bytes each (1 flag + 30 desc + 2 qty + 2 reorder +
+    // 4 price) -- confirms initializeInventoryFileIfNew() actually wrote
+    // all 100 blank records, not zero (the very bug this test exists to
+    // catch: partCount% reading as 0 inside the procedure made `for i% =
+    // 1 to partCount%` a no-op, leaving inven.dat empty).
+    assert_eq!(
+        metadata.len(),
+        3900,
+        "inven.dat should hold 100 blank records"
+    );
 }
 
 /// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
