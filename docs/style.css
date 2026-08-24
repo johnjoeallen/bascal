@@ -322,6 +322,13 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation M
 .tok-num { color: var(--tok-num); }
 .tok-com { color: var(--tok-com); font-style: italic; }
 
+/* MkDocs/Pygments equivalents used by fenced ```bascal blocks. */
+.highlight .k { color: var(--tok-kw); font-weight: 600; }
+.highlight .s, .highlight .s1, .highlight .s2 { color: var(--tok-str); }
+.highlight .m, .highlight .mi, .highlight .mf { color: var(--tok-num); }
+.highlight .c, .highlight .c1, .highlight .cm { color: var(--tok-com); font-style: italic; }
+.highlight .nv { color: var(--code-hi); }
+
 .tally {
   display: flex;
   gap: 1.5rem;

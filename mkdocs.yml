@@ -1,0 +1,96 @@
+site_name: BASCAL
+site_description: A structured language that transpiles to classic BASIC.
+site_url: https://johnjoeallen.github.io/bascal/
+repo_url: https://github.com/johnjoeallen/bascal
+repo_name: johnjoeallen/bascal
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+theme:
+  name: null
+  custom_dir: docs/theme
+hooks:
+  - docs_hooks.py
+extra_css:
+  - style.css
+extra_javascript:
+  - theme-toggle.js
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      pygments_lang_class: true
+  - pymdownx.superfences
+nav:
+  - Home: index.md
+  - Language Book:
+      - Overview: language/index.md
+      - Preface: language/preface.md
+      - A first program: language/first-program.md
+      - Values, names, and expressions: language/values-and-names.md
+      - Control flow: language/control-flow.md
+      - Functions and procedures: language/functions-and-procedures.md
+      - Arrays and strings: language/arrays-and-strings.md
+      - Data and files: language/data-and-files.md
+      - Libraries: language/libraries.md
+      - Embedded data: language/embedded-data.md
+      - Errors, labels, and data: language/errors-labels-and-data.md
+      - Standard library: language/standard-library.md
+      - Running and combining programs: language/running-and-combining-programs.md
+      - The BASIC beneath: language/the-basic-beneath.md
+  - Manual:
+      - Overview: manual/index.md
+      - Introduction: manual/introduction.md
+      - Getting Started: manual/getting-started.md
+      - Program Structure: manual/program-structure.md
+      - Data Types and Type Suffixes: manual/data-types-and-type-suffixes.md
+      - Variables and Constants: manual/variables-and-constants.md
+      - Operators and Expressions: manual/operators-and-expressions.md
+      - Comments: manual/comments.md
+      - Control Flow: manual/control-flow.md
+      - Functions: manual/functions.md
+      - Procedures: manual/procedures.md
+      - Arrays: manual/arrays.md
+      - Input and Output: manual/input-and-output.md
+      - File Input and Output: manual/file-input-and-output.md
+      - Random-Access File I/O: manual/random-access-file-io.md
+      - Record Files: manual/record-files.md
+      - DATA Statements: manual/data-statements.md
+      - Miscellaneous Statements: manual/miscellaneous-statements.md
+      - Dependencies — REQUIRE and IMPORT: manual/dependencies-require-and-import.md
+      - Shared COMMON: manual/shared-common.md
+      - Generated BASIC Shape: manual/generated-basic-shape.md
+      - Command-Line Reference: manual/command-line-reference.md
+      - Statement Quick Reference: manual/statement-quick-reference.md
+      - Standard Library Functions: manual/standard-library-functions.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - Hello, World: tutorials/01_hello.md
+      - Variables and Constants: tutorials/02_variables.md
+      - Operators and Expressions: tutorials/03_arithmetic.md
+      - Conditions: tutorials/04_conditions.md
+      - Loops: tutorials/05_loops.md
+      - Select Case: tutorials/06_select_case.md
+      - Functions: tutorials/07_functions.md
+      - Arrays: tutorials/08_arrays.md
+      - Data, Read, Restore, Swap: tutorials/09_data.md
+      - File Input and Output: tutorials/10_files.md
+      - Screen I/O: tutorials/11_screen.md
+      - Require and Multi-File Projects: tutorials/12_require.md
+      - Shared COMMON: tutorials/13_shared.md
+      - Procedures: tutorials/14_procedures.md
+      - Random-Access and Record Files: tutorials/15_random_and_record_files.md
+      - Short-Circuit && and ||: tutorials/16_short_circuit.md
+      - Labels and Error Handling: tutorials/17_labels_and_error_handling.md
+      - Standard Library Functions: tutorials/18_stdlib.md
+      - Case Study: tutorials/19_inventory.md
+      - Scalar Methods: tutorials/20_methods.md
+  - Examples: examples.md
+  - Origin: origin.md
+  - Development journey: journey.md
+  - Technical challenges: challenges.md
