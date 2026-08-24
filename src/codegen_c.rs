@@ -556,6 +556,12 @@ struct BuiltinUsage {
     /// folded into the same `needs_stdlib_h` gate `VAL`'s `atof` already
     /// sets, since both live behind the same include.
     needs_rnd_helper: bool,
+    /// Set by bare `INKEY$` (an `Expr::Ident`, not a call -- see
+    /// `render_string_expr`'s own `Expr::Ident` arm), whose C translation
+    /// calls the `bcc_inkey` helper (see `INKEY_PROTO`/`INKEY_BODY`),
+    /// which needs `<termios.h>`/`<unistd.h>` for its own non-blocking
+    /// terminal raw-mode read.
+    needs_inkey_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -567,8 +573,15 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_seq_file_helper: false,
         needs_sgn_helper: false,
         needs_rnd_helper: false,
+        needs_inkey_helper: false,
     };
     let mut visit = |expr: &Expr| {
+        if let Expr::Ident(ident) = expr {
+            if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("inkey")
+            {
+                usage.needs_inkey_helper = true;
+            }
+        }
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
             match name.name.to_ascii_lowercase().as_str() {
                 "len" | "asc" => usage.needs_string_h = true,
@@ -848,6 +861,31 @@ const SGN_BODY: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;
 /// same underlying `rand()` stream via `srand()`.
 const RND_PROTO: &str = "static double bcc_rnd(double x);\n";
 const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
+
+/// `INKEY$` -- real BASIC's own non-blocking single-keypress read: return
+/// the next waiting key as a one-character string, or `""` immediately if
+/// none is waiting, never blocking either way (that's what the `do ...
+/// loop until k$ <> ""` polling idiom every BASCAL tutorial/example using
+/// it relies on assumes). Plain C has no such primitive at all -- POSIX's
+/// own is a raw terminal mode plus a non-blocking `read()`, toggled *in
+/// and back out* around each individual call: `tcgetattr`/`tcsetattr`
+/// into `ICANON`/`ECHO`-off "raw" mode with `VMIN=0`/`VTIME=0` (`read`
+/// returns immediately with whatever's available, zero bytes if nothing
+/// is), the one `read()`, then `tcsetattr` straight back to whatever the
+/// terminal's own settings were before this call. Deliberately scoped
+/// this tightly rather than switching into raw mode once and leaving it
+/// -- `INPUT`'s own `bcc_read_line` (`fgets`) shares the same stdin file
+/// descriptor and needs real `ICANON` line-buffering/editing to work at
+/// all; leaving the terminal permanently raw after the first `INKEY$`
+/// call silently broke every `INPUT` after it (fgets would return
+/// whatever partial, unbuffered bytes happened to be sitting there
+/// instead of a real line). The per-call toggle costs two extra syscalls
+/// each time, negligible against a human's own keystroke timing. A real,
+/// documented divergence from real BASIC: this only ever works against
+/// an interactive terminal (POSIX `<termios.h>`), unlike BASCOM's own
+/// DOS-console INKEY$.
+const INKEY_PROTO: &str = "static const char* bcc_inkey(void);\n";
+const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    static char buf[2];\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n    return buf;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
 /// `emit_raise_block`'s own doc comment for how these are used.
@@ -1610,6 +1648,28 @@ fn collect_top_level_int_consts(
         }
     }
     consts
+}
+
+/// The C variable name of every top-level `const`, regardless of its
+/// value's shape (unlike `collect_top_level_int_consts`, which only
+/// tracks the integer-literal-valued subset `dim`'s own array-bound
+/// resolution needs) -- a top-level `const` is implicitly visible from
+/// every function/procedure body with no `global` declaration needed
+/// (see this file's own module doc comment and `tutorial/inventory.bcl`'s
+/// header note on `const`), so `emit_function_def` needs this to avoid
+/// declaring a same-named, always-zero/empty local shadow for a bare
+/// reference to one -- the same declaration-collision category `global`-
+/// declared names are already excluded for (see `collect_global_decl_
+/// idents`), just for a name that never needed the `global` keyword at
+/// all to begin with.
+fn collect_top_level_const_c_names(statements: &[Stmt]) -> BTreeSet<String> {
+    statements
+        .iter()
+        .filter_map(|statement| match &**statement {
+            Statement::Const { name, .. } => Some(c_var_name(name, effective_suffix(name.suffix))),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Resolves one `dim` array-bound expression to a compile-time `i64` --
@@ -2388,6 +2448,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         .map_err(|message| vec![unsupported(&message)])?;
     let functions = FunctionTable { funcs, methods, arrays };
     let try_reachable = collect_try_reachable_procedures(program, &functions);
+    let top_level_const_names = collect_top_level_const_c_names(&program.statements);
     let known_layouts = known_record_layouts(program);
     let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
         channel_fields: HashMap::new(),
@@ -2544,6 +2605,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
             &on_error_handler_ids,
             &data_labels,
             &try_reachable,
+            &top_level_const_names,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -2673,6 +2735,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     if needs_randomize_time {
         includes.push_str("#include <time.h>\n");
     }
+    if builtin_usage.needs_inkey_helper {
+        includes.push_str("#include <termios.h>\n");
+        includes.push_str("#include <unistd.h>\n");
+    }
 
     let mut globals_decl = String::new();
     for (c_name, c_type) in &numeric_vars {
@@ -2746,6 +2812,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         runtime_protos.push_str(RND_PROTO);
         runtime_body.push_str(RND_BODY);
     }
+    if builtin_usage.needs_inkey_helper {
+        runtime_protos.push_str(INKEY_PROTO);
+        runtime_body.push_str(INKEY_BODY);
+    }
     if gosub_count > 0 {
         runtime_state.push_str(GOSUB_HELPER);
     }
@@ -2812,6 +2882,20 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         app.push('\n');
     }
     app.push_str(&function_defs);
+    if builtin_usage.needs_inkey_helper {
+        // `INPUT`'s own `bcc_read_line` (`fgets`) reads through C's
+        // normal *buffered* stdio, which slurps ahead into its own
+        // internal buffer -- bytes past what one `fgets` call needed
+        // become invisible to `bcc_inkey`'s raw `read(STDIN_FILENO, ...)`
+        // syscall on the same fd, since that bypasses stdio's buffer
+        // entirely. Disabling stdin buffering here keeps both reading
+        // styles consistent (every `fgets` then does its own raw reads
+        // too), so a program mixing `INKEY$` with `INPUT` -- like
+        // tutorial/inventory.bcl's own menu-key-then-part-number flow --
+        // doesn't silently lose keystrokes typed right after an `INPUT`
+        // line into a buffer `INKEY$` can never see.
+        body.insert_str(0, "    setvbuf(stdin, NULL, _IONBF, 0);\n");
+    }
     app.push_str(&format!(
         "int main(void) {{\n{}}}\n",
         reindent_c_body(&body)
@@ -2927,6 +3011,7 @@ fn emit_function_def(
     handler_ids: &HashMap<String, usize>,
     data_labels: &HashMap<String, usize>,
     try_reachable: &HashSet<(String, Option<TypeSuffix>)>,
+    top_level_const_names: &BTreeSet<String>,
 ) -> Result<(), String> {
     let is_try_reachable = try_reachable.contains(&fn_key(&func.name));
     let mut numeric_locals = BTreeMap::new();
@@ -2941,8 +3026,12 @@ fn emit_function_def(
         .map(|ident| c_var_name(ident, effective_suffix(ident.suffix)))
         .collect();
     let param_keys: BTreeSet<String> = sig.params.iter().map(|p| p.c_name.clone()).collect();
-    numeric_locals.retain(|k, _| !param_keys.contains(k) && !global_keys.contains(k));
-    string_locals.retain(|k| !param_keys.contains(k) && !global_keys.contains(k));
+    numeric_locals.retain(|k, _| {
+        !param_keys.contains(k) && !global_keys.contains(k) && !top_level_const_names.contains(k)
+    });
+    string_locals.retain(|k| {
+        !param_keys.contains(k) && !global_keys.contains(k) && !top_level_const_names.contains(k)
+    });
 
     let mut body = String::new();
     for fp in &sig.params {
@@ -3583,6 +3672,14 @@ fn register_var(
     if ident.suffix.is_none()
         && (ident.name.eq_ignore_ascii_case("err") || ident.name.eq_ignore_ascii_case("erl"))
     {
+        return;
+    }
+    // `INKEY$` is a real function call in disguise (see `render_string_
+    // expr`'s own `Expr::Ident` arm) -- registering it here would declare
+    // an always-empty shadow `char[256]` that every `k$ = inkey$` read
+    // would silently miss, turning `do ... loop until k$ <> ""` into an
+    // infinite loop (the actual bug this was fixed alongside).
+    if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("inkey") {
         return;
     }
     match ident.suffix {
@@ -6080,6 +6177,18 @@ fn render_string_expr(
 ) -> Result<(Vec<String>, String), String> {
     match expr {
         Expr::String(s) => Ok((Vec::new(), format!("\"{}\"", escape_c_string_literal(s)))),
+        // `INKEY$` -- real BASIC's own non-blocking single-keypress read,
+        // real BASCAL passes straight through too (see `bcc_inkey`'s own
+        // doc comment for the terminal-raw-mode implementation). Checked
+        // before the generic `Expr::Ident` arm below, which would
+        // otherwise treat it as an ordinary (always-empty) string
+        // variable -- see `register_var`'s matching skip.
+        Expr::Ident(ident)
+            if ident.suffix == Some(TypeSuffix::String)
+                && ident.name.eq_ignore_ascii_case("inkey") =>
+        {
+            Ok((Vec::new(), "bcc_inkey()".to_string()))
+        }
         Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
             Ok((Vec::new(), c_var_name(ident, TypeSuffix::String)))
         }

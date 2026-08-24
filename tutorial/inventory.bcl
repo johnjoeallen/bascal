@@ -26,10 +26,9 @@
 //    doesn't decode ERL, which errorTrap() reports as the raw line
 //    number.
 //  - fhb's one-time "hidden" datafile initializer (PUT-ing 100
-//    blank, CHR$(255)-flagged records) isn't reproduced here --
-//    inven.dat must be pre-populated with 100 such blank records
-//    before running this program, or isEmpty%() will read
-//    uninitialized/zero-filled records as never-empty.
+//    blank, CHR$(255)-flagged records) is reproduced below as
+//    initializeInventoryFileIfNew(), called once at program entry --
+//    inven.dat no longer has to be pre-populated by hand.
 //  - The three original tab-position constants (T=20, U=25,
 //    V=30) are collapsed into a single `tabCol% = 20`; a couple of
 //    screens that used U=25 in the original (see showAddStockScreen
@@ -464,9 +463,29 @@ procedure reorderReport()
     waitAnyKey()
 end procedure
 
+// fhb's own one-time "hidden" datafile initializer PUT-ing 100 blank,
+// CHR$(255)-flagged records (see the header note above) -- reproduced
+// here so inven.dat no longer has to be pre-populated by hand before
+// running this program. A brand-new file OPEN created just now (rather
+// than one that already existed) reads back as all-zero bytes: record
+// 1's flag byte is CHR$(0), never CHR$(255) -- the one signal an
+// already-populated file (whose record 1 flag is always either
+// CHR$(255), still an empty slot, or a real part's own "1") could never
+// produce, so it's what isEmpty%() itself can't use (see its own
+// header note) but this one-time check safely can.
+procedure initializeInventoryFileIfNew()
+    let p = inv[1]
+    if asc(p.flag) = 0 then
+        for i% = 1 to partCount%
+            inv[i%] = { flag: chr$(255), desc: "", qty: 0, reorder: 0, price: 0 }
+        end for
+    end if
+end procedure
+
 // -------------------- Program entry --------------------
 
 cls
+initializeInventoryFileIfNew()
 
 do
     showMainMenu()
