@@ -850,10 +850,18 @@ const RND_PROTO: &str = "static double bcc_rnd(double x);\n";
 const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
-/// `emit_raise_block`'s own doc comment for how these four are used.
-/// `bcc_err` is `ERR`; `bcc_resume_id` doubles as `ERL` (see
-/// `render_numeric_expr`'s `Expr::Ident` arm).
-const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\n\n";
+/// `emit_raise_block`'s own doc comment for how these are used.
+/// `bcc_err` is `ERR`; `bcc_erl` is `ERL` (see `render_numeric_expr`'s
+/// `Expr::Ident` arm) -- the real `.bcl` source line of the raise site,
+/// a compile-time literal each `emit_raise_block` call bakes in.
+/// `bcc_resume_id` is a *different* per-raise-site value: a small
+/// sequential index (not a line number, and not shown to BASCAL code at
+/// all) that `RESUME`/`RESUME NEXT` switches on to `goto` back to the
+/// right site -- kept separate from `bcc_erl` because two raise sites can
+/// share a source line (so `bcc_erl` alone couldn't dispatch uniquely),
+/// and because a `RESUME` dispatch table keyed on line numbers would leave
+/// gaps a real line-number-keyed `switch` still has to handle correctly.
+const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\nstatic int bcc_erl = 0;\n\n";
 
 /// `DATA`/`READ`/`RESTORE`'s runtime state: `bcc_data` (declared
 /// separately, right before this, with the program's actual literal
@@ -1641,25 +1649,30 @@ struct ErrorDataCtx<'a> {
 
 /// Emits the shared "an error just occurred" block a raise site (`ERROR`
 /// or a failed sequential `OPEN ... FOR INPUT`) drops into: record the
-/// code and which site raised (`bcc_resume_id` -- also what `ERL` reads,
-/// see `render_numeric_expr`'s `Expr::Ident` arm; a real, documented
-/// divergence from real BASIC's own line number, since this backend
-/// doesn't track BASIC line numbers at all), then either escalate to a
-/// fatal, uncaught-error exit (no handler installed, or already inside
-/// one -- real BASIC has no nested-trap recovery either) or dispatch to
-/// whichever label the most recently executed `ON ERROR GOTO` installed.
-/// `handler_ids` empty means the program has no `ON ERROR GOTO` at all --
-/// the `switch` below then has no cases and is unreachable in practice
-/// (`bcc_on_error_target` can only ever be `-1`), but still valid,
-/// warning-free C.
+/// code, the real `.bcl` source line it raised from (`bcc_erl` -- what
+/// `ERL` reads, see `render_numeric_expr`'s `Expr::Ident` arm; `err_line`
+/// is a compile-time literal baked in from that statement's own `Stmt.pos`
+/// at the call site, so this is the actual source line, not a synthetic
+/// stand-in) and which site raised for `RESUME`/`RESUME NEXT` dispatch
+/// purposes (`bcc_resume_id` -- see `ERROR_HANDLING_GLOBALS`'s own doc
+/// comment for why this is a separate value from `bcc_erl`), then either
+/// escalate to a fatal, uncaught-error exit (no handler installed, or
+/// already inside one -- real BASIC has no nested-trap recovery either) or
+/// dispatch to whichever label the most recently executed `ON ERROR GOTO`
+/// installed. `handler_ids` empty means the program has no `ON ERROR GOTO`
+/// at all -- the `switch` below then has no cases and is unreachable in
+/// practice (`bcc_on_error_target` can only ever be `-1`), but still
+/// valid, warning-free C.
 fn emit_raise_block(
     out: &mut String,
     err_code_text: &str,
     raise_id: usize,
+    err_line: usize,
     handler_ids: &HashMap<String, usize>,
 ) {
     out.push_str(&format!("    bcc_err = {err_code_text};\n"));
     out.push_str(&format!("    bcc_resume_id = {raise_id};\n"));
+    out.push_str(&format!("    bcc_erl = {err_line};\n"));
     out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
     out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
     out.push_str("        exit(1);\n");
@@ -3189,8 +3202,8 @@ fn register_var(
     // Bare `ERR`/`ERL` are system pseudo-variables (see
     // `render_numeric_expr`'s `Expr::Ident` arm), not ordinary globals --
     // registering one here would declare a same-named, always-zero shadow
-    // that every read/write of the real `bcc_err`/`bcc_resume_id` state
-    // would silently miss instead.
+    // that every read/write of the real `bcc_err`/`bcc_erl` state would
+    // silently miss instead.
     if ident.suffix.is_none()
         && (ident.name.eq_ignore_ascii_case("err") || ident.name.eq_ignore_ascii_case("erl"))
     {
@@ -3685,7 +3698,7 @@ fn emit_statement(
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
                     let mut raise = String::new();
-                    emit_raise_block(&mut raise, "53", id, ctx.handler_ids);
+                    emit_raise_block(&mut raise, "53", id, statement.pos.line, ctx.handler_ids);
                     for line in raise.lines() {
                         out.push_str("    ");
                         out.push_str(line);
@@ -4371,7 +4384,7 @@ fn emit_statement(
             let id = ctx.raise_id;
             ctx.raise_id += 1;
             out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-            emit_raise_block(out, &code_text, id, ctx.handler_ids);
+            emit_raise_block(out, &code_text, id, statement.pos.line, ctx.handler_ids);
             out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
             Ok(())
         }
@@ -6115,19 +6128,20 @@ fn render_numeric_expr(
         Expr::Float(f) => Ok((format!("{f:?}"), true)),
         // `ERR`/`ERL`, bare (no type suffix) -- real BASIC's own
         // system pseudo-variables, holding the last raised error's code
-        // and (for `ERL`) the BASIC line number it occurred at. This
-        // backend doesn't track BASIC line numbers at all, so `ERL`
-        // reads `bcc_resume_id` instead -- a stable per-raise-site ID,
-        // not a real line number, but still one distinct value per
-        // raise site (see `emit_raise_block`'s own doc comment for the
-        // full divergence). Checked before the generic `Expr::Ident` arm
-        // below, which would otherwise treat either name as an ordinary
-        // (always-zero) variable -- see `register_var`'s matching skip.
+        // and (for `ERL`) the line it occurred at. `ERL` reads `bcc_erl`,
+        // the real `.bcl` source line baked in as a compile-time literal
+        // at the raise site (see `emit_raise_block`'s own doc comment) --
+        // not a BASIC-target `.bas` line number (this backend doesn't
+        // generate one), but the actual source line, useful for locating
+        // the fault in the program actually being edited. Checked before
+        // the generic `Expr::Ident` arm below, which would otherwise treat
+        // either name as an ordinary (always-zero) variable -- see
+        // `register_var`'s matching skip.
         Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("err") => {
             Ok(("bcc_err".to_string(), false))
         }
         Expr::Ident(ident) if ident.suffix.is_none() && ident.name.eq_ignore_ascii_case("erl") => {
-            Ok(("bcc_resume_id".to_string(), false))
+            Ok(("bcc_erl".to_string(), false))
         }
         Expr::Ident(ident) => {
             let suffix = effective_suffix(ident.suffix);

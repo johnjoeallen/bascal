@@ -3,7 +3,39 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "bcc_runtime.h"
+#define BCC_MAX_GOSUB_DEPTH 64
+static int bcc_gosub_stack[BCC_MAX_GOSUB_DEPTH];
+static int bcc_gosub_sp = 0;
+
+static int bcc_err = 0;
+static int bcc_on_error_target = -1;
+static int bcc_in_handler = 0;
+static int bcc_resume_id = -1;
+static int bcc_erl = 0;
+
+static int bcc_data_ptr = 0;
+
+#define BCC_MAX_CHANNELS 32
+static FILE* bcc_files[BCC_MAX_CHANNELS];
+
+static char bcc_file_field_buf[256];
+
+static const char* bcc_read_data(void);
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
+static void bcc_mki(char* out, int value);
+static void bcc_mkl(char* out, int value);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static int bcc_cvi(const char* s);
+static int bcc_cvl(const char* s);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
+static int bcc_eof(FILE* file);
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);
 
 static char bv_s_filename[256] = {0};
 static char bv_s_firstcountry[256] = {0};
@@ -64,6 +96,7 @@ int main(void) {
     if (!bcc_files[0]) {
         bcc_err = 53;
         bcc_resume_id = 0;
+        bcc_erl = 47;
         if (bcc_on_error_target < 0 || bcc_in_handler) {
             fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
             exit(1);
@@ -89,6 +122,7 @@ int main(void) {
         bcc_raise_retry_1: ;
         bcc_err = bcc_err;
         bcc_resume_id = 1;
+        bcc_erl = 58;
         if (bcc_on_error_target < 0 || bcc_in_handler) {
             fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
             exit(1);
@@ -118,3 +152,121 @@ int main(void) {
     bcc_lbl_secondbatch:;
     return 0;
 }
+
+#define BCC_DATA_COUNT 2
+static const char* bcc_data[BCC_DATA_COUNT] = { "France", "Japan" };
+
+static const char* bcc_read_data(void) {
+    if (bcc_data_ptr >= BCC_DATA_COUNT) {
+        fprintf(stderr, "Out of DATA\n");
+        exit(1);
+    }
+    return bcc_data[bcc_data_ptr++];
+}
+
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {
+    memcpy(field, source, width);
+    field[width] = 0;
+    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;
+}
+
+static void bcc_mki(char* out, int value) {
+    int16_t v = (int16_t)value;
+    memcpy(out, &v, 2);
+}
+
+static void bcc_mkl(char* out, int value) {
+    int32_t v = (int32_t)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static int bcc_cvi(const char* s) {
+    int16_t v;
+    memcpy(&v, s, 2);
+    return (int)v;
+}
+
+static int bcc_cvl(const char* s) {
+    int32_t v;
+    memcpy(&v, s, 4);
+    return (int)v;
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
+    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;
+    return fread(buffer, 1, reclen, file) == reclen;
+}
+
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {
+    fseek(file, (record - 1) * (long)reclen, SEEK_SET);
+    fwrite(buffer, 1, reclen, file);
+}
+
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {
+    size_t len = strlen(value);
+    if (len > width) len = width;
+    memcpy(dest, value, len);
+    memset(dest + len, ' ', width - len);
+}
+
+static int bcc_eof(FILE* file) {
+    int c = fgetc(file);
+    if (c == EOF) return -1;
+    ungetc(c, file);
+    return 0;
+}
+
+static void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {
+    if (fgets(buf, (int)bufsize, file) == NULL) {
+        buf[0] = 0;
+        return;
+    }
+    buf[strcspn(buf, "\r\n")] = 0;
+}
+
+static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
+    int c = fgetc(file);
+    while (c == ' ') c = fgetc(file);
+    size_t len = 0;
+    if (c == '"') {
+        c = fgetc(file);
+        while (c != EOF && c != '"') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        c = fgetc(file);
+        while (c != EOF && c != ',' && c != '\n') c = fgetc(file);
+    } else {
+        while (c != EOF && c != ',' && c != '\n' && c != '\r') {
+            if (len + 1 < bufsize) buf[len++] = (char)c;
+            c = fgetc(file);
+        }
+        if (c == '\r') {
+            int c2 = fgetc(file);
+            if (c2 != '\n' && c2 != EOF) ungetc(c2, file);
+        }
+    }
+    buf[len] = 0;
+}
+
