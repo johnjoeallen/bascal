@@ -144,7 +144,7 @@
 //! explicitly at the byte offsets `records.rs` already computes for the
 //! BASIC backend, the same offsets both backends should share.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
@@ -863,6 +863,19 @@ const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_r
 /// gaps a real line-number-keyed `switch` still has to handle correctly.
 const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\nstatic int bcc_erl = 0;\n\n";
 
+/// A `try`-reachable procedure's own C return type (see
+/// `collect_try_reachable_procedures`'s own doc comment) -- `status` is
+/// `0` on normal completion, or the raised error code otherwise. Deliberately
+/// a named struct, not a bare `int`, even though a `procedure` carries no
+/// other payload: this is the first of the `bcc_result_*` family GitHub
+/// issue #60 originally proposed (a `function`'s own `bcc_result_int`/
+/// `_long`/`_single`/`_double`, each pairing this same `status` field with
+/// a real `value`, are issue #67's follow-up) -- sharing the shape now
+/// means a `procedure` promoted to a `function` later never needs a
+/// second signature change, and every call site's status-check code
+/// (`.status`) already reads identically either way.
+const TRY_RESULT_TYPE: &str = "typedef struct { int status; } bcc_result_void;\n\n";
+
 /// `DATA`/`READ`/`RESTORE`'s runtime state: `bcc_data` (declared
 /// separately, right before this, with the program's actual literal
 /// items -- see `collect_data_items_and_labels`/`generate`'s own
@@ -1375,6 +1388,132 @@ fn count_try_catch_blocks(statements: &[Stmt]) -> usize {
         .sum()
 }
 
+/// Every `procedure` (never a `function` -- see `collect_try_reachable_
+/// procedures`'s own doc comment for why those stay out of scope for now)
+/// directly called as a bare statement inside `statements`, walking the
+/// same nesting shape `count_try_catch_blocks` does. Shared by both the
+/// initial try-body seed pass (`collect_try_body_seeds`) and the BFS
+/// expansion over each newly reachable procedure's own body (which never
+/// contains a `try`/`catch` itself -- top-level-only, so no arm for it is
+/// needed here at all).
+fn collect_called_procedures(
+    statements: &[Stmt],
+    functions: &FunctionTable,
+    out: &mut Vec<(String, Option<TypeSuffix>)>,
+) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::ExprStmt(Expr::Call { name, .. })
+            | Statement::ExprStmt(Expr::ArrayRef { name, .. }) => {
+                let key = fn_key(name);
+                if functions.get(&key).is_some_and(|sig| sig.is_void) {
+                    out.push(key);
+                }
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_called_procedures(then_body, functions, out);
+                collect_called_procedures(else_body, functions, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_called_procedures(body, functions, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_called_procedures(&case.body, functions, out);
+                }
+                collect_called_procedures(else_body, functions, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Seeds `out` with every procedure directly called inside a top-level
+/// `try`'s own `try_body` -- deliberately never `catch_body`: a call
+/// there runs with no trap active (see the `Statement::TryCatch` arm in
+/// `emit_statement`, which resets `bcc_on_error_target` to `-1` at catch
+/// entry, real BASIC's own "no nested-trap recovery" rule), so a
+/// procedure only ever called from a `catch_body` has no active `try` to
+/// propagate a raise to and doesn't need this treatment at all.
+fn collect_try_body_seeds(
+    statements: &[Stmt],
+    functions: &FunctionTable,
+    out: &mut Vec<(String, Option<TypeSuffix>)>,
+) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::TryCatch { try_body, .. } => {
+                collect_called_procedures(try_body, functions, out);
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_try_body_seeds(then_body, functions, out);
+                collect_try_body_seeds(else_body, functions, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_try_body_seeds(body, functions, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_try_body_seeds(&case.body, functions, out);
+                }
+                collect_try_body_seeds(else_body, functions, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every procedure (transitively) on a call path from some top-level
+/// `try`'s own `try_body` -- issue #60's C-target propagation, scoped
+/// down to procedures only for now. A `function` used inside an
+/// expression would need every generated/wrapper function to return a
+/// `{status, value}` struct and every call in the *entire program* --
+/// not just ones near a `try` -- hoisted to a checked temp, since a call
+/// can't sit inline inside an arbitrary expression once its status has
+/// to be checked the instant it returns (see the design notes on GitHub
+/// issue #60). A `procedure` has no value to carry at all, so none of
+/// that applies: its C signature just becomes `int` (a status) instead
+/// of `void`, with no expression-flattening required anywhere.
+///
+/// Once in this set, a procedure gets `error`/failed `open ... for
+/// input` allowed inside its own body (previously rejected -- see their
+/// own arms in `emit_statement`) and returns a nonzero status instead of
+/// (uselessly, cross-function) `goto`-ing a handler directly; every call
+/// site to it decides `goto`/propagate/discard purely from its own
+/// lexical context (`ErrorDataCtx`'s `current_try_catch`/
+/// `current_function_reachable`) -- see `Statement::ExprStmt`'s own
+/// procedure-call arm.
+fn collect_try_reachable_procedures(
+    program: &Program,
+    functions: &FunctionTable,
+) -> HashSet<(String, Option<TypeSuffix>)> {
+    let mut worklist = Vec::new();
+    collect_try_body_seeds(&program.statements, functions, &mut worklist);
+
+    let mut reachable = HashSet::new();
+    while let Some(key) = worklist.pop() {
+        if !reachable.insert(key.clone()) {
+            continue;
+        }
+        if let Some(func) = program.functions.iter().find(|f| fn_key(&f.name) == key) {
+            collect_called_procedures(&func.body, functions, &mut worklist);
+        }
+    }
+    reachable
+}
+
 /// Every distinct `ON ERROR GOTO <label>` target in `statements` (`ON
 /// ERROR GOTO 0`, the disable sentinel, is a numeric literal, not an
 /// identifier, so it's naturally excluded), assigned a stable integer ID
@@ -1738,6 +1877,31 @@ struct ErrorDataCtx<'a> {
     raise_id: usize,
     try_id: usize,
     data_labels: &'a HashMap<String, usize>,
+    /// Every procedure a raise can propagate a nonzero status out of --
+    /// see `collect_try_reachable_procedures`'s own doc comment. Read at
+    /// every bare procedure-call statement to decide whether that call
+    /// even returns a status worth checking at all.
+    try_reachable: &'a HashSet<(String, Option<TypeSuffix>)>,
+    /// Whether the function/procedure body currently being emitted is
+    /// itself in `try_reachable` -- read by `Statement::ReturnVoid` (does
+    /// an explicit bare `return` need `return 0;` instead of `return;`?)
+    /// and by `Statement::ErrorStmt`/`Statement::Open`'s `OpenMode::Input`
+    /// arm (is a raise here even allowed, now that raise sites inside a
+    /// function/procedure body are permitted for reachable procedures
+    /// specifically, still rejected for every other one). Always `false`
+    /// at top level, where neither question is ever asked.
+    current_function_reachable: bool,
+    /// The enclosing `try`'s own catch label, only while emitting that
+    /// `try`'s `try_body` specifically -- `None` everywhere else,
+    /// including that same `try`'s own `catch_body` (see
+    /// `collect_try_body_seeds`'s own doc comment for why a call there
+    /// never needs to `goto` back into the `try` it's already inside).
+    /// Read by a reachable procedure's own call sites to decide `goto`
+    /// (inside the owning `try_body`) vs. propagate-by-`return` (inside
+    /// another reachable procedure's own body, `current_function_
+    /// reachable`) vs. silently discard the status (neither -- some
+    /// unrelated call path this whole mechanism doesn't apply to).
+    current_try_catch: Option<String>,
 }
 
 /// Emits the shared "an error just occurred" block a raise site (`ERROR`
@@ -1777,6 +1941,29 @@ fn emit_raise_block(
         out.push_str(&format!("    case {id}: goto {label};\n"));
     }
     out.push_str("    }\n");
+}
+
+/// The "an error just occurred" block for a raise site inside a `try`-
+/// reachable procedure's own body (see `collect_try_reachable_
+/// procedures`) -- `emit_raise_block`'s counterpart for that context.
+/// Records the code/line the same way, then either escalates to the
+/// identical fatal, uncaught-error exit, or -- since a `goto` here could
+/// never reach a handler that lives in a different C function -- returns
+/// a nonzero status for the immediate caller to notice and keep
+/// propagating (see `Statement::ExprStmt`'s own procedure-call arm). No
+/// retry/after labels, no `bcc_resume_id` dispatch: `resume`/`resume
+/// next` are still rejected inside a function/procedure body (see
+/// `Statement::Resume`'s own arm), so nothing here would ever read
+/// either.
+fn emit_raise_in_procedure_block(out: &mut String, err_code_text: &str, err_line: usize) {
+    out.push_str(&format!("    bcc_err = {err_code_text};\n"));
+    out.push_str(&format!("    bcc_erl = {err_line};\n"));
+    out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
+    out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
+    out.push_str("        exit(1);\n");
+    out.push_str("    }\n");
+    out.push_str("    bcc_in_handler = 1;\n");
+    out.push_str("    return (bcc_result_void){ .status = bcc_err };\n");
 }
 
 fn program_uses_color(program: &Program) -> bool {
@@ -2200,6 +2387,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     apply_byval_array_capacities(&mut funcs, program, &arrays)
         .map_err(|message| vec![unsupported(&message)])?;
     let functions = FunctionTable { funcs, methods, arrays };
+    let try_reachable = collect_try_reachable_procedures(program, &functions);
     let known_layouts = known_record_layouts(program);
     let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
         channel_fields: HashMap::new(),
@@ -2326,7 +2514,8 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut function_defs = String::new();
     for func in &program.functions {
         let sig = functions.signature_for(func).expect("function table should contain declaration");
-        prototypes.push_str(&function_signature(func, sig));
+        let is_try_reachable = try_reachable.contains(&fn_key(&func.name));
+        prototypes.push_str(&function_signature(func, sig, is_try_reachable));
         prototypes.push_str(";\n");
         // A function/procedure with its own array parameter(s) needs a
         // *per-function* extended `FunctionTable` while its own body is
@@ -2354,6 +2543,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
             &mut function_view,
             &on_error_handler_ids,
             &data_labels,
+            &try_reachable,
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -2380,6 +2570,9 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         raise_id: 0,
         try_id: on_error_handler_ids.len(),
         data_labels: &data_labels,
+        try_reachable: &try_reachable,
+        current_function_reachable: false,
+        current_try_catch: None,
     };
     let mut body = String::new();
     for statement in &program.statements {
@@ -2421,10 +2614,19 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     // `RESUME` alone (no raise site at all) is a degenerate but valid
     // program -- the trap would just never fire -- so it's covered here
     // too, or `bcc_on_error_target = ...`/the `switch (bcc_resume_id)`
-    // dispatch would reference undeclared globals.
+    // dispatch would reference undeclared globals. Same story for `try`/
+    // `catch` on its own: its own arm in `emit_statement` always touches
+    // `bcc_on_error_target`/`bcc_in_handler`, even for a `try_body` with
+    // no *direct* raise site of its own -- e.g. one that only calls a
+    // `try`-reachable procedure, whose actual raise site lives inside
+    // that procedure's body instead, uncounted by `raise_site_count`
+    // (which only ever counts top-level raise sites).
     let needs_error_handling = raise_site_count > 0
         || program_has_statement(program, &|s| {
-            matches!(&**s, Statement::OnErrorGoto { .. } | Statement::Resume(_))
+            matches!(
+                &**s,
+                Statement::OnErrorGoto { .. } | Statement::Resume(_) | Statement::TryCatch { .. }
+            )
         });
 
     // <math.h> is only pulled in when something (currently just `\`) needs
@@ -2544,6 +2746,9 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     if needs_error_handling {
         runtime_state.push_str(ERROR_HANDLING_GLOBALS);
     }
+    if !try_reachable.is_empty() {
+        runtime_state.push_str(TRY_RESULT_TYPE);
+    }
     // `bcc_data_ptr` is the only piece of `DATA`/`READ`/`RESTORE` state
     // the user's own emitted code touches directly (`RESTORE` assigns it
     // straight by name -- see `Statement::Restore`'s own arm), so it's
@@ -2641,8 +2846,13 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
 /// (a real pointer already gives the callee live access to the caller's
 /// own storage), so its incoming pointer is simply named `<c_name>`
 /// directly, used as-is throughout the body.
-fn function_signature(func: &FunctionDef, sig: &FnSig) -> String {
-    let ret_type = if sig.is_void || sig.is_string {
+fn function_signature(func: &FunctionDef, sig: &FnSig, is_try_reachable: bool) -> String {
+    let ret_type = if is_try_reachable {
+        // Only ever true alongside `sig.is_void` -- see
+        // `collect_called_procedures`, which only ever adds a real
+        // `procedure` to the reachable set.
+        "bcc_result_void"
+    } else if sig.is_void || sig.is_string {
         "void"
     } else {
         numeric_c_type(func.name.suffix.expect("validated by build_function_table"))
@@ -2710,7 +2920,9 @@ fn emit_function_def(
     file_io: &mut FileIoLayout,
     handler_ids: &HashMap<String, usize>,
     data_labels: &HashMap<String, usize>,
+    try_reachable: &HashSet<(String, Option<TypeSuffix>)>,
 ) -> Result<(), String> {
+    let is_try_reachable = try_reachable.contains(&fn_key(&func.name));
     let mut numeric_locals = BTreeMap::new();
     let mut string_locals = BTreeSet::new();
     for stmt in &func.body {
@@ -2831,6 +3043,9 @@ fn emit_function_def(
         raise_id: 0,
         try_id: 0,
         data_labels,
+        try_reachable,
+        current_function_reachable: is_try_reachable,
+        current_try_catch: None,
     };
     for stmt in &func.body {
         emit_statement(
@@ -2859,8 +3074,16 @@ fn emit_function_def(
     // `invoke_gcc` in `main.rs`), and simpler than trying to prove it's
     // dead first just to skip it.
     emit_byref_scalar_copyback(sig, &mut body);
+    // A `try`-reachable procedure's own C return type is `bcc_result_void`
+    // now (see `function_signature`), not `void` -- unlike a plain
+    // `procedure`, falling off the end here without an explicit `return`
+    // is real undefined behavior in C, not a free, do-nothing exit, so
+    // this always needs its own explicit trailing success return.
+    if is_try_reachable {
+        body.push_str("    return (bcc_result_void){ .status = 0 };\n");
+    }
 
-    out.push_str(&function_signature(func, sig));
+    out.push_str(&function_signature(func, sig, is_try_reachable));
     out.push_str(&format!(" {{\n{}}}\n\n", reindent_c_body(&body)));
     Ok(())
 }
@@ -3854,6 +4077,26 @@ fn emit_statement(
                     out.push_str("    }\n");
                     out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
                 }
+                // Same raise, but from inside a `try`-reachable
+                // procedure's own body -- no retry/after labels (no
+                // `resume` to dispatch back to one, same as `error`'s own
+                // in-procedure arm below), and status-return instead of
+                // `emit_raise_block`'s `goto`, since a `goto` here could
+                // never reach a handler in a different C function anyway.
+                OpenMode::Input if ctx.current_function_reachable => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"r\");\n"
+                    ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    let mut raise = String::new();
+                    emit_raise_in_procedure_block(&mut raise, "53", statement.pos.line);
+                    for line in raise.lines() {
+                        out.push_str("    ");
+                        out.push_str(line);
+                        out.push('\n');
+                    }
+                    out.push_str("    }\n");
+                }
                 OpenMode::Input => {
                     out.push_str(&format!(
                         "    bcc_files[{idx}] = fopen({file_text}, \"r\");\n"
@@ -4245,7 +4488,11 @@ fn emit_statement(
                 current_function.expect("checked by the `is_none()` branch above"),
                 out,
             );
-            out.push_str("    return;\n");
+            if ctx.current_function_reachable {
+                out.push_str("    return (bcc_result_void){ .status = 0 };\n");
+            } else {
+                out.push_str("    return;\n");
+            }
             Ok(())
         }
         // `GOSUB label` -- BASIC-level subroutine call, distinct from a
@@ -4325,7 +4572,32 @@ fn emit_statement(
                 out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
                 arg_texts.push(temp);
             }
-            out.push_str(&format!("    {}({});\n", sig.c_name, arg_texts.join(", ")));
+            let call_text = format!("{}({})", sig.c_name, arg_texts.join(", "));
+            // A `try`-reachable procedure's call sites (see
+            // `collect_try_reachable_procedures`) decide purely from
+            // their own lexical context, no analysis needed here: inside
+            // the owning `try`'s own `try_body`, a nonzero status `goto`s
+            // its catch label; inside another reachable procedure's own
+            // body, it `return`s the whole status upward unchanged;
+            // neither -- some call path this mechanism doesn't reach at
+            // all (outside any `try`, or inside a non-reachable
+            // procedure/function) -- just discards it, same as a plain
+            // `void` call always has: the raise site itself already
+            // fatal-exited if no trap was active (see `emit_raise_in_
+            // procedure_block`), so a nonzero status can only ever reach
+            // here when *something* up this call chain does check it.
+            if ctx.try_reachable.contains(&fn_key(name)) {
+                let status = format!("bcc_st_{temp_counter}");
+                *temp_counter += 1;
+                out.push_str(&format!("    bcc_result_void {status} = {call_text};\n"));
+                if let Some(label) = &ctx.current_try_catch {
+                    out.push_str(&format!("    if ({status}.status) goto {label};\n"));
+                } else if ctx.current_function_reachable {
+                    out.push_str(&format!("    if ({status}.status) return {status};\n"));
+                }
+            } else {
+                out.push_str(&format!("    {call_text};\n"));
+            }
             Ok(())
         }
         Statement::BlankLine => {
@@ -4519,20 +4791,27 @@ fn emit_statement(
         // handler decided it can't actually handle (see the manual's own
         // "typical pattern" example).
         Statement::ErrorStmt { code } => {
-            if current_function.is_some() {
+            if current_function.is_some() && !ctx.current_function_reachable {
                 return Err(
                     "`error` isn't supported inside a function/procedure body by the minimal C \
-                     backend yet -- only at top level"
+                     backend yet -- only at top level, or inside a procedure called (directly or \
+                     transitively) from a `try`'s own try_body"
                         .to_string(),
                 );
             }
             let (code_text, code_is_float) = render_numeric_expr(code, needs_math, functions)?;
             let code_text = coerce_numeric(code_text, code_is_float, false, needs_math);
-            let id = ctx.raise_id;
-            ctx.raise_id += 1;
-            out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-            emit_raise_block(out, &code_text, id, statement.pos.line, ctx.dispatch_labels);
-            out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+            if ctx.current_function_reachable {
+                // No retry/after labels, no `bcc_raise_id` dispatch --
+                // see `emit_raise_in_procedure_block`'s own doc comment.
+                emit_raise_in_procedure_block(out, &code_text, statement.pos.line);
+            } else {
+                let id = ctx.raise_id;
+                ctx.raise_id += 1;
+                out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
+                emit_raise_block(out, &code_text, id, statement.pos.line, ctx.dispatch_labels);
+                out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+            }
             Ok(())
         }
         // `DATA` items are pure compile-time literals, already fully
@@ -4639,24 +4918,32 @@ fn emit_statement(
             }
         }
         // `try`/`catch` (issue #60), restricted to top-level code, exactly
-        // like the rest of the `ON ERROR GOTO` family it's built on. A
-        // full struct-return propagation convention letting a raise deep
-        // inside a called procedure reach a `try` in its caller (see
-        // `tutorial/inventory_try_catch.draft`) is still unimplemented --
-        // this only catches a raise from `try_body`'s own top-level
-        // statements (`error`, or a failed sequential `open ... for
-        // input`), the same raise sites `on error goto` already supports.
+        // like the rest of the `ON ERROR GOTO` family it's built on. Two
+        // ways a raise inside `try_body` reaches the catch label below:
+        // `emit_raise_block`'s own `goto` dispatch, for a raise from
+        // `try_body`'s own top-level statements (`error`, or a failed
+        // sequential `open ... for input`); or a nonzero status bubbling
+        // straight up from a `try`-reachable procedure call inside
+        // `try_body` (see `Statement::ExprStmt`'s own procedure-call arm,
+        // driven by `ctx.current_try_catch` -- set here, restored after).
+        // A raise from inside a called *function* still isn't caught --
+        // GitHub issues #67/#68 track that remaining, larger piece.
         //
-        // Reuses that exact machinery: `bcc_on_error_target` is installed
-        // to this try's own id (`ctx.try_id`, reserved up front by
-        // `generate`'s `dispatch_labels` -- see `ErrorDataCtx`'s own doc
-        // comment) before `try_body`, disabled again after it completes
-        // normally, then a plain `goto` skips the catch block entirely.
-        // `bcc_in_handler` is cleared directly (a plain global this
-        // backend fully controls, unlike real BASIC's own trap state,
-        // which only `RESUME` can clear -- see codegen_basic.rs's
-        // `try_catch` for why *that* backend needs `RESUME <label>`
-        // instead of a bare `goto` here).
+        // `bcc_on_error_target` is installed to this try's own id
+        // (`ctx.try_id`, reserved up front by `generate`'s `dispatch_
+        // labels` -- see `ErrorDataCtx`'s own doc comment) before
+        // `try_body`, disabled again both after it completes normally
+        // *and* right at catch entry -- the second reset matters just as
+        // much as the first: without it, an error raised while running
+        // catch_body itself (directly, or via another `try`-reachable
+        // procedure call there) would still see this try's own id
+        // installed and try to re-enter this same catch, instead of
+        // correctly falling into the fatal "no nested-trap recovery"
+        // path real BASIC has too. `bcc_in_handler` is cleared directly
+        // (a plain global this backend fully controls, unlike real
+        // BASIC's own trap state, which only `RESUME` can clear -- see
+        // codegen_basic.rs's `try_catch` for why *that* backend needs
+        // `RESUME <label>` instead of a bare `goto` here).
         Statement::TryCatch {
             try_body,
             err_var,
@@ -4676,6 +4963,7 @@ fn emit_statement(
             let end_label = format!("bcc_try_{id}_end");
 
             out.push_str(&format!("    bcc_on_error_target = {id};\n"));
+            let outer_try_catch = ctx.current_try_catch.replace(catch_label.clone());
             for stmt in try_body {
                 emit_statement(
                     stmt,
@@ -4691,11 +4979,13 @@ fn emit_statement(
                     ctx,
                 )?;
             }
+            ctx.current_try_catch = outer_try_catch;
             out.push_str("    bcc_on_error_target = -1;\n");
             out.push_str(&format!("    goto {end_label};\n"));
 
             out.push_str(&format!("    {catch_label}: ;\n"));
             out.push_str("    bcc_in_handler = 0;\n");
+            out.push_str("    bcc_on_error_target = -1;\n");
             let err_c = c_var_name(err_var, effective_suffix(err_var.suffix));
             let erl_c = c_var_name(erl_var, effective_suffix(erl_var.suffix));
             out.push_str(&format!("    {err_c} = bcc_err;\n"));

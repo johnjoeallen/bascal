@@ -120,6 +120,97 @@ fn gcc_runs_labels_and_error_handling_tutorial_under_c_target_when_available() {
     }
 }
 
+/// End-to-end confirmation for GitHub issue #60's procedures-only C-target
+/// propagation: a raise two call frames deep (inside `checkPart()`,
+/// called by `editRecord()`, called from inside a `try`) reaches that
+/// `try`'s own `catch`, correctly skipping the rest of both `checkPart()`
+/// and `editRecord()` -- the scenario `--target basic` already handles for
+/// free via real `ON ERROR GOTO`'s own global trap, and that `--target C`
+/// needed `collect_try_reachable_procedures`'s `bcc_result_void`
+/// propagation for (see codegen_c.rs). Skipped (not failed) when `gcc`
+/// isn't available, matching this file's other C-target tests.
+#[test]
+fn gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let source_path = dir.path().join("nested_try.bcl");
+    fs::write(
+        &source_path,
+        r#"program nestedTry
+
+procedure checkPart()
+    print "checking"
+    error 11
+    print "unreachable in checkPart"
+end procedure
+
+procedure editRecord()
+    print "editing"
+    checkPart()
+    print "unreachable in editRecord"
+end procedure
+
+dim e%
+dim l%
+
+try
+    editRecord()
+catch e%, l%
+    print "caught " + str$(e%) + " at " + str$(l%)
+end try
+print "after"
+end
+"#,
+    )
+    .unwrap();
+
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/nested_try");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled nested_try binary");
+    assert!(
+        run.status.success(),
+        "compiled nested_try binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(stdout.contains("checking"), "{stdout}");
+    assert!(stdout.contains("editing"), "{stdout}");
+    assert!(!stdout.contains("unreachable"), "{stdout}");
+    // `str$` matches real BASIC's own leading-space-for-non-negative
+    // convention, so this is "caught " + " 11" + " at " + " 5".
+    assert!(stdout.contains("caught  11 at  5"), "{stdout}");
+    assert!(stdout.contains("after"), "{stdout}");
+}
+
 /// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
 /// `dim`'d string array element (`rawLine$(lineCount%)` in
 /// `tutorial/remline/com/bascal/examples/remline/transform.bcl`) now
