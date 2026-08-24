@@ -86,27 +86,11 @@ pub fn compile_source(
         .generate(&program)
 }
 
-/// The generated `Target::C` runtime-support file's fixed name -- see
-/// `codegen_c::GeneratedC`'s own doc comment. Always the same name
-/// (rather than derived from the input file, the way the app `.c` file's
-/// own name is) so repeated builds in the same directory overwrite it
-/// cleanly instead of accumulating garbage, and so the app file's own
-/// `#include "bcc_runtime.h"` line never has to be templated per program.
-pub const C_RUNTIME_FILE_NAME: &str = "bcc_runtime.h";
-
-/// Same as `compile_file`, but for `Target::C` callers that need the
-/// paired runtime-support file too (see `codegen_c::GeneratedC`) -- the
-/// CLI (to write/link it alongside the app file) and this crate's own
-/// C-backend tests (to check helper-definition text in the right place).
-/// For `Target::Basic`, `runtime` is always `None` -- that backend never
-/// splits its output. For `Target::C`, `runtime` is `None` exactly when
-/// the program needs no `bcc_*` helper at all (see `GeneratedC`'s own
-/// doc comment) -- `Some` otherwise, meant to be written out as a sibling
-/// file named `C_RUNTIME_FILE_NAME` next to the app file.
-pub fn compile_file_with_runtime(
-    input: &Path,
-    options: &CompileOptions,
-) -> Result<(String, Option<String>), Vec<Diagnostic>> {
+/// The most common case: just the primary generated file (the whole
+/// `.bas` for `Target::Basic`, or the single self-contained `.c` for
+/// `Target::C` -- see `codegen_c::GeneratedC`'s own doc comment for why
+/// that `.c` needs no paired file alongside it).
+pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
     let mut options = options.clone();
     if let Some(parent) = input.parent() {
         let parent = parent.to_path_buf();
@@ -168,26 +152,13 @@ pub fn compile_file_with_runtime(
                 .with_line_numbers(options.line_numbers)
                 .with_synthesized_buffer_names(synthesized_buffer_names)
                 .generate(&program)?;
-            Ok((basic, None))
+            Ok(basic)
         }
         Target::C => {
             let generated = codegen_c::generate(&program)?;
-            let runtime = if generated.runtime.is_empty() {
-                None
-            } else {
-                Some(generated.runtime)
-            };
-            Ok((generated.app, runtime))
+            Ok(generated.app)
         }
     }
-}
-
-/// The most common case: just the primary generated file (the whole
-/// `.bas` for `Target::Basic`, or the app-only `.c` for `Target::C` --
-/// see `compile_file_with_runtime`'s own doc comment for why that's not
-/// necessarily everything a `Target::C` program needs to actually build).
-pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
-    Ok(compile_file_with_runtime(input, options)?.0)
 }
 
 /// If `program` uses `MID$` statement-form assignment anywhere (top-level
@@ -1436,8 +1407,8 @@ END
         assert!(output.contains("result$ = capitalizeResult0$"), "{output}");
         let mut c_options = CompileOptions::new();
         c_options.target = Target::C;
-        let (c_output, _) = compile_file_with_runtime(&input, &c_options)
-            .expect("required method should compile for C");
+        let c_output =
+            compile_file(&input, &c_options).expect("required method should compile for C");
         assert!(c_output.contains("bf_s_capitalize"), "{c_output}");
     }
 
@@ -4788,62 +4759,52 @@ resume next
     }
 
     #[test]
-    fn c_target_hello_world_needs_no_runtime_file_at_all() {
+    fn c_target_hello_world_needs_no_runtime_helpers_at_all() {
         // Hello world's only surface (`print` of string literals, `end`)
         // needs none of the `bcc_*` runtime helpers -- so unlike a program
-        // that does (see `c_target_splits_runtime_helpers_into_a_separate_file`
-        // below), it should get no sibling runtime file, and no
-        // `#include` line for one, at all (see GitHub issue #28 and
-        // `codegen_c::GeneratedC`'s own doc comment).
+        // that does (see `c_target_declares_runtime_helpers_up_top_and_defines_them_at_the_bottom`
+        // below), its output should contain no `bcc_*` forward declaration
+        // at all.
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/01_hello.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
-        let (app, runtime) = compile_file_with_runtime(&input, &options)
-            .expect("hello world should compile to C");
+        let app = compile_file(&input, &options).expect("hello world should compile to C");
         assert!(
-            runtime.is_none(),
-            "hello world needs no bcc_* helper, so it should get no runtime file"
-        );
-        assert!(
-            !app.contains("bcc_runtime.h"),
-            "no runtime file means no #include for it either:\n{app}"
+            !app.contains("bcc_"),
+            "hello world needs no bcc_* helper at all:\n{app}"
         );
     }
 
     #[test]
-    fn c_target_splits_runtime_helpers_into_a_separate_file() {
+    fn c_target_declares_runtime_helpers_up_top_and_defines_them_at_the_bottom() {
         // A program that needs a `bcc_*` runtime helper (RND, here) should
-        // get that helper's *definition* only in the paired runtime file,
-        // never inline in its own app file -- the whole point of GitHub
-        // issue #28: reading a compiled program's own `.c` output should
-        // show only that program's own logic. The app file still calls
-        // into the helper by name (`bcc_rnd(...)`), and still `#include`s
-        // the runtime file to see its declaration.
+        // get only a one-line forward declaration for it near the top of
+        // the file -- so the user's own `main` (which calls it) still
+        // compiles -- with the helper's actual *implementation* pushed all
+        // the way down, after `main`, so opening the file shows the user's
+        // own program first (see `codegen_c::GeneratedC`'s own doc
+        // comment, and GitHub issue #28).
         let source = "print rnd(1)\nend\n";
-        let (app, runtime) = compile_source_via_c_target_split(source);
-        let runtime = runtime.expect("RND should need a runtime file");
+        let app = compile_source_via_c_target(source);
 
+        let proto_pos = app
+            .find("static double bcc_rnd(double x);")
+            .expect(&format!("app file should forward-declare bcc_rnd:\n{app}"));
+        let main_pos = app
+            .find("int main(void)")
+            .expect(&format!("app file should define main:\n{app}"));
+        let body_pos = app
+            .find("static double bcc_rnd(double x) {")
+            .expect(&format!("app file should define bcc_rnd's body:\n{app}"));
         assert!(
-            app.contains("#include \"bcc_runtime.h\""),
-            "app file should include the runtime file:\n{app}"
+            proto_pos < main_pos,
+            "bcc_rnd's forward declaration must come before main:\n{app}"
         );
         assert!(
-            app.contains("bcc_rnd("),
-            "app file should still call the helper by name:\n{app}"
-        );
-        assert!(
-            !app.contains("static double bcc_rnd_last"),
-            "the helper's own definition must not leak into the app file:\n{app}"
-        );
-        assert!(
-            runtime.contains("static double bcc_rnd_last"),
-            "the helper's own definition should live in the runtime file:\n{runtime}"
-        );
-        assert!(
-            runtime.contains("#ifndef BCC_RUNTIME_H"),
-            "runtime file should be a safe-to-include header:\n{runtime}"
+            body_pos > main_pos,
+            "bcc_rnd's own body must come after main, not before it:\n{app}"
         );
     }
 
@@ -6935,14 +6896,18 @@ end
         );
         // The helper must be defined exactly once -- a naive fix that lets
         // the function-body pre-scan and the real top-level pass each emit
-        // their own copy would produce a duplicate-symbol C file.
+        // their own copy would produce a duplicate-symbol C file. Two
+        // occurrences of the *signature* text is expected and correct here
+        // (one forward declaration near the top, one real definition at
+        // the bottom -- see `codegen_c::GeneratedC`'s own doc comment), so
+        // this counts the definition specifically (`) {`, not `);`).
         assert_eq!(
-            output.matches("static int bcc_put_record_header(").count(),
+            output.matches("static int bcc_put_record_header(FILE* file, long record, const int16_t* field_0) {").count(),
             1,
             "unexpected output:\n{output}"
         );
         assert_eq!(
-            output.matches("static int bcc_get_record_header(").count(),
+            output.matches("static int bcc_get_record_header(FILE* file, long record, char* field_0) {").count(),
             1,
             "unexpected output:\n{output}"
         );
@@ -7039,13 +7004,17 @@ let s = db[1]
 end
 "#;
         let output = compile_source_via_c_target(source);
+        // Two occurrences of the *signature* text is expected and correct
+        // here (one forward declaration near the top, one real definition
+        // at the bottom -- see `codegen_c::GeneratedC`'s own doc comment),
+        // so this counts the definition specifically (`) {`, not `);`).
         assert_eq!(
-            output.matches("static int bcc_put_record_student(").count(),
+            output.matches("static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3) {").count(),
             1,
             "unexpected output:\n{output}"
         );
         assert_eq!(
-            output.matches("static int bcc_get_record_student(").count(),
+            output.matches("static int bcc_get_record_student(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {").count(),
             1,
             "unexpected output:\n{output}"
         );
@@ -7338,25 +7307,8 @@ end
 
     /// Helper for the C-backend tests above: writes `source` (with a
     /// `program` header prepended) to a temp file and compiles it under
-    /// `Target::C`, panicking with the diagnostics on failure. Returns the
-    /// app file and its paired runtime file (see
-    /// `compile_file_with_runtime`) concatenated back together (runtime
-    /// first, matching where the helpers used to sit in the single
-    /// pre-split file) -- most of the tests below only care whether some
-    /// snippet of generated text is present/absent *somewhere*, and don't
-    /// need to distinguish which of the two files it landed in. A few
-    /// tests that specifically check the split itself use
-    /// `compile_source_via_c_target_split` instead.
+    /// `Target::C`, panicking with the diagnostics on failure.
     fn compile_source_via_c_target(source: &str) -> String {
-        let (app, runtime) = compile_source_via_c_target_split(source);
-        format!("{}{app}", runtime.unwrap_or_default())
-    }
-
-    /// Same as `compile_source_via_c_target`, but keeps the app file and
-    /// its (optional) paired runtime file separate -- for tests that
-    /// check specifically which of the two a piece of generated text
-    /// landed in.
-    fn compile_source_via_c_target_split(source: &str) -> (String, Option<String>) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("numeric_print.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
@@ -7364,7 +7316,7 @@ end
             target: Target::C,
             ..CompileOptions::new()
         };
-        compile_file_with_runtime(&path, &options).unwrap_or_else(|diagnostics| {
+        compile_file(&path, &options).unwrap_or_else(|diagnostics| {
             panic!(
                 "should compile: {}",
                 diagnostics

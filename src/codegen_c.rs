@@ -751,7 +751,9 @@ fn apply_byval_array_capacities(
 /// `function_signature`'s `bcc_out` convention -- so nesting one of
 /// *those* inside `LEN`/`ASC` still isn't supported (see
 /// `render_prelude_free_string_arg`).
-const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\nstatic char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
+const MID_STATE: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\n";
+const MID_PROTOS: &str = "static char* bcc_strbuf_take(void);\nstatic const char* bcc_mid(const char* s, int start, int length);\nstatic const char* bcc_chr(int code);\nstatic const char* bcc_stri(int value);\nstatic const char* bcc_strd(double value);\n";
+const MID_BODY: &str = "static char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
 
 /// Random-access record I/O runtime support: `bcc_files` is a fixed-size
 /// table of open `FILE*` handles, sized `[BCC_MAX_CHANNELS]` and indexed
@@ -784,7 +786,9 @@ const MID_HELPER: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC
 /// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
 /// not big-endian mainframes, matching real BASIC's own on-disk
 /// little-endian layout only on those platforms).
-const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\nstatic void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
+const FILE_IO_STATE: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\n";
+const FILE_IO_PROTOS: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);\nstatic void bcc_mki(char* out, int value);\nstatic void bcc_mkl(char* out, int value);\nstatic void bcc_mks(char* out, double value);\nstatic void bcc_mkd(char* out, double value);\nstatic int bcc_cvi(const char* s);\nstatic int bcc_cvl(const char* s);\nstatic float bcc_cvs(const char* s);\nstatic double bcc_cvd(const char* s);\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);\n";
+const FILE_IO_BODY: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
 
 /// `COLOR fg[, bg]`'s runtime helper -- real BASCOM's classic CGA palette
 /// (0-15 foreground, 0-7 background) has no single portable C equivalent,
@@ -798,7 +802,8 @@ const FILE_IO_HELPER: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_file
 /// those, rather than a formula. `bcc_color`'s `bg` of `-1` means "COLOR
 /// fg" alone was given -- leave the background alone, matching real
 /// BASCOM's own COLOR (an omitted argument doesn't reset it).
-const COLOR_HELPER: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\n\nstatic void bcc_color(int fg, int bg) {\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
+const COLOR_PROTO: &str = "static void bcc_color(int fg, int bg);\n";
+const COLOR_BODY: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\n\nstatic void bcc_color(int fg, int bg) {\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
 
 /// `input [prompt$;] var` -- reads one whole line into a shared,
 /// fixed-size scratch buffer (matching every string in this backend
@@ -807,7 +812,9 @@ const COLOR_HELPER: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 
 /// this same buffer -- safe because each `Statement::Input` fully consumes
 /// it (parses it into the target variable) before the next one runs; there
 /// is never a live reference to a stale read left lying around.
-const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_read_line(void) {\n    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {\n        bcc_input_buf[0] = 0;\n        return;\n    }\n    bcc_input_buf[strcspn(bcc_input_buf, \"\\r\\n\")] = 0;\n}\n\n";
+const INPUT_STATE: &str = "static char bcc_input_buf[256];\n\n";
+const INPUT_PROTO: &str = "static void bcc_read_line(void);\n";
+const INPUT_BODY: &str = "static void bcc_read_line(void) {\n    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {\n        bcc_input_buf[0] = 0;\n        return;\n    }\n    bcc_input_buf[strcspn(bcc_input_buf, \"\\r\\n\")] = 0;\n}\n\n";
 
 /// `INSTR(s$, needle$)` -- the 1-based position of the first match, or 0.
 /// Scoped to this 2-argument form only, matching what `docs/language/
@@ -816,12 +823,14 @@ const INPUT_HELPER: &str = "static char bcc_input_buf[256];\n\nstatic void bcc_r
 /// since nothing in this repo exercises it. `strstr` already does the
 /// actual search; this just converts its pointer result to BASIC's
 /// 1-based index convention (or 0 for "not found", instead of C's `NULL`).
-const INSTR_HELPER: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
+const INSTR_PROTO: &str = "static int bcc_instr(const char* s, const char* needle);\n";
+const INSTR_BODY: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
 
 /// `SGN(x)` -- -1/0/1 by the sign of `x`. No single C library function
 /// does this (unlike `SQR`/`ABS`/`INT`/`FIX`, which map straight onto
 /// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
-const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
+const SGN_PROTO: &str = "static int bcc_sgn(double v);\n";
+const SGN_BODY: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
 
 /// `RND(x)` -- real BASIC's argument-selects-behavior convention: `x < 0`
 /// reseeds the sequence from `x` and returns the first draw of that new,
@@ -837,7 +846,8 @@ const SGN_HELPER: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 
 /// documented argument semantics above. `RANDOMIZE` (see
 /// `Statement::Randomize`'s own handling in `emit_statement`) reseeds the
 /// same underlying `rand()` stream via `srand()`.
-const RND_HELPER: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
+const RND_PROTO: &str = "static double bcc_rnd(double x);\n";
+const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_rnd(double x) {\n    if (x < 0) {\n        srand((unsigned int)(-x));\n    }\n    if (x != 0) {\n        bcc_rnd_last = (double)rand() / ((double)RAND_MAX + 1.0);\n    }\n    return bcc_rnd_last;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
 /// `emit_raise_block`'s own doc comment for how these four are used.
@@ -858,7 +868,9 @@ const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on
 /// raise site there is a fixed, known program position `RESUME`/`RESUME
 /// NEXT` can jump back to by ID, which an arbitrary `READ` call site
 /// would need its own ID for too -- deliberately not attempted).
-const DATA_HELPER: &str = "static int bcc_data_ptr = 0;\n\nstatic const char* bcc_read_data(void) {\n    if (bcc_data_ptr >= BCC_DATA_COUNT) {\n        fprintf(stderr, \"Out of DATA\\n\");\n        exit(1);\n    }\n    return bcc_data[bcc_data_ptr++];\n}\n\n";
+const DATA_STATE: &str = "static int bcc_data_ptr = 0;\n\n";
+const DATA_PROTO: &str = "static const char* bcc_read_data(void);\n";
+const DATA_BODY: &str = "static const char* bcc_read_data(void) {\n    if (bcc_data_ptr >= BCC_DATA_COUNT) {\n        fprintf(stderr, \"Out of DATA\\n\");\n        exit(1);\n    }\n    return bcc_data[bcc_data_ptr++];\n}\n\n";
 
 /// `GOSUB`/`RETURN`'s runtime state: a return-address stack, exactly how a
 /// real BASIC interpreter itself implements GOSUB (push where to resume,
@@ -901,7 +913,9 @@ const GOSUB_HELPER: &str =
 /// line ending. Either way the trailing delimiter (`,`, or `\r`/`\n`) is
 /// consumed so the next field read starts clean, matching real
 /// `INPUT #`'s own field-at-a-time consumption.
-const SEQ_FILE_HELPER: &str = "static int bcc_eof(FILE* file) {\n    int c = fgetc(file);\n    if (c == EOF) return -1;\n    ungetc(c, file);\n    return 0;\n}\n\nstatic void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {\n    if (fgets(buf, (int)bufsize, file) == NULL) {\n        buf[0] = 0;\n        return;\n    }\n    buf[strcspn(buf, \"\\r\\n\")] = 0;\n}\n\nstatic void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {\n    int c = fgetc(file);\n    while (c == ' ') c = fgetc(file);\n    size_t len = 0;\n    if (c == '\"') {\n        c = fgetc(file);\n        while (c != EOF && c != '\"') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        c = fgetc(file);\n        while (c != EOF && c != ',' && c != '\\n') c = fgetc(file);\n    } else {\n        while (c != EOF && c != ',' && c != '\\n' && c != '\\r') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        if (c == '\\r') {\n            int c2 = fgetc(file);\n            if (c2 != '\\n' && c2 != EOF) ungetc(c2, file);\n        }\n    }\n    buf[len] = 0;\n}\n\nstatic char bcc_file_field_buf[256];\n\n";
+const SEQ_FILE_STATE: &str = "static char bcc_file_field_buf[256];\n\n";
+const SEQ_FILE_PROTOS: &str = "static int bcc_eof(FILE* file);\nstatic void bcc_line_input_file(FILE* file, char* buf, size_t bufsize);\nstatic void bcc_read_file_field(FILE* file, char* buf, size_t bufsize);\n";
+const SEQ_FILE_BODY: &str = "static int bcc_eof(FILE* file) {\n    int c = fgetc(file);\n    if (c == EOF) return -1;\n    ungetc(c, file);\n    return 0;\n}\n\nstatic void bcc_line_input_file(FILE* file, char* buf, size_t bufsize) {\n    if (fgets(buf, (int)bufsize, file) == NULL) {\n        buf[0] = 0;\n        return;\n    }\n    buf[strcspn(buf, \"\\r\\n\")] = 0;\n}\n\nstatic void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {\n    int c = fgetc(file);\n    while (c == ' ') c = fgetc(file);\n    size_t len = 0;\n    if (c == '\"') {\n        c = fgetc(file);\n        while (c != EOF && c != '\"') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        c = fgetc(file);\n        while (c != EOF && c != ',' && c != '\\n') c = fgetc(file);\n    } else {\n        while (c != EOF && c != ',' && c != '\\n' && c != '\\r') {\n            if (len + 1 < bufsize) buf[len++] = (char)c;\n            c = fgetc(file);\n        }\n        if (c == '\\r') {\n            int c2 = fgetc(file);\n            if (c2 != '\\n' && c2 != EOF) ungetc(c2, file);\n        }\n    }\n    buf[len] = 0;\n}\n\n";
 
 /// One field's layout within a `FIELD`-declared channel record buffer --
 /// its C variable name (always a string, per `records::buffer_ident`),
@@ -976,10 +990,16 @@ struct FileIoLayout {
     /// can re-FIELD a channel with a different shape, so its synthesized
     /// field-layout helper needs a fresh name each time that happens.
     channel_generation: HashMap<i64, u32>,
-    /// Accumulated C source for every synthesized record helper, spliced
-    /// into `generate`'s output right after `FILE_IO_HELPER` once emission
-    /// of the whole program is done.
+    /// Accumulated C source for every synthesized record helper's
+    /// *implementation*, spliced into `generate`'s output after `main`,
+    /// alongside `FILE_IO_BODY`, once emission of the whole program is
+    /// done.
     helper_defs: String,
+    /// One-line forward declaration per synthesized record helper in
+    /// `helper_defs`, spliced in near the top (alongside `FILE_IO_PROTOS`)
+    /// so `main`'s own calls to it, which appear earlier in the file than
+    /// `helper_defs`' bodies do, still compile.
+    helper_protos: String,
     /// Buffer C variable name -> the *unpacked* source expression a
     /// record/file DSL write is packing into it, captured by `Statement::
     /// Lset`'s C backend arm instead of being packed into the buffer
@@ -2038,29 +2058,24 @@ fn collect_global_decl_idents(body: &[Stmt], out: &mut Vec<BasicIdent>) {
     }
 }
 
-/// `generate`'s output, split into two pieces so a compiled program's own
-/// `.c` file only shows *its own* logic, never the runtime-support
+/// `generate`'s output: a single, self-contained `.c` file, always. A
+/// compiled program's own logic still isn't buried in runtime-support
 /// boilerplate (ring-buffer helpers, `GOSUB`/error-handling/`RANDOMIZE`/
 /// `DATA` state, record I/O helpers, `INSTR`/`SGN`/`RND`, screen-I/O ANSI
-/// helpers, ...) it happens to need -- see the module doc comment and
-/// GitHub issue #28.
-///
-/// `app` is the program's own `main`/`function`/`procedure` definitions
-/// and global variable declarations, plus whatever `#include`s (both
-/// system headers and, when `runtime` is non-empty, a single
-/// `#include "bcc_runtime.h"`) it needs. `runtime` is every `bcc_*`
-/// helper this particular program actually needs (same per-feature gating
-/// as before -- a program that doesn't need a given helper still doesn't
-/// get it), wrapped in its own include guard so it's safe to `#include`
-/// straight into `app` as a single translation unit -- no cross-file
-/// linkage changes needed, since `#include` is a textual paste before
-/// compilation ever starts. `runtime` is the empty string when the
-/// program needs no helpers at all (e.g. a program that only prints
-/// string literals) -- callers should skip writing/including a runtime
-/// file entirely in that case, and `app` has no `#include` line for it.
+/// helpers, ...) -- but instead of splitting that boilerplate into a
+/// separate paired `bcc_runtime.h` file (the design this replaced -- see
+/// GitHub issue #28), every needed helper's one-line forward declaration
+/// goes near the top of `app`, right after whatever state it needs, and
+/// its full implementation is appended at the very end, after `main`.
+/// Opening the file still shows the program itself first; there's just
+/// one file to ever look at, write, or `gcc` -- no sibling file that can
+/// go stale or get clobbered by a second program compiled into the same
+/// directory (each compile fully regenerates its own single file, so
+/// nothing is ever left inconsistent with the `.c` it came from). Only
+/// the specific `bcc_*` helpers this particular program actually needs
+/// appear at all (same per-feature gating as before).
 pub(crate) struct GeneratedC {
     pub(crate) app: String,
-    pub(crate) runtime: String,
 }
 
 pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
@@ -2082,6 +2097,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         record_helpers: std::collections::HashSet::new(),
         channel_generation: HashMap::new(),
         helper_defs: String::new(),
+        helper_protos: String::new(),
         pending_field_values: HashMap::new(),
     };
     let mut file_io = new_file_io(known_layouts.clone());
@@ -2219,6 +2235,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     file_io.used = function_view.used;
     file_io.record_helpers = function_view.record_helpers;
     file_io.helper_defs = function_view.helper_defs;
+    file_io.helper_protos = function_view.helper_protos;
 
     let gosub_count = count_gosubs(&program.statements);
     let mut gosub_id: usize = 0;
@@ -2350,65 +2367,94 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     }
 
     // Every `bcc_*` runtime-support helper this program actually needs,
-    // gated exactly as before (see `GeneratedC`'s own doc comment) --
-    // pushed into its own accumulator, physically separate from `app`
-    // below, rather than `app` itself.
-    let mut runtime = String::new();
+    // gated exactly as before -- but split three ways instead of pushed
+    // into one `runtime` accumulator kept in a separate file: `state`
+    // (macros/static data a helper's *own* function bodies need, plus
+    // anything the user's emitted code itself references by name, e.g.
+    // `bcc_data_ptr`/`bcc_files`/`bcc_input_buf` -- see each `_STATE`
+    // constant's own doc comment) goes right after `includes`, before
+    // anything that could reference it; `protos` (one-line forward
+    // declarations) goes right after `state`, so `main`/the user's own
+    // functions can call a helper by name even though its *body* won't
+    // appear until after them; `body` (the actual implementations) is
+    // appended at the very end of `app`, after `main`, so opening the
+    // generated file shows the user's own program first -- see GitHub
+    // issue #28, and the "helper functions declared at the top,
+    // implementations at the bottom" design this replaced the old
+    // paired-`bcc_runtime.h`-file split with.
+    let mut runtime_state = String::new();
+    let mut runtime_protos = String::new();
+    let mut runtime_body = String::new();
     if builtin_usage.needs_ring_buffer_helpers {
-        runtime.push_str(MID_HELPER);
+        runtime_state.push_str(MID_STATE);
+        runtime_protos.push_str(MID_PROTOS);
+        runtime_body.push_str(MID_BODY);
     }
     if builtin_usage.needs_instr_helper {
-        runtime.push_str(INSTR_HELPER);
+        runtime_protos.push_str(INSTR_PROTO);
+        runtime_body.push_str(INSTR_BODY);
     }
     if builtin_usage.needs_sgn_helper {
-        runtime.push_str(SGN_HELPER);
+        runtime_protos.push_str(SGN_PROTO);
+        runtime_body.push_str(SGN_BODY);
     }
     if builtin_usage.needs_rnd_helper {
-        runtime.push_str(RND_HELPER);
+        runtime_protos.push_str(RND_PROTO);
+        runtime_body.push_str(RND_BODY);
     }
     if gosub_count > 0 {
-        runtime.push_str(GOSUB_HELPER);
+        runtime_state.push_str(GOSUB_HELPER);
     }
     if needs_error_handling {
-        runtime.push_str(ERROR_HANDLING_GLOBALS);
+        runtime_state.push_str(ERROR_HANDLING_GLOBALS);
     }
-    // `bcc_data`'s own declaration is generated here, not a plain `&str`
-    // constant like `DATA_HELPER`, since its contents (`BCC_DATA_COUNT`
-    // and every item) come from the program's actual `DATA` statements
-    // (see `collect_data_items_and_labels`) -- declared right before
-    // `DATA_HELPER`, which references both by name, so declaration order
-    // in the emitted C is satisfied regardless of C's own top-to-bottom
-    // visibility rule for file-scope symbols.
+    // `bcc_data_ptr` is the only piece of `DATA`/`READ`/`RESTORE` state
+    // the user's own emitted code touches directly (`RESTORE` assigns it
+    // straight by name -- see `Statement::Restore`'s own arm), so it's
+    // the only piece that has to live in `state`. `bcc_data[]` itself
+    // (and its `BCC_DATA_COUNT`) is only ever touched from inside
+    // `bcc_read_data`, so it moves down alongside that function's own
+    // body instead, right before `DATA_BODY`.
     if !data_items.is_empty() {
-        runtime.push_str(&format!("#define BCC_DATA_COUNT {}\n", data_items.len()));
-        runtime.push_str(&format!(
+        runtime_state.push_str(DATA_STATE);
+        runtime_protos.push_str(DATA_PROTO);
+        runtime_body.push_str(&format!("#define BCC_DATA_COUNT {}\n", data_items.len()));
+        runtime_body.push_str(&format!(
             "static const char* bcc_data[BCC_DATA_COUNT] = {{ {} }};\n\n",
             data_items.join(", ")
         ));
-        runtime.push_str(DATA_HELPER);
+        runtime_body.push_str(DATA_BODY);
     }
     if file_io.used {
-        runtime.push_str(FILE_IO_HELPER);
-        runtime.push_str(&file_io.helper_defs);
+        runtime_state.push_str(FILE_IO_STATE);
+        runtime_protos.push_str(FILE_IO_PROTOS);
+        runtime_protos.push_str(&file_io.helper_protos);
+        runtime_body.push_str(FILE_IO_BODY);
+        runtime_body.push_str(&file_io.helper_defs);
     }
     if needs_seq_io {
-        runtime.push_str(SEQ_FILE_HELPER);
+        runtime_state.push_str(SEQ_FILE_STATE);
+        runtime_protos.push_str(SEQ_FILE_PROTOS);
+        runtime_body.push_str(SEQ_FILE_BODY);
     }
     if needs_color {
-        runtime.push_str(COLOR_HELPER);
+        runtime_protos.push_str(COLOR_PROTO);
+        runtime_body.push_str(COLOR_BODY);
     }
     if needs_input {
-        runtime.push_str(INPUT_HELPER);
+        runtime_state.push_str(INPUT_STATE);
+        runtime_protos.push_str(INPUT_PROTO);
+        runtime_body.push_str(INPUT_BODY);
     }
 
     let mut app = includes;
     app.push('\n');
-    // Only pull in the runtime file when this program actually needs at
-    // least one helper from it -- e.g. a program that only prints string
-    // literals needs none, and gets no `#include` line and no sibling
-    // file at all (see `GeneratedC`'s own doc comment).
-    if !runtime.is_empty() {
-        app.push_str("#include \"bcc_runtime.h\"\n\n");
+    if !runtime_state.is_empty() {
+        app.push_str(&runtime_state);
+    }
+    if !runtime_protos.is_empty() {
+        app.push_str(&runtime_protos);
+        app.push('\n');
     }
     if !globals_decl.is_empty() {
         app.push_str(&globals_decl);
@@ -2423,17 +2469,12 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         "int main(void) {{\n{}}}\n",
         reindent_c_body(&body)
     ));
+    if !runtime_body.is_empty() {
+        app.push('\n');
+        app.push_str(&runtime_body);
+    }
 
-    // Wrapped in its own include guard so `#include "bcc_runtime.h"`
-    // above is always safe, even though nothing in this backend ever
-    // includes it twice today.
-    let runtime = if runtime.is_empty() {
-        String::new()
-    } else {
-        format!("#ifndef BCC_RUNTIME_H\n#define BCC_RUNTIME_H\n\n{runtime}#endif\n")
-    };
-
-    Ok(GeneratedC { app, runtime })
+    Ok(GeneratedC { app })
 }
 
 /// One function's C prototype/definition header -- `<ret> <name>(<params>)`,
@@ -4650,6 +4691,13 @@ fn ensure_field_helpers(helper_key: &str, fields: &[FieldEntry], file_io: &mut F
     let put_separator = if put_params.is_empty() { "" } else { ", " };
     let get_separator = if get_params.is_empty() { "" } else { ", " };
 
+    file_io.helper_protos.push_str(&format!(
+        "static int bcc_put_record_{suffix}(FILE* file, long record{put_separator}{put_params});\n"
+    ));
+    file_io.helper_protos.push_str(&format!(
+        "static int bcc_get_record_{suffix}(FILE* file, long record{get_separator}{get_params});\n"
+    ));
+
     file_io.helper_defs.push_str(&format!(
         "static int bcc_put_record_{suffix}(FILE* file, long record{put_separator}{put_params}) {{\n    unsigned char buffer[{reclen}];\n"
     ));
@@ -4729,6 +4777,13 @@ fn ensure_dsl_record_helpers(record_type: &str, fields: &[FieldEntry], file_io: 
         .join(", ");
     let put_separator = if put_params.is_empty() { "" } else { ", " };
     let get_separator = if get_params.is_empty() { "" } else { ", " };
+
+    file_io.helper_protos.push_str(&format!(
+        "static int bcc_put_record_{suffix}(FILE* file, long record{put_separator}{put_params});\n"
+    ));
+    file_io.helper_protos.push_str(&format!(
+        "static int bcc_get_record_{suffix}(FILE* file, long record{get_separator}{get_params});\n"
+    ));
 
     file_io.helper_defs.push_str(&format!(
         "static int bcc_put_record_{suffix}(FILE* file, long record{put_separator}{put_params}) {{\n    unsigned char buffer[{reclen}];\n"
