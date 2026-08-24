@@ -1,16 +1,16 @@
 // DESIGN MOCKUP — not accepted by the parser yet.
 //
 // This is the proposed C-port shape for tutorial/inventory.bcl. The
-// attempt/recover syntax is deliberately structured: a failed menu action
-// is abandoned and recovery continues after `end attempt`. It does not
-// reproduce arbitrary BASIC RESUME NEXT instruction-pointer behavior inside
-// a procedure.
+// try/catch syntax is deliberately structured: a failed menu action is
+// abandoned and recovery continues after `end try`. It does not reproduce
+// arbitrary BASIC RESUME NEXT instruction-pointer behavior inside a
+// procedure.
 //
 // The BASIC backend would transpile this to ON ERROR GOTO plus a recovery
 // label and RESUME to that label. The C backend would propagate a status
-// value from the failed procedure and execute the recover block in the
+// value from the failed procedure and execute the catch block in the
 // caller.
-program inventoryAttemptRecover
+program inventoryTryCatch
 
 require com.bascal.stdlib.error
 
@@ -28,7 +28,7 @@ do
     showMainMenu()
     kp$ = readKey$()
 
-    attempt
+    try
         select case kp$
             case "1", "c", "C"
                 checkPart()
@@ -48,11 +48,11 @@ do
                 inv.close()
                 end
         end select
-    recover err%, erl%
+    catch err%, erl%
         // Recovery abandons the complete menu action and resumes here,
-        // after the attempt block, with no dead procedure frame to revisit.
+        // after the try block, with no dead procedure frame to revisit.
         reportInventoryError(err%, erl%)
-    end attempt
+    end try
 loop until quitFlag% = 1
 
 inv.close()
