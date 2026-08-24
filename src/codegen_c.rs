@@ -815,8 +815,21 @@ const FILE_IO_BODY: &str = "static void bcc_read_string_field(char* field, const
 /// those, rather than a formula. `bcc_color`'s `bg` of `-1` means "COLOR
 /// fg" alone was given -- leave the background alone, matching real
 /// BASCOM's own COLOR (an omitted argument doesn't reset it).
+///
+/// `COLOR` is the one screen-appearance change this backend makes that
+/// outlives the program itself if left alone: ANSI SGR color codes stay
+/// in effect in the *terminal*, not just this process, so a program that
+/// never explicitly resets them (real BASCOM programs rarely do -- DOS's
+/// own console reset itself on the next COMMAND.COM prompt) would leave
+/// the user's shell colored after exit. `bcc_color_reset` (`\x1b[0m`,
+/// ANSI's own "all attributes off") is registered via `atexit` the first
+/// time `COLOR` is actually used, guarded by `bcc_color_used` so it's
+/// only registered once -- this way it fires on every exit path alike
+/// (falling off the end of `main`, `STOP`/`SYSTEM`'s `exit(0)`, an
+/// uncaught error's own `exit(1)`) with no need to duplicate a reset call
+/// at each one individually.
 const COLOR_PROTO: &str = "static void bcc_color(int fg, int bg);\n";
-const COLOR_BODY: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\n\nstatic void bcc_color(int fg, int bg) {\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
+const COLOR_BODY: &str = "static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};\nstatic const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};\nstatic int bcc_color_used = 0;\n\nstatic void bcc_color_reset(void) {\n    printf(\"\\x1b[0m\");\n}\n\nstatic void bcc_color(int fg, int bg) {\n    if (!bcc_color_used) {\n        atexit(bcc_color_reset);\n        bcc_color_used = 1;\n    }\n    printf(\"\\x1b[%dm\", bcc_ansi_fg[fg & 15]);\n    if (bg >= 0) {\n        printf(\"\\x1b[%dm\", bcc_ansi_bg[bg & 7]);\n    }\n}\n\n";
 
 /// `input [prompt$;] var` -- reads one whole line into a shared,
 /// fixed-size scratch buffer (matching every string in this backend
@@ -2718,6 +2731,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         || needs_randomize
         || needs_error_handling
         || needs_stop_or_system
+        || needs_color
         || !data_items.is_empty()
     {
         // `input`'s numeric targets parse via `atoi`/`atof` (see
@@ -2729,7 +2743,8 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         // `READ`'s numeric targets parse via `atoi`/`atof` too, and
         // `DATA_HELPER`'s own out-of-DATA path needs `exit()`; `STOP`/
         // `SYSTEM` need `exit()` too (see their own arm in
-        // `emit_statement`).
+        // `emit_statement`); `COLOR` needs `atexit()` (see `COLOR_BODY`'s
+        // own doc comment).
         includes.push_str("#include <stdlib.h>\n");
     }
     if needs_randomize_time {
@@ -4160,6 +4175,20 @@ fn emit_statement(
             }
             file_io.used = true;
             match mode {
+                // Neither attempt below is trappable (unlike `INPUT`'s own
+                // arm just below) -- a `dim`/procedure-scoped `let p =
+                // inv[n]` (`GET`) or `inv[n] = ...` (`PUT`) right after a
+                // failed `OPEN` would otherwise dereference a NULL
+                // `FILE*` and segfault (found via `tutorial/inventory.
+                // bcl`'s own `initializeInventoryFileIfNew()`, called at
+                // top level with no enclosing `try` -- a read-only
+                // inven.dat makes both `fopen` attempts fail, "rb+"
+                // needing write access and "wb+" needing to create/
+                // truncate). A clean, fatal `exit(1)` here is a strict
+                // improvement over that crash even without full trappable-
+                // error support, which would need the same struct-return
+                // propagation issue #67/#68 track for a raise inside an
+                // arbitrary, possibly-non-reachable procedure like this one.
                 OpenMode::Random | OpenMode::Binary => {
                     out.push_str(&format!(
                         "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
@@ -4167,6 +4196,12 @@ fn emit_statement(
                     out.push_str(&format!(
                         "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
                     ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    out.push_str(&format!(
+                        "        fprintf(stderr, \"could not open %s for random access\\n\", {file_text});\n"
+                    ));
+                    out.push_str("        exit(1);\n");
+                    out.push_str("    }\n");
                 }
                 // A missing file for `INPUT` mode raises real BASIC's own
                 // error 53 ("file not found") -- but only at top level,

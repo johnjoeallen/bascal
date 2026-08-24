@@ -7396,6 +7396,41 @@ end
     }
 
     #[test]
+    fn color_registers_a_terminal_reset_on_exit_under_c_target() {
+        // ANSI SGR color codes stay in effect in the *terminal*, not just
+        // the process -- COLOR needs to register an atexit reset so the
+        // user's shell doesn't stay colored after the program exits,
+        // regardless of which exit path actually runs.
+        let source = r#"color 14, 4
+print "hi"
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("atexit(bcc_color_reset)"), "{c}");
+        assert!(c.contains("bcc_color_reset(void)"), "{c}");
+        assert!(c.contains("\\x1b[0m"), "{c}");
+    }
+
+    #[test]
+    fn open_random_failure_exits_cleanly_instead_of_segfaulting_under_c_target() {
+        // GitHub issue found via tutorial/inventory.bcl: a read-only
+        // inven.dat made both fopen attempts ("rb+" then "wb+") fail,
+        // leaving a NULL FILE* that a later GET/PUT dereferenced,
+        // segfaulting. Neither attempt is trappable (unlike `open ... for
+        // input`), so the fix is a clean fatal exit(1) instead of letting
+        // a NULL FILE* reach GET/PUT at all.
+        let source = r#"record Part
+    flag: string(1)
+end record
+file inv as Part = open("inven.dat")
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("if (!bcc_files[0]) {"), "{c}");
+        assert!(c.contains("exit(1);"), "{c}");
+    }
+
+    #[test]
     fn try_catch_transpiles_to_on_error_goto_dispatch_under_c_target() {
         // GitHub issue #60: `try`/`catch` on the C backend, restricted to
         // top-level raise sites (same restriction `on error goto` already
