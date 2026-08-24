@@ -7329,6 +7329,42 @@ end
     }
 
     #[test]
+    fn catch_err_erl_are_read_as_real_locals_not_the_err_erl_pseudo_vars() {
+        // `err`/`erl` (no suffix) are the real, ambient ERR/ERL pseudo-
+        // variables (see codegen_basic.rs's `Expr::Ident` arm) -- but
+        // `catch err%, erl%`'s own vars are ordinary, suffixed locals,
+        // not that pair, and using either as a call argument (routed
+        // through `self.expr`, not the assignment-target path) used to
+        // silently re-render them as the literal pseudo-variable text
+        // "ERR"/"ERL" instead of reading the local's real value, because
+        // `known_callables` only matched on the base name, ignoring the
+        // suffix that's the only thing distinguishing the two here.
+        let source = r#"procedure report(code%, line%)
+    print "code " + str$(code%) + " line " + str$(line%)
+end procedure
+
+try
+    error 11
+catch err%, erl%
+    report(err%, erl%)
+end try
+end
+"#;
+        let basic = compile_source("catch_err_erl.bcl", source).expect("should compile");
+        // `err% = ERR`/`erl% = ERL` (the catch block's own real read of
+        // the pseudo-variables) is correct and expected -- the bug was
+        // specifically in copying err%/erl% *into report()'s own call-
+        // argument locals*, which must read `= err%`/`= erl%`, not the
+        // literal (wrong) `= ERR%`/`= ERL%`.
+        assert!(basic.contains("err% = ERR"), "{basic}");
+        assert!(basic.contains("erl% = ERL"), "{basic}");
+        assert!(!basic.contains("= ERR%"), "{basic}");
+        assert!(!basic.contains("= ERL%"), "{basic}");
+        assert!(basic.contains("= err%"), "{basic}");
+        assert!(basic.contains("= erl%"), "{basic}");
+    }
+
+    #[test]
     fn try_catch_transpiles_to_on_error_goto_dispatch_under_c_target() {
         // GitHub issue #60: `try`/`catch` on the C backend, restricted to
         // top-level raise sites (same restriction `on error goto` already
@@ -7391,9 +7427,9 @@ end
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
         let diagnostics = compile_file(&path, &CompileOptions::new())
             .expect_err("nested try/catch should be rejected");
-        assert!(diagnostics.iter().any(|d| d
-            .message
-            .contains("can't contain another `try`/`catch`")));
+        assert!(diagnostics
+            .iter()
+            .any(|d| d.message.contains("can't contain another `try`/`catch`")));
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a

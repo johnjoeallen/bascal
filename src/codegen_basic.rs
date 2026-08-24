@@ -1298,7 +1298,21 @@ impl CodeGenerator {
             Expr::Ident(ident) => {
                 let is_param = current_function
                     .is_some_and(|f| f.params.iter().any(|(src, _)| same_ident(&src.name, ident)));
+                // `ERR`/`ERL` are the one pair of zero-arg builtins in
+                // `known_callables` that are *always* suffixless in real
+                // BASIC -- unlike `DATE$`/`TIME$`/`INKEY$`, whose own
+                // legitimate spelling already carries a `$` suffix, so a
+                // suffixed `err%`/`erl%` here can only be a genuine user
+                // variable (e.g. `try`/`catch`'s own `catch err%, erl%`
+                // locals -- see `Statement::TryCatch`), never the real
+                // pseudo-variable, which this branch would otherwise
+                // silently misrender as the literal text "ERR"/"ERL",
+                // discarding whatever value the real local actually holds.
+                let is_suffixed_err_or_erl = ident.suffix.is_some()
+                    && (ident.name.eq_ignore_ascii_case("err")
+                        || ident.name.eq_ignore_ascii_case("erl"));
                 let emitted = if !is_param
+                    && !is_suffixed_err_or_erl
                     && self
                         .known_callables
                         .contains(&ident.name.to_ascii_lowercase())
