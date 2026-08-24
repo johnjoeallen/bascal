@@ -7,10 +7,11 @@ See also [AGENTS.md](AGENTS.md) for terminology conventions.
 ## What this is
 
 BASCAL source files use the `.bcl` extension: a Pascal-inspired, structured
-superset of classic Microsoft BASIC. `bcc`, BASCAL's Rust CLI, transpiles
-that `.bcl` source into either plain 1980s Microsoft BASIC (`--target
-basic`, the complete/default backend) or experimental native C (`--target
-C`, narrow and still growing).
+superset of classic Microsoft BASIC. The BASCAL compiler, `bcc`, transpiles
+that `.bcl` source into either standard 1980s Microsoft BASIC (`--target
+basic`, the complete/default backend) or native C (`--target C`, now
+largely complete -- the inventory case study compiles, runs, and has been
+verified end-to-end on Linux).
 
 ## Commands
 
@@ -34,7 +35,7 @@ Pipeline, in `src/lib.rs`'s `compile_file`/`compile_source`: **lexer → parser 
 - `scalar_builtins.rs` — built-in scalar methods available on values.
 - `codegen.rs` — backend dispatch only; re-exports the BASIC backend's public surface (`CodeGenerator`) so callers never need to know the split into `codegen_basic`/`codegen_c` exists. `Target` (`Basic` default, `C`) selects the backend.
 - `codegen_basic.rs` — the original, complete backend: plain BASCOM-compatible BASIC. Only numbers lines that need numbers (branch targets) by default; `--line-numbers` numbers every line for strict BASCOM compatibility.
-- `codegen_c.rs` — experimental native-C backend, aiming eventually at Linux/macOS/Win32 binaries with no BASIC compiler involved. Narrower than the BASIC backend; check here before assuming a feature is supported for `--target C`.
+- `codegen_c.rs` — native-C backend, aiming at Linux/macOS/Win32 binaries with no BASIC compiler involved. Now largely complete and verified end-to-end (`tutorial/inventory.bcl` compiles and runs under Linux), but still narrower than the BASIC backend in places; check here before assuming a feature is supported for `--target C`.
 - `main.rs` — the `bcc` CLI (clap). Handles `require` library search paths, output-path defaulting, optional post-transpile compile (`fbc`/`gcc`) and run.
 
 `require`-based dependencies resolve against library search roots (`-L` dirs, `com/` stdlib, etc.) in `lib.rs`'s `search_roots`/`load_program_recursive` — this is how multi-file BASCAL programs and the `com/` standard library get pulled in.
