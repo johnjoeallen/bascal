@@ -60,65 +60,27 @@ fn freebasic_runs_sort_driver_when_available() {
     }
 }
 
-/// End-to-end confirmation for issue #10's Phase 2 acceptance criterion:
-/// `tutorial/17_labels_and_error_handling.bcl` (GOTO/labels, GOSUB/RETURN,
-/// `ON ERROR GOTO`/`RESUME`/`ERR`, and label-targeted `RESTORE`) compiles
-/// *and runs correctly* under `--target c`, not just transpiles -- gcc-
-/// compiled and executed here, the same bar `freebasic_runs_sort_driver_
-/// when_available` already holds the `basic` target to via `fbc`. Skipped
-/// (not failed) when `gcc` isn't available, matching that test's own
-/// skip-if-unavailable convention.
+/// Classic resumable error handling is intentionally BASIC-only.  The
+/// labels tutorial remains valid for the BASIC backend, but the C backend
+/// must diagnose its `ON ERROR GOTO` rather than emit a partial translation.
 #[test]
-fn gcc_runs_labels_and_error_handling_tutorial_under_c_target_when_available() {
-    if Command::new("gcc").arg("--version").output().is_err() {
-        return;
-    }
-
+fn c_target_rejects_labels_and_error_handling_tutorial() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = repo_root.join("tutorial/17_labels_and_error_handling.bcl");
-    let output_dir = repo_root.join("output/c_target_error_handling");
-    fs::create_dir_all(&output_dir)
-        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
-    let mut dir_arg = output_dir.as_os_str().to_owned();
-    dir_arg.push("/");
-
-    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
         .arg(&source_path)
-        .arg("-o")
-        .arg(&dir_arg)
         .arg("--target")
         .arg("C")
         .arg("--clean")
-        .arg("--binary")
-        .status()
-        .expect("failed to invoke bcc");
-    assert!(status.success(), "bcc failed to compile/build {source_path:?} under --target C");
-
-    let executable_path = repo_root.join("tmp/17_labels_and_error_handling");
-    let run = Command::new(&executable_path)
         .output()
-        .expect("failed to run compiled labels_and_error_handling binary");
+        .expect("failed to invoke bcc");
     assert!(
-        run.status.success(),
-        "compiled labels_and_error_handling binary failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&run.stdout),
-        String::from_utf8_lossy(&run.stderr)
+        !output.status.success(),
+        "bcc unexpectedly accepted {source_path:?} under --target C"
     );
-
-    let stdout = String::from_utf8_lossy(&run.stdout);
-    for expected in [
-        "reached via goto",
-        "inside the gosub'd subroutine",
-        "back after gosub",
-        "caught error 53: does_not_exist.dat not found",
-        "first read: France",
-        "after restore secondBatch: Japan",
-    ] {
-        assert!(
-            stdout.contains(expected),
-            "missing {expected:?} in stdout:\n{stdout}"
-        );
-    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("`on error goto` is not supported with --target c"), "{stderr}");
+    assert!(stderr.contains("`try`/`catch`/`finally`"), "{stderr}");
 }
 
 /// End-to-end confirmation for GitHub issue #60's procedures-only C-target
@@ -145,7 +107,7 @@ fn gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_availab
 
 procedure checkPart()
     print "checking"
-    error 11
+    open "missing.dat" for input as #1
     print "unreachable in checkPart"
 end procedure
 
@@ -207,8 +169,8 @@ end
     assert!(stdout.contains("editing"), "{stdout}");
     assert!(!stdout.contains("unreachable"), "{stdout}");
     // `str$` matches real BASIC's own leading-space-for-non-negative
-    // convention, so this is "caught " + " 11" + " at " + " 5".
-    assert!(stdout.contains("caught  11 at  5"), "{stdout}");
+    // convention, so the failed input open's error 53 is printed as " 53".
+    assert!(stdout.contains("caught  53 at"), "{stdout}");
     assert!(stdout.contains("after"), "{stdout}");
 }
 

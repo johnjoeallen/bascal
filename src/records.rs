@@ -500,6 +500,9 @@ impl Lowerer {
             Statement::ErrorStmt { code } => Statement::ErrorStmt {
                 code: self.rewrite_expr(code).0,
             },
+            Statement::ThrowStmt { code } => Statement::ThrowStmt {
+                code: code.map(|code| self.rewrite_expr(code).0),
+            },
             Statement::Input { prompt, vars } => {
                 let vars = vars.into_iter().map(|e| self.rewrite_expr(e).0).collect();
                 Statement::Input { prompt, vars }

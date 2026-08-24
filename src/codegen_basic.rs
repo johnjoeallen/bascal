@@ -93,6 +93,10 @@ pub struct CodeGenerator {
     // exactly the "RETURN with no GOSUB frame" crash risk the proof exists
     // to rule out.
     error_handler_procedures: HashSet<String>,
+    // Synthetic catch labels of lexically enclosing structured tries. This
+    // lets a nested try restore its enclosing handler before its finally
+    // block runs and rethrow after it.
+    try_handler_stack: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +165,7 @@ impl CodeGenerator {
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
             error_handler_procedures: HashSet::new(),
+            try_handler_stack: Vec::new(),
         }
     }
 
@@ -770,6 +775,14 @@ impl CodeGenerator {
                 self.lines(prelude);
                 self.line(&format!("ERROR {code}"));
             }
+            Statement::ThrowStmt { code } => {
+                let (prelude, code) = match code {
+                    Some(code) => self.expr(code, current_function),
+                    None => (Vec::new(), "ERR".to_string()),
+                };
+                self.lines(prelude);
+                self.line(&format!("ERROR {code}"));
+            }
             Statement::Input { prompt, vars } => {
                 let mut rendered = Vec::new();
                 for var in vars {
@@ -1237,38 +1250,67 @@ impl CodeGenerator {
         let id = self.next_label;
         self.next_label += 1;
         let catch_label = format!("TRY_{id:04}_CATCH");
+        let catch_run_label = format!("TRY_{id:04}_CATCH_RUN");
+        let rethrow_label = format!("TRY_{id:04}_RETHROW");
         let finally_label = format!("TRY_{id:04}_FINALLY");
         let end_label = format!("TRY_{id:04}_END");
+        let pending_name = format!("BCC_TRY_{id:04}_PENDING%");
+        let outer_handler = self.try_handler_stack.last().cloned();
+        let restore_outer = |this: &mut Self| match &outer_handler {
+            Some(label) => this.line(&format!("ON ERROR GOTO {label}")),
+            None => this.line("ON ERROR GOTO 0"),
+        };
 
         self.line(&format!("ON ERROR GOTO {catch_label}"));
+        self.line(&format!("{pending_name} = 0"));
+        self.try_handler_stack.push(catch_label.clone());
         self.indent += 1;
         self.statements(try_body, current_function);
         self.indent -= 1;
-        self.line("ON ERROR GOTO 0");
+        self.try_handler_stack.pop();
+        restore_outer(self);
         self.line(&format!("GOTO {finally_label}"));
 
         self.line(&format!("{catch_label}:"));
         self.indent += 1;
+        self.line(&format!("{pending_name} = ERR"));
         if let Some(catch) = catch {
             let err_name = self.ident(&catch.err_var, current_function);
             let erl_name = self.ident(&catch.erl_var, current_function);
             self.line(&format!("{err_name} = ERR"));
             self.line(&format!("{erl_name} = ERL"));
-            self.statements(&catch.body, current_function);
-            self.line(&format!("RESUME {finally_label}"));
+            // RESUME clears BASIC's active-handler state before the user
+            // catch runs, so a throw from it can be caught and unwound.
+            self.line(&format!("RESUME {catch_run_label}"));
         } else {
-            let err_name = format!("BCC_TRY_{id:04}_ERR%");
-            self.line(&format!("{err_name} = ERR"));
             self.line(&format!("RESUME {finally_label}"));
         }
         self.indent -= 1;
 
+        if let Some(catch) = catch {
+            self.line(&format!("{catch_run_label}:"));
+            self.line(&format!("ON ERROR GOTO {rethrow_label}"));
+            self.indent += 1;
+            self.try_handler_stack.push(rethrow_label.clone());
+            self.statements(&catch.body, current_function);
+            self.try_handler_stack.pop();
+            self.line(&format!("{pending_name} = 0"));
+            restore_outer(self);
+            self.line(&format!("GOTO {finally_label}"));
+            self.indent -= 1;
+
+            self.line(&format!("{rethrow_label}:"));
+            self.indent += 1;
+            self.line(&format!("{pending_name} = ERR"));
+            self.line(&format!("RESUME {finally_label}"));
+            self.indent -= 1;
+        }
+
         self.line(&format!("{finally_label}:"));
+        restore_outer(self);
         self.indent += 1;
         self.statements(finally_body, current_function);
-        if catch.is_none() {
-            self.line(&format!("IF BCC_TRY_{id:04}_ERR% <> 0 THEN ERROR BCC_TRY_{id:04}_ERR%"));
-        }
+        self.line(&format!("IF {pending_name} <> 0 THEN ERROR {pending_name}"));
         self.indent -= 1;
 
         self.line(&format!("{end_label}:"));
@@ -2330,6 +2372,9 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
             }
         }
         Statement::ErrorStmt { code } => visit_expr(code, f),
+        Statement::ThrowStmt { code } => {
+            if let Some(code) = code { visit_expr(code, f); }
+        }
         Statement::Input { vars, .. } => {
             for e in vars {
                 visit_expr(e, f);
@@ -3542,6 +3587,8 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
         Statement::OnErrorGoto { target } | Statement::ErrorStmt { code: target } => {
             collect_names_from_expr(target, names);
         }
+        Statement::ThrowStmt { code: Some(code) } => collect_names_from_expr(code, names),
+        Statement::ThrowStmt { code: None } => {}
         Statement::Goto(e) | Statement::Gosub(e) | Statement::Restore(Some(e)) => {
             collect_names_from_expr(e, names);
         }

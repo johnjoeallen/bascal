@@ -46,21 +46,13 @@
 //! own `return` -- built on a small return-address-ID stack, since C's
 //! `goto` has no "remember where to resume" of its own; see
 //! `Statement::Gosub`'s own doc comment for why it's scoped to top-level
-//! code); `on error goto label`/`on error goto 0`, `resume`/`resume
-//! next`/`resume label`, `error code`, and bare `err`/`erl` (see
-//! `ErrorDataCtx`/`emit_raise_block` -- the same return-address-ID-stack
-//! idea as `gosub`/`return`, just read in the opposite direction: a raise
-//! site's ID is written when it fires and read back later by whichever
-//! `resume` handles it, rather than a `gosub`'s ID being written at the
-//! call and read immediately by its own `return`; also top-level-code-only
-//! for the identical reason. A label handler target only -- a `procedure`
-//! target, which real BASIC also allows, isn't supported yet. A failed
-//! sequential `open ... for input` now raises real BASIC's own error 53
-//! this way too, instead of silently leaving a `NULL` `FILE*` behind (see
-//! `Statement::Open`'s `OpenMode::Input` arm). `erl` reads a stable
-//! per-raise-site ID, not a real BASIC line number -- this backend
-//! doesn't track BASIC line numbers at all, a real, documented
-//! divergence); `data`/`read`/`restore` (see
+//! code); structured `try`/`catch`/`finally` error recovery (see
+//! `emit_try_catch` -- a trappable failure from `OPEN ... FOR INPUT`
+//! reaches the owning catch, including through a reachable callable).
+//! Classic `on error goto`, `resume`, and explicit `error` statements are
+//! deliberately rejected for this target: their resumable control flow
+//! cannot safely cross ordinary C function calls (see
+//! `reject_classic_error_handling`); `data`/`read`/`restore` (see
 //! `collect_data_items_and_labels`/`DATA_HELPER` -- scalar targets only,
 //! no array reads; a `data` item must be a literal number or string;
 //! `restore label` resolves to a fixed item-count position at compile
@@ -98,16 +90,11 @@
 //! arr%(n%)` for a runtime-computed `n%`); `byref` scalar parameters
 //! (byval-only so far); a `function` body that doesn't provably `return`
 //! on every path (see `body_always_returns` -- a `procedure` has no such
-//! requirement); a `procedure` as an `on error goto` target (a label
-//! target is supported -- see above); a `FIELD`/`OPEN`/`GET`/`PUT`
-//! channel or `FIELD` width that isn't a literal integer; and
-//! `gosub`/`on error goto`/`resume`/`error` used inside a `function`/
-//! `procedure` body (`label`/`goto`/`read`/`restore` all work there fine
-//! -- only the return-address-ID-stack techniques are scoped to top-level
-//! code, since a `return` inside a function/procedure body always means
-//! that callable's own return, leaving no unambiguous "this GOSUB's/raise
-//! site's own RETURN/RESUME" to dispatch to) -- all rejected with a
-//! diagnostic rather than guessed at. Recursion (direct or indirect) is
+//! requirement); a `FIELD`/`OPEN`/`GET`/`PUT` channel or `FIELD` width
+//! that isn't a literal integer; `gosub` used inside a `function`/
+//! `procedure` body; and classic `on error goto`/`resume`/`error` anywhere
+//! in a C-target program (use structured `try`/`catch`/`finally` instead)
+//! -- all rejected with a diagnostic rather than guessed at. Recursion (direct or indirect) is
 //! rejected at the resolver level before codegen ever runs, for every
 //! target, not just this one. Everything else (`on ... goto`/`on ...
 //! gosub`, `mid$` statement-form assignment, `poke`/`out`, `print using`,
@@ -124,7 +111,7 @@
 //! `tutorial/13_shared/start.bcl` + `tutorial/13_shared/show.bcl`,
 //! `tutorial/15_random_and_record_files.bcl` (both its hand-written Part 1
 //! and DSL-based Part 2), `tutorial/16_short_circuit.bcl`,
-//! `tutorial/17_labels_and_error_handling.bcl`, and `tutorial/18_stdlib.bcl`
+//! `tutorial/18_stdlib.bcl`
 //! -- each gcc-compiled and run, not just transpiled (see
 //! `docs/manual/command-line-reference.html#backends` for the up to date
 //! list). `tutorial/08_arrays.bcl`, `12_require.bcl` (its required library
@@ -1393,7 +1380,7 @@ fn count_raise_sites(statements: &[Stmt]) -> usize {
         .iter()
         .map(|statement| {
             let self_count = usize::from(
-                matches!(&**statement, Statement::ErrorStmt { .. })
+                matches!(&**statement, Statement::ThrowStmt { .. })
                     || matches!(
                         &**statement,
                         Statement::Open {
@@ -1469,6 +1456,11 @@ fn count_try_catch_blocks(statements: &[Stmt]) -> usize {
                         .sum::<usize>()
                         + count_try_catch_blocks(else_body)
                 }
+                Statement::TryCatch { try_body, catch, finally_body } => {
+                    count_try_catch_blocks(try_body)
+                        + catch.as_ref().map_or(0, |catch| count_try_catch_blocks(&catch.body))
+                        + count_try_catch_blocks(finally_body)
+                }
                 _ => 0,
             };
             self_count + nested_count
@@ -1521,10 +1513,9 @@ fn collect_try_body_seeds(
 /// `try`'s own `try_body` -- issue #60's C-target propagation. A
 /// reachable scalar function returns a `{status, value}` wrapper; a
 /// string function returns `bcc_result_string`, whose value points at its
-/// caller-provided `bcc_out` storage. General expression placement still needs
-/// #68's ANF-style flattening, so this pass only marks callables; the
-/// renderer diagnoses unsupported non-direct placements rather than
-/// allowing an unchecked status to escape.
+/// caller-provided `bcc_out` storage. The expression normalizer hoists each
+/// wrapped call to a checked temporary before its containing expression is
+/// rendered, so no status can escape unchecked.
 ///
 /// Once in this set, a procedure gets `error`/failed `open ... for
 /// input` allowed inside its own body (previously rejected -- see their
@@ -1570,8 +1561,15 @@ fn collect_called_callables(
     for stmt in statements {
         match &stmt.kind {
             Statement::ExprStmt(expr) | Statement::Return { value: expr }
-            | Statement::Assignment { value: expr, .. } | Statement::Const { value: expr, .. }
-            | Statement::ErrorStmt { code: expr } => collect_calls_in_expr(expr, functions, out),
+            | Statement::Const { value: expr, .. } | Statement::ErrorStmt { code: expr } => {
+                collect_calls_in_expr(expr, functions, out)
+            }
+            Statement::ThrowStmt { code: Some(expr) } => collect_calls_in_expr(expr, functions, out),
+            Statement::ThrowStmt { code: None } => {}
+            Statement::Assignment { target, value } => {
+                collect_calls_in_expr(target, functions, out);
+                collect_calls_in_expr(value, functions, out);
+            }
             Statement::Print { tokens } => for token in tokens {
                 if let PrintToken::Expr(expr) = token { collect_calls_in_expr(expr, functions, out); }
             },
@@ -1597,7 +1595,20 @@ fn collect_called_callables(
             }
             Statement::SelectCase { expr, cases, else_body } => {
                 collect_calls_in_expr(expr, functions, out);
-                for case in cases { collect_called_callables(&case.body, functions, out); }
+                for case in cases {
+                    for value in &case.values {
+                        match value {
+                            CaseValue::Single(expr) | CaseValue::Is { value: expr, .. } => {
+                                collect_calls_in_expr(expr, functions, out)
+                            }
+                            CaseValue::Range { from, to } => {
+                                collect_calls_in_expr(from, functions, out);
+                                collect_calls_in_expr(to, functions, out);
+                            }
+                        }
+                    }
+                    collect_called_callables(&case.body, functions, out);
+                }
                 collect_called_callables(else_body, functions, out);
             }
             _ => {}
@@ -1608,11 +1619,11 @@ fn collect_called_callables(
 /// Whether a callable body contains a raise site of its own. A callable
 /// that merely happens to run under a `try` but cannot raise need not have
 /// its C signature rewritten at all; keeping it ordinary also means pure
-/// helper functions remain usable in expressions until #68 handles the
-/// genuinely propagating cases.
+/// helper functions remain ordinary C functions until a reachable raise
+/// requires the result-wrapper convention.
 fn statements_have_direct_raise(statements: &[Stmt]) -> bool {
     statements.iter().any(|stmt| match &stmt.kind {
-        Statement::ErrorStmt { .. }
+        Statement::ThrowStmt { .. }
         | Statement::Open {
             mode: OpenMode::Input,
             ..
@@ -1633,6 +1644,11 @@ fn statements_have_direct_raise(statements: &[Stmt]) -> bool {
                 .any(|case| statements_have_direct_raise(&case.body))
                 || statements_have_direct_raise(else_body)
         }
+        Statement::TryCatch { try_body, catch, finally_body } => {
+            statements_have_direct_raise(try_body)
+                || catch.as_ref().is_some_and(|catch| statements_have_direct_raise(&catch.body))
+                || statements_have_direct_raise(finally_body)
+        }
         _ => false,
     })
 }
@@ -1643,6 +1659,14 @@ fn collect_try_reachable_callables(
 ) -> HashSet<(String, Option<TypeSuffix>)> {
     let mut worklist = Vec::new();
     collect_try_body_seeds(&program.statements, functions, &mut worklist);
+    // A callable that owns a structured try may rethrow after its finally
+    // block even when no top-level try calls it. Give it the result ABI so
+    // that rethrow can return a nonzero status to its caller.
+    for func in &program.functions {
+        if count_try_catch_blocks(&func.body) != 0 {
+            worklist.push(fn_key(&func.name));
+        }
+    }
 
     let mut reachable = HashSet::new();
     while let Some(key) = worklist.pop() {
@@ -2603,6 +2627,15 @@ pub(crate) struct GeneratedC {
 }
 
 pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
+    let mut legacy_error_diagnostics = Vec::new();
+    reject_classic_error_handling(&program.statements, &mut legacy_error_diagnostics);
+    for function in &program.functions {
+        reject_classic_error_handling(&function.body, &mut legacy_error_diagnostics);
+    }
+    if !legacy_error_diagnostics.is_empty() {
+        return Err(legacy_error_diagnostics);
+    }
+
     let (mut funcs, methods) =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
     let int_consts = collect_top_level_int_consts(&program.statements);
@@ -3076,6 +3109,51 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     }
 
     Ok(GeneratedC { app })
+}
+
+/// Classic `ON ERROR` recovery depends on resuming a particular source
+/// instruction, which does not carry safely across ordinary C call frames.
+/// BASCAL's C target therefore reserves structured `try`/`catch`/`finally`
+/// for portable error handling and rejects the old family before emitting
+/// any partial C translation.
+fn reject_classic_error_handling(statements: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::OnErrorGoto { .. } => diagnostics.push(Diagnostic::error(
+                statement.pos.clone(),
+                "`on error goto` is not supported with --target c; use `try`/`catch`/`finally` for portable error handling".to_string(),
+            )),
+            Statement::Resume(_) => diagnostics.push(Diagnostic::error(
+                statement.pos.clone(),
+                "`resume` is not supported with --target c; use `try`/`catch`/`finally` for portable error handling".to_string(),
+            )),
+            Statement::ErrorStmt { .. } => diagnostics.push(Diagnostic::error(
+                statement.pos.clone(),
+                "`error` is BASIC-only; use `throw` or `throw <code>` for portable structured error handling".to_string(),
+            )),
+            Statement::If { then_body, else_body, .. } => {
+                reject_classic_error_handling(then_body, diagnostics);
+                reject_classic_error_handling(else_body, diagnostics);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => reject_classic_error_handling(body, diagnostics),
+            Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    reject_classic_error_handling(&case.body, diagnostics);
+                }
+                reject_classic_error_handling(else_body, diagnostics);
+            }
+            Statement::TryCatch { try_body, catch, finally_body } => {
+                reject_classic_error_handling(try_body, diagnostics);
+                if let Some(catch) = catch {
+                    reject_classic_error_handling(&catch.body, diagnostics);
+                }
+                reject_classic_error_handling(finally_body, diagnostics);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// One function's C prototype/definition header -- `<ret> <name>(<params>)`,
@@ -3763,6 +3841,8 @@ fn collect_vars_in_statement(
         // is skipped by `register_var`'s own guard, not specially handled
         // here).
         Statement::ErrorStmt { code } => collect_vars_in_expr(code, numeric_out, string_out),
+        Statement::ThrowStmt { code: Some(code) } => collect_vars_in_expr(code, numeric_out, string_out),
+        Statement::ThrowStmt { code: None } => {}
         // `err_var`/`erl_var` are hoisted like any other local (see
         // `emit_function_def`'s own doc comment on why every local is
         // declared, zero-initialized, at the top of its enclosing C
@@ -3898,8 +3978,11 @@ fn emit_statement(
 ) -> Result<(), String> {
     match &statement.kind {
         Statement::Print { tokens } => {
+            let tokens = hoist_print_tokens(
+                tokens, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
             let (prelude, mut format, args, needs_newline) =
-                render_print_tokens(tokens, needs_math, temp_counter, functions)?;
+                render_print_tokens(&tokens, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -3998,19 +4081,23 @@ fn emit_statement(
         // exactly matching BASIC's own `LOCATE row, col` -- no reordering
         // or offset needed, unlike `COLOR`'s palette remapping.
         Statement::Locate { row, col } => {
-            let (row_text, row_is_float) = render_numeric_expr(row, needs_math, functions)?;
+            let row = hoist_try_result_calls(row, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let (row_text, row_is_float) = render_numeric_expr(&row, needs_math, functions)?;
             let row_text = coerce_numeric(row_text, row_is_float, false, needs_math);
-            let (col_text, col_is_float) = render_numeric_expr(col, needs_math, functions)?;
+            let col = hoist_try_result_calls(col, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let (col_text, col_is_float) = render_numeric_expr(&col, needs_math, functions)?;
             let col_text = coerce_numeric(col_text, col_is_float, false, needs_math);
             out.push_str(&format!("    printf(\"\\x1b[%d;%dH\", {row_text}, {col_text});\n"));
             Ok(())
         }
         Statement::Color { fg, bg } => {
-            let (fg_text, fg_is_float) = render_numeric_expr(fg, needs_math, functions)?;
+            let fg = hoist_try_result_calls(fg, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let (fg_text, fg_is_float) = render_numeric_expr(&fg, needs_math, functions)?;
             let fg_text = coerce_numeric(fg_text, fg_is_float, false, needs_math);
             let bg_text = match bg {
                 Some(bg) => {
-                    let (text, is_float) = render_numeric_expr(bg, needs_math, functions)?;
+                    let bg = hoist_try_result_calls(bg, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                    let (text, is_float) = render_numeric_expr(&bg, needs_math, functions)?;
                     coerce_numeric(text, is_float, false, needs_math)
                 }
                 None => "-1".to_string(),
@@ -4058,11 +4145,32 @@ fn emit_statement(
             target: Expr::ArrayRef { name, indices },
             value,
         } if functions.arrays.contains_key(&array_c_name(name)) => {
-            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
-            let info = &functions.arrays[&array_c_name(name)];
+            let target = hoist_try_result_calls(
+                &Expr::ArrayRef { name: name.clone(), indices: indices.clone() },
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            let Expr::ArrayRef { name, indices } = target else {
+                unreachable!("array target stays an array reference");
+            };
+            let value = hoist_try_result_calls(
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            let c_expr = render_array_index_expr(&name, &indices, needs_math, functions)?;
+            let info = &functions.arrays[&array_c_name(&name)];
             if info.element_type.is_none() {
                 let (prelude, text) =
-                    render_string_expr(value, needs_math, temp_counter, functions)?;
+                    render_string_expr(&value, needs_math, temp_counter, functions)?;
                 for line in prelude {
                     out.push_str(&line);
                 }
@@ -4071,7 +4179,7 @@ fn emit_statement(
                 ));
             } else {
                 let (value_text, value_is_float) =
-                    render_numeric_expr(value, needs_math, functions)?;
+                    render_numeric_expr(&value, needs_math, functions)?;
                 let target_is_float = info.element_type.is_some_and(|(_, f)| f);
                 let value_text =
                     coerce_numeric(value_text, value_is_float, target_is_float, needs_math);
@@ -4083,8 +4191,7 @@ fn emit_statement(
             target: Expr::Ident(name),
             value,
         } => {
-            if emit_checked_try_result_assignment(
-                name,
+            let value = hoist_try_result_calls(
                 value,
                 out,
                 needs_math,
@@ -4092,11 +4199,8 @@ fn emit_statement(
                 functions,
                 current_function,
                 ctx,
-            )? {
-                Ok(())
-            } else {
-                emit_assignment(name, value, out, needs_math, temp_counter, functions)
-            }
+            )?;
+            emit_assignment(name, &value, out, needs_math, temp_counter, functions)
         }
         // Real MBASIC/BASCOM has no CONST statement at all -- `const` in
         // `.bcl` source is purely a naming/intent signal to the reader
@@ -4104,7 +4208,16 @@ fn emit_statement(
         // codegen ever runs), so it codegens exactly like an ordinary
         // assignment, same as the BASIC backend's own treatment of it.
         Statement::Const { name, value } => {
-            emit_assignment(name, value, out, needs_math, temp_counter, functions)
+            let value = hoist_try_result_calls(
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            emit_assignment(name, &value, out, needs_math, temp_counter, functions)
         }
         // Unlike the BASIC backend, which has to transpile `if`/`elseif`/
         // `else` into a GOTO/label chain (real MBASIC/BASCOM has no block
@@ -4125,7 +4238,16 @@ fn emit_statement(
             then_body,
             else_body,
         } => {
-            let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
+            let condition = hoist_try_result_calls(
+                condition,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            let (cond_text, _) = render_numeric_expr(&condition, needs_math, functions)?;
             out.push_str(&format!("    if ({cond_text}) {{\n"));
             for stmt in then_body {
                 emit_statement(
@@ -4190,14 +4312,17 @@ fn emit_statement(
                 ));
             };
             let loop_var = c_var_name(var, suffix);
-            let (start_text, start_is_float) = render_numeric_expr(start, needs_math, functions)?;
+            let start = hoist_try_result_calls(start, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let (start_text, start_is_float) = render_numeric_expr(&start, needs_math, functions)?;
             let start_text =
                 coerce_numeric(start_text, start_is_float, target_is_float, needs_math);
-            let (end_text, end_is_float) = render_numeric_expr(end, needs_math, functions)?;
+            let end = hoist_try_result_calls(end, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let (end_text, end_is_float) = render_numeric_expr(&end, needs_math, functions)?;
             let end_text = coerce_numeric(end_text, end_is_float, target_is_float, needs_math);
             let step_text = match step {
                 Some(step_expr) => {
-                    let (text, is_float) = render_numeric_expr(step_expr, needs_math, functions)?;
+                    let step_expr = hoist_try_result_calls(step_expr, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                    let (text, is_float) = render_numeric_expr(&step_expr, needs_math, functions)?;
                     coerce_numeric(text, is_float, target_is_float, needs_math)
                 }
                 None => "1".to_string(),
@@ -4234,8 +4359,16 @@ fn emit_statement(
         // (nonzero), same "0 is false, anything else is true" rule C
         // already uses natively, no BASIC-specific semantics to bridge.
         Statement::While { condition, body } => {
-            let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
-            out.push_str(&format!("    while ({cond_text}) {{\n"));
+            let wrapped = contains_try_result_call(condition, functions);
+            if wrapped {
+                out.push_str("    while (1) {\n");
+                let condition = hoist_try_result_calls(condition, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                let (cond_text, _) = render_numeric_expr(&condition, needs_math, functions)?;
+                out.push_str(&format!("    if (!({cond_text})) break;\n"));
+            } else {
+                let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
+                out.push_str(&format!("    while ({cond_text}) {{\n"));
+            }
             for stmt in body {
                 emit_statement(
                     stmt,
@@ -4272,7 +4405,10 @@ fn emit_statement(
         } => {
             out.push_str("    while (1) {\n");
             if let Some(cond) = condition {
-                out.push_str(&emit_do_guard(cond, needs_math, functions)?);
+                let guard = emit_do_guard(
+                    cond, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
+                out.push_str(&guard);
             }
             for stmt in body {
                 emit_statement(
@@ -4290,7 +4426,10 @@ fn emit_statement(
                 )?;
             }
             if let Some(cond) = post_condition {
-                out.push_str(&emit_do_guard(cond, needs_math, functions)?);
+                let guard = emit_do_guard(
+                    cond, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
+                out.push_str(&guard);
             }
             out.push_str("    }\n");
             Ok(())
@@ -4343,8 +4482,11 @@ fn emit_statement(
         } => {
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
+            let file = hoist_try_result_calls(
+                file, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
             let (prelude, file_text) =
-                render_string_expr(file, needs_math, temp_counter, functions)?;
+                render_string_expr(&file, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -4397,7 +4539,7 @@ fn emit_statement(
                 // still just leaves a `NULL` `FILE*` behind on failure,
                 // the same pre-existing unchecked-range-style gap as
                 // before this raise mechanism existed at all.
-                OpenMode::Input if current_function.is_none() => {
+                OpenMode::Input if current_function.is_none() && ctx.current_try_catch.is_none() => {
                     let id = ctx.raise_id;
                     ctx.raise_id += 1;
                     out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
@@ -4414,6 +4556,22 @@ fn emit_statement(
                     }
                     out.push_str("    }\n");
                     out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+                }
+                // A structured try owns a local catch label. Jump directly
+                // to it so nested tries do not depend on the global legacy
+                // ON ERROR dispatch table.
+                OpenMode::Input if ctx.current_try_catch.is_some() => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"r\");\n"
+                    ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    out.push_str("        bcc_err = 53;\n");
+                    out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
+                    out.push_str(&format!(
+                        "        goto {};\n",
+                        ctx.current_try_catch.as_ref().expect("checked above")
+                    ));
+                    out.push_str("    }\n");
                 }
                 // Same raise, but from inside a `try`-reachable
                 // procedure's own body -- no retry/after labels (no
@@ -4484,7 +4642,10 @@ fn emit_statement(
         Statement::LineInput { channel, target } => {
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
-            let (c_expr, element_type) = render_lvalue(target, needs_math, functions)?;
+            let target = hoist_try_result_calls(
+                target, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
+            let (c_expr, element_type) = render_lvalue(&target, needs_math, functions)?;
             if element_type.is_some() {
                 return Err(
                     "LINE INPUT # requires a string (`$`-suffixed) target".to_string(),
@@ -4501,8 +4662,11 @@ fn emit_statement(
         Statement::PrintFile { channel, tokens } => {
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
+            let tokens = hoist_print_tokens(
+                tokens, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
             let (prelude, mut format, args, needs_newline) =
-                render_print_tokens(tokens, needs_math, temp_counter, functions)?;
+                render_print_tokens(&tokens, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -4582,17 +4746,20 @@ fn emit_statement(
             let mut format = String::new();
             let mut args = Vec::new();
             for (index, expr) in exprs.iter().enumerate() {
+                let expr = hoist_try_result_calls(
+                    expr, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
                 if index > 0 {
                     format.push(',');
                 }
-                if is_string_expr_with_functions(expr, functions) {
+                if is_string_expr_with_functions(&expr, functions) {
                     let (expr_prelude, text) =
-                        render_string_expr(expr, needs_math, temp_counter, functions)?;
+                        render_string_expr(&expr, needs_math, temp_counter, functions)?;
                     prelude.extend(expr_prelude);
                     format.push_str("\\\"%s\\\"");
                     args.push(text);
                 } else {
-                    let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
+                    let (text, is_float) = render_numeric_expr(&expr, needs_math, functions)?;
                     format.push_str(if is_float { "%g" } else { "%d" });
                     args.push(text);
                 }
@@ -4648,6 +4815,8 @@ fn emit_statement(
             functions,
             file_io,
             out,
+            current_function,
+            ctx,
             true,
             *require_existing,
             None,
@@ -4665,6 +4834,8 @@ fn emit_statement(
             functions,
             file_io,
             out,
+            current_function,
+            ctx,
             false,
             false,
             provided_fields.as_deref(),
@@ -4710,7 +4881,10 @@ fn emit_statement(
                 file_io.pending_field_values.insert(c_name, raw_value);
                 return Ok(());
             }
-            if let Some((fn_name, target_is_float, arg)) = mk_pack_call(value) {
+            let value = hoist_try_result_calls(
+                value, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
+            if let Some((fn_name, target_is_float, arg)) = mk_pack_call(&value) {
                 if is_rset {
                     return Err(
                         "RSET with MKI$/MKL$/MKS$/MKD$ isn't supported by the minimal C backend \
@@ -4725,7 +4899,7 @@ fn emit_statement(
                 return Ok(());
             }
             let (prelude, value_text) =
-                render_string_expr(value, needs_math, temp_counter, functions)?;
+                render_string_expr(&value, needs_math, temp_counter, functions)?;
             for line in prelude {
                 out.push_str(&line);
             }
@@ -4773,8 +4947,11 @@ fn emit_statement(
                 );
             };
             if sig.is_string {
+                let value = hoist_try_result_calls(
+                    value, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
                 let (prelude, text) =
-                    render_string_expr(value, needs_math, temp_counter, functions)?;
+                    render_string_expr(&value, needs_math, temp_counter, functions)?;
                 for line in prelude {
                     out.push_str(&line);
                 }
@@ -4788,7 +4965,10 @@ fn emit_statement(
                     out.push_str("    return;\n");
                 }
             } else {
-                let (text, is_float) = render_numeric_expr(value, needs_math, functions)?;
+                let value = hoist_try_result_calls(
+                    value, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
+                let (text, is_float) = render_numeric_expr(&value, needs_math, functions)?;
                 let coerced = coerce_numeric(text, is_float, sig.is_float, needs_math);
                 emit_byref_scalar_copyback(sig, out);
                 if ctx.current_function_reachable {
@@ -4914,7 +5094,13 @@ fn emit_statement(
                      to a known BASCAL function/procedure is supported as a standalone statement"
                 )
             })?;
-            let call_args = call_args_with_defaults(sig, args, name)?;
+            let args = args
+                .iter()
+                .map(|arg| hoist_try_result_calls(
+                    arg, out, needs_math, temp_counter, functions, current_function, ctx,
+                ))
+                .collect::<Result<Vec<_>, _>>()?;
+            let call_args = call_args_with_defaults(sig, &args, name)?;
             let (prelude, mut arg_texts) =
                 render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
             for line in prelude {
@@ -4955,6 +5141,10 @@ fn emit_statement(
                     out.push_str(&format!(
                         "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
                         try_result_type(caller)
+                    ));
+                } else {
+                    out.push_str(&format!(
+                        "    if ({status}.status) {{ fprintf(stderr, \"unhandled BASIC error %d\\n\", {status}.status); exit(1); }}\n"
                     ));
                 }
             } else {
@@ -5046,7 +5236,10 @@ fn emit_statement(
                 None => out.push_str("    srand((unsigned int)time(NULL));\n"),
                 Some(_) if is_timer => out.push_str("    srand((unsigned int)time(NULL));\n"),
                 Some(expr) => {
-                    let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
+                    let expr = hoist_try_result_calls(
+                        expr, out, needs_math, temp_counter, functions, current_function, ctx,
+                    )?;
+                    let (text, is_float) = render_numeric_expr(&expr, needs_math, functions)?;
                     let text = coerce_numeric(text, is_float, false, needs_math);
                     out.push_str(&format!("    srand((unsigned int)({text}));\n"));
                 }
@@ -5152,8 +5345,11 @@ fn emit_statement(
         // expression, most commonly `err` itself, to re-raise an error a
         // handler decided it can't actually handle (see the manual's own
         // "typical pattern" example).
-        Statement::ErrorStmt { code } => {
-            if current_function.is_some() && !ctx.current_function_reachable {
+        Statement::ThrowStmt { code } => {
+            if current_function.is_some()
+                && !ctx.current_function_reachable
+                && ctx.current_try_catch.is_none()
+            {
                 return Err(
                     "`error` isn't supported inside a function/procedure body by the minimal C \
                      backend yet -- only at top level, or inside a procedure called (directly or \
@@ -5161,9 +5357,18 @@ fn emit_statement(
                         .to_string(),
                 );
             }
-            let (code_text, code_is_float) = render_numeric_expr(code, needs_math, functions)?;
-            let code_text = coerce_numeric(code_text, code_is_float, false, needs_math);
-            if ctx.current_function_reachable {
+            let code_text = match code {
+                Some(code) => {
+                    let (code_text, code_is_float) = render_numeric_expr(code, needs_math, functions)?;
+                    coerce_numeric(code_text, code_is_float, false, needs_math)
+                }
+                None => "bcc_err".to_string(),
+            };
+            if let Some(label) = &ctx.current_try_catch {
+                out.push_str(&format!("    bcc_err = {code_text};\n"));
+                out.push_str(&format!("    bcc_erl = {};\n", statement.pos.line));
+                out.push_str(&format!("    goto {label};\n"));
+            } else if ctx.current_function_reachable {
                 // No retry/after labels, no `bcc_raise_id` dispatch --
                 // see `emit_raise_in_procedure_block`'s own doc comment.
                 emit_raise_in_callable_block(
@@ -5201,7 +5406,10 @@ fn emit_statement(
         // indexed element, e.g. `read country$(i%), capital$(i%)`).
         Statement::Read(vars) => {
             for var in vars {
-                let (c_expr, element_type) = render_lvalue(var, needs_math, functions)?;
+                let var = hoist_try_result_calls(
+                    var, out, needs_math, temp_counter, functions, current_function, ctx,
+                )?;
+                let (c_expr, element_type) = render_lvalue(&var, needs_math, functions)?;
                 match element_type {
                     None => out.push_str(&format!(
                         "    snprintf({c_expr}, sizeof({c_expr}), \"%s\", bcc_read_data());\n"
@@ -5254,8 +5462,14 @@ fn emit_statement(
         // copies instead, the same convention every other string write in
         // this backend already uses.
         Statement::Swap(a, b) => {
-            let (a_expr, a_type) = render_lvalue(a, needs_math, functions)?;
-            let (b_expr, b_type) = render_lvalue(b, needs_math, functions)?;
+            let a = hoist_try_result_calls(
+                a, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
+            let b = hoist_try_result_calls(
+                b, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
+            let (a_expr, a_type) = render_lvalue(&a, needs_math, functions)?;
+            let (b_expr, b_type) = render_lvalue(&b, needs_math, functions)?;
             let temp = format!("bt_swap_{temp_counter}");
             *temp_counter += 1;
             match (a_type, b_type) {
@@ -5293,8 +5507,8 @@ fn emit_statement(
         // straight up from a `try`-reachable procedure call inside
         // `try_body` (see `Statement::ExprStmt`'s own procedure-call arm,
         // driven by `ctx.current_try_catch` -- set here, restored after).
-        // A raise from inside a called *function* still isn't caught --
-        // GitHub issues #67/#68 track that remaining, larger piece.
+        // A raise from inside a called function/procedure reaches this
+        // catch through the result-wrapper propagation path.
         //
         // `bcc_on_error_target` is installed to this try's own id
         // (`ctx.try_id`, reserved up front by `generate`'s `dispatch_
@@ -5316,23 +5530,15 @@ fn emit_statement(
             catch,
             finally_body,
         } => {
-            if current_function.is_some() {
-                return Err(
-                    "`try`/`catch` isn't supported inside a function/procedure body by the \
-                     minimal C backend yet -- only at top level"
-                        .to_string(),
-                );
-            }
             let id = ctx.try_id;
             ctx.try_id += 1;
             let catch_label = format!("bcc_try_{id}_catch");
+            let rethrow_label = format!("bcc_try_{id}_rethrow");
             let finally_label = format!("bcc_try_{id}_finally");
             let end_label = format!("bcc_try_{id}_end");
-            let unhandled_name = format!("bcc_try_{id}_unhandled");
+            let pending_name = format!("bcc_try_{id}_pending");
 
-            if catch.is_none() {
-                out.push_str(&format!("    int {unhandled_name} = 0;\n"));
-            }
+            out.push_str(&format!("    int {pending_name} = 0;\n"));
             out.push_str(&format!("    bcc_on_error_target = {id};\n"));
             let outer_try_catch = ctx.current_try_catch.replace(catch_label.clone());
             for stmt in try_body {
@@ -5362,6 +5568,7 @@ fn emit_statement(
                 let erl_c = c_var_name(&catch.erl_var, effective_suffix(catch.erl_var.suffix));
                 out.push_str(&format!("    {err_c} = bcc_err;\n"));
                 out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
+                let outer_try_catch = ctx.current_try_catch.replace(rethrow_label.clone());
                 for stmt in &catch.body {
                     emit_statement(
                         stmt,
@@ -5377,8 +5584,16 @@ fn emit_statement(
                         ctx,
                     )?;
                 }
+                ctx.current_try_catch = outer_try_catch;
+                out.push_str("    bcc_on_error_target = -1;\n");
+                out.push_str(&format!("    goto {finally_label};\n"));
             } else {
-                out.push_str(&format!("    {unhandled_name} = 1;\n"));
+                out.push_str(&format!("    {pending_name} = 1;\n"));
+            }
+
+            if catch.is_some() {
+                out.push_str(&format!("    {rethrow_label}: ;\n"));
+                out.push_str(&format!("    {pending_name} = 1;\n"));
             }
 
             out.push_str(&format!("    {finally_label}: ;\n"));
@@ -5397,12 +5612,18 @@ fn emit_statement(
                     ctx,
                 )?;
             }
-            if catch.is_none() {
-                out.push_str(&format!("    if ({unhandled_name}) {{\n"));
+            out.push_str(&format!("    if ({pending_name}) {{\n"));
+            if let Some(label) = &ctx.current_try_catch {
+                out.push_str(&format!("        goto {label};\n"));
+            } else if ctx.current_function_reachable {
+                let caller = current_function.expect("reachable context has a callable signature");
+                let value = if caller.is_string { ", .value = bcc_out" } else { "" };
+                out.push_str(&format!("        return ({}){{ .status = bcc_err{value} }};\n", try_result_type(caller)));
+            } else {
                 out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
                 out.push_str("        exit(1);\n");
-                out.push_str("    }\n");
             }
+            out.push_str("    }\n");
             out.push_str(&format!("    {end_label}: ;\n"));
             Ok(())
         }
@@ -5783,6 +6004,8 @@ fn emit_get_or_put(
     functions: &FunctionTable,
     file_io: &mut FileIoLayout,
     out: &mut String,
+    current_function: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
     is_get: bool,
     require_existing: bool,
     provided_fields: Option<&[bool]>,
@@ -5802,7 +6025,10 @@ fn emit_get_or_put(
              was seen for it (with a literal channel number) before this point"
         ));
     };
-    let (record_text, record_is_float) = render_numeric_expr(record, needs_math, functions)?;
+    let record = hoist_try_result_calls(
+        record, out, needs_math, temp_counter, functions, current_function, ctx,
+    )?;
+    let (record_text, record_is_float) = render_numeric_expr(&record, needs_math, functions)?;
     let record_text = coerce_numeric(record_text, record_is_float, false, needs_math);
 
     // The record DSL emits this GET as a BASIC-backend guard before a
@@ -5856,6 +6082,9 @@ fn emit_get_or_put(
                     field.c_name
                 ));
             };
+            let raw_value = hoist_try_result_calls(
+                &raw_value, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?;
             if field.is_string {
                 let (prelude, text) =
                     render_string_expr(&raw_value, needs_math, temp_counter, functions)?;
@@ -5954,79 +6183,182 @@ fn coerce_numeric(
     }
 }
 
-/// Shared by `Statement::Assignment` and `Statement::Const` -- both are
-/// "evaluate `value`, store it in `name`'s variable," identical at the C
-/// level (see the `Const` match arm's comment for why). Dispatches between
-/// numeric and string variables; anything else (an array target, a
-/// suffixless variable) is an error.
-/// Emits the status check for a value-returning function that is itself the
-/// complete right-hand side of an assignment. General expression placement
-/// (for example `x% = f%() + 1`) is deliberately left to #68's ANF pass;
-/// this direct form is enough to let #67 propagate scalar and string values
-/// through calls without ever treating a result struct as a C scalar.
-fn emit_checked_try_result_assignment(
-    target: &BasicIdent,
-    value: &Expr,
+/// Rewrites wrapped function calls into ordinary temporary variables before
+/// their containing expression is rendered.  A C call returning a
+/// `bcc_result_*` cannot remain inline: its status must be checked before
+/// any sibling expression is evaluated.  Recursing left-to-right gives
+/// BASCAL's ordinary expression evaluation order while making each result
+/// available to the existing expression renderer as a plain identifier.
+fn hoist_try_result_calls(
+    expr: &Expr,
     out: &mut String,
     needs_math: &mut bool,
     temp_counter: &mut usize,
     functions: &FunctionTable,
     current_function: Option<&FnSig>,
     ctx: &ErrorDataCtx<'_>,
-) -> Result<bool, String> {
-    let (name, args) = match value {
-        Expr::Call { name, args } => (name, args.as_slice()),
-        Expr::ArrayRef { name, indices } => (name, indices.as_slice()),
-        _ => return Ok(false),
+) -> Result<Expr, String> {
+    let rewrite_args = |args: &[Expr], out: &mut String, needs_math: &mut bool,
+                        temp_counter: &mut usize| {
+        args.iter()
+            .map(|arg| hoist_try_result_calls(arg, out, needs_math, temp_counter, functions, current_function, ctx))
+            .collect::<Result<Vec<_>, _>>()
     };
-    let Some(sig) = functions.get(&fn_key(name)) else { return Ok(false); };
-    if !sig.try_result { return Ok(false); }
+    match expr {
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
+            let args = rewrite_args(args, out, needs_math, temp_counter)?;
+            let Some(sig) = functions.get(&fn_key(name)) else {
+                return Ok(match expr {
+                    Expr::Call { .. } => Expr::Call { name: name.clone(), args },
+                    Expr::ArrayRef { .. } => Expr::ArrayRef { name: name.clone(), indices: args },
+                    _ => unreachable!(),
+                });
+            };
+            if !sig.try_result {
+                return Ok(match expr {
+                    Expr::Call { .. } => Expr::Call { name: name.clone(), args },
+                    Expr::ArrayRef { .. } => Expr::ArrayRef { name: name.clone(), indices: args },
+                    _ => unreachable!(),
+                });
+            }
 
-    let call_args = call_args_with_defaults(sig, args, name)?;
-    let (prelude, mut arg_texts) =
-        render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
-    for line in prelude { out.push_str(&line); }
-    if sig.is_string {
-        let temp = format!("bt_s_{temp_counter}");
-        *temp_counter += 1;
-        out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
-        arg_texts.push(temp.clone());
-    }
-    let status = format!("bcc_st_{temp_counter}");
-    *temp_counter += 1;
-    out.push_str(&format!(
-        "    {} {status} = {}({});\n",
-        try_result_type(sig), sig.c_name, arg_texts.join(", ")
-    ));
-    if let Some(label) = &ctx.current_try_catch {
-        out.push_str(&format!("    if ({status}.status) goto {label};\n"));
-    } else if ctx.current_function_reachable {
-        let caller = current_function.expect("reachable context has a callable signature");
-        out.push_str(&format!(
-            "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
-            try_result_type(caller)
-        ));
-    }
-    let target_suffix = effective_suffix(target.suffix);
-    if sig.is_string {
-        if target_suffix != TypeSuffix::String {
-            return Err(format!("`{name}` returns a string, not a number, so it can't be assigned to `{target}`"));
+            let call_args = args.iter().collect::<Vec<_>>();
+            let (prelude, mut arg_texts) =
+                render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
+            for line in prelude {
+                out.push_str(&line);
+            }
+            let temp_name = format!("anf_{temp_counter}");
+            *temp_counter += 1;
+            let temp_ident = BasicIdent { name: temp_name, suffix: sig.result_suffix };
+            let value_name = c_var_name(&temp_ident, sig.result_suffix.unwrap_or(TypeSuffix::String));
+            if sig.is_string {
+                out.push_str(&format!("    char {value_name}[{STRING_BUFFER_SIZE}];\n"));
+                arg_texts.push(value_name.clone());
+            }
+            let status = format!("bcc_st_{temp_counter}");
+            *temp_counter += 1;
+            out.push_str(&format!(
+                "    {} {status} = {}({});\n",
+                try_result_type(sig), sig.c_name, arg_texts.join(", ")
+            ));
+            if let Some(label) = &ctx.current_try_catch {
+                out.push_str(&format!("    if ({status}.status) goto {label};\n"));
+            } else if ctx.current_function_reachable {
+                let caller = current_function.expect("reachable context has a callable signature");
+                out.push_str(&format!(
+                    "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
+                    try_result_type(caller)
+                ));
+            } else {
+                out.push_str(&format!(
+                    "    if ({status}.status) {{ fprintf(stderr, \"unhandled BASIC error %d\\n\", {status}.status); exit(1); }}\n"
+                ));
+            }
+            if !sig.is_string {
+                let (_, is_float) = numeric_c_type(sig.result_suffix.expect("numeric function has a suffix"))
+                    .expect("numeric function has a numeric suffix");
+                let c_type = if is_float { "double" } else { "int" };
+                out.push_str(&format!("    {c_type} {value_name} = {status}.value;\n"));
+            }
+            Ok(Expr::Ident(temp_ident))
         }
-        out.push_str(&format!(
-            "    snprintf({}, sizeof({}), \"%s\", {});\n",
-            c_var_name(target, TypeSuffix::String),
-            c_var_name(target, TypeSuffix::String),
-            format!("{status}.value")
-        ));
-    } else {
-        if target_suffix == TypeSuffix::String {
-            return Err(format!("`{name}` returns a number, not a string, so it can't be assigned to `{target}`"));
-        }
-        let (_, target_float) = numeric_c_type(target_suffix).expect("non-string suffix is numeric");
-        let value = coerce_numeric(format!("{status}.value"), sig.is_float, target_float, needs_math);
-        out.push_str(&format!("    {} = {value};\n", c_var_name(target, target_suffix)));
+        Expr::Unary { op, expr } => Ok(Expr::Unary {
+            op: *op,
+            expr: Box::new(hoist_try_result_calls(expr, out, needs_math, temp_counter, functions, current_function, ctx)?),
+        }),
+        Expr::Binary { left, op, right } => Ok(Expr::Binary {
+            left: Box::new(hoist_try_result_calls(left, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            op: *op,
+            right: Box::new(hoist_try_result_calls(right, out, needs_math, temp_counter, functions, current_function, ctx)?),
+        }),
+        Expr::ScalarMethodCall { base, method, args } => Ok(Expr::ScalarMethodCall {
+            base: Box::new(hoist_try_result_calls(base, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            method: method.clone(),
+            args: rewrite_args(args, out, needs_math, temp_counter)?,
+        }),
+        _ => Ok(expr.clone()),
     }
-    Ok(true)
+}
+
+fn contains_try_result_call(expr: &Expr, functions: &FunctionTable) -> bool {
+    match expr {
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
+            functions.get(&fn_key(name)).is_some_and(|sig| sig.try_result)
+                || args.iter().any(|arg| contains_try_result_call(arg, functions))
+        }
+        Expr::Unary { expr, .. } => contains_try_result_call(expr, functions),
+        Expr::Binary { left, right, .. } => {
+            contains_try_result_call(left, functions) || contains_try_result_call(right, functions)
+        }
+        Expr::ScalarMethodCall { base, args, .. } | Expr::MethodCall { base, args, .. } => {
+            contains_try_result_call(base, functions)
+                || args.iter().any(|arg| contains_try_result_call(arg, functions))
+        }
+        Expr::FileIndex { index, .. } => contains_try_result_call(index, functions),
+        Expr::FieldAccess { base, .. } => contains_try_result_call(base, functions),
+        Expr::RecordLit { fields, .. } => fields
+            .iter()
+            .any(|(_, value)| contains_try_result_call(value, functions)),
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => false,
+    }
+}
+
+fn hoist_print_tokens(
+    tokens: &[PrintToken],
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+    current_function: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
+) -> Result<Vec<PrintToken>, String> {
+    tokens
+        .iter()
+        .map(|token| match token {
+            PrintToken::Expr(expr) => Ok(PrintToken::Expr(hoist_try_result_calls(
+                expr,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?)),
+            PrintToken::Semi => Ok(PrintToken::Semi),
+            PrintToken::Comma => Ok(PrintToken::Comma),
+        })
+        .collect()
+}
+
+fn hoist_case_value(
+    value: &CaseValue,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+    current_function: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
+) -> Result<CaseValue, String> {
+    match value {
+        CaseValue::Single(expr) => Ok(CaseValue::Single(hoist_try_result_calls(
+            expr, out, needs_math, temp_counter, functions, current_function, ctx,
+        )?)),
+        CaseValue::Range { from, to } => Ok(CaseValue::Range {
+            from: hoist_try_result_calls(
+                from, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?,
+            to: hoist_try_result_calls(
+                to, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?,
+        }),
+        CaseValue::Is { op, value } => Ok(CaseValue::Is {
+            op: *op,
+            value: hoist_try_result_calls(
+                value, out, needs_math, temp_counter, functions, current_function, ctx,
+            )?,
+        }),
+    }
 }
 
 fn emit_assignment(
@@ -6070,10 +6402,23 @@ fn emit_assignment(
 /// onto the same `while (1) { ...guards...; body; ...guards... }` shape).
 fn emit_do_guard(
     cond: &DoCondition,
+    out: &mut String,
     needs_math: &mut bool,
+    temp_counter: &mut usize,
     functions: &FunctionTable,
+    current_function: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
 ) -> Result<String, String> {
-    let (cond_text, _) = render_numeric_expr(&cond.expr, needs_math, functions)?;
+    let expr = hoist_try_result_calls(
+        &cond.expr,
+        out,
+        needs_math,
+        temp_counter,
+        functions,
+        current_function,
+        ctx,
+    )?;
+    let (cond_text, _) = render_numeric_expr(&expr, needs_math, functions)?;
     Ok(if cond.is_while {
         format!("    if (!({cond_text})) break;\n")
     } else {
@@ -6114,13 +6459,22 @@ fn emit_select_case(
     gosub_id: &mut usize,
     ctx: &mut ErrorDataCtx,
 ) -> Result<(), String> {
-    let is_string = is_string_expr_with_functions(expr, functions);
+    let expr = hoist_try_result_calls(
+        expr,
+        out,
+        needs_math,
+        temp_counter,
+        functions,
+        current_function,
+        ctx,
+    )?;
+    let is_string = is_string_expr_with_functions(&expr, functions);
     let temp = format!("bt_sel_{temp_counter}");
     *temp_counter += 1;
 
     out.push_str("    {\n");
     if is_string {
-        let (prelude, text) = render_string_expr(expr, needs_math, temp_counter, functions)?;
+        let (prelude, text) = render_string_expr(&expr, needs_math, temp_counter, functions)?;
         for line in prelude {
             out.push_str(&line);
         }
@@ -6129,16 +6483,29 @@ fn emit_select_case(
             "    snprintf({temp}, sizeof({temp}), \"%s\", {text});\n"
         ));
     } else {
-        let (text, is_float) = render_numeric_expr(expr, needs_math, functions)?;
+        let (text, is_float) = render_numeric_expr(&expr, needs_math, functions)?;
         let c_type = if is_float { "double" } else { "int" };
         out.push_str(&format!("    {c_type} {temp} = {text};\n"));
     }
 
-    for (i, clause) in cases.iter().enumerate() {
+    let matched = format!("bt_sel_match_{temp_counter}");
+    *temp_counter += 1;
+    out.push_str(&format!("    int {matched} = 0;\n"));
+    for clause in cases {
+        out.push_str(&format!("    if (!{matched}) {{\n"));
         let mut conds = Vec::with_capacity(clause.values.len());
         for value in &clause.values {
-            conds.push(render_case_value_cond(
+            let value = hoist_case_value(
                 value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            conds.push(render_case_value_cond(
+                &value,
                 &temp,
                 is_string,
                 out,
@@ -6149,8 +6516,8 @@ fn emit_select_case(
             )?);
         }
         let joined = conds.join(" || ");
-        let keyword = if i == 0 { "if" } else { "} else if" };
-        out.push_str(&format!("    {keyword} ({joined}) {{\n"));
+        out.push_str(&format!("    if ({joined}) {{\n"));
+        out.push_str(&format!("    {matched} = 1;\n"));
         for stmt in &clause.body {
             emit_statement(
                 stmt,
@@ -6166,28 +6533,11 @@ fn emit_select_case(
                 ctx,
             )?;
         }
-    }
-    if !cases.is_empty() {
-        if !else_body.is_empty() {
-            out.push_str("    } else {\n");
-            for stmt in else_body {
-                emit_statement(
-                    stmt,
-                    out,
-                    needs_math,
-                    needs_string,
-                    temp_counter,
-                    functions,
-                    current_function,
-                    file_io,
-                    gosub_count,
-                    gosub_id,
-                    ctx,
-                )?;
-            }
-        }
         out.push_str("    }\n");
-    } else {
+        out.push_str("    }\n");
+    }
+    if !else_body.is_empty() {
+        out.push_str(&format!("    if (!{matched}) {{\n"));
         for stmt in else_body {
             emit_statement(
                 stmt,
@@ -6203,6 +6553,7 @@ fn emit_select_case(
                 ctx,
             )?;
         }
+        out.push_str("    }\n");
     }
     out.push_str("    }\n");
     Ok(())
@@ -6458,8 +6809,7 @@ fn render_string_call(
     })?;
     if sig.try_result {
         return Err(format!(
-            "`{name}` can raise through a C-target `try`, so it currently must be the complete \
-             right-hand side of an assignment; expression-call flattening is tracked by issue #68"
+            "internal error: wrapped call `{name}` reached the string renderer before expression normalization"
         ));
     }
     let call_args = call_args_with_defaults(sig, args, name)?;
@@ -7137,8 +7487,7 @@ fn render_numeric_call(
     }
     if sig.try_result {
         return Err(format!(
-            "`{name}` can raise through a C-target `try`, so it currently must be the complete \
-             right-hand side of an assignment; expression-call flattening is tracked by issue #68"
+            "internal error: wrapped call `{name}` reached the numeric renderer before expression normalization"
         ));
     }
     let call = format!("{}({})", sig.c_name, arg_texts.join(", "));

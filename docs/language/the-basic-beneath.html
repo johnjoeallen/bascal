@@ -46,7 +46,7 @@ end while
 
     <h2>When raw BASIC matters</h2>
     <p>Some classic statements remain available for programs that need BASIC-specific behaviour. Labels let <code>GOTO</code>, <code>GOSUB</code>, <code>RESTORE</code>, and BASIC-only <code>ON ERROR GOTO</code> recovery name a destination without exposing a numeric line number. The compiler assigns the number.</p>
-    <p>For error handling that must work with both backends, use structured <code>try</code>/<code>catch</code>/<code>finally</code>. The C target’s legacy error mechanisms and some runtime behaviours are intentionally more limited than the BASIC target. In particular, its <code>inkey$</code> support currently uses POSIX terminal headers, so C programs using it do not yet build unchanged on Windows.</p>
+    <p>For error handling that must work with both backends, use structured <code>try</code>/<code>catch</code>/<code>finally</code> with <code>throw</code> or <code>throw n</code>. The C target rejects classic <code>on error goto</code>, <code>resume</code>, and <code>error</code>: their resumable BASIC control flow cannot cross ordinary C function calls safely. Use the structured form instead.</p>
     <div class="aside">Think in BASCAL; inspect generated BASIC or C when target behaviour matters. Design in the source and use the target to check compatibility or reach platform-specific facilities.</div>
 
     <h2>Licensing generated programs</h2>

@@ -5484,9 +5484,9 @@ end
 
     #[test]
     fn c_target_select_case_compiles_numeric_single_range_and_is_clauses() {
-        // Numeric `select case` compiles to a native if/else-if/else
-        // chain against a once-evaluated temp -- single-value, `to`
-        // range, and `is <op>` clauses all in one selector.
+        // Numeric `select case` evaluates its selector once, then checks
+        // clauses in source order -- single-value, `to` range, and `is
+        // <op>` clauses all in one selector.
         let source = "n% = 5\n\
                        select case n%\n\
                            case 1, 2\n\
@@ -5509,14 +5509,14 @@ end
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("} else if ((bt_sel_0 >= 3 && bt_sel_0 <= 6)) {"),
+            output.contains("if ((bt_sel_0 >= 3 && bt_sel_0 <= 6)) {"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains("} else if ((bt_sel_0 >= 7)) {"),
+            output.contains("if ((bt_sel_0 >= 7)) {"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("} else {"), "unexpected output:\n{output}");
+        assert!(output.contains("if (!bt_sel_match_1) {"), "unexpected output:\n{output}");
     }
 
     #[test]
@@ -6077,101 +6077,20 @@ end
     }
 
     #[test]
-    fn c_target_supports_on_error_goto_and_error_and_err() {
-        let source = "on error goto h\nerror 53\ngoto after\nh:\nprint err\nresume next\nafter:\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("static int bcc_err = 0;")
-                && output.contains("static int bcc_on_error_target = -1;")
-                && output.contains("static int bcc_in_handler = 0;")
-                && output.contains("static int bcc_resume_id = -1;"),
-            "ON ERROR GOTO needs the ERROR_HANDLING_GLOBALS block:\n{output}"
-        );
-        assert!(
-            output.contains("bcc_on_error_target = 0;"),
-            "ON ERROR GOTO h should install h as handler 0:\n{output}"
-        );
-        assert!(
-            output.contains("bcc_raise_retry_0: ;")
-                && output.contains("bcc_err = 53;")
-                && output.contains("bcc_resume_id = 0;")
-                && output.contains("case 0: goto bcc_lbl_h;")
-                && output.contains("bcc_raise_after_0: ;"),
-            "ERROR 53 should be a raise site dispatching to handler 0:\n{output}"
-        );
-        assert!(
-            output.contains("printf(\"%d\\n\", bcc_err)"),
-            "bare ERR should read bcc_err, not an ordinary variable:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_on_error_goto_0_disables_the_trap() {
-        let source = "on error goto 0\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("bcc_on_error_target = -1;"),
-            "ON ERROR GOTO 0 should disable the trap, not target a handler:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_resume_same_dispatches_to_the_raise_sites_retry_label() {
-        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume\nafter:\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("switch (bcc_resume_id) {") && output.contains("case 0: goto bcc_raise_retry_0;"),
-            "bare RESUME should dispatch back to the raise site's own retry label:\n{output}"
-        );
-        assert!(
-            output.contains("bcc_in_handler = 0;"),
-            "RESUME should clear bcc_in_handler so a later error can trap again:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_resume_next_dispatches_to_the_raise_sites_after_label() {
-        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume next\nafter:\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("switch (bcc_resume_id) {") && output.contains("case 0: goto bcc_raise_after_0;"),
-            "RESUME NEXT should dispatch to the raise site's own after-label:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_resume_label_jumps_directly_with_no_dispatch() {
-        let source = "on error goto h\nerror 5\ngoto after\nh:\nresume after\nafter:\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("bcc_in_handler = 0;\n    goto bcc_lbl_after;"),
-            "RESUME <label> should jump directly to the label, no runtime dispatch needed:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_open_for_input_raises_error_53_on_a_missing_file() {
-        let source =
-            "on error goto h\nopen \"missing.dat\" for input as #1\ngoto after\nh:\nprint err\nresume next\nafter:\nend\n";
-        let output = compile_source_via_c_target(source);
-        assert!(
-            output.contains("if (!bcc_files[0]) {") && output.contains("bcc_err = 53;"),
-            "a failed sequential OPEN FOR INPUT should raise error 53:\n{output}"
-        );
-    }
-
-    #[test]
-    fn c_target_rejects_error_handling_statements_inside_a_procedure() {
-        for stmt in ["on error goto h", "error 5", "resume next"] {
-            let source = format!("procedure p()\n    {stmt}\nend procedure\np()\nh:\nend\n");
+    fn c_target_rejects_resumable_error_handling_but_accepts_throw() {
+        for stmt in ["on error goto handler", "resume", "resume next", "resume handler"] {
+            let source = format!("if 1 then\n    {stmt}\nend if\nhandler:\nend\n");
             let diagnostics = compile_source_via_c_target_err(&source);
             assert!(
-                diagnostics
-                    .iter()
-                    .any(|d| d.message.contains("function/procedure")),
-                "`{stmt}` inside a procedure should be rejected: {diagnostics:?}"
+                diagnostics.iter().any(|d| {
+                    d.message.contains("--target c")
+                        && d.message.contains("`try`/`catch`/`finally`")
+                }),
+                "`{stmt}` should be rejected for the C target: {diagnostics:?}"
             );
         }
+        assert!(compile_source_via_c_target("try\n    throw 5\ncatch e%, l%\nend try\nend\n")
+            .contains("bcc_try_0_catch"));
     }
 
     #[test]
@@ -7351,10 +7270,18 @@ end
 "#;
         let basic = compile_source("try_finally.bcl", source).expect("try/finally should compile");
         assert!(basic.contains("RESUME 20"), "{basic}");
-        assert!(basic.contains("GOTO 20"), "{basic}");
-        assert!(basic.contains("20 PRINT \"cleanup\""), "{basic}");
+        assert!(basic.contains("GOTO 40"), "{basic}");
+        assert!(basic.contains("40 ON ERROR GOTO 0"), "{basic}");
 
-        let c = compile_source_via_c_target(source);
+        let c = compile_source_via_c_target(r#"try
+    open "missing.dat" for input as #1
+catch e%, l%
+    print e%
+finally
+    print "cleanup"
+end try
+end
+"#);
         assert!(c.contains("goto bcc_try_0_finally;"), "{c}");
         assert!(c.contains("bcc_try_0_finally: ;"), "{c}");
         assert!(c.contains("printf(\"cleanup\\n\");"), "{c}");
@@ -7371,13 +7298,19 @@ end
 "#;
         let basic = compile_source("try_finally_only.bcl", source)
             .expect("try/finally without catch should compile");
-        assert!(basic.contains("BCC_TRY_") && basic.contains("_ERR% = ERR"), "{basic}");
-        assert!(basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_ERR%"), "{basic}");
+        assert!(basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"), "{basic}");
+        assert!(basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"), "{basic}");
 
-        let c = compile_source_via_c_target(source);
-        assert!(c.contains("int bcc_try_0_unhandled = 0;"), "{c}");
-        assert!(c.contains("bcc_try_0_unhandled = 1;"), "{c}");
-        assert!(c.contains("if (bcc_try_0_unhandled)"), "{c}");
+        let c = compile_source_via_c_target(r#"try
+    open "missing.dat" for input as #1
+finally
+    print "cleanup"
+end try
+end
+"#);
+        assert!(c.contains("int bcc_try_0_pending = 0;"), "{c}");
+        assert!(c.contains("bcc_try_0_pending = 1;"), "{c}");
+        assert!(c.contains("if (bcc_try_0_pending)"), "{c}");
     }
 
     #[test]
@@ -7488,14 +7421,9 @@ end
 
     #[test]
     fn try_catch_transpiles_to_on_error_goto_dispatch_under_c_target() {
-        // GitHub issue #60: `try`/`catch` on the C backend, restricted to
-        // top-level raise sites (same restriction `on error goto` already
-        // has) -- reuses the existing bcc_on_error_target/bcc_err/bcc_erl
-        // machinery instead of the full struct-return propagation
-        // proposed in tutorial/inventory_try_catch.draft for raises deep
-        // inside a called procedure.
+        // GitHub issue #60: a trappable I/O failure enters C-target catch.
         let source = r#"try
-    error 11
+    open "missing.dat" for input as #1
 catch e%, l%
     print e%
 end try
@@ -7503,7 +7431,7 @@ end
 "#;
         let c = compile_source_via_c_target(source);
         assert!(c.contains("bcc_on_error_target = 0;"), "{c}");
-        assert!(c.contains("bcc_err = 11;"), "{c}");
+        assert!(c.contains("bcc_err = 53;"), "{c}");
         assert!(c.contains("bcc_on_error_target = -1;"), "{c}");
         assert!(c.contains("bcc_try_0_catch: ;"), "{c}");
         assert!(c.contains("bcc_in_handler = 0;"), "{c}");
@@ -7517,10 +7445,10 @@ end
         // GitHub issue #67: a scalar function reached directly from a
         // try-body assignment returns a status-plus-value wrapper, letting
         // its ERROR escape the C call frame and enter the caller's catch.
-        // More complex expression placement is deliberately covered by
-        // issue #68's ANF flattening follow-up.
+        // The same wrapper convention is normalized before every C
+        // expression renderer sees the call.
         let source = r#"function boom%()
-    error 42
+    open "missing.dat" for input as #1
     return 0
 end function
 
@@ -7546,7 +7474,7 @@ end
         // their value travels through bcc_out, exposed uniformly as the
         // bcc_result_string value pointer alongside propagation status.
         let source = r#"function boom$()
-    error 42
+    open "missing.dat" for input as #1
     return "unreachable"
 end function
 
@@ -7560,17 +7488,170 @@ end
         let c = compile_source_via_c_target(source);
         assert!(c.contains("bcc_result_string bf_s_boom(char* bcc_out)"), "{c}");
         assert!(c.contains("return (bcc_result_string){ .status = bcc_err, .value = bcc_out };"), "{c}");
-        assert!(c.contains("char bt_s_"), "{c}");
+        assert!(c.contains("char bv_s_anf_"), "{c}");
         assert!(c.contains("bcc_result_string bcc_st_"), "{c}");
         assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
-        assert!(c.contains("snprintf(bv_s_value, sizeof(bv_s_value), \"%s\", bcc_st_"), "{c}");
+        assert!(c.contains("snprintf(bv_s_value, sizeof(bv_s_value), \"%s\", bv_s_anf_"), "{c}");
     }
 
     #[test]
-    fn try_catch_is_rejected_inside_a_function_under_c_target() {
+    fn c_target_flattens_wrapped_scalar_calls_inside_an_expression() {
+        let source = r#"function boom%()
+    open "missing.dat" for input as #1
+    return 0
+end function
+
+try
+    value% = boom%() + 1
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("int bv_i_anf_"), "{c}");
+        assert!(c.contains("bv_i_anf_") && c.contains("+ 1"), "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_string_calls_inside_an_expression() {
+        let source = r#"function boom$()
+    open "missing.dat" for input as #1
+    return "unreachable"
+end function
+
+try
+    value$ = "prefix " + boom$()
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_string bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("char bv_s_anf_"), "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_calls_in_conditions_and_loop_guards() {
+        let source = r#"function ready%()
+    open "missing.dat" for input as #1
+    return 0
+end function
+
+try
+    if ready%() then
+        throw 17
+    end if
+    while ready%()
+        print "unreachable"
+    end while
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.matches("bcc_result_int bcc_st_").count() >= 2, "{c}");
+        assert!(c.contains("while (1)"), "{c}");
+        assert!(c.matches(".status) goto bcc_try_0_catch").count() >= 2, "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_calls_in_output_expressions() {
+        let source = r#"function message$()
+    open "missing.dat" for input as #1
+    return "unreachable"
+end function
+
+try
+    print "message: "; message$()
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_string bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("printf(\"message: %s\\n\""), "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_calls_in_select_case() {
+        let source = r#"function choice%()
+    open "missing.dat" for input as #1
+    return 1
+end function
+
+try
+    select case choice%()
+    case 1
+        print "unreachable"
+    end select
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("bt_sel_"), "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_calls_in_array_indices() {
+        let source = r#"function index%()
+    open "missing.dat" for input as #1
+    return 0
+end function
+
+dim values%(1)
+try
+    values%(index%()) = 1
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("bv_i_values[(bv_i_anf_"), "{c}");
+    }
+
+    #[test]
+    fn c_target_flattens_wrapped_calls_in_case_values() {
+        let source = r#"function probe%()
+    open "missing.dat" for input as #1
+    return 1
+end function
+
+try
+    select case 0
+    case probe%()
+        print "unreachable"
+    end select
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("bt_sel_match_"), "{c}");
+    }
+
+    #[test]
+    fn try_catch_is_supported_inside_a_function_under_c_target() {
         let source = r#"function f%()
     try
-        error 11
+        throw 17
     catch e%, l%
         return e%
     end try
@@ -7579,14 +7660,32 @@ end function
 x% = f%()
 end
 "#;
-        let diagnostics = compile_source_via_c_target_err(source);
-        assert!(diagnostics.iter().any(|d| d
-            .message
-            .contains("`try`/`catch` isn't supported inside a function/procedure body")));
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_int bf_i_f(void)"), "{c}");
+        assert!(c.contains("int bcc_try_0_pending = 0;"), "{c}");
+        assert!(c.contains("bcc_try_0_catch:"), "{c}");
     }
 
     #[test]
-    fn nested_try_catch_is_rejected() {
+    fn throw_is_portable_and_bare_throw_reraises() {
+        let source = r#"try
+    throw 17
+catch e%, l%
+    throw
+finally
+    print "cleanup"
+end try
+end
+"#;
+        let basic = compile_source("throw.bcl", source).expect("throw should compile for BASIC");
+        assert!(basic.contains("ERROR 17") && basic.contains("ERROR ERR"), "{basic}");
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_err = 17;") && c.contains("bcc_err = bcc_err;"), "{c}");
+        assert!(c.contains("bcc_try_0_rethrow:"), "{c}");
+    }
+
+    #[test]
+    fn nested_try_catch_restores_the_outer_handler() {
         let source = r#"try
     try
         error 11
@@ -7601,11 +7700,10 @@ end
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested_try.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
-        let diagnostics = compile_file(&path, &CompileOptions::new())
-            .expect_err("nested try/catch should be rejected");
-        assert!(diagnostics
-            .iter()
-            .any(|d| d.message.contains("can't contain another `try`/`catch`")));
+        let basic = compile_file(&path, &CompileOptions::new())
+            .expect("nested try/catch should compile");
+        assert!(basic.contains("ON ERROR GOTO 60"), "{basic}");
+        assert!(basic.contains("BCC_TRY_0002_PENDING%"), "{basic}");
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a

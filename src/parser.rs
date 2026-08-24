@@ -524,6 +524,8 @@ impl Parser {
             self.parse_resume()
         } else if self.check_keyword("error") {
             self.parse_error_stmt()
+        } else if self.check_keyword("throw") {
+            self.parse_throw_stmt()
         } else if self.check_keyword("option") {
             self.parse_option_base()
         } else if self.check_keyword("erase") {
@@ -1517,6 +1519,13 @@ impl Parser {
         let code = self.parse_expr(0)?;
         self.consume_line_end()?;
         Ok(Statement::ErrorStmt { code })
+    }
+
+    fn parse_throw_stmt(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("throw")?;
+        let code = if self.at_line_end() { None } else { Some(self.parse_expr(0)?) };
+        self.consume_line_end()?;
+        Ok(Statement::ThrowStmt { code })
     }
 
     fn parse_lprint(&mut self) -> ParseResult<Statement> {

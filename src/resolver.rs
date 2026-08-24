@@ -14,7 +14,6 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
     reject_option_base(program, &mut diagnostics);
-    reject_nested_try_catch(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
@@ -603,103 +602,6 @@ fn collect_on_error_goto_targets(statements: &[Stmt], out: &mut Vec<BasicIdent>)
     }
 }
 
-/// Rejects a `try`/`catch` whose own `try_body`/`catch_body` contains
-/// another `try`/`catch` anywhere inside it (through arbitrary `if`/`for`/
-/// `while`/`do`/`select case` nesting). Real classic BASIC has no
-/// instruction to *read* the currently installed `ON ERROR GOTO` target,
-/// only to set one -- so a nested try's own successful exit has no way to
-/// restore whatever the enclosing try had installed, only to disable
-/// trapping outright (see codegen_basic.rs's `try_catch`, which does
-/// exactly that). That would silently leave the *outer* try's `catch`
-/// unable to fire for the remainder of its own `try_body`, so nesting is
-/// rejected here at compile time instead -- for both targets alike, even
-/// though `--target C` could in principle save/restore its own
-/// `bcc_on_error_target` local, since try/catch's semantics shouldn't
-/// depend on which backend compiled it.
-fn reject_nested_try_catch(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
-    check_no_nested_try_catch(&program.statements, diagnostics);
-    for function in &program.functions {
-        check_no_nested_try_catch(&function.body, diagnostics);
-    }
-}
-
-fn check_no_nested_try_catch(statements: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
-    for stmt in statements {
-        match &stmt.kind {
-            Statement::TryCatch {
-                try_body,
-                catch,
-                finally_body,
-                ..
-            } => {
-                if contains_try_catch(try_body)
-                    || catch.as_ref().is_some_and(|catch| contains_try_catch(&catch.body))
-                    || contains_try_catch(finally_body)
-                {
-                    diagnostics.push(Diagnostic::error(
-                        stmt.pos.clone(),
-                        "a `try`/`catch` can't contain another `try`/`catch` -- neither backend \
-                         can correctly restore an outer handler once a nested one exits (real \
-                         BASIC has no way to read the currently installed `ON ERROR GOTO` \
-                         target)"
-                            .to_string(),
-                    ));
-                }
-                check_no_nested_try_catch(try_body, diagnostics);
-                if let Some(catch) = catch {
-                    check_no_nested_try_catch(&catch.body, diagnostics);
-                }
-                check_no_nested_try_catch(finally_body, diagnostics);
-            }
-            Statement::If {
-                then_body,
-                else_body,
-                ..
-            } => {
-                check_no_nested_try_catch(then_body, diagnostics);
-                check_no_nested_try_catch(else_body, diagnostics);
-            }
-            Statement::For { body, .. }
-            | Statement::While { body, .. }
-            | Statement::Do { body, .. } => check_no_nested_try_catch(body, diagnostics),
-            Statement::SelectCase {
-                cases, else_body, ..
-            } => {
-                for case in cases {
-                    check_no_nested_try_catch(&case.body, diagnostics);
-                }
-                check_no_nested_try_catch(else_body, diagnostics);
-            }
-            _ => {}
-        }
-    }
-}
-
-/// True if a `try`/`catch` appears anywhere inside `statements`, through
-/// arbitrary `if`/`for`/`while`/`do`/`select case`/`try`/`catch` nesting --
-/// used only by `check_no_nested_try_catch` to decide whether a `try`/
-/// `catch` it just found needs to be flagged (its own two bodies are
-/// walked separately, by name, so both get checked -- unlike a single
-/// generic "children of this statement" helper would manage for a
-/// statement with more than one body, like `if` or `select case`).
-fn contains_try_catch(statements: &[Stmt]) -> bool {
-    statements.iter().any(|stmt| match &stmt.kind {
-        Statement::TryCatch { .. } => true,
-        Statement::If {
-            then_body,
-            else_body,
-            ..
-        } => contains_try_catch(then_body) || contains_try_catch(else_body),
-        Statement::For { body, .. }
-        | Statement::While { body, .. }
-        | Statement::Do { body, .. } => contains_try_catch(body),
-        Statement::SelectCase {
-            cases, else_body, ..
-        } => cases.iter().any(|c| contains_try_catch(&c.body)) || contains_try_catch(else_body),
-        _ => false,
-    })
-}
-
 /// True if every path through `statements` is provably non-fallthrough --
 /// ends in `resume`/`goto`/`end`, or (recursively) an `if` whose `then` and
 /// `else` both diverge, or a `select case` whose every `case` and a
@@ -845,6 +747,7 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         Statement::OnErrorGoto { target: t } | Statement::ErrorStmt { code: t } => {
             expr_calls_function(t, target)
         }
+        Statement::ThrowStmt { code } => code.as_ref().is_some_and(|code| expr_calls_function(code, target)),
         Statement::Resume(kind) => match kind {
             ResumeTarget::Line(e) => expr_calls_function(e, target),
             _ => false,
@@ -1347,6 +1250,9 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         Statement::Goto(e) | Statement::Gosub(e) => walk_expr(e, pos, f),
         Statement::OnErrorGoto { target } => walk_expr(target, pos, f),
         Statement::ErrorStmt { code } => walk_expr(code, pos, f),
+        Statement::ThrowStmt { code } => {
+            if let Some(code) = code { walk_expr(code, pos, f); }
+        }
         Statement::Resume(ResumeTarget::Line(e)) => walk_expr(e, pos, f),
         Statement::Input { vars, .. } | Statement::Read(vars) => {
             vars.iter().for_each(|e| walk_expr(e, pos, f))

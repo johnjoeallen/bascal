@@ -404,6 +404,11 @@ pub enum Statement {
     ErrorStmt {
         code: Expr,
     },
+    /// Structured portable raise. Without a code, rethrows the current
+    /// error (`ERR` on BASIC, `bcc_err` on C).
+    ThrowStmt {
+        code: Option<Expr>,
+    },
     Input {
         prompt: Option<String>,
         vars: Vec<Expr>,
