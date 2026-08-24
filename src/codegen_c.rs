@@ -171,6 +171,10 @@ struct FnSig {
     is_string: bool,
     /// Only meaningful when `!is_string && !is_void`.
     is_float: bool,
+    /// True when this callable may execute beneath a top-level `try` and
+    /// therefore returns a `bcc_result_*` wrapper instead of its ordinary
+    /// C return representation.
+    try_result: bool,
     params: Vec<FnParam>,
     result_suffix: Option<TypeSuffix>,
 }
@@ -915,7 +919,7 @@ const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    struct termi
 const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\nstatic int bcc_erl = 0;\n\n";
 
 /// A `try`-reachable procedure's own C return type (see
-/// `collect_try_reachable_procedures`'s own doc comment) -- `status` is
+/// `collect_try_reachable_callables`'s own doc comment) -- `status` is
 /// `0` on normal completion, or the raised error code otherwise. Deliberately
 /// a named struct, not a bare `int`, even though a `procedure` carries no
 /// other payload: this is the first of the `bcc_result_*` family GitHub
@@ -925,7 +929,27 @@ const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on
 /// means a `procedure` promoted to a `function` later never needs a
 /// second signature change, and every call site's status-check code
 /// (`.status`) already reads identically either way.
-const TRY_RESULT_TYPE: &str = "typedef struct { int status; } bcc_result_void;\n\n";
+const TRY_RESULT_TYPE: &str = "typedef struct { int status; } bcc_result_void;\ntypedef struct { int status; int value; } bcc_result_int;\ntypedef struct { int status; float value; } bcc_result_single;\ntypedef struct { int status; double value; } bcc_result_double;\ntypedef struct { int status; char* value; } bcc_result_string;\n\n";
+
+/// The C result wrapper used by a callable on a path reachable from a
+/// top-level `try`. String-returning functions keep their caller-provided
+/// `bcc_out` storage, with the result's `value` pointing back at it.
+fn try_result_type(sig: &FnSig) -> &'static str {
+    if sig.is_void {
+        "bcc_result_void"
+    } else if sig.is_string {
+        "bcc_result_string"
+    } else if sig.is_float {
+        match sig.result_suffix.expect("numeric functions have a suffix") {
+            TypeSuffix::Single => "bcc_result_single",
+            TypeSuffix::Double => "bcc_result_double",
+            TypeSuffix::Integer | TypeSuffix::Long => "bcc_result_int",
+            TypeSuffix::String => unreachable!("numeric function cannot have string suffix"),
+        }
+    } else {
+        "bcc_result_int"
+    }
+}
 
 /// `DATA`/`READ`/`RESTORE`'s runtime state: `bcc_data` (declared
 /// separately, right before this, with the program's actual literal
@@ -1439,52 +1463,6 @@ fn count_try_catch_blocks(statements: &[Stmt]) -> usize {
         .sum()
 }
 
-/// Every `procedure` (never a `function` -- see `collect_try_reachable_
-/// procedures`'s own doc comment for why those stay out of scope for now)
-/// directly called as a bare statement inside `statements`, walking the
-/// same nesting shape `count_try_catch_blocks` does. Shared by both the
-/// initial try-body seed pass (`collect_try_body_seeds`) and the BFS
-/// expansion over each newly reachable procedure's own body (which never
-/// contains a `try`/`catch` itself -- top-level-only, so no arm for it is
-/// needed here at all).
-fn collect_called_procedures(
-    statements: &[Stmt],
-    functions: &FunctionTable,
-    out: &mut Vec<(String, Option<TypeSuffix>)>,
-) {
-    for stmt in statements {
-        match &stmt.kind {
-            Statement::ExprStmt(Expr::Call { name, .. })
-            | Statement::ExprStmt(Expr::ArrayRef { name, .. }) => {
-                let key = fn_key(name);
-                if functions.get(&key).is_some_and(|sig| sig.is_void) {
-                    out.push(key);
-                }
-            }
-            Statement::If {
-                then_body,
-                else_body,
-                ..
-            } => {
-                collect_called_procedures(then_body, functions, out);
-                collect_called_procedures(else_body, functions, out);
-            }
-            Statement::For { body, .. }
-            | Statement::While { body, .. }
-            | Statement::Do { body, .. } => collect_called_procedures(body, functions, out),
-            Statement::SelectCase {
-                cases, else_body, ..
-            } => {
-                for case in cases {
-                    collect_called_procedures(&case.body, functions, out);
-                }
-                collect_called_procedures(else_body, functions, out);
-            }
-            _ => {}
-        }
-    }
-}
-
 /// Seeds `out` with every procedure directly called inside a top-level
 /// `try`'s own `try_body` -- deliberately never `catch_body`: a call
 /// there runs with no trap active (see the `Statement::TryCatch` arm in
@@ -1500,7 +1478,7 @@ fn collect_try_body_seeds(
     for stmt in statements {
         match &stmt.kind {
             Statement::TryCatch { try_body, .. } => {
-                collect_called_procedures(try_body, functions, out);
+                collect_called_callables(try_body, functions, out);
             }
             Statement::If {
                 then_body,
@@ -1526,17 +1504,14 @@ fn collect_try_body_seeds(
     }
 }
 
-/// Every procedure (transitively) on a call path from some top-level
-/// `try`'s own `try_body` -- issue #60's C-target propagation, scoped
-/// down to procedures only for now. A `function` used inside an
-/// expression would need every generated/wrapper function to return a
-/// `{status, value}` struct and every call in the *entire program* --
-/// not just ones near a `try` -- hoisted to a checked temp, since a call
-/// can't sit inline inside an arbitrary expression once its status has
-/// to be checked the instant it returns (see the design notes on GitHub
-/// issue #60). A `procedure` has no value to carry at all, so none of
-/// that applies: its C signature just becomes `int` (a status) instead
-/// of `void`, with no expression-flattening required anywhere.
+/// Every callable (transitively) on a call path from some top-level
+/// `try`'s own `try_body` -- issue #60's C-target propagation. A
+/// reachable scalar function returns a `{status, value}` wrapper; a
+/// string function returns `bcc_result_string`, whose value points at its
+/// caller-provided `bcc_out` storage. General expression placement still needs
+/// #68's ANF-style flattening, so this pass only marks callables; the
+/// renderer diagnoses unsupported non-direct placements rather than
+/// allowing an unchecked status to escape.
 ///
 /// Once in this set, a procedure gets `error`/failed `open ... for
 /// input` allowed inside its own body (previously rejected -- see their
@@ -1546,7 +1521,110 @@ fn collect_try_body_seeds(
 /// lexical context (`ErrorDataCtx`'s `current_try_catch`/
 /// `current_function_reachable`) -- see `Statement::ExprStmt`'s own
 /// procedure-call arm.
-fn collect_try_reachable_procedures(
+fn collect_calls_in_expr(
+    expr: &Expr,
+    functions: &FunctionTable,
+    out: &mut Vec<(String, Option<TypeSuffix>)>,
+) {
+    match expr {
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
+            if functions.get(&fn_key(name)).is_some() { out.push(fn_key(name)); }
+            for arg in args { collect_calls_in_expr(arg, functions, out); }
+        }
+        Expr::Unary { expr, .. } => collect_calls_in_expr(expr, functions, out),
+        Expr::Binary { left, right, .. } => {
+            collect_calls_in_expr(left, functions, out);
+            collect_calls_in_expr(right, functions, out);
+        }
+        Expr::ScalarMethodCall { base, args, .. } | Expr::MethodCall { base, args, .. } => {
+            collect_calls_in_expr(base, functions, out);
+            for arg in args { collect_calls_in_expr(arg, functions, out); }
+        }
+        Expr::FileIndex { index, .. } => collect_calls_in_expr(index, functions, out),
+        Expr::FieldAccess { base, .. } => collect_calls_in_expr(base, functions, out),
+        Expr::RecordLit { fields, .. } => for (_, value) in fields {
+            collect_calls_in_expr(value, functions, out);
+        },
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {}
+    }
+}
+
+fn collect_called_callables(
+    statements: &[Stmt],
+    functions: &FunctionTable,
+    out: &mut Vec<(String, Option<TypeSuffix>)>,
+) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::ExprStmt(expr) | Statement::Return { value: expr }
+            | Statement::Assignment { value: expr, .. } | Statement::Const { value: expr, .. }
+            | Statement::ErrorStmt { code: expr } => collect_calls_in_expr(expr, functions, out),
+            Statement::Print { tokens } => for token in tokens {
+                if let PrintToken::Expr(expr) = token { collect_calls_in_expr(expr, functions, out); }
+            },
+            Statement::If { condition, then_body, else_body } => {
+                collect_calls_in_expr(condition, functions, out);
+                collect_called_callables(then_body, functions, out);
+                collect_called_callables(else_body, functions, out);
+            }
+            Statement::For { start, end, step, body, .. } => {
+                collect_calls_in_expr(start, functions, out);
+                collect_calls_in_expr(end, functions, out);
+                if let Some(step) = step { collect_calls_in_expr(step, functions, out); }
+                collect_called_callables(body, functions, out);
+            }
+            Statement::While { condition, body } => {
+                collect_calls_in_expr(condition, functions, out);
+                collect_called_callables(body, functions, out);
+            }
+            Statement::Do { condition, body, post_condition } => {
+                if let Some(condition) = condition { collect_calls_in_expr(&condition.expr, functions, out); }
+                collect_called_callables(body, functions, out);
+                if let Some(condition) = post_condition { collect_calls_in_expr(&condition.expr, functions, out); }
+            }
+            Statement::SelectCase { expr, cases, else_body } => {
+                collect_calls_in_expr(expr, functions, out);
+                for case in cases { collect_called_callables(&case.body, functions, out); }
+                collect_called_callables(else_body, functions, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Whether a callable body contains a raise site of its own. A callable
+/// that merely happens to run under a `try` but cannot raise need not have
+/// its C signature rewritten at all; keeping it ordinary also means pure
+/// helper functions remain usable in expressions until #68 handles the
+/// genuinely propagating cases.
+fn statements_have_direct_raise(statements: &[Stmt]) -> bool {
+    statements.iter().any(|stmt| match &stmt.kind {
+        Statement::ErrorStmt { .. }
+        | Statement::Open {
+            mode: OpenMode::Input,
+            ..
+        } => true,
+        Statement::If {
+            then_body,
+            else_body,
+            ..
+        } => statements_have_direct_raise(then_body) || statements_have_direct_raise(else_body),
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => statements_have_direct_raise(body),
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases
+                .iter()
+                .any(|case| statements_have_direct_raise(&case.body))
+                || statements_have_direct_raise(else_body)
+        }
+        _ => false,
+    })
+}
+
+fn collect_try_reachable_callables(
     program: &Program,
     functions: &FunctionTable,
 ) -> HashSet<(String, Option<TypeSuffix>)> {
@@ -1559,10 +1637,44 @@ fn collect_try_reachable_procedures(
             continue;
         }
         if let Some(func) = program.functions.iter().find(|f| fn_key(&f.name) == key) {
-            collect_called_procedures(&func.body, functions, &mut worklist);
+            collect_called_callables(&func.body, functions, &mut worklist);
         }
     }
-    reachable
+    // Only callables that can actually raise need the result-wrapper ABI.
+    // Seed that set with direct raise sites, then close it upward over the
+    // already-discovered call graph so callers propagate their callee's
+    // status. Pure helpers remain ordinary C functions.
+    let mut propagating: HashSet<_> = reachable
+        .iter()
+        .filter(|key| {
+            program
+                .functions
+                .iter()
+                .find(|func| fn_key(&func.name) == **key)
+                .is_some_and(|func| statements_have_direct_raise(&func.body))
+        })
+        .cloned()
+        .collect();
+    loop {
+        let mut changed = false;
+        for key in &reachable {
+            if propagating.contains(key) {
+                continue;
+            }
+            let Some(func) = program.functions.iter().find(|func| fn_key(&func.name) == *key) else {
+                continue;
+            };
+            let mut calls = Vec::new();
+            collect_called_callables(&func.body, functions, &mut calls);
+            if calls.iter().any(|called| propagating.contains(called)) {
+                propagating.insert(key.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            return propagating;
+        }
+    }
 }
 
 /// Every distinct `ON ERROR GOTO <label>` target in `statements` (`ON
@@ -1951,7 +2063,7 @@ struct ErrorDataCtx<'a> {
     try_id: usize,
     data_labels: &'a HashMap<String, usize>,
     /// Every procedure a raise can propagate a nonzero status out of --
-    /// see `collect_try_reachable_procedures`'s own doc comment. Read at
+    /// see `collect_try_reachable_callables`'s own doc comment. Read at
     /// every bare procedure-call statement to decide whether that call
     /// even returns a status worth checking at all.
     try_reachable: &'a HashSet<(String, Option<TypeSuffix>)>,
@@ -2028,7 +2140,12 @@ fn emit_raise_block(
 /// next` are still rejected inside a function/procedure body (see
 /// `Statement::Resume`'s own arm), so nothing here would ever read
 /// either.
-fn emit_raise_in_procedure_block(out: &mut String, err_code_text: &str, err_line: usize) {
+fn emit_raise_in_callable_block(
+    out: &mut String,
+    err_code_text: &str,
+    err_line: usize,
+    sig: &FnSig,
+) {
     out.push_str(&format!("    bcc_err = {err_code_text};\n"));
     out.push_str(&format!("    bcc_erl = {err_line};\n"));
     out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
@@ -2036,7 +2153,11 @@ fn emit_raise_in_procedure_block(out: &mut String, err_code_text: &str, err_line
     out.push_str("        exit(1);\n");
     out.push_str("    }\n");
     out.push_str("    bcc_in_handler = 1;\n");
-    out.push_str("    return (bcc_result_void){ .status = bcc_err };\n");
+    let value = if sig.is_string { ", .value = bcc_out" } else { "" };
+    out.push_str(&format!(
+        "    return ({}){{ .status = bcc_err{value} }};\n",
+        try_result_type(sig)
+    ));
 }
 
 fn program_uses_color(program: &Program) -> bool {
@@ -2318,6 +2439,7 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashM
                 is_void: func.is_procedure,
                 is_string,
                 is_float: numeric.is_some_and(|(_, f)| f),
+                try_result: false,
                 params,
                 result_suffix: func.name.suffix,
             };
@@ -2459,8 +2581,13 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         .map_err(|message| vec![unsupported(&message)])?;
     apply_byval_array_capacities(&mut funcs, program, &arrays)
         .map_err(|message| vec![unsupported(&message)])?;
-    let functions = FunctionTable { funcs, methods, arrays };
-    let try_reachable = collect_try_reachable_procedures(program, &functions);
+    let mut functions = FunctionTable { funcs, methods, arrays };
+    let try_reachable = collect_try_reachable_callables(program, &functions);
+    for key in &try_reachable {
+        if let Some(sig) = functions.funcs.get_mut(key) {
+            sig.try_result = true;
+        }
+    }
     let top_level_const_names = collect_top_level_const_c_names(&program.statements);
     let known_layouts = known_record_layouts(program);
     let new_file_io = |known_record_layouts: HashMap<Vec<u32>, (String, Vec<bool>)>| FileIoLayout {
@@ -2953,10 +3080,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
 /// directly, used as-is throughout the body.
 fn function_signature(func: &FunctionDef, sig: &FnSig, is_try_reachable: bool) -> String {
     let ret_type = if is_try_reachable {
-        // Only ever true alongside `sig.is_void` -- see
-        // `collect_called_procedures`, which only ever adds a real
-        // `procedure` to the reachable set.
-        "bcc_result_void"
+        try_result_type(sig)
     } else if sig.is_void || sig.is_string {
         "void"
     } else {
@@ -3184,13 +3308,17 @@ fn emit_function_def(
     // `invoke_gcc` in `main.rs`), and simpler than trying to prove it's
     // dead first just to skip it.
     emit_byref_scalar_copyback(sig, &mut body);
-    // A `try`-reachable procedure's own C return type is `bcc_result_void`
-    // now (see `function_signature`), not `void` -- unlike a plain
-    // `procedure`, falling off the end here without an explicit `return`
-    // is real undefined behavior in C, not a free, do-nothing exit, so
-    // this always needs its own explicit trailing success return.
+    // A `try`-reachable callable's own C return type is a result wrapper
+    // now (see `function_signature`). Procedures can fall through, so they
+    // need an explicit successful result; functions have an explicit
+    // value-return on every path, but this harmless trailing result keeps
+    // the generated C total even if that invariant changes.
     if is_try_reachable {
-        body.push_str("    return (bcc_result_void){ .status = 0 };\n");
+        let value = if sig.is_string { ", .value = bcc_out" } else { "" };
+        body.push_str(&format!(
+            "    return ({}){{ .status = 0{value} }};\n",
+            try_result_type(sig)
+        ));
     }
 
     out.push_str(&function_signature(func, sig, is_try_reachable));
@@ -3922,7 +4050,22 @@ fn emit_statement(
         Statement::Assignment {
             target: Expr::Ident(name),
             value,
-        } => emit_assignment(name, value, out, needs_math, temp_counter, functions),
+        } => {
+            if emit_checked_try_result_assignment(
+                name,
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )? {
+                Ok(())
+            } else {
+                emit_assignment(name, value, out, needs_math, temp_counter, functions)
+            }
+        }
         // Real MBASIC/BASCOM has no CONST statement at all -- `const` in
         // `.bcl` source is purely a naming/intent signal to the reader
         // (BASCAL's resolver already enforces it's never reassigned before
@@ -4197,8 +4340,18 @@ fn emit_statement(
                         "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    let source_filename = std::path::Path::new(&statement.pos.filename)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(&statement.pos.filename);
+                    let source = format!(
+                        "{}:{}:{}",
+                        escape_c_string_literal(source_filename),
+                        statement.pos.line,
+                        statement.pos.column
+                    );
                     out.push_str(&format!(
-                        "        fprintf(stderr, \"could not open %s for random access\\n\", {file_text});\n"
+                        "        fprintf(stderr, \"could not open %s for random access at {source}\\n\", {file_text});\n"
                     ));
                     out.push_str("        exit(1);\n");
                     out.push_str("    }\n");
@@ -4242,7 +4395,12 @@ fn emit_statement(
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
                     let mut raise = String::new();
-                    emit_raise_in_procedure_block(&mut raise, "53", statement.pos.line);
+                    emit_raise_in_callable_block(
+                        &mut raise,
+                        "53",
+                        statement.pos.line,
+                        current_function.expect("reachable calls only occur inside a callable"),
+                    );
                     for line in raise.lines() {
                         out.push_str("    ");
                         out.push_str(line);
@@ -4592,12 +4750,23 @@ fn emit_statement(
                     "    snprintf(bcc_out, {STRING_BUFFER_SIZE}, \"%s\", {text});\n"
                 ));
                 emit_byref_scalar_copyback(sig, out);
-                out.push_str("    return;\n");
+                if ctx.current_function_reachable {
+                    out.push_str("    return (bcc_result_string){ .status = 0, .value = bcc_out };\n");
+                } else {
+                    out.push_str("    return;\n");
+                }
             } else {
                 let (text, is_float) = render_numeric_expr(value, needs_math, functions)?;
                 let coerced = coerce_numeric(text, is_float, sig.is_float, needs_math);
                 emit_byref_scalar_copyback(sig, out);
-                out.push_str(&format!("    return {coerced};\n"));
+                if ctx.current_function_reachable {
+                    out.push_str(&format!(
+                        "    return ({}){{ .status = 0, .value = {coerced} }};\n",
+                        try_result_type(sig)
+                    ));
+                } else {
+                    out.push_str(&format!("    return {coerced};\n"));
+                }
             }
             Ok(())
         }
@@ -4727,7 +4896,7 @@ fn emit_statement(
             }
             let call_text = format!("{}({})", sig.c_name, arg_texts.join(", "));
             // A `try`-reachable procedure's call sites (see
-            // `collect_try_reachable_procedures`) decide purely from
+            // `collect_try_reachable_callables`) decide purely from
             // their own lexical context, no analysis needed here: inside
             // the owning `try`'s own `try_body`, a nonzero status `goto`s
             // its catch label; inside another reachable procedure's own
@@ -4742,11 +4911,19 @@ fn emit_statement(
             if ctx.try_reachable.contains(&fn_key(name)) {
                 let status = format!("bcc_st_{temp_counter}");
                 *temp_counter += 1;
-                out.push_str(&format!("    bcc_result_void {status} = {call_text};\n"));
+                out.push_str(&format!(
+                    "    {} {status} = {call_text};\n",
+                    try_result_type(sig)
+                ));
                 if let Some(label) = &ctx.current_try_catch {
                     out.push_str(&format!("    if ({status}.status) goto {label};\n"));
                 } else if ctx.current_function_reachable {
-                    out.push_str(&format!("    if ({status}.status) return {status};\n"));
+                    let caller = current_function
+                        .expect("reachable context has a callable signature");
+                    out.push_str(&format!(
+                        "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
+                        try_result_type(caller)
+                    ));
                 }
             } else {
                 out.push_str(&format!("    {call_text};\n"));
@@ -4957,7 +5134,12 @@ fn emit_statement(
             if ctx.current_function_reachable {
                 // No retry/after labels, no `bcc_raise_id` dispatch --
                 // see `emit_raise_in_procedure_block`'s own doc comment.
-                emit_raise_in_procedure_block(out, &code_text, statement.pos.line);
+                emit_raise_in_callable_block(
+                    out,
+                    &code_text,
+                    statement.pos.line,
+                    current_function.expect("reachable calls only occur inside a callable"),
+                );
             } else {
                 let id = ctx.raise_id;
                 ctx.raise_id += 1;
@@ -5714,6 +5896,76 @@ fn coerce_numeric(
 /// level (see the `Const` match arm's comment for why). Dispatches between
 /// numeric and string variables; anything else (an array target, a
 /// suffixless variable) is an error.
+/// Emits the status check for a value-returning function that is itself the
+/// complete right-hand side of an assignment. General expression placement
+/// (for example `x% = f%() + 1`) is deliberately left to #68's ANF pass;
+/// this direct form is enough to let #67 propagate scalar and string values
+/// through calls without ever treating a result struct as a C scalar.
+fn emit_checked_try_result_assignment(
+    target: &BasicIdent,
+    value: &Expr,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+    current_function: Option<&FnSig>,
+    ctx: &ErrorDataCtx<'_>,
+) -> Result<bool, String> {
+    let (name, args) = match value {
+        Expr::Call { name, args } => (name, args.as_slice()),
+        Expr::ArrayRef { name, indices } => (name, indices.as_slice()),
+        _ => return Ok(false),
+    };
+    let Some(sig) = functions.get(&fn_key(name)) else { return Ok(false); };
+    if !sig.try_result { return Ok(false); }
+
+    let call_args = call_args_with_defaults(sig, args, name)?;
+    let (prelude, mut arg_texts) =
+        render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
+    for line in prelude { out.push_str(&line); }
+    if sig.is_string {
+        let temp = format!("bt_s_{temp_counter}");
+        *temp_counter += 1;
+        out.push_str(&format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
+        arg_texts.push(temp.clone());
+    }
+    let status = format!("bcc_st_{temp_counter}");
+    *temp_counter += 1;
+    out.push_str(&format!(
+        "    {} {status} = {}({});\n",
+        try_result_type(sig), sig.c_name, arg_texts.join(", ")
+    ));
+    if let Some(label) = &ctx.current_try_catch {
+        out.push_str(&format!("    if ({status}.status) goto {label};\n"));
+    } else if ctx.current_function_reachable {
+        let caller = current_function.expect("reachable context has a callable signature");
+        out.push_str(&format!(
+            "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
+            try_result_type(caller)
+        ));
+    }
+    let target_suffix = effective_suffix(target.suffix);
+    if sig.is_string {
+        if target_suffix != TypeSuffix::String {
+            return Err(format!("`{name}` returns a string, not a number, so it can't be assigned to `{target}`"));
+        }
+        out.push_str(&format!(
+            "    snprintf({}, sizeof({}), \"%s\", {});\n",
+            c_var_name(target, TypeSuffix::String),
+            c_var_name(target, TypeSuffix::String),
+            format!("{status}.value")
+        ));
+    } else {
+        if target_suffix == TypeSuffix::String {
+            return Err(format!("`{name}` returns a number, not a string, so it can't be assigned to `{target}`"));
+        }
+        let (_, target_float) = numeric_c_type(target_suffix).expect("non-string suffix is numeric");
+        let value = coerce_numeric(format!("{status}.value"), sig.is_float, target_float, needs_math);
+        out.push_str(&format!("    {} = {value};\n", c_var_name(target, target_suffix)));
+    }
+    Ok(true)
+}
+
 fn emit_assignment(
     name: &BasicIdent,
     value: &Expr,
@@ -6141,6 +6393,12 @@ fn render_string_call(
              intrinsics like LEN/ASC/CHR$/MID$/LEFT$/RIGHT$ are, and are already handled above)"
         )
     })?;
+    if sig.try_result {
+        return Err(format!(
+            "`{name}` can raise through a C-target `try`, so it currently must be the complete \
+             right-hand side of an assignment; expression-call flattening is tracked by issue #68"
+        ));
+    }
     let call_args = call_args_with_defaults(sig, args, name)?;
     let (mut prelude, mut arg_texts) =
         render_call_args(&call_args, &sig.params, needs_math, temp_counter, functions)?;
@@ -6814,8 +7072,15 @@ fn render_numeric_call(
             arg_texts.push(coerce_numeric(text, is_float, param.is_float, needs_math));
         }
     }
+    if sig.try_result {
+        return Err(format!(
+            "`{name}` can raise through a C-target `try`, so it currently must be the complete \
+             right-hand side of an assignment; expression-call flattening is tracked by issue #68"
+        ));
+    }
+    let call = format!("{}({})", sig.c_name, arg_texts.join(", "));
     Ok((
-        format!("{}({})", sig.c_name, arg_texts.join(", ")),
+        call,
         sig.is_float,
     ))
 }

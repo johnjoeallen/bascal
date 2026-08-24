@@ -7427,6 +7427,10 @@ end
 "#;
         let c = compile_source_via_c_target(source);
         assert!(c.contains("if (!bcc_files[0]) {"), "{c}");
+        assert!(
+            c.contains("could not open %s for random access at numeric_print.bcl:5:1"),
+            "{c}"
+        );
         assert!(c.contains("exit(1);"), "{c}");
     }
 
@@ -7454,6 +7458,60 @@ end
         assert!(c.contains("bv_i_e = bcc_err;"), "{c}");
         assert!(c.contains("bv_i_l = bcc_erl;"), "{c}");
         assert!(c.contains("bcc_try_0_end: ;"), "{c}");
+    }
+
+    #[test]
+    fn c_target_try_catch_propagates_a_scalar_function_raise() {
+        // GitHub issue #67: a scalar function reached directly from a
+        // try-body assignment returns a status-plus-value wrapper, letting
+        // its ERROR escape the C call frame and enter the caller's catch.
+        // More complex expression placement is deliberately covered by
+        // issue #68's ANF flattening follow-up.
+        let source = r#"function boom%()
+    error 42
+    return 0
+end function
+
+try
+    value% = boom%()
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("typedef struct { int status; int value; } bcc_result_int;"), "{c}");
+        assert!(c.contains("bcc_result_int bf_i_boom(void)"), "{c}");
+        assert!(c.contains("return (bcc_result_int){ .status = bcc_err };"), "{c}");
+        assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains(".value;"), "{c}");
+    }
+
+    #[test]
+    fn c_target_try_catch_propagates_a_string_function_raise() {
+        // String functions are real BASCAL value-returning functions too:
+        // their value travels through bcc_out, exposed uniformly as the
+        // bcc_result_string value pointer alongside propagation status.
+        let source = r#"function boom$()
+    error 42
+    return "unreachable"
+end function
+
+try
+    value$ = boom$()
+catch code%, line%
+    print code%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_result_string bf_s_boom(char* bcc_out)"), "{c}");
+        assert!(c.contains("return (bcc_result_string){ .status = bcc_err, .value = bcc_out };"), "{c}");
+        assert!(c.contains("char bt_s_"), "{c}");
+        assert!(c.contains("bcc_result_string bcc_st_"), "{c}");
+        assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
+        assert!(c.contains("snprintf(bv_s_value, sizeof(bv_s_value), \"%s\", bcc_st_"), "{c}");
     }
 
     #[test]

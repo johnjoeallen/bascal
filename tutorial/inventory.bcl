@@ -527,6 +527,8 @@ do
                     // so it was never anything but a second spelling of
                     // this same close-and-exit action.
                     inv.close()
+                    color 7, 0
+                    cls
                     system
             end select
         catch err%, erl%
