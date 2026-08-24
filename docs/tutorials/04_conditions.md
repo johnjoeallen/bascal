@@ -10,17 +10,19 @@ BASCAL supports multi-line block `if` statements: `if cond then ... end if`, wit
 
 ### if / elseif / elseif / else
 
-    if points% >= 90 then
-        grade$ = "A"
-    elseif points% >= 80 then
-        grade$ = "B"        // points% = 85 lands here
-    elseif points% >= 70 then
-        grade$ = "C"
-    elseif points% >= 60 then
-        grade$ = "D"
-    else
-        grade$ = "F"
-    end if
+```bascal
+if points% >= 90 then
+    grade$ = "A"
+elseif points% >= 80 then
+    grade$ = "B"        // points% = 85 lands here
+elseif points% >= 70 then
+    grade$ = "C"
+elseif points% >= 60 then
+    grade$ = "D"
+else
+    grade$ = "F"
+end if
+```
 
 </div>
 
@@ -30,8 +32,10 @@ BASCAL supports multi-line block `if` statements: `if cond then ... end if`, wit
 
 `elseif` isn't available single-line, same as classic BASIC — it needs the block form above.
 
-    if temperature% > 30 then print "Hot day (single-line)"
-    if temperature% > 100 then print "Scorching" else print "Not scorching"
+```bascal
+if temperature% > 30 then print "Hot day (single-line)"
+if temperature% > 100 then print "Scorching" else print "Not scorching"
+```
 
 </div>
 

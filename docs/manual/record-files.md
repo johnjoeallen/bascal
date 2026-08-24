@@ -12,23 +12,29 @@ The `record` / `file` DSL is sugar over everything in [Random-Access File I/O](r
 
 Declares a fixed-layout record type:
 
-    record Student
-        id:    int16
-        name:  string(20)
-        score: float64
-    end record
+```bascal
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
+```
 
 Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
 
 ### file ... as ... = open(...)
 
-    file db as Student = open("students.dat")
+```bascal
+file db as Student = open("students.dat")
+```
 
 Transpiles to one `OPEN ... FOR RANDOM AS #n LEN = <width>` plus one matching `FIELD #n, ...` statement, binding one string buffer variable per field. File numbers are allocated automatically, starting at `#1`, in the order `file` declarations appear in the source.
 
 ### Whole-record write
 
-    db[1] = { id: 1, name: "Alice", score: 95.0 }
+```bascal
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+```
 
 Every declared field must be supplied exactly once. Transpiles to one `LSET` per field — numeric fields are packed first (`MKI$`/`MKL$`/`MKS$`/`MKD$`), string fields are assigned directly — followed by a single `PUT #n, 1`. `LSET` is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).
 
@@ -38,7 +44,9 @@ A record literal missing a declared field is a **transpile-time error** — this
 
 ### Partial-record write
 
-    db[2] = ?{ score: 61.5 }
+```bascal
+db[2] = ?{ score: 61.5 }
+```
 
 `?{ ... }` is `{ ... }`'s deliberately-incomplete counterpart: any subset of fields is allowed, and unlisted fields are left untouched on disk rather than erroring. `?` doesn't collide with anything — it isn't tokenized at all outside this position.
 
@@ -53,7 +61,9 @@ Note: `GET`ing a record number past the current end of a random-access file does
 
 ### Whole-record read
 
-    let s = db[i]
+```bascal
+let s = db[i]
+```
 
 Transpiles to `GET #n, i` followed by one unpacking assignment per field (`CVI`/`CVL`/`CVS`/`CVD` for numeric fields, taking no suffix at all on real MBASIC/BASCOM), each one written into a scalar named `<var><Field>` — e.g. `sId%`, `sName$`, `sScore#`. Later references to `s.id`, `s.name`, `s.score` in the source resolve directly to those scalars; no `Ident` named literally `s.id` is ever emitted.
 
@@ -65,7 +75,9 @@ Once `s` exists, `s.field = value` reassigns only the in-memory scalar (`s_field
 
 ### Partial-field update
 
-    db[i].field = value
+```bascal
+db[i].field = value
+```
 
 For a single field, on its own, this is the terse form: it transpiles to an implicit `GET #n, i`, a single `LSET` for just that field, then `PUT #n, i`.
 
@@ -73,24 +85,30 @@ This form does its own `GET`/`PUT` every time it appears, so chaining several of
 
 ### Writing a record variable back
 
-    let s = db[i]
-    s.name  = "Alicia"
-    s.score = 99.0
-    db[i] = s
+```bascal
+let s = db[i]
+s.name  = "Alicia"
+s.score = 99.0
+db[i] = s
+```
 
 `db[i] = s` — where `s` was bound by an earlier `let s = db[...]` — packs every field straight from `s`'s scalars and issues a single `PUT #n, i`, regardless of how many of `s`'s fields were reassigned first. Combined with the fact that `s.field = value` is pure in-memory assignment, this is the one-`GET`-one-`PUT` way to change multiple fields: exactly one `GET` (from the `let`) and one `PUT` (from the write-back) no matter how many fields in between were changed. `s` must have been read from a `file` of the same record type as the target; writing an `A` into a `file` of `B`s is a transpile-time error.
 
 ### file.close()
 
-    db.close()
+```bascal
+db.close()
+```
 
 Transpiles to `CLOSE #n`.
 
 ### downto
 
-    for i = 3 downto 1
-        ...
-    end for
+```bascal
+for i = 3 downto 1
+    ...
+end for
+```
 
 Sugar for `for i = 3 to 1 step -1`; ascending `for i = A to B` is unchanged.
 

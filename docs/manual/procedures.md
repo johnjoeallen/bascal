@@ -8,9 +8,11 @@ A procedure is a named subroutine that performs an action but returns no value. 
 
 ### Declaration
 
-    procedure name(param1%, param2$)
-        ' body
-    end procedure
+```bascal
+procedure name(param1%, param2$)
+    ' body
+end procedure
+```
 
 The procedure name has **no type suffix** — the absence of a suffix signals that there is no return value. Parameter names still carry their usual type suffixes.
 
@@ -18,66 +20,74 @@ Parameters may use the same trailing fixed defaults as functions, so `procedure 
 
 From `tutorial/14_procedures.bcl`:
 
-    procedure printSeparator()
-        PRINT "----------------------------"
-    end procedure
+```bascal
+procedure printSeparator()
+    PRINT "----------------------------"
+end procedure
 
-    ' label$ -- text shown before the score
-    ' score% -- value to print
-    procedure printScore(label$, score%)
-        PRINT label$ + ": " + STR$(score%)
-    end procedure
+' label$ -- text shown before the score
+' score% -- value to print
+procedure printScore(label$, score%)
+    PRINT label$ + ": " + STR$(score%)
+end procedure
 
-    ' name$  -- person's name
-    ' score% -- score to test against the passing threshold
-    procedure printIfPass(name$, score%)
-        if score% < 60 then
-            return          // early exit — nothing printed for failing scores
-        end if
-        PRINT name$ + " passed with " + STR$(score%)
-    end procedure
+' name$  -- person's name
+' score% -- score to test against the passing threshold
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return          // early exit — nothing printed for failing scores
+    end if
+    PRINT name$ + " passed with " + STR$(score%)
+end procedure
 
-    ' arr%   -- array to fill; byref because it's mutated in place
-    ' value% -- value written into every element
-    procedure fillRange(byref arr%(?), value%)
-        for i% = 0 to sizeof(arr%) - 1
-            arr%(i%) = value%
-        end for
-    end procedure
+' arr%   -- array to fill; byref because it's mutated in place
+' value% -- value written into every element
+procedure fillRange(byref arr%(?), value%)
+    for i% = 0 to sizeof(arr%) - 1
+        arr%(i%) = value%
+    end for
+end procedure
+```
 
 ### Calling Procedures
 
 Procedures are called as statements (not inside expressions):
 
-    printSeparator()
-    printScore("Alice", 91)
-    printIfPass("Bob", 54)
-    fillRange(data%, 99)
+```bascal
+printSeparator()
+printScore("Alice", 91)
+printIfPass("Bob", 54)
+fillRange(data%, 99)
+```
 
 ### Early Exit
 
 A bare `return` (no expression) exits a procedure immediately. Falling through to `end procedure` is equally valid — the transpiler emits an implicit `RETURN`.
 
-    ' name$  -- person's name
-    ' score% -- score to test against the passing threshold
-    procedure printIfPass(name$, score%)
-        if score% < 60 then
-            return      ' exit early; nothing is printed
-        end if
-        PRINT name$ + " passed with " + STR$(score%)
-    end procedure
+```bascal
+' name$  -- person's name
+' score% -- score to test against the passing threshold
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return      ' exit early; nothing is printed
+    end if
+    PRINT name$ + " passed with " + STR$(score%)
+end procedure
+```
 
 ### Array Parameters
 
 Array parameters use the same [byref / byval](arrays.md#byref-byval) rules and the same `(?, ?, ...)` rank declaration as functions. Pass the plain array name at the call site — no `()`:
 
-    ' arr%   -- array to fill; byref because it's mutated in place
-    ' value% -- value written into every element
-    procedure fillRange(byref arr%(?), value%)   ' arr%(?) -- 1-D array
-        ...
-    end procedure
+```bascal
+' arr%   -- array to fill; byref because it's mutated in place
+' value% -- value written into every element
+procedure fillRange(byref arr%(?), value%)   ' arr%(?) -- 1-D array
+    ...
+end procedure
 
-    fillRange(data%, 99)                         ' plain data%, no ()
+fillRange(data%, 99)                         ' plain data%, no ()
+```
 
 `fillRange` needs `byref` here because its entire job is to mutate the caller's array — without it, `fillRange` would fill its own private copy and the caller's array would be unchanged.
 
@@ -85,12 +95,14 @@ Array parameters use the same [byref / byval](arrays.md#byref-byval) rules and t
 
 Same rules as functions: variables in the body are local by default; use `global varname` to access a module-level variable.
 
-    globalCount% = 0
+```bascal
+globalCount% = 0
 
-    procedure increment()
-        global globalCount%
-        globalCount% = globalCount% + 1
-    end procedure
+procedure increment()
+    global globalCount%
+    globalCount% = globalCount% + 1
+end procedure
+```
 
 ### Restrictions
 

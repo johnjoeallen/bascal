@@ -4,10 +4,12 @@
 
 <div class="prose" markdown="1">
 
-    bcc input.bcl [-o dir/] [-L dir] [-l library]
-                  [--line-numbers | --sparse-line-numbers] [--clean | -c]
-                  [--binary | -b] [--run | -r] [--target | -t basic|C]
-                  [--strict-vars | --strict-vars-warn]
+```bascal
+bcc input.bcl [-o dir/] [-L dir] [-l library]
+              [--line-numbers | --sparse-line-numbers] [--clean | -c]
+              [--binary | -b] [--run | -r] [--target | -t basic|C]
+              [--strict-vars | --strict-vars-warn]
+```
 
 | Flag                    | Short | Description                                                                                                                                                                                                                                                                                                                                                                                                                     |
 |-------------------------|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -27,8 +29,10 @@
 
 Without `--target`, `bcc` picks a default from, first match wins: the `BASCAL_TARGET` environment variable; `~/.config/bascal/config` (a `target=C` line, simple `key=value` settings one per line, `#` comments allowed); `/etc/default/bascal` (same format, system-wide — the standard Debian `/etc/default/<pkgname>` convention, a plain file, not a directory); otherwise `basic`. An explicit `--target`/`-t` on the command line always overrides whatever this picks — handy for setting `C` as a working default without typing `--target C` on every call:
 
-    mkdir -p ~/.config/bascal
-    echo "target=C" > ~/.config/bascal/config
+```bascal
+mkdir -p ~/.config/bascal
+echo "target=C" > ~/.config/bascal/config
+```
 
 ### Backends
 
@@ -55,8 +59,10 @@ Without `--clean`, `bcc` skips re-transpiling if the output `.bas` file is newer
 
 Multiple `-L` flags are supported:
 
-    bcc tutorial/12_require.bcl -L tutorial/lib
-    bcc main.bcl -L libs/sort -L libs/string
+```bascal
+bcc tutorial/12_require.bcl -L tutorial/lib
+bcc main.bcl -L libs/sort -L libs/string
+```
 
 </div>
 

@@ -10,18 +10,20 @@
 
 ### Insertion sort, in place
 
-    function insertionSort%(byref arr%(?))
-        for i% = 1 to sizeof(arr%) - 1
-            key% = arr%(i%)
-            j%   = i% - 1
-            while j% >= 0 and arr%(j%) > key%
-                arr%(j% + 1) = arr%(j%)
-                j% = j% - 1
-            end while
-            arr%(j% + 1) = key%
-        end for
-        return 0
-    end function
+```bascal
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% >= 0 and arr%(j%) > key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function
+```
 
 </div>
 
@@ -29,12 +31,14 @@
 
 ### Calling it, and a 2-D array
 
-    dim data%(N%)
-    ' ... populate data%(0..N%-1) ...
-    dummy% = insertionSort%(data%)   ' arr% is byref, so data% comes back sorted
+```bascal
+dim data%(N%)
+' ... populate data%(0..N%-1) ...
+dummy% = insertionSort%(data%)   ' arr% is byref, so data% comes back sorted
 
-    dim identity%(2, 2)
-    identity%(1, 1) = 1
+dim identity%(2, 2)
+identity%(1, 1) = 1
+```
 
 </div>
 

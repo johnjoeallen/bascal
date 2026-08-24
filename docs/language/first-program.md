@@ -2,19 +2,21 @@
 
 BASCAL files use the `.bcl` extension. The `bcc` compiler turns one into classic BASIC or C. Start by describing the work in the order a reader expects to see it.
 
-    program hello
+```bascal
+program hello
 
-    declare name$
+declare name$
 
-    print "What is your name";
-    input name$
+print "What is your name";
+input name$
 
-    if name$ = "" then
-        print "Hello, stranger."
-    else
-        print "Hello, " + name$ + "."
-    end if
-    end
+if name$ = "" then
+    print "Hello, stranger."
+else
+    print "Hello, " + name$ + "."
+end if
+end
+```
 
 Save this as `hello.bcl` and run `bcc hello.bcl`. The default backend creates `hello.bas`; `bcc --target c hello.bcl` emits C instead. This example compiles with both backends. The C backend is almost complete, and the manual’s [Backends](../manual/command-line-reference.md#backends) section lists its remaining limits.
 

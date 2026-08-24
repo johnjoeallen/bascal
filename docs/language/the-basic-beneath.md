@@ -10,30 +10,34 @@ Generated output is not a disguise. You can inspect it and compile it with the t
 
 A block `if` and a `while` loop become the same branches and jumps you would write by hand in classic BASIC.
 
-    if n% > 3 then
-        print "big"
-    else
-        print "small"
-    end if
+```bascal
+if n% > 3 then
+    print "big"
+else
+    print "small"
+end if
 
-    while n% > 0
-        print n%
-        n% = n% - 1
-    end while
+while n% > 0
+    print n%
+    n% = n% - 1
+end while
+```
 
 transpiles to:
 
-    50 IF (n% > 3) = 0 THEN GOTO 80
-    60     PRINT "big"
-    70     GOTO 90
-    80     PRINT "small"
-    90 REM END IF
+```bascal
+50 IF (n% > 3) = 0 THEN GOTO 80
+60     PRINT "big"
+70     GOTO 90
+80     PRINT "small"
+90 REM END IF
 
-    100 IF (n% > 0) = 0 THEN GOTO 140
-    110     PRINT n%
-    120     n% = n% - 1
-    130     GOTO 100
-    140 REM END WHILE
+100 IF (n% > 0) = 0 THEN GOTO 140
+110     PRINT n%
+120     n% = n% - 1
+130     GOTO 100
+140 REM END WHILE
+```
 
 The `if` test jumps past the `then` block when false, and the `while` test is repeated at the top of the loop. The closing `REM` lines are comments that make the generated BASIC easier to read.
 

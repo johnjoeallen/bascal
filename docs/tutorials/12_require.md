@@ -10,11 +10,13 @@
 
 ### Requiring a library and calling its functions
 
-    require stats
+```bascal
+require stats
 
-    print "Mean:   "  + str$(mean!(scores%))
-    print "Max:    "  + str$(maximum%(scores%))
-    print "Min:    "  + str$(minimum%(scores%))
+print "Mean:   "  + str$(mean!(scores%))
+print "Max:    "  + str$(maximum%(scores%))
+print "Min:    "  + str$(minimum%(scores%))
+```
 
 </div>
 

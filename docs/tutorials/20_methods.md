@@ -10,11 +10,13 @@ A method is a typed operation attached to a scalar value. The suffix after `meth
 
 ### Declare and call a method
 
-    method$ shout$()
-        return self$.ucase() + "!"
-    end method
+```bascal
+method$ shout$()
+    return self$.ucase() + "!"
+end method
 
-    print "hello".shout()
+print "hello".shout()
+```
 
 The receiver is passed implicitly. The method is still a typed callable; it is not a runtime object or a dynamically dispatched class method.
 
@@ -24,11 +26,13 @@ The receiver is passed implicitly. The method is still a typed callable; it is n
 
 ### Chain only compatible results
 
-    name$ = "bascal"
-    print name$.left(3).ucase()
+```bascal
+name$ = "bascal"
+print name$.left(3).ucase()
 
-    score% = 125
-    print score%.clamp(0, 100)
+score% = 125
+print score%.clamp(0, 100)
+```
 
 `left` returns a string, so another string method can follow it. `clamp%` returns an integer, so its result can be assigned to an integer variable or passed where an integer is expected.
 
@@ -40,9 +44,11 @@ The receiver is passed implicitly. The method is still a typed callable; it is n
 
 The resolver checks the receiver suffix, method name, argument count, argument types, and result suffix before either backend emits code. These examples are rejected:
 
-    score%.shout$()       ' no shout$ method for an integer receiver
-    name$.clamp%(0, 10)  ' no clamp% method for a string receiver
-    price!.percent%(15)  ' wrong receiver type if percent% is declared
+```bascal
+score%.shout$()       ' no shout$ method for an integer receiver
+name$.clamp%(0, 10)  ' no clamp% method for a string receiver
+price!.percent%(15)  ' wrong receiver type if percent% is declared
+```
 
 The same checking applies to user methods, methods from `require`d libraries, and built-in scalar methods such as `left`, `len`, `abs`, and `sin`. An unknown method or a mismatched argument cannot silently become a different ordinary call.
 

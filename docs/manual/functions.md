@@ -6,10 +6,12 @@
 
 ### Declaration
 
-    function name%(param1%, param2%)
-        ' body
-        return expression
-    end function
+```bascal
+function name%(param1%, param2%)
+    ' body
+    return expression
+end function
+```
 
 The function name carries the return type suffix. Parameter names also carry type suffixes. Functions may have zero or more parameters.
 
@@ -17,17 +19,21 @@ The function name carries the return type suffix. Parameter names also carry typ
 
 BASCAL also accepts scalar extension-method declarations. The suffix on `method` selects the receiver type, while the suffix on the method name selects its result type. The receiver is available in the body as the matching implicit `self` variable:
 
-    method$ capitalize$()
-        return UCASE$(self$)
-    end method
+```bascal
+method$ capitalize$()
+    return UCASE$(self$)
+end method
 
-    method$ pad$(width%)
-        return self$
-    end method
+method$ pad$(width%)
+    return self$
+end method
+```
 
 Scalar calls require parentheses and may be chained; each result determines the receiver type of the next call:
 
-    result$ = name$.capitalize().pad(20)
+```bascal
+result$ = name$.capitalize().pad(20)
+```
 
 The parser and resolver check receiver types, duplicate declarations, reserved built-in names, and unknown methods. Both targets transpile methods to ordinary typed calls: BASIC uses global parameter/result variables and `GOSUB`, while C uses typed parameters and temporaries.
 
@@ -35,14 +41,16 @@ The parser and resolver check receiver types, duplicate declarations, reserved b
 
 A trailing scalar `byval` parameter may specify a default with `=`. Callers may then omit it; BASCAL supplies the value at the call site.
 
-    const defaultGreeting$ = "Hello"
+```bascal
+const defaultGreeting$ = "Hello"
 
-    function greet$(name$, greeting$ = defaultGreeting$)
-        return greeting$ + ", " + name$
-    end function
+function greet$(name$, greeting$ = defaultGreeting$)
+    return greeting$ + ", " + name$
+end function
 
-    print greet$("Ada")       ' Hello, Ada
-    print greet$("Ada", "Hi") ' Hi, Ada
+print greet$("Ada")       ' Hello, Ada
+print greet$("Ada", "Hi") ' Hi, Ada
+```
 
 Defaults must be literals (including a signed numeric literal) or a top-level `const` whose value is a literal. Once a parameter has a default, every following parameter must have one too. Array and `byref` parameters cannot have defaults.
 
@@ -50,53 +58,59 @@ A function or procedure can't be named the same as a real BASIC builtin — `fun
 
 From `tutorial/07_functions.bcl`:
 
-    ' a% -- first value to compare
-    ' b% -- second value to compare
-    function max%(a%, b%)
-        if a% > b% then
-            return a%
-        else
-            return b%
-        end if
-    end function
+```bascal
+' a% -- first value to compare
+' b% -- second value to compare
+function max%(a%, b%)
+    if a% > b% then
+        return a%
+    else
+        return b%
+    end if
+end function
 
-    ' a% -- first value to compare
-    ' b% -- second value to compare
-    function min%(a%, b%)
-        if a% < b% then
-            return a%
-        else
-            return b%
-        end if
-    end function
+' a% -- first value to compare
+' b% -- second value to compare
+function min%(a%, b%)
+    if a% < b% then
+        return a%
+    else
+        return b%
+    end if
+end function
 
-    ' value% -- number to constrain
-    ' lo%    -- lower bound, inclusive
-    ' hi%    -- upper bound, inclusive
-    function clamp%(value%, lo%, hi%)
-        ' Constrain value to [lo, hi].
-        return max%(lo%, min%(value%, hi%))
-    end function
+' value% -- number to constrain
+' lo%    -- lower bound, inclusive
+' hi%    -- upper bound, inclusive
+function clamp%(value%, lo%, hi%)
+    ' Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function
 
-    ' word$ -- string to title-case
-    function titleCase$(word$)
-        ' Capitalise first letter, lowercase remainder.
-        if LEN(word$) = 0 then
-            return ""
-        end if
-        return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
-    end function
+' word$ -- string to title-case
+function titleCase$(word$)
+    ' Capitalise first letter, lowercase remainder.
+    if LEN(word$) = 0 then
+        return ""
+    end if
+    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+end function
+```
 
 ### Calling Functions
 
-    PRINT "max(4, 9)      = " + STR$(max%(4, 9))         ' 9
-    PRINT "clamp(15,1,10) = " + STR$(clamp%(15, 1, 10))  ' 10
-    PRINT "clamp(-3,1,10) = " + STR$(clamp%(-3, 1, 10))  ' 1
-    PRINT titleCase$("bASCAL")                            ' Bascal
+```bascal
+PRINT "max(4, 9)      = " + STR$(max%(4, 9))         ' 9
+PRINT "clamp(15,1,10) = " + STR$(clamp%(15, 1, 10))  ' 10
+PRINT "clamp(-3,1,10) = " + STR$(clamp%(-3, 1, 10))  ' 1
+PRINT titleCase$("bASCAL")                            ' Bascal
+```
 
 Functions called only for their side effects (discarding the return value) are written as expression statements. The result variable is overwritten but not read:
 
-    dummy% = sortArray%(data%)
+```bascal
+dummy% = sortArray%(data%)
+```
 
 ### Return
 
@@ -106,31 +120,35 @@ Every function must contain at least one `return` statement. Implicit returns at
 
 Each call writes the shared `fnameResult0` variable, so assignments must be made before the next call overwrites it. BASCAL handles this automatically:
 
-    a$ = repeat$("x", 3)   ' repeatResult0$ = "xxx"  →  a$ = "xxx"
-    b$ = repeat$("y", 2)   ' repeatResult0$ = "yy"   →  b$ = "yy"
-    PRINT a$ + " " + b$    ' xxx yy
+```bascal
+a$ = repeat$("x", 3)   ' repeatResult0$ = "xxx"  →  a$ = "xxx"
+b$ = repeat$("y", 2)   ' repeatResult0$ = "yy"   →  b$ = "yy"
+PRINT a$ + " " + b$    ' xxx yy
+```
 
 ### Variable Scoping
 
 Variables inside a function body are **local by default**: the transpiler maps them to uniquely-generated BASIC names of the form `stemVar0%`, `stemVar1%`, etc. Two functions can each have a variable named `i%` with no conflict, and a local can never accidentally shadow a global that happens to share the naive prefix. Use `global varname` to access a module-level variable:
 
-    ' n% -- upper bound of the sum, inclusive
-    function sumTo%(n%)
-        acc% = 0                ' local to sumTo%
-        for i% = 1 to n%       ' local to sumTo%
-            acc% = acc% + i%
-        end for
-        return acc%
-    end function
+```bascal
+' n% -- upper bound of the sum, inclusive
+function sumTo%(n%)
+    acc% = 0                ' local to sumTo%
+    for i% = 1 to n%       ' local to sumTo%
+        acc% = acc% + i%
+    end for
+    return acc%
+end function
 
-    runningTotal% = 0
+runningTotal% = 0
 
-    ' x% -- amount to add to the running total
-    function addToTotal%(x%)
-        global runningTotal%    ' refers to the module-level variable
-        runningTotal% = runningTotal% + x%
-        return runningTotal%
-    end function
+' x% -- amount to add to the running total
+function addToTotal%(x%)
+    global runningTotal%    ' refers to the module-level variable
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function
+```
 
 `global` must name a real module-level variable, not one of the function's own parameters — `function f%(x%) : global x% : ...` is a transpile-time error, since the parameter always resolves first and the `global` declaration could never take effect.
 

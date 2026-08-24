@@ -12,7 +12,9 @@ BASCAL supports the classic statements below directly — `OPEN ... FOR RANDOM`,
 
 ### OPEN FOR RANDOM
 
-    open filename$ for random as #1 len = recLen%
+```bascal
+open filename$ for random as #1 len = recLen%
+```
 
 `len` sets the record size in bytes. Every record occupies exactly that many bytes on disk. Records are numbered from 1.
 
@@ -20,7 +22,9 @@ BASCAL supports the classic statements below directly — `OPEN ... FOR RANDOM`,
 
 Binds string variables to regions of the shared file buffer:
 
-    field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+```bascal
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+```
 
 The widths must sum to the record length. Only string variables may appear in a `FIELD` statement.
 
@@ -28,15 +32,19 @@ The widths must sum to the record length. Only string variables may appear in a 
 
 Copy data into a field-bound buffer variable, padded to the field width:
 
-    lset nameBuf$ = "Alice"    ' left-justified, padded with spaces on the right
-    rset idBuf$   = "42"       ' right-justified, padded with spaces on the left
+```bascal
+lset nameBuf$ = "Alice"    ' left-justified, padded with spaces on the right
+rset idBuf$   = "42"       ' right-justified, padded with spaces on the left
+```
 
 ### PUT and GET
 
 Write or read a numbered record:
 
-    put #1, recordNum%    ' write current buffer as record recordNum%
-    get #1, recordNum%    ' load record recordNum% into buffer variables
+```bascal
+put #1, recordNum%    ' write current buffer as record recordNum%
+get #1, recordNum%    ' load record recordNum% into buffer variables
+```
 
 Omitting the record number reads/writes at the current file position.
 
@@ -44,7 +52,9 @@ Omitting the record number reads/writes at the current file position.
 
 Move the file pointer to a given record position:
 
-    seek #1, recordNum%
+```bascal
+seek #1, recordNum%
+```
 
 ### Packing Helpers
 
@@ -59,23 +69,27 @@ Numeric values must be packed into strings before storing in a `FIELD` buffer, a
 
 Example — writing and reading a numeric score:
 
-    const rec_len% = 30
+```bascal
+const rec_len% = 30
 
-    open "students.dat" for random as #1 len = rec_len%
-    field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+open "students.dat" for random as #1 len = rec_len%
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 
-    lset idBuf$    = mki%(1)
-    lset nameBuf$  = "Alice"
-    lset scoreBuf$ = mkd#(95.0)
-    put #1, 1
+lset idBuf$    = mki%(1)
+lset nameBuf$  = "Alice"
+lset scoreBuf$ = mkd#(95.0)
+put #1, 1
 
-    get #1, 1
-    print rtrim$(nameBuf$) + ": " + str$(cvd#(scoreBuf$))
-    close #1
+get #1, 1
+print rtrim$(nameBuf$) + ": " + str$(cvd#(scoreBuf$))
+close #1
+```
 
 Output:
 
-    Alice: 95
+```bascal
+Alice: 95
+```
 
 </div>
 

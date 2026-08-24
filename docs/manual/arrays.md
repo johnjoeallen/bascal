@@ -6,15 +6,19 @@
 
 ### Declaration
 
-    DIM values%(100)    ' 101 elements: values%(0) .. values%(100)
-    DIM names$(50)
+```bascal
+DIM values%(100)    ' 101 elements: values%(0) .. values%(100)
+DIM names$(50)
+```
 
 Array indices run from 0 to *size* (i.e., *size*+1 elements in total). `OPTION BASE` is rejected outright — a transpile-time error under both targets — see [OPTION BASE](variables-and-constants.md#option-base) in Variables and Constants. Every array is indexed from base 0.
 
 ### Access
 
-    values%(0) = 42
-    PRINT values%(i%)
+```bascal
+values%(0) = 42
+PRINT values%(i%)
+```
 
 ### Passing Arrays to Functions
 
@@ -26,44 +30,48 @@ And separately: `byref` does **not** give the function a real reference to the c
 
 `insertionSort%` mutates the array in place, so its `arr%` parameter needs `byref`; `indexOf%` only reads it, so the unmarked (`byval`) default is correct as-is:
 
-    ' arr% -- array to sort; byref because it's mutated in place
-    function insertionSort%(byref arr%(?))
-        for i% = 1 to sizeof(arr%) - 1
-            key% = arr%(i%)
-            j%   = i% - 1
-            while j% >= 0 and arr%(j%) > key%
-                arr%(j% + 1) = arr%(j%)
-                j% = j% - 1
-            end while
-            arr%(j% + 1) = key%
-        end for
-        return 0
-    end function
+```bascal
+' arr% -- array to sort; byref because it's mutated in place
+function insertionSort%(byref arr%(?))
+    for i% = 1 to sizeof(arr%) - 1
+        key% = arr%(i%)
+        j%   = i% - 1
+        while j% >= 0 and arr%(j%) > key%
+            arr%(j% + 1) = arr%(j%)
+            j% = j% - 1
+        end while
+        arr%(j% + 1) = key%
+    end for
+    return 0
+end function
 
-    ' arr%    -- array to search; byval, since indexOf% only reads it
-    ' target% -- value to search for
-    function indexOf%(arr%(?), target%)
-        for i% = 0 to sizeof(arr%) - 1
-            if arr%(i%) = target% then
-                return i%
-            end if
-        end for
-        return -1
-    end function
+' arr%    -- array to search; byval, since indexOf% only reads it
+' target% -- value to search for
+function indexOf%(arr%(?), target%)
+    for i% = 0 to sizeof(arr%) - 1
+        if arr%(i%) = target% then
+            return i%
+        end if
+    end for
+    return -1
+end function
+```
 
 From `tutorial/08_arrays.bcl`:
 
-    CONST N% = 6
-    DIM data%(N%)
-    data%(0) = 64 : data%(1) = 25 : data%(2) = 12
-    data%(3) = 22 : data%(4) =  3 : data%(5) = 11
+```bascal
+CONST N% = 6
+DIM data%(N%)
+data%(0) = 64 : data%(1) = 25 : data%(2) = 12
+data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 
-    dummy% = insertionSort%(data%)   ' sorts in place -- arr% is byref
+dummy% = insertionSort%(data%)   ' sorts in place -- arr% is byref
 
-    idx% = indexOf%(data%, 22)
-    if idx% >= 0 then
-        PRINT "22 found at index " + STR$(idx%)
-    end if
+idx% = indexOf%(data%, 22)
+if idx% >= 0 then
+    PRINT "22 found at index " + STR$(idx%)
+end if
+```
 
 See [byref / byval](#byref-byval) for exactly what gets copied, and when.
 
@@ -71,8 +79,10 @@ See [byref / byval](#byref-byval) for exactly what gets copied, and when.
 
 Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:
 
-    function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
-    function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
+```bascal
+function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
+function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
+```
 
 - **`byval`** (the default — an unmarked parameter is `byval`): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.
 - **`byref`**: copied in before the call, same as `byval` — but also copied back out to the caller after the call returns.
@@ -83,13 +93,15 @@ This applies uniformly to both parameter kinds:
 
 - **Scalar parameters**: `byval` is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. `byref` turns a scalar parameter into a true output parameter:
 
-      ' n% -- value to increment; byref so the caller sees the result
-      procedure increment(byref n%)
-          n% = n% + 1
-      end procedure
+```bascal
+  ' n% -- value to increment; byref so the caller sees the result
+  procedure increment(byref n%)
+      n% = n% + 1
+  end procedure
 
-      x% = 5
-      increment(x%)   ' x% is now 6
+  x% = 5
+  increment(x%)   ' x% is now 6
+```
 
   A `byref` argument must be a plain variable — `increment(x% + 1)` is a transpile-time error, because there's nowhere for the result to be written back to.
 
@@ -109,19 +121,21 @@ There's also a structural reason it has to work this way, independent of the tar
 
 A 2-D (or higher) array parameter declares its rank the same way as 1-D — one `?` per dimension — and passes the same way, too: just the plain array name, no `()` and no count arguments of any kind. The transpiler already knows the real array's bounds (from its `DIM`, or — if it's itself a parameter being forwarded onward — from what *its* caller passed), and carries them alongside the array automatically. Nothing about that is visible in `.bcl` source; use [`sizeof()`](#sizeof) inside the function body wherever the bound is needed.
 
-    ' grid% -- 2-D array to sum
-    function sumGrid%(byref grid%(?, ?))
-        total% = 0
-        for r% = 0 to sizeof(grid%, 0) - 1
-            for c% = 0 to sizeof(grid%, 1) - 1
-                total% = total% + grid%(r%, c%)
-            end for
+```bascal
+' grid% -- 2-D array to sum
+function sumGrid%(byref grid%(?, ?))
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1
+        for c% = 0 to sizeof(grid%, 1) - 1
+            total% = total% + grid%(r%, c%)
         end for
-        return total%
-    end function
+    end for
+    return total%
+end function
 
-    dim g%(2, 2)
-    print sumGrid%(g%)
+dim g%(2, 2)
+print sumGrid%(g%)
+```
 
 There's no way to pass the wrong bounds by hand here — unlike a manually typed count argument, which could silently drift out of sync with the array's real `DIM` (say, `3, 3` for an array actually `dim`ed `(2, 2)`, reading one row and one column past the end of the real array at runtime), the transpiler reads `grid%`'s bounds directly from `g%`'s own `DIM` and there's no hand-typed number in the picture to get wrong.
 
@@ -138,30 +152,38 @@ An array parameter's storage is one shared, generated variable, reused by every 
 
 Normally this needs no attention at all. Write `?` for every axis, same as always; the transpiler works out a safe capacity itself by scanning every call site in the program and taking the largest resolved size. Below, `sumArr%`'s storage ends up sized for 10 elements even though its first call only ever passes it 3:
 
-    function sumArr%(arr%(?))
-        ' ...
-    end function
+```bascal
+function sumArr%(arr%(?))
+    ' ...
+end function
 
-    dim small%(2)
-    dim big%(9)
-    dummy% = sumArr%(small%)
-    dummy% = sumArr%(big%)
+dim small%(2)
+dim big%(9)
+dummy% = sumArr%(small%)
+dummy% = sumArr%(big%)
+```
 
 This works whenever every call site's array size is knowable at transpile time — a literal `DIM` bound, a `const`, or (when the array being passed is itself another function's array parameter, forwarded onward) that parameter's own already-resolved capacity. It genuinely can't work when a call site's array size is a real runtime value:
 
-    input n%
-    dim data%(n%)
-    dummy% = sumArr%(data%)   ' error: arr%'s capacity can't be inferred
+```bascal
+input n%
+dim data%(n%)
+dummy% = sumArr%(data%)   ' error: arr%'s capacity can't be inferred
+```
 
 There's no way to know at transpile time how big `data%` will turn out to be, so there's no safe number to give its shared storage automatically. Write an explicit capacity instead of `?` for that axis — a literal integer, chosen to comfortably cover every use:
 
-    function sumArr%(arr%(100))
-        ' ...
-    end function
+```bascal
+function sumArr%(arr%(100))
+    ' ...
+end function
+```
 
 Whichever way a capacity is decided — inferred or explicit — every call site still checks the array's *actual* size against it at runtime, right before copying in, and halts with a clear error if it doesn't fit:
 
-    IF sumarrArrDim00% > 100 THEN PRINT "runtime error: ..." : STOP
+```bascal
+IF sumarrArrDim00% > 100 THEN PRINT "runtime error: ..." : STOP
+```
 
 This is a backstop, not the primary defense — a call site whose size *is* a transpile-time constant and provably too big for its capacity is already rejected at transpile time, before generated BASIC exists to run at all. The runtime check exists for the one case that's genuinely unprovable ahead of time: a capacity chosen to comfortably cover today's inputs that a later, larger runtime value turns out to exceed.
 
@@ -169,35 +191,43 @@ This is a backstop, not the primary defense — a call site whose size *is* a tr
 
 `sizeof(name)` returns a `dim`ed array's real element count along an axis — one more than the bound written in its own `DIM`, matching real BASIC's inclusive-bound convention (`dim arr%(N)` holds `N + 1` elements, indices `0..=N`) — resolved entirely at transpile time; it never appears in generated BASIC, only whatever value or name it resolves to. For a 1-D array the axis is implicit:
 
-    dim data%(9)
-    print sizeof(data%)   ' 10 -- one more than the bound used in the dim
+```bascal
+dim data%(9)
+print sizeof(data%)   ' 10 -- one more than the bound used in the dim
+```
 
 For 2-D or higher, the axis is required — `sizeof(name, axis)`, zero-based in the same order as the array's own `DIM`:
 
-    dim grid%(2, 2)
-    print sizeof(grid%, 0)   ' 3 -- first DIM bound's element count
-    print sizeof(grid%, 1)   ' 3 -- second DIM bound's element count
+```bascal
+dim grid%(2, 2)
+print sizeof(grid%, 0)   ' 3 -- first DIM bound's element count
+print sizeof(grid%, 1)   ' 3 -- second DIM bound's element count
+```
 
 The axis must be a literal integer — it selects which frozen value to substitute at transpile time, not something computed at runtime.
 
 **What "resolved at transpile time" means in practice:** if the bound is a literal, `sizeof` just re-emits that literal. If it's an expression (a variable, a `const`, anything not a bare number), the transpiler captures its value into a hidden variable right at the `dim` site, and `sizeof` always reads that captured value — never the live variable, which might change afterward:
 
-    n% = 5
-    dim data%(n%)
-    n% = 99
-    print sizeof(data%)   ' 6 -- one more than the value dim actually used, not the later 99
+```bascal
+n% = 5
+dim data%(n%)
+n% = 99
+print sizeof(data%)   ' 6 -- one more than the value dim actually used, not the later 99
+```
 
 **Inside a function, `sizeof` on one of the function's own array parameters works differently** — there's no local `dim` to freeze a value from, since the array parameter's real size depends on whatever the caller happens to pass. There's no manually declared count parameter to read either: every array parameter's bounds are carried automatically, one hidden transpiler-generated variable per axis, set by the caller (from the real argument array's own resolved bounds) immediately before the call. `sizeof(grid%, 0)` inside `sumGrid%`'s own body just reads that hidden variable back:
 
-    function sumGrid%(byref grid%(?, ?))
-        total% = 0
-        for r% = 0 to sizeof(grid%, 0) - 1     ' reads the auto-passed row count
-            for c% = 0 to sizeof(grid%, 1) - 1 ' reads the auto-passed column count
-                total% = total% + grid%(r%, c%)
-            end for
+```bascal
+function sumGrid%(byref grid%(?, ?))
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1     ' reads the auto-passed row count
+        for c% = 0 to sizeof(grid%, 1) - 1 ' reads the auto-passed column count
+            total% = total% + grid%(r%, c%)
         end for
-        return total%
-    end function
+    end for
+    return total%
+end function
+```
 
 Nothing here is written by the `.bcl` author, at the call site or in the signature — the bound simply isn't a value you pass, it's a value you ask for with `sizeof()` wherever you need it.
 

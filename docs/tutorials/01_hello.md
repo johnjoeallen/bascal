@@ -10,11 +10,13 @@ Every BASCAL program ends with `end`. `print` writes a line to the screen. Three
 
 ### The whole program
 
-    print "Hello, World!"        // inline comment after a statement
-    print "Welcome to BASCAL."
-    ' print "This line is commented out."
+```bascal
+print "Hello, World!"        // inline comment after a statement
+print "Welcome to BASCAL."
+' print "This line is commented out."
 
-    end
+end
+```
 
 </div>
 

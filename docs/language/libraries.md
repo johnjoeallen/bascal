@@ -2,9 +2,11 @@
 
 Use `require` for code a program needs. A dotted path is a file lookup path, not a runtime namespace.
 
-    require com.bascal.sort.quickSort
+```bascal
+require com.bascal.sort.quickSort
 
-    quickSort(values%())
+quickSort(values%())
+```
 
 Put reusable code in a library file, then include that library with `require`. The compiler resolves the dotted path beneath its search paths: dots become directory separators, so this example identifies `com/bascal/sort/quickSort.bcl`. It then incorporates the specified library code into the generated program. This Java-inspired path mechanism keeps dependencies named and located consistently while producing one complete program.
 

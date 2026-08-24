@@ -12,10 +12,12 @@ Classic multi-program BASIC systems pass shared variables across a `CHAIN` with 
 
 `shared <name>` declares this file as the shared-variables file itself (mirroring a regular file's `program <name>`), and each `dim` below becomes one shared variable -- no statements, no functions.
 
-    shared state
+```bascal
+shared state
 
-    dim count%
-    dim label$
+dim count%
+dim label$
+```
 
 </div>
 
@@ -23,15 +25,17 @@ Classic multi-program BASIC systems pass shared variables across a `CHAIN` with 
 
 ### A program that references the shared file
 
-    program start shared state
+```bascal
+program start shared state
 
-    count% = count% + 1
-    count% = count% + 1
-    count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
 
-    ' In a real multi-program application: CHAIN "show" -- the compiled
-    ' program name, not the .bas source (CHAIN "show.bas" tries to run the
-    ' source file itself; verified against real BASCOM 2.00 under dosbox-x)
+' In a real multi-program application: CHAIN "show" -- the compiled
+' program name, not the .bas source (CHAIN "show.bas" tries to run the
+' source file itself; verified against real BASCOM 2.00 under dosbox-x)
+```
 
 </div>
 

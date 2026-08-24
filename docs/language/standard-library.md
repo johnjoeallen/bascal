@@ -10,8 +10,10 @@ BASCAL recognises the standard functions supplied by classic BASIC. They need no
 
 `sqr`, `abs`, `int`, `fix`, `sgn`, `sin`, `cos`, `tan`, `atn`, `log`, and `exp` are available without setup. Angles for `sin`, `cos`, `tan`, and `atn` use radians; `log` is the natural logarithm. `rnd` produces random values, and `randomize` seeds it.
 
-    print sin(0.0); " "; cos(0.0)
-    print sqr(81); " "; abs(-7); " "; cint(3.7)
+```bascal
+print sin(0.0); " "; cos(0.0)
+print sqr(81); " "; abs(-7); " "; cint(3.7)
+```
 
 ### Files, records, and the environment
 
@@ -27,15 +29,17 @@ The BASIC target supports the complete list above. The C backend is almost compl
 
 Real MBASIC/BASCOM does not provide every useful text function. BASCAL supplies `ltrim$`, `rtrim$`, `ucase$`, and `lcase$` as scalar methods (see [Declare and call a method](functions-and-procedures.md#declare-and-call-a-method)), and `error$` as an ordinary function -- each needs its own `require` line:
 
-    require com.bascal.stdlib.ltrim
-    require com.bascal.stdlib.rtrim
-    require com.bascal.stdlib.ucase
-    require com.bascal.stdlib.lcase
-    require com.bascal.stdlib.error
+```bascal
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
 
-    declare s$
-    s$ = "  hello world  "
-    print s$.ltrim().rtrim().ucase()
+declare s$
+s$ = "  hello world  "
+print s$.ltrim().rtrim().ucase()
+```
 
 A method is really just a function with its receiver as an implicit first parameter, so the ordinary call form still works too -- `ucase$(rtrim$(ltrim$(s$)))` resolves to the exact same declarations as the chained call above.
 

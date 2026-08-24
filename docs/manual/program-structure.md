@@ -23,8 +23,10 @@ Beyond the header, a `.bcl` file consists of optional sections in the following 
 
 ### Program Declaration
 
-    program name
-    program name shared sharedname
+```bascal
+program name
+program name shared sharedname
+```
 
 Identifies the file as a runnable program, by name, and optionally links it to a shared-variables file (see [Shared COMMON](shared-common.md#shared-common)). Required in every file that isn't a `library` or `shared` file — in particular, the file passed to `bcc` on the command line must have one.
 
@@ -32,16 +34,20 @@ A `program` declaration is **not allowed** in library modules loaded via `requir
 
 ### Library Declaration
 
-    library name
+```bascal
+library name
+```
 
 Identifies the file as a library module — the only kind of file `require`/`import` may load. From `com/bascal/stdlib/ucase.bcl`:
 
-    // Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
-    // a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
-    library ucase
+```bascal
+// Upper-cases s$. Not a real MBASIC/BASCOM 2.00 builtin -- verified against
+// a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships its own.
+library ucase
 
-    function ucase$(s$)
-        ...
+function ucase$(s$)
+    ...
+```
 
 The name isn't validated against anything (unlike `shared name`, which must match the resolved shared file's filename) — it's documentation, not a lookup key. A `library` declaration is **not allowed** in the root file `bcc` was invoked on, and a file `require`d/`import`ed without one is a transpile-time error (see [Module Conventions](dependencies-require-and-import.md#module-conventions)).
 
@@ -51,27 +57,31 @@ Source files are UTF-8 text. Line endings may be LF or CRLF. Statements are sepa
 
 There is no line-continuation syntax -- no trailing `_`, `\`, or similar. The lexer turns every physical newline into a real token, so any single expression (and the tokens making up a statement header, like a `case` value list) must fit on one physical line; a newline there ends the statement/expression rather than continuing it. This applies everywhere, not just to obviously statement-like constructs -- a function call's argument list, for example, can't have a newline before its closing `)` either:
 
-    ' Not allowed -- the newline after "1," ends the statement early:
-    result% = someFunction(1,
-                            2)
+```bascal
+' Not allowed -- the newline after "1," ends the statement early:
+result% = someFunction(1,
+                        2)
 
-    ' Allowed -- keep the whole call on one line:
-    result% = someFunction(1, 2)
+' Allowed -- keep the whole call on one line:
+result% = someFunction(1, 2)
+```
 
 The same rule governs statement headers like `if`/`then`: the condition and the `then` that closes it must be on one physical line. A newline can only appear *after* `then`, where it's meaningful -- it's what selects the block form of `if` over the single-line form (see [IF / ELSEIF / ELSE / END IF](control-flow.md#if-elseif-else-end-if)):
 
-    ' Not allowed -- the newline before "then" ends the statement early:
-    if score% >= 60
-        then PRINT "Pass"
+```bascal
+' Not allowed -- the newline before "then" ends the statement early:
+if score% >= 60
+    then PRINT "Pass"
 
-    ' Not allowed -- same problem, condition split across lines:
-    if score% >= 60 and
-        attendance% >= 80 then PRINT "Pass"
+' Not allowed -- same problem, condition split across lines:
+if score% >= 60 and
+    attendance% >= 80 then PRINT "Pass"
 
-    ' Allowed -- condition and "then" on one line, body starts after the newline:
-    if score% >= 60 and attendance% >= 80 then
-        PRINT "Pass"
-    end if
+' Allowed -- condition and "then" on one line, body starts after the newline:
+if score% >= 60 and attendance% >= 80 then
+    PRINT "Pass"
+end if
+```
 
 </div>
 

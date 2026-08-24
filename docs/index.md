@@ -18,15 +18,17 @@ In practice that means: write the pane on the right below, not the pane on the l
 
 <span class="tag">Classic MBASIC — avoid</span>
 
-    100 IF grade% >= 90 THEN GOTO 140
-    110 IF grade% >= 80 THEN GOTO 160
-    120 IF grade% >= 70 THEN GOTO 180
-    130 GOTO 200
-    140 PRINT "A" : GOTO 210
-    160 PRINT "B" : GOTO 210
-    180 PRINT "C" : GOTO 210
-    200 PRINT "F"
-    210 REM ...
+```bascal
+100 IF grade% >= 90 THEN GOTO 140
+110 IF grade% >= 80 THEN GOTO 160
+120 IF grade% >= 70 THEN GOTO 180
+130 GOTO 200
+140 PRINT "A" : GOTO 210
+160 PRINT "B" : GOTO 210
+180 PRINT "C" : GOTO 210
+200 PRINT "F"
+210 REM ...
+```
 
 </div>
 
@@ -34,16 +36,18 @@ In practice that means: write the pane on the right below, not the pane on the l
 
 <span class="tag">BASCAL — write this instead</span>
 
-    select case grade%
-    case is >= 90
-        print "A"
-    case is >= 80
-        print "B"
-    case is >= 70
-        print "C"
-    case else
-        print "F"
-    end select
+```bascal
+select case grade%
+case is >= 90
+    print "A"
+case is >= 80
+    print "B"
+case is >= 70
+    print "C"
+case else
+    print "F"
+end select
+```
 
 </div>
 
@@ -67,17 +71,19 @@ Both panes run on the same classic BASIC. `bcc` transpiles the pane on the right
 
 Multiline `if`/`elseif`/`else`/`end if`, `for`/`end for`, `while`/`wend`, and pre-/post-check `do`/`loop` — no hand-numbered `GOTO`.
 
-    if score% >= 90 then
-        grade$ = "A"
-    elseif score% >= 80 then
-        grade$ = "B"
-    else
-        grade$ = "C"
-    end if
+```bascal
+if score% >= 90 then
+    grade$ = "A"
+elseif score% >= 80 then
+    grade$ = "B"
+else
+    grade$ = "C"
+end if
 
-    for i% = 1 to 5
-        print i%
-    end for
+for i% = 1 to 5
+    print i%
+end for
+```
 
 </div>
 
@@ -87,14 +93,16 @@ Multiline `if`/`elseif`/`else`/`end if`, `for`/`end for`, `while`/`wend`, and pr
 
 `function` returns a typed value with explicit `return`; `procedure` is the side-effect-only equivalent. Both transpile to global parameter/result variables plus `GOSUB`.
 
-    function max%(a%, b%)
-        if a% > b% then
-            return a%
-        end if
-        return b%
-    end function
+```bascal
+function max%(a%, b%)
+    if a% > b% then
+        return a%
+    end if
+    return b%
+end function
 
-    top% = max%(4, 9)          ' 9
+top% = max%(4, 9)          ' 9
+```
 
 </div>
 
@@ -104,10 +112,12 @@ Multiline `if`/`elseif`/`else`/`end if`, `for`/`end for`, `while`/`wend`, and pr
 
 `require`/`import` pull in another `.bcl` file's functions by dotted path — dots become directory separators, resolved against `-L` search paths.
 
-    require stats
+```bascal
+require stats
 
-    print mean!(scores%())
-    print maximum%(scores%())
+print mean!(scores%())
+print maximum%(scores%())
+```
 
 </div>
 
@@ -117,14 +127,16 @@ Multiline `if`/`elseif`/`else`/`end if`, `for`/`end for`, `while`/`wend`, and pr
 
 Single values, comma lists, `low to high` ranges, and `is <op> value` comparisons — one dispatch chain instead of a hand-wired `IF`/`GOTO` ladder.
 
-    select case grade%
-    case 90 to 100
-        print "A"
-    case is >= 80
-        print "B"
-    case else
-        print "C"
-    end select
+```bascal
+select case grade%
+case 90 to 100
+    print "A"
+case is >= 80
+    print "B"
+case else
+    print "C"
+end select
+```
 
 </div>
 
@@ -136,17 +148,21 @@ A shared file's variables are emitted identically into every `program ... shared
 
 `state.bcl` (shared file) — `shared <name>` plus `dim`; every variable listed is COMMON by default, no separate keyword needed:
 
-    shared state
+```bascal
+shared state
 
-    dim count%
-    dim label$
+dim count%
+dim label$
+```
 
 `show.bcl`:
 
-    program show shared state
+```bascal
+program show shared state
 
-    print "Count: " + STR$(count%)
-    end
+print "Count: " + STR$(count%)
+end
+```
 
 </div>
 
@@ -156,14 +172,16 @@ A shared file's variables are emitted identically into every `program ... shared
 
 Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }` generate the matching `OPEN`/`FIELD`/`LSET`/`PUT` calls — see the full comparison below.
 
-    record Student
-        id:    int16
-        name:  string(20)
-        score: float64
-    end record
+```bascal
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
 
-    file db as Student = open("students.dat")
-    db[1] = { id: 1, name: "Alice", score: 95.0 }
+file db as Student = open("students.dat")
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+```
 
 </div>
 
@@ -173,14 +191,16 @@ Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }`
 
 `+=`/`-=`/`*=`/`/=` desugar to `var = var op expr`; `TRUE`/`FALSE` are sugar for BASIC's own `-1`/`0`; a single `dim` can declare several names at once.
 
-    dim total%, found%
+```bascal
+dim total%, found%
 
-    total% += 10
-    found% = TRUE
+total% += 10
+found% = TRUE
 
-    if found% = TRUE then
-        print total%
-    end if
+if found% = TRUE then
+    print total%
+end if
+```
 
 </div>
 
@@ -190,15 +210,17 @@ Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }`
 
 Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number — everything else stays plain, hand-readable BASIC.
 
-    ' BASCAL source
-    ' Track the high score for the level
-    if score% > highScore% then highScore% = score%
+```bascal
+' BASCAL source
+' Track the high score for the level
+if score% > highScore% then highScore% = score%
 
-    ' generated .bas
-    ' Track the high score for the level
-    IF (score% > highScore%) = 0 THEN GOTO 10
-        highScore% = score%
-    10 REM END IF
+' generated .bas
+' Track the high score for the level
+IF (score% > highScore%) = 0 THEN GOTO 10
+    highScore% = score%
+10 REM END IF
+```
 
 </div>
 
@@ -224,22 +246,24 @@ Six clauses mean six branch targets and a fall-through target to keep numbered a
 
 <span class="tag">Generated BASIC</span>
 
-    score% = 85
-    IF score% = 100 THEN GOTO 250
-    IF score% >= 90 AND score% <= 99 THEN GOTO 270
-    IF score% >= 80 AND score% <= 89 THEN GOTO 290
-    IF score% >= 70 AND score% <= 79 THEN GOTO 310
-    IF score% >= 60 AND score% <= 69 THEN GOTO 330
-    IF score% >= 0 THEN GOTO 350
-    GOTO 370
-    250 PRINT "Perfect!" : GOTO 380
-    270 PRINT "A -- Excellent" : GOTO 380
-    290 PRINT "B -- Good" : GOTO 380
-    310 PRINT "C -- Satisfactory" : GOTO 380
-    330 PRINT "D -- Passing" : GOTO 380
-    350 PRINT "F -- Fail" : GOTO 380
-    370 PRINT "Invalid score"
-    380 REM ...
+```bascal
+score% = 85
+IF score% = 100 THEN GOTO 250
+IF score% >= 90 AND score% <= 99 THEN GOTO 270
+IF score% >= 80 AND score% <= 89 THEN GOTO 290
+IF score% >= 70 AND score% <= 79 THEN GOTO 310
+IF score% >= 60 AND score% <= 69 THEN GOTO 330
+IF score% >= 0 THEN GOTO 350
+GOTO 370
+250 PRINT "Perfect!" : GOTO 380
+270 PRINT "A -- Excellent" : GOTO 380
+290 PRINT "B -- Good" : GOTO 380
+310 PRINT "C -- Satisfactory" : GOTO 380
+330 PRINT "D -- Passing" : GOTO 380
+350 PRINT "F -- Fail" : GOTO 380
+370 PRINT "Invalid score"
+380 REM ...
+```
 
 </div>
 
@@ -247,22 +271,24 @@ Six clauses mean six branch targets and a fall-through target to keep numbered a
 
 <span class="tag">BASCAL</span>
 
-    select case score%
-    case 100
-        print "Perfect!"
-    case 90 to 99
-        print "A -- Excellent"
-    case 80 to 89
-        print "B -- Good"
-    case 70 to 79
-        print "C -- Satisfactory"
-    case 60 to 69
-        print "D -- Passing"
-    case is >= 0
-        print "F -- Fail"
-    case else
-        print "Invalid score"
-    end select
+```bascal
+select case score%
+case 100
+    print "Perfect!"
+case 90 to 99
+    print "A -- Excellent"
+case 80 to 89
+    print "B -- Good"
+case 70 to 79
+    print "C -- Satisfactory"
+case 60 to 69
+    print "D -- Passing"
+case is >= 0
+    print "F -- Fail"
+case else
+    print "Invalid score"
+end select
+```
 
 </div>
 
@@ -284,12 +310,14 @@ A pre-check loop is one `IF ... THEN GOTO` guarding the top and one `GOTO` loopi
 
 <span class="tag">Generated BASIC</span>
 
-    p% = 1
-    400 IF p% >= 100 THEN GOTO 440
-        PRINT "  "; p%
-        p% = p% * 2
-        GOTO 400
-    440 REM ...
+```bascal
+p% = 1
+400 IF p% >= 100 THEN GOTO 440
+    PRINT "  "; p%
+    p% = p% * 2
+    GOTO 400
+440 REM ...
+```
 
 </div>
 
@@ -297,11 +325,13 @@ A pre-check loop is one `IF ... THEN GOTO` guarding the top and one `GOTO` loopi
 
 <span class="tag">BASCAL</span>
 
-    p% = 1
-    while p% < 100
-        print "  "; p%
-        p% = p% * 2
-    wend
+```bascal
+p% = 1
+while p% < 100
+    print "  "; p%
+    p% = p% * 2
+wend
+```
 
 </div>
 
@@ -323,19 +353,21 @@ Same pre-check shape as `WHILE`, spelled two ways depending on whether the loop-
 
 <span class="tag">Generated BASIC</span>
 
-    k% = 1
-    670 IF k% > 3 THEN GOTO 700
-        PRINT "  "; k%
-        k% = k% + 1
-        GOTO 670
-    700 REM ...
+```bascal
+k% = 1
+670 IF k% > 3 THEN GOTO 700
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 670
+700 REM ...
 
-    k% = 1
-    740 IF k% <= 3 THEN GOTO 770
-        PRINT "  "; k%
-        k% = k% + 1
-        GOTO 740
-    770 REM ...
+k% = 1
+740 IF k% <= 3 THEN GOTO 770
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 740
+770 REM ...
+```
 
 </div>
 
@@ -343,17 +375,19 @@ Same pre-check shape as `WHILE`, spelled two ways depending on whether the loop-
 
 <span class="tag">BASCAL</span>
 
-    k% = 1
-    do while k% <= 3
-        print "  "; k%
-        k% = k% + 1
-    end do
+```bascal
+k% = 1
+do while k% <= 3
+    print "  "; k%
+    k% = k% + 1
+end do
 
-    k% = 1
-    do until k% > 3
-        print "  "; k%
-        k% = k% + 1
-    end do
+k% = 1
+do until k% > 3
+    print "  "; k%
+    k% = k% + 1
+end do
+```
 
 </div>
 
@@ -373,24 +407,26 @@ Classic BASIC has no `REPEAT`/`UNTIL` — a loop that must run its body at least
 
 <span class="tag">Generated BASIC</span>
 
-    ' body always runs at least once
-    k% = 99
-    810 PRINT "  "; k%
-        k% = k% + 1
-        IF k% <= 3 THEN GOTO 810
+```bascal
+' body always runs at least once
+k% = 99
+810 PRINT "  "; k%
+    k% = k% + 1
+    IF k% <= 3 THEN GOTO 810
 
-    j% = 1
-    910 PRINT "  "; j%
-        j% = j% + 1
-        IF j% <= 3 THEN GOTO 910
+j% = 1
+910 PRINT "  "; j%
+    j% = j% + 1
+    IF j% <= 3 THEN GOTO 910
 
-    ' exit from the middle, at k% = 3
-    k% = 1
-    1010 IF k% = 3 THEN GOTO 1070
-        PRINT "  "; k%
-        k% = k% + 1
-        GOTO 1010
-    1070 REM ...
+' exit from the middle, at k% = 3
+k% = 1
+1010 IF k% = 3 THEN GOTO 1070
+    PRINT "  "; k%
+    k% = k% + 1
+    GOTO 1010
+1070 REM ...
+```
 
 </div>
 
@@ -398,28 +434,30 @@ Classic BASIC has no `REPEAT`/`UNTIL` — a loop that must run its body at least
 
 <span class="tag">BASCAL</span>
 
-    ' body always runs at least once
-    k% = 99
-    do
-        print "  "; k%
-        k% = k% + 1
-    loop until k% > 3
+```bascal
+' body always runs at least once
+k% = 99
+do
+    print "  "; k%
+    k% = k% + 1
+loop until k% > 3
 
-    j% = 1
-    do
-        print "  "; j%
-        j% = j% + 1
-    loop while j% <= 3
+j% = 1
+do
+    print "  "; j%
+    j% = j% + 1
+loop while j% <= 3
 
-    ' exit from the middle, at k% = 3
-    k% = 1
-    do
-        if k% = 3 then
-            exit
-        end if
-        print "  "; k%
-        k% = k% + 1
-    end do
+' exit from the middle, at k% = 3
+k% = 1
+do
+    if k% = 3 then
+        exit
+    end if
+    print "  "; k%
+    k% = k% + 1
+end do
+```
 
 </div>
 
@@ -439,12 +477,14 @@ Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there'
 
 <span class="tag">Generated BASIC</span>
 
-    IF (ptr% >= 0) = 0 THEN GOTO 10
-    ispositive_n_0% = scores%(ptr%)
-    GOSUB 20
-    IF (ispositive_result_0% > 0) = 0 THEN GOTO 10
-        PRINT "safe to read"
-    10 REM END IF
+```bascal
+IF (ptr% >= 0) = 0 THEN GOTO 10
+ispositive_n_0% = scores%(ptr%)
+GOSUB 20
+IF (ispositive_result_0% > 0) = 0 THEN GOTO 10
+    PRINT "safe to read"
+10 REM END IF
+```
 
 </div>
 
@@ -452,9 +492,11 @@ Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there'
 
 <span class="tag">BASCAL</span>
 
-    if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
-        print "safe to read"
-    end if
+```bascal
+if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
+    print "safe to read"
+end if
+```
 
 </div>
 
@@ -476,18 +518,20 @@ Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by
 
 <span class="tag">Generated BASIC</span>
 
-    ON ERROR GOTO 10
-    OPEN filename$ FOR INPUT AS #1
-    CLOSE #1
-    ON ERROR GOTO 0
-    GOTO 30
+```bascal
+ON ERROR GOTO 10
+OPEN filename$ FOR INPUT AS #1
+CLOSE #1
+ON ERROR GOTO 0
+GOTO 30
 
-    10 IF (err = 53) = 0 THEN GOTO 20
-        PRINT "file not found"
-        RESUME NEXT
-    20 REM END IF
+10 IF (err = 53) = 0 THEN GOTO 20
+    PRINT "file not found"
+    RESUME NEXT
+20 REM END IF
 
-    30 END
+30 END
+```
 
 </div>
 
@@ -495,20 +539,22 @@ Raw BASIC/BASCOM GOTO/GOSUB targets are line numbers you have to keep in sync by
 
 <span class="tag">BASCAL</span>
 
-    on error goto handleErr
-    open fileName$ for input as #1
-    close #1
-    on error goto 0
-    goto done
+```bascal
+on error goto handleErr
+open fileName$ for input as #1
+close #1
+on error goto 0
+goto done
 
-    handleErr:
-    if err = 53 then
-        print "file not found"
-        resume next
-    end if
+handleErr:
+if err = 53 then
+    print "file not found"
+    resume next
+end if
 
-    done:
-    end
+done:
+end
+```
 
 </div>
 
@@ -530,12 +576,14 @@ Every loop above transpiles to a guarded `GOTO` chain with a local label. `for`/
 
 <span class="tag">BASCAL</span>
 
-    for i% = 1 to 20
-        if i% > 4 then
-            print i%
-            exit
-        end if
-    end for
+```bascal
+for i% = 1 to 20
+    if i% > 4 then
+        print i%
+        exit
+    end if
+end for
+```
 
 </div>
 
@@ -543,12 +591,14 @@ Every loop above transpiles to a guarded `GOTO` chain with a local label. `for`/
 
 <span class="tag">Generated BASIC</span>
 
-    FOR i% = 1 TO 20
-        IF (i% > 4) = 0 THEN GOTO 10
-            PRINT i%
-            EXIT FOR
-    10 REM END IF
-    NEXT i%
+```bascal
+FOR i% = 1 TO 20
+    IF (i% > 4) = 0 THEN GOTO 10
+        PRINT i%
+        EXIT FOR
+10 REM END IF
+NEXT i%
+```
 
 </div>
 
@@ -578,11 +628,13 @@ BASCAL sums the field widths for you and generates the matching `FIELD` binding 
 
 <span class="tag">Generated BASIC</span>
 
-    const rec_len%  = 30   ' 2+20+8, by hand
-    const db_file$  = "students.dat"
+```bascal
+const rec_len%  = 30   ' 2+20+8, by hand
+const db_file$  = "students.dat"
 
-    open db_file$ for random as #1 len = rec_len%
-    field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+open db_file$ for random as #1 len = rec_len%
+field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
+```
 
 </div>
 
@@ -590,13 +642,15 @@ BASCAL sums the field widths for you and generates the matching `FIELD` binding 
 
 <span class="tag">BASCAL</span>
 
-    record Student
-        id:    int16
-        name:  string(20)
-        score: float64
-    end record
+```bascal
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+end record
 
-    file db as Student = open("students.dat")
+file db as Student = open("students.dat")
+```
 
 </div>
 
@@ -616,10 +670,12 @@ Every declared field is required in the record literal — a field forgotten by 
 
 <span class="tag">Generated BASIC</span>
 
-    lset idBuf$    = mki%(1)
-    lset nameBuf$  = "Alice"
-    lset scoreBuf$ = mkd#(95.0)
-    put #1, 1
+```bascal
+lset idBuf$    = mki%(1)
+lset nameBuf$  = "Alice"
+lset scoreBuf$ = mkd#(95.0)
+put #1, 1
+```
 
 </div>
 
@@ -627,7 +683,9 @@ Every declared field is required in the record literal — a field forgotten by 
 
 <span class="tag">BASCAL</span>
 
-    db[1] = { id: 1, name: "Alice", score: 95.0 }
+```bascal
+db[1] = { id: 1, name: "Alice", score: 95.0 }
+```
 
 </div>
 
@@ -647,13 +705,15 @@ Every declared field is required in the record literal — a field forgotten by 
 
 <span class="tag">Generated BASIC</span>
 
-    for i% = num_recs% to 1 step -1
-        get #1, i%
-        id%    = cvi%(idBuf$)
-        score# = cvd#(scoreBuf$)
-        print "[" + str$(id%) + "] " _
-            + rtrim$(nameBuf$) + " -- " + str$(score#)
-    end for
+```bascal
+for i% = num_recs% to 1 step -1
+    get #1, i%
+    id%    = cvi%(idBuf$)
+    score# = cvd#(scoreBuf$)
+    print "[" + str$(id%) + "] " _
+        + rtrim$(nameBuf$) + " -- " + str$(score#)
+end for
+```
 
 </div>
 
@@ -661,10 +721,12 @@ Every declared field is required in the record literal — a field forgotten by 
 
 <span class="tag">BASCAL</span>
 
-    for i = 3 downto 1
-        let s = db[i]
-        print "[" + s.id + "] " + s.name + " -- " + s.score
-    end for
+```bascal
+for i = 3 downto 1
+    let s = db[i]
+    print "[" + s.id + "] " + s.name + " -- " + s.score
+end for
+```
 
 </div>
 
@@ -684,9 +746,11 @@ Bob just scraped a pass on re-mark — only the score changes, but `PUT` always 
 
 <span class="tag">Generated BASIC</span>
 
-    get #1, 2
-    lset scoreBuf$ = mkd#(61.5)
-    put #1, 2
+```bascal
+get #1, 2
+lset scoreBuf$ = mkd#(61.5)
+put #1, 2
+```
 
 </div>
 
@@ -694,7 +758,9 @@ Bob just scraped a pass on re-mark — only the score changes, but `PUT` always 
 
 <span class="tag">BASCAL</span>
 
-    db[2].score = 61.5
+```bascal
+db[2].score = 61.5
+```
 
 </div>
 
@@ -714,10 +780,12 @@ Alice got married and re-sat the exam. Whether the fields you *didn't* list need
 
 <span class="tag">Generated BASIC</span>
 
-    get #1, 1
-    lset nameBuf$  = "Alice Smith"
-    lset scoreBuf$ = mkd#(91.0)
-    put #1, 1
+```bascal
+get #1, 1
+lset nameBuf$  = "Alice Smith"
+lset scoreBuf$ = mkd#(91.0)
+put #1, 1
+```
 
 </div>
 
@@ -725,7 +793,9 @@ Alice got married and re-sat the exam. Whether the fields you *didn't* list need
 
 <span class="tag">BASCAL</span>
 
-    db[1] = ?{ name: "Alice Smith", score: 91.0 }
+```bascal
+db[1] = ?{ name: "Alice Smith", score: 91.0 }
+```
 
 </div>
 
@@ -753,10 +823,12 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 
 <span class="tag">Generated BASIC</span>
 
-    get #1, 3
-    lset nameBuf$  = "Carol Jones"
-    lset scoreBuf$ = mkd#(88.0)
-    put #1, 3
+```bascal
+get #1, 3
+lset nameBuf$  = "Carol Jones"
+lset scoreBuf$ = mkd#(88.0)
+put #1, 3
+```
 
 </div>
 
@@ -764,10 +836,12 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 
 <span class="tag">BASCAL</span>
 
-    let carol = db[3]
-    carol.name  = "Carol Jones"
-    carol.score = 88.0
-    db[3] = carol
+```bascal
+let carol = db[3]
+carol.name  = "Carol Jones"
+carol.score = 88.0
+db[3] = carol
+```
 
 </div>
 
@@ -785,7 +859,9 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 
 <span class="tag">Generated BASIC</span>
 
-    close #1
+```bascal
+close #1
+```
 
 </div>
 
@@ -793,7 +869,9 @@ Same one-`GET`-one-`PUT` shape as `?{ ... }` above, spelled as read/mutate/write
 
 <span class="tag">BASCAL</span>
 
-    db.close()
+```bascal
+db.close()
+```
 
 </div>
 

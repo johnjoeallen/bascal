@@ -10,16 +10,18 @@
 
 ### Requiring the functions you need, then calling them like any other
 
-    require com.bascal.stdlib.ltrim
-    require com.bascal.stdlib.rtrim
-    require com.bascal.stdlib.ucase
-    require com.bascal.stdlib.lcase
-    require com.bascal.stdlib.error
+```bascal
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
 
-    print "[" + ltrim$("   padded left") + "]"
-    print "[" + rtrim$("padded right   ") + "]"
-    print ucase$("shout this")
-    print lcase$("QUIET THIS DOWN")
+print "[" + ltrim$("   padded left") + "]"
+print "[" + rtrim$("padded right   ") + "]"
+print ucase$("shout this")
+print lcase$("QUIET THIS DOWN")
+```
 
 </div>
 
@@ -29,9 +31,11 @@
 
 Pair it with ERR inside an ON ERROR GOTO handler in real code -- see [tutorial 17](17_labels_and_error_handling.md).
 
-    print error$(53)   ' File not found
-    print error$(11)   ' Division by zero
-    print error$(9999) ' Error  9999 (falls through to STR$)
+```bascal
+print error$(53)   ' File not found
+print error$(11)   ' Division by zero
+print error$(9999) ' Error  9999 (falls through to STR$)
+```
 
 </div>
 

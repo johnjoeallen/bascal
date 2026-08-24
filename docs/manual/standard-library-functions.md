@@ -21,19 +21,23 @@ BASCAL recognises the classic BASIC functions below without a declaration or `re
 
 ### MID\$ assignment
 
-    MID$(target$, start[, len]) = replacement$
+```bascal
+MID$(target$, start[, len]) = replacement$
+```
 
 A same-length splice into `target$`, which keeps its original length — not a value-producing expression, and not the same thing as `MID$(...)` used to *read* a substring. `target$` must be a plain string variable or string array element (not, for example, a record/file DSL field or a nested call).
 
 Despite compiling cleanly, this statement isn't reliable across every real MBASIC/BASCOM dialect BASCAL targets, so it's transpiled into a call to `com.bascal.stdlib.midAssign` — an ordinary BASCAL function, auto-added to the program (like any other `com.bascal.stdlib` symbol; see [String and error-message functions](#string-and-error-message-functions) below) the moment `MID$` assignment syntax appears anywhere, with no `require` line needed since nothing in your own source ever spells the function's name:
 
-    function midAssign$(target$, start%, len%, value$)
-        t$ = value$
-        if LEN(t$) > len% then
-            t$ = LEFT$(t$, len%)
-        end if
-        return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
-    end function
+```bascal
+function midAssign$(target$, start%, len%, value$)
+    t$ = value$
+    if LEN(t$) > len% then
+        t$ = LEFT$(t$, len%)
+    end if
+    return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
+end function
+```
 
 Every call site becomes an ordinary function call (`GOSUB`, in the generated BASIC) into that one shared body — the same call/return machinery every other BASCAL function goes through, so there's no separate inline-vs-shared-subroutine cutoff to reason about.
 
@@ -43,11 +47,13 @@ The two-argument form (`MID$(target$, start) = replacement$`) behaves as if `len
 
 `LTRIM$`, `RTRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00 builtins, and `ERROR$` compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`), as an ordinary `require`-able library under `com.bascal.stdlib` — the same mechanism as any other BASCAL library (see [Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md#dependencies-require-and-import)), not something auto-injected by call-site detection. `ltrim$`/`rtrim$`/`ucase$`/`lcase$` are declared as scalar methods, so `s$.ltrim()` and `ltrim$(s$)` both call the identical declaration (see [Built-in methods](../language/functions-and-procedures.md#built-in-methods)); `error$` stays an ordinary function, since an error code is a lookup key rather than a value the call naturally operates on:
 
-    require com.bascal.stdlib.ltrim
-    require com.bascal.stdlib.rtrim
-    require com.bascal.stdlib.ucase
-    require com.bascal.stdlib.lcase
-    require com.bascal.stdlib.error
+```bascal
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+```
 
 | Symbol                    | Signature       | Behavior                                                                                                                                                                                    |
 |---------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

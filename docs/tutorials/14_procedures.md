@@ -10,12 +10,14 @@ A procedure is declared `procedure name(...) ... end procedure` — the name car
 
 ### Early return from a procedure
 
-    procedure printIfPass(name$, score%)
-        if score% < 60 then
-            return          // early exit -- nothing printed for failing scores
-        end if
-        print name$ + " passed with " + str$(score%)
-    end procedure
+```bascal
+procedure printIfPass(name$, score%)
+    if score% < 60 then
+        return          // early exit -- nothing printed for failing scores
+    end if
+    print name$ + " passed with " + str$(score%)
+end procedure
+```
 
 </div>
 

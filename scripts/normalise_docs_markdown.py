@@ -6,6 +6,38 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def fence_indented_code(text: str) -> str:
+    """Turn Pandoc's indented preformatted blocks into typed BASCAL fences."""
+    lines = text.splitlines(keepends=True)
+    result: list[str] = []
+    index = 0
+    in_fence = False
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith("```"):
+            in_fence = not in_fence
+            result.append(line)
+            index += 1
+            continue
+        if not in_fence and line.startswith("    "):
+            block: list[str] = []
+            while index < len(lines):
+                candidate = lines[index]
+                if candidate.startswith("    "):
+                    block.append(candidate[4:])
+                    index += 1
+                elif candidate.strip() == "" and index + 1 < len(lines) and lines[index + 1].startswith("    "):
+                    block.append(candidate)
+                    index += 1
+                else:
+                    break
+            result.extend(["```bascal\n", *block, "```\n"])
+            continue
+        result.append(line)
+        index += 1
+    return "".join(result)
+
+
 def main() -> None:
     for page in (ROOT / "docs").rglob("*.md"):
         if "theme" in page.parts:
@@ -26,8 +58,9 @@ def main() -> None:
             text = re.sub(
                 r'(<span class="chapter-number">.*?</span>)(<span class="chapter-title">.*?</span><span class="chapter-summary">.*?</span>)',
                 r'\1<span>\2</span>',
-                text,
-            )
+            text,
+        )
+        text = fence_indented_code(text)
         page.write_text(text)
 
 

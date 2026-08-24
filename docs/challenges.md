@@ -16,10 +16,12 @@ BASCAL functions transpile to a shared global storage slot per parameter plus a 
 
 Underneath that asymmetry sat a real, silent bug. `ident()`, the function that resolves a source identifier to its generated storage name, checked a function's own parameters *before* it checked `global` declarations:
 
-    function f(arr%, count%)
-        global arr%   ' silently does nothing -- arr% already means the parameter
-        ...
-    end function
+```bascal
+function f(arr%, count%)
+    global arr%   ' silently does nothing -- arr% already means the parameter
+    ...
+end function
+```
 
 The `global arr%` line transpiled without error and did nothing at all — `arr%` inside `f` always meant the parameter, and the parameter check simply won every time.
 
@@ -33,8 +35,10 @@ The `global arr%` line transpiled without error and did nothing at all — `arr%
 
 `global` shadowing a parameter name became a transpile-time error, full stop — no silent behavior either way. Separately, every parameter (scalar or array) gained a `byref`/`byval` qualifier, borrowed deliberately from Visual Basic/QBasic's vocabulary, with `byval` as the default:
 
-    function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
-    function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
+```bascal
+function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
+function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
+```
 
 `byval` copies in only; `byref` copies in and back out. Applied uniformly, this made a `byref` scalar a genuinely new capability — a true output parameter, something MBASIC/BASCOM never had outside a shared global — not just a fix to the array case.
 
@@ -98,9 +102,11 @@ A second question followed once the first was settled: did the *call site* also 
 
 ### Decision
 
-    function insertionSort%(byref arr%(?))
-    function sumGrid%(byref grid%(?, ?))
-    function sumCube%(byref cube%(?, ?, ?))
+```bascal
+function insertionSort%(byref arr%(?))
+function sumGrid%(byref grid%(?, ?))
+function sumCube%(byref cube%(?, ?, ?))
+```
 
 A scalar parameter stays a bare name; an array parameter states its rank directly, one `?` per axis, cross-checked against body usage the same way Challenge 3 already checked it against the caller. This was a real breaking change on the declaration side — a parameter indexed as an array with no declared rank became a transpile-time error — but purely additive at the call site.
 
@@ -146,18 +152,20 @@ The reversal is documented in the commit that made it, in terms worth quoting di
 
 ### Decision
 
-    function sumGrid%(byref grid%(?, ?))
-        total% = 0
-        for r% = 0 to sizeof(grid%, 0) - 1
-            for c% = 0 to sizeof(grid%, 1) - 1
-                total% = total% + grid%(r%, c%)
-            end for
+```bascal
+function sumGrid%(byref grid%(?, ?))
+    total% = 0
+    for r% = 0 to sizeof(grid%, 0) - 1
+        for c% = 0 to sizeof(grid%, 1) - 1
+            total% = total% + grid%(r%, c%)
         end for
-        return total%
-    end function
+    end for
+    return total%
+end function
 
-    dim g%(2, 2)
-    print sumGrid%(g%)
+dim g%(2, 2)
+print sumGrid%(g%)
+```
 
 `sizeof()` still exists and reads exactly the same either way — the only thing that changed is who writes the size expression at the call site: nobody. The freeze-at-`DIM`-time machinery that makes `sizeof()` possible, previously gated to fire only for arrays it was directly called on, became unconditional, since any array might now get passed into a function anywhere in the program.
 
@@ -190,7 +198,9 @@ A parameter's storage is `DIM`ed exactly once, at the top of the generated progr
 
 A capacity provably too small for a resolvable call site is a transpile-time error. Every call site, resolved or not, also carries an unconditional runtime check as a backstop:
 
-    IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
+```bascal
+IF sumarr_arr_dim0_0% > 100 THEN PRINT "runtime error: ..." : STOP
+```
 
 The `100` here isn't a fixed constant baked into the transpiler — it's this specific parameter's own resolved capacity, substituted in literally by whichever of the two branches above decided it (the largest inferred call-site size, or the explicit number the author wrote). A different array parameter with a different capacity gets the same check shape with its own number in place of `100`; the check itself is harmless dead code on a call the transpiler already proved safe, and the only defense at all for the one case that's genuinely unprovable ahead of time.
 

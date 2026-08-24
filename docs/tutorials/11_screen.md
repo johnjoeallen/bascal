@@ -10,13 +10,15 @@
 
 ### A title banner
 
-    cls
+```bascal
+cls
 
-    color 14, 1           // bright yellow text on blue background
-    locate 1, 30
-    print "  BASCAL DEMO  "
+color 14, 1           // bright yellow text on blue background
+locate 1, 30
+print "  BASCAL DEMO  "
 
-    color 7, 0            // restore white on black
+color 7, 0            // restore white on black
+```
 
 </div>
 

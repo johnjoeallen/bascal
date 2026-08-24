@@ -10,12 +10,14 @@ Every name ends with a type suffix that tells the runtime how to store the value
 
 ### Constants and assignment
 
-    const max_score%  = 100
-    const app_name$   = "Grade Checker"
-    const tax_rate!   = 0.2
+```bascal
+const max_score%  = 100
+const app_name$   = "Grade Checker"
+const tax_rate!   = 0.2
 
-    playerName$  = "Alice"
-    score%       = 87
+playerName$  = "Alice"
+score%       = 87
+```
 
 </div>
 
@@ -25,10 +27,12 @@ Every name ends with a type suffix that tells the runtime how to store the value
 
 No str\$() needed just to print a number next to a label.
 
-    print "Score:       "; score%; "/ "; max_score%
+```bascal
+print "Score:       "; score%; "/ "; max_score%
 
-    // str$() is still available when you need to build a string value
-    let greeting$ = "Score is " + str$(score%)
+// str$() is still available when you need to build a string value
+let greeting$ = "Score is " + str$(score%)
+```
 
 </div>
 

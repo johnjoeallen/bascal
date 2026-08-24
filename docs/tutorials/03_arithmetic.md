@@ -10,9 +10,11 @@ Arithmetic (`+ - * / \ MOD ^`), comparison (`= <> < <= > >=`, returning `-1`/`0`
 
 ### Integer division vs MOD
 
-    print a%; "/ "; b%; "="; a% / b%      // 17 / 5 = 3  (truncates)
-    print a%; "\ "; b%; "="; a% \ b%     // 17 \ 5 = 3  (integer quotient)
-    print a%; "MOD "; b%; "="; a% mod b%  // 17 MOD 5 = 2  (remainder)
+```bascal
+print a%; "/ "; b%; "="; a% / b%      // 17 / 5 = 3  (truncates)
+print a%; "\ "; b%; "="; a% \ b%     // 17 \ 5 = 3  (integer quotient)
+print a%; "MOD "; b%; "="; a% mod b%  // 17 MOD 5 = 2  (remainder)
+```
 
 </div>
 
@@ -22,11 +24,13 @@ Arithmetic (`+ - * / \ MOD ^`), comparison (`= <> < <= > >=`, returning `-1`/`0`
 
 This is why BASCAL's own if/while transpilation inverts conditions with (cond) = 0 instead of NOT — see [If Transpilation](../manual/generated-basic-shape.md#if-transpilation) in the manual.
 
-    x% = 7
-    if x% > 0 and x% < 10 then
-        print x%; "is in 1..9"
-    end if
-    print 6 xor 3; " (expect 5 -- 110 XOR 011 = 101)"
+```bascal
+x% = 7
+if x% > 0 and x% < 10 then
+    print x%; "is in 1..9"
+end if
+print 6 xor 3; " (expect 5 -- 110 XOR 011 = 101)"
+```
 
 </div>
 

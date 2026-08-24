@@ -8,40 +8,44 @@
 
 From `tutorial/09_data.bcl`:
 
-    CONST NUM_CAPITALS% = 5
+```bascal
+CONST NUM_CAPITALS% = 5
 
-    DIM country$(NUM_CAPITALS%)
-    DIM capital$(NUM_CAPITALS%)
+DIM country$(NUM_CAPITALS%)
+DIM capital$(NUM_CAPITALS%)
 
-    for i% = 1 to NUM_CAPITALS%
-        READ country$(i%), capital$(i%)
-    end for
+for i% = 1 to NUM_CAPITALS%
+    READ country$(i%), capital$(i%)
+end for
 
-    PRINT "Country         Capital"
-    PRINT "--------------- ---------------"
-    for i% = 1 to NUM_CAPITALS%
-        PRINT country$(i%) + "        " + capital$(i%)
-    end for
+PRINT "Country         Capital"
+PRINT "--------------- ---------------"
+for i% = 1 to NUM_CAPITALS%
+    PRINT country$(i%) + "        " + capital$(i%)
+end for
 
-    ' RESTORE rewinds to the first DATA element
-    RESTORE
-    READ firstCountry$, firstCapital$
-    PRINT "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
+' RESTORE rewinds to the first DATA element
+RESTORE
+READ firstCountry$, firstCapital$
+PRINT "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
 
-    END
+END
 
-    DATA "France",  "Paris"
-    DATA "Germany", "Berlin"
-    DATA "Japan",   "Tokyo"
-    DATA "Brazil",  "Brasilia"
-    DATA "Egypt",   "Cairo"
+DATA "France",  "Paris"
+DATA "Germany", "Berlin"
+DATA "Japan",   "Tokyo"
+DATA "Brazil",  "Brasilia"
+DATA "Egypt",   "Cairo"
+```
 
 ### RESTORE
 
 Resets the `DATA` pointer to the beginning (or to a specific label).
 
-    RESTORE           ' rewind to the first DATA
-    RESTORE fromHere  ' rewind to the DATA right after the `fromHere:` label
+```bascal
+RESTORE           ' rewind to the first DATA
+RESTORE fromHere  ' rewind to the DATA right after the `fromHere:` label
+```
 
 </div>
 

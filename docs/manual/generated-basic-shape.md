@@ -10,8 +10,10 @@ Understanding how BASCAL transpiles its constructs helps when reading generated 
 
 Every generated file begins with:
 
-    ' BASCAL generated BASIC
-    ' Functions are transpiled to global variables, labels, and GOSUB
+```bascal
+' BASCAL generated BASIC
+' Functions are transpiled to global variables, labels, and GOSUB
+```
 
 ### COMMON Block
 
@@ -25,123 +27,149 @@ Pass `--sparse-line-numbers` to fall back to the old behavior, numbering only li
 
 ### If Transpilation
 
-    if x% > 0 then
-        PRINT "positive"
-    end if
+```bascal
+if x% > 0 then
+    PRINT "positive"
+end if
+```
 
 Becomes:
 
-    IF (x% > 0) = 0 THEN GOTO 10
-        PRINT "positive"
-    10 REM END IF
+```bascal
+IF (x% > 0) = 0 THEN GOTO 10
+    PRINT "positive"
+10 REM END IF
+```
 
 The condition is inverted with `= 0` rather than `NOT` to avoid bitwise semantics (see [Operators](operators-and-expressions.md#operators-and-expressions)).
 
 ### While Transpilation
 
-    p% = 1
-    while p% < 100
-        PRINT STR$(p%)
-        p% = p% * 2
-    end while
+```bascal
+p% = 1
+while p% < 100
+    PRINT STR$(p%)
+    p% = p% * 2
+end while
+```
 
 Becomes:
 
-    p% = 1
-    10 IF (p% < 100) = 0 THEN GOTO 20
-        PRINT STR$(p%)
-        p% = p% * 2
-        GOTO 10
-    20 REM END WHILE
+```bascal
+p% = 1
+10 IF (p% < 100) = 0 THEN GOTO 20
+    PRINT STR$(p%)
+    p% = p% * 2
+    GOTO 10
+20 REM END WHILE
+```
 
 ### Do Transpilation
 
-    do while k% <= 3
-        PRINT STR$(k%)
-        k% = k% + 1
-    end do
+```bascal
+do while k% <= 3
+    PRINT STR$(k%)
+    k% = k% + 1
+end do
+```
 
 Becomes:
 
-    10 IF (k% <= 3) = 0 THEN GOTO 20
-        PRINT STR$(k%)
-        k% = k% + 1
-        GOTO 10
-    20 REM END DO
+```bascal
+10 IF (k% <= 3) = 0 THEN GOTO 20
+    PRINT STR$(k%)
+    k% = k% + 1
+    GOTO 10
+20 REM END DO
+```
 
 The post-check form skips the leading guard entirely, since the body always runs at least once:
 
-    do
-        PRINT STR$(k%)
-        k% = k% + 1
-    loop until k% > 3
+```bascal
+do
+    PRINT STR$(k%)
+    k% = k% + 1
+loop until k% > 3
+```
 
 Becomes:
 
-    10 PRINT STR$(k%)
-        k% = k% + 1
-        IF (k% > 3) = 0 THEN GOTO 10
-    20 REM END DO
+```bascal
+10 PRINT STR$(k%)
+    k% = k% + 1
+    IF (k% > 3) = 0 THEN GOTO 10
+20 REM END DO
+```
 
 ### For Transpilation
 
 BASCAL emits native `FOR` / `NEXT`, which BASIC runtimes handle efficiently. The BASCAL `end for` (or bare `end`) is stripped; the BASIC `NEXT` is emitted by the transpiler:
 
-    FOR i% = 1 TO 5
-        PRINT STR$(i%) + "^2 = " + STR$(i% * i%)
-    NEXT i%
+```bascal
+FOR i% = 1 TO 5
+    PRINT STR$(i%) + "^2 = " + STR$(i% * i%)
+NEXT i%
+```
 
 ### Function Transpilation
 
-    ' value% -- number to constrain
-    ' lo%    -- lower bound, inclusive
-    ' hi%    -- upper bound, inclusive
-    function clamp%(value%, lo%, hi%)
-        return max%(lo%, min%(value%, hi%))
-    end function
+```bascal
+' value% -- number to constrain
+' lo%    -- lower bound, inclusive
+' hi%    -- upper bound, inclusive
+function clamp%(value%, lo%, hi%)
+    return max%(lo%, min%(value%, hi%))
+end function
 
-    result% = clamp%(15, 1, 10)
+result% = clamp%(15, 1, 10)
+```
 
 The calls to `max%` and `min%` inside `clamp%` are also transpiled to GOSUBs. The outermost call produces:
 
-    clamp_value% = 15
-    clamp_lo%    = 1
-    clamp_hi%    = 10
-    GOSUB 100
-    result% = clamp_result%
-    ...
-    END
+```bascal
+clamp_value% = 15
+clamp_lo%    = 1
+clamp_hi%    = 10
+GOSUB 100
+result% = clamp_result%
+...
+END
 
-    ' function clamp%(value%, lo%, hi%)
-    100 ' (transpiled body — calls max% and min% via GOSUB)
-        clamp_result% = ...
-        RETURN
-    ' end function clamp%
+' function clamp%(value%, lo%, hi%)
+100 ' (transpiled body — calls max% and min% via GOSUB)
+    clamp_result% = ...
+    RETURN
+' end function clamp%
+```
 
 ### Procedure Transpilation
 
 Procedures follow the same GOSUB pattern as functions but have no result variable:
 
-    ' label$ -- text shown before the score
-    ' score% -- value to print
-    procedure printScore(label$, score%)
-        PRINT label$ + ": " + STR$(score%)
-    end procedure
+```bascal
+' label$ -- text shown before the score
+' score% -- value to print
+procedure printScore(label$, score%)
+    PRINT label$ + ": " + STR$(score%)
+end procedure
 
-    printScore("Alice", 91)
+printScore("Alice", 91)
+```
 
 Transpiles to:
 
-    printscore_label$ = "Alice"
-    printscore_score% = 91
-    GOSUB 200
-    ...
-    END
+```bascal
+printscore_label$ = "Alice"
+printscore_score% = 91
+GOSUB 200
+...
+END
 
-    ' procedure printScore(label$, score%)
-    200 PRINT (printscore_label$ + ": ") + STR$(printscore_score%)
-        RETURN
-    ' end procedure printScore
+' procedure printScore(label$, score%)
+200 PRINT (printscore_label$ + ": ") + STR$(printscore_score%)
+    RETURN
+' end procedure printScore
+```
 
 There is no `printscore_result` variable. A bare `return` inside a procedure transpiles to plain `RETURN`.
 

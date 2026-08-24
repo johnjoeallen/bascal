@@ -10,9 +10,11 @@ Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there'
 
 ### Guard clause -- the second operand is never evaluated when the first fails
 
-    if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
-        print "safe to read"
-    end if
+```bascal
+if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then
+    print "safe to read"
+end if
+```
 
 </div>
 
@@ -20,10 +22,12 @@ Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there'
 
 ### Retry loop -- both stopping conditions live in the loop's own until-clause
 
-    do until succeeded% <> 0 || attempts% >= maxAttempts%
-        attempts% = attempts% + 1
-        ...
-    end do
+```bascal
+do until succeeded% <> 0 || attempts% >= maxAttempts%
+    attempts% = attempts% + 1
+    ...
+end do
+```
 
 </div>
 

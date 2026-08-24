@@ -16,24 +16,26 @@ Verified against real BASCOM 2.00 under dosbox-x: it compiles clean and links, b
 
 bcc computes the field widths and record `LEN` from the `record` declaration and emits the `FIELD` statement itself. Named field access (`p.flag`, `p.qty`, ...) and whole-record reads via `inv[n]` replace fhb's manual `GET`/`PUT` plus `LSET`/`RSET` and `MKI$`/`MKS$`/`CVI$`/`CVS$` packing.
 
-    record Part
-        flag:    string(1)
-        desc:    string(30)
-        qty:     int16
-        reorder: int16
-        price:   float32
-    end record
+```bascal
+record Part
+    flag:    string(1)
+    desc:    string(30)
+    qty:     int16
+    reorder: int16
+    price:   float32
+end record
 
-    file inv as Part = open("inven.dat")
+file inv as Part = open("inven.dat")
 
-    function isEmpty%(flag$)
-        return asc(flag$) = 255
-    end function
+function isEmpty%(flag$)
+    return asc(flag$) = 255
+end function
 
-    let p = inv[part%]
-    if isEmpty%(p.flag) then
-        ' ...
-    end if
+let p = inv[part%]
+if isEmpty%(p.flag) then
+    ' ...
+end if
+```
 
 </div>
 
@@ -43,12 +45,14 @@ bcc computes the field widths and record `LEN` from the `record` declaration and
 
 One call gathers all four editable fields for a part; no shared globals, no separate "output" convention to remember.
 
-    procedure gatherPartDetails(partNum%, byref desc$, byref qty%, byref reorder%, byref price!)
-        input "      Description"; desc$
-        input "Quantity in stock"; qty%
-        input "    Reorder level"; reorder%
-        input "       Unit price"; price!
-    end procedure
+```bascal
+procedure gatherPartDetails(partNum%, byref desc$, byref qty%, byref reorder%, byref price!)
+    input "      Description"; desc$
+    input "Quantity in stock"; qty%
+    input "    Reorder level"; reorder%
+    input "       Unit price"; price!
+end procedure
+```
 
 </div>
 
@@ -58,14 +62,16 @@ One call gathers all four editable fields for a part; no shared globals, no sepa
 
 `on error goto` reaches a label or a procedure identically, via a plain `GOTO`, never a `GOSUB` — so a procedure used this way has no call frame for `RETURN` to pop. bcc's resolver checks for exactly that: any procedure named as an `on error goto` target must contain no `return` anywhere, and every path must be proven to end in `resume`/`resume next`/`resume <label>` rather than falling through. `errorTrap()`'s single trailing `resume next` satisfies that, so codegen skips the implicit `RETURN` it would otherwise append — there's nothing left to fall into even if the proof were somehow wrong. The same check also rejects calling it like an ordinary procedure elsewhere: something proven to never return can never come back to a normal caller either.
 
-    on error goto errorTrap
-    ' ...
-    procedure errorTrap()
-        locate 25, 1
-        print "There has been an error on line" + str$(erl) + ": " + error$(err)
-        k$ = readKey$()
-        resume next
-    end procedure
+```bascal
+on error goto errorTrap
+' ...
+procedure errorTrap()
+    locate 25, 1
+    print "There has been an error on line" + str$(erl) + ": " + error$(err)
+    k$ = readKey$()
+    resume next
+end procedure
+```
 
 </div>
 

@@ -10,15 +10,17 @@
 
 ### Loading a table with READ
 
-    for i% = 1 to num_capitals%
-        read country$(i%), capital$(i%)
-    end for
+```bascal
+for i% = 1 to num_capitals%
+    read country$(i%), capital$(i%)
+end for
 
-    ' ...
+' ...
 
-    data "France",  "Paris"
-    data "Germany", "Berlin"
-    data "Japan",   "Tokyo"
+data "France",  "Paris"
+data "Germany", "Berlin"
+data "Japan",   "Tokyo"
+```
 
 </div>
 
@@ -26,13 +28,15 @@
 
 ### SWAP, including array elements
 
-    swap a%, b%
+```bascal
+swap a%, b%
 
-    ' Bubble-sort using swap -- no temp variable needed
-    if country$(i%) > country$(i% + 1) then
-        swap country$(i%), country$(i% + 1)
-        swap capital$(i%), capital$(i% + 1)
-    end if
+' Bubble-sort using swap -- no temp variable needed
+if country$(i%) > country$(i% + 1) then
+    swap country$(i%), country$(i% + 1)
+    swap capital$(i%), capital$(i% + 1)
+end if
+```
 
 </div>
 

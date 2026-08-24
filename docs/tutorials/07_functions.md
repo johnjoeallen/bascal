@@ -10,10 +10,12 @@ A function is declared `function name%(...) ... end function`; the name carries 
 
 ### Typed return and calling one function from another
 
-    function clamp%(value%, lo%, hi%)
-        // Constrain value to [lo, hi].
-        return max%(lo%, min%(value%, hi%))
-    end function
+```bascal
+function clamp%(value%, lo%, hi%)
+    // Constrain value to [lo, hi].
+    return max%(lo%, min%(value%, hi%))
+end function
+```
 
 </div>
 
@@ -21,13 +23,15 @@ A function is declared `function name%(...) ... end function`; the name carries 
 
 ### global for shared state
 
-    runningTotal% = 0
+```bascal
+runningTotal% = 0
 
-    function addToTotal%(x%)
-        global runningTotal%
-        runningTotal% = runningTotal% + x%
-        return runningTotal%
-    end function
+function addToTotal%(x%)
+    global runningTotal%
+    runningTotal% = runningTotal% + x%
+    return runningTotal%
+end function
+```
 
 </div>
 
@@ -37,11 +41,13 @@ A function is declared `function name%(...) ... end function`; the name carries 
 
 A method is a typed function with an implicit scalar receiver named `self`. Calls use a dot and parentheses; the result can become the receiver of the next method.
 
-    method$ shout$()
-        return self$ + "!"
-    end method
+```bascal
+method$ shout$()
+    return self$ + "!"
+end method
 
-    print "  hello  ".ltrim().rtrim().ucase().shout()
+print "  hello  ".ltrim().rtrim().ucase().shout()
+```
 
 Built-in methods such as `left`, `mid`, `len`, `abs`, and `sin` use the same syntax. Methods transpile to ordinary typed calls for both targets; they do not create runtime objects.
 

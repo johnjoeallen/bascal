@@ -10,12 +10,14 @@ BASCAL has three loop constructs: counted `for ... to [step n] ... end for`, pre
 
 ### for / next with an early exit
 
-    for i% = 1 to 20
-        if i% > 4 and (i% / 2) * 2 = i% then
-            print "  "; i%
-            exit
-        end if
-    end for
+```bascal
+for i% = 1 to 20
+    if i% > 4 and (i% / 2) * 2 = i% then
+        print "  "; i%
+        exit
+    end if
+end for
+```
 
 </div>
 
@@ -25,15 +27,17 @@ BASCAL has three loop constructs: counted `for ... to [step n] ... end for`, pre
 
 Two spellings of the same pre-check loop shape.
 
-    do while k% <= 3
-        print "  "; k%
-        k% = k% + 1
-    end do
+```bascal
+do while k% <= 3
+    print "  "; k%
+    k% = k% + 1
+end do
 
-    do until k% > 3
-        print "  "; k%
-        k% = k% + 1
-    end do
+do until k% > 3
+    print "  "; k%
+    k% = k% + 1
+end do
+```
 
 </div>
 
@@ -43,11 +47,13 @@ Two spellings of the same pre-check loop shape.
 
 The condition is tested after the body, not before, so this prints once even though k% starts already past the stopping value.
 
-    k% = 99
-    do
-        print "  "; k%
-        k% = k% + 1
-    loop until k% > 3
+```bascal
+k% = 99
+do
+    print "  "; k%
+    k% = k% + 1
+loop until k% > 3
+```
 
 </div>
 

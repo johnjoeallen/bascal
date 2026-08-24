@@ -14,16 +14,18 @@ BASCAL manages line numbers itself, so `.bcl` source can never target one direct
 
 It abandons the whole `try` region on a runtime error, exposes the error metadata to `catch`, and always continues right after `end try` — never back inside `try`, and with no `resume` equivalent. `throw` with no argument re-raises whatever error `catch` just captured — useful for a case a given `catch` doesn't recognize, so it keeps propagating instead of being silently swallowed:
 
-    try
-        open fileName$ for input as #2
-    catch err%, erl%
-        if err% = 53 then
-            print "caught error "; err%; ": "; fileName$; " not found"
-        else
-            print "unexpected error "; err%; ", rethrowing"
-            throw
-        end if
-    end try
+```bascal
+try
+    open fileName$ for input as #2
+catch err%, erl%
+    if err% = 53 then
+        print "caught error "; err%; ": "; fileName$; " not found"
+    else
+        print "unexpected error "; err%; ", rethrowing"
+        throw
+    end if
+end try
+```
 
 On the BASIC target this transpiles straight onto real `ON ERROR GOTO`/`RESUME <label>` and covers every raise site. On the C target a raise is caught when it happens in the `try` block itself or inside any procedure/function called (directly or transitively) from there, including calls embedded in larger expressions. `try`/`catch` can't be nested on either target.
 
@@ -33,10 +35,12 @@ On the BASIC target this transpiles straight onto real `ON ERROR GOTO`/`RESUME <
 
 ### A label can share its line with the statement that follows it
 
-    goto afterSkip
-    print "not reached"
-    afterSkip:
-    print "reached via goto"
+```bascal
+goto afterSkip
+print "not reached"
+afterSkip:
+print "reached via goto"
+```
 
 </div>
 
@@ -46,21 +50,23 @@ On the BASIC target this transpiles straight onto real `ON ERROR GOTO`/`RESUME <
 
 A plain GOTO out of a handler would leave the runtime still marked "currently handling an error" — RESUME is what clears that state so a later error can still be trapped.
 
-    on error goto handleOpenError
-    open fileName$ for input as #1
-    ' ...
-    goto afterOpen
+```bascal
+on error goto handleOpenError
+open fileName$ for input as #1
+' ...
+goto afterOpen
 
-    handleOpenError:
-    if err = 53 then
-        print "caught error "; err; ": "; fileName$; " not found"
-        resume afterOpen
-    else
-        error err
-    end if
+handleOpenError:
+if err = 53 then
+    print "caught error "; err; ": "; fileName$; " not found"
+    resume afterOpen
+else
+    error err
+end if
 
-    afterOpen:
-    on error goto 0
+afterOpen:
+on error goto 0
+```
 
 </div>
 
@@ -68,11 +74,13 @@ A plain GOTO out of a handler would leave the runtime still marked "currently ha
 
 ### RESTORE takes a label too, rewinding the DATA pointer to a specific block
 
-    restore secondBatch
-    read secondCountry$
-    ...
-    secondBatch:
-    data "Japan"
+```bascal
+restore secondBatch
+read secondCountry$
+...
+secondBatch:
+data "Japan"
+```
 
 </div>
 

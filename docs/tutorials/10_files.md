@@ -10,17 +10,19 @@ Sequential files use `open filename$ for input|output|append as #n` and `close #
 
 ### Write, append, then read it all back
 
-    open csvFile$ for output as #1
-    write #1, "Alice", 95, "pass"
-    write #1, "Bob",   54, "fail"
-    close #1
+```bascal
+open csvFile$ for output as #1
+write #1, "Alice", 95, "pass"
+write #1, "Bob",   54, "fail"
+close #1
 
-    open csvFile$ for input as #1
-    while eof(1) = 0
-        input #1, name$, score%, result$
-        print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
-    end while
-    close #1
+open csvFile$ for input as #1
+while eof(1) = 0
+    input #1, name$, score%, result$
+    print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
+end while
+close #1
+```
 
 </div>
 
@@ -34,17 +36,19 @@ The file-handle DSL sugars over exactly this — `#1` and friends never appear i
 
 ### The same write/read, through a file handle
 
-    file out = open(csvFile$) for output
-    out.write("Alice", 95, "pass")
-    out.write("Bob", 54, "fail")
-    out.close()
+```bascal
+file out = open(csvFile$) for output
+out.write("Alice", 95, "pass")
+out.write("Bob", 54, "fail")
+out.close()
 
-    file scores = open(csvFile$) for input
-    while not scores.eof()
-        scores.read(name$, score%, result$)
-        print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
-    end while
-    scores.close()
+file scores = open(csvFile$) for input
+while not scores.eof()
+    scores.read(name$, score%, result$)
+    print "  " + name$ + ": " + str$(score%) + "  [" + result$ + "]"
+end while
+scores.close()
+```
 
 </div>
 

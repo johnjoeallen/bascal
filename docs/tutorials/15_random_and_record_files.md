@@ -12,14 +12,16 @@ This tutorial writes one program twice: first with classic random-access primiti
 
 Replaces a hand-computed byte width and a matching FIELD statement.
 
-    record Student
-        id:    int16
-        name:  string(20)
-        score: float64
-        faculty: string(20)
-    end record
+```bascal
+record Student
+    id:    int16
+    name:  string(20)
+    score: float64
+    faculty: string(20)
+end record
 
-    file db as Student = open("students.dat")
+file db as Student = open("students.dat")
+```
 
 </div>
 
@@ -29,7 +31,9 @@ Replaces a hand-computed byte width and a matching FIELD statement.
 
 See the homepage for why this is spelled ?{ ... }.
 
-    db[1] = ?{ name: "Alice Smith", score: 91.0 }
+```bascal
+db[1] = ?{ name: "Alice Smith", score: 91.0 }
+```
 
 </div>
 
