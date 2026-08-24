@@ -7397,13 +7397,19 @@ end
     }
 
     #[test]
-    fn open_random_failure_exits_cleanly_instead_of_segfaulting_under_c_target() {
+    fn open_random_failure_is_a_real_trappable_raise_under_c_target() {
         // GitHub issue found via tutorial/inventory.bcl: a read-only
         // inven.dat made both fopen attempts ("rb+" then "wb+") fail,
         // leaving a NULL FILE* that a later GET/PUT dereferenced,
-        // segfaulting. Neither attempt is trappable (unlike `open ... for
-        // input`), so the fix is a clean fatal exit(1) instead of letting
-        // a NULL FILE* reach GET/PUT at all.
+        // segfaulting. Now trappable via the same emit_raise_block
+        // machinery `open ... for input` already uses -- error 75 ("Path/
+        // File access error", not 53 "File not found": both attempts
+        // failing together almost always means a permissions problem, not
+        // a genuinely missing file). With no enclosing try/on error goto
+        // here, an unhandled raise still falls into the same fatal exit
+        // path as before -- just via the standard mechanism instead of a
+        // bespoke fprintf, so it's a real BASIC error code, not just a
+        // message.
         let source = r#"record Part
     flag: string(1)
 end record
@@ -7412,11 +7418,31 @@ end
 "#;
         let c = compile_source_via_c_target(source);
         assert!(c.contains("if (!bcc_files[0]) {"), "{c}");
-        assert!(
-            c.contains("could not open %s for random access at numeric_print.bcl:5:1"),
-            "{c}"
-        );
+        assert!(c.contains("bcc_err = 75;"), "{c}");
+        assert!(c.contains("unhandled BASIC error"), "{c}");
         assert!(c.contains("exit(1);"), "{c}");
+    }
+
+    #[test]
+    fn open_random_failure_reaches_an_enclosing_catch_under_c_target() {
+        // The whole point of making this trappable: a try wrapped around
+        // the open lets the program handle a bad inven.dat gracefully
+        // instead of the process dying.
+        let source = r#"record Part
+    flag: string(1)
+end record
+
+try
+    file inv as Part = open("inven.dat")
+catch err%, erl%
+    print "could not open inven.dat: "; err%
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("bcc_err = 75;"), "{c}");
+        assert!(c.contains("goto bcc_try_0_catch;"), "{c}");
+        assert!(!c.contains("fprintf(stderr, \"could not open"), "{c}");
     }
 
     #[test]

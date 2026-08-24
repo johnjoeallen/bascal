@@ -1384,7 +1384,7 @@ fn count_raise_sites(statements: &[Stmt]) -> usize {
                     || matches!(
                         &**statement,
                         Statement::Open {
-                            mode: OpenMode::Input,
+                            mode: OpenMode::Input | OpenMode::Random | OpenMode::Binary,
                             ..
                         }
                     ),
@@ -1625,7 +1625,7 @@ fn statements_have_direct_raise(statements: &[Stmt]) -> bool {
     statements.iter().any(|stmt| match &stmt.kind {
         Statement::ThrowStmt { .. }
         | Statement::Open {
-            mode: OpenMode::Input,
+            mode: OpenMode::Input | OpenMode::Random | OpenMode::Binary,
             ..
         } => true,
         Statement::If {
@@ -4492,21 +4492,26 @@ fn emit_statement(
             }
             file_io.used = true;
             match mode {
-                // Neither attempt below is trappable (unlike `INPUT`'s own
-                // arm just below) -- a `dim`/procedure-scoped `let p =
-                // inv[n]` (`GET`) or `inv[n] = ...` (`PUT`) right after a
-                // failed `OPEN` would otherwise dereference a NULL
-                // `FILE*` and segfault (found via `tutorial/inventory.
-                // bcl`'s own `initializeInventoryFileIfNew()`, called at
-                // top level with no enclosing `try` -- a read-only
-                // inven.dat makes both `fopen` attempts fail, "rb+"
-                // needing write access and "wb+" needing to create/
-                // truncate). A clean, fatal `exit(1)` here is a strict
-                // improvement over that crash even without full trappable-
-                // error support, which would need the same struct-return
-                // propagation issue #67/#68 track for a raise inside an
-                // arbitrary, possibly-non-reachable procedure like this one.
-                OpenMode::Random | OpenMode::Binary => {
+                // Real BASIC's own error 75 ("Path/File access error") --
+                // the same trappable mechanism `OpenMode::Input`'s own arms
+                // just below already use, keyed on the identical lexical
+                // contexts (plain top-level with `RESUME`'s own retry/after
+                // labels; directly inside a `try_body`, a straight `goto`;
+                // inside a `try`-reachable callable, status-return
+                // propagation; otherwise, unsupported -- same as `INPUT`'s
+                // own fallback). `rb+` failing needs write access to an
+                // existing file; `wb+` failing needs to create/truncate --
+                // both failing together almost always means a permissions
+                // problem (found via `tutorial/inventory.bcl`'s own
+                // `initializeInventoryFileIfNew()`: a read-only inven.dat),
+                // not a genuinely missing file the way `INPUT`'s own `"r"`
+                // failure means, hence the different code from `INPUT`'s 53.
+                OpenMode::Random | OpenMode::Binary
+                    if current_function.is_none() && ctx.current_try_catch.is_none() =>
+                {
+                    let id = ctx.raise_id;
+                    ctx.raise_id += 1;
+                    out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
                     out.push_str(&format!(
                         "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
                     ));
@@ -4514,21 +4519,67 @@ fn emit_statement(
                         "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
-                    let source_filename = std::path::Path::new(&statement.pos.filename)
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or(&statement.pos.filename);
-                    let source = format!(
-                        "{}:{}:{}",
-                        escape_c_string_literal(source_filename),
+                    let mut raise = String::new();
+                    emit_raise_block(
+                        &mut raise,
+                        "75",
+                        id,
                         statement.pos.line,
-                        statement.pos.column
+                        ctx.dispatch_labels,
                     );
-                    out.push_str(&format!(
-                        "        fprintf(stderr, \"could not open %s for random access at {source}\\n\", {file_text});\n"
-                    ));
-                    out.push_str("        exit(1);\n");
+                    for line in raise.lines() {
+                        out.push_str("    ");
+                        out.push_str(line);
+                        out.push('\n');
+                    }
                     out.push_str("    }\n");
+                    out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
+                }
+                OpenMode::Random | OpenMode::Binary if ctx.current_try_catch.is_some() => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
+                    ));
+                    out.push_str(&format!(
+                        "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
+                    ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    out.push_str("        bcc_err = 75;\n");
+                    out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
+                    out.push_str(&format!(
+                        "        goto {};\n",
+                        ctx.current_try_catch.as_ref().expect("checked above")
+                    ));
+                    out.push_str("    }\n");
+                }
+                OpenMode::Random | OpenMode::Binary if ctx.current_function_reachable => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
+                    ));
+                    out.push_str(&format!(
+                        "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
+                    ));
+                    out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
+                    let mut raise = String::new();
+                    emit_raise_in_callable_block(
+                        &mut raise,
+                        "75",
+                        statement.pos.line,
+                        current_function.expect("reachable calls only occur inside a callable"),
+                    );
+                    for line in raise.lines() {
+                        out.push_str("    ");
+                        out.push_str(line);
+                        out.push('\n');
+                    }
+                    out.push_str("    }\n");
+                }
+                OpenMode::Random | OpenMode::Binary => {
+                    out.push_str(&format!(
+                        "    bcc_files[{idx}] = fopen({file_text}, \"rb+\");\n"
+                    ));
+                    out.push_str(&format!(
+                        "    if (!bcc_files[{idx}]) bcc_files[{idx}] = fopen({file_text}, \"wb+\");\n"
+                    ));
                 }
                 // A missing file for `INPUT` mode raises real BASIC's own
                 // error 53 ("file not found") -- but only at top level,

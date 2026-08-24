@@ -80,8 +80,19 @@ const tabCol% = 20
 
 // `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
 // LEN = <record width> plus the FIELD statement fhb wrote out by
-// hand at his line 550.
-file inv as Part = open("inven.dat")
+// hand at his line 550. Wrapped in its own try/catch: a file that
+// exists but can't be opened for random access (permissions, a
+// read-only inven.dat, disk full on the fallback create) is a real,
+// trappable error (code 75, "Path/File access error") on both
+// targets now, not a hard crash -- report it and exit cleanly
+// instead of leaving the program to fail confusingly the first time
+// something tries to use an `inv` that was never actually opened.
+try
+    file inv as Part = open("inven.dat")
+catch err%, erl%
+    print "could not open inven.dat: " + error$(err%)
+    end
+end try
 
 // -------------------- Pure functions (no file access) --------------------
 
