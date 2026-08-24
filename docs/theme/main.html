@@ -7,13 +7,20 @@
   <title>{% if page and page.title %}{{ page.title }} — {% endif %}{{ config.site_name }}</title>
   <link rel="icon" href="{{ 'favicon.svg' | url }}" type="image/svg+xml">
   {% for path in config.extra_css %}<link rel="stylesheet" href="{{ path | url }}">{% endfor %}
+  {% if page and page.url.startswith('language/') %}<link rel="stylesheet" href="{{ 'language/book.css' | url }}">{% endif %}
   <script>try{var t=localStorage.getItem("bascal-theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 </head>
-<body>
+<body{% if page and page.url.startswith('language/') %} class="book-site"{% endif %}>
+  {% if page and page.url.startswith('language/') %}
+  <header class="book-masthead"><div class="book-width"><a class="book-name" href="{{ 'language/' | url }}">The BASCAL Programming Language</a><a class="book-home" href="{{ nav.homepage.url | url }}">BASCAL home</a></div></header>
+  <main class="book-main book-width">{{ page.content }}</main>
+  <footer class="book-footer"><div class="book-width"><p><a href="{{ 'language/' | url }}">The BASCAL Programming Language</a></p></div></footer>
+  {% else %}
   <header class="hero compact"><div class="wrap"><h1>{{ page.title if page else config.site_name }}</h1></div></header>
   <nav class="subnav"><div class="wrap"><a href="{{ nav.homepage.url | url }}">Home</a><a href="{{ 'language/' | url }}">Language Book</a><a href="{{ 'manual/' | url }}">Manual</a><a href="{{ 'tutorials/' | url }}">Tutorials</a><a href="{{ 'examples/' | url }}">Examples</a><a href="{{ config.repo_url }}">GitHub</a><button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button></div></nav>
   <main class="wrap"><div class="prose">{{ page.content }}</div></main>
   <footer><div class="wrap">BASCAL is licensed under the <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.</div></footer>
+  {% endif %}
   {% for path in config.extra_javascript %}<script src="{{ path | url }}"></script>{% endfor %}
 </body>
 </html>

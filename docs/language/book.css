@@ -48,10 +48,10 @@ h1 { max-width: 12em; margin: 0; font-size: clamp(2.8rem, 8vw, 5.4rem); font-wei
 .part { margin-top: 3.8rem; }
 .part h2 { margin: 0 0 .35rem; color: var(--book-accent); font-size: .82rem; font-family: ui-monospace, monospace; letter-spacing: .09em; text-transform: uppercase; }
 .part > p { margin: 0 0 1rem; color: var(--book-muted); font-size: .95rem; }
-.chapters { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--book-rule); }
-.chapters li { border-bottom: 1px solid var(--book-rule); }
-.chapters a { display: grid; grid-template-columns: 3rem 1fr; gap: .4rem; padding: 1.15rem 0; color: var(--book-ink); text-decoration: none; }
-.chapters a:hover { color: var(--book-link); }
+.chapters, .part ol { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--book-rule); }
+.chapters li, .part ol li { border-bottom: 1px solid var(--book-rule); margin: 0; }
+.chapters a, .part ol a { display: grid; grid-template-columns: 3rem 1fr; gap: .4rem; padding: 1.15rem 0; color: var(--book-ink); text-decoration: none; }
+.chapters a:hover, .part ol a:hover { color: var(--book-link); }
 .chapter-number { color: var(--book-muted); font: .8rem ui-monospace, monospace; padding-top: .32rem; }
 .chapter-title { display: block; font-size: 1.3rem; line-height: 1.18; }
 .chapter-summary { display: block; margin-top: .22rem; color: var(--book-muted); font: .92rem/1.45 Georgia, serif; }
