@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Introduction
+[Home](../../) / [Manual](../) / Introduction
 
 [Getting Started →](getting-started.md)
 

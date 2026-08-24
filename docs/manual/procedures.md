@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Procedures
+[Home](../../) / [Manual](../) / Procedures
 
 [← Functions](functions.md) [Arrays →](arrays.md)
 

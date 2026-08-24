@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Record Files
+[Home](../../) / [Manual](../) / Record Files
 
 [← Random-Access File I/O](random-access-file-io.md) [Data Statements →](data-statements.md)
 

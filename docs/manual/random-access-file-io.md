@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Random-Access File I/O
+[Home](../../) / [Manual](../) / Random-Access File I/O
 
 [← File Input and Output](file-input-and-output.md) [Record Files →](record-files.md)
 

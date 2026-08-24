@@ -1,4 +1,4 @@
-[Home](../) / [Tutorials](./) / Shared COMMON
+[Home](../../) / [Tutorials](../) / Shared COMMON
 
 <div class="prose" markdown="1">
 

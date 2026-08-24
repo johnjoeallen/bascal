@@ -1,4 +1,4 @@
-[Home](./) / Examples
+[Home](../) / Examples
 
 <div class="prose" markdown="1">
 

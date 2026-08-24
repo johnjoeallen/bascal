@@ -1,4 +1,4 @@
-[Home](../) / [Tutorials](./) / Scalar Methods
+[Home](../../) / [Tutorials](../) / Scalar Methods
 
 <div class="prose" markdown="1">
 

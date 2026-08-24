@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Input and Output
+[Home](../../) / [Manual](../) / Input and Output
 
 [← Arrays](arrays.md) [File Input and Output →](file-input-and-output.md)
 

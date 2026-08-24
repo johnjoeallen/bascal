@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Data Statements
+[Home](../../) / [Manual](../) / Data Statements
 
 [← Record Files](record-files.md) [Miscellaneous Statements →](miscellaneous-statements.md)
 

@@ -1,4 +1,4 @@
-[Home](../) / [Tutorials](./) / Require and Multi-File Projects
+[Home](../../) / [Tutorials](../) / Require and Multi-File Projects
 
 <div class="prose" markdown="1">
 

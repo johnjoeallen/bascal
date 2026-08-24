@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Program Structure
+[Home](../../) / [Manual](../) / Program Structure
 
 [← Getting Started](getting-started.md) [Data Types and Type Suffixes →](data-types-and-type-suffixes.md)
 

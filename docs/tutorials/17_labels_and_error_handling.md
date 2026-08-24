@@ -1,8 +1,8 @@
-[Home](../) / [Tutorials](./) / Labels and Error Handling
+[Home](../../) / [Tutorials](../) / Labels and Error Handling
 
 <div class="prose" markdown="1">
 
-BASCAL manages line numbers itself, so `.bcl` source can never target one directly. `goto`, `gosub`, `on error goto`, `resume`, `restore`, and `on ... goto`/`on ... gosub` all require a `name:` label instead — the transpiler assigns the real BASIC line number when it renders output, the same job it already does for every `if`/`while`/`do`/`select case` branch target. `on error goto 0` is the one numeric exception: `0` isn't a line number, it's the sentinel that disables the error trap. See the [control-flow comparison](../#control-flow) on the homepage for a real before/after of the generated numbering.
+BASCAL manages line numbers itself, so `.bcl` source can never target a line number directly. `goto`, `gosub`, `on error goto`, `resume`, `restore`, and `on ... goto`/`on ... gosub` all require a `name:` label instead — the transpiler assigns the real BASIC line number when it renders output, the same job it already does for every `if`/`while`/`do`/`select case` branch target. `on error goto 0` is the one numeric exception: `0` isn't a line number, it's the sentinel that disables the error trap. See the [control-flow comparison](../../#control-flow) on the homepage for a real before/after of the generated numbering.
 
 </div>
 

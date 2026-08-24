@@ -1,4 +1,4 @@
-[Home](./) / BASCAL: The Journey
+[Home](../) / BASCAL: The Journey
 
 <div class="prose" markdown="1">
 
@@ -183,4 +183,4 @@ All dates 2026. Verify any of this directly: `git log --oneline 3de2e8c..763eecf
 
 </div>
 
-[← Back to Home](./)
+[← Back to Home](../)

@@ -1,4 +1,4 @@
-[Home](./) / Why BASCAL Exists
+[Home](../) / Why BASCAL Exists
 
 <div class="prose" markdown="1">
 

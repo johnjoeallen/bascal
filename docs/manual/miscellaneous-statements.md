@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Miscellaneous Statements
+[Home](../../) / [Manual](../) / Miscellaneous Statements
 
 [← Data Statements](data-statements.md) [Dependencies — REQUIRE and IMPORT →](dependencies-require-and-import.md)
 

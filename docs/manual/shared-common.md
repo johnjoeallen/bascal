@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Shared COMMON
+[Home](../../) / [Manual](../) / Shared COMMON
 
 [← Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md) [Generated BASIC Shape →](generated-basic-shape.md)
 

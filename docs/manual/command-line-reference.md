@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Command-Line Reference
+[Home](../../) / [Manual](../) / Command-Line Reference
 
 [← Generated BASIC Shape](generated-basic-shape.md) [Statement Quick Reference →](statement-quick-reference.md)
 

@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Operators and Expressions
+[Home](../../) / [Manual](../) / Operators and Expressions
 
 [← Variables and Constants](variables-and-constants.md) [Comments →](comments.md)
 

@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Arrays
+[Home](../../) / [Manual](../) / Arrays
 
 [← Procedures](procedures.md) [Input and Output →](input-and-output.md)
 

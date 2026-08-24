@@ -1,4 +1,4 @@
-[Home](./) / BASCAL: Technical Challenges
+[Home](../) / BASCAL: Technical Challenges
 
 <div class="prose" markdown="1">
 

@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Dependencies — REQUIRE and IMPORT
+[Home](../../) / [Manual](../) / Dependencies — REQUIRE and IMPORT
 
 [← Miscellaneous Statements](miscellaneous-statements.md) [Shared COMMON →](shared-common.md)
 

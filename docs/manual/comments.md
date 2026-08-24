@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Comments
+[Home](../../) / [Manual](../) / Comments
 
 [← Operators and Expressions](operators-and-expressions.md) [Control Flow →](control-flow.md)
 

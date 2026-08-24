@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Generated BASIC Shape
+[Home](../../) / [Manual](../) / Generated BASIC Shape
 
 [← Shared COMMON](shared-common.md) [Command-Line Reference →](command-line-reference.md)
 

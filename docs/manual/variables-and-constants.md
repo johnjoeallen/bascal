@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Variables and Constants
+[Home](../../) / [Manual](../) / Variables and Constants
 
 [← Data Types and Type Suffixes](data-types-and-type-suffixes.md) [Operators and Expressions →](operators-and-expressions.md)
 

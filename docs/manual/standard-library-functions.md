@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Standard Library Functions
+[Home](../../) / [Manual](../) / Standard Library Functions
 
 [← Statement Quick Reference](statement-quick-reference.md)
 

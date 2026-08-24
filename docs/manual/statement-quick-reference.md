@@ -1,4 +1,4 @@
-[Home](../) / [Manual](../manual/) / Statement Quick Reference
+[Home](../../) / [Manual](../) / Statement Quick Reference
 
 [← Command-Line Reference](command-line-reference.md) [Standard Library Functions →](standard-library-functions.md)
 
