@@ -43,7 +43,11 @@ let greeting$ = "Score is " + str$(score%)
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/02_variables.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/02_variables.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -93,7 +97,15 @@ end
 
 ```
 
-### `tutorial/02_variables.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/02_variables.bas</code></summary>
+
+
 
 ```basic
 
@@ -145,7 +157,15 @@ end
 
 ```
 
-### `tutorial/02_variables.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/02_variables.c</code></summary>
+
+
 
 ```c
 
@@ -258,5 +278,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

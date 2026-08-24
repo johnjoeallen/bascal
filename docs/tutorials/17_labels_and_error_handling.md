@@ -91,7 +91,11 @@ data "Japan"
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/17_labels_and_error_handling.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/17_labels_and_error_handling.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -206,7 +210,15 @@ data "Japan"
 
 ```
 
-### `tutorial/17_labels_and_error_handling.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/17_labels_and_error_handling.bas</code></summary>
+
+
 
 ```basic
 
@@ -329,5 +341,9 @@ data "Japan"
 1000 DATA "Japan"
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

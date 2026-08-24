@@ -44,7 +44,11 @@ db[1] = ?{ name: "Alice Smith", score: 91.0 }
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/15_random_and_record_files.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/15_random_and_record_files.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -376,7 +380,15 @@ end
 
 ```
 
-### `tutorial/15_random_and_record_files.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/15_random_and_record_files.bas</code></summary>
+
+
 
 ```basic
 
@@ -794,7 +806,15 @@ end
 
 ```
 
-### `tutorial/15_random_and_record_files.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/15_random_and_record_files.c</code></summary>
+
+
 
 ```c
 
@@ -1680,5 +1700,9 @@ static int bcc_get_record_student(FILE* file, long record, char* field_0, char* 
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

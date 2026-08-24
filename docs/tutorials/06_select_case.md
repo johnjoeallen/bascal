@@ -32,7 +32,11 @@ end select
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/06_select_case.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/06_select_case.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -116,7 +120,15 @@ end
 
 ```
 
-### `tutorial/06_select_case.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/06_select_case.bas</code></summary>
+
+
 
 ```basic
 
@@ -217,7 +229,15 @@ end
 
 ```
 
-### `tutorial/06_select_case.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/06_select_case.c</code></summary>
+
+
 
 ```c
 
@@ -389,5 +409,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

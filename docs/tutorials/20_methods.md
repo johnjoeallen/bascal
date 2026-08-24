@@ -69,7 +69,11 @@ Full, real, transpiling source: [`20_methods.bcl`](https://github.com/johnjoeall
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/20_methods.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/20_methods.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -124,7 +128,15 @@ end
 
 ```
 
-### `tutorial/20_methods.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/20_methods.bas</code></summary>
+
+
 
 ```basic
 
@@ -224,7 +236,15 @@ end
 
 ```
 
-### `tutorial/20_methods.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/20_methods.c</code></summary>
+
+
 
 ```c
 
@@ -405,5 +425,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

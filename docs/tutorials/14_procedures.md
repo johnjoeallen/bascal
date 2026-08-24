@@ -28,7 +28,11 @@ end procedure
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/14_procedures.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/14_procedures.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -118,7 +122,15 @@ end
 
 ```
 
-### `tutorial/14_procedures.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/14_procedures.bas</code></summary>
+
+
 
 ```basic
 
@@ -249,7 +261,15 @@ end
 
 ```
 
-### `tutorial/14_procedures.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/14_procedures.c</code></summary>
+
+
 
 ```c
 
@@ -433,5 +453,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

@@ -38,7 +38,11 @@ end do
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/16_short_circuit.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/16_short_circuit.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -149,7 +153,15 @@ end
 
 ```
 
-### `tutorial/16_short_circuit.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/16_short_circuit.bas</code></summary>
+
+
 
 ```basic
 
@@ -274,7 +286,15 @@ end
 
 ```
 
-### `tutorial/16_short_circuit.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/16_short_circuit.c</code></summary>
+
+
 
 ```c
 
@@ -397,5 +417,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

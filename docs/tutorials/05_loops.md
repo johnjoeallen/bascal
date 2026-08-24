@@ -64,7 +64,11 @@ loop until k% > 3
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/05_loops.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/05_loops.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -178,7 +182,15 @@ end
 
 ```
 
-### `tutorial/05_loops.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/05_loops.bas</code></summary>
+
+
 
 ```basic
 
@@ -298,7 +310,15 @@ end
 
 ```
 
-### `tutorial/05_loops.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/05_loops.c</code></summary>
+
+
 
 ```c
 
@@ -431,5 +451,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

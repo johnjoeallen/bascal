@@ -27,7 +27,11 @@ end
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/01_hello.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/01_hello.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -56,7 +60,15 @@ end
 
 ```
 
-### `tutorial/01_hello.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/01_hello.bas</code></summary>
+
+
 
 ```basic
 
@@ -85,7 +97,15 @@ end
 
 ```
 
-### `tutorial/01_hello.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/01_hello.c</code></summary>
+
+
 
 ```c
 
@@ -115,5 +135,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

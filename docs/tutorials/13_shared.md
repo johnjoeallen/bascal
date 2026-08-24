@@ -46,7 +46,11 @@ count% = count% + 1
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/13_shared/state.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/13_shared/state.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -74,7 +78,15 @@ declare label$
 
 ```
 
-### `tutorial/13_shared/start.bcl`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/13_shared/start.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -112,7 +124,15 @@ end
 
 ```
 
-### `tutorial/13_shared/show.bcl`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/13_shared/show.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -140,5 +160,9 @@ end if
 end
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

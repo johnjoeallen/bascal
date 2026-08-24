@@ -82,7 +82,11 @@ end procedure
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/inventory.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/inventory.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -656,7 +660,15 @@ end procedure
 
 ```
 
-### `tutorial/inventory.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/inventory.bas</code></summary>
+
+
 
 ```basic
 
@@ -1674,7 +1686,15 @@ end procedure
 
 ```
 
-### `tutorial/inventory.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/inventory.c</code></summary>
+
+
 
 ```c
 
@@ -3306,5 +3326,9 @@ static void bcc_read_line(void) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

@@ -41,7 +41,11 @@ print 6 xor 3; " (expect 5 -- 110 XOR 011 = 101)"
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/03_arithmetic.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/03_arithmetic.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -113,7 +117,15 @@ end
 
 ```
 
-### `tutorial/03_arithmetic.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/03_arithmetic.bas</code></summary>
+
+
 
 ```basic
 
@@ -187,7 +199,15 @@ end
 
 ```
 
-### `tutorial/03_arithmetic.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/03_arithmetic.c</code></summary>
+
+
 
 ```c
 
@@ -274,5 +294,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

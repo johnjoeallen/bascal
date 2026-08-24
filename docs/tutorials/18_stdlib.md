@@ -46,7 +46,11 @@ print error$(9999) ' Error  9999 (falls through to STR$)
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/18_stdlib.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/18_stdlib.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -102,7 +106,15 @@ end
 
 ```
 
-### `tutorial/18_stdlib.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/18_stdlib.bas</code></summary>
+
+
 
 ```basic
 
@@ -413,7 +425,15 @@ end
 
 ```
 
-### `tutorial/18_stdlib.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/18_stdlib.c</code></summary>
+
+
 
 ```c
 
@@ -918,5 +938,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

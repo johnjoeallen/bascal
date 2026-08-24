@@ -46,7 +46,11 @@ if temperature% > 100 then print "Scorching" else print "Not scorching"
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/04_conditions.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/04_conditions.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -130,7 +134,15 @@ end
 
 ```
 
-### `tutorial/04_conditions.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/04_conditions.bas</code></summary>
+
+
 
 ```basic
 
@@ -228,7 +240,15 @@ end
 
 ```
 
-### `tutorial/04_conditions.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/04_conditions.c</code></summary>
+
+
 
 ```c
 
@@ -338,5 +358,9 @@ int main(void) {
 }
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

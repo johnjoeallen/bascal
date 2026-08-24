@@ -27,7 +27,11 @@ print "Min:    "  + str$(minimum%(scores%))
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/12_require.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/12_require.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -74,7 +78,15 @@ end
 
 ```
 
-### `tutorial/12_require.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/12_require.bas</code></summary>
+
+
 
 ```basic
 
@@ -235,5 +247,9 @@ end
 1290 ' end function rangeof%
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

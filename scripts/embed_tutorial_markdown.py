@@ -34,7 +34,16 @@ def replacement(paths: list[str]) -> str:
         # Trailing spaces in generated BASIC have no rendered meaning and make
         # the Markdown source noisy in diffs.
         content = "\n".join(line.rstrip() for line in source.read_text().splitlines())
-        result.extend([f"### `{path}`", f"```{language}", content, "```"])
+        result.extend([
+            '<details class="source-embed" markdown="1">',
+            f"<summary><code>{path}</code></summary>",
+            "",
+            f"```{language}",
+            content,
+            "```",
+            "",
+            "</details>",
+        ])
     result.append(END)
     return "\n\n".join(result)
 

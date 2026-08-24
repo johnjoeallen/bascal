@@ -29,7 +29,11 @@ color 7, 0            // restore white on black
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/11_screen.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/11_screen.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -89,7 +93,15 @@ end
 
 ```
 
-### `tutorial/11_screen.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/11_screen.bas</code></summary>
+
+
 
 ```basic
 
@@ -158,7 +170,15 @@ end
 
 ```
 
-### `tutorial/11_screen.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/11_screen.c</code></summary>
+
+
 
 ```c
 
@@ -251,5 +271,9 @@ static void bcc_color(int fg, int bg) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

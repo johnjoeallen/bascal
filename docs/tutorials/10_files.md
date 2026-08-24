@@ -59,7 +59,11 @@ scores.close()
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/10_files.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/10_files.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -169,7 +173,15 @@ end
 
 ```
 
-### `tutorial/10_files.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/10_files.bas</code></summary>
+
+
 
 ```basic
 
@@ -295,7 +307,15 @@ end
 
 ```
 
-### `tutorial/10_files.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/10_files.c</code></summary>
+
+
 
 ```c
 
@@ -706,5 +726,9 @@ static void bcc_read_file_field(FILE* file, char* buf, size_t bufsize) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

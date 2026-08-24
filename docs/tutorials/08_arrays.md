@@ -49,7 +49,11 @@ identity%(1, 1) = 1
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/08_arrays.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/08_arrays.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -160,7 +164,15 @@ end
 
 ```
 
-### `tutorial/08_arrays.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/08_arrays.bas</code></summary>
+
+
 
 ```basic
 
@@ -330,7 +342,15 @@ end
 
 ```
 
-### `tutorial/08_arrays.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/08_arrays.c</code></summary>
+
+
 
 ```c
 
@@ -545,5 +565,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

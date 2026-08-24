@@ -60,7 +60,11 @@ Built-in methods such as `left`, `mid`, `len`, `abs`, and `sin` use the same syn
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/07_functions.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/07_functions.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -205,7 +209,15 @@ end
 
 ```
 
-### `tutorial/07_functions.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/07_functions.bas</code></summary>
+
+
 
 ```basic
 
@@ -462,7 +474,15 @@ end
 
 ```
 
-### `tutorial/07_functions.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/07_functions.c</code></summary>
+
+
 
 ```c
 
@@ -778,5 +798,9 @@ static const char* bcc_strd(double value) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->

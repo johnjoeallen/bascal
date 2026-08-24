@@ -47,7 +47,11 @@ end if
 
 <!-- BEGIN generated tutorial source -->
 
-### `tutorial/09_data.bcl`
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/09_data.bcl</code></summary>
+
+
 
 ```bascal
 
@@ -120,7 +124,15 @@ data "Egypt",   "Cairo"
 
 ```
 
-### `tutorial/09_data.bas`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/09_data.bas</code></summary>
+
+
 
 ```basic
 
@@ -197,7 +209,15 @@ data "Egypt",   "Cairo"
 
 ```
 
-### `tutorial/09_data.c`
+
+
+</details>
+
+<details class="source-embed" markdown="1">
+
+<summary><code>tutorial/09_data.c</code></summary>
+
+
 
 ```c
 
@@ -389,5 +409,9 @@ static const char* bcc_read_data(void) {
 
 
 ```
+
+
+
+</details>
 
 <!-- END generated tutorial source -->
