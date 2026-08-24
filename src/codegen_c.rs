@@ -563,8 +563,7 @@ struct BuiltinUsage {
     /// Set by bare `INKEY$` (an `Expr::Ident`, not a call -- see
     /// `render_string_expr`'s own `Expr::Ident` arm), whose C translation
     /// calls the `bcc_inkey` helper (see `INKEY_PROTO`/`INKEY_BODY`),
-    /// which needs `<termios.h>`/`<unistd.h>` for its own non-blocking
-    /// terminal raw-mode read.
+    /// which uses a POSIX raw-mode read or the Windows console API.
     needs_inkey_helper: bool,
 }
 
@@ -898,11 +897,10 @@ const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_r
 /// whatever partial, unbuffered bytes happened to be sitting there
 /// instead of a real line). The per-call toggle costs two extra syscalls
 /// each time, negligible against a human's own keystroke timing. A real,
-/// documented divergence from real BASIC: this only ever works against
-/// an interactive terminal (POSIX `<termios.h>`), unlike BASCOM's own
-/// DOS-console INKEY$.
+/// documented divergence from real BASIC: this only works against an
+/// interactive terminal or Windows console, not redirected standard input.
 const INKEY_PROTO: &str = "static const char* bcc_inkey(void);\n";
-const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    static char buf[2];\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n    return buf;\n}\n\n";
+const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char buf[2];\n#if defined(_WIN32)\n    if (_kbhit()) {\n        buf[0] = (char)_getch();\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n#else\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n#endif\n    return buf;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
 /// `emit_raise_block`'s own doc comment for how these are used.
@@ -1311,9 +1309,14 @@ fn program_has_statement(program: &Program, pred: &dyn Fn(&Stmt) -> bool) -> boo
                     } => cases.iter().any(|case| walk(&case.body, pred)) || walk(else_body, pred),
                     Statement::TryCatch {
                         try_body,
-                        catch_body,
+                        catch,
+                        finally_body,
                         ..
-                    } => walk(try_body, pred) || walk(catch_body, pred),
+                    } => {
+                        walk(try_body, pred)
+                            || catch.as_ref().is_some_and(|catch| walk(&catch.body, pred))
+                            || walk(finally_body, pred)
+                    }
                     _ => false,
                 }
         })
@@ -1357,9 +1360,14 @@ fn count_gosubs(statements: &[Stmt]) -> usize {
                 }
                 Statement::TryCatch {
                     try_body,
-                    catch_body,
+                    catch,
+                    finally_body,
                     ..
-                } => count_gosubs(try_body) + count_gosubs(catch_body),
+                } => {
+                    count_gosubs(try_body)
+                        + catch.as_ref().map_or(0, |catch| count_gosubs(&catch.body))
+                        + count_gosubs(finally_body)
+                }
                 _ => 0,
             };
             self_count + nested_count
@@ -1414,9 +1422,14 @@ fn count_raise_sites(statements: &[Stmt]) -> usize {
                 }
                 Statement::TryCatch {
                     try_body,
-                    catch_body,
+                    catch,
+                    finally_body,
                     ..
-                } => count_raise_sites(try_body) + count_raise_sites(catch_body),
+                } => {
+                    count_raise_sites(try_body)
+                        + catch.as_ref().map_or(0, |catch| count_raise_sites(&catch.body))
+                        + count_raise_sites(finally_body)
+                }
                 _ => 0,
             };
             self_count + nested_count
@@ -1727,11 +1740,15 @@ fn collect_on_error_handler_ids_into(statements: &[Stmt], ids: &mut HashMap<Stri
             }
             Statement::TryCatch {
                 try_body,
-                catch_body,
+                catch,
+                finally_body,
                 ..
             } => {
                 collect_on_error_handler_ids_into(try_body, ids);
-                collect_on_error_handler_ids_into(catch_body, ids);
+                if let Some(catch) = catch {
+                    collect_on_error_handler_ids_into(&catch.body, ids);
+                }
+                collect_on_error_handler_ids_into(finally_body, ids);
             }
             _ => {}
         }
@@ -1917,11 +1934,15 @@ fn collect_array_declarations_into(
             }
             Statement::TryCatch {
                 try_body,
-                catch_body,
+                catch,
+                finally_body,
                 ..
             } => {
                 collect_array_declarations_into(try_body, consts, arrays)?;
-                collect_array_declarations_into(catch_body, consts, arrays)?;
+                if let Some(catch) = catch {
+                    collect_array_declarations_into(&catch.body, consts, arrays)?;
+                }
+                collect_array_declarations_into(finally_body, consts, arrays)?;
             }
             _ => {}
         }
@@ -2017,11 +2038,15 @@ fn collect_data_items_and_labels_into(
             }
             Statement::TryCatch {
                 try_body,
-                catch_body,
+                catch,
+                finally_body,
                 ..
             } => {
                 collect_data_items_and_labels_into(try_body, items, labels)?;
-                collect_data_items_and_labels_into(catch_body, items, labels)?;
+                if let Some(catch) = catch {
+                    collect_data_items_and_labels_into(&catch.body, items, labels)?;
+                }
+                collect_data_items_and_labels_into(finally_body, items, labels)?;
             }
             _ => {}
         }
@@ -2287,11 +2312,15 @@ fn apply_field_layouts_before_functions(
                 }
                 Statement::TryCatch {
                     try_body,
-                    catch_body,
+                    catch,
+                    finally_body,
                     ..
                 } => {
                     walk(try_body, layout)?;
-                    walk(catch_body, layout)?;
+                    if let Some(catch) = catch {
+                        walk(&catch.body, layout)?;
+                    }
+                    walk(finally_body, layout)?;
                 }
                 _ => {}
             }
@@ -2878,8 +2907,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         includes.push_str("#include <time.h>\n");
     }
     if builtin_usage.needs_inkey_helper {
-        includes.push_str("#include <termios.h>\n");
-        includes.push_str("#include <unistd.h>\n");
+        includes.push_str("#if defined(_WIN32)\n#include <conio.h>\n#else\n#include <termios.h>\n#include <unistd.h>\n#endif\n");
     }
 
     let mut globals_decl = String::new();
@@ -3744,16 +3772,20 @@ fn collect_vars_in_statement(
         // is what makes them exist as declared C locals at all.
         Statement::TryCatch {
             try_body,
-            err_var,
-            erl_var,
-            catch_body,
+            catch,
+            finally_body,
         } => {
             for stmt in try_body {
                 collect_vars_in_statement(stmt, numeric_out, string_out);
             }
-            register_var(err_var, numeric_out, string_out);
-            register_var(erl_var, numeric_out, string_out);
-            for stmt in catch_body {
+            if let Some(catch) = catch {
+                register_var(&catch.err_var, numeric_out, string_out);
+                register_var(&catch.erl_var, numeric_out, string_out);
+                for stmt in &catch.body {
+                    collect_vars_in_statement(stmt, numeric_out, string_out);
+                }
+            }
+            for stmt in finally_body {
                 collect_vars_in_statement(stmt, numeric_out, string_out);
             }
         }
@@ -5281,9 +5313,8 @@ fn emit_statement(
         // `RESUME <label>` instead of a bare `goto` here).
         Statement::TryCatch {
             try_body,
-            err_var,
-            erl_var,
-            catch_body,
+            catch,
+            finally_body,
         } => {
             if current_function.is_some() {
                 return Err(
@@ -5295,8 +5326,13 @@ fn emit_statement(
             let id = ctx.try_id;
             ctx.try_id += 1;
             let catch_label = format!("bcc_try_{id}_catch");
+            let finally_label = format!("bcc_try_{id}_finally");
             let end_label = format!("bcc_try_{id}_end");
+            let unhandled_name = format!("bcc_try_{id}_unhandled");
 
+            if catch.is_none() {
+                out.push_str(&format!("    int {unhandled_name} = 0;\n"));
+            }
             out.push_str(&format!("    bcc_on_error_target = {id};\n"));
             let outer_try_catch = ctx.current_try_catch.replace(catch_label.clone());
             for stmt in try_body {
@@ -5316,16 +5352,37 @@ fn emit_statement(
             }
             ctx.current_try_catch = outer_try_catch;
             out.push_str("    bcc_on_error_target = -1;\n");
-            out.push_str(&format!("    goto {end_label};\n"));
+            out.push_str(&format!("    goto {finally_label};\n"));
 
             out.push_str(&format!("    {catch_label}: ;\n"));
             out.push_str("    bcc_in_handler = 0;\n");
             out.push_str("    bcc_on_error_target = -1;\n");
-            let err_c = c_var_name(err_var, effective_suffix(err_var.suffix));
-            let erl_c = c_var_name(erl_var, effective_suffix(erl_var.suffix));
-            out.push_str(&format!("    {err_c} = bcc_err;\n"));
-            out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
-            for stmt in catch_body {
+            if let Some(catch) = catch {
+                let err_c = c_var_name(&catch.err_var, effective_suffix(catch.err_var.suffix));
+                let erl_c = c_var_name(&catch.erl_var, effective_suffix(catch.erl_var.suffix));
+                out.push_str(&format!("    {err_c} = bcc_err;\n"));
+                out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
+                for stmt in &catch.body {
+                    emit_statement(
+                        stmt,
+                        out,
+                        needs_math,
+                        needs_string,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        file_io,
+                        gosub_count,
+                        gosub_id,
+                        ctx,
+                    )?;
+                }
+            } else {
+                out.push_str(&format!("    {unhandled_name} = 1;\n"));
+            }
+
+            out.push_str(&format!("    {finally_label}: ;\n"));
+            for stmt in finally_body {
                 emit_statement(
                     stmt,
                     out,
@@ -5339,6 +5396,12 @@ fn emit_statement(
                     gosub_id,
                     ctx,
                 )?;
+            }
+            if catch.is_none() {
+                out.push_str(&format!("    if ({unhandled_name}) {{\n"));
+                out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
+                out.push_str("        exit(1);\n");
+                out.push_str("    }\n");
             }
             out.push_str(&format!("    {end_label}: ;\n"));
             Ok(())

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Embedded Data — The BASCAL Programming Language</title>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="book.css">
+</head>
+<body>
+  <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header>
+  <header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 07A</p><h1>Embedded data</h1></div></header>
+  <main class="chapter-main book-width">
+    <h2>Shipping small constant tables with <code>data</code></h2>
+    <p>Classic BASIC’s <code>data</code>/<code>read</code> pair embeds a small constant table directly in the program instead of a separate file. It suits fixed lookup tables for which a record file would be overkill.</p>
+    <pre><code>dim country$(2), capital$(2)
+declare i%
+
+for i% = 0 to 2
+    read country$(i%), capital$(i%)
+end for
+
+print country$(0); " "; capital$(0)
+
+data "USA", "Washington"
+data "France", "Paris"
+data "Japan", "Tokyo"
+</code></pre>
+    <p><code>data</code> statements can appear anywhere in the source. The compiler gathers them into one sequential table regardless of where they are written. Each <code>read</code> takes the next value, left to right, matching each variable’s declared type.</p>
+
+    <h2>Rewinding with <code>restore</code></h2>
+    <p><code>restore</code> rewinds to the first <code>data</code> statement. <code>restore label</code> rewinds to the <code>data</code> statement immediately following that label, letting one program contain more than one named table.</p>
+    <pre><code>countries:
+data "USA", "France", "Japan"
+
+restore countries
+read first$
+print first$
+</code></pre>
+    <nav class="chapter-nav"><a href="errors-labels-and-data.html">← Errors and labels</a><a href="standard-library.html">The standard library →</a></nav>
+  </main>
+  <footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer>
+  <script src="../bcl-highlight.js"></script>
+</body>
+</html>

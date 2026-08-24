@@ -628,10 +628,14 @@ fn check_no_nested_try_catch(statements: &[Stmt], diagnostics: &mut Vec<Diagnost
         match &stmt.kind {
             Statement::TryCatch {
                 try_body,
-                catch_body,
+                catch,
+                finally_body,
                 ..
             } => {
-                if contains_try_catch(try_body) || contains_try_catch(catch_body) {
+                if contains_try_catch(try_body)
+                    || catch.as_ref().is_some_and(|catch| contains_try_catch(&catch.body))
+                    || contains_try_catch(finally_body)
+                {
                     diagnostics.push(Diagnostic::error(
                         stmt.pos.clone(),
                         "a `try`/`catch` can't contain another `try`/`catch` -- neither backend \
@@ -642,7 +646,10 @@ fn check_no_nested_try_catch(statements: &[Stmt], diagnostics: &mut Vec<Diagnost
                     ));
                 }
                 check_no_nested_try_catch(try_body, diagnostics);
-                check_no_nested_try_catch(catch_body, diagnostics);
+                if let Some(catch) = catch {
+                    check_no_nested_try_catch(&catch.body, diagnostics);
+                }
+                check_no_nested_try_catch(finally_body, diagnostics);
             }
             Statement::If {
                 then_body,
@@ -879,11 +886,15 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         }
         Statement::TryCatch {
             try_body,
-            catch_body,
+            catch,
+            finally_body,
             ..
         } => {
             statements_call_function(try_body, target)
-                || statements_call_function(catch_body, target)
+                || catch
+                    .as_ref()
+                    .is_some_and(|catch| statements_call_function(&catch.body, target))
+                || statements_call_function(finally_body, target)
         }
         Statement::Locate { row, col } => {
             expr_calls_function(row, target) || expr_calls_function(col, target)
@@ -999,9 +1010,14 @@ fn contains_return(statements: &[Stmt]) -> bool {
         } => cases.iter().any(|c| contains_return(&c.body)) || contains_return(else_body),
         Statement::TryCatch {
             try_body,
-            catch_body,
+            catch,
+            finally_body,
             ..
-        } => contains_return(try_body) || contains_return(catch_body),
+        } => {
+            contains_return(try_body)
+                || catch.as_ref().is_some_and(|catch| contains_return(&catch.body))
+                || contains_return(finally_body)
+        }
         _ => false,
     })
 }
@@ -1152,14 +1168,16 @@ fn collect_declarations(statements: &[Stmt], declared: &mut HashSet<VarKey>) {
             }
             Statement::TryCatch {
                 try_body,
-                err_var,
-                erl_var,
-                catch_body,
+                catch,
+                finally_body,
             } => {
                 collect_declarations(try_body, declared);
-                declared.insert(var_key(err_var));
-                declared.insert(var_key(erl_var));
-                collect_declarations(catch_body, declared);
+                if let Some(catch) = catch {
+                    declared.insert(var_key(&catch.err_var));
+                    declared.insert(var_key(&catch.erl_var));
+                    collect_declarations(&catch.body, declared);
+                }
+                collect_declarations(finally_body, declared);
             }
             _ => {}
         }
@@ -1367,11 +1385,15 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         }
         Statement::TryCatch {
             try_body,
-            catch_body,
+            catch,
+            finally_body,
             ..
         } => {
             walk_statements_exprs(try_body, f);
-            walk_statements_exprs(catch_body, f);
+            if let Some(catch) = catch {
+                walk_statements_exprs(&catch.body, f);
+            }
+            walk_statements_exprs(finally_body, f);
         }
         Statement::Locate { row, col } => {
             walk_expr(row, pos, f);

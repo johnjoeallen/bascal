@@ -1163,6 +1163,16 @@ end
     }
 
     #[test]
+    fn c_target_inkey_selects_a_windows_console_implementation() {
+        let c = compile_source_via_c_target("print inkey$\nend\n");
+        assert!(c.contains("#if defined(_WIN32)"), "{c}");
+        assert!(c.contains("#include <conio.h>"), "{c}");
+        assert!(c.contains("#include <termios.h>"), "{c}");
+        assert!(c.contains("if (_kbhit())"), "{c}");
+        assert!(c.contains("(char)_getch()"), "{c}");
+    }
+
+    #[test]
     fn input_dollar_inside_function_resolves_to_builtin() {
         // INPUT$(n) referenced inside a `function` body must resolve to
         // the real builtin call, not a fresh per-function local array --
@@ -7326,6 +7336,48 @@ end
         assert!(basic.contains("e% = ERR"), "{basic}");
         assert!(basic.contains("l% = ERL"), "{basic}");
         assert!(basic.contains("RESUME"), "{basic}");
+    }
+
+    #[test]
+    fn try_catch_finally_runs_cleanup_on_both_paths() {
+        let source = r#"try
+    error 11
+catch e%, l%
+    print e%
+finally
+    print "cleanup"
+end try
+end
+"#;
+        let basic = compile_source("try_finally.bcl", source).expect("try/finally should compile");
+        assert!(basic.contains("RESUME 20"), "{basic}");
+        assert!(basic.contains("GOTO 20"), "{basic}");
+        assert!(basic.contains("20 PRINT \"cleanup\""), "{basic}");
+
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("goto bcc_try_0_finally;"), "{c}");
+        assert!(c.contains("bcc_try_0_finally: ;"), "{c}");
+        assert!(c.contains("printf(\"cleanup\\n\");"), "{c}");
+    }
+
+    #[test]
+    fn try_finally_without_catch_reraises_after_cleanup() {
+        let source = r#"try
+    error 11
+finally
+    print "cleanup"
+end try
+end
+"#;
+        let basic = compile_source("try_finally_only.bcl", source)
+            .expect("try/finally without catch should compile");
+        assert!(basic.contains("BCC_TRY_") && basic.contains("_ERR% = ERR"), "{basic}");
+        assert!(basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_ERR%"), "{basic}");
+
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("int bcc_try_0_unhandled = 0;"), "{c}");
+        assert!(c.contains("bcc_try_0_unhandled = 1;"), "{c}");
+        assert!(c.contains("if (bcc_try_0_unhandled)"), "{c}");
     }
 
     #[test]

@@ -1,6 +1,24 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>The Targets Beneath the Program — The BASCAL Programming Language</title><link rel="icon" href="../favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="book.css"></head><body>
-<header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header><header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 10</p><h1>The targets beneath the program</h1></div></header>
-<main class="chapter-main book-width"><h2>One source language, two targets</h2><p>BASCAL has two almost-complete backends: <code>basic</code> (the default) and <code>c</code> (selected with <code>--target c</code>). The BASIC backend produces classic line-numbered Microsoft BASIC. The C backend produces native C. It has a few documented limits; check the command-line reference when a program uses a less common feature.</p><p>Generated output is not a disguise. You can inspect it and compile it with the toolchain for its target. Even so, write structured BASCAL where possible. A block <code>if</code> is clearer than a hand-wired <code>GOTO</code> ladder because it keeps the program’s intent where you maintain it.</p><h2>See it happen</h2><p>A block <code>if</code> and a <code>while</code> loop become the same branches and jumps you would write by hand in classic BASIC.</p><pre><code>if n% &gt; 3 then
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Targets Beneath the Program — The BASCAL Programming Language</title>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="book.css">
+</head>
+<body>
+  <header class="book-masthead"><div class="book-width"><a class="book-name" href="./">The BASCAL Programming Language</a><a class="book-home" href="../">BASCAL home</a></div></header>
+  <header class="chapter-header"><div class="book-width"><p class="chapter-kicker">Chapter 10</p><h1>The targets beneath the program</h1></div></header>
+  <main class="chapter-main book-width">
+    <h2>One source language, two targets</h2>
+    <p>BASCAL has a complete <code>basic</code> backend and an experimental <code>c</code> backend. The BASIC backend produces classic line-numbered Microsoft BASIC. The C backend produces C source for a native compiler. Use <code>--target c</code> to select it.</p>
+    <p><code>basic</code> is the fallback target when no target is selected, but <code>BASCAL_TARGET</code> or the BASCAL configuration file can choose a different default. The C backend covers the tutorials and much of the core language, but it deliberately has limits; consult the <a href="../manual/command-line-reference.html#backends">backend reference</a> before relying on less common features or portability-sensitive behaviour.</p>
+    <p>Generated output is not a disguise. You can inspect it and compile it with the toolchain for its target. Even so, write structured BASCAL where possible. A block <code>if</code> is clearer than a hand-wired <code>GOTO</code> ladder because it keeps the program’s intent where you maintain it.</p>
+
+    <h2>See it happen</h2>
+    <p>A block <code>if</code> and a <code>while</code> loop become the same branches and jumps you would write by hand in classic BASIC.</p>
+    <pre><code>if n% &gt; 3 then
     print "big"
 else
     print "small"
@@ -10,7 +28,9 @@ while n% &gt; 0
     print n%
     n% = n% - 1
 end while
-</code></pre><p>transpiles to:</p><pre><code>50 IF (n% &gt; 3) = 0 THEN GOTO 80
+</code></pre>
+    <p>transpiles to:</p>
+    <pre><code>50 IF (n% &gt; 3) = 0 THEN GOTO 80
 60     PRINT "big"
 70     GOTO 90
 80     PRINT "small"
@@ -21,4 +41,23 @@ end while
 120     n% = n% - 1
 130     GOTO 100
 140 REM END WHILE
-</code></pre><p>The <code>if</code> test jumps past the <code>then</code> block when false, and the <code>while</code> test is repeated at the top of the loop. The closing <code>REM</code> lines are comments that make the generated BASIC easier to read.</p><h2>When raw BASIC matters</h2><p>Some classic statements remain available for programs that need BASIC-specific behaviour. Labels let <code>GOTO</code>, <code>GOSUB</code>, <code>RESTORE</code>, and error handling name a destination without exposing a numeric line number. The compiler assigns the number.</p><div class="aside">Think in BASCAL; inspect generated BASIC or C when target behaviour matters. Design in the source and use the target to check compatibility or reach platform-specific facilities.</div><h2>Licensing generated programs</h2><p>BASCAL itself is licensed under the <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPLv3</a>. That licence applies to BASCAL, not automatically to programs it generates. You may distribute a BASCAL source program, its generated BASIC or C, and its compiled binary under any licence you choose.</p><p>When the C backend needs standard support functions, it emits them into a runtime header that is compiled and linked into the final binary. The output exception also covers those support functions: they do not place the final binary under the GPLv3 or limit the licence you choose for it. See the repository’s <a href="../../LICENSE-OUTPUT-EXCEPTION.md">output exception</a> for the exact permission.</p><h2>One complete book</h2><p>This book is both an introduction and the authoritative BASCAL reference. Read it in order to learn the language, then return to the relevant chapter for its complete syntax, behaviour, and examples.</p><nav class="chapter-nav"><a href="running-and-combining-programs.html">← Running and combining programs</a><a href="./">Contents →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
+</code></pre>
+    <p>The <code>if</code> test jumps past the <code>then</code> block when false, and the <code>while</code> test is repeated at the top of the loop. The closing <code>REM</code> lines are comments that make the generated BASIC easier to read.</p>
+
+    <h2>When raw BASIC matters</h2>
+    <p>Some classic statements remain available for programs that need BASIC-specific behaviour. Labels let <code>GOTO</code>, <code>GOSUB</code>, <code>RESTORE</code>, and BASIC-only <code>ON ERROR GOTO</code> recovery name a destination without exposing a numeric line number. The compiler assigns the number.</p>
+    <p>For error handling that must work with both backends, use structured <code>try</code>/<code>catch</code>/<code>finally</code>. The C target’s legacy error mechanisms and some runtime behaviours are intentionally more limited than the BASIC target. In particular, its <code>inkey$</code> support currently uses POSIX terminal headers, so C programs using it do not yet build unchanged on Windows.</p>
+    <div class="aside">Think in BASCAL; inspect generated BASIC or C when target behaviour matters. Design in the source and use the target to check compatibility or reach platform-specific facilities.</div>
+
+    <h2>Licensing generated programs</h2>
+    <p>BASCAL itself is licensed under the <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPLv3</a>. That licence applies to BASCAL, not automatically to programs it generates. You may distribute a BASCAL source program, its generated BASIC or C, and its compiled binary under any licence you choose.</p>
+    <p>When the C backend needs support functions, it emits them into the generated C source. The output exception also covers those functions: they do not place the final binary under the GPLv3 or limit the licence you choose for it. See the repository’s <a href="../../LICENSE-OUTPUT-EXCEPTION.md">output exception</a> for the exact permission.</p>
+
+    <h2>One complete book</h2>
+    <p>This book is both an introduction and the authoritative BASCAL reference. Read it in order to learn the language, then return to the relevant chapter for its complete syntax, behaviour, and examples.</p>
+    <nav class="chapter-nav"><a href="running-and-combining-programs.html">← Running and combining programs</a><a href="./">Contents →</a></nav>
+  </main>
+  <footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer>
+  <script src="../bcl-highlight.js"></script>
+</body>
+</html>

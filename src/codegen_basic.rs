@@ -970,11 +970,10 @@ impl CodeGenerator {
             }
             Statement::TryCatch {
                 try_body,
-                err_var,
-                erl_var,
-                catch_body,
+                catch,
+                finally_body,
             } => {
-                self.try_catch(try_body, err_var, erl_var, catch_body, current_function);
+                self.try_catch(try_body, catch.as_ref(), finally_body, current_function);
             }
             Statement::Locate { row, col } => {
                 let (row_prelude, row) = self.expr(row, current_function);
@@ -1231,14 +1230,14 @@ impl CodeGenerator {
     fn try_catch(
         &mut self,
         try_body: &[Stmt],
-        err_var: &BasicIdent,
-        erl_var: &BasicIdent,
-        catch_body: &[Stmt],
+        catch: Option<&TryCatchHandler>,
+        finally_body: &[Stmt],
         current_function: Option<&FunctionInfo>,
     ) {
         let id = self.next_label;
         self.next_label += 1;
         let catch_label = format!("TRY_{id:04}_CATCH");
+        let finally_label = format!("TRY_{id:04}_FINALLY");
         let end_label = format!("TRY_{id:04}_END");
 
         self.line(&format!("ON ERROR GOTO {catch_label}"));
@@ -1246,16 +1245,30 @@ impl CodeGenerator {
         self.statements(try_body, current_function);
         self.indent -= 1;
         self.line("ON ERROR GOTO 0");
-        self.line(&format!("GOTO {end_label}"));
+        self.line(&format!("GOTO {finally_label}"));
 
         self.line(&format!("{catch_label}:"));
         self.indent += 1;
-        let err_name = self.ident(err_var, current_function);
-        let erl_name = self.ident(erl_var, current_function);
-        self.line(&format!("{err_name} = ERR"));
-        self.line(&format!("{erl_name} = ERL"));
-        self.statements(catch_body, current_function);
-        self.line(&format!("RESUME {end_label}"));
+        if let Some(catch) = catch {
+            let err_name = self.ident(&catch.err_var, current_function);
+            let erl_name = self.ident(&catch.erl_var, current_function);
+            self.line(&format!("{err_name} = ERR"));
+            self.line(&format!("{erl_name} = ERL"));
+            self.statements(&catch.body, current_function);
+            self.line(&format!("RESUME {finally_label}"));
+        } else {
+            let err_name = format!("BCC_TRY_{id:04}_ERR%");
+            self.line(&format!("{err_name} = ERR"));
+            self.line(&format!("RESUME {finally_label}"));
+        }
+        self.indent -= 1;
+
+        self.line(&format!("{finally_label}:"));
+        self.indent += 1;
+        self.statements(finally_body, current_function);
+        if catch.is_none() {
+            self.line(&format!("IF BCC_TRY_{id:04}_ERR% <> 0 THEN ERROR BCC_TRY_{id:04}_ERR%"));
+        }
         self.indent -= 1;
 
         self.line(&format!("{end_label}:"));
@@ -2405,11 +2418,15 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
         }
         Statement::TryCatch {
             try_body,
-            catch_body,
+            catch,
+            finally_body,
             ..
         } => {
             visit_body_exprs(try_body, f);
-            visit_body_exprs(catch_body, f);
+            if let Some(catch) = catch {
+                visit_body_exprs(&catch.body, f);
+            }
+            visit_body_exprs(finally_body, f);
         }
         Statement::Locate { row, col } => {
             visit_expr(row, f);
@@ -3399,14 +3416,16 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
         }
         Statement::TryCatch {
             try_body,
-            err_var,
-            erl_var,
-            catch_body,
+            catch,
+            finally_body,
         } => {
             collect_names_from_stmts(try_body, names);
-            names.insert(err_var.as_basic().to_ascii_lowercase());
-            names.insert(erl_var.as_basic().to_ascii_lowercase());
-            collect_names_from_stmts(catch_body, names);
+            if let Some(catch) = catch {
+                names.insert(catch.err_var.as_basic().to_ascii_lowercase());
+                names.insert(catch.erl_var.as_basic().to_ascii_lowercase());
+                collect_names_from_stmts(&catch.body, names);
+            }
+            collect_names_from_stmts(finally_body, names);
         }
         Statement::ExprStmt(e) => collect_names_from_expr(e, names),
         Statement::Return { value } => collect_names_from_expr(value, names),

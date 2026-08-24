@@ -36,3 +36,8 @@ __pycache__/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Local agent/editor metadata and the inventory tutorial's runtime data.
+/.claude/
+/.idea/
+/inven.dat

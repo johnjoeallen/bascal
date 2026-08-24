@@ -324,18 +324,21 @@ impl Lowerer {
             }
             Statement::TryCatch {
                 try_body,
-                err_var,
-                erl_var,
-                catch_body,
+                catch,
+                finally_body,
             } => {
                 let try_body = self.lower_statements(try_body);
-                let catch_body = self.lower_statements(catch_body);
+                let catch = catch.map(|catch| TryCatchHandler {
+                    err_var: catch.err_var,
+                    erl_var: catch.erl_var,
+                    body: self.lower_statements(catch.body),
+                });
+                let finally_body = self.lower_statements(finally_body);
                 out.push(Stmt::new(
                     Statement::TryCatch {
                         try_body,
-                        err_var,
-                        erl_var,
-                        catch_body,
+                        catch,
+                        finally_body,
                     },
                     pos,
                 ));

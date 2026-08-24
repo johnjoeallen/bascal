@@ -1315,7 +1315,7 @@ impl Parser {
         })
     }
 
-    /// `try ... catch err%, erl% ... end try` -- see `Statement::TryCatch`'s
+    /// `try ... [catch err%, erl% ...] [finally ...] end try` -- see `Statement::TryCatch`'s
     /// own doc comment for the semantics. `err_var`/`erl_var` are parsed
     /// exactly like a `for` loop variable (`BasicIdent::parse` over a bare
     /// identifier token) -- ordinary suffixed identifiers, not a fixed
@@ -1324,26 +1324,42 @@ impl Parser {
     fn parse_try_catch(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("try")?;
         self.consume_line_end()?;
-        let try_body = self.parse_block(&[BlockEnd::Catch])?;
-        self.expect_keyword("catch")?;
-        let err_var =
-            BasicIdent::parse(&self.expect_ident("expected error-code variable after `catch`")?);
-        self.expect(
-            TokenKind::Comma,
-            "expected `,` between `catch`'s two variables",
-        )?;
-        let erl_var =
-            BasicIdent::parse(&self.expect_ident("expected error-line variable after `catch`")?);
-        self.consume_line_end()?;
-        let catch_body = self.parse_block(&[BlockEnd::EndTry])?;
+        let try_body = self.parse_block(&[BlockEnd::Catch, BlockEnd::Finally, BlockEnd::EndTry])?;
+        let catch = if self.check_keyword("catch") {
+            self.advance();
+            let err_var = BasicIdent::parse(
+                &self.expect_ident("expected error-code variable after `catch`")?,
+            );
+            self.expect(
+                TokenKind::Comma,
+                "expected `,` between `catch`'s two variables",
+            )?;
+            let erl_var = BasicIdent::parse(
+                &self.expect_ident("expected error-line variable after `catch`")?,
+            );
+            self.consume_line_end()?;
+            let body = self.parse_block(&[BlockEnd::Finally, BlockEnd::EndTry])?;
+            Some(TryCatchHandler { err_var, erl_var, body })
+        } else {
+            None
+        };
+        let finally_body = if self.check_keyword("finally") {
+            self.advance();
+            self.consume_line_end()?;
+            self.parse_block(&[BlockEnd::EndTry])?
+        } else {
+            Vec::new()
+        };
+        if catch.is_none() && finally_body.is_empty() {
+            return Err(self.error("`try` needs a `catch` or `finally` block"));
+        }
         self.expect_keyword("end")?;
         self.expect_keyword("try")?;
         self.consume_line_end()?;
         Ok(Statement::TryCatch {
             try_body,
-            err_var,
-            erl_var,
-            catch_body,
+            catch,
+            finally_body,
         })
     }
 
@@ -2106,6 +2122,7 @@ impl Parser {
             BlockEnd::Case => self.check_keyword("case"),
             BlockEnd::EndSelect => self.check_keyword("end") && self.check_next_keyword("select"),
             BlockEnd::Catch => self.check_keyword("catch"),
+            BlockEnd::Finally => self.check_keyword("finally"),
             BlockEnd::EndTry => self.check_keyword("end") && self.check_next_keyword("try"),
         }
     }
@@ -2275,6 +2292,7 @@ enum BlockEnd {
     Case,
     EndSelect,
     Catch,
+    Finally,
     EndTry,
 }
 
@@ -2723,16 +2741,17 @@ mod tests {
         match &*program.statements[0] {
             Statement::TryCatch {
                 try_body,
-                err_var,
-                erl_var,
-                catch_body,
+                catch,
+                finally_body,
             } => {
                 assert_eq!(try_body.len(), 1);
-                assert_eq!(err_var.name, "e");
-                assert_eq!(err_var.suffix, Some(TypeSuffix::Integer));
-                assert_eq!(erl_var.name, "l");
-                assert_eq!(erl_var.suffix, Some(TypeSuffix::Integer));
-                assert_eq!(catch_body.len(), 1);
+                let catch = catch.as_ref().expect("catch should be present");
+                assert_eq!(catch.err_var.name, "e");
+                assert_eq!(catch.err_var.suffix, Some(TypeSuffix::Integer));
+                assert_eq!(catch.erl_var.name, "l");
+                assert_eq!(catch.erl_var.suffix, Some(TypeSuffix::Integer));
+                assert_eq!(catch.body.len(), 1);
+                assert!(finally_body.is_empty());
             }
             other => panic!("expected try/catch statement, got {other:?}"),
         }

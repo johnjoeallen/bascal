@@ -382,11 +382,13 @@ pub enum Statement {
         target: Expr,
     },
     Resume(ResumeTarget),
-    /// `try ... catch err%, erl% ... end try` -- structured error recovery
+    /// `try ... [catch err%, erl% ...] [finally ...] end try` -- structured
+    /// error recovery and cleanup
     /// (issue #60): a failed statement anywhere in `try_body` abandons the
-    /// rest of it and runs `catch_body` once, then execution continues
-    /// after `end try` -- never back inside `try_body`. `err_var`/
-    /// `erl_var` are ordinary locals scoped to `catch_body` alone (not
+    /// rest of it and runs the optional `catch` body once, then always runs
+    /// `finally_body` before execution continues after `end try` -- never
+    /// back inside `try_body`. A catch's `err_var`/`erl_var` are ordinary
+    /// locals scoped to its body alone (not
     /// aliases for the ambient `err`/`erl` pseudo-variables `on error
     /// goto` uses), populated once at catch-entry with the error code and
     /// (for the C backend) the real `.bcl` source line the failure raised
@@ -396,9 +398,8 @@ pub enum Statement {
     /// behavior isn't reproduced here.
     TryCatch {
         try_body: Vec<Stmt>,
-        err_var: BasicIdent,
-        erl_var: BasicIdent,
-        catch_body: Vec<Stmt>,
+        catch: Option<TryCatchHandler>,
+        finally_body: Vec<Stmt>,
     },
     ErrorStmt {
         code: Expr,
@@ -515,6 +516,13 @@ pub enum Statement {
     Raw(String),
     BlockComment(Vec<String>),
     BlankLine,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TryCatchHandler {
+    pub err_var: BasicIdent,
+    pub erl_var: BasicIdent,
+    pub body: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
