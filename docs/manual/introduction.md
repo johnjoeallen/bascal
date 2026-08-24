@@ -4,7 +4,7 @@
 
 <div class="prose" markdown="1">
 
-**BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication **L**anguage — is a transpiler with two backends: `--target basic` (the default, and the complete one), which translates structured `.bcl` source files into line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and FreeBASIC's QB compatibility mode; and `--target c`, an **experimental**, still-narrow native-C backend aiming to eventually produce native Linux/macOS/Win32 binaries directly, with no BASIC compiler involved at all — see the [Backends](command-line-reference.md#backends) section of the [Command-Line Reference](command-line-reference.md) for exactly what it supports today. Everything else in this manual describes the `basic` target, unless a section says otherwise.
+**BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication **L**anguage — is transpiled by `bcc`, which has two backends: `--target basic` (the default, and the complete one) produces line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and FreeBASIC's QB compatibility mode; `--target c` is an **experimental**, still-narrow native-C backend aiming to eventually produce native Linux/macOS/Win32 binaries directly, with no BASIC compiler involved at all. See the [Backends](command-line-reference.md#backends) section of the [Command-Line Reference](command-line-reference.md) for exactly what it supports today. Everything else in this manual describes the `basic` target, unless a section says otherwise.
 
 BASCAL adds structured programming constructs on top of BASIC's run-time semantics:
 

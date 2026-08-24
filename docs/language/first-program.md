@@ -1,6 +1,6 @@
 ## Start with the whole
 
-BASCAL files use the `.bcl` extension. The `bcc` compiler turns one into classic BASIC or C. Start by describing the work in the order a reader expects to see it.
+The BASCAL compiler (`bcc`) transpiles `.bcl` source files into classic Microsoft BASIC or C. Start by describing the work in the order a reader expects to see it.
 
 ```bascal
 program hello

@@ -4,7 +4,7 @@
 
 ## Preface
 
-BASCAL takes structured `.bcl` source and turns it into line-numbered Microsoft BASIC — the dialect a working MBASIC or BASCOM programmer in the 1980s would recognize, built to run on real vintage toolchains and on FreeBASIC's QB-compatibility mode. It exists, in the author's own words, as a fun project — built to see what's possible, not to solve a problem anyone actually has anymore.
+The BASCAL compiler (`bcc`) transpiles structured `.bcl` source into line-numbered Microsoft BASIC — the dialect a working MBASIC or BASCOM programmer in the 1980s would recognize, built to run on real vintage toolchains and on FreeBASIC's QB-compatibility mode. It exists, in the author's own words, as a fun project — built to see what's possible, not to solve a problem anyone actually has anymore.
 
 That framing matters for the story that follows, because most of the hardest work in this stretch of BASCAL's life wasn't inventing new language features. It was staying honest about a genuinely awkward constraint: the target language has no call stack, no heap, no `REDIM`, and (by design) no recursion. Every "modern" convenience BASCAL adds — real parameters, array passing, a `sizeof()` builtin — has to be *simulated* on top of `GOSUB`, `RETURN`, and global variables, and simulating something faithfully means the simple-looking answer is often wrong in a way that only shows up once you ask what the generated BASIC actually does at runtime, twice, in a loop, forever.
 

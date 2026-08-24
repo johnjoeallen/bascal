@@ -6,7 +6,7 @@ It is a structured superset of BASIC, inspired mainly by Pascal. Blocks show cho
 
 ## The source and its targets
 
-BASCAL source lives in `.bcl` files. Its BASIC and C backends are both almost complete: `basic`, the default, produces line-numbered Microsoft BASIC; `c`, selected with `--target c`, produces native C. The C backend still has a small number of documented gaps. You can read, inspect, and compile the generated output with the appropriate toolchain.
+The BASCAL compiler (`bcc`) transpiles `.bcl` source files to line-numbered Microsoft BASIC by default, or to C with `--target c`. The C backend still has a small number of documented gaps. You can read, inspect, and compile the generated output with the appropriate toolchain.
 
 The usual advice is simple: use a BASCAL construct when one fits the job. Prefer structured `if` statements and loops to hand-wired jumps, and `record`/`file` to hand-written random-file bookkeeping. Raw BASIC remains available when a program genuinely needs target-specific behaviour.
 
