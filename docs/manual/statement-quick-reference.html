@@ -226,111 +226,116 @@
 <td>Portable error recovery (both targets); abandons the <code>try</code> region, no <code>resume</code></td>
 </tr>
 <tr class="even">
+<td><code>THROW</code></td>
+<td><code>throw</code> / <code>throw code%</code></td>
+<td>Re-raise the current error, or raise a new one, from inside <code>catch</code> (portable across both targets)</td>
+</tr>
+<tr class="odd">
 <td><code>OPEN</code></td>
 <td><code>OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n</code></td>
 <td>Open file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>OUT</code></td>
 <td><code>OUT port, val</code></td>
 <td>Write byte to hardware I/O port</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>POKE</code></td>
 <td><code>POKE address, val</code></td>
 <td>Write byte to memory address</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PRINT</code></td>
 <td><code>PRINT expr[, ...]</code></td>
 <td>Print to screen</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PROGRAM</code></td>
 <td><code>program name</code> / <code>program name shared sharedname</code></td>
 <td>Declare this file as a runnable program (mandatory in the file passed to <code>bcc</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LIBRARY</code></td>
 <td><code>library name</code></td>
 <td>Declare this file as a library module (mandatory in every <code>require</code>/<code>import</code> target)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PROCEDURE</code></td>
 <td><code>PROCEDURE name(params)</code> … <code>END PROCEDURE</code></td>
 <td>Define a procedure (no return value)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>PRINT #</code></td>
 <td><code>PRINT #n, expr[, ...]</code></td>
 <td>Print to file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>PRINT USING</code></td>
 <td><code>PRINT USING fmt$; expr[; ...]</code></td>
 <td>Formatted print (also <code>LPRINT USING</code>, <code>PRINT #n, USING</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RANDOMIZE</code></td>
 <td><code>RANDOMIZE [seed]</code></td>
 <td>Seed random number generator</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>READ</code></td>
 <td><code>READ var[, ...]</code></td>
 <td>Read from DATA stream</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>REQUIRE</code></td>
 <td><code>require path.symbol</code></td>
 <td>Load dependency module</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>RESTORE</code></td>
 <td><code>RESTORE [label]</code></td>
 <td>Reset DATA pointer</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RETURN</code></td>
 <td><code>RETURN expr</code> / <code>RETURN</code></td>
 <td>Return value from function; bare form exits a procedure early</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SELECT CASE</code></td>
 <td><code>SELECT CASE expr</code> … <code>END SELECT</code></td>
 <td>Multi-way branch</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>STOP</code></td>
 <td><code>STOP</code></td>
 <td>Stop program execution</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SHARED</code></td>
 <td><code>shared name</code></td>
 <td>Declare this file as the shared-variables file <code>name</code> (shared vars listed via <code>dim</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>SWAP</code></td>
 <td><code>SWAP a, b</code></td>
 <td>Exchange two variable values</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>SYSTEM</code></td>
 <td><code>SYSTEM</code></td>
 <td>Exit to operating system</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>WHILE</code></td>
 <td><code>WHILE cond</code> … <code>END WHILE</code> (or <code>WEND</code>)</td>
 <td>Condition-at-top loop</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>WIDTH</code></td>
 <td><code>WIDTH [#n,] cols</code></td>
 <td>Set line width for console or file channel</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>WRITE #</code></td>
 <td><code>WRITE #n, expr[, ...]</code></td>
 <td>Write to file (quoted format)</td>

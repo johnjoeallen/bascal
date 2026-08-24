@@ -57,17 +57,61 @@
 
 480 ON ERROR GOTO 0
 
-490 ' ---- restore with a label: rewind the DATA pointer to a specific block ----
+490 ' ---- try/catch: portable structured error recovery, and throw to rethrow ----
+500 ' 
+510 ' try/catch (issue #60) is BASCAL's structured alternative to on error
+520 ' goto/resume above -- it transpiles unchanged under both --target basic
+530 ' and --target C. A failed statement anywhere in the try body abandons
+540 ' the rest of it and runs catch once, then execution always continues
+550 ' right after end try -- never back inside try, and with no resume
+560 ' equivalent at all. err%/erl% are ordinary locals scoped to the catch
+570 ' block, not aliases for the ambient err/erl on error goto uses above.
+580 ' 
+590 ' throw with no argument rethrows whatever error err%/erl% just
+600 ' captured -- the portable equivalent of on error goto's own "error err"
+610 ' above -- for an error this catch doesn't recognize, so it keeps
+620 ' propagating instead of being silently swallowed.
 
-500 PRINT "restore to a label:"
-510 READ firstcountry$
-520 PRINT "  first read: "; firstcountry$
-530 RESTORE 580
-540 READ secondcountry$
-550 PRINT "  after restore secondBatch: "; secondcountry$
+630 PRINT "try/catch, missing file, with rethrow:"
+640 filename$ = "also_missing.dat"
+650 ON ERROR GOTO 720
+660 BCC_TRY_0002_PENDING% = 0
+670     OPEN filename$ FOR INPUT AS #2
+680     PRINT "  file opened (unexpected)"
+690     CLOSE #2
+700 ON ERROR GOTO 0
+710 GOTO 880
+720     BCC_TRY_0002_PENDING% = ERR
+730     err% = ERR
+740     erl% = ERL
+750     RESUME 760
+760 ON ERROR GOTO 860
+770     IF (err% = 53) = 0 THEN GOTO 800
+780         PRINT "  caught error "; err%; ": "; filename$; " not found"
+790         GOTO 820
+800         PRINT "  unexpected error "; err%; ", rethrowing"
+810         ERROR ERR
+820     REM END IF
+830     BCC_TRY_0002_PENDING% = 0
+840     ON ERROR GOTO 0
+850     GOTO 880
+860     BCC_TRY_0002_PENDING% = ERR
+870     RESUME 880
+880 ON ERROR GOTO 0
+890     IF BCC_TRY_0002_PENDING% <> 0 THEN ERROR BCC_TRY_0002_PENDING%
+900 REM END TRY
 
-560 END
+910 ' ---- restore with a label: rewind the DATA pointer to a specific block ----
 
-570 DATA "France"
+920 PRINT "restore to a label:"
+930 READ firstcountry$
+940 PRINT "  first read: "; firstcountry$
+950 RESTORE 1000
+960 READ secondcountry$
+970 PRINT "  after restore secondBatch: "; secondcountry$
 
-580 DATA "Japan"
+980 END
+
+990 DATA "France"
+
+1000 DATA "Japan"

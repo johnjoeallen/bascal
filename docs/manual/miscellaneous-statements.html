@@ -140,6 +140,28 @@ end if
 
 done:
 end</code></pre>
+<h3 id="try-catch-throw">TRY / CATCH / THROW</h3>
+<p>Portable structured error recovery: works unchanged under both <code>--target basic</code> and <code>--target C</code>. A failed statement anywhere in the <code>try</code> body abandons the rest of it and runs <code>catch</code> once, then always runs the rest of the program after <code>end try</code> — never back inside <code>try</code>. There is no <code>resume</code> equivalent: recovery always continues right after <code>end try</code>, not at the failing statement or "next".</p>
+<pre><code>try
+    open fileName$ for input as #1
+    &#39; ... file processing ...
+    close #1
+catch err%, erl%
+    print &quot;Error &quot;; err%; &quot; at line &quot;; erl%
+end try</code></pre>
+<p><code>err%</code> and <code>erl%</code> are ordinary locals scoped to the <code>catch</code> block alone — not aliases for the ambient <code>err</code>/<code>erl</code> pseudo-variables <code>on error goto</code> uses above. They're populated once, at the start of <code>catch</code>, with the error code and the line the failure raised from, and go out of scope at <code>end try</code>. <code>catch</code> is optional; a <code>try</code> with only a <code>finally</code> body still abandons <code>try</code> on error, it just has nothing custom to run before <code>finally</code> does.</p>
+<h4 id="throw">THROW</h4>
+<p><code>throw</code> is the portable equivalent of <code>ERROR err</code> above — most often used inside a <code>catch</code> to re-raise an error it doesn't know how to handle, so it keeps propagating instead of being silently swallowed. With no argument it rethrows whatever error is currently active; with an expression, it raises that code as a new error instead.</p>
+<pre><code>try
+    open fileName$ for input as #1
+catch err%, erl%
+    if err% = 53 then
+        print &quot;Cannot open &quot;; fileName$
+    else
+        throw          &#39; not a case this catch handles -- keep propagating
+    end if
+end try</code></pre>
+<pre><code>throw 53   &#39; raise a new error, same as `error 53`</code></pre>
 <h3 id="poke">POKE</h3>
 <p>Writes a byte value to a memory address. The address is an integer expression.</p>
 <pre><code>poke &amp;H0400, 3      &#39; write to segment-zero address using hex literal

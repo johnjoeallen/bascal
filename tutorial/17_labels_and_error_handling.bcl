@@ -61,6 +61,36 @@ end if
 afterOpen:
 on error goto 0
 
+/* ---- try/catch: portable structured error recovery, and throw to rethrow ---- */
+//
+// try/catch (issue #60) is BASCAL's structured alternative to on error
+// goto/resume above -- it transpiles unchanged under both --target basic
+// and --target C. A failed statement anywhere in the try body abandons
+// the rest of it and runs catch once, then execution always continues
+// right after end try -- never back inside try, and with no resume
+// equivalent at all. err%/erl% are ordinary locals scoped to the catch
+// block, not aliases for the ambient err/erl on error goto uses above.
+//
+// throw with no argument rethrows whatever error err%/erl% just
+// captured -- the portable equivalent of on error goto's own "error err"
+// above -- for an error this catch doesn't recognize, so it keeps
+// propagating instead of being silently swallowed.
+
+print "try/catch, missing file, with rethrow:"
+fileName$ = "also_missing.dat"
+try
+    open fileName$ for input as #2
+    print "  file opened (unexpected)"
+    close #2
+catch err%, erl%
+    if err% = 53 then
+        print "  caught error "; err%; ": "; fileName$; " not found"
+    else
+        print "  unexpected error "; err%; ", rethrowing"
+        throw
+    end if
+end try
+
 /* ---- restore with a label: rewind the DATA pointer to a specific block ---- */
 
 print "restore to a label:"
