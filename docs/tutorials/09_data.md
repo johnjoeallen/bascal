@@ -124,7 +124,7 @@ data "Egypt",   "Cairo"
 
 ```basic
 
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial — data, read, restore, swap, randomize
@@ -201,11 +201,23 @@ data "Egypt",   "Cairo"
 
 ```c
 
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-#include "bcc_runtime.h"
+#define BCC_STRBUF_COUNT 8
+static char bcc_strbuf[BCC_STRBUF_COUNT][256];
+static int bcc_strbuf_next = 0;
+
+static int bcc_data_ptr = 0;
+
+static char* bcc_strbuf_take(void);
+static const char* bcc_mid(const char* s, int start, int length);
+static const char* bcc_chr(int code);
+static const char* bcc_stri(int value);
+static const char* bcc_strd(double value);
+static const char* bcc_read_data(void);
 
 static int bv_i_a = 0;
 static int bv_i_b = 0;
@@ -326,6 +338,55 @@ int main(void) {
 
     return 0;
 }
+
+static char* bcc_strbuf_take(void) {
+    char* buf = bcc_strbuf[bcc_strbuf_next];
+    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;
+    return buf;
+}
+
+static const char* bcc_mid(const char* s, int start, int length) {
+    char* out = bcc_strbuf_take();
+    int len = (int)strlen(s);
+    int from = start - 1;
+    if (from < 0) from = 0;
+    if (from > len) from = len;
+    int avail = len - from;
+    if (length < 0) length = 0;
+    if (length > avail) length = avail;
+    snprintf(out, 256, "%.*s", length, s + from);
+    return out;
+}
+
+static const char* bcc_chr(int code) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "%c", code);
+    return out;
+}
+
+static const char* bcc_stri(int value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% d", value);
+    return out;
+}
+
+static const char* bcc_strd(double value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% g", value);
+    return out;
+}
+
+#define BCC_DATA_COUNT 10
+static const char* bcc_data[BCC_DATA_COUNT] = { "France", "Paris", "Germany", "Berlin", "Japan", "Tokyo", "Brazil", "Brasilia", "Egypt", "Cairo" };
+
+static const char* bcc_read_data(void) {
+    if (bcc_data_ptr >= BCC_DATA_COUNT) {
+        fprintf(stderr, "Out of DATA\n");
+        exit(1);
+    }
+    return bcc_data[bcc_data_ptr++];
+}
+
 
 ```
 

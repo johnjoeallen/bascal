@@ -117,7 +117,7 @@ end
 
 ```basic
 
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial — Operators and Expressions
@@ -191,6 +191,7 @@ end
 
 ```c
 
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <math.h>
 

@@ -1,3 +1,4 @@
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 
 int main(void) {

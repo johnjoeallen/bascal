@@ -1,4 +1,4 @@
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
@@ -8,7 +8,7 @@
 70 ' via ordinary-call syntax resolving to this same declaration.
 
 80 ' Tutorial — Scalar methods
-90 '
+90 ' 
 100 ' A method has a typed scalar receiver, written after `method`, and a typed
 110 ' result suffix on its name. The receiver is available as self%/self!/self$
 120 ' in the body. Dot calls can chain when each result has the next receiver's

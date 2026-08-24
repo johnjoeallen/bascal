@@ -120,7 +120,7 @@ end
 
 ```basic
 
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Tutorial — SELECT CASE
@@ -221,6 +221,7 @@ end
 
 ```c
 
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <string.h>
 
@@ -248,19 +249,44 @@ int main(void) {
 
     {
         int bt_sel_0 = bv_i_score;
-        if ((bt_sel_0 == 100)) {
-            printf("Perfect!\n");
-        } else if ((bt_sel_0 >= 90 && bt_sel_0 <= 99)) {
-            printf("A  — Excellent\n");
-        } else if ((bt_sel_0 >= 80 && bt_sel_0 <= 89)) {
-            printf("B  — Good\n");
-        } else if ((bt_sel_0 >= 70 && bt_sel_0 <= 79)) {
-            printf("C  — Satisfactory\n");
-        } else if ((bt_sel_0 >= 60 && bt_sel_0 <= 69)) {
-            printf("D  — Passing\n");
-        } else if ((bt_sel_0 >= 0)) {
-            printf("F  — Fail\n");
-        } else {
+        int bt_sel_match_1 = 0;
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 == 100)) {
+                bt_sel_match_1 = 1;
+                printf("Perfect!\n");
+            }
+        }
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 >= 90 && bt_sel_0 <= 99)) {
+                bt_sel_match_1 = 1;
+                printf("A  — Excellent\n");
+            }
+        }
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 >= 80 && bt_sel_0 <= 89)) {
+                bt_sel_match_1 = 1;
+                printf("B  — Good\n");
+            }
+        }
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 >= 70 && bt_sel_0 <= 79)) {
+                bt_sel_match_1 = 1;
+                printf("C  — Satisfactory\n");
+            }
+        }
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 >= 60 && bt_sel_0 <= 69)) {
+                bt_sel_match_1 = 1;
+                printf("D  — Passing\n");
+            }
+        }
+        if (!bt_sel_match_1) {
+            if ((bt_sel_0 >= 0)) {
+                bt_sel_match_1 = 1;
+                printf("F  — Fail\n");
+            }
+        }
+        if (!bt_sel_match_1) {
             printf("Invalid score\n");
         }
     }
@@ -269,20 +295,29 @@ int main(void) {
     snprintf(bv_s_day, sizeof(bv_s_day), "%s", "Saturday");
 
     {
-        char bt_sel_1[256];
-        snprintf(bt_sel_1, sizeof(bt_sel_1), "%s", bv_s_day);
-        if ((strcmp(bt_sel_1, "Monday") == 0) || (strcmp(bt_sel_1, "Tuesday") == 0) || (strcmp(bt_sel_1, "Wednesday") == 0) || (strcmp(bt_sel_1, "Thursday") == 0) || (strcmp(bt_sel_1, "Friday") == 0)) {
-            char bt_s_2[256];
-            snprintf(bt_s_2, sizeof(bt_s_2), "%s%s", bv_s_day, " is a weekday");
-            printf("%s\n", bt_s_2);
-        } else if ((strcmp(bt_sel_1, "Saturday") == 0) || (strcmp(bt_sel_1, "Sunday") == 0)) {
-            char bt_s_3[256];
-            snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bv_s_day, " is a weekend");
-            printf("%s\n", bt_s_3);
-        } else {
-            char bt_s_4[256];
-            snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", "Unknown day: ", bv_s_day);
-            printf("%s\n", bt_s_4);
+        char bt_sel_2[256];
+        snprintf(bt_sel_2, sizeof(bt_sel_2), "%s", bv_s_day);
+        int bt_sel_match_3 = 0;
+        if (!bt_sel_match_3) {
+            if ((strcmp(bt_sel_2, "Monday") == 0) || (strcmp(bt_sel_2, "Tuesday") == 0) || (strcmp(bt_sel_2, "Wednesday") == 0) || (strcmp(bt_sel_2, "Thursday") == 0) || (strcmp(bt_sel_2, "Friday") == 0)) {
+                bt_sel_match_3 = 1;
+                char bt_s_4[256];
+                snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", bv_s_day, " is a weekday");
+                printf("%s\n", bt_s_4);
+            }
+        }
+        if (!bt_sel_match_3) {
+            if ((strcmp(bt_sel_2, "Saturday") == 0) || (strcmp(bt_sel_2, "Sunday") == 0)) {
+                bt_sel_match_3 = 1;
+                char bt_s_5[256];
+                snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bv_s_day, " is a weekend");
+                printf("%s\n", bt_s_5);
+            }
+        }
+        if (!bt_sel_match_3) {
+            char bt_s_6[256];
+            snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "Unknown day: ", bv_s_day);
+            printf("%s\n", bt_s_6);
         }
     }
 
@@ -290,16 +325,33 @@ int main(void) {
     bv_i_temp = -(3);
 
     {
-        int bt_sel_5 = bv_i_temp;
-        if ((bt_sel_5 < 0)) {
-            printf("Below freezing (%d°)\n", bv_i_temp);
-        } else if ((bt_sel_5 < 10)) {
-            printf("Cold (%d°)\n", bv_i_temp);
-        } else if ((bt_sel_5 < 20)) {
-            printf("Cool (%d°)\n", bv_i_temp);
-        } else if ((bt_sel_5 < 30)) {
-            printf("Warm (%d°)\n", bv_i_temp);
-        } else {
+        int bt_sel_7 = bv_i_temp;
+        int bt_sel_match_8 = 0;
+        if (!bt_sel_match_8) {
+            if ((bt_sel_7 < 0)) {
+                bt_sel_match_8 = 1;
+                printf("Below freezing (%d°)\n", bv_i_temp);
+            }
+        }
+        if (!bt_sel_match_8) {
+            if ((bt_sel_7 < 10)) {
+                bt_sel_match_8 = 1;
+                printf("Cold (%d°)\n", bv_i_temp);
+            }
+        }
+        if (!bt_sel_match_8) {
+            if ((bt_sel_7 < 20)) {
+                bt_sel_match_8 = 1;
+                printf("Cool (%d°)\n", bv_i_temp);
+            }
+        }
+        if (!bt_sel_match_8) {
+            if ((bt_sel_7 < 30)) {
+                bt_sel_match_8 = 1;
+                printf("Warm (%d°)\n", bv_i_temp);
+            }
+        }
+        if (!bt_sel_match_8) {
             printf("Hot (%d°)\n", bv_i_temp);
         }
     }
@@ -308,14 +360,27 @@ int main(void) {
     bv_i_choice = 2;
 
     {
-        int bt_sel_6 = bv_i_choice;
-        if ((bt_sel_6 == 1)) {
-            printf("New game\n");
-        } else if ((bt_sel_6 == 2) || (bt_sel_6 == 3)) {
-            printf("Load game\n");
-        } else if ((bt_sel_6 == 4)) {
-            printf("Options\n");
-        } else {
+        int bt_sel_9 = bv_i_choice;
+        int bt_sel_match_10 = 0;
+        if (!bt_sel_match_10) {
+            if ((bt_sel_9 == 1)) {
+                bt_sel_match_10 = 1;
+                printf("New game\n");
+            }
+        }
+        if (!bt_sel_match_10) {
+            if ((bt_sel_9 == 2) || (bt_sel_9 == 3)) {
+                bt_sel_match_10 = 1;
+                printf("Load game\n");
+            }
+        }
+        if (!bt_sel_match_10) {
+            if ((bt_sel_9 == 4)) {
+                bt_sel_match_10 = 1;
+                printf("Options\n");
+            }
+        }
+        if (!bt_sel_match_10) {
             printf("Quit\n");
         }
     }

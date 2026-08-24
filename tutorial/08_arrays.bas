@@ -1,4 +1,4 @@
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Storage for array parameters, sized to fit every call site
@@ -52,7 +52,7 @@
 440 IF printarrayArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `printArray%` needs "; printarrayArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
 
 450 ' copy array argument into transpiled function storage: data%() -> printarrayArr0%()
-460 FOR BCCT2% = 1 TO printarrayArrDim00%
+460 FOR BCCT2% = 0 TO printarrayArrDim00%
 470     printarrayArr0%(BCCT2%) = data%(BCCT2%)
 480 NEXT BCCT2%
 
@@ -64,14 +64,14 @@
 530 IF insertionsortArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `insertionSort%` needs "; insertionsortArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
 
 540 ' copy array argument into transpiled function storage: data%() -> insertionsortArr0%()
-550 FOR BCCT3% = 1 TO insertionsortArrDim00%
+550 FOR BCCT3% = 0 TO insertionsortArrDim00%
 560     insertionsortArr0%(BCCT3%) = data%(BCCT3%)
 570 NEXT BCCT3%
 
 580 GOSUB 1060
 
 590 ' copy mutated array argument back to caller storage: insertionsortArr0%() -> data%()
-600 FOR BCCT4% = 1 TO insertionsortArrDim00%
+600 FOR BCCT4% = 0 TO insertionsortArrDim00%
 610     data%(BCCT4%) = insertionsortArr0%(BCCT4%)
 620 NEXT BCCT4%
 
@@ -81,7 +81,7 @@
 660 IF printarrayArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `printArray%` needs "; printarrayArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
 
 670 ' copy array argument into transpiled function storage: data%() -> printarrayArr0%()
-680 FOR BCCT5% = 1 TO printarrayArrDim00%
+680 FOR BCCT5% = 0 TO printarrayArrDim00%
 690     printarrayArr0%(BCCT5%) = data%(BCCT5%)
 700 NEXT BCCT5%
 
@@ -95,7 +95,7 @@
 770 IF indexofArrDim00% > 6 THEN PRINT "runtime error: `arr%` of `indexOf%` needs "; indexofArrDim00%; " elements along axis 0, but its storage only holds 6" : STOP
 
 780 ' copy array argument into transpiled function storage: data%() -> indexofArr0%()
-790 FOR BCCT6% = 1 TO indexofArrDim00%
+790 FOR BCCT6% = 0 TO indexofArrDim00%
 800     indexofArr0%(BCCT6%) = data%(BCCT6%)
 810 NEXT BCCT6%
 
@@ -127,7 +127,7 @@
 1040 END
 
 1050 ' function insertionsort%(arr%)
-1060     FOR insertionsortI0% = 1 TO insertionsortArrDim00% - 1
+1060     FOR insertionsortI0% = 1 TO (insertionsortArrDim00% + 1) - 1
 1070         insertionsortKey0% = insertionsortArr0%(insertionsortI0%)
 1080         insertionsortJ0% = insertionsortI0% - 1
 1090         IF ((insertionsortJ0% >= 0) AND (insertionsortArr0%(insertionsortJ0%) > insertionsortKey0%)) = 0 THEN GOTO 1130
@@ -142,7 +142,7 @@
 1180 ' end function insertionsort%
 
 1190 ' function indexof%(arr%, target%)
-1200     FOR indexofI0% = 0 TO indexofArrDim00% - 1
+1200     FOR indexofI0% = 0 TO (indexofArrDim00% + 1) - 1
 1210         IF (indexofArr0%(indexofI0%) = indexofTarget0%) = 0 THEN GOTO 1240
 1220             indexofResult0% = indexofI0%
 1230             RETURN
@@ -154,7 +154,7 @@
 
 1290 ' function printarray%(arr%)
 1300     printarrayLine0$ = "["
-1310     FOR printarrayI0% = 0 TO printarrayArrDim00% - 1
+1310     FOR printarrayI0% = 0 TO (printarrayArrDim00% + 1) - 1
 1320         printarrayLine0$ = (printarrayLine0$ + " ") + STR$(printarrayArr0%(printarrayI0%))
 1330     NEXT printarrayI0%
 1340     PRINT printarrayLine0$ + " ]"

@@ -1,6 +1,8 @@
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
+#include <stdlib.h>
 
-#include "bcc_runtime.h"
+static void bcc_color(int fg, int bg);
 
 int main(void) {
     // Tutorial — Screen I/O: cls, locate, color, beep, lprint
@@ -63,3 +65,23 @@ int main(void) {
     printf("Demo complete.\n");
     return 0;
 }
+
+static const int bcc_ansi_fg[16] = {30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97};
+static const int bcc_ansi_bg[8] = {40, 44, 42, 46, 41, 45, 43, 47};
+static int bcc_color_used = 0;
+
+static void bcc_color_reset(void) {
+    printf("\x1b[0m");
+}
+
+static void bcc_color(int fg, int bg) {
+    if (!bcc_color_used) {
+        atexit(bcc_color_reset);
+        bcc_color_used = 1;
+    }
+    printf("\x1b[%dm", bcc_ansi_fg[fg & 15]);
+    if (bg >= 0) {
+        printf("\x1b[%dm", bcc_ansi_bg[bg & 7]);
+    }
+}
+

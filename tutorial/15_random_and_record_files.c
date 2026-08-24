@@ -1,9 +1,54 @@
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "bcc_runtime.h"
+#define BCC_STRBUF_COUNT 8
+static char bcc_strbuf[BCC_STRBUF_COUNT][256];
+static int bcc_strbuf_next = 0;
+
+static int bcc_err = 0;
+static int bcc_on_error_target = -1;
+static int bcc_in_handler = 0;
+static int bcc_resume_id = -1;
+static int bcc_erl = 0;
+static const char *bcc_err_file = "";
+
+#define BCC_MAX_CHANNELS 32
+static FILE* bcc_files[BCC_MAX_CHANNELS];
+
+static char* bcc_strbuf_take(void);
+static const char* bcc_mid(const char* s, int start, int length);
+static const char* bcc_chr(int code);
+static const char* bcc_stri(int value);
+static const char* bcc_strd(double value);
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
+static void bcc_mki(char* out, int value);
+static void bcc_mkl(char* out, int value);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static int bcc_cvi(const char* s);
+static int bcc_cvl(const char* s);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
+static int bcc_put_record_fields_1_0(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_0(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_fields_1_1(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_1(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_fields_1_2(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_2(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_fields_1_3(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_3(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_fields_1_4(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_4(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_fields_1_5(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3);
+static int bcc_get_record_fields_1_5(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
+static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3);
+static int bcc_get_record_student(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3);
 
 static double bv_d_carolscore = 0;
 static double bv_d_score = 0;
@@ -102,8 +147,23 @@ int main(void) {
 
     // ---- Write three records ----
 
+    bcc_raise_retry_0: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 0;
+        bcc_erl = 63;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_0: ;
 
     // Record 1: Alice, 95
     bcc_mki(bv_s_idbuf, 1);
@@ -132,8 +192,23 @@ int main(void) {
     // ---- Read records in reverse order ----
 
     printf("Part 1 (hand-written) -- reading records in reverse order:\n");
+    bcc_raise_retry_1: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 1;
+        bcc_erl = 92;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_1: ;
 
     int bt_lim_0 = 1;
     int bt_step_0 = -(1);
@@ -161,8 +236,23 @@ int main(void) {
 
     // ---- Update one field in place ----
 
+    bcc_raise_retry_2: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 2;
+        bcc_erl = 106;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_2: ;
 
     // Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
     // always writes the whole 50-byte buffer, so GET has to load the record
@@ -177,8 +267,23 @@ int main(void) {
 
     // ---- Update two fields at once ----
 
+    bcc_raise_retry_3: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 3;
+        bcc_erl = 121;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_3: ;
 
     // Alice got married and re-sat the exam — `name` and `score` both change,
     // `id` and `faculty` don't. Same problem as Bob's update, just with two fields instead
@@ -196,8 +301,23 @@ int main(void) {
 
     // ---- Same shape again ----
 
+    bcc_raise_retry_4: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 4;
+        bcc_erl = 139;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_4: ;
 
     // Carol changed her name and improved her score: the exact same
     // GET / LSET / LSET / PUT shape as Alice's update above, just retyped by
@@ -213,8 +333,23 @@ int main(void) {
     // ---- Verify the updates ----
 
     printf("Part 1 (hand-written) -- after updates:\n");
+    bcc_raise_retry_5: ;
     bcc_files[0] = fopen(bv_s_dbfile, "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 5;
+        bcc_erl = 155;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_5: ;
 
     int bt_lim_7 = bv_i_numrecs;
     int bt_step_7 = 1;
@@ -316,8 +451,23 @@ int main(void) {
 
 
     // file db as Student = open(...)  [50 bytes/record]
+    bcc_raise_retry_6: ;
     bcc_files[0] = fopen("tutorial_records.dat", "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen("tutorial_records.dat", "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 6;
+        bcc_erl = 252;
+        bcc_err_file = "tutorial/15_random_and_record_files.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_6: ;
 
     // ---- Write three records ----
 
@@ -469,3 +619,262 @@ int main(void) {
 
     return 0;
 }
+
+static char* bcc_strbuf_take(void) {
+    char* buf = bcc_strbuf[bcc_strbuf_next];
+    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;
+    return buf;
+}
+
+static const char* bcc_mid(const char* s, int start, int length) {
+    char* out = bcc_strbuf_take();
+    int len = (int)strlen(s);
+    int from = start - 1;
+    if (from < 0) from = 0;
+    if (from > len) from = len;
+    int avail = len - from;
+    if (length < 0) length = 0;
+    if (length > avail) length = avail;
+    snprintf(out, 256, "%.*s", length, s + from);
+    return out;
+}
+
+static const char* bcc_chr(int code) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "%c", code);
+    return out;
+}
+
+static const char* bcc_stri(int value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% d", value);
+    return out;
+}
+
+static const char* bcc_strd(double value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% g", value);
+    return out;
+}
+
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {
+    memcpy(field, source, width);
+    field[width] = 0;
+    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;
+}
+
+static void bcc_mki(char* out, int value) {
+    int16_t v = (int16_t)value;
+    memcpy(out, &v, 2);
+}
+
+static void bcc_mkl(char* out, int value) {
+    int32_t v = (int32_t)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static int bcc_cvi(const char* s) {
+    int16_t v;
+    memcpy(&v, s, 2);
+    return (int)v;
+}
+
+static int bcc_cvl(const char* s) {
+    int32_t v;
+    memcpy(&v, s, 4);
+    return (int)v;
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
+    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;
+    return fread(buffer, 1, reclen, file) == reclen;
+}
+
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {
+    fseek(file, (record - 1) * (long)reclen, SEEK_SET);
+    fwrite(buffer, 1, reclen, file);
+}
+
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {
+    size_t len = strlen(value);
+    if (len > width) len = width;
+    memcpy(dest, value, len);
+    memset(dest + len, ' ', width - len);
+}
+
+static int bcc_put_record_fields_1_0(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_0(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_fields_1_1(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_1(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_fields_1_2(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_2(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_fields_1_3(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_3(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_fields_1_4(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_4(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_fields_1_5(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    memcpy(buffer + 0, field_0, 2);
+    memcpy(buffer + 2, field_1, 20);
+    memcpy(buffer + 22, field_2, 8);
+    memcpy(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_fields_1_5(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+
+static int bcc_put_record_student(FILE* file, long record, const int16_t* field_0, const char* field_1, const double* field_2, const char* field_3) {
+    unsigned char buffer[50];
+    if ((!field_0 || !field_1 || !field_2 || !field_3) && !bcc_read_record(file, buffer, 50, record)) return 0;
+    (void)(field_0 && memcpy(buffer + 0, field_0, 2));
+    if (field_1) bcc_pad_string_field(buffer + 2, field_1, 20);
+    (void)(field_2 && memcpy(buffer + 22, field_2, 8));
+    if (field_3) bcc_pad_string_field(buffer + 30, field_3, 20);
+    bcc_write_record(file, buffer, 50, record);
+    return 1;
+}
+
+static int bcc_get_record_student(FILE* file, long record, char* field_0, char* field_1, char* field_2, char* field_3) {
+    unsigned char buffer[50];
+    if (!bcc_read_record(file, buffer, 50, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 20);
+    memcpy(field_2, buffer + 22, 8);
+    field_2[8] = 0;
+    bcc_read_string_field(field_3, buffer + 30, 20);
+    return 1;
+}
+

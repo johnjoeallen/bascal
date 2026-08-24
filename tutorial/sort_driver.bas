@@ -1,4 +1,4 @@
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Storage for array parameters, sized to fit every call site
@@ -56,14 +56,14 @@
 450 IF bubblesortDataDim00% > 5000 THEN PRINT "runtime error: `data%` of `bubbleSort%` needs "; bubblesortDataDim00%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 460 ' copy array argument into transpiled function storage: bubbledata%() -> bubblesortData0%()
-470 FOR BCCT1% = 1 TO bubblesortDataDim00%
+470 FOR BCCT1% = 0 TO bubblesortDataDim00%
 480     bubblesortData0%(BCCT1%) = bubbledata%(BCCT1%)
 490 NEXT BCCT1%
 
 500 GOSUB 1450
 
 510 ' copy mutated array argument back to caller storage: bubblesortData0%() -> bubbledata%()
-520 FOR BCCT2% = 1 TO bubblesortDataDim00%
+520 FOR BCCT2% = 0 TO bubblesortDataDim00%
 530     bubbledata%(BCCT2%) = bubblesortData0%(BCCT2%)
 540 NEXT BCCT2%
 
@@ -86,14 +86,14 @@
 700 IF shakersortDataDim00% > 5000 THEN PRINT "runtime error: `data%` of `shakerSort%` needs "; shakersortDataDim00%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 710 ' copy array argument into transpiled function storage: shakerdata%() -> shakersortData0%()
-720 FOR BCCT5% = 1 TO shakersortDataDim00%
+720 FOR BCCT5% = 0 TO shakersortDataDim00%
 730     shakersortData0%(BCCT5%) = shakerdata%(BCCT5%)
 740 NEXT BCCT5%
 
 750 GOSUB 1610
 
 760 ' copy mutated array argument back to caller storage: shakersortData0%() -> shakerdata%()
-770 FOR BCCT6% = 1 TO shakersortDataDim00%
+770 FOR BCCT6% = 0 TO shakersortDataDim00%
 780     shakerdata%(BCCT6%) = shakersortData0%(BCCT6%)
 790 NEXT BCCT6%
 
@@ -116,14 +116,14 @@
 950 IF shellsortDataDim00% > 5000 THEN PRINT "runtime error: `data%` of `shellSort%` needs "; shellsortDataDim00%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 960 ' copy array argument into transpiled function storage: shelldata%() -> shellsortData0%()
-970 FOR BCCT9% = 1 TO shellsortDataDim00%
+970 FOR BCCT9% = 0 TO shellsortDataDim00%
 980     shellsortData0%(BCCT9%) = shelldata%(BCCT9%)
 990 NEXT BCCT9%
 
 1000 GOSUB 1990
 
 1010 ' copy mutated array argument back to caller storage: shellsortData0%() -> shelldata%()
-1020 FOR BCCT10% = 1 TO shellsortDataDim00%
+1020 FOR BCCT10% = 0 TO shellsortDataDim00%
 1030     shelldata%(BCCT10%) = shellsortData0%(BCCT10%)
 1040 NEXT BCCT10%
 
@@ -146,14 +146,14 @@
 1200 IF quicksortDataDim00% > 5000 THEN PRINT "runtime error: `data%` of `quickSort%` needs "; quicksortDataDim00%; " elements along axis 0, but its storage only holds 5000" : STOP
 
 1210 ' copy array argument into transpiled function storage: quickdata%() -> quicksortData0%()
-1220 FOR BCCT13% = 1 TO quicksortDataDim00%
+1220 FOR BCCT13% = 0 TO quicksortDataDim00%
 1230     quicksortData0%(BCCT13%) = quickdata%(BCCT13%)
 1240 NEXT BCCT13%
 
 1250 GOSUB 2270
 
 1260 ' copy mutated array argument back to caller storage: quicksortData0%() -> quickdata%()
-1270 FOR BCCT14% = 1 TO quicksortDataDim00%
+1270 FOR BCCT14% = 0 TO quicksortDataDim00%
 1280     quickdata%(BCCT14%) = quicksortData0%(BCCT14%)
 1290 NEXT BCCT14%
 
@@ -174,7 +174,7 @@
 1430 END
 
 1440 ' function bubblesort%(data%)
-1450     bubblesortCount0% = bubblesortDataDim00%
+1450     bubblesortCount0% = (bubblesortDataDim00% + 1)
 1460     ' After each outer pass, the largest remaining value has bubbled right.
 1470     FOR bubblesortI0% = 1 TO bubblesortCount0% - 1
 1480         FOR bubblesortJ0% = 1 TO bubblesortCount0% - bubblesortI0%
@@ -191,7 +191,7 @@
 1590 ' end function bubblesort%
 
 1600 ' function shakersort%(data%)
-1610     shakersortCount0% = shakersortDataDim00%
+1610     shakersortCount0% = (shakersortDataDim00% + 1)
 1620     LEFT% = 1
 1630     RIGHT% = shakersortCount0% - 1
 1640     shakersortSwapped0% = 1
@@ -239,10 +239,10 @@
 1980 ' function shellsort%(data%)
 1990     ' Normalize the count through a required helper so this file has its own
 2000     ' dependency chain.
-2010     touchValue0% = shellsortDataDim00%
+2010     touchValue0% = (shellsortDataDim00% + 1)
 2020     GOSUB 1940
 2030     shellsortCount0% = touchResult0%
-2040     shellsortGap0% = shellsortCount0% / 2
+2040     shellsortGap0% = shellsortCount0% \ 2
 
 2050     ' Repeatedly insertion-sort elements that are gap positions apart.
 2060     IF (shellsortGap0% > 0) = 0 THEN GOTO 2220
@@ -263,7 +263,7 @@
 2180             GOTO 2080
 2190         REM END WHILE
 
-2200         shellsortGap0% = shellsortGap0% / 2
+2200         shellsortGap0% = shellsortGap0% \ 2
 2210         GOTO 2060
 2220     REM END WHILE
 
@@ -277,7 +277,7 @@
 
 2290     quicksortSTop0% = 1
 2300     quicksortSLow0%(1) = 1
-2310     quicksortSHigh0%(1) = quicksortDataDim00%
+2310     quicksortSHigh0%(1) = (quicksortDataDim00% + 1)
 
 2320     IF (quicksortSTop0% > 0) = 0 THEN GOTO 2700
 2330         quicksortQHigh0% = quicksortSHigh0%(quicksortSTop0%)

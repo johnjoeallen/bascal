@@ -1,9 +1,47 @@
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "bcc_runtime.h"
+#define BCC_STRBUF_COUNT 8
+static char bcc_strbuf[BCC_STRBUF_COUNT][256];
+static int bcc_strbuf_next = 0;
+
+static int bcc_err = 0;
+static int bcc_on_error_target = -1;
+static int bcc_in_handler = 0;
+static int bcc_resume_id = -1;
+static int bcc_erl = 0;
+static const char *bcc_err_file = "";
+
+#define BCC_MAX_CHANNELS 32
+static FILE* bcc_files[BCC_MAX_CHANNELS];
+
+static char bcc_input_buf[256];
+
+static char* bcc_strbuf_take(void);
+static const char* bcc_mid(const char* s, int start, int length);
+static const char* bcc_chr(int code);
+static const char* bcc_stri(int value);
+static const char* bcc_strd(double value);
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
+static void bcc_mki(char* out, int value);
+static void bcc_mkl(char* out, int value);
+static void bcc_mks(char* out, double value);
+static void bcc_mkd(char* out, double value);
+static int bcc_cvi(const char* s);
+static int bcc_cvl(const char* s);
+static float bcc_cvs(const char* s);
+static double bcc_cvd(const char* s);
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);
+static int bcc_put_record_header(FILE* file, long record, const int16_t* field_0, const char* field_1);
+static int bcc_get_record_header(FILE* file, long record, char* field_0, char* field_1);
+static int bcc_put_record_entry(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2);
+static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* field_1, char* field_2);
+static void bcc_read_line(void);
 
 static int bv_i_lastslot = 0;
 static char bv_s_catalogauthorbuf[256] = {0};
@@ -392,43 +430,68 @@ void bf_i_mainmenu(void) {
 
         {
             int bt_sel_24 = bv_i_choice;
-            if ((bt_sel_24 == 1)) {
-                bf_i_listall();
-            } else if ((bt_sel_24 == 2)) {
-                printf("AUTHOR  ? ");
-                bcc_read_line();
-                snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
-                printf("TITLE   ? ");
-                bcc_read_line();
-                snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
-                printf("SUBJECT ? ");
-                bcc_read_line();
-                snprintf(bv_s_subject, sizeof(bv_s_subject), "%s", bcc_input_buf);
-                bf_i_additem(bv_s_author, bv_s_title, bv_s_subject);
-            } else if ((bt_sel_24 == 3)) {
-                printf("AUTHOR ? ");
-                bcc_read_line();
-                snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
-                bf_i_searchbyauthor(bv_s_author);
-            } else if ((bt_sel_24 == 4)) {
-                printf("AUTHOR ? ");
-                bcc_read_line();
-                snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
-                printf("TITLE  ? ");
-                bcc_read_line();
-                snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
-                bf_i_searchbyauthortitle(bv_s_author, bv_s_title);
-            } else if ((bt_sel_24 == 5)) {
-                printf("AUTHOR (to delete) ? ");
-                bcc_read_line();
-                snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
-                printf("TITLE  (to delete) ? ");
-                bcc_read_line();
-                snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
-                bf_i_deleteitem(bv_s_author, bv_s_title);
-            } else if ((bt_sel_24 == 6)) {
-                bv_i_running = 0;
-            } else {
+            int bt_sel_match_25 = 0;
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 1)) {
+                    bt_sel_match_25 = 1;
+                    bf_i_listall();
+                }
+            }
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 2)) {
+                    bt_sel_match_25 = 1;
+                    printf("AUTHOR  ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
+                    printf("TITLE   ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
+                    printf("SUBJECT ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_subject, sizeof(bv_s_subject), "%s", bcc_input_buf);
+                    bf_i_additem(bv_s_author, bv_s_title, bv_s_subject);
+                }
+            }
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 3)) {
+                    bt_sel_match_25 = 1;
+                    printf("AUTHOR ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
+                    bf_i_searchbyauthor(bv_s_author);
+                }
+            }
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 4)) {
+                    bt_sel_match_25 = 1;
+                    printf("AUTHOR ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
+                    printf("TITLE  ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
+                    bf_i_searchbyauthortitle(bv_s_author, bv_s_title);
+                }
+            }
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 5)) {
+                    bt_sel_match_25 = 1;
+                    printf("AUTHOR (to delete) ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_author, sizeof(bv_s_author), "%s", bcc_input_buf);
+                    printf("TITLE  (to delete) ? ");
+                    bcc_read_line();
+                    snprintf(bv_s_title, sizeof(bv_s_title), "%s", bcc_input_buf);
+                    bf_i_deleteitem(bv_s_author, bv_s_title);
+                }
+            }
+            if (!bt_sel_match_25) {
+                if ((bt_sel_24 == 6)) {
+                    bt_sel_match_25 = 1;
+                    bv_i_running = 0;
+                }
+            }
+            if (!bt_sel_match_25) {
                 printf("Invalid choice\n");
             }
         }
@@ -479,11 +542,41 @@ int main(void) {
     bv_i_lastslot = 11;
 
     // file header as Header = open(...)  [60 bytes/record]
+    bcc_raise_retry_0: ;
     bcc_files[0] = fopen("catalog.dat", "rb+");
     if (!bcc_files[0]) bcc_files[0] = fopen("catalog.dat", "wb+");
+    if (!bcc_files[0]) {
+        bcc_err = 75;
+        bcc_resume_id = 0;
+        bcc_erl = 53;
+        bcc_err_file = "tutorial/card_catalog.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_0: ;
     // file catalog as Entry = open(...)  [60 bytes/record]
+    bcc_raise_retry_1: ;
     bcc_files[1] = fopen("catalog.dat", "rb+");
     if (!bcc_files[1]) bcc_files[1] = fopen("catalog.dat", "wb+");
+    if (!bcc_files[1]) {
+        bcc_err = 75;
+        bcc_resume_id = 1;
+        bcc_erl = 54;
+        bcc_err_file = "tutorial/card_catalog.bcl";
+        if (bcc_on_error_target < 0 || bcc_in_handler) {
+            fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
+            exit(1);
+        }
+        bcc_in_handler = 1;
+        switch (bcc_on_error_target) {
+        }
+    }
+    bcc_raise_after_1: ;
 
     // ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ----
 
@@ -521,3 +614,152 @@ int main(void) {
 
     return 0;
 }
+
+static char* bcc_strbuf_take(void) {
+    char* buf = bcc_strbuf[bcc_strbuf_next];
+    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;
+    return buf;
+}
+
+static const char* bcc_mid(const char* s, int start, int length) {
+    char* out = bcc_strbuf_take();
+    int len = (int)strlen(s);
+    int from = start - 1;
+    if (from < 0) from = 0;
+    if (from > len) from = len;
+    int avail = len - from;
+    if (length < 0) length = 0;
+    if (length > avail) length = avail;
+    snprintf(out, 256, "%.*s", length, s + from);
+    return out;
+}
+
+static const char* bcc_chr(int code) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "%c", code);
+    return out;
+}
+
+static const char* bcc_stri(int value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% d", value);
+    return out;
+}
+
+static const char* bcc_strd(double value) {
+    char* out = bcc_strbuf_take();
+    snprintf(out, 256, "% g", value);
+    return out;
+}
+
+static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {
+    memcpy(field, source, width);
+    field[width] = 0;
+    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;
+}
+
+static void bcc_mki(char* out, int value) {
+    int16_t v = (int16_t)value;
+    memcpy(out, &v, 2);
+}
+
+static void bcc_mkl(char* out, int value) {
+    int32_t v = (int32_t)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mks(char* out, double value) {
+    float v = (float)value;
+    memcpy(out, &v, 4);
+}
+
+static void bcc_mkd(char* out, double value) {
+    memcpy(out, &value, 8);
+}
+
+static int bcc_cvi(const char* s) {
+    int16_t v;
+    memcpy(&v, s, 2);
+    return (int)v;
+}
+
+static int bcc_cvl(const char* s) {
+    int32_t v;
+    memcpy(&v, s, 4);
+    return (int)v;
+}
+
+static float bcc_cvs(const char* s) {
+    float v;
+    memcpy(&v, s, 4);
+    return v;
+}
+
+static double bcc_cvd(const char* s) {
+    double v;
+    memcpy(&v, s, 8);
+    return v;
+}
+
+static int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {
+    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;
+    return fread(buffer, 1, reclen, file) == reclen;
+}
+
+static void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {
+    fseek(file, (record - 1) * (long)reclen, SEEK_SET);
+    fwrite(buffer, 1, reclen, file);
+}
+
+static void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {
+    size_t len = strlen(value);
+    if (len > width) len = width;
+    memcpy(dest, value, len);
+    memset(dest + len, ' ', width - len);
+}
+
+static int bcc_put_record_header(FILE* file, long record, const int16_t* field_0, const char* field_1) {
+    unsigned char buffer[60];
+    if ((!field_0 || !field_1) && !bcc_read_record(file, buffer, 60, record)) return 0;
+    (void)(field_0 && memcpy(buffer + 0, field_0, 2));
+    if (field_1) bcc_pad_string_field(buffer + 2, field_1, 58);
+    bcc_write_record(file, buffer, 60, record);
+    return 1;
+}
+
+static int bcc_get_record_header(FILE* file, long record, char* field_0, char* field_1) {
+    unsigned char buffer[60];
+    if (!bcc_read_record(file, buffer, 60, record)) return 0;
+    memcpy(field_0, buffer + 0, 2);
+    field_0[2] = 0;
+    bcc_read_string_field(field_1, buffer + 2, 58);
+    return 1;
+}
+
+static int bcc_put_record_entry(FILE* file, long record, const char* field_0, const char* field_1, const char* field_2) {
+    unsigned char buffer[60];
+    if ((!field_0 || !field_1 || !field_2) && !bcc_read_record(file, buffer, 60, record)) return 0;
+    if (field_0) bcc_pad_string_field(buffer + 0, field_0, 20);
+    if (field_1) bcc_pad_string_field(buffer + 20, field_1, 20);
+    if (field_2) bcc_pad_string_field(buffer + 40, field_2, 20);
+    bcc_write_record(file, buffer, 60, record);
+    return 1;
+}
+
+static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* field_1, char* field_2) {
+    unsigned char buffer[60];
+    if (!bcc_read_record(file, buffer, 60, record)) return 0;
+    bcc_read_string_field(field_0, buffer + 0, 20);
+    bcc_read_string_field(field_1, buffer + 20, 20);
+    bcc_read_string_field(field_2, buffer + 40, 20);
+    return 1;
+}
+
+static void bcc_read_line(void) {
+    if (fgets(bcc_input_buf, sizeof(bcc_input_buf), stdin) == NULL) {
+        bcc_input_buf[0] = 0;
+        return;
+    }
+    bcc_input_buf[strcspn(bcc_input_buf, "\r\n")] = 0;
+}
+

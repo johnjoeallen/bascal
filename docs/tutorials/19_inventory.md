@@ -660,7 +660,7 @@ end procedure
 
 ```basic
 
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
@@ -1678,6 +1678,7 @@ end procedure
 
 ```c
 
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -1699,6 +1700,7 @@ static int bcc_on_error_target = -1;
 static int bcc_in_handler = 0;
 static int bcc_resume_id = -1;
 static int bcc_erl = 0;
+static const char *bcc_err_file = "";
 
 #define BCC_MAX_CHANNELS 32
 static FILE* bcc_files[BCC_MAX_CHANNELS];
@@ -2895,6 +2897,7 @@ int main(void) {
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_erl = 91;
+        bcc_err_file = "tutorial/inventory.bcl";
         goto bcc_try_0_catch;
     }
     bcc_on_error_target = -1;

@@ -122,7 +122,7 @@ end
 
 ```basic
 
-10 ' BASCAL generated BASIC
+10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
 30 ' Storage for array parameters, sized to fit every call site
@@ -194,14 +194,14 @@ end
 590 IF fillrangeArrDim00% > 5 THEN PRINT "runtime error: `arr%` of `fillRange` needs "; fillrangeArrDim00%; " elements along axis 0, but its storage only holds 5" : STOP
 
 600 ' copy array argument into transpiled function storage: data%() -> fillrangeArr0%()
-610 FOR BCCT2% = 1 TO fillrangeArrDim00%
+610 FOR BCCT2% = 0 TO fillrangeArrDim00%
 620     fillrangeArr0%(BCCT2%) = data%(BCCT2%)
 630 NEXT BCCT2%
 
 640 GOSUB 940
 
 650 ' copy mutated array argument back to caller storage: fillrangeArr0%() -> data%()
-660 FOR BCCT3% = 1 TO fillrangeArrDim00%
+660 FOR BCCT3% = 0 TO fillrangeArrDim00%
 670     data%(BCCT3%) = fillrangeArr0%(BCCT3%)
 680 NEXT BCCT3%
 
@@ -236,7 +236,7 @@ end
 920 ' end procedure printifpass
 
 930 ' procedure fillrange(arr%, value%)
-940     FOR fillrangeI0% = 0 TO fillrangeArrDim00% - 1
+940     FOR fillrangeI0% = 0 TO (fillrangeArrDim00% + 1) - 1
 950         fillrangeArr0%(fillrangeI0%) = fillrangeValue0%
 960     NEXT fillrangeI0%
 970     RETURN
@@ -253,6 +253,7 @@ end
 
 ```c
 
+// BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
 #include <string.h>
 
