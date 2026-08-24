@@ -200,12 +200,12 @@ try
     open fileName$ for input as #1
     ' ... file processing ...
     close #1
-catch err%, erl%
+catch err%, erl%, source$
     print "Error "; err%; " at line "; erl%
 end try
 ```
 
-`err%` and `erl%` are ordinary locals scoped to the `catch` block alone — not aliases for the ambient `err`/`erl` pseudo-variables `on error goto` uses above. They're populated once, at the start of `catch`, with the error code and the line the failure raised from, and go out of scope at `end try`. `catch` is optional; a `try` with only a `finally` body still abandons `try` on error, it just has nothing custom to run before `finally` does.
+`err%`, `erl%`, and `source$` are ordinary locals scoped to the `catch` block alone — not aliases for the ambient `err`/`erl` pseudo-variables `on error goto` uses above. They're populated once, at the start of `catch`, with the error code, line, and `.bcl` source file that raised the error, and go out of scope at `end try`. `catch` is optional; a `try` with only a `finally` body still abandons `try` on error, it just has nothing custom to run before `finally` does.
 
 #### THROW
 

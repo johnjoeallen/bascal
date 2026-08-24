@@ -18,19 +18,19 @@ after:
 
 ## Handling an error at the point that needs it
 
-For code that should run on both targets, use structured `try`/`catch`/`finally`. It abandons the complete `try` region when a runtime error occurs, makes the error code and source line available to `catch`, always runs `finally`, and then continues after `end try`.
+For code that should run on both targets, use structured `try`/`catch`/`finally`. It abandons the complete `try` region when a runtime error occurs, makes the error code, source line, and source file available to `catch`, always runs `finally`, and then continues after `end try`.
 
 ```bascal
 try
     checkPart()
-catch err%, erl%
-    print "error "; err%; " on line "; erl%
+catch err%, erl%, source$
+    print "error "; err%; " at "; source$; ":"; erl%
 finally
     closePart()
 end try
 ```
 
-`err%` and `erl%` are ordinary locals scoped to the `catch` block; they are not the ambient `err`/`erl` pseudo-variables. `catch` is optional when only cleanup is needed: an unhandled error is re-raised after `finally` runs. There is no `resume`: a failed action is always abandoned, never resumed partway through a procedure.
+`err%`, `erl%`, and `source$` are ordinary locals scoped to the `catch` block; they are not the ambient `err`/`erl` pseudo-variables. `source$` identifies the `.bcl` source file that raised the error. `catch` is optional when only cleanup is needed: an unhandled error is re-raised after `finally` runs. There is no `resume`: a failed action is always abandoned, never resumed partway through a procedure.
 
 On the BASIC target, `try`/`catch`/`finally` transpiles to real `ON ERROR GOTO`/`RESUME <label>`. On the C target, a raise reaches the owning `catch` when it occurs in the `try` block or in a procedure/function called from it, including when that function call is part of a larger expression such as `x% = boom%() + 1`. Tries may be nested: each `finally` runs before an unhandled error reaches the enclosing `catch` or escapes its function. A catch that completes normally suppresses its error; bare `throw` rethrows it after that finally block, while `throw n` throws error `n`.
 
