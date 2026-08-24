@@ -47,10 +47,10 @@ on the homepage for a real before/after of the generated numbering.</p>
 
   <div class="snippet">
     <h3>Portable error handling is under development</h3>
-    <p class="note"><code>on error goto</code>/<code>resume</code> is the classic BASIC model shown below. It is currently a BASIC-target feature: the C backend cannot safely reproduce arbitrary instruction-pointer recovery across generated function and procedure calls.</p>
-    <p>The portable replacement being designed for both targets is a structured <code>try</code>/<code>catch</code> block — the same terminology Visual Basic .NET uses for structured exception handling. It abandons the whole <code>try</code> region on a runtime error, exposes the error metadata to the <code>catch</code> block, and continues after <code>end try</code>:</p>
+    <p class="note"><code>on error goto</code>/<code>resume</code> is the classic BASIC model shown below. It is the BASIC target's own mechanism; the portable, both-target one is <code>try</code>/<code>catch</code>.</p>
+    <p>The portable, both-target mechanism is a structured <code>try</code>/<code>catch</code> block — the same terminology Visual Basic .NET uses for structured exception handling. It abandons the whole <code>try</code> region on a runtime error, exposes the error metadata to the <code>catch</code> block, and continues after <code>end try</code>:</p>
     <pre><code>try ... catch err%, erl% ... end try</code></pre>
-    <p>This syntax is a design mockup, not accepted BASCAL syntax yet. The BASIC backend is expected to transpile it to a local <code>ON ERROR GOTO</code> handler and recovery label; the C backend is expected to propagate a status/error result and run the <code>catch</code> block. See <a href="https://github.com/johnjoeallen/bascal/issues/60">issue #60</a> for the evolving semantics, including nested <code>try</code> blocks and divide-by-zero/file errors.</p>
+    <p>On the BASIC target this transpiles straight onto real <code>ON ERROR GOTO</code>/<code>RESUME &lt;label&gt;</code> and covers every raise site. On the C target a raise is caught when it happens in the <code>try</code> block itself or inside any procedure/function called (directly or transitively) from there; a caught function's result can be assigned directly (<code>x% = boom%()</code>) but not yet embedded inside a larger expression — see <a href="https://github.com/johnjoeallen/bascal/issues/60">issue #60</a> and its <a href="https://github.com/johnjoeallen/bascal/issues/68">#68</a> follow-up for that remaining gap. <code>try</code>/<code>catch</code> can't be nested on either target.</p>
   </div>
 
     <div class="snippet">

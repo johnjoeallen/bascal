@@ -110,11 +110,11 @@ program randomAndRecordFiles
 
 // trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 function trimmed$(s$)
-    i% = LEN(s$)
-    while i% &gt; 0 &amp;&amp; MID$(s$, i%, 1) = " "
+    i% = s$.len()
+    while i% &gt; 0 &amp;&amp; s$.mid(i%, 1) = " "
         i% = i% - 1
     end while
-    return LEFT$(s$, i%)
+    return s$.left(i%)
 end function
 
 const recLen%  = 50   // 2 bytes id + 20 bytes name + 8 bytes score + 20 bytes faculty

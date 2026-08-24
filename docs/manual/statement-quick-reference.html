@@ -80,145 +80,150 @@
 <td><code>CONST name = expr</code></td>
 <td>Declare a named constant</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>DATA</code></td>
 <td><code>DATA val[, ...]</code></td>
 <td>Embed literal data values</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>DIM</code></td>
 <td><code>DIM name[(d1[, d2, ...])][, name2...]</code></td>
 <td>Declare one or more variables or 1-D/multi-D arrays</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ERASE</code></td>
 <td><code>ERASE arr[, ...]</code></td>
 <td>Free memory used by arrays</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>DO</code></td>
 <td><code>DO [WHILE/UNTIL cond]</code> … <code>END DO</code>, or <code>DO</code> … <code>LOOP [WHILE/UNTIL cond]</code></td>
 <td>Pre-check or post-check conditional loop</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>END</code></td>
 <td><code>END</code></td>
 <td>End of program</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>EXIT</code></td>
 <td><code>exit</code></td>
 <td>Exit the innermost enclosing FOR/WHILE/DO loop</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>FOR</code></td>
 <td><code>FOR v = start TO end [STEP s]</code> … <code>END FOR</code></td>
 <td>Counted loop</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>FUNCTION</code></td>
 <td><code>FUNCTION name%(params)</code> … <code>END FUNCTION</code></td>
 <td>Define a function with a return value</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Label</td>
 <td><code>name:</code></td>
 <td>Declare a branch target for GOTO/GOSUB/ON.../RESUME</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>GOSUB</code></td>
 <td><code>GOSUB label</code></td>
 <td>Call BASIC subroutine</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>GOTO</code></td>
 <td><code>GOTO label</code></td>
 <td>Unconditional branch</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>IF</code></td>
 <td><code>IF cond THEN</code> … [<code>ELSEIF</code> …] [<code>ELSE</code> …] <code>END IF</code></td>
 <td>Conditional block</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>INPUT</code></td>
 <td><code>INPUT [prompt;] var[, ...]</code></td>
 <td>Read from keyboard</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>KILL</code></td>
 <td><code>KILL file$</code></td>
 <td>Delete a file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>INPUT #</code></td>
 <td><code>INPUT #n, var[, ...]</code></td>
 <td>Read from file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LET</code></td>
 <td><code>LET var = expr</code></td>
 <td>Assignment (keyword optional)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Compound assign</td>
 <td><code>var += / -= / *= / /= expr</code></td>
 <td>Assignment shorthand for <code>var = var op expr</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>MID$</code> (stmt)</td>
 <td><code>MID$(str$, start[, len]) = repl$</code></td>
 <td>In-place substring replacement</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LINE INPUT</code></td>
 <td><code>LINE INPUT #n, var$</code></td>
 <td>Read full line from file</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>LOCATE</code></td>
 <td><code>LOCATE row, col</code></td>
 <td>Position cursor</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>LPRINT</code></td>
 <td><code>LPRINT expr[, ...]</code></td>
 <td>Print to printer</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>NAME</code></td>
 <td><code>NAME old$ AS new$</code></td>
 <td>Rename a file</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>OPTION BASE</code></td>
 <td><code>OPTION BASE 0\|1</code></td>
 <td>Not supported (and unlikely to ever be) — see <a href="variables-and-constants.html#option-base">OPTION BASE</a></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ON...GOTO</code></td>
 <td><code>ON expr GOTO label1, label2, ...</code></td>
 <td>Computed GOTO</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ON...GOSUB</code></td>
 <td><code>ON expr GOSUB label1, label2, ...</code></td>
 <td>Computed GOSUB</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ON ERROR GOTO</code></td>
 <td><code>ON ERROR GOTO label</code></td>
 <td>Install error handler (<code>ON ERROR GOTO 0</code> disables)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>ERROR</code></td>
 <td><code>ERROR n</code></td>
 <td>Trigger runtime error code <em>n</em></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>RESUME</code></td>
 <td><code>RESUME</code> / <code>RESUME NEXT</code> / <code>RESUME label</code></td>
 <td>Resume after error handler</td>
+</tr>
+<tr class="odd">
+<td><code>TRY</code> / <code>CATCH</code></td>
+<td><code>try ... catch err%, erl% ... end try</code></td>
+<td>Portable error recovery (both targets); abandons the <code>try</code> region, no <code>resume</code></td>
 </tr>
 <tr class="even">
 <td><code>OPEN</code></td>
@@ -342,17 +347,17 @@
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr class="even">
 <td><code>DATE$</code></td>
 <td>String</td>
 <td>Current date as <code>MM-DD-YYYY</code></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>TIME$</code></td>
 <td>String</td>
 <td>Current time as <code>HH:MM:SS</code></td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>TIMER</code></td>
 <td>Single</td>
 <td>Seconds elapsed since midnight</td>
