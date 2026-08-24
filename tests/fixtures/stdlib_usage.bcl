@@ -9,5 +9,6 @@ print ltrim$("  hi")
 print rtrim$("hi  ")
 print ucase$("hi")
 print lcase$("HI")
-print error$(5)
+print error$(errIllegalFunctionCall%)
+print errFileNotFound%; " "; errPathNotFound%
 end

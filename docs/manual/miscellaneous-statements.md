@@ -200,14 +200,14 @@ try
     open fileName$ for input as #1
     ' ... file processing ...
     close #1
-catch err%(53, 55), erl%, source$
+catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
     print "Error "; err%; " at line "; erl%
 end try
 ```
 
 `err%`, `erl%`, and `source$` are ordinary locals scoped to the `catch` block alone — not aliases for the ambient `err`/`erl` pseudo-variables `on error goto` uses above. They're populated once, at the start of `catch`, with the error code, line, and `.bcl` source file that raised the error, and go out of scope at `end try`.
 
-Attach a parenthesized, comma-separated filter list to the error-code variable to handle only selected codes: `catch err%(53, 55), erl%, source$`. The list accepts numeric expressions, not only literals. If no filter expression matches the raised error, BASCAL skips the catch body and re-raises the error after `finally` (or immediately when there is no `finally`). `catch` is optional; a `try` with only a `finally` body still abandons `try` on error, it just has nothing custom to run before `finally` does.
+Attach a parenthesized, comma-separated filter list to the error-code variable to handle only selected codes. After `require com.bascal.stdlib.error`, use the library’s named common-error constants: `catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$`. The list accepts numeric expressions, not only literals. If no filter expression matches the raised error, BASCAL skips the catch body and re-raises the error after `finally` (or immediately when there is no `finally`). `catch` is optional; a `try` with only a `finally` body still abandons `try` on error, it just has nothing custom to run before `finally` does.
 
 #### THROW
 

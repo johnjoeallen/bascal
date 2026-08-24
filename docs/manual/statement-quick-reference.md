@@ -40,7 +40,7 @@
 | `ON ERROR GOTO` | `ON ERROR GOTO label`                                                   | Install error handler (`ON ERROR GOTO 0` disables)                                                    |
 | `ERROR`         | `ERROR n`                                                               | Trigger runtime error code *n*                                                                        |
 | `RESUME`        | `RESUME` / `RESUME NEXT` / `RESUME label`                               | Resume after error handler                                                                            |
-| `TRY` / `CATCH` | `try ... catch err%(53, 55), erl%, source$ ... end try`               | Portable error recovery; optional code filter plus code, line, and source file; no `resume`          |
+| `TRY` / `CATCH` | `try ... catch err%(errFileNotFound%), erl%, source$ ... end try`    | Portable error recovery; optional code filter plus code, line, and source file; no `resume`          |
 | `THROW`         | `throw` / `throw code%`                                                 | Re-raise the current error, or raise a new one, from inside `catch` (portable across both targets)    |
 | `OPEN`          | `OPEN file$ FOR INPUT/OUTPUT/APPEND AS #n`                              | Open file                                                                                             |
 | `OUT`           | `OUT port, val`                                                         | Write byte to hardware I/O port                                                                       |

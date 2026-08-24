@@ -10,6 +10,7 @@
 // on error goto 0 is the one numeric exception -- 0 isn't a line number,
 // it's the sentinel that disables the error trap.
 program labelsAndErrorHandling
+require com.bascal.stdlib.error
 
 /* ---- goto / label basics ---- */
 
@@ -50,7 +51,7 @@ close #1
 goto afterOpen
 
 handleOpenError:
-if err = 53 then
+if err = errFileNotFound% then
     print "  caught error "; err; ": "; fileName$; " not found"
     resume afterOpen
 else
@@ -68,13 +69,11 @@ on error goto 0
 // and --target C. A failed statement anywhere in the try body abandons
 // the rest of it and runs catch once, then execution always continues
 // right after end try -- never back inside try, and with no resume
-// equivalent at all. err%/erl% are ordinary locals scoped to the catch
-// block, not aliases for the ambient err/erl on error goto uses above.
+// equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
+// catch block, not aliases for the ambient err/erl on error goto above.
 //
-// throw with no argument rethrows whatever error err%/erl% just
-// captured -- the portable equivalent of on error goto's own "error err"
-// above -- for an error this catch doesn't recognize, so it keeps
-// propagating instead of being silently swallowed.
+// The filter means this catch handles only errFileNotFound%; every other
+// error automatically rethrows after the try block.
 
 print "try/catch, missing file, with rethrow:"
 fileName$ = "also_missing.dat"
@@ -82,13 +81,9 @@ try
     open fileName$ for input as #2
     print "  file opened (unexpected)"
     close #2
-catch err%, erl%
-    if err% = 53 then
-        print "  caught error "; err%; ": "; fileName$; " not found"
-    else
-        print "  unexpected error "; err%; ", rethrowing"
-        throw
-    end if
+catch err%(errFileNotFound%), erl%, source$
+    print "  caught error "; err%; " at "; source$; ":"; erl%
+    print "  "; fileName$; " not found"
 end try
 
 /* ---- restore with a label: rewind the DATA pointer to a specific block ---- */

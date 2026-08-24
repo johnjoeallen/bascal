@@ -3,10 +3,10 @@
 // returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
 // ships a working implementation.
 //
-// Covers the classic error codes an ON ERROR GOTO + ERR handler is
-// realistically going to hit -- not the full table, but every code common
-// enough to be worth a real message instead of falling through to the
-// generic one.
+// The named constants below are the complete common subset supported by
+// ERROR$: use them in THROW and filtered CATCH clauses instead of magic
+// numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
+// BASCOM subset still fall through to ERROR$'s generic message.
 //
 // Deliberately NOT a scalar method (see GitHub issue #41, which asked for
 // this decision to be recorded either way): code% is an opaque lookup key,
@@ -16,73 +16,107 @@
 // table keyed by that code. Stays an ordinary function.
 library error
 
+const errSyntax% = 2
+const errReturnWithoutGosub% = 3
+const errOutOfData% = 4
+const errIllegalFunctionCall% = 5
+const errOverflow% = 6
+const errOutOfMemory% = 7
+const errSubscriptOutOfRange% = 9
+const errDuplicateDefinition% = 10
+const errDivisionByZero% = 11
+const errTypeMismatch% = 13
+const errOutOfStringSpace% = 14
+const errNoResume% = 19
+const errResumeWithoutError% = 20
+const errDeviceTimeout% = 24
+const errDeviceFault% = 25
+const errOutOfPaper% = 27
+const errBadFileNumber% = 52
+const errFileNotFound% = 53
+const errBadFileMode% = 54
+const errFileAlreadyOpen% = 55
+const errDeviceIo% = 57
+const errFileAlreadyExists% = 58
+const errDiskFull% = 61
+const errInputPastEnd% = 62
+const errBadRecordNumber% = 63
+const errBadFileName% = 64
+const errTooManyFiles% = 67
+const errDeviceUnavailable% = 68
+const errDiskWriteProtected% = 70
+const errDiskNotReady% = 71
+const errDiskMediaError% = 72
+const errPathFileAccess% = 75
+const errPathNotFound% = 76
+
 function error$(code%)
     select case code%
-        case 2
+        case errSyntax%
             return "Syntax error"
-        case 3
+        case errReturnWithoutGosub%
             return "RETURN without GOSUB"
-        case 4
+        case errOutOfData%
             return "Out of DATA"
-        case 5
+        case errIllegalFunctionCall%
             return "Illegal function call"
-        case 6
+        case errOverflow%
             return "Overflow"
-        case 7
+        case errOutOfMemory%
             return "Out of memory"
-        case 9
+        case errSubscriptOutOfRange%
             return "Subscript out of range"
-        case 10
+        case errDuplicateDefinition%
             return "Duplicate Definition"
-        case 11
+        case errDivisionByZero%
             return "Division by zero"
-        case 13
+        case errTypeMismatch%
             return "Type mismatch"
-        case 14
+        case errOutOfStringSpace%
             return "Out of string space"
-        case 19
+        case errNoResume%
             return "No RESUME"
-        case 20
+        case errResumeWithoutError%
             return "RESUME without error"
-        case 24
+        case errDeviceTimeout%
             return "Device timeout"
-        case 25
+        case errDeviceFault%
             return "Device fault"
-        case 27
+        case errOutOfPaper%
             return "Out of paper"
-        case 52
+        case errBadFileNumber%
             return "Bad file number"
-        case 53
+        case errFileNotFound%
             return "File not found"
-        case 54
+        case errBadFileMode%
             return "Bad file mode"
-        case 55
+        case errFileAlreadyOpen%
             return "File already open"
-        case 57
+        case errDeviceIo%
             return "Device I/O error"
-        case 58
+        case errFileAlreadyExists%
             return "File already exists"
-        case 61
+        case errDiskFull%
             return "Disk full"
-        case 62
+        case errInputPastEnd%
             return "Input past end"
-        case 63
+        case errBadRecordNumber%
             return "Bad record number"
-        case 64
+        case errBadFileName%
             return "Bad file name"
-        case 67
+        case errTooManyFiles%
             return "Too many files"
-        case 68
+        case errDeviceUnavailable%
             return "Device unavailable"
-        case 70
+        case errDiskWriteProtected%
             return "Disk write protected"
-        case 71
+        case errDiskNotReady%
             return "Disk not ready"
-        case 72
+        case errDiskMediaError%
             return "Disk media error"
-        case 75
+        case errPathFileAccess%
             return "Path/File access error"
-        case 76
+        case errPathNotFound%
             return "Path not found"
         case else
             return "Error " + STR$(code%)

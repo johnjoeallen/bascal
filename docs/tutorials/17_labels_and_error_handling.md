@@ -12,18 +12,16 @@ BASCAL manages line numbers itself, so `.bcl` source can never target a line num
 
 `on error goto`/`resume`, shown further down, is the classic BASIC model — it's the BASIC target's own mechanism. `try`/`catch` transpiles unchanged under both `--target basic` and `--target C`.
 
-It abandons the whole `try` region on a runtime error, exposes the error metadata to `catch`, and always continues right after `end try` — never back inside `try`, and with no `resume` equivalent. `throw` with no argument re-raises whatever error `catch` just captured — useful for a case a given `catch` doesn't recognize, so it keeps propagating instead of being silently swallowed:
+It abandons the whole `try` region on a runtime error, exposes the error metadata to `catch`, and always continues right after `end try` — never back inside `try`, and with no `resume` equivalent. Require the error library and use its named constants to filter the errors this handler accepts; an unmatched error rethrows automatically:
 
 ```bascal
+require com.bascal.stdlib.error
+
 try
     open fileName$ for input as #2
-catch err%, erl%
-    if err% = 53 then
-        print "caught error "; err%; ": "; fileName$; " not found"
-    else
-        print "unexpected error "; err%; ", rethrowing"
-        throw
-    end if
+catch err%(errFileNotFound%), erl%, source$
+    print "caught error "; err%; " at "; source$; ":"; erl%
+    print fileName$; " not found"
 end try
 ```
 
@@ -57,7 +55,7 @@ open fileName$ for input as #1
 goto afterOpen
 
 handleOpenError:
-if err = 53 then
+if err = errFileNotFound% then
     print "caught error "; err; ": "; fileName$; " not found"
     resume afterOpen
 else

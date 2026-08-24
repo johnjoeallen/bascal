@@ -43,7 +43,9 @@ print s$.ltrim().rtrim().ucase()
 
 A method is really just a function with its receiver as an implicit first parameter, so the ordinary call form still works too -- `ucase$(rtrim$(ltrim$(s$)))` resolves to the exact same declarations as the chained call above.
 
-`ltrim$(s$)` removes leading spaces and `rtrim$(s$)` removes trailing spaces. `ucase$(s$)` changes `a`–`z` to uppercase, while `lcase$(s$)` changes `A`–`Z` to lowercase; other characters are unchanged. `error$(code%)` turns a classic BASIC error number into a readable message, such as `error$(53)` returning `"File not found"`.
+`ltrim$(s$)` removes leading spaces and `rtrim$(s$)` removes trailing spaces. `ucase$(s$)` changes `a`–`z` to uppercase, while `lcase$(s$)` changes `A`–`Z` to lowercase; other characters are unchanged. `error$(code%)` turns a classic BASIC error number into a readable message, such as `error$(errFileNotFound%)` returning `"File not found"`.
+
+The `error` library also exports named constants for its complete shared MBASIC/GW-BASIC/BASCOM error subset. Use these with `throw`, `error$`, and filtered `catch` clauses: `errSyntax%`, `errReturnWithoutGosub%`, `errOutOfData%`, `errIllegalFunctionCall%`, `errOverflow%`, `errOutOfMemory%`, `errSubscriptOutOfRange%`, `errDuplicateDefinition%`, `errDivisionByZero%`, `errTypeMismatch%`, `errOutOfStringSpace%`, `errNoResume%`, `errResumeWithoutError%`, `errDeviceTimeout%`, `errDeviceFault%`, `errOutOfPaper%`, `errBadFileNumber%`, `errFileNotFound%`, `errBadFileMode%`, `errFileAlreadyOpen%`, `errDeviceIo%`, `errFileAlreadyExists%`, `errDiskFull%`, `errInputPastEnd%`, `errBadRecordNumber%`, `errBadFileName%`, `errTooManyFiles%`, `errDeviceUnavailable%`, `errDiskWriteProtected%`, `errDiskNotReady%`, `errDiskMediaError%`, `errPathFileAccess%`, and `errPathNotFound%`.
 
 These modules live under `com.bascal.stdlib` and use the same dependency rules as any other library. BASCAL also adds its internal `midAssign` helper automatically when you use the statement form of `mid$`; you never need to require it yourself.
 
