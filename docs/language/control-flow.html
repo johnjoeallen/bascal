@@ -8,7 +8,18 @@
     end if
     print row%
 end for
-</code></pre><p><code>if</code>, <code>elseif</code>, <code>else</code>, and <code>end if</code> make a selection one unit. <code>for</code>, <code>while</code>, and <code>do</code> make repetition one unit. The target BASIC still uses its branches, but they are generated from the structure rather than maintained by hand.</p><h2>Choose among many cases</h2><pre><code>select case score%
+</code></pre><p><code>if</code>, <code>elseif</code>, <code>else</code>, and <code>end if</code> make a selection one unit; <code>for</code>/<code>end for</code>, <code>while</code>/<code>end while</code>, and <code>do</code>/<code>loop</code> make repetition one unit. The target BASIC still uses its branches, but they are generated from the structure rather than maintained by hand — nothing renumbers a hand-written <code>GOTO</code> when a line is inserted above it.</p><h2>Four ways to repeat, chosen by when the test runs</h2><p><code>for</code> counts; the rest test a condition, and differ only in <em>when</em> that test runs and which way it points.</p><pre><code>while attempts% &lt; maxAttempts%       ' test before, "while true"
+    attempts% = attempts% + 1
+end while
+
+do until attempts% &gt;= maxAttempts%   ' test before, "until true"
+    attempts% = attempts% + 1
+end do
+
+do                                    ' test after, so the body
+    attempts% = attempts% + 1        ' always runs at least once
+loop until attempts% &gt;= maxAttempts%
+</code></pre><p><code>while</code> and <code>do until</code> both test before the body runs, so the body may execute zero times; they differ only in which way the condition points (keep going <em>while</em> true, versus keep going <em>until</em> true). <code>do ... loop until</code> tests after, so the body is guaranteed to run once even if the condition was already satisfied going in — the natural shape for “read a line, then decide whether to read another.” <code>exit</code> leaves the innermost loop early from anywhere in its body, replacing a hand-aimed <code>GOTO</code> past the loop’s end.</p><h2>Choose among many cases</h2><pre><code>select case score%
 case 90 to 100
     grade$ = "A"
 case is &gt;= 80
@@ -16,4 +27,11 @@ case is &gt;= 80
 case else
     grade$ = "C"
 end select
-</code></pre><p><code>select case</code> is particularly useful when a ladder of conditions is really one decision. Use <code>&amp;&amp;</code> and <code>||</code> when a later condition must only be evaluated when needed. The complete treatment of block forms also covers early exits and pre- and post-condition <code>do</code> loops.</p><nav class="chapter-nav"><a href="values-and-names.html">← Values, names, and expressions</a><a href="arrays-and-strings.html">Arrays and strings →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
+</code></pre><p><code>select case</code> is particularly useful when a ladder of <code>elseif</code>s is really one decision about a single value — each <code>case</code> reads as one row of that decision instead of a repeated condition.</p><h2>Short-circuit evaluation: <code>&amp;&amp;</code> and <code>||</code></h2><p>This is the one piece of BASCAL’s control flow with no classic-BASIC equivalent at all, so it is worth slowing down for. Classic BASIC’s <code>AND</code>/<code>OR</code> are <em>bitwise</em> operators: both sides are full expressions, both get evaluated, and only then are the two results combined. That is fine when both sides are cheap and safe to evaluate unconditionally — it stops being fine the moment evaluating the second side is only safe, or only makes sense, when the first side already came out a certain way.</p><pre><code>if ptr% &gt;= 0 &amp;&amp; scores%(ptr%) &gt; 0 then
+    print "safe to read"
+end if
+</code></pre><p><code>&amp;&amp;</code> stops as soon as the answer is known: if <code>ptr% &gt;= 0</code> is false, <code>scores%(ptr%)</code> is never touched at all — no out-of-range read, no crash. <code>||</code> is the mirror image: it stops at the first operand that comes out true, so later operands (a slower check, a fallback lookup) only run when every earlier one has already failed. Written with classic bitwise <code>AND</code>, the same guard would need <code>ptr% &gt;= 0</code> checked in its own <code>if</code> <em>before</em> the array read could safely appear at all, since bitwise <code>AND</code> would evaluate <code>scores%(ptr%)</code> unconditionally, out-of-range index or not.</p><div class="aside">Two real restrictions worth remembering: <code>&amp;&amp;</code>/<code>||</code> are usable only directly in the condition of <code>if</code>/<code>elseif</code>/<code>while</code>/<code>do</code> — never assigned to a variable or passed as a function argument — and a single condition may chain any number of the <em>same</em> operator, but mixing <code>&amp;&amp;</code> and <code>||</code> in one condition is a transpile-time error. Split into nested <code>if</code> statements instead, the way the generated BASIC itself does under the hood.</div><p>A retry loop shows the same idea on the repeating side: instead of a bare <code>do</code> with a separate <code>exit</code> for every way it might stop, both stopping conditions can live in one <code>do until</code> clause, short-circuiting so only the checks that still matter actually run each time through.</p><pre><code>do until succeeded% &lt;&gt; 0 || attempts% &gt;= maxAttempts%
+    attempts% = attempts% + 1
+    ' ...
+end do
+</code></pre><nav class="chapter-nav"><a href="values-and-names.html">← Values, names, and expressions</a><a href="arrays-and-strings.html">Arrays and strings →</a></nav></main><footer class="book-footer"><div class="book-width"><p><a href="./">The BASCAL Programming Language</a></p></div></footer><script src="../bcl-highlight.js"></script></body></html>
