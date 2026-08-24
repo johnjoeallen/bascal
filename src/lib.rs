@@ -7365,6 +7365,37 @@ end
     }
 
     #[test]
+    fn tab_and_spc_render_as_ansi_escapes_under_c_target() {
+        let source = r#"print tab(10) "hi"
+print "a" spc(3) "b"
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("\\x1b[%dG"), "{c}");
+        assert!(c.contains("%*s"), "{c}");
+    }
+
+    #[test]
+    fn tab_is_rejected_outside_a_print_statement_under_c_target() {
+        let source = r#"x% = tab(5)
+end
+"#;
+        let diagnostics = compile_source_via_c_target_err(source);
+        assert!(!diagnostics.is_empty());
+    }
+
+    #[test]
+    fn stop_and_system_exit_the_process_under_c_target() {
+        let source = r#"stop
+system
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert_eq!(c.matches("exit(0);").count(), 2, "{c}");
+        assert!(c.contains("#include <stdlib.h>"), "{c}");
+    }
+
+    #[test]
     fn try_catch_transpiles_to_on_error_goto_dispatch_under_c_target() {
         // GitHub issue #60: `try`/`catch` on the C backend, restricted to
         // top-level raise sites (same restriction `on error goto` already

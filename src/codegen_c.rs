@@ -2602,6 +2602,9 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let builtin_usage = scan_builtin_usage(program);
     let needs_color = program_uses_color(program);
     let needs_input = program_uses_input(program);
+    let needs_stop_or_system = program_has_statement(program, &|s| {
+        matches!(&**s, Statement::Stop | Statement::System)
+    });
     let needs_seq_io =
         builtin_usage.needs_seq_file_helper || program_uses_sequential_file_io(program);
     let needs_randomize = program_uses_randomize(program);
@@ -2652,6 +2655,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         || needs_input
         || needs_randomize
         || needs_error_handling
+        || needs_stop_or_system
         || !data_items.is_empty()
     {
         // `input`'s numeric targets parse via `atoi`/`atof` (see
@@ -2661,7 +2665,9 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         // (`builtin_usage.needs_stdlib_h`) is ever called; an untrapped
         // raise site's fatal path needs `exit()` (see `emit_raise_block`);
         // `READ`'s numeric targets parse via `atoi`/`atof` too, and
-        // `DATA_HELPER`'s own out-of-DATA path needs `exit()`.
+        // `DATA_HELPER`'s own out-of-DATA path needs `exit()`; `STOP`/
+        // `SYSTEM` need `exit()` too (see their own arm in
+        // `emit_statement`).
         includes.push_str("#include <stdlib.h>\n");
     }
     if needs_randomize_time {
@@ -3639,6 +3645,21 @@ fn emit_statement(
         }
         Statement::End => {
             out.push_str("    return 0;\n");
+            Ok(())
+        }
+        // `STOP`/`SYSTEM` -- both terminate the whole program outright,
+        // real BASIC's own "halt, don't just fall through" statements
+        // (`STOP` is real BASIC's breakpoint-style halt, resumable with
+        // `CONT` only in an interactive session -- meaningless for a
+        // compiled program, so indistinguishable from `END` here; `SYSTEM`
+        // exits back to the OS/DOS shell). `exit(0)`, not `return 0`
+        // (`Statement::End`'s own choice): unlike `END`, either of these
+        // can appear inside a function/procedure body too, where
+        // `return 0` would just return from that one call frame -- wrong,
+        // since both need to halt the entire process regardless of call
+        // depth.
+        Statement::Stop | Statement::System => {
+            out.push_str("    exit(0);\n");
             Ok(())
         }
         // `input [prompt$;] var` -- interactive keyboard input, distinct
@@ -6163,6 +6184,50 @@ fn render_print_tokens(
             PrintToken::Expr(Expr::String(s)) => {
                 needs_newline = true;
                 format.push_str(&escape_c_format_text(s));
+            }
+            // `TAB(n)`/`SPC(n)` -- print-position directives, not real
+            // values (see tutorial/inventory.bcl's own header note on why
+            // BASCOM itself rejects `"literal" + tab(n)`): only legal as
+            // a bare, adjacent `PRINT` token, so they're intercepted
+            // here, before falling through to `render_numeric_expr`
+            // below, which has no general notion of either. `tab`/`spc`
+            // are suffixless, so a single-arg call to either always
+            // parses as `Expr::Call`, never `Expr::ArrayRef` (see
+            // `make_paren_ident_expr` in parser.rs: `Expr::ArrayRef` only
+            // for a *suffixed* name's single-arg call, or any name's
+            // zero-arg call).
+            //
+            // `TAB(n)` moves the cursor to column `n` on the current
+            // line, via the same ANSI cursor-column-absolute escape
+            // family `LOCATE` already uses (`\x1b[<n>G`) -- consistent
+            // with `LOCATE`'s own row/col passing straight through to
+            // ANSI's identical 1-based column numbering, no reordering
+            // or offset needed. `SPC(n)` prints `n` literal spaces, via
+            // printf's own `%*s` field-width trick: a field width with
+            // an empty string right-pads it with exactly that many
+            // spaces.
+            PrintToken::Expr(Expr::Call {
+                name,
+                args: call_args,
+            }) if call_args.len() == 1 && name.name.eq_ignore_ascii_case("tab") => {
+                let (n_text, n_is_float) =
+                    render_numeric_expr(&call_args[0], needs_math, functions)?;
+                let n_text = coerce_numeric(n_text, n_is_float, false, needs_math);
+                needs_newline = true;
+                format.push_str("\\x1b[%dG");
+                args.push(n_text);
+            }
+            PrintToken::Expr(Expr::Call {
+                name,
+                args: call_args,
+            }) if call_args.len() == 1 && name.name.eq_ignore_ascii_case("spc") => {
+                let (n_text, n_is_float) =
+                    render_numeric_expr(&call_args[0], needs_math, functions)?;
+                let n_text = coerce_numeric(n_text, n_is_float, false, needs_math);
+                needs_newline = true;
+                format.push_str("%*s");
+                args.push(n_text);
+                args.push("\"\"".to_string());
             }
             PrintToken::Expr(expr) if is_string_expr_with_functions(expr, functions) => {
                 let (expr_prelude, text) =
