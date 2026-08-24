@@ -10,896 +10,920 @@
 90 ' realistically going to hit -- not the full table, but every code common
 100 ' enough to be worth a real message instead of falling through to the
 110 ' generic one.
+120 ' 
+130 ' Deliberately NOT a scalar method (see GitHub issue #41, which asked for
+140 ' this decision to be recorded either way): code% is an opaque lookup key,
+150 ' not a value the call is naturally "operating on" the way ltrim$/rtrim$/
+160 ' ucase$/lcase$ operate on their string -- code%.error() would read as if
+170 ' the *error code itself* has a message, when really this is a lookup
+180 ' table keyed by that code. Stays an ordinary function.
 
-120 ' ============================================================
-130 ' INVENTORY.BCL -- Random-Access Inventory Program
-140 ' 
-150 ' A BASCAL reconstruction of "Example program for RANDOM ACCESS
-160 ' FILE study", by fhb, 8/19/98, from Joseph Sixpack's GW-BASIC
-170 ' programs page (part of his "Last Book of GW-Basic" collection):
-180 ' http://www.geocities.ws/joseph_sixpack/binventory.html
-190 ' fhb's own header comment credits the original as "suggested
-200 ' from MS-BASIC manual".
+190 ' ============================================================
+200 ' INVENTORY.BCL -- Random-Access Inventory Program
 210 ' 
-220 ' This is a reconstruction, not a line-by-line port -- some
-230 ' original pieces have no BASCAL equivalent and were dropped
-240 ' rather than approximated:
-250 ' - The GOTO-driven "subroutine roadmap" dispatcher at the top
-260 ' of fhb's listing (a `LIST 110-320` etc. navigation aid for
-270 ' editing in the GW-BASIC interpreter) has no meaning once the
-280 ' program is structured into named function/procedure blocks.
-290 ' - `KEY OFF` / `KEY I,""` (clearing the function-key soft-label
-300 ' row) and `VIEW PRINT` (scroll-region windowing for the list
-310 ' screen) are interpreter/console features BASCAL doesn't
-320 ' expose.
-330 ' - fhb's own hand-rolled numeric-ERR-code-to-message lookup table
-340 ' (ERR=1 "Input value overflow", ERR=2 "Syntax error", ... ERR=25)
-350 ' is replaced below by BASCAL's com.bascal.stdlib.error library
-360 ' (ERROR$(code%)) -- same idea, BASCAL's own table; it still
-370 ' doesn't decode ERL, which errorTrap() reports as the raw line
-380 ' number.
-390 ' - fhb's one-time "hidden" datafile initializer (PUT-ing 100
-400 ' blank, CHR$(255)-flagged records) isn't reproduced here --
-410 ' inven.dat must be pre-populated with 100 such blank records
-420 ' before running this program, or isEmpty%() will read
-430 ' uninitialized/zero-filled records as never-empty.
-440 ' - The three original tab-position constants (T=20, U=25,
-450 ' V=30) are collapsed into a single `tabCol% = 20`; a couple of
-460 ' screens that used U=25 in the original (see showAddStockScreen
-470 ' below) keep 25 as a literal rather than reusing tabCol%.
-480 ' 
-490 ' Tracks parts in a fixed 100-record file: check status, add,
-500 ' edit, add/subtract stock, and a reorder report.
-510 ' 
-520 ' Verified against real BASCOM 2.00 under dosbox-x: compiles
-530 ' clean and links, but -- because this program uses `on error
-540 ' goto` / `resume` -- only when BASCOM is invoked with the /E and
-550 ' /X switches (error trapping isn't linked in by default). See
-560 ' `errorTrap()` at the bottom.
-570 ' ============================================================
+220 ' A BASCAL reconstruction of "Example program for RANDOM ACCESS
+230 ' FILE study", by fhb, 8/19/98, from Joseph Sixpack's GW-BASIC
+240 ' programs page (part of his "Last Book of GW-Basic" collection):
+250 ' http://www.geocities.ws/joseph_sixpack/binventory.html
+260 ' fhb's own header comment credits the original as "suggested
+270 ' from MS-BASIC manual".
+280 ' 
+290 ' This is a reconstruction, not a line-by-line port -- some
+300 ' original pieces have no BASCAL equivalent and were dropped
+310 ' rather than approximated:
+320 ' - The GOTO-driven "subroutine roadmap" dispatcher at the top
+330 ' of fhb's listing (a `LIST 110-320` etc. navigation aid for
+340 ' editing in the GW-BASIC interpreter) has no meaning once the
+350 ' program is structured into named function/procedure blocks.
+360 ' - `KEY OFF` / `KEY I,""` (clearing the function-key soft-label
+370 ' row) and `VIEW PRINT` (scroll-region windowing for the list
+380 ' screen) are interpreter/console features BASCAL doesn't
+390 ' expose.
+400 ' - fhb's own hand-rolled numeric-ERR-code-to-message lookup table
+410 ' (ERR=1 "Input value overflow", ERR=2 "Syntax error", ... ERR=25)
+420 ' is replaced below by BASCAL's com.bascal.stdlib.error library
+430 ' (ERROR$(code%)) -- same idea, BASCAL's own table; it still
+440 ' doesn't decode ERL, which errorTrap() reports as the raw line
+450 ' number.
+460 ' - fhb's one-time "hidden" datafile initializer (PUT-ing 100
+470 ' blank, CHR$(255)-flagged records) isn't reproduced here --
+480 ' inven.dat must be pre-populated with 100 such blank records
+490 ' before running this program, or isEmpty%() will read
+500 ' uninitialized/zero-filled records as never-empty.
+510 ' - The three original tab-position constants (T=20, U=25,
+520 ' V=30) are collapsed into a single `tabCol% = 20`; a couple of
+530 ' screens that used U=25 in the original (see showAddStockScreen
+540 ' below) keep 25 as a literal rather than reusing tabCol%.
+550 ' 
+560 ' Tracks parts in a fixed 100-record file: check status, add,
+570 ' edit, add/subtract stock, and a reorder report.
+580 ' 
+590 ' Error handling uses try/catch (GitHub issue #60), not the raw `on
+600 ' error goto` / `resume next` fhb's original relies on: a failed menu
+610 ' action is abandoned outright and the program returns straight to the
+620 ' main menu, rather than resuming at the exact instruction after
+630 ' whatever failed -- see reportInventoryError() below and
+640 ' tutorial/inventory_try_catch.draft's own header comment for why. This
+650 ' is a real, deliberate behavior change from an earlier on-error-goto
+660 ' version of this file, which *was* verified against real BASCOM 2.00
+670 ' under dosbox-x (only with the /E and /X switches -- error trapping
+680 ' isn't linked in by default); the try/catch shape below transpiles to
+690 ' the same ON ERROR GOTO/RESUME primitives BASCOM accepts, but hasn't
+700 ' itself been independently re-verified against a real BASCOM compile.
+710 ' ============================================================
 
-580 ' BASCAL-ism: the record/file DSL. `record ... end record` plus
-590 ' `file ... as ... = open(...)` below replace fhb's manual
-600 ' FIELD #1,1 AS F$,30 AS D$,2 AS Q$,... buffer layout entirely --
-610 ' bcc computes the field widths and record LEN from this
-620 ' declaration and generates the FIELD statement itself. Named
-630 ' field access (`p.flag`, `p.qty`, ...) and whole-record
-640 ' read/write via `inv[n]` (see checkPart() below) replace fhb's
-650 ' manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
+720 ' BASCAL-ism: the record/file DSL. `record ... end record` plus
+730 ' `file ... as ... = open(...)` below replace fhb's manual
+740 ' FIELD #1,1 AS F$,30 AS D$,2 AS Q$,... buffer layout entirely --
+750 ' bcc computes the field widths and record LEN from this
+760 ' declaration and generates the FIELD statement itself. Named
+770 ' field access (`p.flag`, `p.qty`, ...) and whole-record
+780 ' read/write via `inv[n]` (see checkPart() below) replace fhb's
+790 ' manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
 
-660 ' BASCAL-ism: `const` is a real compile-time constant, not a plain
-670 ' variable assignment like fhb's `N=100` / `T=20` -- it can never
-680 ' be reassigned, and resolves to the same value everywhere,
-690 ' including inside every function/procedure below, with no
-700 ' `global` declaration needed.
-710 partcount% = 100
-720 tabcol% = 20
+800 ' BASCAL-ism: `const` is a real compile-time constant, not a plain
+810 ' variable assignment like fhb's `N=100` / `T=20` -- it can never
+820 ' be reassigned, and resolves to the same value everywhere,
+830 ' including inside every function/procedure below, with no
+840 ' `global` declaration needed.
+850 partcount% = 100
+860 tabcol% = 20
 
-730 ' `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
-740 ' LEN = <record width> plus the FIELD statement fhb wrote out by
-750 ' hand at his line 550.
-760 ' file inv as Part = open(...)  [39 bytes/record]
-770 OPEN "inven.dat" FOR RANDOM AS #1 LEN = 39
-780 FIELD #1, 1 AS invFlagBuf$, 30 AS invDescBuf$, 2 AS invQtyBuf$, 2 AS invReorderBuf$, 4 AS invPriceBuf$
+870 ' `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
+880 ' LEN = <record width> plus the FIELD statement fhb wrote out by
+890 ' hand at his line 550.
+900 ' file inv as Part = open(...)  [39 bytes/record]
+910 OPEN "inven.dat" FOR RANDOM AS #1 LEN = 39
+920 FIELD #1, 1 AS invFlagBuf$, 30 AS invDescBuf$, 2 AS invQtyBuf$, 2 AS invReorderBuf$, 4 AS invPriceBuf$
 
-790 ' -------------------- Pure functions (no file access) --------------------
+930 ' -------------------- Pure functions (no file access) --------------------
 
-800 ' BASCAL-ism: `function ... end function` with `return` replaces
-810 ' fhb's convention of a GOSUB target plus a bare RETURN -- there's
-820 ' no separate "subroutine label" and no shared/global result
-830 ' variable to manage by hand; `isEmpty%(...)` is called like an
-840 ' ordinary expression at every use below (e.g. `isEmpty%(p.flag)`).
-850 ' A record whose flag byte is CHR$(255) is an empty/never-used slot.
+940 ' BASCAL-ism: `function ... end function` with `return` replaces
+950 ' fhb's convention of a GOSUB target plus a bare RETURN -- there's
+960 ' no separate "subroutine label" and no shared/global result
+970 ' variable to manage by hand; `isEmpty%(...)` is called like an
+980 ' ordinary expression at every use below (e.g. `isEmpty%(p.flag)`).
+990 ' A record whose flag byte is CHR$(255) is an empty/never-used slot.
 
-860 ' BASCAL-ism: `&&` and `||` are short-circuit AND/OR -- real
-870 ' MBASIC/BASCOM only has bitwise AND/OR (which fhb relies on here
-880 ' too, since `PART!<1 OR PART!>N!` never short-circuits anyway).
-890 ' BASCAL lowers `&&`/`||` into the equivalent branching so the
-900 ' short-circuit *is* real at the generated-BASIC level; see the
-910 ' manual's "Short-Circuit && and ||" section
-920 ' (https://johnjoeallen.github.io/bascal/manual/).
+1000 ' BASCAL-ism: `&&` and `||` are short-circuit AND/OR -- real
+1010 ' MBASIC/BASCOM only has bitwise AND/OR (which fhb relies on here
+1020 ' too, since `PART!<1 OR PART!>N!` never short-circuits anyway).
+1030 ' BASCAL lowers `&&`/`||` into the equivalent branching so the
+1040 ' short-circuit *is* real at the generated-BASIC level; see the
+1050 ' manual's "Short-Circuit && and ||" section
+1060 ' (https://johnjoeallen.github.io/bascal/manual/).
 
-930 ' -------------------- Keyboard input --------------------
+1070 ' -------------------- Keyboard input --------------------
 
-940 ' BASCAL-ism: `do ... loop until` is a structured post-check loop
-950 ' replacing fhb's `730 KP$=INKEY$:IF KP$="" THEN 730` GOTO-polling
-960 ' idiom. `inkey$` itself is the real INKEY$ builtin passed straight
-970 ' through, resolving correctly from inside a function/procedure
-980 ' body like this one -- every menu action below calls
-990 ' readKey$()/waitAnyKey() rather than polling INKEY$ inline.
+1080 ' BASCAL-ism: `do ... loop until` is a structured post-check loop
+1090 ' replacing fhb's `730 KP$=INKEY$:IF KP$="" THEN 730` GOTO-polling
+1100 ' idiom. `inkey$` itself is the real INKEY$ builtin passed straight
+1110 ' through, resolving correctly from inside a function/procedure
+1120 ' body like this one -- every menu action below calls
+1130 ' readKey$()/waitAnyKey() rather than polling INKEY$ inline.
 
-1000 ' -------------------- Display procedures --------------------
+1140 ' -------------------- Display procedures --------------------
 
-1010 ' byref scalar parameters: gatherPartDetails writes the four editable
-1020 ' fields for a part directly back into the caller's variables.
+1150 ' byref scalar parameters: gatherPartDetails writes the four editable
+1160 ' fields for a part directly back into the caller's variables.
 
-1030 ' -------------------- Menu actions --------------------
+1170 ' -------------------- Menu actions --------------------
 
-1040 ' -------------------- Program entry --------------------
+1180 ' -------------------- Program entry --------------------
 
-1050 CLS
-1060 ON ERROR GOTO 8370
+1190 CLS
 
-1070     GOSUB 3400
-1080     GOSUB 3250
-1090     kp$ = readkeyResult0$
-1100     IF (INSTR("12345678cCeElLaAsSrRqQxX", kp$) <> 0) = 0 THEN GOTO 1450
-1110         ' BASCAL-ism: `select case` replaces fhb's chain of eight
-1120         ' `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
-1130         ' (his 770-840) with one multi-way dispatch.
-1140         BCCT4$ = kp$
-1150         IF (BCCT4$ = "1" OR BCCT4$ = "c" OR BCCT4$ = "C") <> 0 THEN GOTO 1240
-1160         IF (BCCT4$ = "2" OR BCCT4$ = "e" OR BCCT4$ = "E") <> 0 THEN GOTO 1260
-1170         IF (BCCT4$ = "3" OR BCCT4$ = "l" OR BCCT4$ = "L") <> 0 THEN GOTO 1280
-1180         IF (BCCT4$ = "4" OR BCCT4$ = "a" OR BCCT4$ = "A") <> 0 THEN GOTO 1300
-1190         IF (BCCT4$ = "5" OR BCCT4$ = "s" OR BCCT4$ = "S") <> 0 THEN GOTO 1320
-1200         IF (BCCT4$ = "6" OR BCCT4$ = "r" OR BCCT4$ = "R") <> 0 THEN GOTO 1340
-1210         IF (BCCT4$ = "7" OR BCCT4$ = "q" OR BCCT4$ = "Q") <> 0 THEN GOTO 1360
-1220         IF (BCCT4$ = "8" OR BCCT4$ = "x" OR BCCT4$ = "X") <> 0 THEN GOTO 1380
-1230         GOTO 1440
-1240             GOSUB 4940
-1250             GOTO 1440
-1260             GOSUB 5480
-1270             GOTO 1440
-1280             GOSUB 6170
-1290             GOTO 1440
-1300             GOSUB 6530
-1310             GOTO 1440
-1320             GOSUB 7210
-1330             GOTO 1440
-1340             GOSUB 7980
-1350             GOTO 1440
-1360             quitflag% = 1
-1370             GOTO 1440
-1380             ' BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
-1390             ' matching fhb's own `90 CLOSE:SYSTEM`.
-1400             ' inv.close()
-1410             CLOSE #1
-1420             SYSTEM
-1430             GOTO 1440
-1440         REM END SELECT
-1450     REM END IF
-1460     IF (quitflag% = 1) = 0 THEN GOTO 1070
-1470 REM END DO
+1200     GOSUB 3710
+1210     GOSUB 3560
+1220     kp$ = readkeyResult0$
+1230     IF (INSTR("12345678cCeElLaAsSrRqQxX", kp$) <> 0) = 0 THEN GOTO 1780
+1240         ' BASCAL-ism: `select case` replaces fhb's chain of eight
+1250         ' `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
+1260         ' (his 770-840) with one multi-way dispatch.
+1270         ' 
+1280         ' BASCAL-ism: `try`/`catch` (issue #60) replaces fhb's own global
+1290         ' `ON ERROR GOTO` trap. A failed menu action is abandoned outright
+1300         ' here -- the `catch` below runs, then execution continues right
+1310         ' after `end try`, back at `loop until` -- rather than resuming at
+1320         ' the exact instruction after whatever failed inside checkPart()/
+1330         ' editRecord()/etc. the way fhb's `RESUME NEXT` did. See
+1340         ' reportInventoryError() below and tutorial/inventory_try_catch.
+1350         ' draft's own header comment for why that arbitrary resume-point
+1360         ' behavior isn't something try/catch reproduces.
+1370         ON ERROR GOTO 1710
+1380             BCCT5$ = kp$
+1390             IF (BCCT5$ = "1" OR BCCT5$ = "c" OR BCCT5$ = "C") <> 0 THEN GOTO 1480
+1400             IF (BCCT5$ = "2" OR BCCT5$ = "e" OR BCCT5$ = "E") <> 0 THEN GOTO 1500
+1410             IF (BCCT5$ = "3" OR BCCT5$ = "l" OR BCCT5$ = "L") <> 0 THEN GOTO 1520
+1420             IF (BCCT5$ = "4" OR BCCT5$ = "a" OR BCCT5$ = "A") <> 0 THEN GOTO 1540
+1430             IF (BCCT5$ = "5" OR BCCT5$ = "s" OR BCCT5$ = "S") <> 0 THEN GOTO 1560
+1440             IF (BCCT5$ = "6" OR BCCT5$ = "r" OR BCCT5$ = "R") <> 0 THEN GOTO 1580
+1450             IF (BCCT5$ = "7" OR BCCT5$ = "q" OR BCCT5$ = "Q") <> 0 THEN GOTO 1600
+1460             IF (BCCT5$ = "8" OR BCCT5$ = "x" OR BCCT5$ = "X") <> 0 THEN GOTO 1620
+1470             GOTO 1680
+1480                 GOSUB 5250
+1490                 GOTO 1680
+1500                 GOSUB 5790
+1510                 GOTO 1680
+1520                 GOSUB 6480
+1530                 GOTO 1680
+1540                 GOSUB 6840
+1550                 GOTO 1680
+1560                 GOSUB 7520
+1570                 GOTO 1680
+1580                 GOSUB 8290
+1590                 GOTO 1680
+1600                 quitflag% = 1
+1610                 GOTO 1680
+1620                 ' BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
+1630                 ' matching fhb's own `90 CLOSE:SYSTEM`.
+1640                 ' inv.close()
+1650                 CLOSE #1
+1660                 SYSTEM
+1670                 GOTO 1680
+1680             REM END SELECT
+1690         ON ERROR GOTO 0
+1700         GOTO 1770
+1710             err% = ERR
+1720             erl% = ERL
+1730             reportinventoryerrorErr0% = err%
+1740             reportinventoryerrorErl0% = erl%
+1750             GOSUB 8680
+1760             RESUME 1770
+1770         REM END TRY
+1780     REM END IF
+1790     IF (quitflag% = 1) = 0 THEN GOTO 1200
+1800 REM END DO
 
-1480 ' inv.close()
-1490 CLOSE #1
-1500 END
+1810 ' inv.close()
+1820 CLOSE #1
+1830 END
 
-1510 ' -------------------- Error handling --------------------
-1520 ' A procedure, not just a raw label -- safe here because bcc's resolver
-1530 ' specifically proves it safe. `errorTrap()` is the target of `on error
-1540 ' goto` above, reached via a raw GOTO rather than a GOSUB, so a `return`
-1550 ' or a fallen-through implicit trailing RETURN would have no GOSUB frame
-1560 ' to pop and would crash with "RETURN without GOSUB" (fittingly, exactly
-1570 ' what ERROR$(3) below reports). bcc rejects any procedure named as an
-1580 ' `on error goto` target that contains a `return` anywhere, or that can't
-1590 ' be proven to end every path in `resume`/`resume next`/`resume <label>`
-1600 ' (this one's trailing `resume next` qualifies) -- and, given that proof,
-1610 ' codegen skips the implicit trailing RETURN entirely, so there's nothing
-1620 ' left to fall into even if the proof were somehow wrong. The same check
-1630 ' also rejects calling it like an ordinary procedure anywhere else:
-1640 ' something proven to never return can never come back to a normal caller.
-1650 END
+1840 ' -------------------- Error handling --------------------
+1850 ' err%/erl% are ordinary locals scoped to the `catch` block above, not
+1860 ' aliases for the ambient (readable-anywhere) `err`/`erl` pseudo-
+1870 ' variables `on error goto` uses -- see `Statement::TryCatch`'s own doc
+1880 ' comment in ast.rs. Passed straight through to ERROR$ here like fhb's
+1890 ' own ERR/ERL (his 3390: "an error on line";ERL), decoded through
+1900 ' BASCAL's own com.bascal.stdlib.error (ERROR$) instead of fhb's
+1910 ' hand-rolled lookup table -- see the header note above. try/catch
+1920 ' itself isn't documented in the manual yet (GitHub issue #60 tracks
+1930 ' the still-unfinished C-target work; the manual page can follow once
+1940 ' that lands) -- see ast.rs's own `Statement::TryCatch` doc comment for
+1950 ' the full semantics meanwhile.
+1960 END
 
-1660 ' function error$(code%)
-1670     BCCT6% = errorCode0%
-1680     IF (BCCT6% = 2) <> 0 THEN GOTO 2020
-1690     IF (BCCT6% = 3) <> 0 THEN GOTO 2050
-1700     IF (BCCT6% = 4) <> 0 THEN GOTO 2080
-1710     IF (BCCT6% = 5) <> 0 THEN GOTO 2110
-1720     IF (BCCT6% = 6) <> 0 THEN GOTO 2140
-1730     IF (BCCT6% = 7) <> 0 THEN GOTO 2170
-1740     IF (BCCT6% = 9) <> 0 THEN GOTO 2200
-1750     IF (BCCT6% = 10) <> 0 THEN GOTO 2230
-1760     IF (BCCT6% = 11) <> 0 THEN GOTO 2260
-1770     IF (BCCT6% = 13) <> 0 THEN GOTO 2290
-1780     IF (BCCT6% = 14) <> 0 THEN GOTO 2320
-1790     IF (BCCT6% = 19) <> 0 THEN GOTO 2350
-1800     IF (BCCT6% = 20) <> 0 THEN GOTO 2380
-1810     IF (BCCT6% = 24) <> 0 THEN GOTO 2410
-1820     IF (BCCT6% = 25) <> 0 THEN GOTO 2440
-1830     IF (BCCT6% = 27) <> 0 THEN GOTO 2470
-1840     IF (BCCT6% = 52) <> 0 THEN GOTO 2500
-1850     IF (BCCT6% = 53) <> 0 THEN GOTO 2530
-1860     IF (BCCT6% = 54) <> 0 THEN GOTO 2560
-1870     IF (BCCT6% = 55) <> 0 THEN GOTO 2590
-1880     IF (BCCT6% = 57) <> 0 THEN GOTO 2620
-1890     IF (BCCT6% = 58) <> 0 THEN GOTO 2650
-1900     IF (BCCT6% = 61) <> 0 THEN GOTO 2680
-1910     IF (BCCT6% = 62) <> 0 THEN GOTO 2710
-1920     IF (BCCT6% = 63) <> 0 THEN GOTO 2740
-1930     IF (BCCT6% = 64) <> 0 THEN GOTO 2770
-1940     IF (BCCT6% = 67) <> 0 THEN GOTO 2800
-1950     IF (BCCT6% = 68) <> 0 THEN GOTO 2830
-1960     IF (BCCT6% = 70) <> 0 THEN GOTO 2860
-1970     IF (BCCT6% = 71) <> 0 THEN GOTO 2890
-1980     IF (BCCT6% = 72) <> 0 THEN GOTO 2920
-1990     IF (BCCT6% = 75) <> 0 THEN GOTO 2950
-2000     IF (BCCT6% = 76) <> 0 THEN GOTO 2980
-2010     GOTO 3010
-2020         errorResult0$ = "Syntax error"
-2030         RETURN
-2040         GOTO 3030
-2050         errorResult0$ = "RETURN without GOSUB"
-2060         RETURN
-2070         GOTO 3030
-2080         errorResult0$ = "Out of DATA"
-2090         RETURN
-2100         GOTO 3030
-2110         errorResult0$ = "Illegal function call"
-2120         RETURN
-2130         GOTO 3030
-2140         errorResult0$ = "Overflow"
-2150         RETURN
-2160         GOTO 3030
-2170         errorResult0$ = "Out of memory"
-2180         RETURN
-2190         GOTO 3030
-2200         errorResult0$ = "Subscript out of range"
-2210         RETURN
-2220         GOTO 3030
-2230         errorResult0$ = "Duplicate Definition"
-2240         RETURN
-2250         GOTO 3030
-2260         errorResult0$ = "Division by zero"
-2270         RETURN
-2280         GOTO 3030
-2290         errorResult0$ = "Type mismatch"
-2300         RETURN
-2310         GOTO 3030
-2320         errorResult0$ = "Out of string space"
-2330         RETURN
-2340         GOTO 3030
-2350         errorResult0$ = "No RESUME"
-2360         RETURN
-2370         GOTO 3030
-2380         errorResult0$ = "RESUME without error"
-2390         RETURN
-2400         GOTO 3030
-2410         errorResult0$ = "Device timeout"
-2420         RETURN
-2430         GOTO 3030
-2440         errorResult0$ = "Device fault"
-2450         RETURN
-2460         GOTO 3030
-2470         errorResult0$ = "Out of paper"
-2480         RETURN
-2490         GOTO 3030
-2500         errorResult0$ = "Bad file number"
-2510         RETURN
-2520         GOTO 3030
-2530         errorResult0$ = "File not found"
-2540         RETURN
-2550         GOTO 3030
-2560         errorResult0$ = "Bad file mode"
-2570         RETURN
-2580         GOTO 3030
-2590         errorResult0$ = "File already open"
-2600         RETURN
-2610         GOTO 3030
-2620         errorResult0$ = "Device I/O error"
-2630         RETURN
-2640         GOTO 3030
-2650         errorResult0$ = "File already exists"
-2660         RETURN
-2670         GOTO 3030
-2680         errorResult0$ = "Disk full"
-2690         RETURN
-2700         GOTO 3030
-2710         errorResult0$ = "Input past end"
-2720         RETURN
-2730         GOTO 3030
-2740         errorResult0$ = "Bad record number"
-2750         RETURN
-2760         GOTO 3030
-2770         errorResult0$ = "Bad file name"
-2780         RETURN
-2790         GOTO 3030
-2800         errorResult0$ = "Too many files"
-2810         RETURN
-2820         GOTO 3030
-2830         errorResult0$ = "Device unavailable"
-2840         RETURN
-2850         GOTO 3030
-2860         errorResult0$ = "Disk write protected"
-2870         RETURN
-2880         GOTO 3030
-2890         errorResult0$ = "Disk not ready"
-2900         RETURN
-2910         GOTO 3030
-2920         errorResult0$ = "Disk media error"
-2930         RETURN
-2940         GOTO 3030
-2950         errorResult0$ = "Path/File access error"
-2960         RETURN
-2970         GOTO 3030
-2980         errorResult0$ = "Path not found"
-2990         RETURN
-3000         GOTO 3030
-3010         errorResult0$ = "Error " + STR$(errorCode0%)
-3020         RETURN
-3030     REM END SELECT
-3040     RETURN
-3050 ' end function error$
+1970 ' function error$(code%)
+1980     BCCT7% = errorCode0%
+1990     IF (BCCT7% = 2) <> 0 THEN GOTO 2330
+2000     IF (BCCT7% = 3) <> 0 THEN GOTO 2360
+2010     IF (BCCT7% = 4) <> 0 THEN GOTO 2390
+2020     IF (BCCT7% = 5) <> 0 THEN GOTO 2420
+2030     IF (BCCT7% = 6) <> 0 THEN GOTO 2450
+2040     IF (BCCT7% = 7) <> 0 THEN GOTO 2480
+2050     IF (BCCT7% = 9) <> 0 THEN GOTO 2510
+2060     IF (BCCT7% = 10) <> 0 THEN GOTO 2540
+2070     IF (BCCT7% = 11) <> 0 THEN GOTO 2570
+2080     IF (BCCT7% = 13) <> 0 THEN GOTO 2600
+2090     IF (BCCT7% = 14) <> 0 THEN GOTO 2630
+2100     IF (BCCT7% = 19) <> 0 THEN GOTO 2660
+2110     IF (BCCT7% = 20) <> 0 THEN GOTO 2690
+2120     IF (BCCT7% = 24) <> 0 THEN GOTO 2720
+2130     IF (BCCT7% = 25) <> 0 THEN GOTO 2750
+2140     IF (BCCT7% = 27) <> 0 THEN GOTO 2780
+2150     IF (BCCT7% = 52) <> 0 THEN GOTO 2810
+2160     IF (BCCT7% = 53) <> 0 THEN GOTO 2840
+2170     IF (BCCT7% = 54) <> 0 THEN GOTO 2870
+2180     IF (BCCT7% = 55) <> 0 THEN GOTO 2900
+2190     IF (BCCT7% = 57) <> 0 THEN GOTO 2930
+2200     IF (BCCT7% = 58) <> 0 THEN GOTO 2960
+2210     IF (BCCT7% = 61) <> 0 THEN GOTO 2990
+2220     IF (BCCT7% = 62) <> 0 THEN GOTO 3020
+2230     IF (BCCT7% = 63) <> 0 THEN GOTO 3050
+2240     IF (BCCT7% = 64) <> 0 THEN GOTO 3080
+2250     IF (BCCT7% = 67) <> 0 THEN GOTO 3110
+2260     IF (BCCT7% = 68) <> 0 THEN GOTO 3140
+2270     IF (BCCT7% = 70) <> 0 THEN GOTO 3170
+2280     IF (BCCT7% = 71) <> 0 THEN GOTO 3200
+2290     IF (BCCT7% = 72) <> 0 THEN GOTO 3230
+2300     IF (BCCT7% = 75) <> 0 THEN GOTO 3260
+2310     IF (BCCT7% = 76) <> 0 THEN GOTO 3290
+2320     GOTO 3320
+2330         errorResult0$ = "Syntax error"
+2340         RETURN
+2350         GOTO 3340
+2360         errorResult0$ = "RETURN without GOSUB"
+2370         RETURN
+2380         GOTO 3340
+2390         errorResult0$ = "Out of DATA"
+2400         RETURN
+2410         GOTO 3340
+2420         errorResult0$ = "Illegal function call"
+2430         RETURN
+2440         GOTO 3340
+2450         errorResult0$ = "Overflow"
+2460         RETURN
+2470         GOTO 3340
+2480         errorResult0$ = "Out of memory"
+2490         RETURN
+2500         GOTO 3340
+2510         errorResult0$ = "Subscript out of range"
+2520         RETURN
+2530         GOTO 3340
+2540         errorResult0$ = "Duplicate Definition"
+2550         RETURN
+2560         GOTO 3340
+2570         errorResult0$ = "Division by zero"
+2580         RETURN
+2590         GOTO 3340
+2600         errorResult0$ = "Type mismatch"
+2610         RETURN
+2620         GOTO 3340
+2630         errorResult0$ = "Out of string space"
+2640         RETURN
+2650         GOTO 3340
+2660         errorResult0$ = "No RESUME"
+2670         RETURN
+2680         GOTO 3340
+2690         errorResult0$ = "RESUME without error"
+2700         RETURN
+2710         GOTO 3340
+2720         errorResult0$ = "Device timeout"
+2730         RETURN
+2740         GOTO 3340
+2750         errorResult0$ = "Device fault"
+2760         RETURN
+2770         GOTO 3340
+2780         errorResult0$ = "Out of paper"
+2790         RETURN
+2800         GOTO 3340
+2810         errorResult0$ = "Bad file number"
+2820         RETURN
+2830         GOTO 3340
+2840         errorResult0$ = "File not found"
+2850         RETURN
+2860         GOTO 3340
+2870         errorResult0$ = "Bad file mode"
+2880         RETURN
+2890         GOTO 3340
+2900         errorResult0$ = "File already open"
+2910         RETURN
+2920         GOTO 3340
+2930         errorResult0$ = "Device I/O error"
+2940         RETURN
+2950         GOTO 3340
+2960         errorResult0$ = "File already exists"
+2970         RETURN
+2980         GOTO 3340
+2990         errorResult0$ = "Disk full"
+3000         RETURN
+3010         GOTO 3340
+3020         errorResult0$ = "Input past end"
+3030         RETURN
+3040         GOTO 3340
+3050         errorResult0$ = "Bad record number"
+3060         RETURN
+3070         GOTO 3340
+3080         errorResult0$ = "Bad file name"
+3090         RETURN
+3100         GOTO 3340
+3110         errorResult0$ = "Too many files"
+3120         RETURN
+3130         GOTO 3340
+3140         errorResult0$ = "Device unavailable"
+3150         RETURN
+3160         GOTO 3340
+3170         errorResult0$ = "Disk write protected"
+3180         RETURN
+3190         GOTO 3340
+3200         errorResult0$ = "Disk not ready"
+3210         RETURN
+3220         GOTO 3340
+3230         errorResult0$ = "Disk media error"
+3240         RETURN
+3250         GOTO 3340
+3260         errorResult0$ = "Path/File access error"
+3270         RETURN
+3280         GOTO 3340
+3290         errorResult0$ = "Path not found"
+3300         RETURN
+3310         GOTO 3340
+3320         errorResult0$ = "Error " + STR$(errorCode0%)
+3330         RETURN
+3340     REM END SELECT
+3350     RETURN
+3360 ' end function error$
 
-3060 ' function isempty%(flag$)
-3070     isemptyResult0% = ASC(isemptyFlag0$) = 255
-3080     RETURN
-3090 ' end function isempty%
+3370 ' function isempty%(flag$)
+3380     isemptyResult0% = ASC(isemptyFlag0$) = 255
+3390     RETURN
+3400 ' end function isempty%
 
-3100 ' function partinrange%(n%)
-3110     IF (partinrangeN0% >= 1) = 0 THEN GOTO 3150
-3120     IF (partinrangeN0% <= partcount%) = 0 THEN GOTO 3150
-3130         partinrangeResult0% = 1
-3140         RETURN
-3150     REM END IF
-3160     partinrangeResult0% = 0
-3170     RETURN
-3180 ' end function partinrange%
+3410 ' function partinrange%(n%)
+3420     IF (partinrangeN0% >= 1) = 0 THEN GOTO 3460
+3430     IF (partinrangeN0% <= partcount%) = 0 THEN GOTO 3460
+3440         partinrangeResult0% = 1
+3450         RETURN
+3460     REM END IF
+3470     partinrangeResult0% = 0
+3480     RETURN
+3490 ' end function partinrange%
 
-3190 ' function readpartnumberinput$()
-3200     INPUT "Input part number"; readpartnumberinputS0$
-3210     readpartnumberinputResult0$ = readpartnumberinputS0$
-3220     RETURN
-3230 ' end function readpartnumberinput$
+3500 ' function readpartnumberinput$()
+3510     INPUT "Input part number"; readpartnumberinputS0$
+3520     readpartnumberinputResult0$ = readpartnumberinputS0$
+3530     RETURN
+3540 ' end function readpartnumberinput$
 
-3240 ' function readkey$()
-3250         readkeyK0$ = INKEY$
-3260         IF (readkeyK0$ <> "") = 0 THEN GOTO 3250
-3270     REM END DO
-3280     readkeyResult0$ = readkeyK0$
-3290     RETURN
-3300 ' end function readkey$
+3550 ' function readkey$()
+3560         readkeyK0$ = INKEY$
+3570         IF (readkeyK0$ <> "") = 0 THEN GOTO 3560
+3580     REM END DO
+3590     readkeyResult0$ = readkeyK0$
+3600     RETURN
+3610 ' end function readkey$
 
-3310 ' procedure waitanykey()
-3320     LOCATE 25, 10
-3330     PRINT "Press the AnyKey to continue...";
-3340         waitanykeyK0$ = INKEY$
-3350         IF (waitanykeyK0$ <> "") = 0 THEN GOTO 3340
-3360     REM END DO
-3370     RETURN
-3380 ' end procedure waitanykey
+3620 ' procedure waitanykey()
+3630     LOCATE 25, 10
+3640     PRINT "Press the AnyKey to continue...";
+3650         waitanykeyK0$ = INKEY$
+3660         IF (waitanykeyK0$ <> "") = 0 THEN GOTO 3650
+3670     REM END DO
+3680     RETURN
+3690 ' end procedure waitanykey
 
-3390 ' procedure showmainmenu()
-3400     CLS
-3410     COLOR 14, 4
-3420     CLS
-3430     LOCATE 6, 1
-3440     PRINT
-3450     ' `tab(n)` passes straight through to real TAB(n), same as
-3460     ' fhb's own `PRINT TAB(V) "..."` -- but only as a bare item in
-3470     ' a PRINT list, juxtaposed or `;`-separated like here. Real
-3480     ' BASCOM rejects `"literal" + tab(n) + ...` (TAB isn't a real
-3490     ' string function you can concatenate); see printListHeader()
-3500     ' and printReorderHeader() below, which need `;` between a
-3510     ' preceding string and a `tab(n)` for exactly this reason.
-3520     PRINT TAB(30)"Inventory Program"
-3530     PRINT
-3540     PRINT TAB(tabcol%)"1......C)heck a part"
-3550     PRINT TAB(tabcol%)"2......E)dit/overwrite/add a part"
-3560     PRINT TAB(tabcol%)("3......L)ist all" + STR$(partcount%)) + "parts"
-3570     PRINT TAB(tabcol%)"4......A)dd stock"
-3580     PRINT TAB(tabcol%)"5......S)ubtract stock"
-3590     PRINT TAB(tabcol%)"6......R)eorder Report"
-3600     PRINT
-3610     PRINT TAB(tabcol%)"7......Q)uit to BASIC"
-3620     PRINT TAB(tabcol%)"8......eX)it to system"
-3630     RETURN
-3640 ' end procedure showmainmenu
-
-3650 ' procedure showbadpartnumber()
-3660     CLS
-3670     LOCATE 10, 10
-3680     PRINT "Part number is out of permissable range of 1 to" + STR$(partcount%)
-3690     RETURN
-3700 ' end procedure showbadpartnumber
-
-3710 ' procedure showrangeretrymessage()
-3720     LOCATE 10, 15
-3730     PRINT "The Part number is out of permissable range of 1 to" + STR$(partcount%)
-3740     LOCATE 25, 15
-3750     PRINT "Press the Anykey to reenter part number...";
-3760     RETURN
-3770 ' end procedure showrangeretrymessage
-
-3780 ' procedure shownullentrymessage(partstr$)
-3790     LOCATE 10, tabcol%
-3800     PRINT ("Part number " + shownullentrymessagePartStr0$) + " is a null entry"
-3810     RETURN
-3820 ' end procedure shownullentrymessage
-
-3830 ' procedure showpartstatus(partnum%, desc$, qty%, reorder%, price!)
-3840     CLS
-3850     LOCATE 5, 1
-3860     PRINT TAB(tabcol%)"Inventory Status for Individual Part Number"
-3870     PRINT TAB(tabcol%)"==========================================="
-3880     PRINT
-3890     PRINT
-3900     PRINT TAB(tabcol%)"     Part number:  " + STR$(showpartstatusPartNum0%)
+3700 ' procedure showmainmenu()
+3710     CLS
+3720     COLOR 14, 4
+3730     CLS
+3740     LOCATE 6, 1
+3750     PRINT
+3760     ' `tab(n)` passes straight through to real TAB(n), same as
+3770     ' fhb's own `PRINT TAB(V) "..."` -- but only as a bare item in
+3780     ' a PRINT list, juxtaposed or `;`-separated like here. Real
+3790     ' BASCOM rejects `"literal" + tab(n) + ...` (TAB isn't a real
+3800     ' string function you can concatenate); see printListHeader()
+3810     ' and printReorderHeader() below, which need `;` between a
+3820     ' preceding string and a `tab(n)` for exactly this reason.
+3830     PRINT TAB(30)"Inventory Program"
+3840     PRINT
+3850     PRINT TAB(tabcol%)"1......C)heck a part"
+3860     PRINT TAB(tabcol%)"2......E)dit/overwrite/add a part"
+3870     PRINT TAB(tabcol%)("3......L)ist all" + STR$(partcount%)) + "parts"
+3880     PRINT TAB(tabcol%)"4......A)dd stock"
+3890     PRINT TAB(tabcol%)"5......S)ubtract stock"
+3900     PRINT TAB(tabcol%)"6......R)eorder Report"
 3910     PRINT
-3920     PRINT TAB(tabcol%)"       Item name:  " + showpartstatusDesc0$
-3930     PRINT TAB(tabcol%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
-3940     PRINT TAB(tabcol%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
-3950     PRINT TAB(tabcol%)"      Unit price:  " + STR$(showpartstatusPrice0!)
-3960     RETURN
-3970 ' end procedure showpartstatus
+3920     PRINT TAB(tabcol%)"7......Q)uit to BASIC"
+3930     PRINT TAB(tabcol%)"8......eX)it to system"
+3940     RETURN
+3950 ' end procedure showmainmenu
 
-3980 ' procedure printlistheader()
-3990     CLS
-4000     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partcount%) + "items"
-4010     PRINT "                                          Quantity       Reorder"
-4020     PRINT " Partno           Description             on hand         level"
-4030     LOCATE 25, 1
-4040     PRINT "Press the AnyKey to scroll listing...";
-4050     RETURN
-4060 ' end procedure printlistheader
+3960 ' procedure showbadpartnumber()
+3970     CLS
+3980     LOCATE 10, 10
+3990     PRINT "Part number is out of permissable range of 1 to" + STR$(partcount%)
+4000     RETURN
+4010 ' end procedure showbadpartnumber
 
-4070 ' procedure printinventoryline(partnum%, desc$, qty%, reorder%)
-4080     PRINT (((((STR$(printinventorylinePartNum0%) + "  ") + printinventorylineDesc0$) + "   ") + STR$(printinventorylineQty0%)) + "          ") + STR$(printinventorylineReorder0%)
-4090     RETURN
-4100 ' end procedure printinventoryline
+4020 ' procedure showrangeretrymessage()
+4030     LOCATE 10, 15
+4040     PRINT "The Part number is out of permissable range of 1 to" + STR$(partcount%)
+4050     LOCATE 25, 15
+4060     PRINT "Press the Anykey to reenter part number...";
+4070     RETURN
+4080 ' end procedure showrangeretrymessage
 
-4110 ' procedure printreorderheader()
-4120     CLS
-4130     LOCATE 1, tabcol%
-4140     PRINT "Reorder Report"; TAB(55); DATE$
-4150     PRINT
-4160     PRINT "                                             Quantity       Reorder"
-4170     PRINT "    Partno           Description             on hand         level"
-4180     PRINT "   =======  ==============================   ========       ======="
-4190     RETURN
-4200 ' end procedure printreorderheader
+4090 ' procedure shownullentrymessage(partstr$)
+4100     LOCATE 10, tabcol%
+4110     PRINT ("Part number " + shownullentrymessagePartStr0$) + " is a null entry"
+4120     RETURN
+4130 ' end procedure shownullentrymessage
 
-4210 ' procedure printreorderline(partnum%, desc$, qty%, reorder%)
-4220     PRINT (((((("  " + STR$(printreorderlinePartNum0%)) + "  ") + printreorderlineDesc0$) + "   ") + STR$(printreorderlineQty0%)) + "          ") + STR$(printreorderlineReorder0%)
-4230     RETURN
-4240 ' end procedure printreorderline
+4140 ' procedure showpartstatus(partnum%, desc$, qty%, reorder%, price!)
+4150     CLS
+4160     LOCATE 5, 1
+4170     PRINT TAB(tabcol%)"Inventory Status for Individual Part Number"
+4180     PRINT TAB(tabcol%)"==========================================="
+4190     PRINT
+4200     PRINT
+4210     PRINT TAB(tabcol%)"     Part number:  " + STR$(showpartstatusPartNum0%)
+4220     PRINT
+4230     PRINT TAB(tabcol%)"       Item name:  " + showpartstatusDesc0$
+4240     PRINT TAB(tabcol%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
+4250     PRINT TAB(tabcol%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
+4260     PRINT TAB(tabcol%)"      Unit price:  " + STR$(showpartstatusPrice0!)
+4270     RETURN
+4280 ' end procedure showpartstatus
 
-4250 ' procedure gatherpartdetails(partnum%, desc$, qty%, reorder%, price!)
-4260     CLS
-4270     LOCATE 4, tabcol%
-4280     PRINT "Adding or Overwriting a Record"
-4290     LOCATE 8, tabcol%
-4300     PRINT "Record/Partno" + STR$(gatherpartdetailsPartNum0%)
-4310     LOCATE 11, 39
-4320     PRINT "------------------------------"
-4330     LOCATE 10, tabcol%
-4340     INPUT "      Description"; gatherpartdetailsDesc0$
-4350     LOCATE 12, tabcol%
-4360     INPUT "Quantity in stock"; gatherpartdetailsQty0%
-4370     LOCATE 14, tabcol%
-4380     INPUT "    Reorder level"; gatherpartdetailsReorder0%
-4390     LOCATE 16, tabcol%
-4400     INPUT "       Unit price"; gatherpartdetailsPrice0!
-4410     LOCATE 18, tabcol%
-4420     PRINT "Is information correct (Y/N)?"
-4430     RETURN
-4440 ' end procedure gatherpartdetails
+4290 ' procedure printlistheader()
+4300     CLS
+4310     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partcount%) + "items"
+4320     PRINT "                                          Quantity       Reorder"
+4330     PRINT " Partno           Description             on hand         level"
+4340     LOCATE 25, 1
+4350     PRINT "Press the AnyKey to scroll listing...";
+4360     RETURN
+4370 ' end procedure printlistheader
 
-4450 ' procedure showaddstockscreen(partnum%, desc$, qty%, reorder%)
-4460     CLS
-4470     LOCATE 4, 25
-4480     PRINT "Add to an inventory part number"
-4490     LOCATE 5, 25
-4500     PRINT "==============================="
-4510     LOCATE 8, tabcol%
-4520     PRINT "     Part number: " + STR$(showaddstockscreenPartNum0%)
-4530     LOCATE 9, tabcol%
-4540     PRINT "Item description: " + showaddstockscreenDesc0$
-4550     LOCATE 10, tabcol%
-4560     PRINT "Quantity on hand: " + STR$(showaddstockscreenQty0%)
-4570     LOCATE 11, tabcol%
-4580     PRINT "   Reorder Level: " + STR$(showaddstockscreenReorder0%)
-4590     RETURN
-4600 ' end procedure showaddstockscreen
+4380 ' procedure printinventoryline(partnum%, desc$, qty%, reorder%)
+4390     PRINT (((((STR$(printinventorylinePartNum0%) + "  ") + printinventorylineDesc0$) + "   ") + STR$(printinventorylineQty0%)) + "          ") + STR$(printinventorylineReorder0%)
+4400     RETURN
+4410 ' end procedure printinventoryline
 
-4610 ' procedure shownegativeqtywarning()
-4620     LOCATE 17, 15
-4630     PRINT "The quantity to add must NOT be a negative number"
-4640     LOCATE 25, 1
-4650     PRINT "Please press the Anykey to reenter quantity to add...";
-4660     RETURN
-4670 ' end procedure shownegativeqtywarning
+4420 ' procedure printreorderheader()
+4430     CLS
+4440     LOCATE 1, tabcol%
+4450     PRINT "Reorder Report"; TAB(55); DATE$
+4460     PRINT
+4470     PRINT "                                             Quantity       Reorder"
+4480     PRINT "    Partno           Description             on hand         level"
+4490     PRINT "   =======  ==============================   ========       ======="
+4500     RETURN
+4510 ' end procedure printreorderheader
 
-4680 ' procedure showsubtractstockscreen(partnum%, desc$, qty%, reorder%)
-4690     CLS
-4700     LOCATE 4, tabcol%
-4710     PRINT "Subtract an inventory part number"
-4720     LOCATE 5, tabcol%
-4730     PRINT "================================="
-4740     LOCATE 8, tabcol%
-4750     PRINT "         Part number: " + STR$(showsubtractstockscreenPartNum0%)
-4760     LOCATE 9, tabcol%
-4770     PRINT "    Item description: " + showsubtractstockscreenDesc0$
-4780     LOCATE 10, tabcol%
-4790     PRINT "    Quantity on hand: " + STR$(showsubtractstockscreenQty0%)
-4800     LOCATE 11, tabcol%
-4810     PRINT "       Reorder Level: " + STR$(showsubtractstockscreenReorder0%)
-4820     RETURN
-4830 ' end procedure showsubtractstockscreen
+4520 ' procedure printreorderline(partnum%, desc$, qty%, reorder%)
+4530     PRINT (((((("  " + STR$(printreorderlinePartNum0%)) + "  ") + printreorderlineDesc0$) + "   ") + STR$(printreorderlineQty0%)) + "          ") + STR$(printreorderlineReorder0%)
+4540     RETURN
+4550 ' end procedure printreorderline
 
-4840 ' procedure showoversubtractwarning(onhand%)
-4850     LOCATE 17, 5
-4860     PRINT "The quantity to SUBTRACT must NOT result in NEGATIVE inventory"
-4870     LOCATE 18, 5
-4880     PRINT ("Only" + STR$(showoversubtractwarningOnHand0%)) + " IN STOCK"
-4890     LOCATE 25, 1
-4900     PRINT "Please press the Anykey to reenter quantity to subtract...";
-4910     RETURN
-4920 ' end procedure showoversubtractwarning
+4560 ' procedure gatherpartdetails(partnum%, desc$, qty%, reorder%, price!)
+4570     CLS
+4580     LOCATE 4, tabcol%
+4590     PRINT "Adding or Overwriting a Record"
+4600     LOCATE 8, tabcol%
+4610     PRINT "Record/Partno" + STR$(gatherpartdetailsPartNum0%)
+4620     LOCATE 11, 39
+4630     PRINT "------------------------------"
+4640     LOCATE 10, tabcol%
+4650     INPUT "      Description"; gatherpartdetailsDesc0$
+4660     LOCATE 12, tabcol%
+4670     INPUT "Quantity in stock"; gatherpartdetailsQty0%
+4680     LOCATE 14, tabcol%
+4690     INPUT "    Reorder level"; gatherpartdetailsReorder0%
+4700     LOCATE 16, tabcol%
+4710     INPUT "       Unit price"; gatherpartdetailsPrice0!
+4720     LOCATE 18, tabcol%
+4730     PRINT "Is information correct (Y/N)?"
+4740     RETURN
+4750 ' end procedure gatherpartdetails
 
-4930 ' procedure checkpart()
-4940     GOSUB 3200
-4950     checkpartPartStr0$ = readpartnumberinputResult0$
-4960     checkpartPart0% = VAL(checkpartPartStr0$)
-4970     partinrangeN0% = checkpartPart0%
-4980     GOSUB 3110
-4990     IF (partinrangeResult0% = 0) = 0 THEN GOTO 5030
-5000         GOSUB 3660
-5010         GOSUB 3320
-5020         RETURN
-5030     REM END IF
-5040     ' BASCAL-ism: `let p = inv[part%]` reads record `part%` of the
-5050     ' `inv` file into a local record variable `p` -- one expression
-5060     ' for what fhb's `GET #1, PART!` plus five separate field reads
-5070     ' (F$, D$, CVI(Q$), CVI(R$), CVS(P$)) did by hand. The write
-5080     ' side, `inv[part%] = { ... }` (see editRecord() below), is the
-5090     ' same sugar for PUT plus the LSET/MKx$ packing it replaces.
-5100     ' let p = inv[...]  (whole-record read)
-5110     GET #1, checkpartPart0%
-5120     checkpartPFlagTrimI0% = LEN(invFlagBuf$)
-5130     IF (checkpartPFlagTrimI0% > 0) = 0 THEN GOTO 5170
-5140     IF (MID$(invFlagBuf$, checkpartPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 5170
-5150         checkpartPFlagTrimI0% = checkpartPFlagTrimI0% - 1
-5160         GOTO 5130
-5170     REM END WHILE
-5180     checkpartPFlag0$ = LEFT$(invFlagBuf$, checkpartPFlagTrimI0%)
-5190     checkpartPDescTrimI0% = LEN(invDescBuf$)
-5200     IF (checkpartPDescTrimI0% > 0) = 0 THEN GOTO 5240
-5210     IF (MID$(invDescBuf$, checkpartPDescTrimI0%, 1) = " ") = 0 THEN GOTO 5240
-5220         checkpartPDescTrimI0% = checkpartPDescTrimI0% - 1
-5230         GOTO 5200
-5240     REM END WHILE
-5250     checkpartPDesc0$ = LEFT$(invDescBuf$, checkpartPDescTrimI0%)
-5260     checkpartPQty0% = CVI(invQtyBuf$)
-5270     checkpartPReorder0% = CVI(invReorderBuf$)
-5280     checkpartPPrice0! = CVS(invPriceBuf$)
-5290     isemptyFlag0$ = checkpartPFlag0$
-5300     GOSUB 3070
-5310     IF (isemptyResult0%) = 0 THEN GOTO 5370
-5320         CLS
-5330         LOCATE 10, 18
-5340         PRINT ("Part number" + STR$(checkpartPart0%)) + "is still a null entry at this time"
-5350         GOSUB 3320
-5360         RETURN
-5370     REM END IF
-5380     showpartstatusPartNum0% = checkpartPart0%
-5390     showpartstatusDesc0$ = checkpartPDesc0$
-5400     showpartstatusQty0% = checkpartPQty0%
-5410     showpartstatusReorder0% = checkpartPReorder0%
-5420     showpartstatusPrice0! = checkpartPPrice0!
-5430     GOSUB 3840
-5440     GOSUB 3320
-5450     RETURN
-5460 ' end procedure checkpart
+4760 ' procedure showaddstockscreen(partnum%, desc$, qty%, reorder%)
+4770     CLS
+4780     LOCATE 4, 25
+4790     PRINT "Add to an inventory part number"
+4800     LOCATE 5, 25
+4810     PRINT "==============================="
+4820     LOCATE 8, tabcol%
+4830     PRINT "     Part number: " + STR$(showaddstockscreenPartNum0%)
+4840     LOCATE 9, tabcol%
+4850     PRINT "Item description: " + showaddstockscreenDesc0$
+4860     LOCATE 10, tabcol%
+4870     PRINT "Quantity on hand: " + STR$(showaddstockscreenQty0%)
+4880     LOCATE 11, tabcol%
+4890     PRINT "   Reorder Level: " + STR$(showaddstockscreenReorder0%)
+4900     RETURN
+4910 ' end procedure showaddstockscreen
 
-5470 ' procedure editrecord()
-5480     CLS
-5490     LOCATE 10, tabcol%
-5500     GOSUB 3200
-5510     editrecordPartStr0$ = readpartnumberinputResult0$
-5520     editrecordPart0% = VAL(editrecordPartStr0$)
-5530     partinrangeN0% = editrecordPart0%
-5540     GOSUB 3110
-5550     IF (partinrangeResult0% = 0) = 0 THEN GOTO 5590
-5560         GOSUB 3660
-5570         GOSUB 3320
-5580         RETURN
-5590     REM END IF
-5600     ' let p = inv[...]  (whole-record read)
-5610     GET #1, editrecordPart0%
-5620     editrecordPFlagTrimI0% = LEN(invFlagBuf$)
-5630     IF (editrecordPFlagTrimI0% > 0) = 0 THEN GOTO 5670
-5640     IF (MID$(invFlagBuf$, editrecordPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 5670
-5650         editrecordPFlagTrimI0% = editrecordPFlagTrimI0% - 1
-5660         GOTO 5630
-5670     REM END WHILE
-5680     editrecordPFlag0$ = LEFT$(invFlagBuf$, editrecordPFlagTrimI0%)
-5690     editrecordPDescTrimI0% = LEN(invDescBuf$)
-5700     IF (editrecordPDescTrimI0% > 0) = 0 THEN GOTO 5740
-5710     IF (MID$(invDescBuf$, editrecordPDescTrimI0%, 1) = " ") = 0 THEN GOTO 5740
-5720         editrecordPDescTrimI0% = editrecordPDescTrimI0% - 1
-5730         GOTO 5700
-5740     REM END WHILE
-5750     editrecordPDesc0$ = LEFT$(invDescBuf$, editrecordPDescTrimI0%)
-5760     editrecordPQty0% = CVI(invQtyBuf$)
-5770     editrecordPReorder0% = CVI(invReorderBuf$)
-5780     editrecordPPrice0! = CVS(invPriceBuf$)
-5790     isemptyFlag0$ = editrecordPFlag0$
-5800     GOSUB 3070
-5810     IF (isemptyResult0% = 0) = 0 THEN GOTO 5900
-5820         LOCATE 12, tabcol%
-5830         PRINT "Overwrite existing part data?"
-5840         GOSUB 3250
-5850         editrecordKp0$ = readkeyResult0$
-5860         IF (editrecordKp0$ <> "Y") = 0 THEN GOTO 5890
-5870         IF (editrecordKp0$ <> "y") = 0 THEN GOTO 5890
-5880             RETURN
-5890         REM END IF
+4920 ' procedure shownegativeqtywarning()
+4930     LOCATE 17, 15
+4940     PRINT "The quantity to add must NOT be a negative number"
+4950     LOCATE 25, 1
+4960     PRINT "Please press the Anykey to reenter quantity to add...";
+4970     RETURN
+4980 ' end procedure shownegativeqtywarning
+
+4990 ' procedure showsubtractstockscreen(partnum%, desc$, qty%, reorder%)
+5000     CLS
+5010     LOCATE 4, tabcol%
+5020     PRINT "Subtract an inventory part number"
+5030     LOCATE 5, tabcol%
+5040     PRINT "================================="
+5050     LOCATE 8, tabcol%
+5060     PRINT "         Part number: " + STR$(showsubtractstockscreenPartNum0%)
+5070     LOCATE 9, tabcol%
+5080     PRINT "    Item description: " + showsubtractstockscreenDesc0$
+5090     LOCATE 10, tabcol%
+5100     PRINT "    Quantity on hand: " + STR$(showsubtractstockscreenQty0%)
+5110     LOCATE 11, tabcol%
+5120     PRINT "       Reorder Level: " + STR$(showsubtractstockscreenReorder0%)
+5130     RETURN
+5140 ' end procedure showsubtractstockscreen
+
+5150 ' procedure showoversubtractwarning(onhand%)
+5160     LOCATE 17, 5
+5170     PRINT "The quantity to SUBTRACT must NOT result in NEGATIVE inventory"
+5180     LOCATE 18, 5
+5190     PRINT ("Only" + STR$(showoversubtractwarningOnHand0%)) + " IN STOCK"
+5200     LOCATE 25, 1
+5210     PRINT "Please press the Anykey to reenter quantity to subtract...";
+5220     RETURN
+5230 ' end procedure showoversubtractwarning
+
+5240 ' procedure checkpart()
+5250     GOSUB 3510
+5260     checkpartPartStr0$ = readpartnumberinputResult0$
+5270     checkpartPart0% = VAL(checkpartPartStr0$)
+5280     partinrangeN0% = checkpartPart0%
+5290     GOSUB 3420
+5300     IF (partinrangeResult0% = 0) = 0 THEN GOTO 5340
+5310         GOSUB 3970
+5320         GOSUB 3630
+5330         RETURN
+5340     REM END IF
+5350     ' BASCAL-ism: `let p = inv[part%]` reads record `part%` of the
+5360     ' `inv` file into a local record variable `p` -- one expression
+5370     ' for what fhb's `GET #1, PART!` plus five separate field reads
+5380     ' (F$, D$, CVI(Q$), CVI(R$), CVS(P$)) did by hand. The write
+5390     ' side, `inv[part%] = { ... }` (see editRecord() below), is the
+5400     ' same sugar for PUT plus the LSET/MKx$ packing it replaces.
+5410     ' let p = inv[...]  (whole-record read)
+5420     GET #1, checkpartPart0%
+5430     checkpartPFlagTrimI0% = LEN(invFlagBuf$)
+5440     IF (checkpartPFlagTrimI0% > 0) = 0 THEN GOTO 5480
+5450     IF (MID$(invFlagBuf$, checkpartPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 5480
+5460         checkpartPFlagTrimI0% = checkpartPFlagTrimI0% - 1
+5470         GOTO 5440
+5480     REM END WHILE
+5490     checkpartPFlag0$ = LEFT$(invFlagBuf$, checkpartPFlagTrimI0%)
+5500     checkpartPDescTrimI0% = LEN(invDescBuf$)
+5510     IF (checkpartPDescTrimI0% > 0) = 0 THEN GOTO 5550
+5520     IF (MID$(invDescBuf$, checkpartPDescTrimI0%, 1) = " ") = 0 THEN GOTO 5550
+5530         checkpartPDescTrimI0% = checkpartPDescTrimI0% - 1
+5540         GOTO 5510
+5550     REM END WHILE
+5560     checkpartPDesc0$ = LEFT$(invDescBuf$, checkpartPDescTrimI0%)
+5570     checkpartPQty0% = CVI(invQtyBuf$)
+5580     checkpartPReorder0% = CVI(invReorderBuf$)
+5590     checkpartPPrice0! = CVS(invPriceBuf$)
+5600     isemptyFlag0$ = checkpartPFlag0$
+5610     GOSUB 3380
+5620     IF (isemptyResult0%) = 0 THEN GOTO 5680
+5630         CLS
+5640         LOCATE 10, 18
+5650         PRINT ("Part number" + STR$(checkpartPart0%)) + "is still a null entry at this time"
+5660         GOSUB 3630
+5670         RETURN
+5680     REM END IF
+5690     showpartstatusPartNum0% = checkpartPart0%
+5700     showpartstatusDesc0$ = checkpartPDesc0$
+5710     showpartstatusQty0% = checkpartPQty0%
+5720     showpartstatusReorder0% = checkpartPReorder0%
+5730     showpartstatusPrice0! = checkpartPPrice0!
+5740     GOSUB 4150
+5750     GOSUB 3630
+5760     RETURN
+5770 ' end procedure checkpart
+
+5780 ' procedure editrecord()
+5790     CLS
+5800     LOCATE 10, tabcol%
+5810     GOSUB 3510
+5820     editrecordPartStr0$ = readpartnumberinputResult0$
+5830     editrecordPart0% = VAL(editrecordPartStr0$)
+5840     partinrangeN0% = editrecordPart0%
+5850     GOSUB 3420
+5860     IF (partinrangeResult0% = 0) = 0 THEN GOTO 5900
+5870         GOSUB 3970
+5880         GOSUB 3630
+5890         RETURN
 5900     REM END IF
+5910     ' let p = inv[...]  (whole-record read)
+5920     GET #1, editrecordPart0%
+5930     editrecordPFlagTrimI0% = LEN(invFlagBuf$)
+5940     IF (editrecordPFlagTrimI0% > 0) = 0 THEN GOTO 5980
+5950     IF (MID$(invFlagBuf$, editrecordPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 5980
+5960         editrecordPFlagTrimI0% = editrecordPFlagTrimI0% - 1
+5970         GOTO 5940
+5980     REM END WHILE
+5990     editrecordPFlag0$ = LEFT$(invFlagBuf$, editrecordPFlagTrimI0%)
+6000     editrecordPDescTrimI0% = LEN(invDescBuf$)
+6010     IF (editrecordPDescTrimI0% > 0) = 0 THEN GOTO 6050
+6020     IF (MID$(invDescBuf$, editrecordPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6050
+6030         editrecordPDescTrimI0% = editrecordPDescTrimI0% - 1
+6040         GOTO 6010
+6050     REM END WHILE
+6060     editrecordPDesc0$ = LEFT$(invDescBuf$, editrecordPDescTrimI0%)
+6070     editrecordPQty0% = CVI(invQtyBuf$)
+6080     editrecordPReorder0% = CVI(invReorderBuf$)
+6090     editrecordPPrice0! = CVS(invPriceBuf$)
+6100     isemptyFlag0$ = editrecordPFlag0$
+6110     GOSUB 3380
+6120     IF (isemptyResult0% = 0) = 0 THEN GOTO 6210
+6130         LOCATE 12, tabcol%
+6140         PRINT "Overwrite existing part data?"
+6150         GOSUB 3560
+6160         editrecordKp0$ = readkeyResult0$
+6170         IF (editrecordKp0$ <> "Y") = 0 THEN GOTO 6200
+6180         IF (editrecordKp0$ <> "y") = 0 THEN GOTO 6200
+6190             RETURN
+6200         REM END IF
+6210     REM END IF
 
-5910         gatherpartdetailsPartNum0% = editrecordPart0%
-5920         gatherpartdetailsDesc0$ = editrecordEditDesc0$
-5930         gatherpartdetailsQty0% = editrecordEditQty0%
-5940         gatherpartdetailsReorder0% = editrecordEditReorder0%
-5950         gatherpartdetailsPrice0! = editrecordEditPrice0!
-5960         GOSUB 4260
-5970         editrecordEditDesc0$ = gatherpartdetailsDesc0$
-5980         editrecordEditQty0% = gatherpartdetailsQty0%
-5990         editrecordEditReorder0% = gatherpartdetailsReorder0%
-6000         editrecordEditPrice0! = gatherpartdetailsPrice0!
-6010         GOSUB 3250
-6020         editrecordKp0$ = readkeyResult0$
-6030         IF (editrecordKp0$ = "Y") <> 0 THEN GOTO 6060
-6040         IF (editrecordKp0$ = "y") <> 0 THEN GOTO 6060
-6050         GOTO 5910
-6060     REM END DO
-6070     ' inv[...] = { ... }  (whole-record write)
-6080     LSET invFlagBuf$ = "1"
-6090     LSET invDescBuf$ = editrecordEditDesc0$
-6100     LSET invQtyBuf$ = MKI$(editrecordEditQty0%)
-6110     LSET invReorderBuf$ = MKI$(editrecordEditReorder0%)
-6120     LSET invPriceBuf$ = MKS$(editrecordEditPrice0!)
-6130     PUT #1, editrecordPart0%
-6140     RETURN
-6150 ' end procedure editrecord
+6220         gatherpartdetailsPartNum0% = editrecordPart0%
+6230         gatherpartdetailsDesc0$ = editrecordEditDesc0$
+6240         gatherpartdetailsQty0% = editrecordEditQty0%
+6250         gatherpartdetailsReorder0% = editrecordEditReorder0%
+6260         gatherpartdetailsPrice0! = editrecordEditPrice0!
+6270         GOSUB 4570
+6280         editrecordEditDesc0$ = gatherpartdetailsDesc0$
+6290         editrecordEditQty0% = gatherpartdetailsQty0%
+6300         editrecordEditReorder0% = gatherpartdetailsReorder0%
+6310         editrecordEditPrice0! = gatherpartdetailsPrice0!
+6320         GOSUB 3560
+6330         editrecordKp0$ = readkeyResult0$
+6340         IF (editrecordKp0$ = "Y") <> 0 THEN GOTO 6370
+6350         IF (editrecordKp0$ = "y") <> 0 THEN GOTO 6370
+6360         GOTO 6220
+6370     REM END DO
+6380     ' inv[...] = { ... }  (whole-record write)
+6390     LSET invFlagBuf$ = "1"
+6400     LSET invDescBuf$ = editrecordEditDesc0$
+6410     LSET invQtyBuf$ = MKI$(editrecordEditQty0%)
+6420     LSET invReorderBuf$ = MKI$(editrecordEditReorder0%)
+6430     LSET invPriceBuf$ = MKS$(editrecordEditPrice0!)
+6440     PUT #1, editrecordPart0%
+6450     RETURN
+6460 ' end procedure editrecord
 
-6160 ' procedure listall()
-6170     GOSUB 3990
-6180     listallScrollCount0% = 0
-6190     FOR listallI0% = 1 TO partcount%
-6200         ' let p = inv[...]  (whole-record read)
-6210         GET #1, listallI0%
-6220         listallPFlagTrimI0% = LEN(invFlagBuf$)
-6230         IF (listallPFlagTrimI0% > 0) = 0 THEN GOTO 6270
-6240         IF (MID$(invFlagBuf$, listallPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6270
-6250             listallPFlagTrimI0% = listallPFlagTrimI0% - 1
-6260             GOTO 6230
-6270         REM END WHILE
-6280         listallPFlag0$ = LEFT$(invFlagBuf$, listallPFlagTrimI0%)
-6290         listallPDescTrimI0% = LEN(invDescBuf$)
-6300         IF (listallPDescTrimI0% > 0) = 0 THEN GOTO 6340
-6310         IF (MID$(invDescBuf$, listallPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6340
-6320             listallPDescTrimI0% = listallPDescTrimI0% - 1
-6330             GOTO 6300
-6340         REM END WHILE
-6350         listallPDesc0$ = LEFT$(invDescBuf$, listallPDescTrimI0%)
-6360         listallPQty0% = CVI(invQtyBuf$)
-6370         listallPReorder0% = CVI(invReorderBuf$)
-6380         listallPPrice0! = CVS(invPriceBuf$)
-6390         printinventorylinePartNum0% = listallI0%
-6400         printinventorylineDesc0$ = listallPDesc0$
-6410         printinventorylineQty0% = listallPQty0%
-6420         printinventorylineReorder0% = listallPReorder0%
-6430         GOSUB 4080
-6440         listallScrollCount0% = listallScrollCount0% + 1
-6450         IF (listallScrollCount0% = 20) = 0 THEN GOTO 6480
-6460             GOSUB 3320
-6470             listallScrollCount0% = 0
-6480         REM END IF
-6490     NEXT listallI0%
-6500     RETURN
-6510 ' end procedure listall
+6470 ' procedure listall()
+6480     GOSUB 4300
+6490     listallScrollCount0% = 0
+6500     FOR listallI0% = 1 TO partcount%
+6510         ' let p = inv[...]  (whole-record read)
+6520         GET #1, listallI0%
+6530         listallPFlagTrimI0% = LEN(invFlagBuf$)
+6540         IF (listallPFlagTrimI0% > 0) = 0 THEN GOTO 6580
+6550         IF (MID$(invFlagBuf$, listallPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6580
+6560             listallPFlagTrimI0% = listallPFlagTrimI0% - 1
+6570             GOTO 6540
+6580         REM END WHILE
+6590         listallPFlag0$ = LEFT$(invFlagBuf$, listallPFlagTrimI0%)
+6600         listallPDescTrimI0% = LEN(invDescBuf$)
+6610         IF (listallPDescTrimI0% > 0) = 0 THEN GOTO 6650
+6620         IF (MID$(invDescBuf$, listallPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6650
+6630             listallPDescTrimI0% = listallPDescTrimI0% - 1
+6640             GOTO 6610
+6650         REM END WHILE
+6660         listallPDesc0$ = LEFT$(invDescBuf$, listallPDescTrimI0%)
+6670         listallPQty0% = CVI(invQtyBuf$)
+6680         listallPReorder0% = CVI(invReorderBuf$)
+6690         listallPPrice0! = CVS(invPriceBuf$)
+6700         printinventorylinePartNum0% = listallI0%
+6710         printinventorylineDesc0$ = listallPDesc0$
+6720         printinventorylineQty0% = listallPQty0%
+6730         printinventorylineReorder0% = listallPReorder0%
+6740         GOSUB 4390
+6750         listallScrollCount0% = listallScrollCount0% + 1
+6760         IF (listallScrollCount0% = 20) = 0 THEN GOTO 6790
+6770             GOSUB 3630
+6780             listallScrollCount0% = 0
+6790         REM END IF
+6800     NEXT listallI0%
+6810     RETURN
+6820 ' end procedure listall
 
-6520 ' procedure addstock()
-6530     CLS
-6540     LOCATE 5, 25
-6550     PRINT "A D D I N G   S T O C K"
+6830 ' procedure addstock()
+6840     CLS
+6850     LOCATE 5, 25
+6860     PRINT "A D D I N G   S T O C K"
 
-6560         LOCATE 8, 25
-6570         GOSUB 3200
-6580         addstockPartStr0$ = readpartnumberinputResult0$
-6590         addstockPart0% = VAL(addstockPartStr0$)
-6600         partinrangeN0% = addstockPart0%
-6610         GOSUB 3110
-6620         addstockValidPart0% = partinrangeResult0%
-6630         IF (addstockValidPart0% = 0) = 0 THEN GOTO 6660
-6640             GOSUB 3720
-6650             GOSUB 3250
-6660         REM END IF
-6670         IF (addstockValidPart0% <> 0) = 0 THEN GOTO 6560
-6680     REM END DO
+6870         LOCATE 8, 25
+6880         GOSUB 3510
+6890         addstockPartStr0$ = readpartnumberinputResult0$
+6900         addstockPart0% = VAL(addstockPartStr0$)
+6910         partinrangeN0% = addstockPart0%
+6920         GOSUB 3420
+6930         addstockValidPart0% = partinrangeResult0%
+6940         IF (addstockValidPart0% = 0) = 0 THEN GOTO 6970
+6950             GOSUB 4030
+6960             GOSUB 3560
+6970         REM END IF
+6980         IF (addstockValidPart0% <> 0) = 0 THEN GOTO 6870
+6990     REM END DO
 
-6690     ' let p = inv[...]  (whole-record read)
-6700     GET #1, addstockPart0%
-6710     addstockPFlagTrimI0% = LEN(invFlagBuf$)
-6720     IF (addstockPFlagTrimI0% > 0) = 0 THEN GOTO 6760
-6730     IF (MID$(invFlagBuf$, addstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6760
-6740         addstockPFlagTrimI0% = addstockPFlagTrimI0% - 1
-6750         GOTO 6720
-6760     REM END WHILE
-6770     addstockPFlag0$ = LEFT$(invFlagBuf$, addstockPFlagTrimI0%)
-6780     addstockPDescTrimI0% = LEN(invDescBuf$)
-6790     IF (addstockPDescTrimI0% > 0) = 0 THEN GOTO 6830
-6800     IF (MID$(invDescBuf$, addstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6830
-6810         addstockPDescTrimI0% = addstockPDescTrimI0% - 1
-6820         GOTO 6790
-6830     REM END WHILE
-6840     addstockPDesc0$ = LEFT$(invDescBuf$, addstockPDescTrimI0%)
-6850     addstockPQty0% = CVI(invQtyBuf$)
-6860     addstockPReorder0% = CVI(invReorderBuf$)
-6870     addstockPPrice0! = CVS(invPriceBuf$)
-6880     isemptyFlag0$ = addstockPFlag0$
-6890     GOSUB 3070
-6900     IF (isemptyResult0%) = 0 THEN GOTO 6950
-6910         shownullentrymessagePartStr0$ = addstockPartStr0$
-6920         GOSUB 3790
-6930         GOSUB 3250
-6940         RETURN
-6950     REM END IF
+7000     ' let p = inv[...]  (whole-record read)
+7010     GET #1, addstockPart0%
+7020     addstockPFlagTrimI0% = LEN(invFlagBuf$)
+7030     IF (addstockPFlagTrimI0% > 0) = 0 THEN GOTO 7070
+7040     IF (MID$(invFlagBuf$, addstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7070
+7050         addstockPFlagTrimI0% = addstockPFlagTrimI0% - 1
+7060         GOTO 7030
+7070     REM END WHILE
+7080     addstockPFlag0$ = LEFT$(invFlagBuf$, addstockPFlagTrimI0%)
+7090     addstockPDescTrimI0% = LEN(invDescBuf$)
+7100     IF (addstockPDescTrimI0% > 0) = 0 THEN GOTO 7140
+7110     IF (MID$(invDescBuf$, addstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7140
+7120         addstockPDescTrimI0% = addstockPDescTrimI0% - 1
+7130         GOTO 7100
+7140     REM END WHILE
+7150     addstockPDesc0$ = LEFT$(invDescBuf$, addstockPDescTrimI0%)
+7160     addstockPQty0% = CVI(invQtyBuf$)
+7170     addstockPReorder0% = CVI(invReorderBuf$)
+7180     addstockPPrice0! = CVS(invPriceBuf$)
+7190     isemptyFlag0$ = addstockPFlag0$
+7200     GOSUB 3380
+7210     IF (isemptyResult0%) = 0 THEN GOTO 7260
+7220         shownullentrymessagePartStr0$ = addstockPartStr0$
+7230         GOSUB 4100
+7240         GOSUB 3560
+7250         RETURN
+7260     REM END IF
 
-6960         showaddstockscreenPartNum0% = addstockPart0%
-6970         showaddstockscreenDesc0$ = addstockPDesc0$
-6980         showaddstockscreenQty0% = addstockPQty0%
-6990         showaddstockscreenReorder0% = addstockPReorder0%
-7000         GOSUB 4460
-7010         LOCATE 14, tabcol%
-7020         INPUT " Quantity to add"; addstockAddStr0$
-7030         addstockAddAmt0% = VAL(addstockAddStr0$)
-7040         IF (addstockAddAmt0% < 0) = 0 THEN GOTO 7070
-7050             GOSUB 4620
-7060             GOSUB 3250
-7070         REM END IF
-7080         IF (addstockAddAmt0% >= 0) = 0 THEN GOTO 6960
-7090     REM END DO
+7270         showaddstockscreenPartNum0% = addstockPart0%
+7280         showaddstockscreenDesc0$ = addstockPDesc0$
+7290         showaddstockscreenQty0% = addstockPQty0%
+7300         showaddstockscreenReorder0% = addstockPReorder0%
+7310         GOSUB 4770
+7320         LOCATE 14, tabcol%
+7330         INPUT " Quantity to add"; addstockAddStr0$
+7340         addstockAddAmt0% = VAL(addstockAddStr0$)
+7350         IF (addstockAddAmt0% < 0) = 0 THEN GOTO 7380
+7360             GOSUB 4930
+7370             GOSUB 3560
+7380         REM END IF
+7390         IF (addstockAddAmt0% >= 0) = 0 THEN GOTO 7270
+7400     REM END DO
 
-7100     addstockPQty0% = addstockPQty0% + addstockAddAmt0%
-7110     ' inv[...] = p  (write back a let-bound record)
-7120     LSET invFlagBuf$ = addstockPFlag0$
-7130     LSET invDescBuf$ = addstockPDesc0$
-7140     LSET invQtyBuf$ = MKI$(addstockPQty0%)
-7150     LSET invReorderBuf$ = MKI$(addstockPReorder0%)
-7160     LSET invPriceBuf$ = MKS$(addstockPPrice0!)
-7170     PUT #1, addstockPart0%
-7180     RETURN
-7190 ' end procedure addstock
+7410     addstockPQty0% = addstockPQty0% + addstockAddAmt0%
+7420     ' inv[...] = p  (write back a let-bound record)
+7430     LSET invFlagBuf$ = addstockPFlag0$
+7440     LSET invDescBuf$ = addstockPDesc0$
+7450     LSET invQtyBuf$ = MKI$(addstockPQty0%)
+7460     LSET invReorderBuf$ = MKI$(addstockPReorder0%)
+7470     LSET invPriceBuf$ = MKS$(addstockPPrice0!)
+7480     PUT #1, addstockPart0%
+7490     RETURN
+7500 ' end procedure addstock
 
-7200 ' procedure subtractstock()
-7210     CLS
-7220     LOCATE 5, 20
-7230     PRINT "S U B T R A C T I N G    S T O C K"
+7510 ' procedure subtractstock()
+7520     CLS
+7530     LOCATE 5, 20
+7540     PRINT "S U B T R A C T I N G    S T O C K"
 
-7240         LOCATE 8, 25
-7250         GOSUB 3200
-7260         subtractstockPartStr0$ = readpartnumberinputResult0$
-7270         subtractstockPart0% = VAL(subtractstockPartStr0$)
-7280         partinrangeN0% = subtractstockPart0%
-7290         GOSUB 3110
-7300         subtractstockValidPart0% = partinrangeResult0%
-7310         IF (subtractstockValidPart0% = 0) = 0 THEN GOTO 7340
-7320             GOSUB 3720
-7330             GOSUB 3250
-7340         REM END IF
-7350         IF (subtractstockValidPart0% <> 0) = 0 THEN GOTO 7240
-7360     REM END DO
+7550         LOCATE 8, 25
+7560         GOSUB 3510
+7570         subtractstockPartStr0$ = readpartnumberinputResult0$
+7580         subtractstockPart0% = VAL(subtractstockPartStr0$)
+7590         partinrangeN0% = subtractstockPart0%
+7600         GOSUB 3420
+7610         subtractstockValidPart0% = partinrangeResult0%
+7620         IF (subtractstockValidPart0% = 0) = 0 THEN GOTO 7650
+7630             GOSUB 4030
+7640             GOSUB 3560
+7650         REM END IF
+7660         IF (subtractstockValidPart0% <> 0) = 0 THEN GOTO 7550
+7670     REM END DO
 
-7370     ' let p = inv[...]  (whole-record read)
-7380     GET #1, subtractstockPart0%
-7390     subtractstockPFlagTrimI0% = LEN(invFlagBuf$)
-7400     IF (subtractstockPFlagTrimI0% > 0) = 0 THEN GOTO 7440
-7410     IF (MID$(invFlagBuf$, subtractstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7440
-7420         subtractstockPFlagTrimI0% = subtractstockPFlagTrimI0% - 1
-7430         GOTO 7400
-7440     REM END WHILE
-7450     subtractstockPFlag0$ = LEFT$(invFlagBuf$, subtractstockPFlagTrimI0%)
-7460     subtractstockPDescTrimI0% = LEN(invDescBuf$)
-7470     IF (subtractstockPDescTrimI0% > 0) = 0 THEN GOTO 7510
-7480     IF (MID$(invDescBuf$, subtractstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7510
-7490         subtractstockPDescTrimI0% = subtractstockPDescTrimI0% - 1
-7500         GOTO 7470
-7510     REM END WHILE
-7520     subtractstockPDesc0$ = LEFT$(invDescBuf$, subtractstockPDescTrimI0%)
-7530     subtractstockPQty0% = CVI(invQtyBuf$)
-7540     subtractstockPReorder0% = CVI(invReorderBuf$)
-7550     subtractstockPPrice0! = CVS(invPriceBuf$)
-7560     isemptyFlag0$ = subtractstockPFlag0$
-7570     GOSUB 3070
-7580     IF (isemptyResult0%) = 0 THEN GOTO 7630
-7590         shownullentrymessagePartStr0$ = subtractstockPartStr0$
-7600         GOSUB 3790
-7610         GOSUB 3250
-7620         RETURN
-7630     REM END IF
+7680     ' let p = inv[...]  (whole-record read)
+7690     GET #1, subtractstockPart0%
+7700     subtractstockPFlagTrimI0% = LEN(invFlagBuf$)
+7710     IF (subtractstockPFlagTrimI0% > 0) = 0 THEN GOTO 7750
+7720     IF (MID$(invFlagBuf$, subtractstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7750
+7730         subtractstockPFlagTrimI0% = subtractstockPFlagTrimI0% - 1
+7740         GOTO 7710
+7750     REM END WHILE
+7760     subtractstockPFlag0$ = LEFT$(invFlagBuf$, subtractstockPFlagTrimI0%)
+7770     subtractstockPDescTrimI0% = LEN(invDescBuf$)
+7780     IF (subtractstockPDescTrimI0% > 0) = 0 THEN GOTO 7820
+7790     IF (MID$(invDescBuf$, subtractstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7820
+7800         subtractstockPDescTrimI0% = subtractstockPDescTrimI0% - 1
+7810         GOTO 7780
+7820     REM END WHILE
+7830     subtractstockPDesc0$ = LEFT$(invDescBuf$, subtractstockPDescTrimI0%)
+7840     subtractstockPQty0% = CVI(invQtyBuf$)
+7850     subtractstockPReorder0% = CVI(invReorderBuf$)
+7860     subtractstockPPrice0! = CVS(invPriceBuf$)
+7870     isemptyFlag0$ = subtractstockPFlag0$
+7880     GOSUB 3380
+7890     IF (isemptyResult0%) = 0 THEN GOTO 7940
+7900         shownullentrymessagePartStr0$ = subtractstockPartStr0$
+7910         GOSUB 4100
+7920         GOSUB 3560
+7930         RETURN
+7940     REM END IF
 
-7640         showsubtractstockscreenPartNum0% = subtractstockPart0%
-7650         showsubtractstockscreenDesc0$ = subtractstockPDesc0$
-7660         showsubtractstockscreenQty0% = subtractstockPQty0%
-7670         showsubtractstockscreenReorder0% = subtractstockPReorder0%
-7680         GOSUB 4690
-7690         LOCATE 14, tabcol%
-7700         INPUT "Quantity to subtract"; subtractstockSubStr0$
-7710         subtractstockSubAmt0% = VAL(subtractstockSubStr0$)
-7720         subtractstockOverSubtract0% = 0
-7730         IF (subtractstockSubAmt0% >= 0) = 0 THEN GOTO 7790
-7740         IF ((subtractstockPQty0% - subtractstockSubAmt0%) < 0) = 0 THEN GOTO 7790
-7750             subtractstockOverSubtract0% = 1
-7760             showoversubtractwarningOnHand0% = subtractstockPQty0%
-7770             GOSUB 4850
-7780             GOSUB 3250
-7790         REM END IF
-7800         IF (subtractstockSubAmt0% >= 0) = 0 THEN GOTO 7640
-7810         IF (subtractstockOverSubtract0% = 0) = 0 THEN GOTO 7640
-7820     REM END DO
+7950         showsubtractstockscreenPartNum0% = subtractstockPart0%
+7960         showsubtractstockscreenDesc0$ = subtractstockPDesc0$
+7970         showsubtractstockscreenQty0% = subtractstockPQty0%
+7980         showsubtractstockscreenReorder0% = subtractstockPReorder0%
+7990         GOSUB 5000
+8000         LOCATE 14, tabcol%
+8010         INPUT "Quantity to subtract"; subtractstockSubStr0$
+8020         subtractstockSubAmt0% = VAL(subtractstockSubStr0$)
+8030         subtractstockOverSubtract0% = 0
+8040         IF (subtractstockSubAmt0% >= 0) = 0 THEN GOTO 8100
+8050         IF ((subtractstockPQty0% - subtractstockSubAmt0%) < 0) = 0 THEN GOTO 8100
+8060             subtractstockOverSubtract0% = 1
+8070             showoversubtractwarningOnHand0% = subtractstockPQty0%
+8080             GOSUB 5160
+8090             GOSUB 3560
+8100         REM END IF
+8110         IF (subtractstockSubAmt0% >= 0) = 0 THEN GOTO 7950
+8120         IF (subtractstockOverSubtract0% = 0) = 0 THEN GOTO 7950
+8130     REM END DO
 
-7830     subtractstockPQty0% = subtractstockPQty0% - subtractstockSubAmt0%
-7840     IF (subtractstockPQty0% <= subtractstockPReorder0%) = 0 THEN GOTO 7860
-7850         LOCATE 16, tabcol%
-7860     REM END IF
-7870     PRINT (("quantity now" + STR$(subtractstockPQty0%)) + " reorder level") + STR$(subtractstockPReorder0%)
-7880     ' inv[...] = p  (write back a let-bound record)
-7890     LSET invFlagBuf$ = subtractstockPFlag0$
-7900     LSET invDescBuf$ = subtractstockPDesc0$
-7910     LSET invQtyBuf$ = MKI$(subtractstockPQty0%)
-7920     LSET invReorderBuf$ = MKI$(subtractstockPReorder0%)
-7930     LSET invPriceBuf$ = MKS$(subtractstockPPrice0!)
-7940     PUT #1, subtractstockPart0%
-7950     RETURN
-7960 ' end procedure subtractstock
+8140     subtractstockPQty0% = subtractstockPQty0% - subtractstockSubAmt0%
+8150     IF (subtractstockPQty0% <= subtractstockPReorder0%) = 0 THEN GOTO 8170
+8160         LOCATE 16, tabcol%
+8170     REM END IF
+8180     PRINT (("quantity now" + STR$(subtractstockPQty0%)) + " reorder level") + STR$(subtractstockPReorder0%)
+8190     ' inv[...] = p  (write back a let-bound record)
+8200     LSET invFlagBuf$ = subtractstockPFlag0$
+8210     LSET invDescBuf$ = subtractstockPDesc0$
+8220     LSET invQtyBuf$ = MKI$(subtractstockPQty0%)
+8230     LSET invReorderBuf$ = MKI$(subtractstockPReorder0%)
+8240     LSET invPriceBuf$ = MKS$(subtractstockPPrice0!)
+8250     PUT #1, subtractstockPart0%
+8260     RETURN
+8270 ' end procedure subtractstock
 
-7970 ' procedure reorderreport()
-7980     GOSUB 4120
-7990     reorderreportReportLineCount0% = 0
-8000     FOR reorderreportI0% = 1 TO partcount%
-8010         ' let p = inv[...]  (whole-record read)
-8020         GET #1, reorderreportI0%
-8030         reorderreportPFlagTrimI0% = LEN(invFlagBuf$)
-8040         IF (reorderreportPFlagTrimI0% > 0) = 0 THEN GOTO 8080
-8050         IF (MID$(invFlagBuf$, reorderreportPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 8080
-8060             reorderreportPFlagTrimI0% = reorderreportPFlagTrimI0% - 1
-8070             GOTO 8040
-8080         REM END WHILE
-8090         reorderreportPFlag0$ = LEFT$(invFlagBuf$, reorderreportPFlagTrimI0%)
-8100         reorderreportPDescTrimI0% = LEN(invDescBuf$)
-8110         IF (reorderreportPDescTrimI0% > 0) = 0 THEN GOTO 8150
-8120         IF (MID$(invDescBuf$, reorderreportPDescTrimI0%, 1) = " ") = 0 THEN GOTO 8150
-8130             reorderreportPDescTrimI0% = reorderreportPDescTrimI0% - 1
-8140             GOTO 8110
-8150         REM END WHILE
-8160         reorderreportPDesc0$ = LEFT$(invDescBuf$, reorderreportPDescTrimI0%)
-8170         reorderreportPQty0% = CVI(invQtyBuf$)
-8180         reorderreportPReorder0% = CVI(invReorderBuf$)
-8190         reorderreportPPrice0! = CVS(invPriceBuf$)
-8200         IF (reorderreportPQty0% < reorderreportPReorder0%) = 0 THEN GOTO 8310
-8210             printreorderlinePartNum0% = reorderreportI0%
-8220             printreorderlineDesc0$ = reorderreportPDesc0$
-8230             printreorderlineQty0% = reorderreportPQty0%
-8240             printreorderlineReorder0% = reorderreportPReorder0%
-8250             GOSUB 4220
-8260             reorderreportReportLineCount0% = reorderreportReportLineCount0% + 1
-8270             IF (reorderreportReportLineCount0% > 15) = 0 THEN GOTO 8300
-8280                 GOSUB 3320
-8290                 reorderreportReportLineCount0% = 0
-8300             REM END IF
-8310         REM END IF
-8320     NEXT reorderreportI0%
-8330     GOSUB 3320
-8340     RETURN
-8350 ' end procedure reorderreport
+8280 ' procedure reorderreport()
+8290     GOSUB 4430
+8300     reorderreportReportLineCount0% = 0
+8310     FOR reorderreportI0% = 1 TO partcount%
+8320         ' let p = inv[...]  (whole-record read)
+8330         GET #1, reorderreportI0%
+8340         reorderreportPFlagTrimI0% = LEN(invFlagBuf$)
+8350         IF (reorderreportPFlagTrimI0% > 0) = 0 THEN GOTO 8390
+8360         IF (MID$(invFlagBuf$, reorderreportPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 8390
+8370             reorderreportPFlagTrimI0% = reorderreportPFlagTrimI0% - 1
+8380             GOTO 8350
+8390         REM END WHILE
+8400         reorderreportPFlag0$ = LEFT$(invFlagBuf$, reorderreportPFlagTrimI0%)
+8410         reorderreportPDescTrimI0% = LEN(invDescBuf$)
+8420         IF (reorderreportPDescTrimI0% > 0) = 0 THEN GOTO 8460
+8430         IF (MID$(invDescBuf$, reorderreportPDescTrimI0%, 1) = " ") = 0 THEN GOTO 8460
+8440             reorderreportPDescTrimI0% = reorderreportPDescTrimI0% - 1
+8450             GOTO 8420
+8460         REM END WHILE
+8470         reorderreportPDesc0$ = LEFT$(invDescBuf$, reorderreportPDescTrimI0%)
+8480         reorderreportPQty0% = CVI(invQtyBuf$)
+8490         reorderreportPReorder0% = CVI(invReorderBuf$)
+8500         reorderreportPPrice0! = CVS(invPriceBuf$)
+8510         IF (reorderreportPQty0% < reorderreportPReorder0%) = 0 THEN GOTO 8620
+8520             printreorderlinePartNum0% = reorderreportI0%
+8530             printreorderlineDesc0$ = reorderreportPDesc0$
+8540             printreorderlineQty0% = reorderreportPQty0%
+8550             printreorderlineReorder0% = reorderreportPReorder0%
+8560             GOSUB 4530
+8570             reorderreportReportLineCount0% = reorderreportReportLineCount0% + 1
+8580             IF (reorderreportReportLineCount0% > 15) = 0 THEN GOTO 8610
+8590                 GOSUB 3630
+8600                 reorderreportReportLineCount0% = 0
+8610             REM END IF
+8620         REM END IF
+8630     NEXT reorderreportI0%
+8640     GOSUB 3630
+8650     RETURN
+8660 ' end procedure reorderreport
 
-8360 ' procedure errortrap()
-8370     LOCATE 25, 1
-8380     ' `err` and `erl` are real numeric system pseudo-variables, passed
-8390     ' straight through like fhb's own ERR/ERL (his 3390: "an error on
-8400     ' line";ERL). Unlike fhb's version, which used a hand-rolled ERR
-8410     ' lookup table, this decodes ERR through BASCAL's own
-8420     ' com.bascal.stdlib.error (ERROR$) instead -- see the header note
-8430     ' above. See the manual's ON ERROR GOTO section
-8440     ' (https://johnjoeallen.github.io/bascal/manual/).
-8450     errorCode0% = ERR
-8460     GOSUB 1670
-8470     PRINT (("There has been an error on line" + STR$(ERL)) + ": ") + errorResult0$
-8480     GOSUB 3250
-8490     errortrapK0$ = readkeyResult0$
-8500     RESUME NEXT
-8510 ' end procedure errortrap
+8670 ' procedure reportinventoryerror(err%, erl%)
+8680     LOCATE 25, 1
+8690     errorCode0% = reportinventoryerrorErr0%
+8700     GOSUB 1980
+8710     PRINT (("There has been an error on line" + STR$(reportinventoryerrorErl0%)) + ": ") + errorResult0$
+8720     GOSUB 3560
+8730     reportinventoryerrorK0$ = readkeyResult0$
+8740     RETURN
+8750 ' end procedure reportinventoryerror

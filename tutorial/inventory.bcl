@@ -38,11 +38,18 @@
 // Tracks parts in a fixed 100-record file: check status, add,
 // edit, add/subtract stock, and a reorder report.
 //
-// Verified against real BASCOM 2.00 under dosbox-x: compiles
-// clean and links, but -- because this program uses `on error
-// goto` / `resume` -- only when BASCOM is invoked with the /E and
-// /X switches (error trapping isn't linked in by default). See
-// `errorTrap()` at the bottom.
+// Error handling uses try/catch (GitHub issue #60), not the raw `on
+// error goto` / `resume next` fhb's original relies on: a failed menu
+// action is abandoned outright and the program returns straight to the
+// main menu, rather than resuming at the exact instruction after
+// whatever failed -- see reportInventoryError() below and
+// tutorial/inventory_try_catch.draft's own header comment for why. This
+// is a real, deliberate behavior change from an earlier on-error-goto
+// version of this file, which *was* verified against real BASCOM 2.00
+// under dosbox-x (only with the /E and /X switches -- error trapping
+// isn't linked in by default); the try/catch shape below transpiles to
+// the same ON ERROR GOTO/RESUME primitives BASCOM accepts, but hasn't
+// itself been independently re-verified against a real BASCOM compile.
 // ============================================================
 program inventory
 
@@ -460,7 +467,6 @@ end procedure
 // -------------------- Program entry --------------------
 
 cls
-on error goto errorTrap
 
 do
     showMainMenu()
@@ -469,27 +475,41 @@ do
         // BASCAL-ism: `select case` replaces fhb's chain of eight
         // `IF VAL(KP$)=n OR KP$="x" OR KP$="X" THEN GOTO ...` lines
         // (his 770-840) with one multi-way dispatch.
-        select case kp$
-            case "1", "c", "C"
-                checkPart()
-            case "2", "e", "E"
-                editRecord()
-            case "3", "l", "L"
-                listAll()
-            case "4", "a", "A"
-                addStock()
-            case "5", "s", "S"
-                subtractStock()
-            case "6", "r", "R"
-                reorderReport()
-            case "7", "q", "Q"
-                quitFlag% = 1
-            case "8", "x", "X"
-                // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
-                // matching fhb's own `90 CLOSE:SYSTEM`.
-                inv.close()
-                system
-        end select
+        //
+        // BASCAL-ism: `try`/`catch` (issue #60) replaces fhb's own global
+        // `ON ERROR GOTO` trap. A failed menu action is abandoned outright
+        // here -- the `catch` below runs, then execution continues right
+        // after `end try`, back at `loop until` -- rather than resuming at
+        // the exact instruction after whatever failed inside checkPart()/
+        // editRecord()/etc. the way fhb's `RESUME NEXT` did. See
+        // reportInventoryError() below and tutorial/inventory_try_catch.
+        // draft's own header comment for why that arbitrary resume-point
+        // behavior isn't something try/catch reproduces.
+        try
+            select case kp$
+                case "1", "c", "C"
+                    checkPart()
+                case "2", "e", "E"
+                    editRecord()
+                case "3", "l", "L"
+                    listAll()
+                case "4", "a", "A"
+                    addStock()
+                case "5", "s", "S"
+                    subtractStock()
+                case "6", "r", "R"
+                    reorderReport()
+                case "7", "q", "Q"
+                    quitFlag% = 1
+                case "8", "x", "X"
+                    // BASCAL-ism: `inv.close()` is sugar for `CLOSE #1`,
+                    // matching fhb's own `90 CLOSE:SYSTEM`.
+                    inv.close()
+                    system
+            end select
+        catch err%, erl%
+            reportInventoryError(err%, erl%)
+        end try
     end if
 loop until quitFlag% = 1
 
@@ -497,29 +517,19 @@ inv.close()
 END
 
 // -------------------- Error handling --------------------
-// A procedure, not just a raw label -- safe here because bcc's resolver
-// specifically proves it safe. `errorTrap()` is the target of `on error
-// goto` above, reached via a raw GOTO rather than a GOSUB, so a `return`
-// or a fallen-through implicit trailing RETURN would have no GOSUB frame
-// to pop and would crash with "RETURN without GOSUB" (fittingly, exactly
-// what ERROR$(3) below reports). bcc rejects any procedure named as an
-// `on error goto` target that contains a `return` anywhere, or that can't
-// be proven to end every path in `resume`/`resume next`/`resume <label>`
-// (this one's trailing `resume next` qualifies) -- and, given that proof,
-// codegen skips the implicit trailing RETURN entirely, so there's nothing
-// left to fall into even if the proof were somehow wrong. The same check
-// also rejects calling it like an ordinary procedure anywhere else:
-// something proven to never return can never come back to a normal caller.
-procedure errorTrap()
+// err%/erl% are ordinary locals scoped to the `catch` block above, not
+// aliases for the ambient (readable-anywhere) `err`/`erl` pseudo-
+// variables `on error goto` uses -- see `Statement::TryCatch`'s own doc
+// comment in ast.rs. Passed straight through to ERROR$ here like fhb's
+// own ERR/ERL (his 3390: "an error on line";ERL), decoded through
+// BASCAL's own com.bascal.stdlib.error (ERROR$) instead of fhb's
+// hand-rolled lookup table -- see the header note above. try/catch
+// itself isn't documented in the manual yet (GitHub issue #60 tracks
+// the still-unfinished C-target work; the manual page can follow once
+// that lands) -- see ast.rs's own `Statement::TryCatch` doc comment for
+// the full semantics meanwhile.
+procedure reportInventoryError(err%, erl%)
     locate 25, 1
-    // `err` and `erl` are real numeric system pseudo-variables, passed
-    // straight through like fhb's own ERR/ERL (his 3390: "an error on
-    // line";ERL). Unlike fhb's version, which used a hand-rolled ERR
-    // lookup table, this decodes ERR through BASCAL's own
-    // com.bascal.stdlib.error (ERROR$) instead -- see the header note
-    // above. See the manual's ON ERROR GOTO section
-    // (https://johnjoeallen.github.io/bascal/manual/).
-    print "There has been an error on line" + str$(erl) + ": " + error$(err)
+    print "There has been an error on line" + str$(erl%) + ": " + error$(err%)
     k$ = readKey$()
-    resume next
 end procedure
