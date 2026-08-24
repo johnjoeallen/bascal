@@ -62,5 +62,3 @@ print name$.left(5).len()   ' same as len(left$(name$, 5))
 ```
 
 Their names are reserved: a program can’t declare its own `method$ left$(...)`, the same way it can’t declare a function named after a real BASIC builtin. An invalid receiver or argument is rejected during transpilation rather than silently becoming a different ordinary call.
-
-[← Arrays and strings](arrays-and-strings.md)[Libraries →](libraries.md)

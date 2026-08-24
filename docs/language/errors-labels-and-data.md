@@ -53,5 +53,3 @@ continue:
 ```
 
 Inside the handler, the no-suffix pseudo-variables `err` and `erl` hold the failing error code and line. `resume` retries the failed statement; `resume next` skips it; `resume label` jumps elsewhere, as above. `on error goto 0` disables the trap, and `error code%` raises or re-raises an error deliberately.
-
-[← Data that outlives a run](data-and-files.md)[Embedded data →](embedded-data.md)

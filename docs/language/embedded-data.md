@@ -31,5 +31,3 @@ restore countries
 read first$
 print first$
 ```
-
-[← Errors and labels](errors-labels-and-data.md)[The standard library →](standard-library.md)

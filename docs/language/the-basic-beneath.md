@@ -62,5 +62,3 @@ When the C backend needs support functions, it emits them into the generated C s
 ## One complete book
 
 This book is both an introduction and the authoritative BASCAL reference. Read it in order to learn the language, then return to the relevant chapter for its complete syntax, behaviour, and examples.
-
-[← Running and combining programs](running-and-combining-programs.md)[Contents →](./)

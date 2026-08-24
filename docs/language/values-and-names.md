@@ -27,5 +27,3 @@ scores%(2) = 87
 ```
 
 Arrays, constants, conversion rules, and type suffixes are developed throughout the following chapters; each declaration should make both its storage and its intended use clear.
-
-[← A first program](first-program.md)[Making control flow visible →](control-flow.md)

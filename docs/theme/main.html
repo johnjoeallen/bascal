@@ -14,7 +14,7 @@
   {% if page and page.url.startswith('language/') %}
   <header class="book-masthead"><div class="book-width"><a class="book-name" href="{{ 'language/' | url }}">The BASCAL Programming Language</a><a class="book-home" href="{{ nav.homepage.url | url }}">BASCAL home</a></div></header>
   {% if page.url == 'language/' %}<section class="book-hero"><div class="book-width"><p class="eyebrow">A guide to a structured superset of BASIC</p><h1>The BASCAL Programming Language</h1><p class="subtitle">A programmer’s introduction to BASCAL: a clear, structured superset of BASIC inspired primarily by Pascal.</p><p class="byline">An online book for BASCAL 0.99</p></div></section>{% endif %}
-  <main class="book-main book-width">{{ page.content }}</main>
+  <main class="book-main book-width">{{ page.content }}{% if page.url != 'language/' %}<nav class="chapter-nav">{% if page.previous_page %}<a href="{{ page.previous_page.url | url }}">← {{ page.previous_page.title }}</a>{% else %}<span></span>{% endif %}{% if page.next_page %}<a href="{{ page.next_page.url | url }}">{{ page.next_page.title }} →</a>{% else %}<span></span>{% endif %}</nav>{% endif %}</main>
   <footer class="book-footer"><div class="book-width"><p><a href="{{ 'language/' | url }}">The BASCAL Programming Language</a></p></div></footer>
   {% else %}
   <header class="hero compact"><div class="wrap"><h1>{{ page.title if page else config.site_name }}</h1></div></header>

@@ -48,5 +48,3 @@ A method is really just a function with its receiver as an implicit first parame
 These modules live under `com.bascal.stdlib` and use the same dependency rules as any other library. BASCAL also adds its internal `midAssign` helper automatically when you use the statement form of `mid$`; you never need to require it yourself.
 
 For signatures, examples, and target details, see the manual’s [Standard Library Functions](../manual/standard-library-functions.md) chapter.
-
-[← Embedded data](embedded-data.md)[Running and combining programs →](running-and-combining-programs.md)

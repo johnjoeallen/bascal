@@ -43,5 +43,3 @@ BASCAL makes control flow easy to read in the source, then emits the needed cons
 </div>
 
 The next chapters explain the declarations, expressions, and blocks used here. Later chapters give the detailed language and command-line rules.
-
-[← Preface](preface.md)[Values, names, and expressions →](values-and-names.md)

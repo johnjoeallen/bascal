@@ -25,5 +25,3 @@ This book shows how to think in BASCAL and says exactly what each form does.
 </div>
 
 Compile and alter the small programs as you read. You can inspect BASCAL’s generated code, but maintain the clear, structured source program.
-
-[← Contents](./)[A first program →](first-program.md)

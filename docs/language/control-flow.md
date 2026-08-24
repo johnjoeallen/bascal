@@ -76,5 +76,3 @@ do until succeeded% <> 0 || attempts% >= maxAttempts%
     ' ...
 end do
 ```
-
-[← Values, names, and expressions](values-and-names.md)[Arrays and strings →](arrays-and-strings.md)

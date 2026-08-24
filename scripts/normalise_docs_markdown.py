@@ -58,8 +58,16 @@ def main() -> None:
             text = re.sub(
                 r'(<span class="chapter-number">.*?</span>)(<span class="chapter-title">.*?</span><span class="chapter-summary">.*?</span>)',
                 r'\1<span>\2</span>',
-            text,
-        )
+                text,
+            )
+        if page.parent == ROOT / "docs" / "language" and page.name != "index.md":
+            text = re.sub(
+                r"^\[← [^\]]+\]\([^)]+\)\[[^\]]+ →\]\([^)]+\)\s*$",
+                "",
+                text,
+                flags=re.MULTILINE,
+            )
+        text = text.rstrip() + "\n"
         text = fence_indented_code(text)
         page.write_text(text)
 

@@ -62,5 +62,3 @@ print name$
 `ltrim$`, `rtrim$`, `ucase$`, and `lcase$` are BASCAL libraries, not MBASIC/BASCOM builtins. See [The standard library](standard-library.md) for their `require` lines.
 
 </div>
-
-[← Making control flow visible](control-flow.md)[Functions, procedures, and methods →](functions-and-procedures.md)

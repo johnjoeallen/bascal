@@ -93,5 +93,3 @@ close #1
 ## Keep the target available
 
 BASCAL remains a strict superset of the target dialect. Existing sequential file operations and hand-written BASIC file statements can pass through when you need them — the compiler never forces a rewrite onto working code just because a more structured way to say the same thing now exists.
-
-[← Libraries](libraries.md)[Errors, labels, and embedded data →](errors-labels-and-data.md)
