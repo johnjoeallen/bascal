@@ -527,6 +527,12 @@ pub enum Statement {
 pub struct TryCatchHandler {
     pub err_var: BasicIdent,
     pub erl_var: BasicIdent,
+    /// Optional third `catch` binding (`catch err%, erl%, source$`):
+    /// the original BASCAL source filename the raising statement came
+    /// from (including code pulled in through `require`), never the
+    /// generated BASIC/C output's own path. Parser-enforced to be a
+    /// plain string variable (`TypeSuffix::String`).
+    pub source_var: Option<BasicIdent>,
     pub body: Vec<Stmt>,
 }
 

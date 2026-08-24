@@ -97,6 +97,18 @@ pub struct CodeGenerator {
     // lets a nested try restore its enclosing handler before its finally
     // block runs and rethrow after it.
     try_handler_stack: Vec<String>,
+    // Whether any `catch` anywhere in the program binds the optional
+    // third (source-filename) variable -- decided once, up front, in
+    // `generate()`. Gates all of the per-statement source-file tracking
+    // and the `BCC_RESOLVE_SOURCE_FILE` lookup subroutine below, so a
+    // program that never uses `catch err%, erl%, source$` gets byte-for-
+    // byte the same output it always has.
+    needs_source_lookup: bool,
+    // The original `.bcl` filename `statement()` most recently emitted a
+    // `source_file_marker` for -- lets it emit one only when the file
+    // actually changes from one statement to the next. `None` until the
+    // first statement, guaranteeing that one gets a marker of its own.
+    current_marker_file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -166,6 +178,8 @@ impl CodeGenerator {
             top_level_array_bounds: HashMap::new(),
             error_handler_procedures: HashSet::new(),
             try_handler_stack: Vec::new(),
+            needs_source_lookup: false,
+            current_marker_file: None,
         }
     }
 
@@ -180,6 +194,7 @@ impl CodeGenerator {
     }
 
     pub fn generate(mut self, program: &Program) -> Result<String, Vec<Diagnostic>> {
+        self.needs_source_lookup = program_uses_catch_source_var(program);
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
         // later functions cannot collide with earlier ones either.
@@ -274,11 +289,26 @@ impl CodeGenerator {
                 self.function(function);
             }
         }
-        if self.diagnostics.is_empty() {
-            Ok(number_basic_lines(&self.output, self.line_numbers))
-        } else {
-            Err(self.diagnostics)
+        if !self.diagnostics.is_empty() {
+            return Err(self.diagnostics);
         }
+        if self.needs_source_lookup {
+            // A first numbering pass, over the program exactly as built so
+            // far, to learn which final line-number ranges belong to which
+            // original `.bcl` file -- see `number_basic_lines`'s own doc
+            // comment. Its rendered text is discarded: appending the
+            // lookup subroutine strictly after everything already emitted
+            // cannot change any number this pass already assigned (see
+            // `emit_source_file_lookup_subroutine`'s doc comment), so a
+            // second, real pass over the augmented program produces
+            // identical numbers for every line that mattered here.
+            let (_, breakpoints) = number_basic_lines(&self.output, self.line_numbers);
+            if program.functions.is_empty() && !ends_with_end(&program.statements) {
+                self.line("END");
+            }
+            self.emit_source_file_lookup_subroutine(&breakpoints);
+        }
+        Ok(number_basic_lines(&self.output, self.line_numbers).0)
     }
 
     /// Emits the one-time, top-level `DIM` for every array parameter's
@@ -374,6 +404,14 @@ impl CodeGenerator {
     }
 
     fn statement(&mut self, statement: &Stmt, current_function: Option<&FunctionInfo>) {
+        if self.needs_source_lookup
+            && self.current_marker_file.as_deref() != Some(statement.pos.filename.as_str())
+        {
+            self.current_marker_file = Some(statement.pos.filename.clone());
+            self.line(&source_file_marker(&crate::diagnostics::display_source_filename(
+                &statement.pos.filename,
+            )));
+        }
         match &statement.kind {
             Statement::Dim {
                 name,
@@ -1279,6 +1317,11 @@ impl CodeGenerator {
             let erl_name = self.ident(&catch.erl_var, current_function);
             self.line(&format!("{err_name} = ERR"));
             self.line(&format!("{erl_name} = ERL"));
+            if let Some(source_var) = &catch.source_var {
+                let source_name = self.ident(source_var, current_function);
+                self.line("GOSUB BCC_RESOLVE_SOURCE_FILE");
+                self.line(&format!("{source_name} = BCC_SOURCE_FILE$"));
+            }
             // RESUME clears BASIC's active-handler state before the user
             // catch runs, so a throw from it can be caught and unwound.
             self.line(&format!("RESUME {catch_run_label}"));
@@ -2157,6 +2200,72 @@ impl CodeGenerator {
     fn blank(&mut self) {
         self.output.push('\n');
     }
+
+    /// Appends the shared `catch err%, erl%, source$` lookup subroutine,
+    /// entered via `GOSUB` from every catch site that binds a source-
+    /// filename variable (see `try_catch`). `breakpoints` comes from a
+    /// throwaway first `number_basic_lines` pass over the program built so
+    /// far (see `generate()`'s own call site) -- each entry is the highest
+    /// final line number reached while still inside one contiguous run of
+    /// lines from the same original `.bcl` file, in ascending order, so
+    /// `ERL <= bound` correctly identifies the file for any line number
+    /// the program could ever actually assign to `ERL`: BASIC only ever
+    /// reports a line number that exists, and this backend always emits
+    /// one file's statements as one contiguous run (see
+    /// `source_file_marker`'s own doc comment), so the breakpoints
+    /// partition every possible `ERL` value without gaps.
+    ///
+    /// Appending this strictly after everything `generate()` has emitted
+    /// so far -- and only once every function/procedure (each of which
+    /// always ends in a real `RETURN`, never fallthrough) or a synthesized
+    /// top-level `END` guarantees this is never reached except via its own
+    /// `GOSUB` -- is what lets the breakpoints computed against the
+    /// pre-append text stay correct once this subroutine's own lines are
+    /// numbered alongside everything else: sequential numbering assigns
+    /// identical numbers to every pre-existing line either way, since
+    /// nothing here can turn an earlier line into (or out of) a branch
+    /// target.
+    fn emit_source_file_lookup_subroutine(&mut self, breakpoints: &[(usize, String)]) {
+        self.blank();
+        self.line("' catch's optional source$ binding: map ERL back to its original .bcl file");
+        self.line("BCC_RESOLVE_SOURCE_FILE:");
+        self.indent += 1;
+        match breakpoints.split_last() {
+            Some((last, rest)) => {
+                for (bound, file) in rest {
+                    self.line(&format!(
+                        "IF ERL <= {bound} THEN BCC_SOURCE_FILE$ = \"{}\" : RETURN",
+                        escape_string(file)
+                    ));
+                }
+                self.line(&format!(
+                    "BCC_SOURCE_FILE$ = \"{}\"",
+                    escape_string(&last.1)
+                ));
+            }
+            None => self.line("BCC_SOURCE_FILE$ = \"\""),
+        }
+        self.line("RETURN");
+        self.indent -= 1;
+    }
+}
+
+/// A hidden, never-emitted marker line `statement()` inserts right before
+/// the first statement of every run of lines from a new original `.bcl`
+/// file (tracked via `CodeGenerator::current_marker_file`), only when
+/// `needs_source_lookup` is set. `number_basic_lines` reads these to learn
+/// which file each final line number came from, then strips them before
+/// producing real output -- they use a `'` (comment) prefix as a safety
+/// net (so anything that ever saw one unstripped would still see valid,
+/// harmless BASIC) plus a `\u{1}` control byte real `.bcl` source could
+/// never lex as a comment's own text, so a marker can never collide with
+/// an author's own comment.
+fn source_file_marker(file: &str) -> String {
+    format!("'\u{1}{file}")
+}
+
+fn parse_source_file_marker(line: &str) -> Option<&str> {
+    line.trim_start().strip_prefix("'\u{1}")
 }
 
 impl FunctionInfo {
@@ -2659,6 +2768,58 @@ fn infer_param_ranks(
             }
         })
         .collect()
+}
+
+/// Whether any `catch` anywhere in `program` binds the optional third
+/// (source-filename) variable -- decides whether `generate()` needs to
+/// track per-statement source files at all (see `TryCatchHandler::
+/// source_var`'s own doc comment). Recurses into every nested statement
+/// body, top-level and every function/procedure's own alike, so a program
+/// gets exactly the same output it always has unless it actually writes
+/// `catch err%, erl%, source$` somewhere.
+fn program_uses_catch_source_var(program: &Program) -> bool {
+    statements_use_catch_source_var(&program.statements)
+        || program
+            .functions
+            .iter()
+            .any(|f| statements_use_catch_source_var(&f.body))
+}
+
+fn statements_use_catch_source_var(statements: &[Stmt]) -> bool {
+    statements.iter().any(|stmt| match &stmt.kind {
+        Statement::TryCatch {
+            try_body,
+            catch,
+            finally_body,
+        } => {
+            catch.as_ref().is_some_and(|c| c.source_var.is_some())
+                || statements_use_catch_source_var(try_body)
+                || catch
+                    .as_ref()
+                    .is_some_and(|c| statements_use_catch_source_var(&c.body))
+                || statements_use_catch_source_var(finally_body)
+        }
+        Statement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            statements_use_catch_source_var(then_body)
+                || statements_use_catch_source_var(else_body)
+        }
+        Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => {
+            statements_use_catch_source_var(body)
+        }
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases
+                .iter()
+                .any(|case| statements_use_catch_source_var(&case.body))
+                || statements_use_catch_source_var(else_body)
+        }
+        _ => false,
+    })
 }
 
 /// Declared rank (number of DIM dimensions) of every array DIMed anywhere
@@ -3468,6 +3629,9 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
             if let Some(catch) = catch {
                 names.insert(catch.err_var.as_basic().to_ascii_lowercase());
                 names.insert(catch.erl_var.as_basic().to_ascii_lowercase());
+                if let Some(source_var) = &catch.source_var {
+                    names.insert(source_var.as_basic().to_ascii_lowercase());
+                }
                 collect_names_from_stmts(&catch.body, names);
             }
             collect_names_from_stmts(finally_body, names);
@@ -3846,14 +4010,38 @@ fn ends_with_return(statements: &[Stmt]) -> bool {
         .is_some_and(|s| matches!(&**s, Statement::Return { .. } | Statement::ReturnVoid))
 }
 
-fn number_basic_lines(source: &str, full: bool) -> String {
+/// Renders `source` (the generator's raw, unnumbered text) into real BASIC
+/// line numbers, and reports which original `.bcl` file each numbered line
+/// came from -- see `emit_source_file_lookup_subroutine`'s own doc comment
+/// for how that second part is used and why it stays correct even though
+/// this function is called a second time after that subroutine's own text
+/// is appended.
+fn number_basic_lines(source: &str, full: bool) -> (String, Vec<(usize, String)>) {
     let lines = source.lines().collect::<Vec<_>>();
 
-    // Lines that survive into the output (non-blank, non-label-only)
+    // The `source_file_marker` in effect for each line -- `None` before
+    // the first one, or when the program never needed any (the common
+    // case: `needs_source_lookup` is false, so `source` has no markers at
+    // all and every entry here is `None`).
+    let mut line_file: Vec<Option<&str>> = Vec::with_capacity(lines.len());
+    let mut current_file: Option<&str> = None;
+    for line in &lines {
+        if let Some(file) = parse_source_file_marker(line) {
+            current_file = Some(file);
+        }
+        line_file.push(current_file);
+    }
+
+    // Lines that survive into the output (non-blank, non-label-only,
+    // non-marker)
     let emitted: Vec<usize> = lines
         .iter()
         .enumerate()
-        .filter(|(_, line)| !line.trim().is_empty() && is_label_line(line).is_none())
+        .filter(|(_, line)| {
+            !line.trim().is_empty()
+                && is_label_line(line).is_none()
+                && parse_source_file_marker(line).is_none()
+        })
         .map(|(i, _)| i)
         .collect();
 
@@ -3894,13 +4082,31 @@ fn number_basic_lines(source: &str, full: bool) -> String {
         })
         .collect();
 
+    // Every numbered line's (number, file) pair, in ascending-number
+    // (= source) order, collapsed to just the highest number reached
+    // within each contiguous same-file run -- see
+    // `emit_source_file_lookup_subroutine`'s own doc comment for why an
+    // ascending `ERL <= bound` chain built from exactly these pairs
+    // correctly identifies the file for any line number the program could
+    // ever actually assign to `ERL`.
+    let mut breakpoints: Vec<(usize, String)> = Vec::new();
+    for &index in &emitted {
+        let (Some(&number), Some(file)) = (index_to_number.get(&index), line_file[index]) else {
+            continue;
+        };
+        match breakpoints.last_mut() {
+            Some((last_number, last_file)) if last_file == file => *last_number = number,
+            _ => breakpoints.push((number, file.to_string())),
+        }
+    }
+
     // Walk every intermediate line in order so blank lines pass through.
-    // Label-only lines are dropped; everything else is emitted.
+    // Label-only and marker lines are dropped; everything else is emitted.
     // Consecutive blank lines are folded into a single blank.
     let mut output = String::new();
     let mut last_was_blank = false;
     for (index, &raw) in lines.iter().enumerate() {
-        if is_label_line(raw).is_some() {
+        if is_label_line(raw).is_some() || parse_source_file_marker(raw).is_some() {
             continue;
         }
         if raw.trim().is_empty() {
@@ -3933,12 +4139,15 @@ fn number_basic_lines(source: &str, full: bool) -> String {
             output.push_str(&format!("{text}\n"));
         }
     }
-    output
+    (output, breakpoints)
 }
 
 fn next_emitted_line_index(lines: &[&str], start: usize) -> Option<usize> {
     for (index, line) in lines.iter().enumerate().skip(start) {
-        if is_label_line(line).is_some() || line.trim().is_empty() {
+        if is_label_line(line).is_some()
+            || line.trim().is_empty()
+            || parse_source_file_marker(line).is_some()
+        {
             continue;
         }
         return Some(index);

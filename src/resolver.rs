@@ -1078,6 +1078,9 @@ fn collect_declarations(statements: &[Stmt], declared: &mut HashSet<VarKey>) {
                 if let Some(catch) = catch {
                     declared.insert(var_key(&catch.err_var));
                     declared.insert(var_key(&catch.erl_var));
+                    if let Some(source_var) = &catch.source_var {
+                        declared.insert(var_key(source_var));
+                    }
                     collect_declarations(&catch.body, declared);
                 }
                 collect_declarations(finally_body, declared);

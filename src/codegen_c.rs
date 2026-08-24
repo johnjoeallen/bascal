@@ -901,7 +901,15 @@ const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char 
 /// share a source line (so `bcc_erl` alone couldn't dispatch uniquely),
 /// and because a `RESUME` dispatch table keyed on line numbers would leave
 /// gaps a real line-number-keyed `switch` still has to handle correctly.
-const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\nstatic int bcc_erl = 0;\n\n";
+/// `bcc_err_file` is `catch`'s optional third (`source$`) binding's own
+/// backing state: the real `.bcl` filename the raise site's own statement
+/// came from, a compile-time string literal each `emit_raise_block`/
+/// `emit_raise_in_callable_block` call bakes in right alongside
+/// `bcc_erl` -- no per-call propagation needed, unlike the `try`-
+/// reachable-procedure status codes in `TRY_RESULT_TYPE`, because (like
+/// `bcc_err`/`bcc_erl` themselves) it's a single process-wide global, not
+/// per-call-frame state.
+const ERROR_HANDLING_GLOBALS: &str = "static int bcc_err = 0;\nstatic int bcc_on_error_target = -1;\nstatic int bcc_in_handler = 0;\nstatic int bcc_resume_id = -1;\nstatic int bcc_erl = 0;\nstatic const char *bcc_err_file = \"\";\n\n";
 
 /// A `try`-reachable procedure's own C return type (see
 /// `collect_try_reachable_callables`'s own doc comment) -- `status` is
@@ -2160,11 +2168,16 @@ fn emit_raise_block(
     err_code_text: &str,
     raise_id: usize,
     err_line: usize,
+    err_file: &str,
     dispatch_labels: &[String],
 ) {
     out.push_str(&format!("    bcc_err = {err_code_text};\n"));
     out.push_str(&format!("    bcc_resume_id = {raise_id};\n"));
     out.push_str(&format!("    bcc_erl = {err_line};\n"));
+    out.push_str(&format!(
+        "    bcc_err_file = \"{}\";\n",
+        escape_c_string_literal(&crate::diagnostics::display_source_filename(err_file))
+    ));
     out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
     out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
     out.push_str("        exit(1);\n");
@@ -2193,10 +2206,15 @@ fn emit_raise_in_callable_block(
     out: &mut String,
     err_code_text: &str,
     err_line: usize,
+    err_file: &str,
     sig: &FnSig,
 ) {
     out.push_str(&format!("    bcc_err = {err_code_text};\n"));
     out.push_str(&format!("    bcc_erl = {err_line};\n"));
+    out.push_str(&format!(
+        "    bcc_err_file = \"{}\";\n",
+        escape_c_string_literal(&crate::diagnostics::display_source_filename(err_file))
+    ));
     out.push_str("    if (bcc_on_error_target < 0 || bcc_in_handler) {\n");
     out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
     out.push_str("        exit(1);\n");
@@ -3861,6 +3879,9 @@ fn collect_vars_in_statement(
             if let Some(catch) = catch {
                 register_var(&catch.err_var, numeric_out, string_out);
                 register_var(&catch.erl_var, numeric_out, string_out);
+                if let Some(source_var) = &catch.source_var {
+                    register_var(source_var, numeric_out, string_out);
+                }
                 for stmt in &catch.body {
                     collect_vars_in_statement(stmt, numeric_out, string_out);
                 }
@@ -4525,6 +4546,7 @@ fn emit_statement(
                         "75",
                         id,
                         statement.pos.line,
+                        &statement.pos.filename,
                         ctx.dispatch_labels,
                     );
                     for line in raise.lines() {
@@ -4546,6 +4568,10 @@ fn emit_statement(
                     out.push_str("        bcc_err = 75;\n");
                     out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
                     out.push_str(&format!(
+                        "        bcc_err_file = \"{}\";\n",
+                        escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                    ));
+                    out.push_str(&format!(
                         "        goto {};\n",
                         ctx.current_try_catch.as_ref().expect("checked above")
                     ));
@@ -4564,6 +4590,7 @@ fn emit_statement(
                         &mut raise,
                         "75",
                         statement.pos.line,
+                        &statement.pos.filename,
                         current_function.expect("reachable calls only occur inside a callable"),
                     );
                     for line in raise.lines() {
@@ -4599,7 +4626,14 @@ fn emit_statement(
                     ));
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
                     let mut raise = String::new();
-                    emit_raise_block(&mut raise, "53", id, statement.pos.line, ctx.dispatch_labels);
+                    emit_raise_block(
+                        &mut raise,
+                        "53",
+                        id,
+                        statement.pos.line,
+                        &statement.pos.filename,
+                        ctx.dispatch_labels,
+                    );
                     for line in raise.lines() {
                         out.push_str("    ");
                         out.push_str(line);
@@ -4618,6 +4652,10 @@ fn emit_statement(
                     out.push_str(&format!("    if (!bcc_files[{idx}]) {{\n"));
                     out.push_str("        bcc_err = 53;\n");
                     out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
+                    out.push_str(&format!(
+                        "        bcc_err_file = \"{}\";\n",
+                        escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                    ));
                     out.push_str(&format!(
                         "        goto {};\n",
                         ctx.current_try_catch.as_ref().expect("checked above")
@@ -4640,6 +4678,7 @@ fn emit_statement(
                         &mut raise,
                         "53",
                         statement.pos.line,
+                        &statement.pos.filename,
                         current_function.expect("reachable calls only occur inside a callable"),
                     );
                     for line in raise.lines() {
@@ -5418,6 +5457,10 @@ fn emit_statement(
             if let Some(label) = &ctx.current_try_catch {
                 out.push_str(&format!("    bcc_err = {code_text};\n"));
                 out.push_str(&format!("    bcc_erl = {};\n", statement.pos.line));
+                out.push_str(&format!(
+                    "    bcc_err_file = \"{}\";\n",
+                    escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                ));
                 out.push_str(&format!("    goto {label};\n"));
             } else if ctx.current_function_reachable {
                 // No retry/after labels, no `bcc_raise_id` dispatch --
@@ -5426,13 +5469,21 @@ fn emit_statement(
                     out,
                     &code_text,
                     statement.pos.line,
+                    &statement.pos.filename,
                     current_function.expect("reachable calls only occur inside a callable"),
                 );
             } else {
                 let id = ctx.raise_id;
                 ctx.raise_id += 1;
                 out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
-                emit_raise_block(out, &code_text, id, statement.pos.line, ctx.dispatch_labels);
+                emit_raise_block(
+                    out,
+                    &code_text,
+                    id,
+                    statement.pos.line,
+                    &statement.pos.filename,
+                    ctx.dispatch_labels,
+                );
                 out.push_str(&format!("    bcc_raise_after_{id}: ;\n"));
             }
             Ok(())
@@ -5619,6 +5670,12 @@ fn emit_statement(
                 let erl_c = c_var_name(&catch.erl_var, effective_suffix(catch.erl_var.suffix));
                 out.push_str(&format!("    {err_c} = bcc_err;\n"));
                 out.push_str(&format!("    {erl_c} = bcc_erl;\n"));
+                if let Some(source_var) = &catch.source_var {
+                    let source_c = c_var_name(source_var, TypeSuffix::String);
+                    out.push_str(&format!(
+                        "    snprintf({source_c}, {STRING_BUFFER_SIZE}, \"%s\", bcc_err_file);\n"
+                    ));
+                }
                 let outer_try_catch = ctx.current_try_catch.replace(rethrow_label.clone());
                 for stmt in &catch.body {
                     emit_statement(

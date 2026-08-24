@@ -1339,9 +1339,22 @@ impl Parser {
             let erl_var = BasicIdent::parse(
                 &self.expect_ident("expected error-line variable after `catch`")?,
             );
+            let source_var = if self.eat(TokenKind::Comma) {
+                let source_var = BasicIdent::parse(
+                    &self.expect_ident("expected source-filename variable after `catch`'s error-line variable")?,
+                );
+                if source_var.suffix != Some(TypeSuffix::String) {
+                    return Err(self.error(
+                        "catch's optional third binding must be a string variable",
+                    ));
+                }
+                Some(source_var)
+            } else {
+                None
+            };
             self.consume_line_end()?;
             let body = self.parse_block(&[BlockEnd::Finally, BlockEnd::EndTry])?;
-            Some(TryCatchHandler { err_var, erl_var, body })
+            Some(TryCatchHandler { err_var, erl_var, source_var, body })
         } else {
             None
         };
@@ -2774,6 +2787,31 @@ mod tests {
         assert!(errs.iter().any(|d| d
             .message
             .contains("expected `,` between `catch`'s two variables")));
+    }
+
+    #[test]
+    fn parses_try_catch_with_optional_source_binding() {
+        let program = parse("try\nerror 11\ncatch e%, l%, s$\nprint s$\nend try\nend\n");
+        match &*program.statements[0] {
+            Statement::TryCatch { catch, .. } => {
+                let catch = catch.as_ref().expect("catch should be present");
+                let source_var = catch.source_var.as_ref().expect("source_var should be present");
+                assert_eq!(source_var.name, "s");
+                assert_eq!(source_var.suffix, Some(TypeSuffix::String));
+            }
+            other => panic!("expected try/catch statement, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn catch_source_binding_must_be_a_string_variable() {
+        let tokens =
+            Lexer::new("test.bcl", "try\nerror 11\ncatch e%, l%, s%\nend try\nend\n").lex();
+        let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
+        let errs = result.expect_err("expected a parse error for a non-string source binding");
+        assert!(errs
+            .iter()
+            .any(|d| d.message.contains("must be a string variable")));
     }
 
     #[test]

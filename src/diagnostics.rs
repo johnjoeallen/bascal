@@ -1,4 +1,29 @@
 use std::fmt;
+use std::path::Path;
+
+/// A `SourcePos::filename` is always an absolute, canonicalized path (see
+/// `lib.rs`'s own `normalize_path`) -- fine for a compiler diagnostic the
+/// developer reads on the machine that ran `bcc`, but never appropriate to
+/// bake into a *compiled program's own runtime output*: the machine
+/// running that program may not be the machine that built it, and even
+/// when it is, exposing the build tree's absolute layout serves no
+/// purpose the program's own user needs. Used wherever a raise site's
+/// filename becomes part of generated BASIC/C output itself (`catch`'s
+/// optional `source$` binding), never for an ordinary compiler
+/// diagnostic. Falls back to the absolute path unchanged if it isn't
+/// actually under the current working directory, or the working
+/// directory can't be read at all.
+pub fn display_source_filename(filename: &str) -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| {
+            Path::new(filename)
+                .strip_prefix(&cwd)
+                .ok()
+                .map(|rel| rel.display().to_string())
+        })
+        .unwrap_or_else(|| filename.to_string())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourcePos {

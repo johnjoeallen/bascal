@@ -7258,6 +7258,84 @@ end
     }
 
     #[test]
+    fn try_catch_without_source_binding_never_emits_the_lookup_subroutine() {
+        // GitHub issue #74: the `BCC_RESOLVE_SOURCE_FILE` lookup subroutine
+        // (and its per-statement source-file marker tracking) must never
+        // appear unless some `catch` in the program actually binds the
+        // optional third `source$` variable -- keeps every existing
+        // `try`/`catch` program's output exactly as it was before this
+        // feature existed.
+        let source = r#"try
+    error 11
+catch e%, l%
+    print e%
+end try
+end
+"#;
+        let basic = compile_source("no_source_binding.bcl", source)
+            .expect("try/catch without source$ should compile");
+        assert!(!basic.contains("BCC_RESOLVE_SOURCE_FILE"), "{basic}");
+        assert!(!basic.contains("BCC_SOURCE_FILE$"), "{basic}");
+    }
+
+    #[test]
+    fn catch_source_binding_maps_erl_back_to_the_originating_bcl_file() {
+        // GitHub issue #74: `catch err%, erl%, source$` -- on the BASIC
+        // backend, `source$` is resolved via a `GOSUB` to a synthesized
+        // lookup subroutine built from a first numbering pass over the
+        // program (see `codegen_basic.rs`'s own `emit_source_file_lookup_
+        // subroutine` doc comment).
+        let source = r#"try
+    error 11
+catch e%, l%, s$
+    print s$
+end try
+end
+"#;
+        let basic = compile_source("issue_74.bcl", source)
+            .expect("catch's optional source$ binding should compile");
+        assert!(basic.contains("GOSUB"), "{basic}");
+        assert!(basic.contains("s$ = BCC_SOURCE_FILE$"), "{basic}");
+        // A single-file program collapses to one unconditional assignment,
+        // no `IF ERL <= ...` boundary chain needed.
+        assert!(basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""), "{basic}");
+        assert!(!basic.contains("IF ERL <="), "{basic}");
+    }
+
+    #[test]
+    fn catch_source_binding_builds_a_boundary_chain_across_multiple_files() {
+        // GitHub issue #74: a raise reachable from more than one original
+        // `.bcl` file (here, a top-level `try` plus a required library's
+        // own procedure) needs the full `IF ERL <= bound THEN ...`
+        // boundary chain, not the single-assignment shortcut above.
+        let dir = tempfile::tempdir().unwrap();
+        let lib_path = dir.path().join("helper.bcl");
+        std::fs::write(
+            &lib_path,
+            "library helper\n\nprocedure boom()\n    error 11\nend procedure\n",
+        )
+        .unwrap();
+        let main_path = dir.path().join("main.bcl");
+        std::fs::write(
+            &main_path,
+            "program p\n\nrequire helper\n\ntry\n    boom()\ncatch e%, l%, s$\n    print s$\nend try\nend\n",
+        )
+        .unwrap();
+        let basic = compile_file(&main_path, &CompileOptions::new()).unwrap_or_else(|diagnostics| {
+            panic!(
+                "should compile: {}",
+                diagnostics
+                    .into_iter()
+                    .map(|d| d.to_string())
+                    .collect::<String>()
+            )
+        });
+        assert!(basic.contains("IF ERL <="), "{basic}");
+        assert!(basic.contains("helper.bcl"), "{basic}");
+        assert!(basic.contains("main.bcl"), "{basic}");
+    }
+
+    #[test]
     fn try_catch_finally_runs_cleanup_on_both_paths() {
         let source = r#"try
     error 11
@@ -7464,6 +7542,26 @@ end
         assert!(c.contains("bv_i_e = bcc_err;"), "{c}");
         assert!(c.contains("bv_i_l = bcc_erl;"), "{c}");
         assert!(c.contains("bcc_try_0_end: ;"), "{c}");
+    }
+
+    #[test]
+    fn catch_source_binding_is_supported_under_c_target() {
+        // GitHub issue #74: on the C backend, `bcc_err_file` is a global
+        // set as a compile-time string literal alongside `bcc_err`/
+        // `bcc_erl` at every raise site (see `emit_raise_block`'s own doc
+        // comment) -- no per-call propagation needed, since (like
+        // `bcc_err`/`bcc_erl`) it's process-wide state, not per-frame.
+        let source = r#"try
+    open "missing.dat" for input as #1
+catch e%, l%, s$
+    print s$
+end try
+end
+"#;
+        let c = compile_source_via_c_target(source);
+        assert!(c.contains("static const char *bcc_err_file"), "{c}");
+        assert!(c.contains("bcc_err_file = \""), "{c}");
+        assert!(c.contains("snprintf(") && c.contains("bcc_err_file);"), "{c}");
     }
 
     #[test]
