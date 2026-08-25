@@ -483,7 +483,7 @@ fn compile_link_run_in(fixture_name: &str, work_dir: &Path) -> String {
 /// *behavior* -- it has to agree on the actual *on-disk byte layout*, or
 /// a file one target writes won't read back correctly under the other.
 /// cross_write.bcl/cross_read.bcl (a 2-byte MKI$-packed int field plus a
-/// 10-byte string field -- deliberately no float field, since
+/// 10-byte right-justified string field -- deliberately no float field, since
 /// MKS$/MKD$/CVS/CVD are a real, documented divergence from real BASCOM's
 /// Microsoft Binary Format, see `FILE_IO_HELPER`'s doc comment in
 /// codegen_c.rs -- this test isn't the place to re-demonstrate that)

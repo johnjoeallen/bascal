@@ -1,5 +1,5 @@
 // Writes one random-access record: a 2-byte packed integer field and a
-// 10-byte string field. Paired with cross_read.bcl (same layout) to check
+// 10-byte right-justified string field. Paired with cross_read.bcl (same layout) to check
 // that a file written by one BASCAL target can be read back correctly by
 // the other -- see tests/dosbox_conformance.rs's
 // c_target_random_access_file_is_binary_compatible_with_real_bascom.
@@ -9,7 +9,7 @@ open "CROSS.DAT" for random as #1 len = 12
 field #1, 2 as idBuf$, 10 as nameBuf$
 
 lset idBuf$ = mki$(42)
-lset nameBuf$ = "CrossTest"
+rset nameBuf$ = "CrossTest"
 put #1, 1
 
 close #1

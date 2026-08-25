@@ -17,6 +17,34 @@ fn java_available() -> bool {
     Command::new("java").arg("-version").output().is_ok()
 }
 
+/// Pending cross-backend record-file compatibility check. This is deliberately
+/// ignored until JVM random-access file I/O exists; enabling it today should
+/// fail because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
+#[test]
+#[ignore = "expected failure until JVM random-access record I/O is implemented (#105)"]
+fn jvm_record_binary_compatibility_with_basic_and_c_is_pending() {
+    let source_path = repo_root().join("tests/fixtures/conformance/cross_write.bcl");
+    let temp_dir = tempfile::tempdir().expect("failed to create JVM record test directory");
+    let mut output_arg = temp_dir.path().as_os_str().to_owned();
+    output_arg.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--binary")
+        .arg("-o")
+        .arg(output_arg)
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "JVM record binary compatibility is not implemented yet:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Compile `source_path` to a temporary `.j` file and assemble it through
 /// the CLI, so this exercises the same `krak2` configuration lookup users
 /// get (`BASCAL_KRAK2`, config file, then PATH).  A missing assembler is a

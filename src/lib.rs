@@ -1881,6 +1881,10 @@ db[1] = { left: "L", right: "R" }
 end
 "#;
         let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("bcc_pad_string_field(buffer + 0, field_0, 8)"),
+            "{output}"
+        );
         assert!(output.contains("memset(buffer + 8, ' ', 8)"), "{output}");
         assert!(output.contains("memcpy(buffer + 8 + 8 - len"), "{output}");
     }
