@@ -7,8 +7,9 @@ use bcc::{compile_file, default_output_path, CompileOptions, Target};
 use clap::Parser;
 
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
-/// (the `basic` target, complete) or an experimental native-C backend (the
-/// `C` target).
+/// (the `basic` target, complete), a mostly-complete native-C backend (the
+/// `c` target), or a brand-new, bootstrap-stage native-JVM backend (the
+/// `jvm` target -- just beginning, not yet ready for real programs).
 /// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
 /// --version`, `bash --version`) for what a copyright/license notice in
 /// `--version` output should look like; the GPL itself recommends exactly
@@ -56,7 +57,7 @@ struct Cli {
     #[arg(short = 'c', long)]
     clean: bool,
 
-    /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target C's .c
+    /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
     binary: bool,
 
@@ -64,7 +65,7 @@ struct Cli {
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (the original, complete backend) or `C` (an experimental native-C backend). Case-insensitive; `c` also works. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (the original, complete backend), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -80,7 +81,7 @@ struct Cli {
 const DEFAULT_TARGET_HELP: &str = "\
 Default target (used when --target isn't given), first match wins:
   1. BASCAL_TARGET environment variable
-  2. ~/.config/bascal/config (\"target=C\", one setting per line)
+  2. ~/.config/bascal/config (\"target=c\", one setting per line)
   3. /etc/default/bascal (same format, system-wide)
   4. basic, if none of the above are set";
 
@@ -91,7 +92,10 @@ fn main() -> ExitCode {
     // this is the only way to get "BASCAL Compiler version x.y.z" instead
     // of "bcc x.y.z" while still letting clap own everything else
     // (--help's own flag listing, error messages, ...).
-    if env::args().nth(1).is_some_and(|arg| arg == "-V" || arg == "--version") {
+    if env::args()
+        .nth(1)
+        .is_some_and(|arg| arg == "-V" || arg == "--version")
+    {
         println!("BASCAL Compiler version {VERSION}");
         return ExitCode::SUCCESS;
     }
@@ -129,9 +133,8 @@ fn parse_target_str(value: &str) -> Option<Target> {
 /// `parse_target_str` matching the `Fn(&str) -> Result<Target, String>`
 /// shape `clap` expects.
 fn parse_target_value(value: &str) -> Result<Target, String> {
-    parse_target_str(value).ok_or_else(|| {
-        format!("expected `basic`, `C`, or `jvm` (case-insensitive), got `{value}`")
-    })
+    parse_target_str(value)
+        .ok_or_else(|| format!("expected `basic`, `c`, or `jvm` (case-insensitive), got `{value}`"))
 }
 
 /// Finds `key`'s value in a simple `key=value` config file's contents --
@@ -156,7 +159,7 @@ fn parse_config_value(contents: &str, key: &str) -> Option<String> {
 }
 
 /// The `--target` value to use when the CLI flag itself isn't given --
-/// lets a user or system set `C` as their working default without typing
+/// lets a user or system set `c` as their working default without typing
 /// `--target c` on every invocation. Checked in order, first match wins:
 /// the `BASCAL_TARGET` environment variable (works the same on every
 /// platform, including Windows, where there's no real equivalent of
@@ -355,7 +358,9 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
         .file_stem()
         .and_then(|stem| stem.to_str())
         .ok_or_else(|| format!("error: invalid class path {}", class_path.display()))?;
-    let class_dir = class_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let class_dir = class_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     let status = Command::new("java")
         .arg("-cp")
         .arg(class_dir)
@@ -363,9 +368,7 @@ fn run_java_class(class_path: &PathBuf) -> Result<(), String> {
         .status()
         .map_err(|err| format!("error: failed to invoke java: {err}"))?;
     if !status.success() {
-        return Err(format!(
-            "error: {class_name} exited with {status}"
-        ));
+        return Err(format!("error: {class_name} exited with {status}"));
     }
     Ok(())
 }
@@ -580,13 +583,12 @@ mod tests {
 
     #[test]
     fn cli_accepts_strict_vars_and_strict_vars_warn() {
-        let cli =
-            Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars"]).expect("should parse");
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars"]).expect("should parse");
         assert!(cli.strict_vars);
         assert!(!cli.strict_vars_warn);
 
-        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars-warn"])
-            .expect("should parse");
+        let cli =
+            Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars-warn"]).expect("should parse");
         assert!(!cli.strict_vars);
         assert!(cli.strict_vars_warn);
 
@@ -600,13 +602,8 @@ mod tests {
         // `run()`'s own precedence rule (`cli.strict_vars_warn && !cli.strict_vars`)
         // -- both flags parse fine together, but only the hard-error mode
         // should end up active in the CompileOptions `run()` builds.
-        let cli = Cli::try_parse_from([
-            "bcc",
-            "input.bcl",
-            "--strict-vars",
-            "--strict-vars-warn",
-        ])
-        .expect("should parse both flags together");
+        let cli = Cli::try_parse_from(["bcc", "input.bcl", "--strict-vars", "--strict-vars-warn"])
+            .expect("should parse both flags together");
         assert!(cli.strict_vars);
         assert!(cli.strict_vars_warn);
         assert!(
@@ -662,7 +659,10 @@ mod tests {
         );
         let err = resolve_output_path(&cli, Target::Basic)
             .expect_err("-o must name a directory, not an exact file path");
-        assert!(err.contains("-o must name a directory"), "unexpected: {err}");
+        assert!(
+            err.contains("-o must name a directory"),
+            "unexpected: {err}"
+        );
     }
 
     #[test]

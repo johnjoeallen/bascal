@@ -1,8 +1,10 @@
 //! Backend dispatch. `codegen_basic` holds the original, complete backend --
 //! plain 1980s Microsoft BASIC/BASCOM, BASCAL's whole reason for existing.
-//! `codegen_c` is an experimental, still-narrow native-C backend, aiming to
-//! eventually produce Linux/macOS/Win32 binaries directly, without going
-//! through a BASIC compiler at all; see `Target::C` below.
+//! `codegen_c` is a mostly-complete native-C backend, producing Linux/macOS/
+//! Win32 binaries directly, without going through a BASIC compiler at all;
+//! see `Target::C` below. `codegen_jvm` is a brand-new, bootstrap-stage
+//! native-JVM backend -- just beginning, not yet ready for real programs;
+//! see `Target::Jvm` below.
 //!
 //! Everything actually re-exported here is the BASIC backend's public
 //! surface -- `records.rs` and `lib.rs` reach through this module rather

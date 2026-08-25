@@ -193,7 +193,7 @@ end
 
 ### TRY / CATCH / THROW
 
-Portable structured error recovery: works unchanged under both `--target basic` and `--target C`. A failed statement anywhere in the `try` body abandons the rest of it and runs `catch` once, then always runs the rest of the program after `end try` — never back inside `try`. There is no `resume` equivalent: recovery always continues right after `end try`, not at the failing statement or "next".
+Portable structured error recovery: works unchanged under both `--target basic` and `--target c`. A failed statement anywhere in the `try` body abandons the rest of it and runs `catch` once, then always runs the rest of the program after `end try` — never back inside `try`. There is no `resume` equivalent: recovery always continues right after `end try`, not at the failing statement or "next".
 
 ```bascal
 try

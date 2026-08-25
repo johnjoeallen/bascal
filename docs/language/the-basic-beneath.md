@@ -1,8 +1,8 @@
-## One source language, two targets
+## One source language, three targets
 
-BASCAL has a complete `basic` backend and an experimental `c` backend. The BASIC backend produces classic line-numbered Microsoft BASIC. The C backend produces C source for a native compiler. Use `--target c` to select it.
+BASCAL has a complete `basic` backend, a mostly-complete `c` backend, and a brand-new, bootstrap-stage `jvm` backend. The BASIC backend produces classic line-numbered Microsoft BASIC. The C backend produces C source for a native compiler; use `--target c` to select it. The JVM backend, `--target jvm`, produces [Krakatau](https://github.com/Storyyeller/Krakatau) assembly text, assembled into a `.class` and run on any JRE — it's still just beginning (`print` of string literals and `end` so far), not yet ready for real programs.
 
-`basic` is the fallback target when no target is selected, but `BASCAL_TARGET` or the BASCAL configuration file can choose a different default. The C backend covers the tutorials and much of the core language, but it deliberately has limits; consult the [backend reference](../manual/command-line-reference.md#backends) before relying on less common features or portability-sensitive behaviour.
+`basic` is the fallback target when no target is selected, but `BASCAL_TARGET` or the BASCAL configuration file can choose a different default. The C backend covers the tutorials and most of the core language, but it deliberately has limits; the JVM backend covers far less so far, being much newer. Consult the [backend reference](../manual/command-line-reference.md#backends) before relying on less common features or portability-sensitive behaviour on either.
 
 Generated output is not a disguise. You can inspect it and compile it with the toolchain for its target. Even so, write structured BASCAL where possible. A block `if` is clearer than a hand-wired `GOTO` ladder because it keeps the program’s intent where you maintain it.
 

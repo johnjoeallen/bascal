@@ -1,6 +1,6 @@
 [Home](../) / Tutorials
 
-Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is an experimental native-C backend, see the manual's [Backends](../manual/command-line-reference.md#backends) section for what it currently supports.
+Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` is a brand-new, bootstrap-stage native-JVM backend, just beginning. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
 
 <div class="section" markdown="1">
 

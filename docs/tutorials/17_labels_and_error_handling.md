@@ -10,7 +10,7 @@ BASCAL manages line numbers itself, so `.bcl` source can never target a line num
 
 ### try/catch is the portable, both-target alternative to on error goto/resume
 
-`on error goto`/`resume`, shown further down, is the classic BASIC model — it's the BASIC target's own mechanism. `try`/`catch` transpiles unchanged under both `--target basic` and `--target C`.
+`on error goto`/`resume`, shown further down, is the classic BASIC model — it's the BASIC target's own mechanism. `try`/`catch` transpiles unchanged under both `--target basic` and `--target c`.
 
 It abandons the whole `try` region on a runtime error, exposes the error metadata to `catch`, and always continues right after `end try` — never back inside `try`, and with no `resume` equivalent. Require the error library and use its named constants to filter the errors this handler accepts; an unmatched error rethrows automatically:
 
@@ -165,7 +165,7 @@ on error goto 0
 //
 // try/catch (issue #60) is BASCAL's structured alternative to on error
 // goto/resume above -- it transpiles unchanged under both --target basic
-// and --target C. A failed statement anywhere in the try body abandons
+// and --target c. A failed statement anywhere in the try body abandons
 // the rest of it and runs catch once, then execution always continues
 // right after end try -- never back inside try, and with no resume
 // equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
@@ -329,7 +329,7 @@ data "Japan"
 990 '
 1000 ' try/catch (issue #60) is BASCAL's structured alternative to on error
 1010 ' goto/resume above -- it transpiles unchanged under both --target basic
-1020 ' and --target C. A failed statement anywhere in the try body abandons
+1020 ' and --target c. A failed statement anywhere in the try body abandons
 1030 ' the rest of it and runs catch once, then execution always continues
 1040 ' right after end try -- never back inside try, and with no resume
 1050 ' equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
