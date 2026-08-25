@@ -24,7 +24,7 @@
 //! `.limit locals` is computed from them.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, PrintToken, Program, Statement, Stmt,
@@ -43,6 +43,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         next_label: 0,
         loop_exits: Vec::new(),
         return_type: None,
+        labels: collect_labels(&program.statements),
     };
     for statement in &program.statements {
         emitter
@@ -93,6 +94,37 @@ fn class_name_for(program: &Program) -> String {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
         None => "Program".to_string(),
     }
+}
+
+fn jvm_label(name: &str) -> String {
+    format!("L_user_{}", name.to_ascii_lowercase())
+}
+
+fn collect_labels(statements: &[Stmt]) -> HashSet<String> {
+    let mut labels = HashSet::new();
+    fn visit(statements: &[Stmt], labels: &mut HashSet<String>) {
+        for statement in statements {
+            match &statement.kind {
+                Statement::Label(name) => {
+                    labels.insert(name.to_ascii_lowercase());
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, labels);
+                    visit(else_body, labels);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => visit(body, labels),
+                _ => {}
+            }
+        }
+    }
+    visit(statements, &mut labels);
+    labels
 }
 
 fn function_key(name: &BasicIdent) -> String {
@@ -155,6 +187,7 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         next_label: 0,
         loop_exits: Vec::new(),
         return_type: Some(type_for_ident(&function.name)),
+        labels: collect_labels(&function.body),
     };
     for statement in &function.body {
         emitter.emit_statement(statement, &mut body)?;
@@ -184,6 +217,7 @@ struct JvmEmitter<'a> {
     next_label: usize,
     loop_exits: Vec<String>,
     return_type: Option<JvmType>,
+    labels: HashSet<String>,
 }
 
 impl JvmEmitter<'_> {
@@ -257,6 +291,25 @@ impl JvmEmitter<'_> {
                 }
                 None => Err("RETURN is only supported inside a JVM function".to_string()),
             },
+            Statement::Label(name) => {
+                out.push_str(&format!("{}:\n", jvm_label(name)));
+                Ok(())
+            }
+            Statement::Goto(target) => {
+                let Expr::Ident(target) = target else {
+                    return Err("JVM GOTO targets must be labels".to_string());
+                };
+                let key = target.name.to_ascii_lowercase();
+                if !self.labels.contains(&key) {
+                    return Err(format!("JVM GOTO target `{target}` is not in this callable"));
+                }
+                out.push_str(&format!("    goto {}\n", jvm_label(&target.name)));
+                Ok(())
+            }
+            Statement::Gosub(_) => Err(
+                "GOSUB is not supported by the JVM target; use a function/procedure instead"
+                    .to_string(),
+            ),
             Statement::GlobalDecl(name) => Err(format!(
                 "global variable `{name}` requires JVM static-field storage, which is not implemented yet"
             )),

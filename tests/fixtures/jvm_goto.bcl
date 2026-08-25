@@ -1,0 +1,8 @@
+program labels
+
+print "start"
+goto done
+print "wrong"
+done:
+print "finish"
+end

@@ -257,3 +257,30 @@ fn scalar_functions_run_when_available() {
         fs::read_to_string(expected_path).expect("failed to read expected output")
     );
 }
+
+#[test]
+fn scoped_goto_runs_when_available() {
+    if !java_available() {
+        return;
+    }
+    let root = repo_root();
+    let temp_dir = tempfile::tempdir().expect("failed to create JVM conformance temp directory");
+    let output_dir = temp_dir.path().join("out");
+    fs::create_dir(&output_dir).expect("failed to create JVM output directory");
+    let source = root.join("tests/fixtures/jvm_goto.bcl");
+    if compile_and_assemble(&source, &output_dir).is_none() {
+        return;
+    }
+    let run = Command::new("java")
+        .arg("-cp")
+        .arg(root.join("tmp"))
+        .arg("Labels")
+        .output()
+        .expect("failed to run assembled Labels class");
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "start\nfinish\n");
+}
