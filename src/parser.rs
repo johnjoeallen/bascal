@@ -59,6 +59,82 @@ fn collect_typed_arrays(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayDecl> 
     arrays
 }
 
+fn collect_typed_array_refs(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayRef> {
+    let mut refs = Vec::new();
+    fn expr(e: &Expr, refs: &mut Vec<crate::ast::TypedArrayRef>) {
+        match e {
+            Expr::ArrayRef { name, indices } => refs.push(crate::ast::TypedArrayRef {
+                name: name.clone(),
+                element_suffix: name.suffix,
+                dimensions: indices.len(),
+                indices: indices.clone(),
+                sizeof_axis: None,
+            }),
+            Expr::Call { name, args } if name.name.eq_ignore_ascii_case("sizeof") => {
+                if let Some(Expr::Ident(array)) = args.first() {
+                    refs.push(crate::ast::TypedArrayRef {
+                        name: array.clone(),
+                        element_suffix: array.suffix,
+                        dimensions: 0,
+                        indices: Vec::new(),
+                        sizeof_axis: args.get(1).and_then(|axis| match axis {
+                            Expr::Integer(value) => usize::try_from(*value).ok(),
+                            _ => None,
+                        }),
+                    });
+                }
+            }
+            Expr::Binary { left, right, .. } => {
+                expr(left, refs);
+                expr(right, refs);
+            }
+            Expr::Unary { expr: inner, .. } => expr(inner, refs),
+            _ => {}
+        }
+    }
+    fn visit(statements: &[Stmt], refs: &mut Vec<crate::ast::TypedArrayRef>) {
+        for statement in statements {
+            match &statement.kind {
+                Statement::Assignment { target, value } => {
+                    expr(target, refs);
+                    expr(value, refs);
+                }
+                Statement::Print { tokens } => {
+                    for token in tokens {
+                        if let PrintToken::Expr(value) = token {
+                            expr(value, refs);
+                        }
+                    }
+                }
+                Statement::If {
+                    condition,
+                    then_body,
+                    else_body,
+                } => {
+                    expr(condition, refs);
+                    visit(then_body, refs);
+                    visit(else_body, refs);
+                }
+                Statement::For {
+                    start, end, body, ..
+                } => {
+                    expr(start, refs);
+                    expr(end, refs);
+                    visit(body, refs);
+                }
+                Statement::While { condition, body } => {
+                    expr(condition, refs);
+                    visit(body, refs);
+                }
+                Statement::Do { body, .. } => visit(body, refs),
+                _ => {}
+            }
+        }
+    }
+    visit(statements, &mut refs);
+    refs
+}
+
 impl Parser {
     pub fn new(filename: String, tokens: Vec<Token>) -> Self {
         Self {
@@ -159,6 +235,7 @@ impl Parser {
         }
 
         let typed_arrays = collect_typed_arrays(&statements);
+        let typed_array_refs = collect_typed_array_refs(&statements);
         Ok(Program {
             program_decl,
             library_decl,
@@ -169,7 +246,7 @@ impl Parser {
             functions,
             records,
             typed_arrays,
-            typed_array_refs: Vec::new(),
+            typed_array_refs,
         })
     }
 
