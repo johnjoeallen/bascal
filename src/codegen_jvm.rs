@@ -1678,7 +1678,11 @@ fn emit_numeric_expr(
             Ok(NumericType::Int)
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => {
-            let Expr::Ident(array) = &args[0] else { return Err("JVM SIZEOF requires an array identifier".to_string()); };
+            let array = match &args[0] {
+                Expr::Ident(array) => array,
+                Expr::ArrayRef { name, indices } if indices.is_empty() => name,
+                _ => return Err("JVM SIZEOF requires an array identifier".to_string()),
+            };
             let shape = context.arrays.get(&variable_key(array)).ok_or_else(|| format!("unknown JVM array `{array}`"))?;
             if shape.dimensions.len() != 1 { return Err("JVM SIZEOF currently supports one-dimensional arrays only".to_string()); }
             emit_numeric_expr_as(&shape.dimensions[0], NumericType::Int, out, context)?;
