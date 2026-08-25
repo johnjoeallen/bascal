@@ -9,8 +9,22 @@ use clap::Parser;
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
 /// (the `basic` target, complete) or an experimental native-C backend (the
 /// `C` target).
+/// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
+/// --version`, `bash --version`) for what a copyright/license notice in
+/// `--version` output should look like; the GPL itself recommends exactly
+/// this for a program with terminal interaction (see the license notice
+/// boilerplate at the end of LICENSE). "GPLv3" not "GPLv3+": Cargo.toml
+/// declares `license = "GPL-3.0-only"`, not `-or-later`.
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\n\nCopyright (C) 2026 BASCAL contributors\n",
+    "License GPLv3: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>.\n",
+    "This is free software: you are free to change and redistribute it.\n",
+    "There is NO WARRANTY, to the extent permitted by law."
+);
+
 #[derive(Parser, Debug)]
-#[command(name = "bcc", version, about, after_help = DEFAULT_TARGET_HELP)]
+#[command(name = "bcc", version = VERSION, about, after_help = DEFAULT_TARGET_HELP)]
 struct Cli {
     /// BASCAL source file to compile
     #[arg(value_name = "input.bcl")]
