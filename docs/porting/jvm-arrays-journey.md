@@ -49,9 +49,11 @@ continued to pass.
 
 ## Current status
 
-Tutorial 08 now transpiles for the JVM target, including one- and two-
-dimensional integer reads, writes, `SIZEOF`, and array-parameter calls. Runtime
-array-parameter copying and non-integer element arrays remain future work.
+Tutorial 08 now transpiles, assembles, and runs for the JVM target, including
+one- and two-dimensional integer reads, writes, `SIZEOF`, and array-parameter
+calls. The verified run sorts the sample array, searches it, and prints the
+identity matrix. Runtime array-parameter copying and non-integer element
+arrays remain future work.
 
 Tracked follow-up work:
 
