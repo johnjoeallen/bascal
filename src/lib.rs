@@ -2,6 +2,7 @@ pub mod ast;
 pub mod codegen;
 mod codegen_basic;
 mod codegen_c;
+mod codegen_jvm;
 pub mod diagnostics;
 pub mod lexer;
 pub mod parser;
@@ -158,6 +159,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             let generated = codegen_c::generate(&program)?;
             Ok(generated.app)
         }
+        Target::Jvm => codegen_jvm::generate(&program),
     }
 }
 
@@ -267,6 +269,7 @@ pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
     let extension = match target {
         Target::Basic => "bas",
         Target::C => "c",
+        Target::Jvm => "j",
     };
     input.with_extension(extension)
 }

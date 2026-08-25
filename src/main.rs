@@ -93,6 +93,7 @@ fn parse_target_str(value: &str) -> Option<Target> {
     match value.to_ascii_lowercase().as_str() {
         "basic" => Some(Target::Basic),
         "c" => Some(Target::C),
+        "jvm" => Some(Target::Jvm),
         _ => None,
     }
 }
@@ -101,8 +102,9 @@ fn parse_target_str(value: &str) -> Option<Target> {
 /// `parse_target_str` matching the `Fn(&str) -> Result<Target, String>`
 /// shape `clap` expects.
 fn parse_target_value(value: &str) -> Result<Target, String> {
-    parse_target_str(value)
-        .ok_or_else(|| format!("expected `basic` or `C` (case-insensitive), got `{value}`"))
+    parse_target_str(value).ok_or_else(|| {
+        format!("expected `basic`, `C`, or `jvm` (case-insensitive), got `{value}`")
+    })
 }
 
 /// Finds `key`'s value in a simple `key=value` config file's contents --
@@ -316,6 +318,11 @@ fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, Strin
     match target {
         Target::Basic => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
+        Target::Jvm => Err(
+            "--binary/--run don't support --target jvm yet -- it's a bootstrap-stage backend, \
+             see codegen_jvm.rs's module doc comment"
+                .to_string(),
+        ),
     }
 }
 
