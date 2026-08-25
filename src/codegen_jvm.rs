@@ -1444,6 +1444,10 @@ fn emit_numeric_expr(
             out.push_str("    invokestatic java/lang/Math/exp (D)D\n");
             Ok(NumericType::Double)
         }
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("rnd") && args.is_empty() => {
+            out.push_str("    invokestatic java/lang/Math/random ()D\n");
+            Ok(NumericType::Double)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
