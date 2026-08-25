@@ -1010,7 +1010,15 @@ impl JvmContext {
         let mut constants = HashMap::new();
         let mut arrays = BTreeMap::new();
         collect_scalar_declarations(&program.statements, &mut declarations, &mut constants);
-        collect_array_declarations(&program.statements, &mut arrays);
+        for array in &program.typed_arrays {
+            arrays.insert(
+                variable_key(&array.name),
+                ArrayShape {
+                    element: type_for_ident(&array.name),
+                    dimensions: array.dimensions.clone(),
+                },
+            );
+        }
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
