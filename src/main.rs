@@ -20,7 +20,9 @@ const VERSION: &str = concat!(
     "\n\nCopyright (C) 2026 BASCAL contributors\n",
     "License GPLv3: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>.\n",
     "This is free software: you are free to change and redistribute it.\n",
-    "There is NO WARRANTY, to the extent permitted by law."
+    "There is NO WARRANTY, to the extent permitted by law.\n\n",
+    "Code:    https://github.com/johnjoeallen/bascal\n",
+    "Website: https://johnjoeallen.github.io/bascal/"
 );
 
 #[derive(Parser, Debug)]
