@@ -1559,6 +1559,10 @@ fn emit_numeric_expr(
             out.push_str(&format!("    ldc2_w {value:?}\n"));
             Ok(NumericType::Double)
         }
+        Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => {
+            out.push_str("    ldc2_w 3.141592653589793\n");
+            Ok(NumericType::Double)
+        }
         Expr::Float(_) => Err("non-finite numeric literals are not supported by the JVM backend".to_string()),
         Expr::Ident(name) if context.constant(name).is_some() => {
             emit_numeric_expr(context.constant(name).expect("checked above"), out, context)
@@ -1680,6 +1684,7 @@ fn emit_numeric_expr(
 
 fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, String> {
     match expr {
+        Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cint") && args.len() == 1 => Ok(NumericType::Int),
