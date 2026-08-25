@@ -372,9 +372,8 @@ impl JvmEmitter<'_> {
                     .arrays
                     .get(&variable_key(name))
                     .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
-                if shape.dimensions.len() != 1
+                if indices.len() != shape.dimensions.len()
                     || !matches!(shape.element, JvmType::Numeric(NumericType::Int))
-                    || indices.len() != 1
                 {
                     return Err("JVM indexed assignment currently supports one-dimensional integer arrays only".to_string());
                 }
@@ -385,7 +384,16 @@ impl JvmEmitter<'_> {
                     self.context.array_index(name),
                     desc
                 ));
-                emit_numeric_expr_as(&indices[0], NumericType::Int, out, self.context)?;
+                for index in &indices[..indices.len() - 1] {
+                    emit_numeric_expr_as(index, NumericType::Int, out, self.context)?;
+                    out.push_str("    aaload\n");
+                }
+                emit_numeric_expr_as(
+                    indices.last().expect("validated index count"),
+                    NumericType::Int,
+                    out,
+                    self.context,
+                )?;
                 emit_numeric_expr_as(value, NumericType::Int, out, self.context)?;
                 out.push_str("    iastore\n");
                 Ok(())
@@ -1686,11 +1694,15 @@ fn emit_numeric_expr(
                 .arrays
                 .get(&variable_key(name))
                 .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
-            if shape.dimensions.len() != 1 || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) || indices.len() != 1 {
-                return Err("JVM indexed access currently supports one-dimensional integer arrays only".to_string());
+            if indices.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
+                return Err("JVM indexed access currently supports integer arrays with matching dimensions".to_string());
             }
             out.push_str(&format!("    getstatic {}/a{} {}\n", context.class_name, context.array_index(name), array_descriptor(shape)));
-            emit_numeric_expr_as(&indices[0], NumericType::Int, out, context)?;
+            for index in &indices[..indices.len() - 1] {
+                emit_numeric_expr_as(index, NumericType::Int, out, context)?;
+                out.push_str("    aaload\n");
+            }
+            emit_numeric_expr_as(indices.last().expect("validated index count"), NumericType::Int, out, context)?;
             out.push_str("    iaload\n");
             Ok(NumericType::Int)
         }
