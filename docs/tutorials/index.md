@@ -1,6 +1,6 @@
 [Home](../) / Tutorials
 
-Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` currently covers the first six core-language tutorials. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
+Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` currently covers the first eight core-language tutorials plus selected later tutorials. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
 
 <div class="section" markdown="1">
 
@@ -31,7 +31,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 
 ## Data and I/O
 
-- [Arrays <span class="targets">(Basic, C)</span>](08_arrays.md)
+- [Arrays <span class="targets">(Basic, C, JVM)</span>](08_arrays.md)
 - [Data, Read, Restore, Swap <span class="targets">(Basic, C)</span>](09_data.md)
 - [File Input and Output <span class="targets">(Basic, C)</span>](10_files.md)
 - [Screen I/O <span class="targets">(Basic, C, JVM)</span>](11_screen.md)

@@ -56,7 +56,7 @@
 470     printarrayArr0%(BCCT2%) = data%(BCCT2%)
 480 NEXT BCCT2%
 
-490 GOSUB 1300
+490 GOSUB 1310
 500 dummy% = printarrayResult0%
 
 510 ' Sort and show
@@ -85,7 +85,7 @@
 690     printarrayArr0%(BCCT5%) = data%(BCCT5%)
 700 NEXT BCCT5%
 
-710 GOSUB 1300
+710 GOSUB 1310
 720 dummy% = printarrayResult0%
 
 730 ' Search
@@ -99,7 +99,7 @@
 800     indexofArr0%(BCCT6%) = data%(BCCT6%)
 810 NEXT BCCT6%
 
-820 GOSUB 1200
+820 GOSUB 1210
 830 idx% = indexofResult0%
 840 IF (idx% >= 0) = 0 THEN GOTO 870
 850     PRINT (STR$(target%) + " found at index ") + STR$(idx%)
@@ -130,34 +130,35 @@
 1060     FOR insertionsortI0% = 1 TO (insertionsortArrDim00% + 1) - 1
 1070         insertionsortKey0% = insertionsortArr0%(insertionsortI0%)
 1080         insertionsortJ0% = insertionsortI0% - 1
-1090         IF ((insertionsortJ0% >= 0) AND (insertionsortArr0%(insertionsortJ0%) > insertionsortKey0%)) = 0 THEN GOTO 1130
-1100             insertionsortArr0%(insertionsortJ0% + 1) = insertionsortArr0%(insertionsortJ0%)
-1110             insertionsortJ0% = insertionsortJ0% - 1
-1120             GOTO 1090
-1130         REM END WHILE
-1140         insertionsortArr0%(insertionsortJ0% + 1) = insertionsortKey0%
-1150     NEXT insertionsortI0%
-1160     insertionsortResult0% = 0
-1170     RETURN
-1180 ' end function insertionsort%
+1090         IF (insertionsortJ0% >= 0) = 0 THEN GOTO 1140
+1100         IF (insertionsortArr0%(insertionsortJ0%) > insertionsortKey0%) = 0 THEN GOTO 1140
+1110             insertionsortArr0%(insertionsortJ0% + 1) = insertionsortArr0%(insertionsortJ0%)
+1120             insertionsortJ0% = insertionsortJ0% - 1
+1130             GOTO 1090
+1140         REM END WHILE
+1150         insertionsortArr0%(insertionsortJ0% + 1) = insertionsortKey0%
+1160     NEXT insertionsortI0%
+1170     insertionsortResult0% = 0
+1180     RETURN
+1190 ' end function insertionsort%
 
-1190 ' function indexof%(arr%, target%)
-1200     FOR indexofI0% = 0 TO (indexofArrDim00% + 1) - 1
-1210         IF (indexofArr0%(indexofI0%) = indexofTarget0%) = 0 THEN GOTO 1240
-1220             indexofResult0% = indexofI0%
-1230             RETURN
-1240         REM END IF
-1250     NEXT indexofI0%
-1260     indexofResult0% = -1
-1270     RETURN
-1280 ' end function indexof%
+1200 ' function indexof%(arr%, target%)
+1210     FOR indexofI0% = 0 TO (indexofArrDim00% + 1) - 1
+1220         IF (indexofArr0%(indexofI0%) = indexofTarget0%) = 0 THEN GOTO 1250
+1230             indexofResult0% = indexofI0%
+1240             RETURN
+1250         REM END IF
+1260     NEXT indexofI0%
+1270     indexofResult0% = -1
+1280     RETURN
+1290 ' end function indexof%
 
-1290 ' function printarray%(arr%)
-1300     printarrayLine0$ = "["
-1310     FOR printarrayI0% = 0 TO (printarrayArrDim00% + 1) - 1
-1320         printarrayLine0$ = (printarrayLine0$ + " ") + STR$(printarrayArr0%(printarrayI0%))
-1330     NEXT printarrayI0%
-1340     PRINT printarrayLine0$ + " ]"
-1350     printarrayResult0% = 0
-1360     RETURN
-1370 ' end function printarray%
+1300 ' function printarray%(arr%)
+1310     printarrayLine0$ = "["
+1320     FOR printarrayI0% = 0 TO (printarrayArrDim00% + 1) - 1
+1330         printarrayLine0$ = (printarrayLine0$ + " ") + STR$(printarrayArr0%(printarrayI0%))
+1340     NEXT printarrayI0%
+1350     PRINT printarrayLine0$ + " ]"
+1360     printarrayResult0% = 0
+1370     RETURN
+1380 ' end function printarray%

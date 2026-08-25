@@ -1,6 +1,5 @@
 // BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
-#include <math.h>
 #include <string.h>
 
 #define BCC_STRBUF_COUNT 8
@@ -36,7 +35,7 @@ int bf_i_insertionsort(int* bv_i_arr, int bv_i_arr_len0) {
     for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bv_i_key = bv_i_arr[(bv_i_i)];
         bv_i_j = (bv_i_i - 1);
-        while (((int)((long)round((double)(-(bv_i_j >= 0))) & (long)round((double)(-(bv_i_arr[(bv_i_j)] > bv_i_key)))))) {
+        while (((-(bv_i_j >= 0)) && (-(bv_i_arr[(bv_i_j)] > bv_i_key)))) {
             bv_i_arr[((bv_i_j + 1))] = bv_i_arr[(bv_i_j)];
             bv_i_j = (bv_i_j - 1);
         }
