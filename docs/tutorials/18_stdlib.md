@@ -2,6 +2,8 @@
 
 <div class="prose" markdown="1">
 
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/18_stdlib.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/18_stdlib.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/18_stdlib.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/18_stdlib.j).
+
 `LTRIM$`, `RTRIM$`, `UCASE$`, `LCASE$`, and `ERROR$` either aren't real MBASIC/BASCOM 2.00 builtins at all, or (in `ERROR$`'s case) compile and link but silently return an empty string at runtime -- verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x. BASCAL ships its own implementations under `com.bascal.stdlib`, resolved exactly like `com.bascal.sort` in [tutorial 12](12_require.md) -- but `bcc` always adds the library's install location to its search path automatically (next to the binary, or `usr/share/bascal` for a `.deb`/`.rpm` install), so no `-L` flag is needed to reach it.
 
 </div>
