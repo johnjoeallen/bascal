@@ -347,10 +347,7 @@ impl JvmEmitter<'_> {
                 };
                 emit_terminal_escape(&format!("\u{1b}[{};{}H", row, col), out)
             }
-            Statement::Dim {
-                is_array: false, ..
-            }
-            | Statement::Const { .. } => Ok(()),
+            Statement::Dim { .. } | Statement::Const { .. } => Ok(()),
             Statement::Assignment {
                 target: Expr::Ident(name),
                 value,
@@ -1680,6 +1677,14 @@ fn emit_numeric_expr(
             out.push_str("    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    iconst_1\n    iadd\n");
             Ok(NumericType::Int)
         }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => {
+            let Expr::Ident(array) = &args[0] else { return Err("JVM SIZEOF requires an array identifier".to_string()); };
+            let shape = context.arrays.get(&variable_key(array)).ok_or_else(|| format!("unknown JVM array `{array}`"))?;
+            if shape.dimensions.len() != 1 { return Err("JVM SIZEOF currently supports one-dimensional arrays only".to_string()); }
+            emit_numeric_expr_as(&shape.dimensions[0], NumericType::Int, out, context)?;
+            out.push_str("    iconst_1\n    iadd\n");
+            Ok(NumericType::Int)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
@@ -1860,6 +1865,12 @@ fn emit_numeric_expr(
 
 fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, String> {
     match expr {
+        Expr::ArrayRef { name, .. } if context.arrays.contains_key(&variable_key(name)) => {
+            match context.arrays[&variable_key(name)].element {
+                JvmType::Numeric(ty) => Ok(ty),
+                JvmType::String => Err(format!("`{name}` is a string array")),
+            }
+        }
         Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
@@ -1876,6 +1887,7 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
             Ok(promote_numeric(left, right))
         }
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("val") && args.len() == 1 => Ok(NumericType::Double),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, .. } | Expr::ArrayRef { name, .. }
             if context.function(name).is_some() => match context.function(name).expect("checked above").result {
             JvmType::Numeric(ty) => Ok(ty),
