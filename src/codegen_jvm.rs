@@ -1384,6 +1384,16 @@ fn emit_numeric_expr(
             out.push_str("    invokevirtual java/lang/String/length ()I\n");
             Ok(NumericType::Int)
         }
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("abs") && args.len() == 1 => {
+            let ty = emit_numeric_expr(&args[0], out, context)?;
+            let descriptor = match ty {
+                NumericType::Int => "(I)I",
+                NumericType::Long => "(J)J",
+                NumericType::Double => "(D)D",
+            };
+            out.push_str(&format!("    invokestatic java/lang/Math/abs {descriptor}\n"));
+            Ok(ty)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
