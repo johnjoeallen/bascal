@@ -117,6 +117,8 @@ Each unsupported form reports a "not supported yet" diagnostic rather than panic
 
 `--target jvm` is an early-stage native-JVM backend. It currently supports scalar variables and constants, numeric arithmetic and comparisons, string concatenation and selected string conversions, `print`, `if`/`elseif`/`else`, `for`/`while`/`do` loops with `exit`, numeric or exact-string `select case`, and by-value scalar functions with local variables and `global` access to top-level scalars. It emits Krakatau assembly and can assemble/run it through `krak2` and a JRE. Arrays, file/screen I/O, procedures, by-reference parameters, and many standard-library operations remain unfinished; see the GitHub issue tracker's `jvm-target` label for progress.
 
+Tutorials 01 through 07 currently compile, assemble, and run on the JVM; later tutorials remain marked Basic/C until their required features are implemented.
+
 It emits [Krakatau](https://github.com/Storyyeller/Krakatau) assembly text (`.j`), assembled into a real `.class` by the external `krak2` tool (`v2`/Rust branch — no installed-by-default story, so `scripts/fetch-krak2.sh` builds and installs it into `~/.local`, matching how `scripts/install-bcc.sh` installs `bcc` itself), then run by any JRE's `java`.
 
 `krak2` is looked for on `PATH` by default; point `bcc` at one living elsewhere with a `krak2=/path/to/krak2` line in `~/.config/bascal/config` or the `BASCAL_KRAK2` environment variable, the same precedence `--target` itself uses.
