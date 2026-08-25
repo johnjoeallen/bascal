@@ -51,5 +51,8 @@ jobs:
       - name: Fetch or reuse krak2
         run: scripts/fetch-krak2.sh
 
+      - name: Add krak2 to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Test JVM conformance
         run: cargo test --locked --test jvm_conformance
