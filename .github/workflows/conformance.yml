@@ -28,3 +28,28 @@ jobs:
 
       - name: Test (including dosbox-x conformance suite)
         run: cargo test --locked
+
+  jvm:
+    name: JVM conformance suite
+    runs-on: ubuntu-latest
+    env:
+      KRAK2_COMMIT: ae49743af92bbab1684b19bb1bee22b0a64d8ce5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache krak2
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/krakatau/${{ env.KRAK2_COMMIT }}
+          key: ${{ runner.os }}-krak2-${{ env.KRAK2_COMMIT }}
+
+      - name: Fetch or reuse krak2
+        run: scripts/fetch-krak2.sh
+
+      - name: Test JVM conformance
+        run: cargo test --locked --test jvm_conformance
