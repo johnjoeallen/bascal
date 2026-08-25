@@ -1471,6 +1471,12 @@ fn emit_numeric_expr(
             out.push_str("    invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D\n");
             Ok(NumericType::Double)
         }
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("instr") && args.len() == 2 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_string_expr(&args[1], out, context)?;
+            out.push_str("    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    iconst_1\n    iadd\n");
+            Ok(NumericType::Int)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
