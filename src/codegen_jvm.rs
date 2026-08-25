@@ -281,6 +281,7 @@ impl JvmEmitter<'_> {
     fn emit_statement(&mut self, statement: &Stmt, out: &mut String) -> Result<(), String> {
         match &statement.kind {
             Statement::Print { tokens } => emit_print_tokens(tokens, out, self.context),
+            Statement::Lprint(tokens) => emit_print_tokens(tokens, out, self.context),
             Statement::Cls => emit_terminal_escape("\u{1b}[2J\u{1b}[H", out),
             Statement::Beep => emit_terminal_escape("\u{7}", out),
             Statement::Color { fg, bg } => {
