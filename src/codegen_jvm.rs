@@ -1260,6 +1260,12 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("trim") && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            out.push_str("    invokevirtual java/lang/String/trim ()Ljava/lang/String;\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             emit_function_call(name, args, JvmType::String, out, context)
         }
