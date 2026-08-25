@@ -108,27 +108,27 @@
 960 ' ---- try/catch: portable structured error recovery, and throw to rethrow ----
 970 ' 
 980 ' try/catch (issue #60) is BASCAL's structured alternative to on error
-990 ' goto/resume above -- it transpiles unchanged under both --target basic
-1000 ' and --target C. A failed statement anywhere in the try body abandons
+990 ' goto/resume above -- this explicit THROW form transpiles under --target
+1000 ' basic, --target C, and --target jvm. A failed statement anywhere in the try body abandons
 1010 ' the rest of it and runs catch once, then execution always continues
 1020 ' right after end try -- never back inside try, and with no resume
 1030 ' equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
 1040 ' catch block, not aliases for the ambient err/erl on error goto above.
 1050 ' 
-1060 ' The filter means this catch handles only errFileNotFound%; every other
-1070 ' error automatically rethrows after the try block.
+1060 ' The two-value filter means this catch handles either a missing-file or
+1070 ' already-open error; every other error automatically rethrows after the try
+1080 ' block. THROW keeps this structured example portable even on targets whose
+1090 ' file-operation runtime is not yet available.
 
-1080 PRINT "try/catch, missing file, with rethrow:"
-1090 filename$ = "also_missing.dat"
-1100 ON ERROR GOTO 1170
-1110 BCC_TRY_0002_PENDING% = 0
-1120     OPEN filename$ FOR INPUT AS #2
-1130     PRINT "  file opened (unexpected)"
-1140     CLOSE #2
+1100 PRINT "try/catch, selected errors, with rethrow:"
+1110 filename$ = "also_missing.dat"
+1120 ON ERROR GOTO 1170
+1130 BCC_TRY_0002_PENDING% = 0
+1140     ERROR errfilenotfound%
 1150 ON ERROR GOTO 0
 1160 GOTO 1330
 1170     BCC_TRY_0002_PENDING% = ERR
-1180     IF (ERR = errfilenotfound%) THEN GOTO 1200
+1180     IF (ERR = errfilenotfound%) OR (ERR = errfilealreadyopen%) THEN GOTO 1200
 1190     RESUME 1330
 1200     err% = ERR
 1210     erl% = ERL

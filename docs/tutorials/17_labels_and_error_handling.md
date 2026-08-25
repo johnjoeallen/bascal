@@ -8,9 +8,9 @@ BASCAL manages line numbers itself, so `.bcl` source can never target a line num
 
 <div class="snippet" markdown="1">
 
-### try/catch is the portable, both-target alternative to on error goto/resume
+### try/catch is the portable alternative to on error goto/resume
 
-`on error goto`/`resume`, shown further down, is the classic BASIC model — it's the BASIC target's own mechanism. `try`/`catch` transpiles unchanged under both `--target basic` and `--target c`.
+`on error goto`/`resume`, shown further down, is the classic BASIC model — it's the BASIC target's own mechanism. The explicit `throw`/`error` form of `try`/`catch` transpiles unchanged under `--target basic`, `--target c`, and `--target jvm`.
 
 It abandons the whole `try` region on a runtime error, exposes the error metadata to `catch`, and always continues right after `end try` — never back inside `try`, and with no `resume` equivalent. Require the error library and use its named constants to filter the errors this handler accepts; an unmatched error rethrows automatically:
 
@@ -18,14 +18,14 @@ It abandons the whole `try` region on a runtime error, exposes the error metadat
 require com.bascal.stdlib.error
 
 try
-    open fileName$ for input as #2
-catch err%(errFileNotFound%), erl%, source$
+    throw errFileNotFound%
+catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
     print "caught error "; err%; " at "; source$; ":"; erl%
     print fileName$; " not found"
 end try
 ```
 
-On the BASIC target this transpiles straight onto real `ON ERROR GOTO`/`RESUME <label>` and covers every raise site. On the C target a raise is caught when it happens in the `try` block itself or inside any procedure/function called (directly or transitively) from there, including calls embedded in larger expressions. `try`/`catch` can't be nested on either target.
+On the BASIC target this transpiles straight onto real `ON ERROR GOTO`/`RESUME <label>`. On the C target a raise is caught when it happens in the `try` block itself or inside any procedure/function called (directly or transitively) from there, including calls embedded in larger expressions. The JVM target supports this explicit `throw`/`error` form, including multi-value filters and source bindings; JVM file-operation failures are tracked separately in issue #115. `try`/`catch` can't be nested on the BASIC or C targets.
 
 </div>
 
@@ -171,16 +171,16 @@ on error goto 0
 // equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
 // catch block, not aliases for the ambient err/erl on error goto above.
 //
-// The filter means this catch handles only errFileNotFound%; every other
-// error automatically rethrows after the try block.
+// The two-value filter means this catch handles either a missing-file or
+// already-open error; every other error automatically rethrows after the try
+// block. THROW keeps this structured example portable even on targets whose
+// file-operation runtime is not yet available.
 
-print "try/catch, missing file, with rethrow:"
+print "try/catch, selected errors, with rethrow:"
 fileName$ = "also_missing.dat"
 try
-    open fileName$ for input as #2
-    print "  file opened (unexpected)"
-    close #2
-catch err%(errFileNotFound%), erl%, source$
+    throw errFileNotFound%
+catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
     print "  caught error "; err%; " at "; source$; ":"; erl%
     print "  "; fileName$; " not found"
 end try
@@ -332,20 +332,20 @@ data "Japan"
 1030 ' equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
 1040 ' catch block, not aliases for the ambient err/erl on error goto above.
 1050 '
-1060 ' The filter means this catch handles only errFileNotFound%; every other
-1070 ' error automatically rethrows after the try block.
+1060 ' The two-value filter means this catch handles either a missing-file or
+1070 ' already-open error; every other error automatically rethrows after the try
+1080 ' block. THROW keeps this structured example portable even on targets whose
+1090 ' file-operation runtime is not yet available.
 
-1080 PRINT "try/catch, missing file, with rethrow:"
-1090 filename$ = "also_missing.dat"
-1100 ON ERROR GOTO 1170
-1110 BCC_TRY_0002_PENDING% = 0
-1120     OPEN filename$ FOR INPUT AS #2
-1130     PRINT "  file opened (unexpected)"
-1140     CLOSE #2
+1100 PRINT "try/catch, selected errors, with rethrow:"
+1110 filename$ = "also_missing.dat"
+1120 ON ERROR GOTO 1170
+1130 BCC_TRY_0002_PENDING% = 0
+1140     ERROR errfilenotfound%
 1150 ON ERROR GOTO 0
 1160 GOTO 1330
 1170     BCC_TRY_0002_PENDING% = ERR
-1180     IF (ERR = errfilenotfound%) THEN GOTO 1200
+1180     IF (ERR = errfilenotfound%) OR (ERR = errfilealreadyopen%) THEN GOTO 1200
 1190     RESUME 1330
 1200     err% = ERR
 1210     erl% = ERL
