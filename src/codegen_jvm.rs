@@ -257,6 +257,9 @@ impl JvmEmitter<'_> {
                 }
                 None => Err("RETURN is only supported inside a JVM function".to_string()),
             },
+            Statement::GlobalDecl(name) => Err(format!(
+                "global variable `{name}` requires JVM static-field storage, which is not implemented yet"
+            )),
             Statement::End => {
                 out.push_str("    return\n");
                 Ok(())
@@ -852,13 +855,15 @@ impl JvmContext {
                 name,
                 indices: args,
             } if (name.name.eq_ignore_ascii_case("chr") && args.len() == 1)
-                || (name.name.eq_ignore_ascii_case("mid") && args.len() == 3) =>
+                || (name.name.eq_ignore_ascii_case("mid")
+                    && (args.len() == 2 || args.len() == 3)) =>
             {
                 true
             }
             Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => self
                 .function(name)
                 .is_some_and(|signature| matches!(signature.result, JvmType::String)),
+            Expr::ScalarMethodCall { .. } => true,
             _ => false,
         }
     }
@@ -956,6 +961,28 @@ fn type_for_ident(ident: &BasicIdent) -> JvmType {
 /// the way through the JVM.
 fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Result<(), String> {
     match expr {
+        Expr::ScalarMethodCall { base, method, args } => {
+            let name = BasicIdent {
+                name: method.clone(),
+                suffix: Some(TypeSuffix::String),
+            };
+            let signature = context
+                .function(&name)
+                .ok_or_else(|| format!("unsupported JVM string method `{method}`"))?;
+            if signature.result != JvmType::String || signature.params.len() != args.len() + 1 {
+                return Err(format!("invalid JVM string method call `{method}`"));
+            }
+            emit_string_expr(base, out, context)?;
+            for (arg, ty) in args.iter().zip(signature.params.iter().skip(1)) {
+                match ty {
+                    JvmType::String => emit_string_expr(arg, out, context)?,
+                    JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
+                }
+            }
+            let descriptor_args = signature.params.iter().map(|ty| descriptor(*ty)).collect::<String>();
+            out.push_str(&format!("    invokestatic {}/{} ({descriptor_args}){}\n", context.class_name, name.name, descriptor(signature.result)));
+            Ok(())
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if name.name.eq_ignore_ascii_case("chr") && args.len() == 1 => {
             emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
@@ -969,6 +996,21 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             out.push_str("    iconst_1\n    isub\n    dup\n");
             emit_numeric_expr_as(&args[2], NumericType::Int, out, context)?;
             out.push_str("    iadd\n    invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("mid") && args.len() == 2 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_numeric_expr_as(&args[1], NumericType::Int, out, context)?;
+            out.push_str("    iconst_1\n    isub\n    invokevirtual java/lang/String/substring (I)Ljava/lang/String;\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("left") && args.len() == 2 => {
+            emit_string_expr(&args[0], out, context)?;
+            out.push_str("    iconst_0\n");
+            emit_numeric_expr_as(&args[1], NumericType::Int, out, context)?;
+            out.push_str("    invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n");
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }

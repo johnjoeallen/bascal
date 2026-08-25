@@ -22,6 +22,7 @@ assets = [
     ["tutorial/**/*.bcl", "usr/share/doc/bascal/tutorial/", "644"],
     ["tutorial/**/*.md", "usr/share/doc/bascal/tutorial/", "644"],
     ["tutorial/*.bas", "usr/share/doc/bascal/tutorial/", "644"],
+    ["tutorial/*.j", "usr/share/doc/bascal/tutorial/", "644"],
     ["tutorial/13_shared/*.bas", "usr/share/doc/bascal/tutorial/13_shared/", "644"],
     ["tutorial/remline/remline.bas", "usr/share/doc/bascal/tutorial/remline/remline.bas", "644"],
     ["tutorial/remline/sample/expected.bas", "usr/share/doc/bascal/tutorial/remline/sample/expected.bas", "644"],

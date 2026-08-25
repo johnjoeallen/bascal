@@ -22,7 +22,14 @@ def regenerate(paths: list[str]) -> None:
         source = ROOT / path
         if source.suffix != ".bcl" or not re.search(r"^\s*program\b", source.read_text(), re.M):
             continue
-        subprocess.run([binary, "--target", "basic", source], check=True, cwd=ROOT)
+        # Tutorial 12 deliberately keeps `require stats` short and documents
+        # the library search path separately.  The docs build must provide the
+        # same tutorial library directory as that documented command line.
+        subprocess.run(
+            [binary, "--target", "basic", "-L", ROOT / "tutorial" / "lib", source],
+            check=True,
+            cwd=ROOT,
+        )
         if str(source.with_suffix(".c").relative_to(ROOT)) in paths:
             subprocess.run([binary, "--target", "c", source], check=True, cwd=ROOT)
 

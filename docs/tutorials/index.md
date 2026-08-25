@@ -1,17 +1,17 @@
 [Home](../) / Tutorials
 
-Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` is a brand-new, bootstrap-stage native-JVM backend, just beginning. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
+Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` currently covers the first six core-language tutorials. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
 
 <div class="section" markdown="1">
 
 ## Core Language
 
-- [Hello, World <span class="targets">(Basic, C)</span>](01_hello.md)
-- [Variables and Constants <span class="targets">(Basic, C)</span>](02_variables.md)
-- [Operators and Expressions <span class="targets">(Basic, C)</span>](03_arithmetic.md)
-- [Conditions <span class="targets">(Basic, C)</span>](04_conditions.md)
-- [Loops <span class="targets">(Basic, C)</span>](05_loops.md)
-- [Select Case <span class="targets">(Basic, C)</span>](06_select_case.md)
+- [Hello, World <span class="targets">(Basic, C, JVM)</span>](01_hello.md)
+- [Variables and Constants <span class="targets">(Basic, C, JVM)</span>](02_variables.md)
+- [Operators and Expressions <span class="targets">(Basic, C, JVM)</span>](03_arithmetic.md)
+- [Conditions <span class="targets">(Basic, C, JVM)</span>](04_conditions.md)
+- [Loops <span class="targets">(Basic, C, JVM)</span>](05_loops.md)
+- [Select Case <span class="targets">(Basic, C, JVM)</span>](06_select_case.md)
 
 </div>
 
