@@ -34,6 +34,22 @@ mkdir -p ~/.config/bascal
 echo "target=C" > ~/.config/bascal/config
 ```
 
+### Portability across backends
+
+BASCAL started as a strict superset of classic BASIC: every raw BASIC statement class the compiler recognizes at all was, by design, guaranteed to pass through and transpile correctly. That guarantee holds in full today only for `--target basic`. Answering to more than one runtime came at a cost: `--target c` and `--target jvm` each have to permanently drop a small set of raw-BASIC forms that don't translate safely onto a real C call stack or the JVM's own method/bytecode model — for readability and portability across backends, not because anyone stopped caring about compatibility. BASCAL as a whole is now a **partial** superset of BASIC, not a strict one. `--target basic` remains the most complete, closest-to-strict superset, and the right choice whenever maximum BASIC compatibility matters more than a native binary or JVM output.
+
+The divergences below are permanent design decisions, not temporary implementation gaps -- see each backend's own "Currently supported"/"Not yet supported" lists further down this page (and the GitHub issue tracker's `c-target`/`jvm-target` labels) for what's simply still unfinished, a separate and shrinking list.
+
+**`--target C`:**
+
+- Classic `ON ERROR GOTO`/every `RESUME` variant/`ERROR` is rejected at compile time (see `reject_classic_error_handling` in `codegen_c.rs`). The C backend's `gosub`/`on error goto` support is built on a return-address-ID stack that only works because top-level code executes directly in `main` -- a `RESUME` reaching into or across a `procedure`'s own C call frame has no safe equivalent without a much larger redesign of how procedures compile, so this is a permanent limitation of compiling to real C functions on the real C call stack, not a "not yet." **Portable equivalent:** `try`/`catch`/`finally`, BASCAL's own structured error recovery, supported on both `basic` and `C`.
+
+**`--target jvm`:**
+
+- `GOSUB`/bare `RETURN` (BASIC-level subroutine call, distinct from a `function`/`procedure`'s own `return`) is rejected entirely, not merely deferred. **Portable equivalent:** `function`/`procedure` -- the structured replacement BASCAL already provides, and the one the language steers new/edited source toward anyway (see [Legacy-Form Warnings](miscellaneous-statements.md#legacy-form-warnings)).
+- `GOTO`/`label:` may not cross into or out of a `function`/`procedure` -- a `goto`'s target label must live in the same callable as the `goto` itself (or, for a top-level `goto`, another top-level label in the main program body). This isn't a BASCAL policy choice: the JVM's own `goto` instruction is a branch offset within one method's own bytecode, with no way to jump into another method's code at all, so this matches what the JVM can physically express. **Portable equivalent:** none direct -- restructure the jump as a function call/return instead.
+- Classic `ON ERROR GOTO`/every `RESUME` variant/`ERROR` is rejected, for the same reason as `--target C` above. **Portable equivalent:** `try`/`catch`/`finally` (once implemented for this target -- it isn't yet; see the GitHub issue tracker's `jvm-target` label).
+
 ### Backends
 
 `--target basic` (the default) is everything else on this page: plain 1980s Microsoft BASIC/BASCOM output.

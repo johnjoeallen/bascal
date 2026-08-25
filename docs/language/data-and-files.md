@@ -92,4 +92,4 @@ close #1
 
 ## Keep the target available
 
-BASCAL remains a strict superset of the target dialect. Existing sequential file operations and hand-written BASIC file statements can pass through when you need them — the compiler never forces a rewrite onto working code just because a more structured way to say the same thing now exists.
+Under `--target basic`, BASCAL remains a strict superset of the target dialect. Existing sequential file operations and hand-written BASIC file statements can pass through when you need them — the compiler never forces a rewrite onto working code just because a more structured way to say the same thing now exists. `--target c` supports the same random-access/sequential file I/O natively too; see [Portability across backends](../manual/command-line-reference.md#portability-across-backends) for where BASCAL is no longer a strict superset once `--target c`/`--target jvm` enter the picture.

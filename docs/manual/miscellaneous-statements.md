@@ -105,7 +105,7 @@ If the expression evaluates to 0 or exceeds the number of targets, execution con
 
 ### Legacy-Form Warnings
 
-BASCAL stays a strict superset of classic BASIC — every legacy form on this page keeps compiling exactly as it always has. But a few of them have a direct, unambiguous BASCAL structured equivalent, and `bcc` names it as an advisory warning printed to stderr (never a compile error) whenever it sees one, to steer new or edited source toward the structured spelling:
+Under `--target basic`, BASCAL stays a strict superset of classic BASIC — every legacy form on this page keeps compiling exactly as it always has. (This page's own `GOTO`/`GOSUB`/`ON ERROR GOTO`/`RESUME`/`ERROR` forms are exactly where `--target c` and `--target jvm` each permanently diverge from that — see [Portability across backends](command-line-reference.md#portability-across-backends) if you're targeting either of those.) But a few of these forms have a direct, unambiguous BASCAL structured equivalent, and `bcc` names it as an advisory warning printed to stderr (never a compile error) whenever it sees one, to steer new or edited source toward the structured spelling:
 
 - `ON ... GOTO` / `ON ... GOSUB` — prefer `select case`.
 - a chain of two or more `IF ... THEN GOTO` / `ELSEIF ... THEN GOTO` links, each branching to a different label — prefer `select case`. A single, unchained `IF cond THEN GOTO label` (an ordinary early-exit/error-check branch) is left alone.
