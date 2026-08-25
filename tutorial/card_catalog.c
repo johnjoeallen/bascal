@@ -43,6 +43,8 @@ static int bcc_put_record_entry(FILE* file, long record, const char* field_0, co
 static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* field_1, char* field_2);
 static void bcc_read_line(void);
 
+static float bv_f_catalog = 0;
+static float bv_f_header = 0;
 static int bv_i_lastslot = 0;
 static char bv_s_catalogauthorbuf[256] = {0};
 static char bv_s_catalogsubjectbuf[256] = {0};

@@ -29,7 +29,9 @@ pub fn lower(
         .functions
         .into_iter()
         .map(|mut f| {
+            lowerer.enter_function(&f);
             f.body = lowerer.lower_statements(f.body);
+            lowerer.leave_function();
             f
         })
         .collect();
@@ -69,6 +71,10 @@ struct RecordType {
 struct FileInfo {
     channel: i64,
     kind: FileKind,
+    /// `None` means a top-level file. A file declared inside a callable is
+    /// visible only in that callable, even though lowering ultimately uses
+    /// target-level channel and FIELD-buffer storage.
+    owner: Option<String>,
 }
 
 /// What a `file` variable actually is: the random-access record/file DSL
@@ -132,6 +138,13 @@ struct Lowerer {
     /// `reject_functions_shadowing_builtins` already enforces for user
     /// declarations), unlike this set, which is genuinely suffix-specific.
     known_ordinary_functions: HashSet<(String, Option<TypeSuffix>)>,
+    /// The callable whose body is currently being lowered, plus the file
+    /// names it explicitly exposes with `global`. `file` DSL nodes disappear
+    /// before resolver scoping runs, so this pass must enforce the same
+    /// local-unless-global rule itself.
+    current_function: Option<String>,
+    current_file_globals: HashSet<String>,
+    current_statement_pos: Option<SourcePos>,
 }
 
 impl Lowerer {
@@ -145,6 +158,9 @@ impl Lowerer {
             synthesized_buffer_names: std::collections::HashSet::new(),
             user_method_results: HashMap::new(),
             known_ordinary_functions: HashSet::new(),
+            current_function: None,
+            current_file_globals: HashSet::new(),
+            current_statement_pos: None,
         }
     }
 
@@ -207,6 +223,7 @@ impl Lowerer {
 
     fn lower_statement(&mut self, stmt: Stmt, out: &mut Vec<Stmt>) {
         let pos = stmt.pos.clone();
+        self.current_statement_pos = Some(pos.clone());
         match stmt.kind {
             // These three delegate to helpers that may synthesize several
             // low-level statements from one high-level DSL statement (e.g.
@@ -223,6 +240,20 @@ impl Lowerer {
                 let mut raw = Vec::new();
                 self.lower_file_decl(var, record_type, path, mode, &mut raw);
                 out.extend(raw.into_iter().map(|s| Stmt::new(s, pos.clone())));
+            }
+            // A `file` object is erased into a fixed channel and (for a
+            // record file) FIELD buffers. `global fileName` is therefore a
+            // source-scope declaration only: preserve it as an explanatory
+            // comment for BASIC output, but do not leave a fake suffixless
+            // scalar for either backend to allocate.
+            Statement::GlobalDecl(ident)
+                if self.current_function.is_some()
+                    && self.files.contains_key(&ident.name.to_ascii_lowercase()) =>
+            {
+                out.push(Stmt::new(
+                    Statement::Raw(format!("' global {}", ident.name)),
+                    pos,
+                ));
             }
             Statement::Assignment { target, value } => {
                 let mut raw = Vec::new();
@@ -351,6 +382,16 @@ impl Lowerer {
             }
             other => out.push(Stmt::new(self.rewrite_statement_exprs(other), pos)),
         }
+    }
+
+    fn enter_function(&mut self, function: &FunctionDef) {
+        self.current_function = Some(function.name.name.to_ascii_lowercase());
+        self.current_file_globals = collect_global_names(&function.body);
+    }
+
+    fn leave_function(&mut self) {
+        self.current_function = None;
+        self.current_file_globals.clear();
     }
 
     fn rewrite_do_condition(&mut self, cond: DoCondition) -> DoCondition {
@@ -718,6 +759,7 @@ impl Lowerer {
                 FileInfo {
                     channel,
                     kind: FileKind::Sequential(mode),
+                    owner: self.current_function.clone(),
                 },
             );
             out.push(Statement::Open {
@@ -752,6 +794,7 @@ impl Lowerer {
             FileInfo {
                 channel,
                 kind: FileKind::Record(record_type.clone()),
+                owner: self.current_function.clone(),
             },
         );
 
@@ -1172,6 +1215,9 @@ impl Lowerer {
             ));
             return None;
         };
+        if !self.file_is_visible(var, &info) {
+            return None;
+        }
         let FileKind::Record(record_type) = info.kind else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
@@ -1197,13 +1243,16 @@ impl Lowerer {
     /// sequential alike. Used by `.close()`, which is valid on either kind.
     fn lookup_any_file_channel(&mut self, var: &BasicIdent) -> Option<i64> {
         let key = var.name.to_ascii_lowercase();
-        let Some(info) = self.files.get(&key) else {
+        let Some(info) = self.files.get(&key).cloned() else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
                 format!("`{}` is not a declared `file`", var.name),
             ));
             return None;
         };
+        if !self.file_is_visible(var, &info) {
+            return None;
+        }
         Some(info.channel)
     }
 
@@ -1227,6 +1276,9 @@ impl Lowerer {
             ));
             return None;
         };
+        if !self.file_is_visible(var, &info) {
+            return None;
+        }
         let FileKind::Sequential(mode) = info.kind else {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
@@ -1263,6 +1315,28 @@ impl Lowerer {
             return None;
         }
         Some(info.channel)
+    }
+
+    fn file_is_visible(&mut self, var: &BasicIdent, info: &FileInfo) -> bool {
+        let Some(current_function) = &self.current_function else {
+            return true;
+        };
+        let visible = match &info.owner {
+            Some(owner) => owner == current_function,
+            None => self
+                .current_file_globals
+                .contains(&var.name.to_ascii_lowercase()),
+        };
+        if !visible {
+            self.diagnostics.push(Diagnostic::error(
+                self.current_statement_pos.clone().unwrap_or_else(generated_pos),
+                format!(
+                    "`{}` is a top-level file; declare `global {}` in `{}` before using it",
+                    var.name, var.name, current_function
+                ),
+            ));
+        }
+        visible
     }
 
     fn buffer_ident(&mut self, file_var: &str, field_name: &str) -> BasicIdent {
@@ -1787,6 +1861,57 @@ fn trim_statements(
     };
 
     vec![init, while_loop, finalize]
+}
+
+/// Collects `global` declarations at any nesting depth in a callable body.
+/// The ordinary resolver does the same for normal variables; record/file
+/// lowering runs first, so it needs this small parallel view before it erases
+/// the file-object syntax.
+fn collect_global_names(body: &[Stmt]) -> HashSet<String> {
+    let mut names = HashSet::new();
+    collect_global_names_into(body, &mut names);
+    names
+}
+
+fn collect_global_names_into(body: &[Stmt], names: &mut HashSet<String>) {
+    for stmt in body {
+        match &stmt.kind {
+            Statement::GlobalDecl(ident) => {
+                names.insert(ident.name.to_ascii_lowercase());
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_global_names_into(then_body, names);
+                collect_global_names_into(else_body, names);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_global_names_into(body, names),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_global_names_into(&case.body, names);
+                }
+                collect_global_names_into(else_body, names);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_global_names_into(try_body, names);
+                if let Some(catch) = catch {
+                    collect_global_names_into(&catch.body, names);
+                }
+                collect_global_names_into(finally_body, names);
+            }
+            _ => {}
+        }
+    }
 }
 
 fn field_width(ty: &RecordFieldType) -> u32 {

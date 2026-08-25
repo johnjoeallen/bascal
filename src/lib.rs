@@ -1891,10 +1891,12 @@ end record
 file items as Item = open("probe.dat")
 
 procedure addItem(n$, q%)
+    global items
     items[1] = { name: n$, qty: q% }
 end procedure
 
 procedure showItem()
+    global items
     let s = items[1]
     print s.name + " " + str$(s.qty)
 end procedure
@@ -1931,6 +1933,54 @@ end
     }
 
     #[test]
+    fn top_level_file_requires_global_inside_procedure() {
+        let source = r#"record Item
+    name: string(10)
+end record
+
+file items as Item = open("probe.dat")
+
+procedure addItem()
+    items[1] = { name: "widget" }
+end procedure
+
+addItem()
+end
+"#;
+        let diagnostics = compile_source("file_scope.bcl", source)
+            .expect_err("a top-level file must not be visible in a procedure without `global`");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("`items` is a top-level file")
+                    && diagnostic.message.contains("global items")
+            }),
+            "expected a file-scope diagnostic, got: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn top_level_sequential_file_requires_global_inside_procedure() {
+        let source = r#"file output = open("probe.txt") for output
+
+procedure writeProbe()
+    output.write("hello")
+end procedure
+
+writeProbe()
+end
+"#;
+        let diagnostics = compile_source("sequential_file_scope.bcl", source)
+            .expect_err("a top-level sequential file must require `global` in a procedure");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("`output` is a top-level file")
+                    && diagnostic.message.contains("global output")
+            }),
+            "expected a file-scope diagnostic, got: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn record_downto_lowers_to_step_negative_one() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains("FOR i = 3 TO 1 STEP -1"));
@@ -1958,6 +2008,38 @@ end
         assert!(output.contains("OPEN \"b.dat\" FOR RANDOM AS #2 LEN = 2"));
         assert!(output.contains("CLOSE #1"));
         assert!(output.contains("CLOSE #2"));
+    }
+
+    #[test]
+    fn procedure_local_files_receive_distinct_program_wide_channels() {
+        let source = r#"procedure writeFirst()
+    file first = open("first.csv") for output
+    first.write("one")
+    first.close()
+end procedure
+
+procedure writeSecond()
+    file second = open("second.csv") for output
+    second.write("two")
+    second.close()
+end procedure
+
+writeFirst()
+writeSecond()
+end
+"#;
+        let output = compile_source("procedure_files.bcl", source)
+            .expect("procedure-local file declarations should compile");
+        assert!(
+            output.contains(r#"OPEN "first.csv" FOR OUTPUT AS #1"#),
+            "first procedure file should use channel #1:\n{output}"
+        );
+        assert!(
+            output.contains(r#"OPEN "second.csv" FOR OUTPUT AS #2"#),
+            "second procedure file should use channel #2:\n{output}"
+        );
+        assert_eq!(output.matches("CLOSE #1").count(), 1, "{output}");
+        assert_eq!(output.matches("CLOSE #2").count(), 1, "{output}");
     }
 
     #[test]
@@ -4884,6 +4966,10 @@ end
 "#;
         let output = compile_source_via_c_target(source);
         assert!(
+            !output.contains("bv_f_header"),
+            "a file-object `global` must not become a C scalar:\n{output}"
+        );
+        assert!(
             output.contains(r#"printf("Score: %d / %g (100%%)\n", 100, 3.5);"#),
             "unexpected output:\n{output}"
         );
@@ -6814,6 +6900,7 @@ end record
 file header as Header = open("catalog.dat")
 
 procedure touch()
+    global header
     header[1] = { size: 1 }
 end procedure
 

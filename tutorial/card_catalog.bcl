@@ -56,6 +56,8 @@ file catalog as Entry  = open("catalog.dat")
 /* ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ---- */
 procedure initCatalog()
     global lastSlot%
+    global header
+    global catalog
     header[1] = { size: lastSlot%, reserved: "" }
     for i% = 2 to lastSlot%
         catalog[i%] = { author: "", title: "", subject: "" }
@@ -67,6 +69,8 @@ end procedure
 // title$   -- new entry's title
 // subject$ -- new entry's subject
 procedure addItem(author$, title$, subject$)
+    global header
+    global catalog
     let h = header[1]
     i% = 1
     stop% = 0
@@ -89,6 +93,8 @@ end procedure
 
 /* ---- MENU=1 subroutine in CLERK.BAS: list every non-empty entry ---- */
 procedure listAll()
+    global header
+    global catalog
     let h = header[1]
     for i% = 2 to h.size
         let e = catalog[i%]
@@ -101,6 +107,8 @@ end procedure
 /* ---- MENU=2 subroutine in CLERK.BAS: filter by author ---- */
 // author$ -- author name to match
 procedure searchByAuthor(author$)
+    global header
+    global catalog
     let h = header[1]
     for i% = 2 to h.size
         let e = catalog[i%]
@@ -114,6 +122,8 @@ end procedure
 // author$ -- author name to match
 // title$  -- title to match
 procedure searchByAuthorTitle(author$, title$)
+    global header
+    global catalog
     let h = header[1]
     for i% = 2 to h.size
         let e = catalog[i%]
@@ -127,6 +137,8 @@ end procedure
 // author$ -- author name to match
 // title$  -- title to match
 procedure deleteItem(author$, title$)
+    global header
+    global catalog
     let h = header[1]
     i% = 1
     stop% = 0

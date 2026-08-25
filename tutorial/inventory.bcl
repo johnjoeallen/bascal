@@ -308,6 +308,7 @@ end procedure
 // -------------------- Menu actions --------------------
 
 procedure checkPart()
+    global inv
     partStr$ = readPartNumberInput$()
     part% = val(partStr$)
     if partInRange%(part%) = 0 then
@@ -334,6 +335,7 @@ procedure checkPart()
 end procedure
 
 procedure editRecord()
+    global inv
     cls
     locate 10, tabCol%
     partStr$ = readPartNumberInput$()
@@ -361,6 +363,7 @@ procedure editRecord()
 end procedure
 
 procedure listAll()
+    global inv
     printListHeader()
     scrollCount% = 0
     for i% = 1 to partCount%
@@ -375,6 +378,7 @@ procedure listAll()
 end procedure
 
 procedure addStock()
+    global inv
     cls
     locate 5, 25
     print "A D D I N G   S T O C K"
@@ -413,6 +417,7 @@ procedure addStock()
 end procedure
 
 procedure subtractStock()
+    global inv
     cls
     locate 5, 20
     print "S U B T R A C T I N G    S T O C K"
@@ -457,6 +462,7 @@ procedure subtractStock()
 end procedure
 
 procedure reorderReport()
+    global inv
     printReorderHeader()
     reportLineCount% = 0
     for i% = 1 to partCount%
@@ -484,6 +490,7 @@ end procedure
 // produce, so it's what isEmpty%() itself can't use (see its own
 // header note) but this one-time check safely can.
 procedure initializeInventoryFileIfNew()
+    global inv
     let p = inv[1]
     if asc(p.flag) = 0 then
         for i% = 1 to partCount%

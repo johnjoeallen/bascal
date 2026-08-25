@@ -13,6 +13,7 @@ GENERATED = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)
 SOURCE_EMBED = re.compile(r'<div class="source-embed">.*?</div>', re.S)
 LINK = re.compile(re.escape(GITHUB_BLOB) + r"(tutorial/[^)\s]+)")
 PATH_HEADER = re.compile(r"^### `?(tutorial/[^`\n]+)`?$", re.MULTILINE)
+EMBED_PATH = re.compile(r"<summary><code>(tutorial/[^<\n]+)</code></summary>")
 
 
 def regenerate(paths: list[str]) -> None:
@@ -52,7 +53,13 @@ def main() -> None:
     for page in sorted(TUTORIALS.glob("[0-9][0-9]_*.md")):
         text = page.read_text()
         existing = GENERATED.search(text)
-        paths = list(dict.fromkeys(LINK.findall(text) or PATH_HEADER.findall(text)))
+        paths = list(
+            dict.fromkeys(
+                LINK.findall(text)
+                or PATH_HEADER.findall(text)
+                or EMBED_PATH.findall(text)
+            )
+        )
         if not paths:
             continue
         regenerate(paths)
