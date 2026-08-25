@@ -23,6 +23,8 @@ branch and extended incrementally.
 7. Added multidimensional integer reads and writes using `aaload`, `iaload`,
    and `iastore`.
 8. Added initial `SIZEOF` handling for one-dimensional arrays.
+9. Expanded the shared IR with typed array-reference records carrying array
+   identity, rank, indices, element suffix, and optional `SIZEOF` axis.
 
 Each stage was committed separately and the existing JVM conformance suite
 continued to pass.
