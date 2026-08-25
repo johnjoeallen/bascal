@@ -304,6 +304,14 @@ impl JvmEmitter<'_> {
                 };
                 emit_terminal_escape(&code, out)
             }
+            Statement::Locate { row, col } => {
+                let (Expr::Integer(row), Expr::Integer(col)) = (row, col) else {
+                    return Err(
+                        "JVM LOCATE currently requires literal row and column values".to_string(),
+                    );
+                };
+                emit_terminal_escape(&format!("\u{1b}[{};{}H", row, col), out)
+            }
             Statement::Dim {
                 is_array: false, ..
             }
