@@ -99,7 +99,13 @@ pub enum RecordFieldType {
     Int32,
     Float32,
     Float64,
-    Str(u32),
+    Str(u32, RecordStringAlignment),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordStringAlignment {
+    Left,
+    Right,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

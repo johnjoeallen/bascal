@@ -135,8 +135,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseClause, CaseValue, DoCondition, Expr, FunctionDef, OpenMode,
-    ParamMode, PrintToken, Program, RecordFieldType, ResumeTarget, Statement, Stmt, TypeSuffix,
-    UnaryOp,
+    ParamMode, PrintToken, Program, RecordFieldType, RecordStringAlignment, ResumeTarget,
+    Statement, Stmt, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -1018,6 +1018,7 @@ struct FieldEntry {
     offset: u32,
     is_string: bool,
     ty: Option<RecordFieldType>,
+    right_align: bool,
 }
 
 /// The random-access record I/O layout *currently in effect*, tracked as
@@ -1182,6 +1183,12 @@ fn apply_field_statement(
                 .as_ref()
                 .and_then(|items| items.get(entries.len()))
                 .copied(),
+            right_align: field_types
+                .as_ref()
+                .and_then(|items| items.get(entries.len()))
+                .is_some_and(|ty| {
+                    matches!(ty, RecordFieldType::Str(_, RecordStringAlignment::Right))
+                }),
         });
         offset += width;
     }
@@ -5204,7 +5211,7 @@ fn emit_statement(
             // A raw, hand-written `LSET`/`RSET` never targets one of these
             // buffers (their names are DSL-synthesized), so this can't
             // misfire on ordinary user code.
-            if !is_rset && is_dsl_record_buffer(file_io, &c_name) {
+            if is_dsl_record_buffer(file_io, &c_name) {
                 let raw_value = match mk_pack_call(value) {
                     Some((_, _, arg)) => arg.clone(),
                     None => value.clone(),
@@ -6239,7 +6246,7 @@ fn record_field_c_type(ty: RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "int32_t",
         RecordFieldType::Float32 => "float",
         RecordFieldType::Float64 => "double",
-        RecordFieldType::Str(_) => unreachable!(
+        RecordFieldType::Str(..) => unreachable!(
             "string record fields are passed as const char*/char*, never through record_field_c_type"
         ),
     }
@@ -6389,11 +6396,19 @@ fn ensure_dsl_record_helpers(record_type: &str, fields: &[FieldEntry], file_io: 
     ));
     for (index, field) in fields.iter().enumerate() {
         if field.is_string {
-            file_io.helper_defs.push_str(&format!(
-                "    if (field_{index}) bcc_pad_string_field(buffer + {offset}, field_{index}, {width});\n",
-                offset = field.offset,
-                width = field.width
-            ));
+            if field.right_align {
+                file_io.helper_defs.push_str(&format!(
+                        "    if (field_{index}) {{ size_t len = strlen(field_{index}); if (len > {width}) len = {width}; memset(buffer + {offset}, ' ', {width}); memcpy(buffer + {offset} + {width} - len, field_{index}, len); }}\n",
+                        offset = field.offset,
+                        width = field.width
+                    ));
+            } else {
+                file_io.helper_defs.push_str(&format!(
+                        "    if (field_{index}) bcc_pad_string_field(buffer + {offset}, field_{index}, {width});\n",
+                        offset = field.offset,
+                        width = field.width
+                    ));
+            }
         } else {
             file_io.helper_defs.push_str(&format!(
                 "    (void)(field_{index} && memcpy(buffer + {offset}, field_{index}, {width}));\n",

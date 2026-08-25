@@ -15,12 +15,12 @@ Declares a fixed-layout record type:
 ```bascal
 record Student
     id:    int16
-    name:  string(20)
+    name:  string(20) left
     score: float64
 end record
 ```
 
-Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
+Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). String fields default to `left` alignment; write `string(N) right` to pad with spaces on the left instead. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
 
 ### file ... as ... = open(...)
 
@@ -36,7 +36,7 @@ Transpiles to one `OPEN ... FOR RANDOM AS #n LEN = <width>` plus one matching `F
 db[1] = { id: 1, name: "Alice", score: 95.0 }
 ```
 
-Every declared field must be supplied exactly once. Transpiles to one `LSET` per field — numeric fields are packed first (`MKI$`/`MKL$`/`MKS$`/`MKD$`), string fields are assigned directly — followed by a single `PUT #n, 1`. `LSET` is used for every field, numeric or string: once a numeric value is packed, the result is exact-width binary, so left/right justification makes no difference (this matches real BASCOM practice).
+Every declared field must be supplied exactly once. Transpiles to one `LSET` or `RSET` per field — numeric fields are packed first (`MKI$`/`MKL$`/`MKS$`/`MKD$`), string fields are assigned directly — followed by a single `PUT #n, 1`. Numeric fields always use `LSET`; string fields use the alignment declared on the field.
 
 Note `MKx$` always carries a `$` suffix, never a type suffix matching the value being packed (`MKI%`, `MKD#`, etc. are not real MBASIC/BASCOM functions) — every `MKx$` variant returns a string, which is what `LSET` requires.
 

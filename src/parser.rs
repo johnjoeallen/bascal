@@ -403,7 +403,16 @@ impl Parser {
                 if width <= 0 {
                     return Err(self.error("string field width must be a positive integer"));
                 }
-                Ok(RecordFieldType::Str(width as u32))
+                let alignment = if self.check_keyword("right") {
+                    self.advance();
+                    RecordStringAlignment::Right
+                } else {
+                    if self.check_keyword("left") {
+                        self.advance();
+                    }
+                    RecordStringAlignment::Left
+                };
+                Ok(RecordFieldType::Str(width as u32, alignment))
             }
             other => Err(self.error(format!(
                 "unknown record field type `{other}`; expected int16, int32, float32, float64, or string(N)"
@@ -2583,9 +2592,28 @@ mod tests {
         assert_eq!(rec.fields[0].name, "id");
         assert_eq!(rec.fields[0].ty, RecordFieldType::Int16);
         assert_eq!(rec.fields[1].name, "name");
-        assert_eq!(rec.fields[1].ty, RecordFieldType::Str(20));
+        assert_eq!(
+            rec.fields[1].ty,
+            RecordFieldType::Str(20, RecordStringAlignment::Left)
+        );
         assert_eq!(rec.fields[2].name, "score");
         assert_eq!(rec.fields[2].ty, RecordFieldType::Float64);
+    }
+
+    #[test]
+    fn parses_record_string_alignment() {
+        let program = parse(
+            "record R\n    left: string(8) left\n    right: string(8) right\nend record\nend\n",
+        );
+        let fields = &program.records[0].fields;
+        assert_eq!(
+            fields[0].ty,
+            RecordFieldType::Str(8, RecordStringAlignment::Left)
+        );
+        assert_eq!(
+            fields[1].ty,
+            RecordFieldType::Str(8, RecordStringAlignment::Right)
+        );
     }
 
     #[test]

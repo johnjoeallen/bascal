@@ -830,7 +830,7 @@ impl Lowerer {
             string_fields: Some(
                 rec.fields
                     .iter()
-                    .map(|field| matches!(field.ty, RecordFieldType::Str(_)))
+                    .map(|field| matches!(field.ty, RecordFieldType::Str(..)))
                     .collect(),
             ),
             field_types: Some(rec.fields.iter().map(|field| field.ty).collect()),
@@ -980,10 +980,7 @@ impl Lowerer {
             let value_expr = self.rewrite_expr(value_expr).0;
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, value_expr);
-            out.push(Statement::Lset {
-                var: buf_ident,
-                value: packed,
-            });
+            out.push(string_assignment_statement(&f.ty, buf_ident, packed));
         }
 
         out.push(Statement::Put {
@@ -1041,10 +1038,7 @@ impl Lowerer {
             };
             let buf_ident = self.buffer_ident(&var.name, &f.name);
             let packed = pack_expr(&f.ty, Expr::Ident(scalar_ident));
-            out.push(Statement::Lset {
-                var: buf_ident,
-                value: packed,
-            });
+            out.push(string_assignment_statement(&f.ty, buf_ident, packed));
         }
 
         out.push(Statement::Put {
@@ -1153,10 +1147,11 @@ impl Lowerer {
         let value = self.rewrite_expr(value).0;
         let buf_ident = self.buffer_ident(&var.name, &field_spec.name);
         let packed = pack_expr(&field_spec.ty, value);
-        out.push(Statement::Lset {
-            var: buf_ident,
-            value: packed,
-        });
+        out.push(string_assignment_statement(
+            &field_spec.ty,
+            buf_ident,
+            packed,
+        ));
 
         let provided_fields = Some(
             rec.fields
@@ -1385,7 +1380,7 @@ impl Lowerer {
         type_name: &str,
     ) {
         match (value, ty) {
-            (Expr::String(s), RecordFieldType::Str(width)) => {
+            (Expr::String(s), RecordFieldType::Str(width, _)) => {
                 if s.len() as u32 > *width {
                     self.diagnostics.push(Diagnostic::error(
                         generated_pos(),
@@ -1402,7 +1397,7 @@ impl Lowerer {
                     format!("field `{field_name}` of record `{type_name}` is numeric; cannot assign a string literal"),
                 ));
             }
-            (Expr::Integer(_) | Expr::Float(_), RecordFieldType::Str(_)) => {
+            (Expr::Integer(_) | Expr::Float(_), RecordFieldType::Str(..)) => {
                 self.diagnostics.push(Diagnostic::error(
                     generated_pos(),
                     format!("field `{field_name}` of record `{type_name}` is string(N); cannot assign a numeric literal"),
@@ -1949,12 +1944,19 @@ fn field_width(ty: &RecordFieldType) -> u32 {
         RecordFieldType::Int32 => 4,
         RecordFieldType::Float32 => 4,
         RecordFieldType::Float64 => 8,
-        RecordFieldType::Str(n) => *n,
+        RecordFieldType::Str(n, _) => *n,
+    }
+}
+
+fn string_assignment_statement(ty: &RecordFieldType, var: BasicIdent, value: Expr) -> Statement {
+    match ty {
+        RecordFieldType::Str(_, RecordStringAlignment::Right) => Statement::Rset { var, value },
+        _ => Statement::Lset { var, value },
     }
 }
 
 fn field_is_numeric(ty: &RecordFieldType) -> bool {
-    !matches!(ty, RecordFieldType::Str(_))
+    !matches!(ty, RecordFieldType::Str(..))
 }
 
 fn field_suffix(ty: &RecordFieldType) -> TypeSuffix {
@@ -1963,7 +1965,7 @@ fn field_suffix(ty: &RecordFieldType) -> TypeSuffix {
         RecordFieldType::Int32 => TypeSuffix::Long,
         RecordFieldType::Float32 => TypeSuffix::Single,
         RecordFieldType::Float64 => TypeSuffix::Double,
-        RecordFieldType::Str(_) => TypeSuffix::String,
+        RecordFieldType::Str(..) => TypeSuffix::String,
     }
 }
 
@@ -1976,7 +1978,7 @@ fn pack_fn_name(ty: &RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "mkl$",
         RecordFieldType::Float32 => "mks$",
         RecordFieldType::Float64 => "mkd$",
-        RecordFieldType::Str(_) => unreachable!("string fields are not packed"),
+        RecordFieldType::Str(..) => unreachable!("string fields are not packed"),
     }
 }
 
@@ -1990,7 +1992,7 @@ fn unpack_fn_name(ty: &RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "cvl",
         RecordFieldType::Float32 => "cvs",
         RecordFieldType::Float64 => "cvd",
-        RecordFieldType::Str(_) => {
+        RecordFieldType::Str(..) => {
             unreachable!("string fields are trimmed, not unpacked via a function call")
         }
     }

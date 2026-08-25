@@ -1856,6 +1856,36 @@ end
     }
 
     #[test]
+    fn record_string_alignment_lowers_to_lset_and_rset() {
+        let source = r#"record R
+    left: string(8) left
+    right: string(8) right
+end record
+file db as R = open("alignment.dat")
+db[1] = { left: "L", right: "R" }
+end
+"#;
+        let output = compile_source("alignment.bcl", source).expect("should compile");
+        assert!(output.contains("LSET dbLeftBuf$ = \"L\""), "{output}");
+        assert!(output.contains("RSET dbRightBuf$ = \"R\""), "{output}");
+    }
+
+    #[test]
+    fn c_target_record_string_alignment_pads_right_aligned_fields() {
+        let source = r#"record R
+    left: string(8) left
+    right: string(8) right
+end record
+file db as R = open("alignment.dat")
+db[1] = { left: "L", right: "R" }
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("memset(buffer + 8, ' ', 8)"), "{output}");
+        assert!(output.contains("memcpy(buffer + 8 + 8 - len"), "{output}");
+    }
+
+    #[test]
     fn record_whole_read_lowers_to_get_and_unpack() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
         assert!(output.contains("GET #1, i"));
