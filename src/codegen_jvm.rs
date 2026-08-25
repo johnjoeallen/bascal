@@ -363,6 +363,33 @@ impl JvmEmitter<'_> {
                 emit_store(variable, out, self.context);
                 Ok(())
             }
+            Statement::Assignment {
+                target: Expr::ArrayRef { name, indices },
+                value,
+            } => {
+                let shape = self
+                    .context
+                    .arrays
+                    .get(&variable_key(name))
+                    .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
+                if shape.dimensions.len() != 1
+                    || !matches!(shape.element, JvmType::Numeric(NumericType::Int))
+                    || indices.len() != 1
+                {
+                    return Err("JVM indexed assignment currently supports one-dimensional integer arrays only".to_string());
+                }
+                let desc = array_descriptor(shape);
+                out.push_str(&format!(
+                    "    getstatic {}/a{} {}\n",
+                    self.context.class_name,
+                    self.context.array_index(name),
+                    desc
+                ));
+                emit_numeric_expr_as(&indices[0], NumericType::Int, out, self.context)?;
+                emit_numeric_expr_as(value, NumericType::Int, out, self.context)?;
+                out.push_str("    iastore\n");
+                Ok(())
+            }
             Statement::ExprStmt(Expr::Call { name, args })
             | Statement::ExprStmt(Expr::ArrayRef {
                 name,
