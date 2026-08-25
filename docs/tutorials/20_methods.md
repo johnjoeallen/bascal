@@ -2,6 +2,8 @@
 
 <div class="prose" markdown="1">
 
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.j).
+
 A method is a typed operation attached to a scalar value. The suffix after `method` declares the receiver type: `method$` receives a string, `method%` receives an integer, and `method!` receives a single-precision number. The method name has its own result suffix, and the receiver is available as the matching implicit `self` variable.
 
 </div>

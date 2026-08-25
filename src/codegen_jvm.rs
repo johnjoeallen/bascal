@@ -1027,7 +1027,14 @@ impl JvmContext {
             Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => self
                 .function(name)
                 .is_some_and(|signature| matches!(signature.result, JvmType::String)),
-            Expr::ScalarMethodCall { .. } => true,
+            Expr::ScalarMethodCall { method, .. } => {
+                let ident = BasicIdent {
+                    name: method.clone(),
+                    suffix: Some(TypeSuffix::String),
+                };
+                self.function(&ident)
+                    .is_some_and(|signature| signature.result == JvmType::String)
+            }
             _ => false,
         }
     }
@@ -1328,6 +1335,30 @@ fn emit_numeric_expr(
     context: &JvmContext,
 ) -> Result<NumericType, String> {
     match expr {
+        Expr::ScalarMethodCall { base, method, args } => {
+            let base_ty = emit_numeric_expr(base, out, context)?;
+            let suffixes = [TypeSuffix::Integer, TypeSuffix::Long, TypeSuffix::Single, TypeSuffix::Double];
+            let (name, signature) = suffixes
+                .iter()
+                .filter_map(|suffix| {
+                    let ident = BasicIdent { name: method.clone(), suffix: Some(*suffix) };
+                    context.function(&ident).map(|sig| (ident, sig))
+                })
+                .find(|(_, sig)| sig.params.first() == Some(&JvmType::Numeric(base_ty)) && sig.params.len() == args.len() + 1 && !sig.returns_void)
+                .ok_or_else(|| format!("unsupported JVM numeric method `{method}`"))?;
+            for (arg, ty) in args.iter().zip(signature.params.iter().skip(1)) {
+                match ty {
+                    JvmType::String => emit_string_expr(arg, out, context)?,
+                    JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
+                }
+            }
+            let descriptor_args = signature.params.iter().map(|ty| descriptor(*ty)).collect::<String>();
+            out.push_str(&format!("    invokestatic {}/{} ({descriptor_args}){}\n", context.class_name, name.name, descriptor(signature.result)));
+            match signature.result {
+                JvmType::Numeric(result) => Ok(result),
+                JvmType::String => Err(format!("numeric method `{method}` returns a string")),
+            }
+        }
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => {
             emit_string_expr(&args[0], out, context)?;
             out.push_str("    iconst_0\n    invokevirtual java/lang/String/charAt (I)C\n");

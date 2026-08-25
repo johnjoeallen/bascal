@@ -20,7 +20,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 ## Abstraction and Reuse
 
 - [Functions <span class="targets">(Basic, C, JVM)</span>](07_functions.md)
-- [Scalar Methods <span class="targets">(Basic, C)</span>](20_methods.md)
+- [Scalar Methods <span class="targets">(Basic, C, JVM)</span>](20_methods.md)
 - [Require and Multi-File Projects <span class="targets">(Basic, C)</span>](12_require.md)
 - [Shared COMMON <span class="targets">(Basic, C)</span>](13_shared.md)
 - [Procedures <span class="targets">(Basic, C)</span>](14_procedures.md)
