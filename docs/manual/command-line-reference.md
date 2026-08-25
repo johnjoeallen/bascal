@@ -123,6 +123,8 @@ It emits [Krakatau](https://github.com/Storyyeller/Krakatau) assembly text (`.j`
 
 `krak2` is looked for on `PATH` by default; point `bcc` at one living elsewhere with a `krak2=/path/to/krak2` line in `~/.config/bascal/config` or the `BASCAL_KRAK2` environment variable, the same precedence `--target` itself uses.
 
+**Minimum JRE version: Java SE 6 (`java` 1.6) or later.** Generated `.class` files deliberately target class-file version 50 — Java SE 6's own class-file format — rather than a newer one. Class-file version 51 (Java SE 7) and up require every method with branches to carry an explicit `StackMapTable` attribute for the JVM's modern verifier to check; this backend doesn't compute those yet (see `codegen_jvm.rs`'s own module doc comment). Targeting version 50 instead means the JVM falls back to its older, slower but frame-inference-capable verifier, which works out `if`/loop branch types on its own — so `--target jvm`'s current `if`/`for`/`while`/`do`/`select case` support doesn't need real frame-tracking machinery to already exist. Any JRE from 6 onward runs a version-50 class file without issue (the JVM's class-file compatibility is backward, not forward-only), so there's no need to install anything newer than what's already on the system just to run BASCAL's JVM output.
+
 ### Up-to-Date Check
 
 Without `--clean`, `bcc` skips re-transpiling if the output `.bas` file is newer than all input `.bcl` files. With `--binary` (or `--run`, which implies it), a second up-to-date check covers the compiled binary — and with `--run`, the already-built binary still runs even when nothing needed rebuilding.
