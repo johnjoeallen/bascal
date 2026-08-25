@@ -425,7 +425,7 @@ fn load_program_recursive(
         statements: Vec::new(),
         functions: Vec::new(),
         records: Vec::new(),
-        typed_arrays: Vec::new(),
+        typed_arrays: program.typed_arrays.clone(),
     };
 
     for declaration in &program.declarations {
