@@ -71,244 +71,247 @@
 660 PRINT "  not reached"
 670 PRINT "  reached via goto"
 
-680 ' ---- gosub / return (BASIC-level subroutine, distinct from BASCAL functions) ----
+680 ' ---- portable procedure call (replaces BASIC-level GOSUB) ----
 
-690 PRINT "gosub/return:"
-700 GOSUB 730
+690 PRINT "procedure call:"
+700 GOSUB 2880
 710 PRINT "  back after gosub"
-720 GOTO 750
+720 GOTO 730
 
-730 PRINT "  inside the gosub'd subroutine"
-740 RETURN
+730 ' ---- error handling: on error goto, resume to a label, err ----
+740 ' 
+750 ' Opening a file that doesn't exist raises BASIC runtime error 53
+760 ' ("file not found"). The handler below catches it, prints a message, and
+770 ' then RESUMEs at a label -- not the failing statement or "next", but a
+780 ' specific point past the whole try/handler region. RESUME (not a plain
+790 ' GOTO) is what clears the runtime's "currently handling an error" state,
+800 ' so a later error can still be trapped.
 
-750 ' ---- error handling: on error goto, resume to a label, err ----
-760 ' 
-770 ' Opening a file that doesn't exist raises BASIC runtime error 53
-780 ' ("file not found"). The handler below catches it, prints a message, and
-790 ' then RESUMEs at a label -- not the failing statement or "next", but a
-800 ' specific point past the whole try/handler region. RESUME (not a plain
-810 ' GOTO) is what clears the runtime's "currently handling an error" state,
-820 ' so a later error can still be trapped.
+810 PRINT "error handling, missing file:"
+820 filename$ = "does_not_exist.dat"
+830 ON ERROR GOTO 880
+840 OPEN filename$ FOR INPUT AS #1
+850 PRINT "  file opened (unexpected)"
+860 CLOSE #1
+870 GOTO 950
 
-830 PRINT "error handling, missing file:"
-840 filename$ = "does_not_exist.dat"
-850 ON ERROR GOTO 900
-860 OPEN filename$ FOR INPUT AS #1
-870 PRINT "  file opened (unexpected)"
-880 CLOSE #1
-890 GOTO 970
+880 IF (ERR = errfilenotfound%) = 0 THEN GOTO 920
+890     PRINT "  caught error "; ERR; ": "; filename$; " not found"
+900     RESUME 950
+910     GOTO 940
+920     PRINT "  unexpected error "; ERR
+930     ERROR ERR
+940 REM END IF
 
-900 IF (ERR = errfilenotfound%) = 0 THEN GOTO 940
-910     PRINT "  caught error "; ERR; ": "; filename$; " not found"
-920     RESUME 970
-930     GOTO 960
-940     PRINT "  unexpected error "; ERR
-950     ERROR ERR
-960 REM END IF
+950 ON ERROR GOTO 0
 
-970 ON ERROR GOTO 0
+960 ' ---- try/catch: portable structured error recovery, and throw to rethrow ----
+970 ' 
+980 ' try/catch (issue #60) is BASCAL's structured alternative to on error
+990 ' goto/resume above -- it transpiles unchanged under both --target basic
+1000 ' and --target C. A failed statement anywhere in the try body abandons
+1010 ' the rest of it and runs catch once, then execution always continues
+1020 ' right after end try -- never back inside try, and with no resume
+1030 ' equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
+1040 ' catch block, not aliases for the ambient err/erl on error goto above.
+1050 ' 
+1060 ' The filter means this catch handles only errFileNotFound%; every other
+1070 ' error automatically rethrows after the try block.
 
-980 ' ---- try/catch: portable structured error recovery, and throw to rethrow ----
-990 ' 
-1000 ' try/catch (issue #60) is BASCAL's structured alternative to on error
-1010 ' goto/resume above -- it transpiles unchanged under both --target basic
-1020 ' and --target C. A failed statement anywhere in the try body abandons
-1030 ' the rest of it and runs catch once, then execution always continues
-1040 ' right after end try -- never back inside try, and with no resume
-1050 ' equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
-1060 ' catch block, not aliases for the ambient err/erl on error goto above.
-1070 ' 
-1080 ' The filter means this catch handles only errFileNotFound%; every other
-1090 ' error automatically rethrows after the try block.
+1080 PRINT "try/catch, missing file, with rethrow:"
+1090 filename$ = "also_missing.dat"
+1100 ON ERROR GOTO 1170
+1110 BCC_TRY_0002_PENDING% = 0
+1120     OPEN filename$ FOR INPUT AS #2
+1130     PRINT "  file opened (unexpected)"
+1140     CLOSE #2
+1150 ON ERROR GOTO 0
+1160 GOTO 1330
+1170     BCC_TRY_0002_PENDING% = ERR
+1180     IF (ERR = errfilenotfound%) THEN GOTO 1200
+1190     RESUME 1330
+1200     err% = ERR
+1210     erl% = ERL
+1220     GOSUB 2920
+1230     source$ = BCC_SOURCE_FILE$
+1240     RESUME 1250
+1250 ON ERROR GOTO 1310
+1260     PRINT "  caught error "; err%; " at "; source$; ":"; erl%
+1270     PRINT "  "; filename$; " not found"
+1280     BCC_TRY_0002_PENDING% = 0
+1290     ON ERROR GOTO 0
+1300     GOTO 1330
+1310     BCC_TRY_0002_PENDING% = ERR
+1320     RESUME 1330
+1330 ON ERROR GOTO 0
+1340     IF BCC_TRY_0002_PENDING% <> 0 THEN ERROR BCC_TRY_0002_PENDING%
+1350 REM END TRY
 
-1100 PRINT "try/catch, missing file, with rethrow:"
-1110 filename$ = "also_missing.dat"
-1120 ON ERROR GOTO 1190
-1130 BCC_TRY_0002_PENDING% = 0
-1140     OPEN filename$ FOR INPUT AS #2
-1150     PRINT "  file opened (unexpected)"
-1160     CLOSE #2
-1170 ON ERROR GOTO 0
-1180 GOTO 1350
-1190     BCC_TRY_0002_PENDING% = ERR
-1200     IF (ERR = errfilenotfound%) THEN GOTO 1220
-1210     RESUME 1350
-1220     err% = ERR
-1230     erl% = ERL
-1240     GOSUB 2900
-1250     source$ = BCC_SOURCE_FILE$
-1260     RESUME 1270
-1270 ON ERROR GOTO 1330
-1280     PRINT "  caught error "; err%; " at "; source$; ":"; erl%
-1290     PRINT "  "; filename$; " not found"
-1300     BCC_TRY_0002_PENDING% = 0
-1310     ON ERROR GOTO 0
-1320     GOTO 1350
-1330     BCC_TRY_0002_PENDING% = ERR
-1340     RESUME 1350
-1350 ON ERROR GOTO 0
-1360     IF BCC_TRY_0002_PENDING% <> 0 THEN ERROR BCC_TRY_0002_PENDING%
-1370 REM END TRY
+1360 ' ---- restore with a label: rewind the DATA pointer to a specific block ----
 
-1380 ' ---- restore with a label: rewind the DATA pointer to a specific block ----
+1370 PRINT "restore to a label:"
+1380 READ firstcountry$
+1390 PRINT "  first read: "; firstcountry$
+1400 RESTORE 1450
+1410 READ secondcountry$
+1420 PRINT "  after restore secondBatch: "; secondcountry$
 
-1390 PRINT "restore to a label:"
-1400 READ firstcountry$
-1410 PRINT "  first read: "; firstcountry$
-1420 RESTORE 1470
-1430 READ secondcountry$
-1440 PRINT "  after restore secondBatch: "; secondcountry$
+1430 END
 
-1450 END
+1440 DATA "France"
 
-1460 DATA "France"
+1450 DATA "Japan"
+1460 END
 
-1470 DATA "Japan"
-1480 END
+1470 ' function error$(code%)
+1480     BCCT4% = errorCode0%
+1490     IF (BCCT4% = errsyntax%) <> 0 THEN GOTO 1830
+1500     IF (BCCT4% = errreturnwithoutgosub%) <> 0 THEN GOTO 1860
+1510     IF (BCCT4% = erroutofdata%) <> 0 THEN GOTO 1890
+1520     IF (BCCT4% = errillegalfunctioncall%) <> 0 THEN GOTO 1920
+1530     IF (BCCT4% = erroverflow%) <> 0 THEN GOTO 1950
+1540     IF (BCCT4% = erroutofmemory%) <> 0 THEN GOTO 1980
+1550     IF (BCCT4% = errsubscriptoutofrange%) <> 0 THEN GOTO 2010
+1560     IF (BCCT4% = errduplicatedefinition%) <> 0 THEN GOTO 2040
+1570     IF (BCCT4% = errdivisionbyzero%) <> 0 THEN GOTO 2070
+1580     IF (BCCT4% = errtypemismatch%) <> 0 THEN GOTO 2100
+1590     IF (BCCT4% = erroutofstringspace%) <> 0 THEN GOTO 2130
+1600     IF (BCCT4% = errnoresume%) <> 0 THEN GOTO 2160
+1610     IF (BCCT4% = errresumewithouterror%) <> 0 THEN GOTO 2190
+1620     IF (BCCT4% = errdevicetimeout%) <> 0 THEN GOTO 2220
+1630     IF (BCCT4% = errdevicefault%) <> 0 THEN GOTO 2250
+1640     IF (BCCT4% = erroutofpaper%) <> 0 THEN GOTO 2280
+1650     IF (BCCT4% = errbadfilenumber%) <> 0 THEN GOTO 2310
+1660     IF (BCCT4% = errfilenotfound%) <> 0 THEN GOTO 2340
+1670     IF (BCCT4% = errbadfilemode%) <> 0 THEN GOTO 2370
+1680     IF (BCCT4% = errfilealreadyopen%) <> 0 THEN GOTO 2400
+1690     IF (BCCT4% = errdeviceio%) <> 0 THEN GOTO 2430
+1700     IF (BCCT4% = errfilealreadyexists%) <> 0 THEN GOTO 2460
+1710     IF (BCCT4% = errdiskfull%) <> 0 THEN GOTO 2490
+1720     IF (BCCT4% = errinputpastend%) <> 0 THEN GOTO 2520
+1730     IF (BCCT4% = errbadrecordnumber%) <> 0 THEN GOTO 2550
+1740     IF (BCCT4% = errbadfilename%) <> 0 THEN GOTO 2580
+1750     IF (BCCT4% = errtoomanyfiles%) <> 0 THEN GOTO 2610
+1760     IF (BCCT4% = errdeviceunavailable%) <> 0 THEN GOTO 2640
+1770     IF (BCCT4% = errdiskwriteprotected%) <> 0 THEN GOTO 2670
+1780     IF (BCCT4% = errdisknotready%) <> 0 THEN GOTO 2700
+1790     IF (BCCT4% = errdiskmediaerror%) <> 0 THEN GOTO 2730
+1800     IF (BCCT4% = errpathfileaccess%) <> 0 THEN GOTO 2760
+1810     IF (BCCT4% = errpathnotfound%) <> 0 THEN GOTO 2790
+1820     GOTO 2820
+1830         errorResult0$ = "Syntax error"
+1840         RETURN
+1850         GOTO 2840
+1860         errorResult0$ = "RETURN without GOSUB"
+1870         RETURN
+1880         GOTO 2840
+1890         errorResult0$ = "Out of DATA"
+1900         RETURN
+1910         GOTO 2840
+1920         errorResult0$ = "Illegal function call"
+1930         RETURN
+1940         GOTO 2840
+1950         errorResult0$ = "Overflow"
+1960         RETURN
+1970         GOTO 2840
+1980         errorResult0$ = "Out of memory"
+1990         RETURN
+2000         GOTO 2840
+2010         errorResult0$ = "Subscript out of range"
+2020         RETURN
+2030         GOTO 2840
+2040         errorResult0$ = "Duplicate Definition"
+2050         RETURN
+2060         GOTO 2840
+2070         errorResult0$ = "Division by zero"
+2080         RETURN
+2090         GOTO 2840
+2100         errorResult0$ = "Type mismatch"
+2110         RETURN
+2120         GOTO 2840
+2130         errorResult0$ = "Out of string space"
+2140         RETURN
+2150         GOTO 2840
+2160         errorResult0$ = "No RESUME"
+2170         RETURN
+2180         GOTO 2840
+2190         errorResult0$ = "RESUME without error"
+2200         RETURN
+2210         GOTO 2840
+2220         errorResult0$ = "Device timeout"
+2230         RETURN
+2240         GOTO 2840
+2250         errorResult0$ = "Device fault"
+2260         RETURN
+2270         GOTO 2840
+2280         errorResult0$ = "Out of paper"
+2290         RETURN
+2300         GOTO 2840
+2310         errorResult0$ = "Bad file number"
+2320         RETURN
+2330         GOTO 2840
+2340         errorResult0$ = "File not found"
+2350         RETURN
+2360         GOTO 2840
+2370         errorResult0$ = "Bad file mode"
+2380         RETURN
+2390         GOTO 2840
+2400         errorResult0$ = "File already open"
+2410         RETURN
+2420         GOTO 2840
+2430         errorResult0$ = "Device I/O error"
+2440         RETURN
+2450         GOTO 2840
+2460         errorResult0$ = "File already exists"
+2470         RETURN
+2480         GOTO 2840
+2490         errorResult0$ = "Disk full"
+2500         RETURN
+2510         GOTO 2840
+2520         errorResult0$ = "Input past end"
+2530         RETURN
+2540         GOTO 2840
+2550         errorResult0$ = "Bad record number"
+2560         RETURN
+2570         GOTO 2840
+2580         errorResult0$ = "Bad file name"
+2590         RETURN
+2600         GOTO 2840
+2610         errorResult0$ = "Too many files"
+2620         RETURN
+2630         GOTO 2840
+2640         errorResult0$ = "Device unavailable"
+2650         RETURN
+2660         GOTO 2840
+2670         errorResult0$ = "Disk write protected"
+2680         RETURN
+2690         GOTO 2840
+2700         errorResult0$ = "Disk not ready"
+2710         RETURN
+2720         GOTO 2840
+2730         errorResult0$ = "Disk media error"
+2740         RETURN
+2750         GOTO 2840
+2760         errorResult0$ = "Path/File access error"
+2770         RETURN
+2780         GOTO 2840
+2790         errorResult0$ = "Path not found"
+2800         RETURN
+2810         GOTO 2840
+2820         errorResult0$ = "Error " + STR$(errorCode0%)
+2830         RETURN
+2840     REM END SELECT
+2850     RETURN
+2860 ' end function error$
 
-1490 ' function error$(code%)
-1500     BCCT4% = errorCode0%
-1510     IF (BCCT4% = 2) <> 0 THEN GOTO 1850
-1520     IF (BCCT4% = 3) <> 0 THEN GOTO 1880
-1530     IF (BCCT4% = 4) <> 0 THEN GOTO 1910
-1540     IF (BCCT4% = 5) <> 0 THEN GOTO 1940
-1550     IF (BCCT4% = 6) <> 0 THEN GOTO 1970
-1560     IF (BCCT4% = 7) <> 0 THEN GOTO 2000
-1570     IF (BCCT4% = 9) <> 0 THEN GOTO 2030
-1580     IF (BCCT4% = 10) <> 0 THEN GOTO 2060
-1590     IF (BCCT4% = 11) <> 0 THEN GOTO 2090
-1600     IF (BCCT4% = 13) <> 0 THEN GOTO 2120
-1610     IF (BCCT4% = 14) <> 0 THEN GOTO 2150
-1620     IF (BCCT4% = 19) <> 0 THEN GOTO 2180
-1630     IF (BCCT4% = 20) <> 0 THEN GOTO 2210
-1640     IF (BCCT4% = 24) <> 0 THEN GOTO 2240
-1650     IF (BCCT4% = 25) <> 0 THEN GOTO 2270
-1660     IF (BCCT4% = 27) <> 0 THEN GOTO 2300
-1670     IF (BCCT4% = 52) <> 0 THEN GOTO 2330
-1680     IF (BCCT4% = 53) <> 0 THEN GOTO 2360
-1690     IF (BCCT4% = 54) <> 0 THEN GOTO 2390
-1700     IF (BCCT4% = 55) <> 0 THEN GOTO 2420
-1710     IF (BCCT4% = 57) <> 0 THEN GOTO 2450
-1720     IF (BCCT4% = 58) <> 0 THEN GOTO 2480
-1730     IF (BCCT4% = 61) <> 0 THEN GOTO 2510
-1740     IF (BCCT4% = 62) <> 0 THEN GOTO 2540
-1750     IF (BCCT4% = 63) <> 0 THEN GOTO 2570
-1760     IF (BCCT4% = 64) <> 0 THEN GOTO 2600
-1770     IF (BCCT4% = 67) <> 0 THEN GOTO 2630
-1780     IF (BCCT4% = 68) <> 0 THEN GOTO 2660
-1790     IF (BCCT4% = 70) <> 0 THEN GOTO 2690
-1800     IF (BCCT4% = 71) <> 0 THEN GOTO 2720
-1810     IF (BCCT4% = 72) <> 0 THEN GOTO 2750
-1820     IF (BCCT4% = 75) <> 0 THEN GOTO 2780
-1830     IF (BCCT4% = 76) <> 0 THEN GOTO 2810
-1840     GOTO 2840
-1850         errorResult0$ = "Syntax error"
-1860         RETURN
-1870         GOTO 2860
-1880         errorResult0$ = "RETURN without GOSUB"
-1890         RETURN
-1900         GOTO 2860
-1910         errorResult0$ = "Out of DATA"
-1920         RETURN
-1930         GOTO 2860
-1940         errorResult0$ = "Illegal function call"
-1950         RETURN
-1960         GOTO 2860
-1970         errorResult0$ = "Overflow"
-1980         RETURN
-1990         GOTO 2860
-2000         errorResult0$ = "Out of memory"
-2010         RETURN
-2020         GOTO 2860
-2030         errorResult0$ = "Subscript out of range"
-2040         RETURN
-2050         GOTO 2860
-2060         errorResult0$ = "Duplicate Definition"
-2070         RETURN
-2080         GOTO 2860
-2090         errorResult0$ = "Division by zero"
-2100         RETURN
-2110         GOTO 2860
-2120         errorResult0$ = "Type mismatch"
-2130         RETURN
-2140         GOTO 2860
-2150         errorResult0$ = "Out of string space"
-2160         RETURN
-2170         GOTO 2860
-2180         errorResult0$ = "No RESUME"
-2190         RETURN
-2200         GOTO 2860
-2210         errorResult0$ = "RESUME without error"
-2220         RETURN
-2230         GOTO 2860
-2240         errorResult0$ = "Device timeout"
-2250         RETURN
-2260         GOTO 2860
-2270         errorResult0$ = "Device fault"
-2280         RETURN
-2290         GOTO 2860
-2300         errorResult0$ = "Out of paper"
-2310         RETURN
-2320         GOTO 2860
-2330         errorResult0$ = "Bad file number"
-2340         RETURN
-2350         GOTO 2860
-2360         errorResult0$ = "File not found"
-2370         RETURN
-2380         GOTO 2860
-2390         errorResult0$ = "Bad file mode"
-2400         RETURN
-2410         GOTO 2860
-2420         errorResult0$ = "File already open"
-2430         RETURN
-2440         GOTO 2860
-2450         errorResult0$ = "Device I/O error"
-2460         RETURN
-2470         GOTO 2860
-2480         errorResult0$ = "File already exists"
-2490         RETURN
-2500         GOTO 2860
-2510         errorResult0$ = "Disk full"
-2520         RETURN
-2530         GOTO 2860
-2540         errorResult0$ = "Input past end"
-2550         RETURN
-2560         GOTO 2860
-2570         errorResult0$ = "Bad record number"
-2580         RETURN
-2590         GOTO 2860
-2600         errorResult0$ = "Bad file name"
-2610         RETURN
-2620         GOTO 2860
-2630         errorResult0$ = "Too many files"
-2640         RETURN
-2650         GOTO 2860
-2660         errorResult0$ = "Device unavailable"
-2670         RETURN
-2680         GOTO 2860
-2690         errorResult0$ = "Disk write protected"
-2700         RETURN
-2710         GOTO 2860
-2720         errorResult0$ = "Disk not ready"
-2730         RETURN
-2740         GOTO 2860
-2750         errorResult0$ = "Disk media error"
-2760         RETURN
-2770         GOTO 2860
-2780         errorResult0$ = "Path/File access error"
-2790         RETURN
-2800         GOTO 2860
-2810         errorResult0$ = "Path not found"
-2820         RETURN
-2830         GOTO 2860
-2840         errorResult0$ = "Error " + STR$(errorCode0%)
-2850         RETURN
-2860     REM END SELECT
-2870     RETURN
-2880 ' end function error$
+2870 ' procedure printbanner()
+2880     PRINT "  inside the gosub'd subroutine"
+2890     RETURN
+2900 ' end procedure printbanner
 
-2890 ' catch's optional source$ binding: map ERL back to its original .bcl file
-2900     IF ERL <= 510 THEN BCC_SOURCE_FILE$ = "com/bascal/stdlib/error.bcl" : RETURN
-2910     IF ERL <= 1490 THEN BCC_SOURCE_FILE$ = "tutorial/17_labels_and_error_handling.bcl" : RETURN
-2920     BCC_SOURCE_FILE$ = "com/bascal/stdlib/error.bcl"
-2930     RETURN
+2910 ' catch's optional source$ binding: map ERL back to its original .bcl file
+2920     IF ERL <= 510 THEN BCC_SOURCE_FILE$ = "com/bascal/stdlib/error.bcl" : RETURN
+2930     IF ERL <= 1470 THEN BCC_SOURCE_FILE$ = "tutorial/17_labels_and_error_handling.bcl" : RETURN
+2940     IF ERL <= 2870 THEN BCC_SOURCE_FILE$ = "com/bascal/stdlib/error.bcl" : RETURN
+2950     BCC_SOURCE_FILE$ = "tutorial/17_labels_and_error_handling.bcl"
+2960     RETURN

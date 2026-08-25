@@ -20,16 +20,16 @@ print "  not reached"
 afterSkip:
 print "  reached via goto"
 
-/* ---- gosub / return (BASIC-level subroutine, distinct from BASCAL functions) ---- */
+/* ---- portable procedure call (replaces BASIC-level GOSUB) ---- */
 
-print "gosub/return:"
-gosub printBanner
+print "procedure call:"
+printBanner()
 print "  back after gosub"
 goto afterBanner
 
-printBanner:
-print "  inside the gosub'd subroutine"
-return
+procedure printBanner()
+    print "  inside the gosub'd subroutine"
+end procedure
 
 afterBanner:
 
