@@ -281,6 +281,8 @@ impl JvmEmitter<'_> {
     fn emit_statement(&mut self, statement: &Stmt, out: &mut String) -> Result<(), String> {
         match &statement.kind {
             Statement::Print { tokens } => emit_print_tokens(tokens, out, self.context),
+            Statement::Cls => emit_terminal_escape("\u{1b}[2J\u{1b}[H", out),
+            Statement::Beep => emit_terminal_escape("\u{7}", out),
             Statement::Dim {
                 is_array: false, ..
             }
@@ -795,6 +797,14 @@ fn emit_print_tokens(
             "    invokevirtual java/io/PrintStream/{method} {descriptor}\n"
         ));
     }
+    Ok(())
+}
+
+fn emit_terminal_escape(value: &str, out: &mut String) -> Result<(), String> {
+    out.push_str(&format!(
+        "    getstatic java/lang/System/out Ljava/io/PrintStream;\n    ldc \"{}\"\n    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V\n",
+        escape_jvm_string(value)
+    ));
     Ok(())
 }
 
