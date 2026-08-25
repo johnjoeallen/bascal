@@ -27,6 +27,9 @@ branch and extended incrementally.
    identity, rank, indices, element suffix, and optional `SIZEOF` axis.
 10. Began populating typed array-reference records during parsing for array
     expressions, assignments, control-flow conditions, and `SIZEOF`.
+11. Connected parser-shaped `Expr::Call` array references to JVM reads and
+    writes, and represented array parameters as rank-aware aliases to the
+    program's static array storage so tutorial 08 now transpiles.
 
 Each stage was committed separately and the existing JVM conformance suite
 continued to pass.
@@ -44,13 +47,11 @@ continued to pass.
   metadata, allocation, access, and propagation stages rather than stopping at
   the initial design discussion.
 
-## Current blocker
+## Current status
 
-Tutorial 08 still fails while resolving `SIZEOF(data%)`: a lowered array-name
-path is being treated as a scalar identifier before the JVM array resolver sees
-it. The next stage is to preserve the typed array reference through that shared
-`SIZEOF` lowering/resolution path, then add end-to-end multidimensional tutorial
-fixtures.
+Tutorial 08 now transpiles for the JVM target, including one- and two-
+dimensional integer reads, writes, `SIZEOF`, and array-parameter calls. Runtime
+array-parameter copying and non-integer element arrays remain future work.
 
 ## Latest continuation prompt
 
@@ -69,3 +70,4 @@ considered complete.
 - `f5af594` — array size expressions
 - `85ddd82`, `f80f39c`, `34971ef`, `ed4c097`, `1d537c9` — typed IR definition,
   propagation, parsing, and JVM integration
+- `e0aa6f3` — call-shaped array references and rank-aware array parameters
