@@ -2,6 +2,8 @@
 
 <div class="prose" markdown="1">
 
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bas), [C structured example](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.c), and [JVM assembly structured example](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.j). The complete tutorial remains Basic-only because its legacy `ON ERROR GOTO`/`RESUME` and `DATA`/`READ` sections are not portable; the structured `THROW`/`CATCH` example is supported by all three backends.
+
 BASCAL manages line numbers itself, so `.bcl` source can never target a line number directly. `goto`, `gosub`, `on error goto`, `resume`, `restore`, and `on ... goto`/`on ... gosub` all require a `name:` label instead — the transpiler assigns the real BASIC line number when it renders output, the same job it already does for every `if`/`while`/`do`/`select case` branch target. `on error goto 0` is the one numeric exception: `0` isn't a line number, it's the sentinel that disables the error trap. See the [control-flow comparison](../../#control-flow) on the homepage for a real before/after of the generated numbering.
 
 </div>
