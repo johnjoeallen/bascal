@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use bcc::{compile_file, default_output_path, CompileOptions, Target};
@@ -283,9 +283,7 @@ fn run(cli: Cli) -> Result<(), String> {
     }
 
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
-        let binary_path = PathBuf::from("tmp").join(output_path.file_stem().ok_or_else(|| {
-            format!("error: invalid BASIC output path {}", output_path.display())
-        })?);
+        let binary_path = expected_binary_path(target, &output_path)?;
         if want_binary && !is_up_to_date(&cli.input, &binary_path) {
             let built = invoke_binary(target, &output_path)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
@@ -417,7 +415,7 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_dir = PathBuf::from("tmp");
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
-    let binary_path = binary_dir.join(binary_name);
+    let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
     let status = Command::new("fbc")
         .arg("-lang")
         .arg("qb")
@@ -436,6 +434,41 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     Ok(binary_path)
 }
 
+fn native_binary_path(output_path: &Path) -> Result<PathBuf, String> {
+    let stem = output_path.file_stem().ok_or_else(|| {
+        format!(
+            "error: invalid generated output path {}",
+            output_path.display()
+        )
+    })?;
+    Ok(native_binary_path_from_stem(&PathBuf::from("tmp"), stem))
+}
+
+fn expected_binary_path(target: Target, output_path: &Path) -> Result<PathBuf, String> {
+    if target == Target::Jvm {
+        let stem = output_path.file_stem().ok_or_else(|| {
+            format!(
+                "error: invalid generated output path {}",
+                output_path.display()
+            )
+        })?;
+        return Ok(PathBuf::from("tmp").join(stem).with_extension("class"));
+    }
+    native_binary_path(output_path)
+}
+
+fn native_binary_path_from_stem(directory: &Path, stem: &std::ffi::OsStr) -> PathBuf {
+    let path = directory.join(stem);
+    #[cfg(windows)]
+    {
+        path.with_extension("exe")
+    }
+    #[cfg(not(windows))]
+    {
+        path
+    }
+}
+
 fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_name = c_path
         .file_stem()
@@ -443,7 +476,7 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_dir = PathBuf::from("tmp");
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
-    let binary_path = binary_dir.join(binary_name);
+    let binary_path = native_binary_path_from_stem(&binary_dir, binary_name);
     let status = Command::new("gcc")
         .arg(c_path)
         .arg("-o")
@@ -670,5 +703,14 @@ mod tests {
         let cli = cli_with_output(PathBuf::from("some/dir/input.bcl"), None);
         let resolved = resolve_output_path(&cli, Target::C).unwrap();
         assert_eq!(resolved, PathBuf::from("some/dir/input.c"));
+    }
+
+    #[test]
+    fn native_binary_path_uses_platform_executable_suffix() {
+        let path = native_binary_path_from_stem(Path::new("tmp"), std::ffi::OsStr::new("demo"));
+        #[cfg(windows)]
+        assert_eq!(path, PathBuf::from("tmp/demo.exe"));
+        #[cfg(not(windows))]
+        assert_eq!(path, PathBuf::from("tmp/demo"));
     }
 }
