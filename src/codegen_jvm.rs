@@ -38,6 +38,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let context = JvmContext::build(program, functions.clone(), class_name.clone())?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
+    emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -98,7 +99,7 @@ fn class_name_for(program: &Program) -> String {
 }
 
 fn emit_fields(context: &JvmContext) -> String {
-    context
+    let mut fields = context
         .variables
         .values()
         .filter(|v| v.is_static)
@@ -109,7 +110,40 @@ fn emit_fields(context: &JvmContext) -> String {
                 v.descriptor()
             )
         })
-        .collect()
+        .collect::<String>();
+    for (index, shape) in context.arrays.values().enumerate() {
+        fields.push_str(&format!(
+            ".field public static a{} {}\n",
+            index,
+            array_descriptor(shape)
+        ));
+    }
+    fields
+}
+
+fn array_descriptor(shape: &ArrayShape) -> String {
+    format!(
+        "{}{}",
+        "[".repeat(shape.dimensions.len()),
+        descriptor(shape.element)
+    )
+}
+
+fn emit_array_initializers(context: &JvmContext, out: &mut String) -> Result<(), String> {
+    for (index, shape) in context.arrays.values().enumerate() {
+        for dimension in &shape.dimensions {
+            emit_numeric_expr_as(dimension, NumericType::Int, out, context)?;
+            out.push_str("    iconst_1\n    iadd\n");
+        }
+        let desc = array_descriptor(shape);
+        out.push_str(&format!(
+            "    multianewarray {desc} {}\n    putstatic {}/a{} {desc}\n",
+            shape.dimensions.len(),
+            context.class_name,
+            index
+        ));
+    }
+    Ok(())
 }
 
 fn emit_load(variable: Variable, out: &mut String, context: &JvmContext) {
@@ -215,6 +249,7 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                             function
                                 .params
                                 .iter()
+                                .filter(|param| param.axes.is_none())
                                 .map(|param| type_for_ident(&param.name)),
                         )
                         .collect(),
@@ -313,10 +348,7 @@ impl JvmEmitter<'_> {
                 };
                 emit_terminal_escape(&format!("\u{1b}[{};{}H", row, col), out)
             }
-            Statement::Dim {
-                is_array: false, ..
-            }
-            | Statement::Const { .. } => Ok(()),
+            Statement::Dim { .. } | Statement::Const { .. } => Ok(()),
             Statement::Assignment {
                 target: Expr::Ident(name),
                 value,
@@ -327,6 +359,46 @@ impl JvmEmitter<'_> {
                     JvmType::Numeric(ty) => emit_numeric_expr_as(value, ty, out, self.context)?,
                 }
                 emit_store(variable, out, self.context);
+                Ok(())
+            }
+            Statement::Assignment {
+                target:
+                    Expr::Call {
+                        name,
+                        args: indices,
+                    }
+                    | Expr::ArrayRef { name, indices },
+                value,
+            } => {
+                let shape = self
+                    .context
+                    .arrays
+                    .get(&variable_key(name))
+                    .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
+                if indices.len() != shape.dimensions.len()
+                    || !matches!(shape.element, JvmType::Numeric(NumericType::Int))
+                {
+                    return Err("JVM indexed assignment currently supports one-dimensional integer arrays only".to_string());
+                }
+                let desc = array_descriptor(shape);
+                out.push_str(&format!(
+                    "    getstatic {}/a{} {}\n",
+                    self.context.class_name,
+                    self.context.array_index(name),
+                    desc
+                ));
+                for index in &indices[..indices.len() - 1] {
+                    emit_numeric_expr_as(index, NumericType::Int, out, self.context)?;
+                    out.push_str("    aaload\n");
+                }
+                emit_numeric_expr_as(
+                    indices.last().expect("validated index count"),
+                    NumericType::Int,
+                    out,
+                    self.context,
+                )?;
+                emit_numeric_expr_as(value, NumericType::Int, out, self.context)?;
+                out.push_str("    iastore\n");
                 Ok(())
             }
             Statement::ExprStmt(Expr::Call { name, args })
@@ -868,6 +940,12 @@ struct Variable {
     is_static: bool,
 }
 
+#[derive(Clone)]
+struct ArrayShape {
+    element: JvmType,
+    dimensions: Vec<Expr>,
+}
+
 impl Variable {
     fn field_name(self) -> String {
         format!("g{}", self.slot)
@@ -904,6 +982,9 @@ impl Variable {
 
 struct JvmContext {
     variables: BTreeMap<String, Variable>,
+    arrays: BTreeMap<String, ArrayShape>,
+    array_aliases: BTreeMap<String, String>,
+    array_refs: Vec<crate::ast::TypedArrayRef>,
     constants: HashMap<String, Expr>,
     local_count: usize,
     initializer_start: usize,
@@ -921,6 +1002,15 @@ struct FunctionSig {
 }
 
 impl JvmContext {
+    fn array_index(&self, ident: &BasicIdent) -> usize {
+        let key = variable_key(ident);
+        let key = self.array_aliases.get(&key).unwrap_or(&key);
+        self.arrays
+            .keys()
+            .position(|candidate| candidate == key)
+            .expect("registered JVM array")
+    }
+
     fn build(
         program: &Program,
         functions: HashMap<String, FunctionSig>,
@@ -928,7 +1018,20 @@ impl JvmContext {
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
+        let mut arrays = BTreeMap::new();
         collect_scalar_declarations(&program.statements, &mut declarations, &mut constants);
+        for array in &program.typed_arrays {
+            arrays.insert(
+                variable_key(&array.name),
+                ArrayShape {
+                    element: type_for_ident(&array.name),
+                    dimensions: array.dimensions.clone(),
+                },
+            );
+        }
+        if arrays.is_empty() {
+            collect_array_declarations(&program.statements, &mut arrays);
+        }
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -944,6 +1047,9 @@ impl JvmContext {
             .collect();
         Ok(Self {
             variables,
+            arrays,
+            array_aliases: BTreeMap::new(),
+            array_refs: program.typed_array_refs.clone(),
             constants,
             local_count: next_slot,
             initializer_start: 1,
@@ -970,7 +1076,7 @@ impl JvmContext {
             next_slot += variable.width();
             variables.insert(variable_key(&self_ident), variable);
         }
-        for param in &function.params {
+        for param in function.params.iter().filter(|param| param.axes.is_none()) {
             let variable = Variable {
                 slot: next_slot,
                 ty: type_for_ident(&param.name),
@@ -1000,8 +1106,24 @@ impl JvmContext {
             next_slot += variable.width();
             variables.insert(key, variable);
         }
+        let mut arrays = parent.arrays.clone();
+        let mut array_aliases = parent.array_aliases.clone();
+        for param in function.params.iter().filter(|param| param.axes.is_some()) {
+            if let Some((source, shape)) = parent
+                .arrays
+                .iter()
+                .find(|(_, shape)| shape.dimensions.len() == param.rank().unwrap_or(0))
+            {
+                let key = variable_key(&param.name);
+                arrays.insert(key.clone(), shape.clone());
+                array_aliases.insert(key, source.clone());
+            }
+        }
         Self {
             variables,
+            arrays,
+            array_aliases,
+            array_refs: parent.array_refs.clone(),
             constants,
             local_count: next_slot,
             initializer_start,
@@ -1174,6 +1296,38 @@ fn collect_scalar_declarations(
             Statement::While { body, .. } | Statement::Do { body, .. } => {
                 collect_scalar_declarations(body, declarations, constants);
             }
+            _ => {}
+        }
+    }
+}
+
+fn collect_array_declarations(statements: &[Stmt], arrays: &mut BTreeMap<String, ArrayShape>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Dim {
+                name,
+                is_array: true,
+                sizes,
+            } => {
+                arrays.insert(
+                    variable_key(name),
+                    ArrayShape {
+                        element: type_for_ident(name),
+                        dimensions: sizes.clone(),
+                    },
+                );
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_array_declarations(then_body, arrays);
+                collect_array_declarations(else_body, arrays);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_array_declarations(body, arrays),
             _ => {}
         }
     }
@@ -1386,11 +1540,18 @@ fn emit_function_call(
         .ok_or_else(|| format!("unknown JVM function `{name}`"))?;
     if signature.returns_void
         || signature.result != expected
-        || signature.params.len() != args.len()
+        || signature.params.len()
+            != args
+                .iter()
+                .filter(|arg| !matches!(arg, Expr::Ident(name) if context.arrays.contains_key(&variable_key(name))))
+                .count()
     {
         return Err(format!("invalid JVM function call `{name}`"));
     }
-    for (arg, ty) in args.iter().zip(&signature.params) {
+    let scalar_args = args.iter().filter(
+        |arg| !matches!(arg, Expr::Ident(name) if context.arrays.contains_key(&variable_key(name))),
+    );
+    for (arg, ty) in scalar_args.zip(&signature.params) {
         match ty {
             JvmType::String => emit_string_expr(arg, out, context)?,
             JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
@@ -1561,6 +1722,18 @@ fn emit_numeric_expr(
             out.push_str("    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    iconst_1\n    iadd\n");
             Ok(NumericType::Int)
         }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => {
+            let array = match &args[0] {
+                Expr::Ident(array) => array,
+                Expr::ArrayRef { name, indices } if indices.is_empty() => name,
+                _ => return Err("JVM SIZEOF requires an array identifier".to_string()),
+            };
+            let shape = context.arrays.get(&variable_key(array)).ok_or_else(|| format!("unknown JVM array `{array}`"))?;
+            if shape.dimensions.len() != 1 { return Err("JVM SIZEOF currently supports one-dimensional arrays only".to_string()); }
+            emit_numeric_expr_as(&shape.dimensions[0], NumericType::Int, out, context)?;
+            out.push_str("    iconst_1\n    iadd\n");
+            Ok(NumericType::Int)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
@@ -1569,6 +1742,35 @@ fn emit_numeric_expr(
             };
             emit_function_call(name, args, signature.result, out, context)?;
             Ok(result)
+        }
+        Expr::Call { name, args } if context.arrays.contains_key(&variable_key(name)) => {
+            let shape = context.arrays.get(&variable_key(name)).expect("array exists");
+            if args.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
+                return Err("JVM indexed access requires matching integer array dimensions".to_string());
+            }
+            let desc = array_descriptor(shape);
+            out.push_str(&format!("    getstatic {}/a{} {}\n", context.class_name, context.array_index(name), desc));
+            for index in &args[..args.len() - 1] { emit_numeric_expr_as(index, NumericType::Int, out, context)?; out.push_str("    aaload\n"); }
+            emit_numeric_expr_as(args.last().expect("validated index count"), NumericType::Int, out, context)?;
+            out.push_str("    iaload\n");
+            Ok(NumericType::Int)
+        }
+        Expr::ArrayRef { name, indices } => {
+            let shape = context
+                .arrays
+                .get(&variable_key(name))
+                .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
+            if indices.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
+                return Err("JVM indexed access currently supports integer arrays with matching dimensions".to_string());
+            }
+            out.push_str(&format!("    getstatic {}/a{} {}\n", context.class_name, context.array_index(name), array_descriptor(shape)));
+            for index in &indices[..indices.len() - 1] {
+                emit_numeric_expr_as(index, NumericType::Int, out, context)?;
+                out.push_str("    aaload\n");
+            }
+            emit_numeric_expr_as(indices.last().expect("validated index count"), NumericType::Int, out, context)?;
+            out.push_str("    iaload\n");
+            Ok(NumericType::Int)
         }
         Expr::Binary {
             left,
@@ -1724,6 +1926,12 @@ fn emit_numeric_expr(
 
 fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, String> {
     match expr {
+        Expr::ArrayRef { name, .. } if context.arrays.contains_key(&variable_key(name)) => {
+            match context.arrays[&variable_key(name)].element {
+                JvmType::Numeric(ty) => Ok(ty),
+                JvmType::String => Err(format!("`{name}` is a string array")),
+            }
+        }
         Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
@@ -1740,6 +1948,7 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
             Ok(promote_numeric(left, right))
         }
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("val") && args.len() == 1 => Ok(NumericType::Double),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, .. } | Expr::ArrayRef { name, .. }
             if context.function(name).is_some() => match context.function(name).expect("checked above").result {
             JvmType::Numeric(ty) => Ok(ty),
