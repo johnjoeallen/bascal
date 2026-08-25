@@ -907,7 +907,7 @@ Every tutorial below has its own page with a short walkthrough and a few snippet
 - [Procedures](tutorials/14_procedures.md)
 - [Random-access & record files](tutorials/15_random_and_record_files.md)
 - [Short-circuit && and \|\|](tutorials/16_short_circuit.md)
-- [Labels and error handling](tutorials/17_labels_and_error_handling.md)
+- [Classic BASIC error handling](tutorials/17_labels_and_error_handling.md) and [portable structured error handling](tutorials/21_portable_error_handling.md)
 - [Standard library functions](tutorials/18_stdlib.md)
 - [Scalar methods](tutorials/20_methods.md)
 

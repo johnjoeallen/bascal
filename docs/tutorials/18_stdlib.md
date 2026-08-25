@@ -31,7 +31,7 @@ print lcase$("QUIET THIS DOWN")
 
 ### ERROR\$ maps a classic error code to a message
 
-Pair it with ERR inside an ON ERROR GOTO handler in real code -- see [tutorial 17](17_labels_and_error_handling.md).
+Pair it with ERR inside an ON ERROR GOTO handler in real code -- see [classic tutorial 17](17_labels_and_error_handling.md), or use [portable structured handling](21_portable_error_handling.md).
 
 ```bascal
 print error$(53)   ' File not found
@@ -43,7 +43,7 @@ print error$(9999) ' Error  9999 (falls through to STR$)
 
 
 
-[← Labels and Error Handling](17_labels_and_error_handling.md)  ·  [Case Study: Random-Access Inventory →](19_inventory.md)
+[← Portable Error Handling](21_portable_error_handling.md)  ·  [Case Study: Random-Access Inventory →](19_inventory.md)
 
 
 <!-- BEGIN generated tutorial source -->

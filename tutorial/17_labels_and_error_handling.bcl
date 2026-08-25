@@ -62,42 +62,4 @@ end if
 afterOpen:
 on error goto 0
 
-/* ---- try/catch: portable structured error recovery, and throw to rethrow ---- */
-//
-// try/catch (issue #60) is BASCAL's structured alternative to on error
-// goto/resume above -- this explicit THROW form transpiles under --target
-// basic, --target C, and --target jvm. A failed statement anywhere in the try body abandons
-// the rest of it and runs catch once, then execution always continues
-// right after end try -- never back inside try, and with no resume
-// equivalent at all. err%/erl%/source$ are ordinary locals scoped to the
-// catch block, not aliases for the ambient err/erl on error goto above.
-//
-// The two-value filter means this catch handles either a missing-file or
-// already-open error; every other error automatically rethrows after the try
-// block. THROW keeps this structured example portable even on targets whose
-// file-operation runtime is not yet available.
-
-print "try/catch, selected errors, with rethrow:"
-fileName$ = "also_missing.dat"
-try
-    throw errFileNotFound%
-catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
-    print "  caught error "; err%; " at "; source$; ":"; erl%
-    print "  "; fileName$; " not found"
-end try
-
-/* ---- restore with a label: rewind the DATA pointer to a specific block ---- */
-
-print "restore to a label:"
-read firstCountry$
-print "  first read: "; firstCountry$
-restore secondBatch
-read secondCountry$
-print "  after restore secondBatch: "; secondCountry$
-
 end
-
-data "France"
-
-secondBatch:
-data "Japan"

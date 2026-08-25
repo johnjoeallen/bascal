@@ -1,0 +1,17 @@
+// Tutorial — Portable Structured Error Handling
+//
+// TRY/CATCH/FINALLY and THROW are BASCAL's portable error model.  A catch can
+// select several error codes and bind the originating source file.
+program portableErrorHandling
+require com.bascal.stdlib.error
+
+print "portable try/catch:"
+try
+    throw errFileNotFound%
+catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
+    print "  caught error "; err%; " at "; source$; ":"; erl%
+finally
+    print "  cleanup always runs"
+end try
+
+end

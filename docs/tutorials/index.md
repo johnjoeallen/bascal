@@ -32,7 +32,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 ## Data and I/O
 
 - [Arrays <span class="targets">(Basic, C, JVM)</span>](08_arrays.md)
-- [Data, Read, Restore, Swap <span class="targets">(Basic, C)</span>](09_data.md)
+- [Data, Read, Swap <span class="targets">(Basic, C)</span>](09_data.md)
 - [File Input and Output <span class="targets">(Basic, C)</span>](10_files.md)
 - [Screen I/O <span class="targets">(Basic, C, JVM)</span>](11_screen.md)
 - [Random-Access and Record Files <span class="targets">(Basic, C)</span>](15_random_and_record_files.md)
@@ -44,8 +44,9 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 ## Control Flow and Runtime
 
 - [Short-Circuit && and \|\| <span class="targets">(Basic, C)</span>](16_short_circuit.md)
-- [Labels and Error Handling <span class="targets">(Basic; structured C, JVM)</span>](17_labels_and_error_handling.md)
-  Generated files: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.c), [JVM `.j`](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.j)
+- [Classic BASIC Error Handling <span class="targets">(Basic)</span>](17_labels_and_error_handling.md)
+- [Portable Structured Error Handling <span class="targets">(Basic, C, JVM)</span>](21_portable_error_handling.md)
+- [RESTORE and DATA <span class="targets">(Basic, C)</span>](22_restore_data.md)
 - [Standard Library Functions <span class="targets">(Basic, C, JVM)</span>](18_stdlib.md)
 
 </div>

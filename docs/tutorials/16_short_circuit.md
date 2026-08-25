@@ -33,7 +33,7 @@ end do
 
 
 
-[← Random-Access and Record Files](15_random_and_record_files.md)  ·  [Labels and Error Handling →](17_labels_and_error_handling.md)
+[← Random-Access and Record Files](15_random_and_record_files.md)  ·  [Classic BASIC Error Handling →](17_labels_and_error_handling.md)
 
 
 <!-- BEGIN generated tutorial source -->

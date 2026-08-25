@@ -86,10 +86,12 @@ nav:
       - Procedures: tutorials/14_procedures.md
       - Random-Access and Record Files: tutorials/15_random_and_record_files.md
       - Short-Circuit && and ||: tutorials/16_short_circuit.md
-      - Labels and Error Handling: tutorials/17_labels_and_error_handling.md
+      - Classic BASIC Error Handling: tutorials/17_labels_and_error_handling.md
       - Standard Library Functions: tutorials/18_stdlib.md
       - Case Study: tutorials/19_inventory.md
       - Scalar Methods: tutorials/20_methods.md
+      - Portable Structured Error Handling: tutorials/21_portable_error_handling.md
+      - RESTORE and DATA: tutorials/22_restore_data.md
   - Examples: examples.md
   - Origin: origin.md
   - Development journey: journey.md

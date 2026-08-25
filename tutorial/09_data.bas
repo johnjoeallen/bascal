@@ -1,70 +1,64 @@
 10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial — data, read, restore, swap, randomize
+30 ' Tutorial — DATA, READ, SWAP, and RANDOMIZE
 40 ' 
 50 ' data embeds literal values directly in the program.  read consumes
-60 ' them in sequence.  restore rewinds the pointer so data can be read
-70 ' again.  The data statements may appear anywhere in the program body;
-80 ' the generated BASIC places them after END.
-90 ' 
-100 ' swap exchanges two variables atomically — no temporary needed.
-110 ' 
-120 ' randomize seeds the BASIC RND function.  Pass timer for a
-130 ' time-based seed; pass a literal for reproducible results.
+60 ' them in sequence.  The data statements may appear anywhere in the program body;
+70 ' the generated BASIC places them after END.
+80 '
+90 ' swap exchanges two variables atomically — no temporary needed.
+100 '
+110 ' randomize seeds the BASIC RND function.  Pass timer for a
+120 ' time-based seed; pass a literal for reproducible results.
 
-140 numcapitals% = 5
+130 numcapitals% = 5
 
-150 DIM country$(numcapitals%)
-160 BCCT1% = numcapitals%
-170 DIM capital$(numcapitals%)
-180 BCCT2% = numcapitals%
+140 DIM country$(numcapitals%)
+150 BCCT1% = numcapitals%
+160 DIM capital$(numcapitals%)
+170 BCCT2% = numcapitals%
 
-190 ' Load the lookup table
-200 FOR i% = 1 TO numcapitals%
-210     READ country$(i%), capital$(i%)
-220 NEXT i%
+180 ' Load the lookup table
+190 FOR i% = 1 TO numcapitals%
+200     READ country$(i%), capital$(i%)
+210 NEXT i%
 
-230 ' Print the table
-240 PRINT "Country         Capital"
-250 PRINT "--------------- ---------------"
-260 FOR i% = 1 TO numcapitals%
-270     PRINT (country$(i%) + "        ") + capital$(i%)
-280 NEXT i%
+220 ' Print the table
+230 PRINT "Country         Capital"
+240 PRINT "--------------- ---------------"
+250 FOR i% = 1 TO numcapitals%
+260     PRINT (country$(i%) + "        ") + capital$(i%)
+270 NEXT i%
 
-290 ' restore lets us re-read from the beginning
-300 RESTORE
-310 READ firstcountry$, firstcapital$
-320 PRINT (("First entry re-read: " + firstcountry$) + " -> ") + firstcapital$
+280 ' swap — sort two variables without a temp
+290 a% = 42
+300 b% = 17
+310 PRINT (("Before swap: a=" + STR$(a%)) + " b=") + STR$(b%)
+320 SWAP a%, b%
+330 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
 
-330 ' swap — sort two variables without a temp
-340 a% = 42
-350 b% = 17
-360 PRINT (("Before swap: a=" + STR$(a%)) + " b=") + STR$(b%)
-370 SWAP a%, b%
-380 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
+340 ' Bubble-sort the country array using swap
+350 FOR pass% = 1 TO numcapitals% - 1
+360     FOR i% = 1 TO numcapitals% - pass%
+370         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 400
+380             SWAP country$(i%), country$(i% + 1)
+390             SWAP capital$(i%), capital$(i% + 1)
+400         REM END IF
+410     NEXT i%
+420 NEXT pass%
+430 PRINT "Sorted by country:"
+440 FOR i% = 1 TO numcapitals%
+450     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
+460 NEXT i%
 
-390 ' Bubble-sort the country array using swap
-400 FOR pass% = 1 TO numcapitals% - 1
-410     FOR i% = 1 TO numcapitals% - pass%
-420         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 450
-430             SWAP country$(i%), country$(i% + 1)
-440             SWAP capital$(i%), capital$(i% + 1)
-450         REM END IF
-460     NEXT i%
-470 NEXT pass%
-480 PRINT "Sorted by country:"
-490 FOR i% = 1 TO numcapitals%
-500     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
-510 NEXT i%
+470 ' randomize — seed with a literal for reproducible output
+480 RANDOMIZE 99
 
-520 ' randomize — seed with a literal for reproducible output
-530 RANDOMIZE 99
+490 END
 
-540 END
-
-550 DATA "France", "Paris"
-560 DATA "Germany", "Berlin"
-570 DATA "Japan", "Tokyo"
-580 DATA "Brazil", "Brasilia"
-590 DATA "Egypt", "Cairo"
+500 DATA "France", "Paris"
+510 DATA "Germany", "Berlin"
+520 DATA "Japan", "Tokyo"
+530 DATA "Brazil", "Brasilia"
+540 DATA "Egypt", "Cairo"

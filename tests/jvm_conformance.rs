@@ -108,6 +108,34 @@ fn jvm_catch_filters_and_source_bindings_run_when_available() {
     assert!(stdout.contains("finally"), "{stdout}");
 }
 
+#[test]
+fn portable_error_handling_tutorial_runs_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let source_path = repo_root().join("tutorial/21_portable_error_handling.bcl");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "portable error-handling tutorial failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("caught error 53"), "{stdout}");
+    assert!(stdout.contains("portable_error_handling.bcl"), "{stdout}");
+    assert!(stdout.contains("cleanup always runs"), "{stdout}");
+}
+
 /// Compile `source_path` to a temporary `.j` file and assemble it through
 /// the CLI, so this exercises the same `krak2` configuration lookup users
 /// get (`BASCAL_KRAK2`, config file, then PATH).  A missing assembler is a

@@ -2,7 +2,7 @@
 
 <div class="prose" markdown="1">
 
-`data` embeds literal values directly in the program; `read` consumes them in sequence; `restore` rewinds the pointer so the same data can be read again. `data` statements can appear anywhere in the source — the generated BASIC places them after `END`. `swap` exchanges two variables (including array elements) without a temporary.
+`data` embeds literal values directly in the program; `read` consumes them in sequence. `data` statements can appear anywhere in the source — the generated BASIC places them after `END`. `swap` exchanges two variables (including array elements) without a temporary. See [RESTORE and DATA](22_restore_data.md) for rewinding to a named DATA block.
 
 </div>
 
@@ -55,11 +55,10 @@ end if
 
 ```bascal
 
-// Tutorial — data, read, restore, swap, randomize
+// Tutorial — DATA, READ, SWAP, and RANDOMIZE
 //
 // data embeds literal values directly in the program.  read consumes
-// them in sequence.  restore rewinds the pointer so data can be read
-// again.  The data statements may appear anywhere in the program body;
+// them in sequence.  The data statements may appear anywhere in the program body;
 // the generated BASIC places them after END.
 //
 // swap exchanges two variables atomically — no temporary needed.
@@ -84,11 +83,6 @@ print "--------------- ---------------"
 for i% = 1 to numCapitals%
     print country$(i%) + "        " + capital$(i%)
 end for
-
-/* restore lets us re-read from the beginning */
-restore
-read firstCountry$, firstCapital$
-print "First entry re-read: " + firstCountry$ + " -> " + firstCapital$
 
 /* swap — sort two variables without a temp */
 a% = 42
@@ -139,73 +133,67 @@ data "Egypt",   "Cairo"
 10 ' BASCAL generated BASIC -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 20 ' Functions are transpiled to global variables, labels, and GOSUB
 
-30 ' Tutorial — data, read, restore, swap, randomize
+30 ' Tutorial — DATA, READ, SWAP, and RANDOMIZE
 40 '
 50 ' data embeds literal values directly in the program.  read consumes
-60 ' them in sequence.  restore rewinds the pointer so data can be read
-70 ' again.  The data statements may appear anywhere in the program body;
-80 ' the generated BASIC places them after END.
-90 '
-100 ' swap exchanges two variables atomically — no temporary needed.
-110 '
-120 ' randomize seeds the BASIC RND function.  Pass timer for a
-130 ' time-based seed; pass a literal for reproducible results.
+60 ' them in sequence.  The data statements may appear anywhere in the program body;
+70 ' the generated BASIC places them after END.
+80 '
+90 ' swap exchanges two variables atomically — no temporary needed.
+100 '
+110 ' randomize seeds the BASIC RND function.  Pass timer for a
+120 ' time-based seed; pass a literal for reproducible results.
 
-140 numcapitals% = 5
+130 numcapitals% = 5
 
-150 DIM country$(numcapitals%)
-160 BCCT1% = numcapitals%
-170 DIM capital$(numcapitals%)
-180 BCCT2% = numcapitals%
+140 DIM country$(numcapitals%)
+150 BCCT1% = numcapitals%
+160 DIM capital$(numcapitals%)
+170 BCCT2% = numcapitals%
 
-190 ' Load the lookup table
-200 FOR i% = 1 TO numcapitals%
-210     READ country$(i%), capital$(i%)
-220 NEXT i%
+180 ' Load the lookup table
+190 FOR i% = 1 TO numcapitals%
+200     READ country$(i%), capital$(i%)
+210 NEXT i%
 
-230 ' Print the table
-240 PRINT "Country         Capital"
-250 PRINT "--------------- ---------------"
-260 FOR i% = 1 TO numcapitals%
-270     PRINT (country$(i%) + "        ") + capital$(i%)
-280 NEXT i%
+220 ' Print the table
+230 PRINT "Country         Capital"
+240 PRINT "--------------- ---------------"
+250 FOR i% = 1 TO numcapitals%
+260     PRINT (country$(i%) + "        ") + capital$(i%)
+270 NEXT i%
 
-290 ' restore lets us re-read from the beginning
-300 RESTORE
-310 READ firstcountry$, firstcapital$
-320 PRINT (("First entry re-read: " + firstcountry$) + " -> ") + firstcapital$
+280 ' swap — sort two variables without a temp
+290 a% = 42
+300 b% = 17
+310 PRINT (("Before swap: a=" + STR$(a%)) + " b=") + STR$(b%)
+320 SWAP a%, b%
+330 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
 
-330 ' swap — sort two variables without a temp
-340 a% = 42
-350 b% = 17
-360 PRINT (("Before swap: a=" + STR$(a%)) + " b=") + STR$(b%)
-370 SWAP a%, b%
-380 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
+340 ' Bubble-sort the country array using swap
+350 FOR pass% = 1 TO numcapitals% - 1
+360     FOR i% = 1 TO numcapitals% - pass%
+370         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 400
+380             SWAP country$(i%), country$(i% + 1)
+390             SWAP capital$(i%), capital$(i% + 1)
+400         REM END IF
+410     NEXT i%
+420 NEXT pass%
+430 PRINT "Sorted by country:"
+440 FOR i% = 1 TO numcapitals%
+450     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
+460 NEXT i%
 
-390 ' Bubble-sort the country array using swap
-400 FOR pass% = 1 TO numcapitals% - 1
-410     FOR i% = 1 TO numcapitals% - pass%
-420         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 450
-430             SWAP country$(i%), country$(i% + 1)
-440             SWAP capital$(i%), capital$(i% + 1)
-450         REM END IF
-460     NEXT i%
-470 NEXT pass%
-480 PRINT "Sorted by country:"
-490 FOR i% = 1 TO numcapitals%
-500     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
-510 NEXT i%
+470 ' randomize — seed with a literal for reproducible output
+480 RANDOMIZE 99
 
-520 ' randomize — seed with a literal for reproducible output
-530 RANDOMIZE 99
+490 END
 
-540 END
-
-550 DATA "France", "Paris"
-560 DATA "Germany", "Berlin"
-570 DATA "Japan", "Tokyo"
-580 DATA "Brazil", "Brasilia"
-590 DATA "Egypt", "Cairo"
+500 DATA "France", "Paris"
+510 DATA "Germany", "Berlin"
+520 DATA "Japan", "Tokyo"
+530 DATA "Brazil", "Brasilia"
+540 DATA "Egypt", "Cairo"
 
 ```
 
@@ -244,17 +232,14 @@ static int bv_i_b = 0;
 static int bv_i_i = 0;
 static int bv_i_numcapitals = 0;
 static int bv_i_pass = 0;
-static char bv_s_firstcapital[256] = {0};
-static char bv_s_firstcountry[256] = {0};
 static char bv_s_capital[6][256] = {0};
 static char bv_s_country[6][256] = {0};
 
 int main(void) {
-    // Tutorial — data, read, restore, swap, randomize
+    // Tutorial — DATA, READ, SWAP, and RANDOMIZE
     //
     // data embeds literal values directly in the program.  read consumes
-    // them in sequence.  restore rewinds the pointer so data can be read
-    // again.  The data statements may appear anywhere in the program body;
+    // them in sequence.  The data statements may appear anywhere in the program body;
     // the generated BASIC places them after END.
     //
     // swap exchanges two variables atomically — no temporary needed.
@@ -286,69 +271,57 @@ int main(void) {
         printf("%s\n", bt_s_3);
     }
 
-    // restore lets us re-read from the beginning
-    bcc_data_ptr = 0;
-    snprintf(bv_s_firstcountry, sizeof(bv_s_firstcountry), "%s", bcc_read_data());
-    snprintf(bv_s_firstcapital, sizeof(bv_s_firstcapital), "%s", bcc_read_data());
-    char bt_s_4[256];
-    snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", "First entry re-read: ", bv_s_firstcountry);
-    char bt_s_5[256];
-    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bt_s_4, " -> ");
-    char bt_s_6[256];
-    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bt_s_5, bv_s_firstcapital);
-    printf("%s\n", bt_s_6);
-
     // swap — sort two variables without a temp
     bv_i_a = 42;
     bv_i_b = 17;
-    char bt_s_7[256];
-    snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", "Before swap: a=", bcc_stri(bv_i_a));
-    char bt_s_8[256];
-    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bt_s_7, " b=");
-    char bt_s_9[256];
-    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", bt_s_8, bcc_stri(bv_i_b));
-    printf("%s\n", bt_s_9);
-    int bt_swap_10 = bv_i_a;
+    char bt_s_4[256];
+    snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", "Before swap: a=", bcc_stri(bv_i_a));
+    char bt_s_5[256];
+    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bt_s_4, " b=");
+    char bt_s_6[256];
+    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bt_s_5, bcc_stri(bv_i_b));
+    printf("%s\n", bt_s_6);
+    int bt_swap_7 = bv_i_a;
     bv_i_a = bv_i_b;
-    bv_i_b = bt_swap_10;
-    char bt_s_11[256];
-    snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", "After swap:  a=", bcc_stri(bv_i_a));
-    char bt_s_12[256];
-    snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", bt_s_11, " b=");
-    char bt_s_13[256];
-    snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", bt_s_12, bcc_stri(bv_i_b));
-    printf("%s\n", bt_s_13);
+    bv_i_b = bt_swap_7;
+    char bt_s_8[256];
+    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", "After swap:  a=", bcc_stri(bv_i_a));
+    char bt_s_9[256];
+    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", bt_s_8, " b=");
+    char bt_s_10[256];
+    snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", bt_s_9, bcc_stri(bv_i_b));
+    printf("%s\n", bt_s_10);
 
     // Bubble-sort the country array using swap
-    int bt_lim_14 = (bv_i_numcapitals - 1);
-    int bt_step_14 = 1;
-    for (bv_i_pass = 1; bt_step_14 >= 0 ? bv_i_pass <= bt_lim_14 : bv_i_pass >= bt_lim_14; bv_i_pass += bt_step_14) {
-        int bt_lim_15 = (bv_i_numcapitals - bv_i_pass);
-        int bt_step_15 = 1;
-        for (bv_i_i = 1; bt_step_15 >= 0 ? bv_i_i <= bt_lim_15 : bv_i_i >= bt_lim_15; bv_i_i += bt_step_15) {
+    int bt_lim_11 = (bv_i_numcapitals - 1);
+    int bt_step_11 = 1;
+    for (bv_i_pass = 1; bt_step_11 >= 0 ? bv_i_pass <= bt_lim_11 : bv_i_pass >= bt_lim_11; bv_i_pass += bt_step_11) {
+        int bt_lim_12 = (bv_i_numcapitals - bv_i_pass);
+        int bt_step_12 = 1;
+        for (bv_i_i = 1; bt_step_12 >= 0 ? bv_i_i <= bt_lim_12 : bv_i_i >= bt_lim_12; bv_i_i += bt_step_12) {
             if ((-(strcmp(bv_s_country[(bv_i_i)], bv_s_country[((bv_i_i + 1))]) > 0))) {
-                char bt_swap_16[256];
-                snprintf(bt_swap_16, sizeof(bt_swap_16), "%s", bv_s_country[(bv_i_i)]);
+                char bt_swap_13[256];
+                snprintf(bt_swap_13, sizeof(bt_swap_13), "%s", bv_s_country[(bv_i_i)]);
                 snprintf(bv_s_country[(bv_i_i)], sizeof(bv_s_country[(bv_i_i)]), "%s", bv_s_country[((bv_i_i + 1))]);
-                snprintf(bv_s_country[((bv_i_i + 1))], sizeof(bv_s_country[((bv_i_i + 1))]), "%s", bt_swap_16);
-                char bt_swap_17[256];
-                snprintf(bt_swap_17, sizeof(bt_swap_17), "%s", bv_s_capital[(bv_i_i)]);
+                snprintf(bv_s_country[((bv_i_i + 1))], sizeof(bv_s_country[((bv_i_i + 1))]), "%s", bt_swap_13);
+                char bt_swap_14[256];
+                snprintf(bt_swap_14, sizeof(bt_swap_14), "%s", bv_s_capital[(bv_i_i)]);
                 snprintf(bv_s_capital[(bv_i_i)], sizeof(bv_s_capital[(bv_i_i)]), "%s", bv_s_capital[((bv_i_i + 1))]);
-                snprintf(bv_s_capital[((bv_i_i + 1))], sizeof(bv_s_capital[((bv_i_i + 1))]), "%s", bt_swap_17);
+                snprintf(bv_s_capital[((bv_i_i + 1))], sizeof(bv_s_capital[((bv_i_i + 1))]), "%s", bt_swap_14);
             }
         }
     }
     printf("Sorted by country:\n");
-    int bt_lim_18 = bv_i_numcapitals;
-    int bt_step_18 = 1;
-    for (bv_i_i = 1; bt_step_18 >= 0 ? bv_i_i <= bt_lim_18 : bv_i_i >= bt_lim_18; bv_i_i += bt_step_18) {
-        char bt_s_19[256];
-        snprintf(bt_s_19, sizeof(bt_s_19), "%s%s", "  ", bv_s_country[(bv_i_i)]);
-        char bt_s_20[256];
-        snprintf(bt_s_20, sizeof(bt_s_20), "%s%s", bt_s_19, " -> ");
-        char bt_s_21[256];
-        snprintf(bt_s_21, sizeof(bt_s_21), "%s%s", bt_s_20, bv_s_capital[(bv_i_i)]);
-        printf("%s\n", bt_s_21);
+    int bt_lim_15 = bv_i_numcapitals;
+    int bt_step_15 = 1;
+    for (bv_i_i = 1; bt_step_15 >= 0 ? bv_i_i <= bt_lim_15 : bv_i_i >= bt_lim_15; bv_i_i += bt_step_15) {
+        char bt_s_16[256];
+        snprintf(bt_s_16, sizeof(bt_s_16), "%s%s", "  ", bv_s_country[(bv_i_i)]);
+        char bt_s_17[256];
+        snprintf(bt_s_17, sizeof(bt_s_17), "%s%s", bt_s_16, " -> ");
+        char bt_s_18[256];
+        snprintf(bt_s_18, sizeof(bt_s_18), "%s%s", bt_s_17, bv_s_capital[(bv_i_i)]);
+        printf("%s\n", bt_s_18);
     }
 
     // randomize — seed with a literal for reproducible output

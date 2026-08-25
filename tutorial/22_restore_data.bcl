@@ -1,0 +1,19 @@
+// Tutorial — DATA, READ, and RESTORE
+//
+// RESTORE rewinds the DATA pointer to a named DATA block.  Labels keep the
+// source readable while the transpiler assigns the generated line numbers.
+program restoreData
+
+print "restore to a label:"
+read firstCountry$
+print "  first read: "; firstCountry$
+restore secondBatch
+read secondCountry$
+print "  after restore secondBatch: "; secondCountry$
+
+end
+
+data "France"
+
+secondBatch:
+data "Japan"
