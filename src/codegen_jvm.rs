@@ -1414,6 +1414,11 @@ fn emit_numeric_expr(
             out.push_str("    invokestatic java/lang/Math/signum (D)D\n");
             Ok(NumericType::Double)
         }
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("sin") && args.len() == 1 => {
+            emit_numeric_expr_as(&args[0], NumericType::Double, out, context)?;
+            out.push_str("    invokestatic java/lang/Math/sin (D)D\n");
+            Ok(NumericType::Double)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
