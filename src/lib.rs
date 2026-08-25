@@ -670,7 +670,10 @@ end
         assert!(basic.contains("announceSuffix0$ = \"!\""), "{basic}");
 
         let c = compile_source_via_c_target(source);
-        assert!(c.contains("bf_s_decorate(\"hello\", bv_s_punctuation,"), "{c}");
+        assert!(
+            c.contains("bf_s_decorate(\"hello\", bv_s_punctuation,"),
+            "{c}"
+        );
         assert!(c.contains("bf_i_announce(\"ready\", \"!\");"), "{c}");
     }
 
@@ -803,7 +806,8 @@ end
         let err = compile_source("builtin_reserved.bcl", source)
             .expect_err("a built-in method name should still be reserved");
         assert!(
-            err.iter().any(|d| d.message.contains("reserved for built-in scalar methods")),
+            err.iter()
+                .any(|d| d.message.contains("reserved for built-in scalar methods")),
             "unexpected diagnostics: {err:?}"
         );
     }
@@ -819,7 +823,8 @@ end
             .expect_err("a function and method sharing a name should be rejected");
         assert!(
             err.iter().any(|d| {
-                d.message.contains("declared as both a function and a method")
+                d.message
+                    .contains("declared as both a function and a method")
             }),
             "unexpected diagnostics: {err:?}"
         );
@@ -882,7 +887,10 @@ end
         );
 
         let c_err = compile_source_via_c_target_err(source);
-        assert!(!c_err.is_empty(), "the C target should reject the mismatched call outright");
+        assert!(
+            !c_err.is_empty(),
+            "the C target should reject the mismatched call outright"
+        );
     }
 
     #[test]
@@ -900,7 +908,11 @@ end
             .lines()
             .filter_map(|l| l.trim_start().strip_prefix("GOSUB "))
             .collect();
-        assert_eq!(gosub_targets.len(), 2, "expected two GOSUB call sites:\n{output}");
+        assert_eq!(
+            gosub_targets.len(),
+            2,
+            "expected two GOSUB call sites:\n{output}"
+        );
         assert_ne!(
             gosub_targets[0], gosub_targets[1],
             "foo% and foo$ must GOSUB different labels, not collide on the same one:\n{output}"
@@ -916,7 +928,9 @@ end
 "#;
         let dynamic_error = compile_source("dynamic_default.bcl", dynamic)
             .expect_err("a dynamic default must be rejected");
-        assert!(dynamic_error.iter().any(|d| d.message.contains("literal or a top-level `const`")));
+        assert!(dynamic_error
+            .iter()
+            .any(|d| d.message.contains("literal or a top-level `const`")));
 
         let non_trailing = r#"function choose%(first% = 1, second%)
     return first% + second%
@@ -925,7 +939,9 @@ end
 "#;
         let trailing_error = compile_source("non_trailing_default.bcl", non_trailing)
             .expect_err("a required parameter after a default must be rejected");
-        assert!(trailing_error.iter().any(|d| d.message.contains("required but follows")));
+        assert!(trailing_error
+            .iter()
+            .any(|d| d.message.contains("required but follows")));
 
         let signed = r#"function offset%(value% = -1)
     return value%
@@ -1025,8 +1041,7 @@ END
         // always strictly validated, so this needs `com.bascal.stdlib`'s
         // require lines to actually resolve.
         let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
-        let output =
-            compile_file(&input, &CompileOptions::new()).expect("sample should compile");
+        let output = compile_file(&input, &CompileOptions::new()).expect("sample should compile");
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
         assert!(output.contains("GOSUB "));
@@ -1415,7 +1430,8 @@ END
             "program main\nrequire com.example.text\nresult$ = name$.capitalize()\nend\n",
         )
         .expect("program source");
-        let output = compile_file(&input, &CompileOptions::new()).expect("required method should compile");
+        let output =
+            compile_file(&input, &CompileOptions::new()).expect("required method should compile");
         assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
         assert!(output.contains("result$ = capitalizeResult0$"), "{output}");
         let mut c_options = CompileOptions::new();
@@ -1491,7 +1507,10 @@ end
         let declare_out = compile_source("e.bcl", "declare x%, y%(20)\nx% = 5\nprint x%\nend\n")
             .expect("declare should compile");
         assert_eq!(dim_out, declare_out);
-        assert!(declare_out.contains("DIM x%"), "unexpected output:\n{declare_out}");
+        assert!(
+            declare_out.contains("DIM x%"),
+            "unexpected output:\n{declare_out}"
+        );
     }
 
     #[test]
@@ -1553,7 +1572,10 @@ end
             .into_iter()
             .map(|d| d.to_string())
             .collect::<String>();
-        assert!(msg.contains("`scroe%` is used without a"), "unexpected: {msg}");
+        assert!(
+            msg.contains("`scroe%` is used without a"),
+            "unexpected: {msg}"
+        );
     }
 
     #[test]
@@ -3230,11 +3252,15 @@ end
 "#;
         let output = compile_source("array_copy_index0.bcl", source).expect("should compile");
         assert!(
-            output.lines().any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 0 TO ")),
+            output
+                .lines()
+                .any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 0 TO ")),
             "array copy loops should start at index 0, not 1:\n{output}"
         );
         assert!(
-            !output.lines().any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 1 TO ")),
+            !output
+                .lines()
+                .any(|l| l.trim_start().starts_with("FOR BCCT") && l.contains(" = 1 TO ")),
             "no array copy loop should start at index 1 (drops index 0):\n{output}"
         );
     }
@@ -3788,7 +3814,11 @@ end
             .filter(|l| l.trim_start().starts_with("PRINT"))
             .map(|l| l.trim_start().trim_start_matches("PRINT").trim())
             .collect();
-        assert_eq!(printed, vec!["0", "9", "0", "2", "0", "3"], "unexpected output:\n{output}");
+        assert_eq!(
+            printed,
+            vec!["0", "9", "0", "2", "0", "3"],
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -3824,7 +3854,8 @@ end
                 .expect_err("lbound/ubound on an unrecognized array should be rejected");
             assert!(
                 err.iter()
-                    .any(|d| d.message.contains("nope%") && d.message.contains("isn't a known array")),
+                    .any(|d| d.message.contains("nope%")
+                        && d.message.contains("isn't a known array")),
                 "error must name the unresolvable array for {call}: {:?}",
                 err
             );
@@ -5605,7 +5636,10 @@ end
             output.contains("if ((bt_sel_0 >= 7)) {"),
             "unexpected output:\n{output}"
         );
-        assert!(output.contains("if (!bt_sel_match_1) {"), "unexpected output:\n{output}");
+        assert!(
+            output.contains("if (!bt_sel_match_1) {"),
+            "unexpected output:\n{output}"
+        );
     }
 
     #[test]
@@ -5818,15 +5852,11 @@ end
             "RIGHT$ needs the MID_HELPER block for bcc_mid:\n{output}"
         );
         assert!(
-            output.contains(
-                "bcc_mid(bv_s_s, (int)strlen(bv_s_s) - (6) + 1, 6)"
-            ),
+            output.contains("bcc_mid(bv_s_s, (int)strlen(bv_s_s) - (6) + 1, 6)"),
             "unexpected output:\n{output}"
         );
         assert!(
-            output.contains(
-                "bcc_mid(\"BASCAL\", (int)strlen(\"BASCAL\") - (3) + 1, 3)"
-            ),
+            output.contains("bcc_mid(\"BASCAL\", (int)strlen(\"BASCAL\") - (3) + 1, 3)"),
             "a string literal argument should be passed straight through:\n{output}"
         );
     }
@@ -6128,7 +6158,8 @@ end
         // The same RETURN is reached from two different GOSUB call sites
         // -- real GOSUB/RETURN's whole point (see `Statement::ReturnVoid`'s
         // own doc comment): the switch dispatch has to cover both IDs.
-        let source = "gosub greet\ngosub greet\ngoto skip\ngreet:\nprint \"hi\"\nreturn\nskip:\nend\n";
+        let source =
+            "gosub greet\ngosub greet\ngoto skip\ngreet:\nprint \"hi\"\nreturn\nskip:\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 0;")
@@ -6138,7 +6169,8 @@ end
             "each GOSUB call site should get its own resume ID:\n{output}"
         );
         assert!(
-            output.contains("case 0: goto bcc_ret_0;") && output.contains("case 1: goto bcc_ret_1;"),
+            output.contains("case 0: goto bcc_ret_0;")
+                && output.contains("case 1: goto bcc_ret_1;"),
             "the shared RETURN's dispatch should cover both call sites' IDs:\n{output}"
         );
     }
@@ -6167,7 +6199,12 @@ end
 
     #[test]
     fn c_target_rejects_resumable_error_handling_but_accepts_throw() {
-        for stmt in ["on error goto handler", "resume", "resume next", "resume handler"] {
+        for stmt in [
+            "on error goto handler",
+            "resume",
+            "resume next",
+            "resume handler",
+        ] {
             let source = format!("if 1 then\n    {stmt}\nend if\nhandler:\nend\n");
             let diagnostics = compile_source_via_c_target_err(&source);
             assert!(
@@ -6178,8 +6215,10 @@ end
                 "`{stmt}` should be rejected for the C target: {diagnostics:?}"
             );
         }
-        assert!(compile_source_via_c_target("try\n    throw 5\ncatch e%, l%\nend try\nend\n")
-            .contains("bcc_try_0_catch"));
+        assert!(
+            compile_source_via_c_target("try\n    throw 5\ncatch e%, l%\nend try\nend\n")
+                .contains("bcc_try_0_catch")
+        );
     }
 
     #[test]
@@ -6188,7 +6227,9 @@ end
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("#define BCC_DATA_COUNT 2")
-                && output.contains("static const char* bcc_data[BCC_DATA_COUNT] = { \"hello\", \"42\" };"),
+                && output.contains(
+                    "static const char* bcc_data[BCC_DATA_COUNT] = { \"hello\", \"42\" };"
+                ),
             "DATA items should be flattened into one static array:\n{output}"
         );
         assert!(
@@ -6222,14 +6263,17 @@ end
         let source = "dim x%\nread x%\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
-            diagnostics.iter().any(|d| d.message.contains("no `data` items")),
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("no `data` items")),
             "unexpected diagnostics: {diagnostics:?}"
         );
     }
 
     #[test]
     fn c_target_supports_1d_numeric_array_declaration_indexing_and_assignment() {
-        let source = "dim scores%(5)\nscores%(0) = 10\nscores%(1) = scores%(0) + 5\nprint scores%(1)\nend\n";
+        let source =
+            "dim scores%(5)\nscores%(0) = 10\nscores%(1) = scores%(0) + 5\nprint scores%(1)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("static int bv_i_scores[6] = {0};"),
@@ -6254,14 +6298,13 @@ end
         let source = "dim country$(2)\ncountry$(0) = \"France\"\nprint country$(0)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
-            output.contains(&format!(
-                "static char bv_s_country[3][{}] = {{0}};",
-                256
-            )),
+            output.contains(&format!("static char bv_s_country[3][{}] = {{0}};", 256)),
             "dim country$(2) should declare 3 string elements:\n{output}"
         );
         assert!(
-            output.contains("snprintf(bv_s_country[(0)], sizeof(bv_s_country[(0)]), \"%s\", \"France\");"),
+            output.contains(
+                "snprintf(bv_s_country[(0)], sizeof(bv_s_country[(0)]), \"%s\", \"France\");"
+            ),
             "a string array element can't be assigned via plain =, needs snprintf:\n{output}"
         );
         assert!(
@@ -6332,7 +6375,8 @@ end
             "sizeof(grid%(9, 4), 0) should resolve to the literal 10:\n{output}"
         );
         assert!(
-            output.contains("printf(\"%d\\n\", 5)") && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
+            output.contains("printf(\"%d\\n\", 5)")
+                && output.matches("printf(\"%d\\n\", 5)").count() >= 2,
             "sizeof(grid%(9, 4), 1) should also resolve to 5:\n{output}"
         );
     }
@@ -6481,7 +6525,8 @@ end
         // expressions must be scanned for variable declarations, the same
         // as any other statement's expressions, or referencing a variable
         // only inside locate/color would compile to an undeclared C name.
-        let source = "row% = 5\ncol% = 10\nfg% = 14\nbg% = 1\nlocate row%, col%\ncolor fg%, bg%\nend\n";
+        let source =
+            "row% = 5\ncol% = 10\nfg% = 14\nbg% = 1\nlocate row%, col%\ncolor fg%, bg%\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("static int bv_i_row = 0;")
@@ -6926,7 +6971,11 @@ end
             "unexpected output:\n{output}"
         );
         assert_eq!(
-            output.matches("static int bcc_get_record_header(FILE* file, long record, char* field_0) {").count(),
+            output
+                .matches(
+                    "static int bcc_get_record_header(FILE* file, long record, char* field_0) {"
+                )
+                .count(),
             1,
             "unexpected output:\n{output}"
         );
@@ -7388,7 +7437,10 @@ end
         assert!(basic.contains("s$ = BCC_SOURCE_FILE$"), "{basic}");
         // A single-file program collapses to one unconditional assignment,
         // no `IF ERL <= ...` boundary chain needed.
-        assert!(basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""), "{basic}");
+        assert!(
+            basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""),
+            "{basic}"
+        );
         assert!(!basic.contains("IF ERL <="), "{basic}");
     }
 
@@ -7411,15 +7463,16 @@ end
             "program p\n\nrequire helper\n\ntry\n    boom()\ncatch e%, l%, s$\n    print s$\nend try\nend\n",
         )
         .unwrap();
-        let basic = compile_file(&main_path, &CompileOptions::new()).unwrap_or_else(|diagnostics| {
-            panic!(
-                "should compile: {}",
-                diagnostics
-                    .into_iter()
-                    .map(|d| d.to_string())
-                    .collect::<String>()
-            )
-        });
+        let basic =
+            compile_file(&main_path, &CompileOptions::new()).unwrap_or_else(|diagnostics| {
+                panic!(
+                    "should compile: {}",
+                    diagnostics
+                        .into_iter()
+                        .map(|d| d.to_string())
+                        .collect::<String>()
+                )
+            });
         assert!(basic.contains("IF ERL <="), "{basic}");
         assert!(basic.contains("helper.bcl"), "{basic}");
         assert!(basic.contains("main.bcl"), "{basic}");
@@ -7437,8 +7490,8 @@ catch e%, l%
 end try
 end
 "#;
-        let with_feature = compile_source("no_filter.bcl", source)
-            .expect("catch without a filter should compile");
+        let with_feature =
+            compile_source("no_filter.bcl", source).expect("catch without a filter should compile");
         assert!(!with_feature.contains("MATCHED"), "{with_feature}");
         assert!(!with_feature.contains("IF (ERR"), "{with_feature}");
     }
@@ -7457,7 +7510,10 @@ end
 "#;
         let basic = compile_source("issue_76.bcl", source)
             .expect("catch's error-code filter should compile");
-        assert!(basic.contains("IF (ERR = 53) OR (ERR = 76) THEN GOTO"), "{basic}");
+        assert!(
+            basic.contains("IF (ERR = 53) OR (ERR = 76) THEN GOTO"),
+            "{basic}"
+        );
     }
 
     #[test]
@@ -7479,7 +7535,10 @@ end
             .expect("catch's error-code filter with finally should compile");
         assert!(basic.contains("IF (ERR = 53) THEN GOTO"), "{basic}");
         assert!(basic.contains("PRINT \"cleanup\""), "{basic}");
-        assert!(basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"), "{basic}");
+        assert!(
+            basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"),
+            "{basic}"
+        );
     }
 
     #[test]
@@ -7494,7 +7553,10 @@ end try
 end
 "#;
         let c = compile_source_via_c_target(source);
-        assert!(c.contains("if (!((bcc_err == 53) || (bcc_err == 76))) {"), "{c}");
+        assert!(
+            c.contains("if (!((bcc_err == 53) || (bcc_err == 76))) {"),
+            "{c}"
+        );
         assert!(c.contains("bcc_try_0_pending = 1;"), "{c}");
         assert!(c.contains("goto bcc_try_0_finally;"), "{c}");
     }
@@ -7515,7 +7577,8 @@ end
         assert!(basic.contains("GOTO 40"), "{basic}");
         assert!(basic.contains("40 ON ERROR GOTO 0"), "{basic}");
 
-        let c = compile_source_via_c_target(r#"try
+        let c = compile_source_via_c_target(
+            r#"try
     open "missing.dat" for input as #1
 catch e%, l%
     print e%
@@ -7523,7 +7586,8 @@ finally
     print "cleanup"
 end try
 end
-"#);
+"#,
+        );
         assert!(c.contains("goto bcc_try_0_finally;"), "{c}");
         assert!(c.contains("bcc_try_0_finally: ;"), "{c}");
         assert!(c.contains("printf(\"cleanup\\n\");"), "{c}");
@@ -7540,16 +7604,24 @@ end
 "#;
         let basic = compile_source("try_finally_only.bcl", source)
             .expect("try/finally without catch should compile");
-        assert!(basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"), "{basic}");
-        assert!(basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"), "{basic}");
+        assert!(
+            basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"),
+            "{basic}"
+        );
+        assert!(
+            basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"),
+            "{basic}"
+        );
 
-        let c = compile_source_via_c_target(r#"try
+        let c = compile_source_via_c_target(
+            r#"try
     open "missing.dat" for input as #1
 finally
     print "cleanup"
 end try
 end
-"#);
+"#,
+        );
         assert!(c.contains("int bcc_try_0_pending = 0;"), "{c}");
         assert!(c.contains("bcc_try_0_pending = 1;"), "{c}");
         assert!(c.contains("if (bcc_try_0_pending)"), "{c}");
@@ -7725,7 +7797,10 @@ end
         let c = compile_source_via_c_target(source);
         assert!(c.contains("static const char *bcc_err_file"), "{c}");
         assert!(c.contains("bcc_err_file = \""), "{c}");
-        assert!(c.contains("snprintf(") && c.contains("bcc_err_file);"), "{c}");
+        assert!(
+            c.contains("snprintf(") && c.contains("bcc_err_file);"),
+            "{c}"
+        );
     }
 
     #[test]
@@ -7748,9 +7823,15 @@ end try
 end
 "#;
         let c = compile_source_via_c_target(source);
-        assert!(c.contains("typedef struct { int status; int value; } bcc_result_int;"), "{c}");
+        assert!(
+            c.contains("typedef struct { int status; int value; } bcc_result_int;"),
+            "{c}"
+        );
         assert!(c.contains("bcc_result_int bf_i_boom(void)"), "{c}");
-        assert!(c.contains("return (bcc_result_int){ .status = bcc_err };"), "{c}");
+        assert!(
+            c.contains("return (bcc_result_int){ .status = bcc_err };"),
+            "{c}"
+        );
         assert!(c.contains("bcc_result_int bcc_st_"), "{c}");
         assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
         assert!(c.contains(".value;"), "{c}");
@@ -7774,12 +7855,21 @@ end try
 end
 "#;
         let c = compile_source_via_c_target(source);
-        assert!(c.contains("bcc_result_string bf_s_boom(char* bcc_out)"), "{c}");
-        assert!(c.contains("return (bcc_result_string){ .status = bcc_err, .value = bcc_out };"), "{c}");
+        assert!(
+            c.contains("bcc_result_string bf_s_boom(char* bcc_out)"),
+            "{c}"
+        );
+        assert!(
+            c.contains("return (bcc_result_string){ .status = bcc_err, .value = bcc_out };"),
+            "{c}"
+        );
         assert!(c.contains("char bv_s_anf_"), "{c}");
         assert!(c.contains("bcc_result_string bcc_st_"), "{c}");
         assert!(c.contains(".status) goto bcc_try_0_catch"), "{c}");
-        assert!(c.contains("snprintf(bv_s_value, sizeof(bv_s_value), \"%s\", bv_s_anf_"), "{c}");
+        assert!(
+            c.contains("snprintf(bv_s_value, sizeof(bv_s_value), \"%s\", bv_s_anf_"),
+            "{c}"
+        );
     }
 
     #[test]
@@ -7845,7 +7935,10 @@ end
         let c = compile_source_via_c_target(source);
         assert!(c.matches("bcc_result_int bcc_st_").count() >= 2, "{c}");
         assert!(c.contains("while (1)"), "{c}");
-        assert!(c.matches(".status) goto bcc_try_0_catch").count() >= 2, "{c}");
+        assert!(
+            c.matches(".status) goto bcc_try_0_catch").count() >= 2,
+            "{c}"
+        );
     }
 
     #[test]
@@ -7966,9 +8059,15 @@ end try
 end
 "#;
         let basic = compile_source("throw.bcl", source).expect("throw should compile for BASIC");
-        assert!(basic.contains("ERROR 17") && basic.contains("ERROR ERR"), "{basic}");
+        assert!(
+            basic.contains("ERROR 17") && basic.contains("ERROR ERR"),
+            "{basic}"
+        );
         let c = compile_source_via_c_target(source);
-        assert!(c.contains("bcc_err = 17;") && c.contains("bcc_err = bcc_err;"), "{c}");
+        assert!(
+            c.contains("bcc_err = 17;") && c.contains("bcc_err = bcc_err;"),
+            "{c}"
+        );
         assert!(c.contains("bcc_try_0_rethrow:"), "{c}");
     }
 
@@ -7988,8 +8087,8 @@ end
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested_try.bcl");
         std::fs::write(&path, format!("program p\n{source}")).unwrap();
-        let basic = compile_file(&path, &CompileOptions::new())
-            .expect("nested try/catch should compile");
+        let basic =
+            compile_file(&path, &CompileOptions::new()).expect("nested try/catch should compile");
         assert!(basic.contains("ON ERROR GOTO 60"), "{basic}");
         assert!(basic.contains("BCC_TRY_0002_PENDING%"), "{basic}");
     }

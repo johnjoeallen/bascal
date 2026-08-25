@@ -89,6 +89,12 @@ fn normalize(text: &str) -> String {
 fn run_dosbox_batch(work_dir: &Path, batch_file: &str) {
     let mount_arg = format!("MOUNT C: {}", work_dir.display());
     let output = Command::new("dosbox-x")
+        // The conformance suite neither displays nor plays anything.  More
+        // importantly, letting SDL select the host audio backend can leave
+        // DOSBox-X blocked indefinitely while trying to connect to
+        // PulseAudio (common in containers and headless CI).
+        .env("SDL_AUDIODRIVER", "dummy")
+        .arg("-nogui")
         .arg("-c")
         .arg(&mount_arg)
         .arg("-c")
@@ -279,7 +285,8 @@ fn self_referential_string_concatenation_matches_real_bascom() {
     require_fixture!();
 
     let actual = compile_link_run("string_self_concat");
-    let expected_path = repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
     let expected = fs::read_to_string(&expected_path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 
@@ -351,7 +358,8 @@ fn self_referential_string_concatenation_matches_c_target() {
     let work_dir = std::env::temp_dir().join("bascal-c-target-string-self-concat");
     let _ = fs::remove_dir_all(&work_dir);
     let actual = compile_run_c_target_in("string_self_concat", &work_dir);
-    let expected_path = repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
+    let expected_path =
+        repo_root().join("tests/fixtures/conformance/string_self_concat.expected.txt");
     let expected = fs::read_to_string(&expected_path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", expected_path.display()));
 

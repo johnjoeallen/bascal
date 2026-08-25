@@ -79,7 +79,10 @@ fn c_target_rejects_labels_and_error_handling_tutorial() {
         "bcc unexpectedly accepted {source_path:?} under --target C"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("`on error goto` is not supported with --target c"), "{stderr}");
+    assert!(
+        stderr.contains("`on error goto` is not supported with --target c"),
+        "{stderr}"
+    );
     assert!(stderr.contains("`try`/`catch`/`finally`"), "{stderr}");
 }
 
@@ -313,7 +316,10 @@ fn gcc_runs_remline_under_c_target_when_available() {
         .arg("--binary")
         .status()
         .expect("failed to invoke bcc");
-    assert!(status.success(), "bcc failed to compile/build {source_path:?} under --target C");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
 
     let executable_path = repo_root.join("tmp/remline");
     let run = Command::new(&executable_path)

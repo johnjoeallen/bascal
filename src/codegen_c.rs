@@ -789,7 +789,8 @@ const MID_BODY: &str = "static char* bcc_strbuf_take(void) {\n    char* buf = bc
 /// realistic `--target c` deployment platform today -- x86/x86-64/ARM --
 /// not big-endian mainframes, matching real BASIC's own on-disk
 /// little-endian layout only on those platforms).
-const FILE_IO_STATE: &str = "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\n";
+const FILE_IO_STATE: &str =
+    "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\n";
 const FILE_IO_PROTOS: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);\nstatic void bcc_mki(char* out, int value);\nstatic void bcc_mkl(char* out, int value);\nstatic void bcc_mks(char* out, double value);\nstatic void bcc_mkd(char* out, double value);\nstatic int bcc_cvi(const char* s);\nstatic int bcc_cvl(const char* s);\nstatic float bcc_cvs(const char* s);\nstatic double bcc_cvd(const char* s);\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);\n";
 const FILE_IO_BODY: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
 
@@ -1172,8 +1173,15 @@ fn apply_field_statement(
             c_name,
             width,
             offset,
-            is_string: string_fields.as_ref().and_then(|items| items.get(entries.len())).copied().unwrap_or(false),
-            ty: field_types.as_ref().and_then(|items| items.get(entries.len())).copied(),
+            is_string: string_fields
+                .as_ref()
+                .and_then(|items| items.get(entries.len()))
+                .copied()
+                .unwrap_or(false),
+            ty: field_types
+                .as_ref()
+                .and_then(|items| items.get(entries.len()))
+                .copied(),
         });
         offset += width;
     }
@@ -1235,7 +1243,9 @@ fn known_record_layouts(program: &Program) -> HashMap<Vec<u32>, (String, Vec<boo
                         let strings = string_fields
                             .clone()
                             .unwrap_or_else(|| vec![false; fields.len()]);
-                        layouts.entry(widths).or_insert_with(|| (name.clone(), strings));
+                        layouts
+                            .entry(widths)
+                            .or_insert_with(|| (name.clone(), strings));
                     }
                 }
                 Statement::If {
@@ -1422,7 +1432,9 @@ fn count_raise_sites(statements: &[Stmt]) -> usize {
                     ..
                 } => {
                     count_raise_sites(try_body)
-                        + catch.as_ref().map_or(0, |catch| count_raise_sites(&catch.body))
+                        + catch
+                            .as_ref()
+                            .map_or(0, |catch| count_raise_sites(&catch.body))
                         + count_raise_sites(finally_body)
                 }
                 _ => 0,
@@ -1464,9 +1476,15 @@ fn count_try_catch_blocks(statements: &[Stmt]) -> usize {
                         .sum::<usize>()
                         + count_try_catch_blocks(else_body)
                 }
-                Statement::TryCatch { try_body, catch, finally_body } => {
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
                     count_try_catch_blocks(try_body)
-                        + catch.as_ref().map_or(0, |catch| count_try_catch_blocks(&catch.body))
+                        + catch
+                            .as_ref()
+                            .map_or(0, |catch| count_try_catch_blocks(&catch.body))
                         + count_try_catch_blocks(finally_body)
                 }
                 _ => 0,
@@ -1539,9 +1557,17 @@ fn collect_calls_in_expr(
     out: &mut Vec<(String, Option<TypeSuffix>)>,
 ) {
     match expr {
-        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
-            if functions.get(&fn_key(name)).is_some() { out.push(fn_key(name)); }
-            for arg in args { collect_calls_in_expr(arg, functions, out); }
+        Expr::Call { name, args }
+        | Expr::ArrayRef {
+            name,
+            indices: args,
+        } => {
+            if functions.get(&fn_key(name)).is_some() {
+                out.push(fn_key(name));
+            }
+            for arg in args {
+                collect_calls_in_expr(arg, functions, out);
+            }
         }
         Expr::Unary { expr, .. } => collect_calls_in_expr(expr, functions, out),
         Expr::Binary { left, right, .. } => {
@@ -1550,13 +1576,17 @@ fn collect_calls_in_expr(
         }
         Expr::ScalarMethodCall { base, args, .. } | Expr::MethodCall { base, args, .. } => {
             collect_calls_in_expr(base, functions, out);
-            for arg in args { collect_calls_in_expr(arg, functions, out); }
+            for arg in args {
+                collect_calls_in_expr(arg, functions, out);
+            }
         }
         Expr::FileIndex { index, .. } => collect_calls_in_expr(index, functions, out),
         Expr::FieldAccess { base, .. } => collect_calls_in_expr(base, functions, out),
-        Expr::RecordLit { fields, .. } => for (_, value) in fields {
-            collect_calls_in_expr(value, functions, out);
-        },
+        Expr::RecordLit { fields, .. } => {
+            for (_, value) in fields {
+                collect_calls_in_expr(value, functions, out);
+            }
+        }
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {}
     }
 }
@@ -1568,40 +1598,70 @@ fn collect_called_callables(
 ) {
     for stmt in statements {
         match &stmt.kind {
-            Statement::ExprStmt(expr) | Statement::Return { value: expr }
-            | Statement::Const { value: expr, .. } | Statement::ErrorStmt { code: expr } => {
+            Statement::ExprStmt(expr)
+            | Statement::Return { value: expr }
+            | Statement::Const { value: expr, .. }
+            | Statement::ErrorStmt { code: expr } => collect_calls_in_expr(expr, functions, out),
+            Statement::ThrowStmt { code: Some(expr) } => {
                 collect_calls_in_expr(expr, functions, out)
             }
-            Statement::ThrowStmt { code: Some(expr) } => collect_calls_in_expr(expr, functions, out),
             Statement::ThrowStmt { code: None } => {}
             Statement::Assignment { target, value } => {
                 collect_calls_in_expr(target, functions, out);
                 collect_calls_in_expr(value, functions, out);
             }
-            Statement::Print { tokens } => for token in tokens {
-                if let PrintToken::Expr(expr) = token { collect_calls_in_expr(expr, functions, out); }
-            },
-            Statement::If { condition, then_body, else_body } => {
+            Statement::Print { tokens } => {
+                for token in tokens {
+                    if let PrintToken::Expr(expr) = token {
+                        collect_calls_in_expr(expr, functions, out);
+                    }
+                }
+            }
+            Statement::If {
+                condition,
+                then_body,
+                else_body,
+            } => {
                 collect_calls_in_expr(condition, functions, out);
                 collect_called_callables(then_body, functions, out);
                 collect_called_callables(else_body, functions, out);
             }
-            Statement::For { start, end, step, body, .. } => {
+            Statement::For {
+                start,
+                end,
+                step,
+                body,
+                ..
+            } => {
                 collect_calls_in_expr(start, functions, out);
                 collect_calls_in_expr(end, functions, out);
-                if let Some(step) = step { collect_calls_in_expr(step, functions, out); }
+                if let Some(step) = step {
+                    collect_calls_in_expr(step, functions, out);
+                }
                 collect_called_callables(body, functions, out);
             }
             Statement::While { condition, body } => {
                 collect_calls_in_expr(condition, functions, out);
                 collect_called_callables(body, functions, out);
             }
-            Statement::Do { condition, body, post_condition } => {
-                if let Some(condition) = condition { collect_calls_in_expr(&condition.expr, functions, out); }
+            Statement::Do {
+                condition,
+                body,
+                post_condition,
+            } => {
+                if let Some(condition) = condition {
+                    collect_calls_in_expr(&condition.expr, functions, out);
+                }
                 collect_called_callables(body, functions, out);
-                if let Some(condition) = post_condition { collect_calls_in_expr(&condition.expr, functions, out); }
+                if let Some(condition) = post_condition {
+                    collect_calls_in_expr(&condition.expr, functions, out);
+                }
             }
-            Statement::SelectCase { expr, cases, else_body } => {
+            Statement::SelectCase {
+                expr,
+                cases,
+                else_body,
+            } => {
                 collect_calls_in_expr(expr, functions, out);
                 for case in cases {
                     for value in &case.values {
@@ -1652,9 +1712,15 @@ fn statements_have_direct_raise(statements: &[Stmt]) -> bool {
                 .any(|case| statements_have_direct_raise(&case.body))
                 || statements_have_direct_raise(else_body)
         }
-        Statement::TryCatch { try_body, catch, finally_body } => {
+        Statement::TryCatch {
+            try_body,
+            catch,
+            finally_body,
+        } => {
             statements_have_direct_raise(try_body)
-                || catch.as_ref().is_some_and(|catch| statements_have_direct_raise(&catch.body))
+                || catch
+                    .as_ref()
+                    .is_some_and(|catch| statements_have_direct_raise(&catch.body))
                 || statements_have_direct_raise(finally_body)
         }
         _ => false,
@@ -1706,7 +1772,11 @@ fn collect_try_reachable_callables(
             if propagating.contains(key) {
                 continue;
             }
-            let Some(func) = program.functions.iter().find(|func| fn_key(&func.name) == *key) else {
+            let Some(func) = program
+                .functions
+                .iter()
+                .find(|func| fn_key(&func.name) == *key)
+            else {
                 continue;
             };
             let mut calls = Vec::new();
@@ -1799,9 +1869,7 @@ fn collect_on_error_handler_ids_into(statements: &[Stmt], ids: &mut HashMap<Stri
 /// integer value gets recovered. Keyed the same way `fn_key`/`var_key`
 /// already do (lowercased name, suffix), matching how a `dim`'s size
 /// expression -- a bare `Expr::Ident` -- would reference it.
-fn collect_top_level_int_consts(
-    statements: &[Stmt],
-) -> HashMap<(String, Option<TypeSuffix>), i64> {
+fn collect_top_level_int_consts(statements: &[Stmt]) -> HashMap<(String, Option<TypeSuffix>), i64> {
     let mut consts = HashMap::new();
     for statement in statements {
         if let Statement::Const { name, value } = &**statement {
@@ -1911,7 +1979,11 @@ fn collect_array_declarations_into(
             } => {
                 let is_string = name.suffix == Some(TypeSuffix::String);
                 let suffix = effective_suffix(name.suffix);
-                let element_type = if is_string { None } else { numeric_c_type(suffix) };
+                let element_type = if is_string {
+                    None
+                } else {
+                    numeric_c_type(suffix)
+                };
                 if !is_string && element_type.is_none() {
                     return Err(format!(
                         "`dim {name}` isn't supported by the minimal C backend yet -- only \
@@ -2220,7 +2292,11 @@ fn emit_raise_in_callable_block(
     out.push_str("        exit(1);\n");
     out.push_str("    }\n");
     out.push_str("    bcc_in_handler = 1;\n");
-    let value = if sig.is_string { ", .value = bcc_out" } else { "" };
+    let value = if sig.is_string {
+        ", .value = bcc_out"
+    } else {
+        ""
+    };
     out.push_str(&format!(
         "    return ({}){{ .status = bcc_err{value} }};\n",
         try_result_type(sig)
@@ -2329,7 +2405,14 @@ fn apply_field_layouts_before_functions(
                     string_fields,
                     field_types,
                 } => {
-                    apply_field_statement(channel, fields, record_type, string_fields, field_types, layout)?;
+                    apply_field_statement(
+                        channel,
+                        fields,
+                        record_type,
+                        string_fields,
+                        field_types,
+                        layout,
+                    )?;
                 }
                 Statement::If {
                     then_body,
@@ -2392,7 +2475,9 @@ fn apply_field_layouts_before_functions(
 /// MBASIC/BASCOM's own GOSUB-without-RETURN behavior), a real C function
 /// falling off the end without `return`-ing a value is undefined behavior,
 /// not a defined-if-surprising fallback.
-fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashMap<(TypeSuffix, String), FnSig>), String> {
+fn build_function_table(
+    functions: &[FunctionDef],
+) -> Result<(FunctionMap, HashMap<(TypeSuffix, String), FnSig>), String> {
     let mut table = FunctionMap::new();
     let mut methods = HashMap::new();
     for func in functions {
@@ -2413,10 +2498,17 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashM
                 func.name
             ));
         }
-        let mut params = Vec::with_capacity(func.params.len() + usize::from(func.receiver.is_some()));
+        let mut params =
+            Vec::with_capacity(func.params.len() + usize::from(func.receiver.is_some()));
         if let Some(receiver) = func.receiver {
             params.push(FnParam {
-                c_name: c_var_name(&BasicIdent { name: "self".to_string(), suffix: Some(receiver) }, receiver),
+                c_name: c_var_name(
+                    &BasicIdent {
+                        name: "self".to_string(),
+                        suffix: Some(receiver),
+                    },
+                    receiver,
+                ),
                 is_string: receiver == TypeSuffix::String,
                 is_float: numeric_c_type(receiver).is_some_and(|(_, f)| f),
                 default: None,
@@ -2503,17 +2595,17 @@ fn build_function_table(functions: &[FunctionDef]) -> Result<(FunctionMap, HashM
             ));
         }
         let sig = FnSig {
-                c_name: func.receiver.map_or_else(
-                    || function_c_name(&func.name),
-                    |receiver| format!("{}_{}", function_c_name(&func.name), type_tag(receiver)),
-                ),
-                is_void: func.is_procedure,
-                is_string,
-                is_float: numeric.is_some_and(|(_, f)| f),
-                try_result: false,
-                params,
-                result_suffix: func.name.suffix,
-            };
+            c_name: func.receiver.map_or_else(
+                || function_c_name(&func.name),
+                |receiver| format!("{}_{}", function_c_name(&func.name), type_tag(receiver)),
+            ),
+            is_void: func.is_procedure,
+            is_string,
+            is_float: numeric.is_some_and(|(_, f)| f),
+            try_result: false,
+            params,
+            result_suffix: func.name.suffix,
+        };
         if let Some(receiver) = func.receiver {
             methods.insert((receiver, func.name.name.to_ascii_lowercase()), sig);
         } else {
@@ -2533,14 +2625,26 @@ fn type_tag(suffix: TypeSuffix) -> char {
     }
 }
 
-fn call_args_with_defaults<'a>(sig: &'a FnSig, args: &'a [Expr], name: &BasicIdent) -> Result<Vec<&'a Expr>, String> {
+fn call_args_with_defaults<'a>(
+    sig: &'a FnSig,
+    args: &'a [Expr],
+    name: &BasicIdent,
+) -> Result<Vec<&'a Expr>, String> {
     if args.len() > sig.params.len() {
-        return Err(format!("`{name}` expects {} argument(s), got {}", sig.params.len(), args.len()));
+        return Err(format!(
+            "`{name}` expects {} argument(s), got {}",
+            sig.params.len(),
+            args.len()
+        ));
     }
     let mut result: Vec<&Expr> = args.iter().collect();
     for param in sig.params.iter().skip(args.len()) {
         let Some(default) = &param.default else {
-            return Err(format!("`{name}` expects {} argument(s), got {}", sig.params.len(), args.len()));
+            return Err(format!(
+                "`{name}` expects {} argument(s), got {}",
+                sig.params.len(),
+                args.len()
+            ));
         };
         result.push(default);
     }
@@ -2661,7 +2765,11 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         .map_err(|message| vec![unsupported(&message)])?;
     apply_byval_array_capacities(&mut funcs, program, &arrays)
         .map_err(|message| vec![unsupported(&message)])?;
-    let mut functions = FunctionTable { funcs, methods, arrays };
+    let mut functions = FunctionTable {
+        funcs,
+        methods,
+        arrays,
+    };
     let try_reachable = collect_try_reachable_callables(program, &functions);
     for key in &try_reachable {
         if let Some(sig) = functions.funcs.get_mut(key) {
@@ -2794,7 +2902,9 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut prototypes = String::new();
     let mut function_defs = String::new();
     for func in &program.functions {
-        let sig = functions.signature_for(func).expect("function table should contain declaration");
+        let sig = functions
+            .signature_for(func)
+            .expect("function table should contain declaration");
         let is_try_reachable = try_reachable.contains(&fn_key(&func.name));
         prototypes.push_str(&function_signature(func, sig, is_try_reachable));
         prototypes.push_str(";\n");
@@ -2926,8 +3036,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     if needs_math {
         includes.push_str("#include <math.h>\n");
     }
-    if needs_string || builtin_usage.needs_string_h || needs_input || needs_seq_io || file_io.used
-    {
+    if needs_string || builtin_usage.needs_string_h || needs_input || needs_seq_io || file_io.used {
         includes.push_str("#include <string.h>\n");
     }
     if file_io.used {
@@ -3229,7 +3338,8 @@ fn function_signature(func: &FunctionDef, sig: &FnSig, is_try_reachable: bool) -
             if fp.is_string {
                 params.push(format!("char* {}_in", fp.c_name));
             } else {
-                let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
+                let (c_type, _) =
+                    numeric_c_type(fp.suffix).expect("validated by build_function_table");
                 params.push(format!("{c_type}* {}_in", fp.c_name));
             }
         } else if fp.is_string {
@@ -3374,7 +3484,10 @@ fn emit_function_def(
             }
         }
     }
-    if sig.params.iter().any(|p| p.is_string || p.array.is_some() || p.by_ref)
+    if sig
+        .params
+        .iter()
+        .any(|p| p.is_string || p.array.is_some() || p.by_ref)
         || !numeric_locals.is_empty()
         || !string_locals.is_empty()
         || !sorted_local_arrays.is_empty()
@@ -3441,7 +3554,11 @@ fn emit_function_def(
     // value-return on every path, but this harmless trailing result keeps
     // the generated C total even if that invariant changes.
     if is_try_reachable {
-        let value = if sig.is_string { ", .value = bcc_out" } else { "" };
+        let value = if sig.is_string {
+            ", .value = bcc_out"
+        } else {
+            ""
+        };
         body.push_str(&format!(
             "    return ({}){{ .status = 0{value} }};\n",
             try_result_type(sig)
@@ -3862,7 +3979,9 @@ fn collect_vars_in_statement(
         // is skipped by `register_var`'s own guard, not specially handled
         // here).
         Statement::ErrorStmt { code } => collect_vars_in_expr(code, numeric_out, string_out),
-        Statement::ThrowStmt { code: Some(code) } => collect_vars_in_expr(code, numeric_out, string_out),
+        Statement::ThrowStmt { code: Some(code) } => {
+            collect_vars_in_expr(code, numeric_out, string_out)
+        }
         Statement::ThrowStmt { code: None } => {}
         // `err_var`/`erl_var` are hoisted like any other local (see
         // `emit_function_def`'s own doc comment on why every local is
@@ -4006,7 +4125,13 @@ fn emit_statement(
     match &statement.kind {
         Statement::Print { tokens } => {
             let tokens = hoist_print_tokens(
-                tokens, out, needs_math, temp_counter, functions, current_function, ctx,
+                tokens,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let (prelude, mut format, args, needs_newline) =
                 render_print_tokens(&tokens, needs_math, temp_counter, functions)?;
@@ -4108,22 +4233,56 @@ fn emit_statement(
         // exactly matching BASIC's own `LOCATE row, col` -- no reordering
         // or offset needed, unlike `COLOR`'s palette remapping.
         Statement::Locate { row, col } => {
-            let row = hoist_try_result_calls(row, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let row = hoist_try_result_calls(
+                row,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
             let (row_text, row_is_float) = render_numeric_expr(&row, needs_math, functions)?;
             let row_text = coerce_numeric(row_text, row_is_float, false, needs_math);
-            let col = hoist_try_result_calls(col, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let col = hoist_try_result_calls(
+                col,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
             let (col_text, col_is_float) = render_numeric_expr(&col, needs_math, functions)?;
             let col_text = coerce_numeric(col_text, col_is_float, false, needs_math);
-            out.push_str(&format!("    printf(\"\\x1b[%d;%dH\", {row_text}, {col_text});\n"));
+            out.push_str(&format!(
+                "    printf(\"\\x1b[%d;%dH\", {row_text}, {col_text});\n"
+            ));
             Ok(())
         }
         Statement::Color { fg, bg } => {
-            let fg = hoist_try_result_calls(fg, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let fg = hoist_try_result_calls(
+                fg,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
             let (fg_text, fg_is_float) = render_numeric_expr(&fg, needs_math, functions)?;
             let fg_text = coerce_numeric(fg_text, fg_is_float, false, needs_math);
             let bg_text = match bg {
                 Some(bg) => {
-                    let bg = hoist_try_result_calls(bg, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                    let bg = hoist_try_result_calls(
+                        bg,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
+                    )?;
                     let (text, is_float) = render_numeric_expr(&bg, needs_math, functions)?;
                     coerce_numeric(text, is_float, false, needs_math)
                 }
@@ -4157,9 +4316,7 @@ fn emit_statement(
         // `collect_array_declarations`/`ArrayInfo`), which also already
         // validated its shape (element type, literal-or-const bounds), so
         // reaching this arm at all means it's known-good.
-        Statement::Dim {
-            is_array: true, ..
-        } => Ok(()),
+        Statement::Dim { is_array: true, .. } => Ok(()),
         // `arr%(i%) = value` / `country$(i%) = value` -- an indexed
         // write into a `dim`-declared array (see `ArrayInfo`). Real C
         // multi-dimensional indexing (`arr[i]`, `grid[r][c]`) needs no
@@ -4173,7 +4330,10 @@ fn emit_statement(
             value,
         } if functions.arrays.contains_key(&array_c_name(name)) => {
             let target = hoist_try_result_calls(
-                &Expr::ArrayRef { name: name.clone(), indices: indices.clone() },
+                &Expr::ArrayRef {
+                    name: name.clone(),
+                    indices: indices.clone(),
+                },
                 out,
                 needs_math,
                 temp_counter,
@@ -4339,16 +4499,40 @@ fn emit_statement(
                 ));
             };
             let loop_var = c_var_name(var, suffix);
-            let start = hoist_try_result_calls(start, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let start = hoist_try_result_calls(
+                start,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
             let (start_text, start_is_float) = render_numeric_expr(&start, needs_math, functions)?;
             let start_text =
                 coerce_numeric(start_text, start_is_float, target_is_float, needs_math);
-            let end = hoist_try_result_calls(end, out, needs_math, temp_counter, functions, current_function, ctx)?;
+            let end = hoist_try_result_calls(
+                end,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
             let (end_text, end_is_float) = render_numeric_expr(&end, needs_math, functions)?;
             let end_text = coerce_numeric(end_text, end_is_float, target_is_float, needs_math);
             let step_text = match step {
                 Some(step_expr) => {
-                    let step_expr = hoist_try_result_calls(step_expr, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                    let step_expr = hoist_try_result_calls(
+                        step_expr,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
+                    )?;
                     let (text, is_float) = render_numeric_expr(&step_expr, needs_math, functions)?;
                     coerce_numeric(text, is_float, target_is_float, needs_math)
                 }
@@ -4389,7 +4573,15 @@ fn emit_statement(
             let wrapped = contains_try_result_call(condition, functions);
             if wrapped {
                 out.push_str("    while (1) {\n");
-                let condition = hoist_try_result_calls(condition, out, needs_math, temp_counter, functions, current_function, ctx)?;
+                let condition = hoist_try_result_calls(
+                    condition,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
+                )?;
                 let (cond_text, _) = render_numeric_expr(&condition, needs_math, functions)?;
                 out.push_str(&format!("    if (!({cond_text})) break;\n"));
             } else {
@@ -4433,7 +4625,13 @@ fn emit_statement(
             out.push_str("    while (1) {\n");
             if let Some(cond) = condition {
                 let guard = emit_do_guard(
-                    cond, out, needs_math, temp_counter, functions, current_function, ctx,
+                    cond,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 out.push_str(&guard);
             }
@@ -4454,7 +4652,13 @@ fn emit_statement(
             }
             if let Some(cond) = post_condition {
                 let guard = emit_do_guard(
-                    cond, out, needs_math, temp_counter, functions, current_function, ctx,
+                    cond,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 out.push_str(&guard);
             }
@@ -4510,7 +4714,13 @@ fn emit_statement(
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
             let file = hoist_try_result_calls(
-                file, out, needs_math, temp_counter, functions, current_function, ctx,
+                file,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let (prelude, file_text) =
                 render_string_expr(&file, needs_math, temp_counter, functions)?;
@@ -4575,7 +4785,9 @@ fn emit_statement(
                     out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
                     out.push_str(&format!(
                         "        bcc_err_file = \"{}\";\n",
-                        escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                        escape_c_string_literal(&crate::diagnostics::display_source_filename(
+                            &statement.pos.filename
+                        ))
                     ));
                     out.push_str(&format!(
                         "        goto {};\n",
@@ -4623,7 +4835,9 @@ fn emit_statement(
                 // still just leaves a `NULL` `FILE*` behind on failure,
                 // the same pre-existing unchecked-range-style gap as
                 // before this raise mechanism existed at all.
-                OpenMode::Input if current_function.is_none() && ctx.current_try_catch.is_none() => {
+                OpenMode::Input
+                    if current_function.is_none() && ctx.current_try_catch.is_none() =>
+                {
                     let id = ctx.raise_id;
                     ctx.raise_id += 1;
                     out.push_str(&format!("    bcc_raise_retry_{id}: ;\n"));
@@ -4660,7 +4874,9 @@ fn emit_statement(
                     out.push_str(&format!("        bcc_erl = {};\n", statement.pos.line));
                     out.push_str(&format!(
                         "        bcc_err_file = \"{}\";\n",
-                        escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                        escape_c_string_literal(&crate::diagnostics::display_source_filename(
+                            &statement.pos.filename
+                        ))
                     ));
                     out.push_str(&format!(
                         "        goto {};\n",
@@ -4739,13 +4955,17 @@ fn emit_statement(
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
             let target = hoist_try_result_calls(
-                target, out, needs_math, temp_counter, functions, current_function, ctx,
+                target,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let (c_expr, element_type) = render_lvalue(&target, needs_math, functions)?;
             if element_type.is_some() {
-                return Err(
-                    "LINE INPUT # requires a string (`$`-suffixed) target".to_string(),
-                );
+                return Err("LINE INPUT # requires a string (`$`-suffixed) target".to_string());
             }
             out.push_str(&format!(
                 "    bcc_line_input_file(bcc_files[{idx}], {c_expr}, sizeof({c_expr}));\n"
@@ -4759,7 +4979,13 @@ fn emit_statement(
             let ch = literal_channel(channel)?;
             let idx = ch - 1;
             let tokens = hoist_print_tokens(
-                tokens, out, needs_math, temp_counter, functions, current_function, ctx,
+                tokens,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let (prelude, mut format, args, needs_newline) =
                 render_print_tokens(&tokens, needs_math, temp_counter, functions)?;
@@ -4813,13 +5039,9 @@ fn emit_statement(
                     let (_, is_float) = numeric_c_type(suffix)
                         .expect("effective_suffix never returns TypeSuffix::String");
                     if is_float {
-                        out.push_str(&format!(
-                            "    {c_name} = atof(bcc_file_field_buf);\n"
-                        ));
+                        out.push_str(&format!("    {c_name} = atof(bcc_file_field_buf);\n"));
                     } else {
-                        out.push_str(&format!(
-                            "    {c_name} = atoi(bcc_file_field_buf);\n"
-                        ));
+                        out.push_str(&format!("    {c_name} = atoi(bcc_file_field_buf);\n"));
                     }
                 }
             }
@@ -4843,7 +5065,13 @@ fn emit_statement(
             let mut args = Vec::new();
             for (index, expr) in exprs.iter().enumerate() {
                 let expr = hoist_try_result_calls(
-                    expr, out, needs_math, temp_counter, functions, current_function, ctx,
+                    expr,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 if index > 0 {
                     format.push(',');
@@ -4885,7 +5113,14 @@ fn emit_statement(
             record_type,
             string_fields,
             field_types,
-        } => apply_field_statement(channel, fields, record_type, string_fields, field_types, file_io),
+        } => apply_field_statement(
+            channel,
+            fields,
+            record_type,
+            string_fields,
+            field_types,
+            file_io,
+        ),
         // `GET`/`PUT #ch, record` -- read/write one whole record (`GET`
         // splits the record's raw bytes across every `FIELD`'d variable
         // on that channel, at their declared offsets; `PUT` does the
@@ -4978,7 +5213,13 @@ fn emit_statement(
                 return Ok(());
             }
             let value = hoist_try_result_calls(
-                value, out, needs_math, temp_counter, functions, current_function, ctx,
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             if let Some((fn_name, target_is_float, arg)) = mk_pack_call(&value) {
                 if is_rset {
@@ -5044,7 +5285,13 @@ fn emit_statement(
             };
             if sig.is_string {
                 let value = hoist_try_result_calls(
-                    value, out, needs_math, temp_counter, functions, current_function, ctx,
+                    value,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 let (prelude, text) =
                     render_string_expr(&value, needs_math, temp_counter, functions)?;
@@ -5056,13 +5303,21 @@ fn emit_statement(
                 ));
                 emit_byref_scalar_copyback(sig, out);
                 if ctx.current_function_reachable {
-                    out.push_str("    return (bcc_result_string){ .status = 0, .value = bcc_out };\n");
+                    out.push_str(
+                        "    return (bcc_result_string){ .status = 0, .value = bcc_out };\n",
+                    );
                 } else {
                     out.push_str("    return;\n");
                 }
             } else {
                 let value = hoist_try_result_calls(
-                    value, out, needs_math, temp_counter, functions, current_function, ctx,
+                    value,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 let (text, is_float) = render_numeric_expr(&value, needs_math, functions)?;
                 let coerced = coerce_numeric(text, is_float, sig.is_float, needs_math);
@@ -5192,9 +5447,17 @@ fn emit_statement(
             })?;
             let args = args
                 .iter()
-                .map(|arg| hoist_try_result_calls(
-                    arg, out, needs_math, temp_counter, functions, current_function, ctx,
-                ))
+                .map(|arg| {
+                    hoist_try_result_calls(
+                        arg,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
+                    )
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             let call_args = call_args_with_defaults(sig, &args, name)?;
             let (prelude, mut arg_texts) =
@@ -5232,8 +5495,8 @@ fn emit_statement(
                 if let Some(label) = &ctx.current_try_catch {
                     out.push_str(&format!("    if ({status}.status) goto {label};\n"));
                 } else if ctx.current_function_reachable {
-                    let caller = current_function
-                        .expect("reachable context has a callable signature");
+                    let caller =
+                        current_function.expect("reachable context has a callable signature");
                     out.push_str(&format!(
                         "    if ({status}.status) return ({}){{ .status = {status}.status }};\n",
                         try_result_type(caller)
@@ -5333,7 +5596,13 @@ fn emit_statement(
                 Some(_) if is_timer => out.push_str("    srand((unsigned int)time(NULL));\n"),
                 Some(expr) => {
                     let expr = hoist_try_result_calls(
-                        expr, out, needs_math, temp_counter, functions, current_function, ctx,
+                        expr,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
                     )?;
                     let (text, is_float) = render_numeric_expr(&expr, needs_math, functions)?;
                     let text = coerce_numeric(text, is_float, false, needs_math);
@@ -5455,7 +5724,8 @@ fn emit_statement(
             }
             let code_text = match code {
                 Some(code) => {
-                    let (code_text, code_is_float) = render_numeric_expr(code, needs_math, functions)?;
+                    let (code_text, code_is_float) =
+                        render_numeric_expr(code, needs_math, functions)?;
                     coerce_numeric(code_text, code_is_float, false, needs_math)
                 }
                 None => "bcc_err".to_string(),
@@ -5465,7 +5735,9 @@ fn emit_statement(
                 out.push_str(&format!("    bcc_erl = {};\n", statement.pos.line));
                 out.push_str(&format!(
                     "    bcc_err_file = \"{}\";\n",
-                    escape_c_string_literal(&crate::diagnostics::display_source_filename(&statement.pos.filename))
+                    escape_c_string_literal(&crate::diagnostics::display_source_filename(
+                        &statement.pos.filename
+                    ))
                 ));
                 out.push_str(&format!("    goto {label};\n"));
             } else if ctx.current_function_reachable {
@@ -5515,7 +5787,13 @@ fn emit_statement(
         Statement::Read(vars) => {
             for var in vars {
                 let var = hoist_try_result_calls(
-                    var, out, needs_math, temp_counter, functions, current_function, ctx,
+                    var,
+                    out,
+                    needs_math,
+                    temp_counter,
+                    functions,
+                    current_function,
+                    ctx,
                 )?;
                 let (c_expr, element_type) = render_lvalue(&var, needs_math, functions)?;
                 match element_type {
@@ -5571,10 +5849,22 @@ fn emit_statement(
         // this backend already uses.
         Statement::Swap(a, b) => {
             let a = hoist_try_result_calls(
-                a, out, needs_math, temp_counter, functions, current_function, ctx,
+                a,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let b = hoist_try_result_calls(
-                b, out, needs_math, temp_counter, functions, current_function, ctx,
+                b,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             let (a_expr, a_type) = render_lvalue(&a, needs_math, functions)?;
             let (b_expr, b_type) = render_lvalue(&b, needs_math, functions)?;
@@ -5750,10 +6040,19 @@ fn emit_statement(
                 out.push_str(&format!("        goto {label};\n"));
             } else if ctx.current_function_reachable {
                 let caller = current_function.expect("reachable context has a callable signature");
-                let value = if caller.is_string { ", .value = bcc_out" } else { "" };
-                out.push_str(&format!("        return ({}){{ .status = bcc_err{value} }};\n", try_result_type(caller)));
+                let value = if caller.is_string {
+                    ", .value = bcc_out"
+                } else {
+                    ""
+                };
+                out.push_str(&format!(
+                    "        return ({}){{ .status = bcc_err{value} }};\n",
+                    try_result_type(caller)
+                ));
             } else {
-                out.push_str("        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n");
+                out.push_str(
+                    "        fprintf(stderr, \"unhandled BASIC error %d\\n\", bcc_err);\n",
+                );
                 out.push_str("        exit(1);\n");
             }
             out.push_str("    }\n");
@@ -5798,9 +6097,11 @@ fn render_lvalue(
         // A 2+-index array element parses as `Expr::Call`, not
         // `Expr::ArrayRef` -- see the identical arm's own comment in
         // `render_numeric_expr`.
-        Expr::ArrayRef { name, indices } | Expr::Call { name, args: indices }
-            if functions.arrays.contains_key(&array_c_name(name)) =>
-        {
+        Expr::ArrayRef { name, indices }
+        | Expr::Call {
+            name,
+            args: indices,
+        } if functions.arrays.contains_key(&array_c_name(name)) => {
             let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
             let element_type = functions.arrays[&array_c_name(name)].element_type;
             Ok((c_expr, element_type))
@@ -6043,9 +6344,11 @@ fn ensure_dsl_record_helpers(record_type: &str, fields: &[FieldEntry], file_io: 
             if field.is_string {
                 format!("const char* field_{index}")
             } else {
-                let ty = record_field_c_type(field.ty.expect(
-                    "a DSL record field always carries its declared RecordFieldType",
-                ));
+                let ty = record_field_c_type(
+                    field
+                        .ty
+                        .expect("a DSL record field always carries its declared RecordFieldType"),
+                );
                 format!("const {ty}* field_{index}")
             }
         })
@@ -6159,7 +6462,13 @@ fn emit_get_or_put(
         ));
     };
     let record = hoist_try_result_calls(
-        record, out, needs_math, temp_counter, functions, current_function, ctx,
+        record,
+        out,
+        needs_math,
+        temp_counter,
+        functions,
+        current_function,
+        ctx,
     )?;
     let (record_text, record_is_float) = render_numeric_expr(&record, needs_math, functions)?;
     let record_text = coerce_numeric(record_text, record_is_float, false, needs_math);
@@ -6216,7 +6525,13 @@ fn emit_get_or_put(
                 ));
             };
             let raw_value = hoist_try_result_calls(
-                &raw_value, out, needs_math, temp_counter, functions, current_function, ctx,
+                &raw_value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?;
             if field.is_string {
                 let (prelude, text) =
@@ -6331,26 +6646,52 @@ fn hoist_try_result_calls(
     current_function: Option<&FnSig>,
     ctx: &ErrorDataCtx<'_>,
 ) -> Result<Expr, String> {
-    let rewrite_args = |args: &[Expr], out: &mut String, needs_math: &mut bool,
-                        temp_counter: &mut usize| {
-        args.iter()
-            .map(|arg| hoist_try_result_calls(arg, out, needs_math, temp_counter, functions, current_function, ctx))
-            .collect::<Result<Vec<_>, _>>()
-    };
+    let rewrite_args =
+        |args: &[Expr], out: &mut String, needs_math: &mut bool, temp_counter: &mut usize| {
+            args.iter()
+                .map(|arg| {
+                    hoist_try_result_calls(
+                        arg,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()
+        };
     match expr {
-        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
+        Expr::Call { name, args }
+        | Expr::ArrayRef {
+            name,
+            indices: args,
+        } => {
             let args = rewrite_args(args, out, needs_math, temp_counter)?;
             let Some(sig) = functions.get(&fn_key(name)) else {
                 return Ok(match expr {
-                    Expr::Call { .. } => Expr::Call { name: name.clone(), args },
-                    Expr::ArrayRef { .. } => Expr::ArrayRef { name: name.clone(), indices: args },
+                    Expr::Call { .. } => Expr::Call {
+                        name: name.clone(),
+                        args,
+                    },
+                    Expr::ArrayRef { .. } => Expr::ArrayRef {
+                        name: name.clone(),
+                        indices: args,
+                    },
                     _ => unreachable!(),
                 });
             };
             if !sig.try_result {
                 return Ok(match expr {
-                    Expr::Call { .. } => Expr::Call { name: name.clone(), args },
-                    Expr::ArrayRef { .. } => Expr::ArrayRef { name: name.clone(), indices: args },
+                    Expr::Call { .. } => Expr::Call {
+                        name: name.clone(),
+                        args,
+                    },
+                    Expr::ArrayRef { .. } => Expr::ArrayRef {
+                        name: name.clone(),
+                        indices: args,
+                    },
                     _ => unreachable!(),
                 });
             }
@@ -6363,8 +6704,12 @@ fn hoist_try_result_calls(
             }
             let temp_name = format!("anf_{temp_counter}");
             *temp_counter += 1;
-            let temp_ident = BasicIdent { name: temp_name, suffix: sig.result_suffix };
-            let value_name = c_var_name(&temp_ident, sig.result_suffix.unwrap_or(TypeSuffix::String));
+            let temp_ident = BasicIdent {
+                name: temp_name,
+                suffix: sig.result_suffix,
+            };
+            let value_name =
+                c_var_name(&temp_ident, sig.result_suffix.unwrap_or(TypeSuffix::String));
             if sig.is_string {
                 out.push_str(&format!("    char {value_name}[{STRING_BUFFER_SIZE}];\n"));
                 arg_texts.push(value_name.clone());
@@ -6373,7 +6718,9 @@ fn hoist_try_result_calls(
             *temp_counter += 1;
             out.push_str(&format!(
                 "    {} {status} = {}({});\n",
-                try_result_type(sig), sig.c_name, arg_texts.join(", ")
+                try_result_type(sig),
+                sig.c_name,
+                arg_texts.join(", ")
             ));
             if let Some(label) = &ctx.current_try_catch {
                 out.push_str(&format!("    if ({status}.status) goto {label};\n"));
@@ -6389,8 +6736,9 @@ fn hoist_try_result_calls(
                 ));
             }
             if !sig.is_string {
-                let (_, is_float) = numeric_c_type(sig.result_suffix.expect("numeric function has a suffix"))
-                    .expect("numeric function has a numeric suffix");
+                let (_, is_float) =
+                    numeric_c_type(sig.result_suffix.expect("numeric function has a suffix"))
+                        .expect("numeric function has a numeric suffix");
                 let c_type = if is_float { "double" } else { "int" };
                 out.push_str(&format!("    {c_type} {value_name} = {status}.value;\n"));
             }
@@ -6398,15 +6746,47 @@ fn hoist_try_result_calls(
         }
         Expr::Unary { op, expr } => Ok(Expr::Unary {
             op: *op,
-            expr: Box::new(hoist_try_result_calls(expr, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            expr: Box::new(hoist_try_result_calls(
+                expr,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?),
         }),
         Expr::Binary { left, op, right } => Ok(Expr::Binary {
-            left: Box::new(hoist_try_result_calls(left, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            left: Box::new(hoist_try_result_calls(
+                left,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?),
             op: *op,
-            right: Box::new(hoist_try_result_calls(right, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            right: Box::new(hoist_try_result_calls(
+                right,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?),
         }),
         Expr::ScalarMethodCall { base, method, args } => Ok(Expr::ScalarMethodCall {
-            base: Box::new(hoist_try_result_calls(base, out, needs_math, temp_counter, functions, current_function, ctx)?),
+            base: Box::new(hoist_try_result_calls(
+                base,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?),
             method: method.clone(),
             args: rewrite_args(args, out, needs_math, temp_counter)?,
         }),
@@ -6416,9 +6796,17 @@ fn hoist_try_result_calls(
 
 fn contains_try_result_call(expr: &Expr, functions: &FunctionTable) -> bool {
     match expr {
-        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } => {
-            functions.get(&fn_key(name)).is_some_and(|sig| sig.try_result)
-                || args.iter().any(|arg| contains_try_result_call(arg, functions))
+        Expr::Call { name, args }
+        | Expr::ArrayRef {
+            name,
+            indices: args,
+        } => {
+            functions
+                .get(&fn_key(name))
+                .is_some_and(|sig| sig.try_result)
+                || args
+                    .iter()
+                    .any(|arg| contains_try_result_call(arg, functions))
         }
         Expr::Unary { expr, .. } => contains_try_result_call(expr, functions),
         Expr::Binary { left, right, .. } => {
@@ -6426,14 +6814,18 @@ fn contains_try_result_call(expr: &Expr, functions: &FunctionTable) -> bool {
         }
         Expr::ScalarMethodCall { base, args, .. } | Expr::MethodCall { base, args, .. } => {
             contains_try_result_call(base, functions)
-                || args.iter().any(|arg| contains_try_result_call(arg, functions))
+                || args
+                    .iter()
+                    .any(|arg| contains_try_result_call(arg, functions))
         }
         Expr::FileIndex { index, .. } => contains_try_result_call(index, functions),
         Expr::FieldAccess { base, .. } => contains_try_result_call(base, functions),
         Expr::RecordLit { fields, .. } => fields
             .iter()
             .any(|(_, value)| contains_try_result_call(value, functions)),
-        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => false,
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {
+            false
+        }
     }
 }
 
@@ -6475,20 +6867,44 @@ fn hoist_case_value(
 ) -> Result<CaseValue, String> {
     match value {
         CaseValue::Single(expr) => Ok(CaseValue::Single(hoist_try_result_calls(
-            expr, out, needs_math, temp_counter, functions, current_function, ctx,
+            expr,
+            out,
+            needs_math,
+            temp_counter,
+            functions,
+            current_function,
+            ctx,
         )?)),
         CaseValue::Range { from, to } => Ok(CaseValue::Range {
             from: hoist_try_result_calls(
-                from, out, needs_math, temp_counter, functions, current_function, ctx,
+                from,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?,
             to: hoist_try_result_calls(
-                to, out, needs_math, temp_counter, functions, current_function, ctx,
+                to,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?,
         }),
         CaseValue::Is { op, value } => Ok(CaseValue::Is {
             op: *op,
             value: hoist_try_result_calls(
-                value, out, needs_math, temp_counter, functions, current_function, ctx,
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
             )?,
         }),
     }
@@ -6792,9 +7208,17 @@ fn is_string_expr(expr: &Expr) -> bool {
 
 fn is_string_expr_with_functions(expr: &Expr, functions: &FunctionTable) -> bool {
     match expr {
-        Expr::ScalarMethodCall { base, method, .. } => scalar_method_result(functions, base, method) == Some(TypeSuffix::String),
-        Expr::Binary { op: BinaryOp::Add, left, right } =>
-            is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions),
+        Expr::ScalarMethodCall { base, method, .. } => {
+            scalar_method_result(functions, base, method) == Some(TypeSuffix::String)
+        }
+        Expr::Binary {
+            op: BinaryOp::Add,
+            left,
+            right,
+        } => {
+            is_string_expr_with_functions(left, functions)
+                || is_string_expr_with_functions(right, functions)
+        }
         _ => is_string_expr(expr),
     }
 }
@@ -6804,15 +7228,23 @@ fn scalar_expr_suffix(expr: &Expr, functions: &FunctionTable) -> Option<TypeSuff
         Expr::String(_) => Some(TypeSuffix::String),
         Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
         Expr::Float(_) => Some(TypeSuffix::Single),
-        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => Some(effective_suffix(id.suffix)),
+        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => {
+            Some(effective_suffix(id.suffix))
+        }
         Expr::Unary { expr, .. } => scalar_expr_suffix(expr, functions),
         Expr::Binary { left, .. } => scalar_expr_suffix(left, functions),
-        Expr::ScalarMethodCall { base, method, .. } => scalar_method_result(functions, base, method),
+        Expr::ScalarMethodCall { base, method, .. } => {
+            scalar_method_result(functions, base, method)
+        }
         _ => None,
     }
 }
 
-fn scalar_method_result(functions: &FunctionTable, base: &Expr, method: &str) -> Option<TypeSuffix> {
+fn scalar_method_result(
+    functions: &FunctionTable,
+    base: &Expr,
+    method: &str,
+) -> Option<TypeSuffix> {
     let receiver = scalar_expr_suffix(base, functions)?;
     functions.method(receiver, method)?.result_suffix
 }
@@ -6983,9 +7415,14 @@ fn render_string_method_call(
     temp_counter: &mut usize,
     functions: &FunctionTable,
 ) -> Result<(Vec<String>, String), String> {
-    let receiver = scalar_expr_suffix(base, functions).ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
-    let sig = functions.method(receiver, method).ok_or_else(|| format!("unknown method `.{method}()`"))?;
-    if !sig.is_string { return Err(format!("method `.{method}()` does not return a string")); }
+    let receiver = scalar_expr_suffix(base, functions)
+        .ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
+    let sig = functions
+        .method(receiver, method)
+        .ok_or_else(|| format!("unknown method `.{method}()`"))?;
+    if !sig.is_string {
+        return Err(format!("method `.{method}()` does not return a string"));
+    }
     let mut call_args = Vec::with_capacity(args.len() + 1);
     call_args.push(base.clone());
     call_args.extend(args.iter().cloned());
@@ -6995,13 +7432,15 @@ fn render_string_method_call(
     for (arg, param) in call_args.into_iter().zip(&sig.params) {
         if param.is_string {
             let (p, t) = render_string_expr(arg, needs_math, temp_counter, functions)?;
-            prelude.extend(p); text.push(t);
+            prelude.extend(p);
+            text.push(t);
         } else {
             let (t, f) = render_numeric_expr(arg, needs_math, functions)?;
             text.push(coerce_numeric(t, f, param.is_float, needs_math));
         }
     }
-    let temp = format!("bt_s_{temp_counter}"); *temp_counter += 1;
+    let temp = format!("bt_s_{temp_counter}");
+    *temp_counter += 1;
     prelude.push(format!("    char {temp}[{STRING_BUFFER_SIZE}];\n"));
     text.push(temp.clone());
     prelude.push(format!("    {}({});\n", sig.c_name, text.join(", ")));
@@ -7035,7 +7474,9 @@ fn render_string_expr(
             op: BinaryOp::Add,
             left,
             right,
-        } if is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions) => {
+        } if is_string_expr_with_functions(left, functions)
+            || is_string_expr_with_functions(right, functions) =>
+        {
             let (mut prelude, left_text) =
                 render_string_expr(left, needs_math, temp_counter, functions)?;
             let (right_prelude, right_text) =
@@ -7585,9 +8026,7 @@ fn render_numeric_call(
             };
             let key = array_c_name(ident);
             let info = functions.arrays.get(&key).ok_or_else(|| {
-                format!(
-                    "`{ident}` isn't a known array, so it can't be passed as an array argument"
-                )
+                format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
             })?;
             let len_text = info
                 .runtime_len
@@ -7624,10 +8063,7 @@ fn render_numeric_call(
         ));
     }
     let call = format!("{}({})", sig.c_name, arg_texts.join(", "));
-    Ok((
-        call,
-        sig.is_float,
-    ))
+    Ok((call, sig.is_float))
 }
 fn render_numeric_method_call(
     base: &Expr,
@@ -7636,11 +8072,17 @@ fn render_numeric_method_call(
     needs_math: &mut bool,
     functions: &FunctionTable,
 ) -> Result<(String, bool), String> {
-    let receiver = scalar_expr_suffix(base, functions).ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
-    let sig = functions.method(receiver, method).ok_or_else(|| format!("unknown method `.{method}()`"))?;
-    if sig.is_string || sig.is_void { return Err(format!("method `.{method}()` does not return a number")); }
+    let receiver = scalar_expr_suffix(base, functions)
+        .ok_or_else(|| format!("method receiver for `.{method}()` must be scalar"))?;
+    let sig = functions
+        .method(receiver, method)
+        .ok_or_else(|| format!("unknown method `.{method}()`"))?;
+    if sig.is_string || sig.is_void {
+        return Err(format!("method `.{method}()` does not return a number"));
+    }
     let mut call_args = Vec::with_capacity(args.len() + 1);
-    call_args.push(base.clone()); call_args.extend(args.iter().cloned());
+    call_args.push(base.clone());
+    call_args.extend(args.iter().cloned());
     let call_args = call_args_with_defaults(sig, &call_args, &BasicIdent::parse(method))?;
     let mut text = Vec::new();
     for (arg, param) in call_args.into_iter().zip(&sig.params) {
@@ -7856,7 +8298,9 @@ fn render_numeric_expr(
             // shapes `render_prelude_free_string_arg` covers, since this
             // function has nowhere to route a prelude a fuller string
             // expression (`+` concatenation) would need.
-            if is_string_expr_with_functions(left, functions) || is_string_expr_with_functions(right, functions) {
+            if is_string_expr_with_functions(left, functions)
+                || is_string_expr_with_functions(right, functions)
+            {
                 let l = render_prelude_free_string_arg(left, needs_math, functions)?;
                 let r = render_prelude_free_string_arg(right, needs_math, functions)?;
                 return Ok((format!("(-(strcmp({l}, {r}) {c_op} 0))"), false));
@@ -8103,11 +8547,14 @@ fn render_prelude_free_string_arg(
         // shape a string comparison (`country$(i%) > country$(i% + 1)`,
         // `strcmp`'s own operands -- see this function's own call site
         // above) needs just as much as a plain string variable does.
-        Expr::ArrayRef { name, indices } | Expr::Call { name, args: indices }
-            if functions
-                .arrays
-                .get(&array_c_name(name))
-                .is_some_and(|info| info.element_type.is_none()) =>
+        Expr::ArrayRef { name, indices }
+        | Expr::Call {
+            name,
+            args: indices,
+        } if functions
+            .arrays
+            .get(&array_c_name(name))
+            .is_some_and(|info| info.element_type.is_none()) =>
         {
             render_array_index_expr(name, indices, needs_math, functions)
         }

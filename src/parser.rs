@@ -228,7 +228,9 @@ impl Parser {
         let fn_pos = self.current_pos();
         let receiver = BasicIdent::parse(&self.expect_ident("expected method receiver type")?)
             .suffix
-            .ok_or_else(|| self.error("method declarations need a receiver suffix, e.g. `method$`"))?;
+            .ok_or_else(|| {
+                self.error("method declarations need a receiver suffix, e.g. `method$`")
+            })?;
         let name = BasicIdent::parse(&self.expect_ident("expected method name")?);
         if name.suffix.is_none() {
             return Err(self.error("method names need a result type suffix"));
@@ -241,7 +243,14 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("method")?;
         self.consume_line_end()?;
-        Ok(FunctionDef { name, params, body, is_procedure: false, receiver: Some(receiver), pos: fn_pos })
+        Ok(FunctionDef {
+            name,
+            params,
+            body,
+            is_procedure: false,
+            receiver: Some(receiver),
+            pos: fn_pos,
+        })
     }
 
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
@@ -411,7 +420,12 @@ impl Parser {
             } else {
                 None
             };
-            items.push(Param { name, mode, default, axes });
+            items.push(Param {
+                name,
+                mode,
+                default,
+                axes,
+            });
             if !self.eat(TokenKind::Comma) {
                 break;
             }
@@ -1357,13 +1371,13 @@ impl Parser {
                 &self.expect_ident("expected error-line variable after `catch`")?,
             );
             let source_var = if self.eat(TokenKind::Comma) {
-                let source_var = BasicIdent::parse(
-                    &self.expect_ident("expected source-filename variable after `catch`'s error-line variable")?,
-                );
+                let source_var = BasicIdent::parse(&self.expect_ident(
+                    "expected source-filename variable after `catch`'s error-line variable",
+                )?);
                 if source_var.suffix != Some(TypeSuffix::String) {
-                    return Err(self.error(
-                        "catch's optional third binding must be a string variable",
-                    ));
+                    return Err(
+                        self.error("catch's optional third binding must be a string variable")
+                    );
                 }
                 Some(source_var)
             } else {
@@ -1559,7 +1573,11 @@ impl Parser {
 
     fn parse_throw_stmt(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("throw")?;
-        let code = if self.at_line_end() { None } else { Some(self.parse_expr(0)?) };
+        let code = if self.at_line_end() {
+            None
+        } else {
+            Some(self.parse_expr(0)?)
+        };
         self.consume_line_end()?;
         Ok(Statement::ThrowStmt { code })
     }
@@ -1990,9 +2008,17 @@ impl Parser {
             if self.eat(TokenKind::LParen) {
                 let args = self.parse_expr_list_until_rparen()?;
                 left = if is_scalar_receiver(&left) {
-                    Expr::ScalarMethodCall { base: Box::new(left), method: member, args }
+                    Expr::ScalarMethodCall {
+                        base: Box::new(left),
+                        method: member,
+                        args,
+                    }
                 } else {
-                    Expr::MethodCall { base: Box::new(left), method: member, args }
+                    Expr::MethodCall {
+                        base: Box::new(left),
+                        method: member,
+                        args,
+                    }
                 };
             } else {
                 left = Expr::FieldAccess {
@@ -2404,9 +2430,18 @@ mod tests {
             "open inputFile$ for input as #1\nline input #1, line$\nprint #2, line$\nclose #1\n",
         );
         assert!(matches!(program.statements[0].kind, Statement::Open { .. }));
-        assert!(matches!(program.statements[1].kind, Statement::LineInput { .. }));
-        assert!(matches!(program.statements[2].kind, Statement::PrintFile { .. }));
-        assert!(matches!(program.statements[3].kind, Statement::Close { .. }));
+        assert!(matches!(
+            program.statements[1].kind,
+            Statement::LineInput { .. }
+        ));
+        assert!(matches!(
+            program.statements[2].kind,
+            Statement::PrintFile { .. }
+        ));
+        assert!(matches!(
+            program.statements[3].kind,
+            Statement::Close { .. }
+        ));
     }
 
     #[test]
@@ -2447,7 +2482,12 @@ mod tests {
         // Compare statement *shape* only -- `declare` is a longer keyword
         // than `dim`, so the two programs' statements don't share column
         // positions even though they parse to the same `Statement`s.
-        let kinds = |p: &Program| p.statements.iter().map(|s| s.kind.clone()).collect::<Vec<_>>();
+        let kinds = |p: &Program| {
+            p.statements
+                .iter()
+                .map(|s| s.kind.clone())
+                .collect::<Vec<_>>()
+        };
         assert_eq!(kinds(&dim_program), kinds(&declare_program));
         match &*declare_program.statements[0] {
             Statement::Dim { name, is_array, .. } => {
@@ -2706,7 +2746,10 @@ mod tests {
     fn parses_label_declaration_and_following_statement() {
         let program = parse("skip:\nprint \"after\"\nend\n");
         assert!(matches!(&*program.statements[0], Statement::Label(name) if name == "skip"));
-        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
+        assert!(matches!(
+            program.statements[1].kind,
+            Statement::Print { .. }
+        ));
     }
 
     #[test]
@@ -2715,7 +2758,10 @@ mod tests {
         // `skip: print "hi"` puts both statements on one physical line.
         let program = parse("skip: print \"hi\"\nend\n");
         assert!(matches!(&*program.statements[0], Statement::Label(name) if name == "skip"));
-        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
+        assert!(matches!(
+            program.statements[1].kind,
+            Statement::Print { .. }
+        ));
     }
 
     #[test]
@@ -2818,7 +2864,10 @@ mod tests {
         match &*program.statements[0] {
             Statement::TryCatch { catch, .. } => {
                 let catch = catch.as_ref().expect("catch should be present");
-                let source_var = catch.source_var.as_ref().expect("source_var should be present");
+                let source_var = catch
+                    .source_var
+                    .as_ref()
+                    .expect("source_var should be present");
                 assert_eq!(source_var.name, "s");
                 assert_eq!(source_var.suffix, Some(TypeSuffix::String));
             }
@@ -2828,8 +2877,11 @@ mod tests {
 
     #[test]
     fn catch_source_binding_must_be_a_string_variable() {
-        let tokens =
-            Lexer::new("test.bcl", "try\nerror 11\ncatch e%, l%, s%\nend try\nend\n").lex();
+        let tokens = Lexer::new(
+            "test.bcl",
+            "try\nerror 11\ncatch e%, l%, s%\nend try\nend\n",
+        )
+        .lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for a non-string source binding");
         assert!(errs
@@ -2865,13 +2917,12 @@ mod tests {
 
     #[test]
     fn catch_error_filter_requires_closing_paren() {
-        let tokens =
-            Lexer::new("test.bcl", "try\nerror 11\ncatch e%(53, l%\nend try\nend\n").lex();
+        let tokens = Lexer::new("test.bcl", "try\nerror 11\ncatch e%(53, l%\nend try\nend\n").lex();
         let result = Parser::new("test.bcl".to_string(), tokens).parse_program();
         let errs = result.expect_err("expected a parse error for an unterminated filter list");
-        assert!(errs
-            .iter()
-            .any(|d| d.message.contains("expected `)` after catch's error-code filter list")));
+        assert!(errs.iter().any(|d| d
+            .message
+            .contains("expected `)` after catch's error-code filter list")));
     }
 
     #[test]
@@ -2972,11 +3023,17 @@ mod tests {
     #[test]
     fn wend_closes_a_while_loop() {
         let program = parse("while p% < 10\nprint p%\nwend\nprint \"after\"\nend\n");
-        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
+        assert!(matches!(
+            program.statements[0].kind,
+            Statement::While { .. }
+        ));
         // The statement after `wend` must be a sibling of the while loop,
         // not part of its body -- this is exactly the case that silently
         // broke before `wend` was a recognized terminator.
-        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
+        assert!(matches!(
+            program.statements[1].kind,
+            Statement::Print { .. }
+        ));
         if let Statement::While { body, .. } = &*program.statements[0] {
             assert_eq!(
                 body.len(),
@@ -2989,9 +3046,15 @@ mod tests {
     #[test]
     fn end_while_and_bare_end_still_work_alongside_wend() {
         let program = parse("while p% < 10\nprint p%\nend while\nend\n");
-        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
+        assert!(matches!(
+            program.statements[0].kind,
+            Statement::While { .. }
+        ));
         let program = parse("while p% < 10\nprint p%\nend\nend\n");
-        assert!(matches!(program.statements[0].kind, Statement::While { .. }));
+        assert!(matches!(
+            program.statements[0].kind,
+            Statement::While { .. }
+        ));
     }
 
     #[test]
@@ -3010,7 +3073,10 @@ mod tests {
         }
         // The statement after the single-line if must be its sibling, not
         // absorbed into the then-body.
-        assert!(matches!(program.statements[1].kind, Statement::Print { .. }));
+        assert!(matches!(
+            program.statements[1].kind,
+            Statement::Print { .. }
+        ));
     }
 
     #[test]
@@ -3108,7 +3174,9 @@ mod tests {
             Statement::Assignment { value, .. } => match value {
                 Expr::ScalarMethodCall { base, method, .. } => {
                     assert_eq!(method, "pad");
-                    assert!(matches!(base.as_ref(), Expr::ScalarMethodCall { method, .. } if method == "capitalize"));
+                    assert!(
+                        matches!(base.as_ref(), Expr::ScalarMethodCall { method, .. } if method == "capitalize")
+                    );
                 }
                 other => panic!("expected scalar method chain, got {other:?}"),
             },

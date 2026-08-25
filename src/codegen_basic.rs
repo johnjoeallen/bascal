@@ -408,9 +408,9 @@ impl CodeGenerator {
             && self.current_marker_file.as_deref() != Some(statement.pos.filename.as_str())
         {
             self.current_marker_file = Some(statement.pos.filename.clone());
-            self.line(&source_file_marker(&crate::diagnostics::display_source_filename(
-                &statement.pos.filename,
-            )));
+            self.line(&source_file_marker(
+                &crate::diagnostics::display_source_filename(&statement.pos.filename),
+            ));
         }
         match &statement.kind {
             Statement::Dim {
@@ -1477,19 +1477,15 @@ impl CodeGenerator {
                     .find(|builtin| name.name.eq_ignore_ascii_case(builtin));
                 if let Some(&builtin_name) = array_bound_builtin {
                     let resolved = match args.first() {
-                        Some(Expr::Ident(array_name)) if args.len() <= 2 => {
-                            match builtin_name {
-                                "lbound" => {
-                                    self.resolve_lbound(array_name, args.get(1), current_function)
-                                }
-                                "ubound" => {
-                                    self.resolve_ubound(array_name, args.get(1), current_function)
-                                }
-                                _ => {
-                                    self.resolve_sizeof(array_name, args.get(1), current_function)
-                                }
+                        Some(Expr::Ident(array_name)) if args.len() <= 2 => match builtin_name {
+                            "lbound" => {
+                                self.resolve_lbound(array_name, args.get(1), current_function)
                             }
-                        }
+                            "ubound" => {
+                                self.resolve_ubound(array_name, args.get(1), current_function)
+                            }
+                            _ => self.resolve_sizeof(array_name, args.get(1), current_function),
+                        },
                         _ => Err(format!(
                             "{builtin_name} expects an array name, e.g. `{builtin_name}(arr%)` \
                              or `{builtin_name}(grid%, 1)`"
@@ -1580,9 +1576,14 @@ impl CodeGenerator {
                 let mut call_args = Vec::with_capacity(args.len() + 1);
                 call_args.push((**base).clone());
                 call_args.extend(args.iter().cloned());
-                (self.call_lines(&info, &call_args, current_function), info.result.as_basic())
+                (
+                    self.call_lines(&info, &call_args, current_function),
+                    info.result.as_basic(),
+                )
             }
-            Expr::FileIndex { .. } | Expr::FieldAccess { .. } | Expr::MethodCall { .. }
+            Expr::FileIndex { .. }
+            | Expr::FieldAccess { .. }
+            | Expr::MethodCall { .. }
             | Expr::RecordLit { .. } => {
                 unreachable!("record/file DSL must be lowered before codegen")
             }
@@ -1954,7 +1955,8 @@ impl CodeGenerator {
 
     fn method_info(&self, receiver: TypeSuffix, name: &str) -> Option<&FunctionInfo> {
         self.functions.iter().find(|function| {
-            function.receiver == Some(receiver) && function.source_name.name.eq_ignore_ascii_case(name)
+            function.receiver == Some(receiver)
+                && function.source_name.name.eq_ignore_ascii_case(name)
         })
     }
 
@@ -1963,8 +1965,9 @@ impl CodeGenerator {
             Expr::String(_) => Some(TypeSuffix::String),
             Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
             Expr::Float(_) => Some(TypeSuffix::Single),
-            Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } =>
-                Some(id.suffix.unwrap_or(TypeSuffix::Single)),
+            Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => {
+                Some(id.suffix.unwrap_or(TypeSuffix::Single))
+            }
             Expr::Unary { expr, .. } => self.expr_receiver_type(expr),
             Expr::Binary { left, .. } => self.expr_receiver_type(left),
             Expr::ScalarMethodCall { base, method, .. } => {
@@ -2093,7 +2096,9 @@ impl CodeGenerator {
         let rank = self
             .resolve_array_rank(name, current_function)
             .ok_or_else(|| {
-                format!("`{name}` isn't a known array, so `{builtin_name}` can't determine its size")
+                format!(
+                    "`{name}` isn't a known array, so `{builtin_name}` can't determine its size"
+                )
             })?;
 
         let axis = match axis_expr {
@@ -2331,7 +2336,10 @@ impl FunctionInfo {
             .collect();
         if let Some(receiver) = function.receiver {
             let self_param = Param {
-                name: BasicIdent { name: "self".to_string(), suffix: Some(receiver) },
+                name: BasicIdent {
+                    name: "self".to_string(),
+                    suffix: Some(receiver),
+                },
                 mode: ParamMode::ByVal,
                 default: None,
                 axes: None,
@@ -2506,7 +2514,9 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
         }
         Statement::ErrorStmt { code } => visit_expr(code, f),
         Statement::ThrowStmt { code } => {
-            if let Some(code) = code { visit_expr(code, f); }
+            if let Some(code) = code {
+                visit_expr(code, f);
+            }
         }
         Statement::Input { vars, .. } => {
             for e in vars {
@@ -2688,7 +2698,9 @@ fn visit_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
         }
         Expr::ScalarMethodCall { base, args, .. } => {
             visit_expr(base, f);
-            for e in args { visit_expr(e, f); }
+            for e in args {
+                visit_expr(e, f);
+            }
         }
         Expr::RecordLit { fields, .. } => {
             for (_, e) in fields {
@@ -2831,12 +2843,11 @@ fn statements_use_catch_source_var(statements: &[Stmt]) -> bool {
             else_body,
             ..
         } => {
-            statements_use_catch_source_var(then_body)
-                || statements_use_catch_source_var(else_body)
+            statements_use_catch_source_var(then_body) || statements_use_catch_source_var(else_body)
         }
-        Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => {
-            statements_use_catch_source_var(body)
-        }
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => statements_use_catch_source_var(body),
         Statement::SelectCase {
             cases, else_body, ..
         } => {
@@ -3839,13 +3850,17 @@ fn collect_names_from_expr(expr: &Expr, names: &mut HashSet<String>) {
             collect_names_from_expr(right, names);
         }
         Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) => {}
-        Expr::FileIndex { .. } | Expr::FieldAccess { .. } | Expr::MethodCall { .. }
+        Expr::FileIndex { .. }
+        | Expr::FieldAccess { .. }
+        | Expr::MethodCall { .. }
         | Expr::RecordLit { .. } => {
             unreachable!("record/file DSL must be lowered before codegen")
         }
         Expr::ScalarMethodCall { base, args, .. } => {
             collect_names_from_expr(base, names);
-            for arg in args { collect_names_from_expr(arg, names); }
+            for arg in args {
+                collect_names_from_expr(arg, names);
+            }
         }
     }
 }

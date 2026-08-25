@@ -1,0 +1,9 @@
+Grade Checker
+Hello, Alice!
+Player: Alice
+Score: 87/ 100
+Temperature: 36.6
+Tax rate: 0.2
+Score is 87
+-1
+-1

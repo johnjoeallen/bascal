@@ -1,0 +1,24 @@
+// JVM-target conformance fixture: scalar locals and compile-time constants.
+program variables
+
+const maxScore% = 100
+const appName$ = "Grade Checker"
+const taxRate! = 0.2
+
+dim score%
+playerName$ = "Alice"
+greeting$ = "Hello" + ", " + playerName$ + "!"
+score% = 87
+temperature! = 36.6
+
+print appName$
+print greeting$
+print "Player: "; playerName$
+print "Score: "; score%; "/ "; maxScore%
+print "Temperature: "; temperature!
+print "Tax rate: "; taxRate!
+print "Score is " + str$(score%)
+print playerName$ = "Alice"
+print playerName$ <> "Bob"
+
+end

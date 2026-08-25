@@ -167,13 +167,19 @@ impl Lowerer {
     fn build_user_method_table(&mut self, functions: &[FunctionDef]) {
         for function in functions {
             if function.receiver.is_none() {
-                self.known_ordinary_functions
-                    .insert((function.name.name.to_ascii_lowercase(), function.name.suffix));
+                self.known_ordinary_functions.insert((
+                    function.name.name.to_ascii_lowercase(),
+                    function.name.suffix,
+                ));
             }
         }
         for function in functions {
-            let Some(receiver) = function.receiver else { continue };
-            let Some(result) = function.name.suffix else { continue };
+            let Some(receiver) = function.receiver else {
+                continue;
+            };
+            let Some(result) = function.name.suffix else {
+                continue;
+            };
             self.user_method_results
                 .insert((receiver, function.name.name.to_ascii_lowercase()), result);
         }
@@ -819,7 +825,12 @@ impl Lowerer {
             channel: Expr::Integer(channel),
             fields,
             record_type: Some(record_type),
-            string_fields: Some(rec.fields.iter().map(|field| matches!(field.ty, RecordFieldType::Str(_))).collect()),
+            string_fields: Some(
+                rec.fields
+                    .iter()
+                    .map(|field| matches!(field.ty, RecordFieldType::Str(_)))
+                    .collect(),
+            ),
             field_types: Some(rec.fields.iter().map(|field| field.ty).collect()),
         });
     }
@@ -1173,10 +1184,16 @@ impl Lowerer {
                     return;
                 }
                 if method.eq_ignore_ascii_case("write") {
-                    if let Some(channel) =
-                        self.lookup_sequential_file(&var, "write", &[OpenMode::Output, OpenMode::Append])
-                    {
-                        let exprs = args.iter().cloned().map(|e| self.rewrite_expr(e).0).collect();
+                    if let Some(channel) = self.lookup_sequential_file(
+                        &var,
+                        "write",
+                        &[OpenMode::Output, OpenMode::Append],
+                    ) {
+                        let exprs = args
+                            .iter()
+                            .cloned()
+                            .map(|e| self.rewrite_expr(e).0)
+                            .collect();
                         out.push(Statement::Raw(format!("' {}.write(...)", var.name)));
                         out.push(Statement::Write {
                             channel: Expr::Integer(channel),
@@ -1189,7 +1206,11 @@ impl Lowerer {
                     if let Some(channel) =
                         self.lookup_sequential_file(&var, "read", &[OpenMode::Input])
                     {
-                        let vars = args.iter().cloned().map(|e| self.rewrite_expr(e).0).collect();
+                        let vars = args
+                            .iter()
+                            .cloned()
+                            .map(|e| self.rewrite_expr(e).0)
+                            .collect();
                         out.push(Statement::Raw(format!("' {}.read(...)", var.name)));
                         out.push(Statement::InputFile {
                             channel: Expr::Integer(channel),
@@ -1295,9 +1316,9 @@ impl Lowerer {
                 OpenMode::Input => "input",
                 OpenMode::Output => "output",
                 OpenMode::Append => "append",
-                OpenMode::Random | OpenMode::Binary => unreachable!(
-                    "the file/open DSL sugar never parses a random/binary mode"
-                ),
+                OpenMode::Random | OpenMode::Binary => {
+                    unreachable!("the file/open DSL sugar never parses a random/binary mode")
+                }
             };
             let expected = allowed_modes
                 .iter()
@@ -1329,7 +1350,9 @@ impl Lowerer {
         };
         if !visible {
             self.diagnostics.push(Diagnostic::error(
-                self.current_statement_pos.clone().unwrap_or_else(generated_pos),
+                self.current_statement_pos
+                    .clone()
+                    .unwrap_or_else(generated_pos),
                 format!(
                     "`{}` is a top-level file; declare `global {}` in `{}` before using it",
                     var.name, var.name, current_function
@@ -1542,7 +1565,10 @@ impl Lowerer {
             }
             Expr::ScalarMethodCall { base, method, args } => {
                 let (base, _) = self.rewrite_expr(*base);
-                let args: Vec<Expr> = args.into_iter().map(|arg| self.rewrite_expr(arg).0).collect();
+                let args: Vec<Expr> = args
+                    .into_iter()
+                    .map(|arg| self.rewrite_expr(arg).0)
+                    .collect();
                 (self.rewrite_scalar_method_call(base, method, args), None)
             }
         }
@@ -1600,10 +1626,7 @@ impl Lowerer {
             };
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
-                format!(
-                    "`.{method}()` expects {expected}, got {}",
-                    args.len()
-                ),
+                format!("`.{method}()` expects {expected}, got {}", args.len()),
             ));
             return Expr::Integer(0);
         }
@@ -1688,7 +1711,11 @@ impl Lowerer {
     /// doesn't -- `name` then stays whatever it already was
     /// (`Expr::Call`/`Expr::ArrayRef`), and resolver's existing "unknown
     /// function" diagnostics still fire correctly downstream.
-    fn try_ordinary_call_as_method(&self, name: &BasicIdent, args: Vec<Expr>) -> Result<Expr, Vec<Expr>> {
+    fn try_ordinary_call_as_method(
+        &self,
+        name: &BasicIdent,
+        args: Vec<Expr>,
+    ) -> Result<Expr, Vec<Expr>> {
         if args.is_empty() {
             return Err(args);
         }

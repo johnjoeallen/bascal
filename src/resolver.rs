@@ -66,14 +66,16 @@ fn reject_invalid_parameter_defaults(program: &Program, diagnostics: &mut Vec<Di
 }
 
 fn is_fixed_default_value(expr: &Expr) -> bool {
-    matches!(expr, Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_))
-        || matches!(
+    matches!(
+        expr,
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_)
+    ) || matches!(
+        expr,
+        Expr::Unary {
+            op: UnaryOp::Neg,
             expr,
-            Expr::Unary {
-                op: UnaryOp::Neg,
-                expr,
-            } if matches!(expr.as_ref(), Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_))
-        )
+        } if matches!(expr.as_ref(), Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_))
+    )
 }
 
 /// `global x` inside a function that also has a parameter named `x` is
@@ -149,7 +151,10 @@ fn collect_global_decls(body: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent)>) {
 /// see `standard-library.html`), so this is rejected outright rather than
 /// left to whichever resolution order the codegen happens to pick.
 fn reject_functions_shadowing_builtins(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
-    let builtins: HashSet<&str> = crate::codegen_basic::BASIC_BUILTINS.iter().copied().collect();
+    let builtins: HashSet<&str> = crate::codegen_basic::BASIC_BUILTINS
+        .iter()
+        .copied()
+        .collect();
     for function in &program.functions {
         if function.receiver.is_some() {
             continue;
@@ -271,7 +276,9 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
 
     let mut seen = HashSet::new();
     for function in &program.functions {
-        let Some(receiver) = function.receiver else { continue };
+        let Some(receiver) = function.receiver else {
+            continue;
+        };
         let key = (receiver, function.name.name.to_ascii_lowercase());
         if !seen.insert(key) {
             diagnostics.push(Diagnostic::error(
@@ -279,9 +286,10 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
                 format!("duplicate method `{}.{}`", receiver, function.name),
             ));
         }
-        if ordinary_functions
-            .contains(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
-        {
+        if ordinary_functions.contains(&(
+            function.name.name.to_ascii_lowercase(),
+            function.name.suffix,
+        )) {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
                 format!(
@@ -293,23 +301,36 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
                 ),
             ));
         }
-        if function.params.iter().any(|p| {
-            p.name.name.eq_ignore_ascii_case("self") && p.name.suffix == Some(receiver)
-        }) {
+        if function
+            .params
+            .iter()
+            .any(|p| p.name.name.eq_ignore_ascii_case("self") && p.name.suffix == Some(receiver))
+        {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
-                format!("method `{}` reserves implicit receiver `self{receiver}`", function.name),
+                format!(
+                    "method `{}` reserves implicit receiver `self{receiver}`",
+                    function.name
+                ),
             ));
         }
     }
 
     for function in &program.functions {
-        let Some(receiver) = function.receiver else { continue };
+        let Some(receiver) = function.receiver else {
+            continue;
+        };
         let key = function.name.name.to_ascii_lowercase();
-        if crate::codegen_basic::BASIC_BUILTINS.iter().any(|b| *b == key) {
+        if crate::codegen_basic::BASIC_BUILTINS
+            .iter()
+            .any(|b| *b == key)
+        {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
-                format!("method name `{}` is reserved for built-in scalar methods", function.name),
+                format!(
+                    "method name `{}` is reserved for built-in scalar methods",
+                    function.name
+                ),
             ));
         }
         validate_scalar_method_calls(&function.body, program, diagnostics, receiver);
@@ -319,7 +340,12 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     });
 }
 
-fn validate_scalar_method_calls(body: &[Stmt], program: &Program, diagnostics: &mut Vec<Diagnostic>, _receiver: TypeSuffix) {
+fn validate_scalar_method_calls(
+    body: &[Stmt],
+    program: &Program,
+    diagnostics: &mut Vec<Diagnostic>,
+    _receiver: TypeSuffix,
+) {
     for stmt in body {
         walk_statements_exprs(std::slice::from_ref(stmt), &mut |expr, pos| {
             validate_one_scalar_method(expr, program, diagnostics, pos)
@@ -327,14 +353,31 @@ fn validate_scalar_method_calls(body: &[Stmt], program: &Program, diagnostics: &
     }
 }
 
-fn validate_one_scalar_method(expr: &Expr, program: &Program, diagnostics: &mut Vec<Diagnostic>, pos: &SourcePos) {
-    let Expr::ScalarMethodCall { base, method, .. } = expr else { return };
-    let Some(receiver) = scalar_expr_type(base, program) else {
-        diagnostics.push(Diagnostic::error(pos.clone(), format!("method receiver for `.{method}()` must be a scalar expression")));
+fn validate_one_scalar_method(
+    expr: &Expr,
+    program: &Program,
+    diagnostics: &mut Vec<Diagnostic>,
+    pos: &SourcePos,
+) {
+    let Expr::ScalarMethodCall { base, method, .. } = expr else {
         return;
     };
-    if !program.functions.iter().any(|f| f.receiver == Some(receiver) && f.name.name.eq_ignore_ascii_case(method)) {
-        diagnostics.push(Diagnostic::error(pos.clone(), format!("unknown method `.{method}()` for receiver type `{receiver}`")));
+    let Some(receiver) = scalar_expr_type(base, program) else {
+        diagnostics.push(Diagnostic::error(
+            pos.clone(),
+            format!("method receiver for `.{method}()` must be a scalar expression"),
+        ));
+        return;
+    };
+    if !program
+        .functions
+        .iter()
+        .any(|f| f.receiver == Some(receiver) && f.name.name.eq_ignore_ascii_case(method))
+    {
+        diagnostics.push(Diagnostic::error(
+            pos.clone(),
+            format!("unknown method `.{method}()` for receiver type `{receiver}`"),
+        ));
     }
 }
 
@@ -343,8 +386,9 @@ fn scalar_expr_type(expr: &Expr, program: &Program) -> Option<TypeSuffix> {
         Expr::String(_) => Some(TypeSuffix::String),
         Expr::Integer(_) | Expr::HexLit(_) => Some(TypeSuffix::Integer),
         Expr::Float(_) => Some(TypeSuffix::Single),
-        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } =>
-            Some(id.suffix.unwrap_or(TypeSuffix::Single)),
+        Expr::Ident(id) | Expr::Call { name: id, .. } | Expr::ArrayRef { name: id, .. } => {
+            Some(id.suffix.unwrap_or(TypeSuffix::Single))
+        }
         Expr::Unary { expr, .. } => scalar_expr_type(expr, program),
         Expr::Binary { left, .. } => scalar_expr_type(left, program),
         Expr::ScalarMethodCall { base, method, .. } => {
@@ -358,7 +402,6 @@ fn scalar_expr_type(expr: &Expr, program: &Program) -> Option<TypeSuffix> {
         _ => None,
     }
 }
-
 
 /// Rejects any recursive call cycle -- direct (a function calling itself)
 /// or indirect (`f%` calls `g%` calls `f%`, or a longer chain). Functions
@@ -747,7 +790,9 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         Statement::OnErrorGoto { target: t } | Statement::ErrorStmt { code: t } => {
             expr_calls_function(t, target)
         }
-        Statement::ThrowStmt { code } => code.as_ref().is_some_and(|code| expr_calls_function(code, target)),
+        Statement::ThrowStmt { code } => code
+            .as_ref()
+            .is_some_and(|code| expr_calls_function(code, target)),
         Statement::Resume(kind) => match kind {
             ResumeTarget::Line(e) => expr_calls_function(e, target),
             _ => false,
@@ -922,7 +967,9 @@ fn contains_return(statements: &[Stmt]) -> bool {
             ..
         } => {
             contains_return(try_body)
-                || catch.as_ref().is_some_and(|catch| contains_return(&catch.body))
+                || catch
+                    .as_ref()
+                    .is_some_and(|catch| contains_return(&catch.body))
                 || contains_return(finally_body)
         }
         _ => false,
@@ -1250,7 +1297,11 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
             walk_expr(a, pos, f);
             walk_expr(b, pos, f);
         }
-        Statement::Poke { address, value } | Statement::Out { port: address, value } => {
+        Statement::Poke { address, value }
+        | Statement::Out {
+            port: address,
+            value,
+        } => {
             walk_expr(address, pos, f);
             walk_expr(value, pos, f);
         }
@@ -1258,7 +1309,9 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         Statement::OnErrorGoto { target } => walk_expr(target, pos, f),
         Statement::ErrorStmt { code } => walk_expr(code, pos, f),
         Statement::ThrowStmt { code } => {
-            if let Some(code) = code { walk_expr(code, pos, f); }
+            if let Some(code) = code {
+                walk_expr(code, pos, f);
+            }
         }
         Statement::Resume(ResumeTarget::Line(e)) => walk_expr(e, pos, f),
         Statement::Input { vars, .. } | Statement::Read(vars) => {
@@ -1325,7 +1378,9 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
             walk_expr(expr, pos, f);
             targets.iter().for_each(|e| walk_expr(e, pos, f));
         }
-        Statement::Field { channel, fields, .. } => {
+        Statement::Field {
+            channel, fields, ..
+        } => {
             walk_expr(channel, pos, f);
             fields.iter().for_each(|(w, _)| walk_expr(w, pos, f));
         }
@@ -1384,8 +1439,7 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
 fn walk_expr(expr: &Expr, pos: &SourcePos, f: &mut dyn FnMut(&Expr, &SourcePos)) {
     f(expr, pos);
     match expr {
-        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {
-        }
+        Expr::Integer(_) | Expr::Float(_) | Expr::HexLit(_) | Expr::String(_) | Expr::Ident(_) => {}
         Expr::ArrayRef { indices, .. } => indices.iter().for_each(|e| walk_expr(e, pos, f)),
         Expr::Call { args, .. } => args.iter().for_each(|e| walk_expr(e, pos, f)),
         Expr::Unary { expr, .. } => walk_expr(expr, pos, f),
@@ -1498,7 +1552,11 @@ fn walk_legacy_forms(
                 seen_labels.insert(name.to_ascii_lowercase());
             }
             Statement::OnBranch { is_gosub, .. } => {
-                let legacy = if *is_gosub { "ON ... GOSUB" } else { "ON ... GOTO" };
+                let legacy = if *is_gosub {
+                    "ON ... GOSUB"
+                } else {
+                    "ON ... GOTO"
+                };
                 diagnostics.push(Diagnostic::warning(
                     stmt.pos.clone(),
                     format!(
@@ -1556,7 +1614,9 @@ fn walk_legacy_forms(
                 walk_legacy_forms(then_body, seen_labels, diagnostics);
                 walk_legacy_forms(else_body, seen_labels, diagnostics);
             }
-            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => {
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => {
                 walk_legacy_forms(body, seen_labels, diagnostics);
             }
             Statement::SelectCase {
@@ -1619,7 +1679,9 @@ mod legacy_form_tests {
     fn unknown_scalar_methods_are_rejected() {
         let program = parse("s$ = name$.missing()\nend\n");
         let diagnostics = validate(&program).expect_err("unknown method should fail");
-        assert!(diagnostics.iter().any(|d| d.message.contains("unknown method")));
+        assert!(diagnostics
+            .iter()
+            .any(|d| d.message.contains("unknown method")));
     }
 
     #[test]
@@ -1670,10 +1732,7 @@ end
     fn forward_goto_to_a_later_label_is_not_flagged() {
         let source = "if x = 1 then goto skip\nprint \"not skipped\"\nskip:\nend\n";
         let msgs = messages(source);
-        assert!(
-            msgs.is_empty(),
-            "a forward jump isn't a loop: {msgs:?}"
-        );
+        assert!(msgs.is_empty(), "a forward jump isn't a loop: {msgs:?}");
     }
 
     #[test]
@@ -1767,7 +1826,8 @@ mod position_tests {
 
     #[test]
     fn duplicate_function_points_at_the_second_declaration() {
-        let source = "function f(x)\nreturn x\nend function\nfunction f(y)\nreturn y\nend function\nend\n";
+        let source =
+            "function f(x)\nreturn x\nend function\nfunction f(y)\nreturn y\nend function\nend\n";
         let program = parse(source);
         let diags = validate(&program).unwrap_err();
         assert_real_pos(&diags);

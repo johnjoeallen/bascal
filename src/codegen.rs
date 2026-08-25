@@ -20,8 +20,8 @@ pub(crate) use crate::codegen_basic::{
 /// original, complete target: plain BASCOM-compatible BASIC. `C` is a
 /// native-C backend -- see `codegen_c`'s own module doc comment for exactly
 /// what it supports today. `Jvm` is a bootstrap-stage native-JVM backend --
-/// see `codegen_jvm`'s own module doc comment; it doesn't generate any code
-/// yet. `main.rs`'s `--target` flag/`BASCAL_TARGET` env var/config files all
+/// see `codegen_jvm`'s own module doc comment; it currently supports a small
+/// straight-line subset. `main.rs`'s `--target` flag/`BASCAL_TARGET` env var/config files all
 /// accept either spelling case-insensitively (`basic`/`BASIC`/..., `c`/`C`,
 /// `jvm`/`JVM`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

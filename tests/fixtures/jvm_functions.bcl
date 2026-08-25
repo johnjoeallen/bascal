@@ -1,0 +1,21 @@
+program functions
+
+function max%(a%, b%)
+    if a% > b% then
+        return a%
+    else
+        return b%
+    end if
+end function
+
+function repeat$(text$, n%)
+    acc$ = ""
+    for i% = 1 to n%
+        acc$ = acc$ + text$
+    end for
+    return acc$
+end function
+
+print max%(4, 9)
+print repeat$("ab", 3)
+end
