@@ -1,6 +1,6 @@
 [Home](../../) / [Tutorials](../) / Select Case
 
-JVM assembly: [tutorial/06_select_case.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.j)
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.j).
 
 <div class="prose" markdown="1">
 

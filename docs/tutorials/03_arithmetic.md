@@ -1,6 +1,6 @@
 [Home](../../) / [Tutorials](../) / Operators and Expressions
 
-JVM assembly: [tutorial/03_arithmetic.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.j)
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.j).
 
 <div class="prose" markdown="1">
 

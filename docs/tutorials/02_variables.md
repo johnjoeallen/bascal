@@ -1,6 +1,6 @@
 [Home](../../) / [Tutorials](../) / Variables and Constants
 
-JVM assembly: [tutorial/02_variables.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.j)
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.j).
 
 <div class="prose" markdown="1">
 

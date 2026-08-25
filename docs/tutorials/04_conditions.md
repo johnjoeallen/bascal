@@ -1,6 +1,6 @@
 [Home](../../) / [Tutorials](../) / Conditions
 
-JVM assembly: [tutorial/04_conditions.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.j)
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.j).
 
 <div class="prose" markdown="1">
 

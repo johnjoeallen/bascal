@@ -1,6 +1,6 @@
 [Home](../../) / [Tutorials](../) / Loops
 
-JVM assembly: [tutorial/05_loops.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.j)
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.j).
 
 <div class="prose" markdown="1">
 

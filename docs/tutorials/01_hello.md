@@ -4,7 +4,7 @@
 
 Every BASCAL program ends with `end`. `print` writes a line to the screen. Three comment styles are available and all three are preserved in the generated output: a leading `'` (classic BASIC style), a leading `//` (C style), and `/* ... */` block comments.
 
-This tutorial also passes the JVM backend. Its checked-in Krakatau assembly fixture is [`tutorial/01_hello.j`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.j).
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/01_hello.j).
 
 </div>
 
