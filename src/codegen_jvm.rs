@@ -27,17 +27,7 @@
 use crate::ast::{Expr, PrintToken, Program, Statement, Stmt};
 use crate::diagnostics::{Diagnostic, SourcePos};
 
-/// The emitted `.j`'s text and the class name it declares (`.class public
-/// <name>`) -- callers that go on to assemble it (`krak2 asm` then `java
-/// <name>`) need that name verbatim: the JVM launcher requires the
-/// `.class` file on disk to be named `<name>.class`, so it can't just reuse
-/// the input `.bcl`'s own file stem the way `codegen_c`'s output can.
-pub(crate) struct GeneratedJvm {
-    pub(crate) class_name: String,
-    pub(crate) source: String,
-}
-
-pub(crate) fn generate(program: &Program) -> Result<GeneratedJvm, Vec<Diagnostic>> {
+pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if !program.functions.is_empty() {
         return Err(vec![unsupported(
             "functions/procedures are not supported by the minimal JVM backend yet",
@@ -58,13 +48,12 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedJvm, Vec<Diagnostic
     }
 
     let class_name = class_name_for(program);
-    let source = format!(
+    Ok(format!(
         ".class public {class_name}\n.super java/lang/Object\n\n\
          .method public static main : ([Ljava/lang/String;)V\n    \
          .limit stack 2\n    .limit locals 1\n\n\
          {body}.end method\n"
-    );
-    Ok(GeneratedJvm { class_name, source })
+    ))
 }
 
 /// Java class-name-cases BASCAL's `program <name>` declaration (BASCAL
@@ -73,7 +62,11 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedJvm, Vec<Diagnostic
 /// letter needs adjusting to match Java's PascalCase convention; this is
 /// cosmetic, not a correctness requirement, since the JVM itself accepts
 /// any name here). Falls back to `Program` when the source has no `program`
-/// declaration at all (it's optional in BASCAL).
+/// declaration at all (it's optional in BASCAL). `main.rs`'s `invoke_krak2`
+/// recovers this same name back out of the emitted `.class public <name>`
+/// line rather than calling this directly -- `codegen_jvm` is a private
+/// module, not part of `bcc`'s public API surface `main.rs` (a separate
+/// crate) can reach.
 fn class_name_for(program: &Program) -> String {
     let Some(decl) = &program.program_decl else {
         return "Program".to_string();
