@@ -1245,6 +1245,21 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("right") && args.len() == 2 => {
+            emit_string_expr(&args[0], out, context)?;
+            out.push_str("    dup\n    invokevirtual java/lang/String/length ()I\n");
+            emit_numeric_expr_as(&args[1], NumericType::Int, out, context)?;
+            out.push_str("    isub\n    invokevirtual java/lang/String/substring (I)Ljava/lang/String;\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if (name.name.eq_ignore_ascii_case("lcase") || name.name.eq_ignore_ascii_case("ucase")) && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            let method = if name.name.eq_ignore_ascii_case("lcase") { "toLowerCase" } else { "toUpperCase" };
+            out.push_str(&format!("    invokevirtual java/lang/String/{method} ()Ljava/lang/String;\n"));
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             emit_function_call(name, args, JvmType::String, out, context)
         }
