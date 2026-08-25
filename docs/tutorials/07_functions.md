@@ -2,6 +2,8 @@
 
 <div class="prose" markdown="1">
 
+Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/07_functions.j).
+
 A function is declared `function name%(...) ... end function`; the name carries the return-type suffix and every path must reach a `return`. Variables declared inside a function are local by default — the transpiler prefixes them with the function name — so two functions can each use `i%` without conflict. To touch a global from inside a function, declare it with `global varname`. Functions can't recurse — directly (calling themselves) or indirectly (two or more functions calling each other in a cycle) — since any recursive call would overwrite its own parameter variables; the transpiler checks the whole call graph and rejects any cycle.
 
 </div>

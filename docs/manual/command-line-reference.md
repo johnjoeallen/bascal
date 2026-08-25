@@ -115,7 +115,7 @@ Each unsupported form reports a "not supported yet" diagnostic rather than panic
 
 #### `--target jvm`
 
-`--target jvm` is an early-stage native-JVM backend. It currently supports scalar variables and constants, numeric arithmetic and comparisons, string concatenation and selected string conversions, `print`, `if`/`elseif`/`else`, `for`/`while`/`do` loops with `exit`, and numeric or exact-string `select case`. It emits Krakatau assembly and can assemble/run it through `krak2` and a JRE. Arrays, file/screen I/O, procedures, full function/global support, and many standard-library operations remain unfinished; see the GitHub issue tracker's `jvm-target` label for progress.
+`--target jvm` is an early-stage native-JVM backend. It currently supports scalar variables and constants, numeric arithmetic and comparisons, string concatenation and selected string conversions, `print`, `if`/`elseif`/`else`, `for`/`while`/`do` loops with `exit`, numeric or exact-string `select case`, and by-value scalar functions with local variables and `global` access to top-level scalars. It emits Krakatau assembly and can assemble/run it through `krak2` and a JRE. Arrays, file/screen I/O, procedures, by-reference parameters, and many standard-library operations remain unfinished; see the GitHub issue tracker's `jvm-target` label for progress.
 
 It emits [Krakatau](https://github.com/Storyyeller/Krakatau) assembly text (`.j`), assembled into a real `.class` by the external `krak2` tool (`v2`/Rust branch — no installed-by-default story, so `scripts/fetch-krak2.sh` builds and installs it into `~/.local`, matching how `scripts/install-bcc.sh` installs `bcc` itself), then run by any JRE's `java`.
 

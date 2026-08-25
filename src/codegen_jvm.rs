@@ -66,10 +66,11 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         );
     }
     Ok(format!(
-        ".version 50 0\n.class public {class_name}\n.super java/lang/Object\n\n{methods}\
+        ".version 50 0\n.class public {class_name}\n.super java/lang/Object\n\n{}{methods}\
          .method public static main : ([Ljava/lang/String;)V\n    \
          .limit stack 16\n    .limit locals {}\n\n\
          {body}.end method\n",
+        emit_fields(&context),
         context.local_count(),
     ))
 }
@@ -93,6 +94,55 @@ fn class_name_for(program: &Program) -> String {
     match chars.next() {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
         None => "Program".to_string(),
+    }
+}
+
+fn emit_fields(context: &JvmContext) -> String {
+    context
+        .variables
+        .values()
+        .filter(|v| v.is_static)
+        .map(|v| {
+            format!(
+                ".field public static {} {}\n",
+                v.field_name(),
+                v.descriptor()
+            )
+        })
+        .collect()
+}
+
+fn emit_load(variable: Variable, out: &mut String, context: &JvmContext) {
+    if variable.is_static {
+        out.push_str(&format!(
+            "    getstatic {}/{} {}\n",
+            context.class_name,
+            variable.field_name(),
+            variable.descriptor()
+        ));
+    } else {
+        out.push_str(&format!(
+            "    {} {}\n",
+            variable.load_opcode(),
+            variable.slot
+        ));
+    }
+}
+
+fn emit_store(variable: Variable, out: &mut String, context: &JvmContext) {
+    if variable.is_static {
+        out.push_str(&format!(
+            "    putstatic {}/{} {}\n",
+            context.class_name,
+            variable.field_name(),
+            variable.descriptor()
+        ));
+    } else {
+        out.push_str(&format!(
+            "    {} {}\n",
+            variable.store_opcode(),
+            variable.slot
+        ));
     }
 }
 
@@ -237,11 +287,7 @@ impl JvmEmitter<'_> {
                     JvmType::String => emit_string_expr(value, out, self.context)?,
                     JvmType::Numeric(ty) => emit_numeric_expr_as(value, ty, out, self.context)?,
                 }
-                out.push_str(&format!(
-                    "    {} {}\n",
-                    variable.store_opcode(),
-                    variable.slot
-                ));
+                emit_store(variable, out, self.context);
                 Ok(())
             }
             Statement::If {
@@ -301,7 +347,9 @@ impl JvmEmitter<'_> {
                 };
                 let key = target.name.to_ascii_lowercase();
                 if !self.labels.contains(&key) {
-                    return Err(format!("JVM GOTO target `{target}` is not in this callable"));
+                    return Err(format!(
+                        "JVM GOTO target `{target}` is not in this callable"
+                    ));
                 }
                 out.push_str(&format!("    goto {}\n", jvm_label(&target.name)));
                 Ok(())
@@ -310,9 +358,7 @@ impl JvmEmitter<'_> {
                 "GOSUB is not supported by the JVM target; use a function/procedure instead"
                     .to_string(),
             ),
-            Statement::GlobalDecl(name) => Err(format!(
-                "global variable `{name}` requires JVM static-field storage, which is not implemented yet"
-            )),
+            Statement::GlobalDecl(_) => Ok(()),
             Statement::End => {
                 out.push_str("    return\n");
                 Ok(())
@@ -427,13 +473,14 @@ impl JvmEmitter<'_> {
             return Err("FOR STEP 0 is not supported by the JVM backend".to_string());
         }
         emit_numeric_expr_as(start, NumericType::Int, out, self.context)?;
-        out.push_str(&format!("    istore {}\n", variable.slot));
+        emit_store(variable, out, self.context);
 
         let id = self.next_label;
         self.next_label += 1;
         let top_label = format!("L_for_{id}_top");
         let end_label = format!("L_for_{id}_end");
-        out.push_str(&format!("{top_label}:\n    iload {}\n", variable.slot));
+        out.push_str(&format!("{top_label}:\n"));
+        emit_load(variable, out, self.context);
         emit_numeric_expr_as(end, NumericType::Int, out, self.context)?;
         let branch = if step_value > 0 {
             "if_icmpgt"
@@ -446,12 +493,11 @@ impl JvmEmitter<'_> {
             self.emit_statement(statement, out)?;
         }
         self.loop_exits.pop();
-        out.push_str(&format!("    iload {}\n", variable.slot));
+        emit_load(variable, out, self.context);
         emit_numeric_expr_as(step, NumericType::Int, out, self.context)?;
-        out.push_str(&format!(
-            "    iadd\n    istore {}\n    goto {top_label}\n{end_label}:\n",
-            variable.slot
-        ));
+        out.push_str(&format!("    iadd\n"));
+        emit_store(variable, out, self.context);
+        out.push_str(&format!("    goto {top_label}\n{end_label}:\n"));
         Ok(())
     }
 
@@ -735,9 +781,17 @@ enum JvmType {
 struct Variable {
     slot: usize,
     ty: JvmType,
+    is_static: bool,
 }
 
 impl Variable {
+    fn field_name(self) -> String {
+        format!("g{}", self.slot)
+    }
+
+    fn descriptor(self) -> &'static str {
+        descriptor(self.ty)
+    }
     fn width(self) -> usize {
         match self.ty {
             JvmType::Numeric(NumericType::Long | NumericType::Double) => 2,
@@ -772,6 +826,7 @@ struct JvmContext {
     functions: HashMap<String, FunctionSig>,
     class_name: String,
     condition_label: Cell<usize>,
+    initialize_static: bool,
 }
 
 #[derive(Clone)]
@@ -796,6 +851,7 @@ impl JvmContext {
                 let variable = Variable {
                     slot: next_slot,
                     ty,
+                    is_static: true,
                 };
                 next_slot += variable.width();
                 (key, variable)
@@ -809,6 +865,7 @@ impl JvmContext {
             functions,
             class_name,
             condition_label: Cell::new(0),
+            initialize_static: true,
         })
     }
 
@@ -823,6 +880,7 @@ impl JvmContext {
             let variable = Variable {
                 slot: next_slot,
                 ty: type_for_ident(&self_ident),
+                is_static: false,
             };
             next_slot += variable.width();
             variables.insert(variable_key(&self_ident), variable);
@@ -831,6 +889,7 @@ impl JvmContext {
             let variable = Variable {
                 slot: next_slot,
                 ty: type_for_ident(&param.name),
+                is_static: false,
             };
             next_slot += variable.width();
             variables.insert(variable_key(&param.name), variable);
@@ -839,6 +898,11 @@ impl JvmContext {
         let mut declarations = BTreeMap::new();
         let mut constants = parent.constants.clone();
         collect_scalar_declarations(&function.body, &mut declarations, &mut constants);
+        for name in collect_global_names(&function.body) {
+            if let Some(variable) = parent.variables.get(&variable_key(&name)) {
+                variables.insert(variable_key(&name), *variable);
+            }
+        }
         for (key, ty) in declarations {
             if variables.contains_key(&key) {
                 continue;
@@ -846,6 +910,7 @@ impl JvmContext {
             let variable = Variable {
                 slot: next_slot,
                 ty,
+                is_static: false,
             };
             next_slot += variable.width();
             variables.insert(key, variable);
@@ -858,6 +923,7 @@ impl JvmContext {
             functions: parent.functions.clone(),
             class_name: parent.class_name.clone(),
             condition_label: Cell::new(0),
+            initialize_static: false,
         }
     }
 
@@ -922,23 +988,58 @@ impl JvmContext {
     }
 
     fn emit_initializers(&self, out: &mut String) {
-        for variable in self
-            .variables
-            .values()
-            .filter(|variable| variable.slot >= self.initializer_start)
-        {
+        for variable in self.variables.values().filter(|variable| {
+            variable.slot >= self.initializer_start
+                && (self.initialize_static || !variable.is_static)
+        }) {
             match variable.ty {
                 JvmType::String => {
-                    out.push_str(&format!("    ldc \"\"\n    astore {}\n", variable.slot))
+                    if variable.is_static {
+                        out.push_str(&format!(
+                            "    ldc \"\"\n    putstatic {}/{} {}\n",
+                            self.class_name,
+                            variable.field_name(),
+                            variable.descriptor()
+                        ))
+                    } else {
+                        out.push_str(&format!("    ldc \"\"\n    astore {}\n", variable.slot))
+                    }
                 }
                 JvmType::Numeric(NumericType::Int) => {
-                    out.push_str(&format!("    iconst_0\n    istore {}\n", variable.slot))
+                    if variable.is_static {
+                        out.push_str(&format!(
+                            "    iconst_0\n    putstatic {}/{} {}\n",
+                            self.class_name,
+                            variable.field_name(),
+                            variable.descriptor()
+                        ))
+                    } else {
+                        out.push_str(&format!("    iconst_0\n    istore {}\n", variable.slot))
+                    }
                 }
                 JvmType::Numeric(NumericType::Long) => {
-                    out.push_str(&format!("    lconst_0\n    lstore {}\n", variable.slot))
+                    if variable.is_static {
+                        out.push_str(&format!(
+                            "    lconst_0\n    putstatic {}/{} {}\n",
+                            self.class_name,
+                            variable.field_name(),
+                            variable.descriptor()
+                        ))
+                    } else {
+                        out.push_str(&format!("    lconst_0\n    lstore {}\n", variable.slot))
+                    }
                 }
                 JvmType::Numeric(NumericType::Double) => {
-                    out.push_str(&format!("    dconst_0\n    dstore {}\n", variable.slot))
+                    if variable.is_static {
+                        out.push_str(&format!(
+                            "    dconst_0\n    putstatic {}/{} {}\n",
+                            self.class_name,
+                            variable.field_name(),
+                            variable.descriptor()
+                        ))
+                    } else {
+                        out.push_str(&format!("    dconst_0\n    dstore {}\n", variable.slot))
+                    }
                 }
             }
         }
@@ -984,6 +1085,31 @@ fn collect_scalar_declarations(
             _ => {}
         }
     }
+}
+
+fn collect_global_names(statements: &[Stmt]) -> Vec<BasicIdent> {
+    let mut names = Vec::new();
+    fn visit(statements: &[Stmt], names: &mut Vec<BasicIdent>) {
+        for statement in statements {
+            match &statement.kind {
+                Statement::GlobalDecl(name) => names.push(name.clone()),
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, names);
+                    visit(else_body, names);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => visit(body, names),
+                _ => {}
+            }
+        }
+    }
+    visit(statements, &mut names);
+    names
 }
 
 fn variable_key(ident: &BasicIdent) -> String {
@@ -1082,7 +1208,7 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             if !matches!(variable.ty, JvmType::String) {
                 return Err(format!("`{name}` is numeric, not a string"));
             }
-            out.push_str(&format!("    {} {}\n", variable.load_opcode(), variable.slot));
+            emit_load(variable, out, context);
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
@@ -1211,7 +1337,7 @@ fn emit_numeric_expr(
             let JvmType::Numeric(ty) = variable.ty else {
                 return Err(format!("`{name}` is a string, not a numeric scalar"));
             };
-            out.push_str(&format!("    {} {}\n", variable.load_opcode(), variable.slot));
+            emit_load(variable, out, context);
             Ok(ty)
         }
         Expr::Unary {
