@@ -53,6 +53,15 @@ Tutorial 08 now transpiles for the JVM target, including one- and two-
 dimensional integer reads, writes, `SIZEOF`, and array-parameter calls. Runtime
 array-parameter copying and non-integer element arrays remain future work.
 
+Tracked follow-up work:
+
+- [#112](https://github.com/johnjoeallen/bascal/issues/112): complete JVM
+  array-parameter `byval`/`byref` semantics and per-call bounds.
+- [#111](https://github.com/johnjoeallen/bascal/issues/111): support
+  non-integer array element types.
+- [#113](https://github.com/johnjoeallen/bascal/issues/113): implement
+  genuine multidimensional array semantics matching the Basic backend.
+
 ## Latest continuation prompt
 
 The follow-up request was to continue array support while keeping this record
