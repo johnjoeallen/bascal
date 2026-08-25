@@ -83,6 +83,17 @@ Default target (used when --target isn't given), first match wins:
   4. basic, if none of the above are set";
 
 fn main() -> ExitCode {
+    // -V/--version is intercepted here, ahead of clap, because clap 4's
+    // auto-generated version flag hardcodes a "{bin} {version}" first line
+    // with no override hook (version_template was removed after clap 3) --
+    // this is the only way to get "BASCAL Compiler version x.y.z" instead
+    // of "bcc x.y.z" while still letting clap own everything else
+    // (--help's own flag listing, error messages, ...).
+    if env::args().nth(1).is_some_and(|arg| arg == "-V" || arg == "--version") {
+        println!("BASCAL Compiler version {VERSION}");
+        return ExitCode::SUCCESS;
+    }
+
     // Parsing happens before entering the fallible part of the program on
     // purpose: a bad flag or --help/--version are clap's own concern (it
     // prints its own formatted message and exits itself), entirely
