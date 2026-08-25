@@ -45,6 +45,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         loop_exits: Vec::new(),
         return_type: None,
         labels: collect_labels(&program.statements),
+        exception_handlers: Vec::new(),
     };
     for statement in &program.statements {
         emitter
@@ -59,6 +60,16 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     if !ends_with_end(&program.statements) {
         body.push_str("    return\n");
     }
+    let handlers = emitter
+        .exception_handlers
+        .iter()
+        .map(|handler| {
+            format!(
+                "    .catch java/lang/RuntimeException from {} to {} using {}\n",
+                handler.start, handler.end, handler.handler
+            )
+        })
+        .collect::<String>();
 
     let mut methods = String::new();
     for function in &program.functions {
@@ -70,7 +81,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         ".version 50 0\n.class public {class_name}\n.super java/lang/Object\n\n{}{methods}\
          .method public static main : ([Ljava/lang/String;)V\n    \
          .limit stack 16\n    .limit locals {}\n\n\
-         {body}.end method\n",
+         {body}{handlers}.end method\n",
         emit_fields(&context),
         context.local_count(),
     ))
@@ -271,6 +282,7 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         loop_exits: Vec::new(),
         return_type: (!function.is_procedure).then(|| type_for_ident(&function.name)),
         labels: collect_labels(&function.body),
+        exception_handlers: Vec::new(),
     };
     for statement in &function.body {
         emitter.emit_statement(statement, &mut body)?;
@@ -301,7 +313,17 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
     } else {
         descriptor(sig.result)
     };
-    Ok(format!(".method public static {} : ({args}){}\n    .limit stack 16\n    .limit locals {}\n\n{body}.end method\n\n", function.name.name, result, context.local_count()))
+    let handlers = emitter
+        .exception_handlers
+        .iter()
+        .map(|handler| {
+            format!(
+                "    .catch java/lang/RuntimeException from {} to {} using {}\n",
+                handler.start, handler.end, handler.handler
+            )
+        })
+        .collect::<String>();
+    Ok(format!(".method public static {} : ({args}){}\n    .limit stack 16\n    .limit locals {}\n\n{body}{handlers}.end method\n\n", function.name.name, result, context.local_count()))
 }
 
 struct JvmEmitter<'a> {
@@ -310,9 +332,62 @@ struct JvmEmitter<'a> {
     loop_exits: Vec<String>,
     return_type: Option<JvmType>,
     labels: HashSet<String>,
+    exception_handlers: Vec<JvmExceptionHandler>,
+}
+
+struct JvmExceptionHandler {
+    start: String,
+    end: String,
+    handler: String,
 }
 
 impl JvmEmitter<'_> {
+    fn emit_try_catch(
+        &mut self,
+        try_body: &[Stmt],
+        catch: Option<&crate::ast::TryCatchHandler>,
+        finally_body: &[Stmt],
+        out: &mut String,
+    ) -> Result<(), String> {
+        let Some(catch) = catch else {
+            return Err("JVM TRY currently requires a CATCH clause".to_string());
+        };
+        if !catch.error_filter.is_empty() || catch.source_var.is_some() {
+            return Err("JVM CATCH filters and source bindings are not supported yet".to_string());
+        }
+        let id = self.next_label;
+        self.next_label += 1;
+        let start = format!("L_try_{id}_start");
+        let end = format!("L_try_{id}_end");
+        let handler = format!("L_try_{id}_catch");
+        let finish = format!("L_try_{id}_finish");
+        self.exception_handlers.push(JvmExceptionHandler {
+            start: start.clone(),
+            end: end.clone(),
+            handler: handler.clone(),
+        });
+
+        out.push_str(&format!("{start}:\n"));
+        for statement in try_body {
+            self.emit_statement(statement, out)?;
+        }
+        out.push_str(&format!("    goto {finish}\n{end}:\n{handler}:\n"));
+        out.push_str("    invokevirtual java/lang/Throwable/getMessage ()Ljava/lang/String;\n    invokestatic java/lang/Integer/parseInt (Ljava/lang/String;)I\n");
+        let err = self.context.variable(&catch.err_var)?;
+        emit_store(err, out, self.context);
+        let erl = self.context.variable(&catch.erl_var)?;
+        out.push_str("    iconst_0\n");
+        emit_store(erl, out, self.context);
+        for statement in &catch.body {
+            self.emit_statement(statement, out)?;
+        }
+        out.push_str(&format!("    goto {finish}\n{finish}:\n"));
+        for statement in finally_body {
+            self.emit_statement(statement, out)?;
+        }
+        Ok(())
+    }
+
     fn emit_statement(&mut self, statement: &Stmt, out: &mut String) -> Result<(), String> {
         match &statement.kind {
             Statement::Print { tokens } => emit_print_tokens(tokens, out, self.context),
@@ -347,6 +422,22 @@ impl JvmEmitter<'_> {
                     );
                 };
                 emit_terminal_escape(&format!("\u{1b}[{};{}H", row, col), out)
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => self.emit_try_catch(try_body, catch.as_ref(), finally_body, out),
+            Statement::ThrowStmt { code: Some(code) } | Statement::ErrorStmt { code } => {
+                out.push_str("    new java/lang/RuntimeException\n    dup\n");
+                emit_numeric_expr_as(code, NumericType::Int, out, self.context)?;
+                out.push_str("    invokestatic java/lang/Integer/toString (I)Ljava/lang/String;\n    invokespecial java/lang/RuntimeException/<init> (Ljava/lang/String;)V\n    athrow\n");
+                Ok(())
+            }
+            Statement::ThrowStmt { code: None } => {
+                return Err(
+                    "JVM bare THROW is only supported inside a JVM catch handler".to_string(),
+                );
             }
             Statement::Dim { .. } | Statement::Const { .. } => Ok(()),
             Statement::Assignment {
@@ -1296,6 +1387,21 @@ fn collect_scalar_declarations(
             }
             Statement::While { body, .. } | Statement::Do { body, .. } => {
                 collect_scalar_declarations(body, declarations, constants);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_scalar_declarations(try_body, declarations, constants);
+                if let Some(catch) = catch {
+                    declarations
+                        .insert(variable_key(&catch.err_var), type_for_ident(&catch.err_var));
+                    declarations
+                        .insert(variable_key(&catch.erl_var), type_for_ident(&catch.erl_var));
+                    collect_scalar_declarations(&catch.body, declarations, constants);
+                }
+                collect_scalar_declarations(finally_body, declarations, constants);
             }
             _ => {}
         }

@@ -1,0 +1,11 @@
+program jvmTry
+
+try
+    throw 7
+catch err%, erl%
+    print "caught " + str$(err%)
+finally
+    print "finally"
+end try
+
+end

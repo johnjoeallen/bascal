@@ -48,7 +48,7 @@ The divergences below are permanent design decisions, not temporary implementati
 
 - `GOSUB`/bare `RETURN` (BASIC-level subroutine call, distinct from a `function`/`procedure`'s own `return`) is rejected entirely, not merely deferred. **Portable equivalent:** `function`/`procedure` — the structured replacement BASCAL already provides, and the one the language steers new/edited source toward anyway (see [Legacy-Form Warnings](miscellaneous-statements.md#legacy-form-warnings)).
 - `GOTO`/`label:` may not cross into or out of a `function`/`procedure` — a `goto`'s target label must live in the same callable as the `goto` itself (or, for a top-level `goto`, another top-level label in the main program body). This isn't a BASCAL policy choice: the JVM's own `goto` instruction is a branch offset within one method's own bytecode, with no way to jump into another method's code at all, so this matches what the JVM can physically express. **Portable equivalent:** none direct — restructure the jump as a function call/return instead.
-- Classic `ON ERROR GOTO`/every `RESUME` variant/`ERROR` is rejected, for the same reason as `--target c` above. **Portable equivalent:** `try`/`catch`/`finally` (once implemented for this target — it isn't yet; see the GitHub issue tracker's `jvm-target` label).
+- Classic `ON ERROR GOTO`/every `RESUME` variant is rejected, for the same reason as `--target c` above. The JVM target supports the initial `try`/`catch`/`finally` path for explicit numeric `throw`/`error` statements; catch filters, source bindings, and runtime file errors remain unfinished (see issue #108). **Portable equivalent:** use structured `try`/`catch`/`finally` rather than legacy handlers.
 
 ### Backends
 
