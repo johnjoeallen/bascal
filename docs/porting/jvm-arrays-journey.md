@@ -25,6 +25,8 @@ branch and extended incrementally.
 8. Added initial `SIZEOF` handling for one-dimensional arrays.
 9. Expanded the shared IR with typed array-reference records carrying array
    identity, rank, indices, element suffix, and optional `SIZEOF` axis.
+10. Began populating typed array-reference records during parsing for array
+    expressions, assignments, control-flow conditions, and `SIZEOF`.
 
 Each stage was committed separately and the existing JVM conformance suite
 continued to pass.
