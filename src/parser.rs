@@ -169,6 +169,7 @@ impl Parser {
             functions,
             records,
             typed_arrays,
+            typed_array_refs: Vec::new(),
         })
     }
 

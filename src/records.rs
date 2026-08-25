@@ -51,6 +51,7 @@ pub fn lower(
             functions,
             records: Vec::new(),
             typed_arrays: program.typed_arrays,
+            typed_array_refs: program.typed_array_refs,
         },
         lowerer.synthesized_buffer_names,
     ))

@@ -59,6 +59,7 @@ pub struct Program {
     /// Typed array declarations preserved for backends that need rank and
     /// element information after source-level lowering.
     pub typed_arrays: Vec<TypedArrayDecl>,
+    pub typed_array_refs: Vec<TypedArrayRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,6 +67,15 @@ pub struct TypedArrayDecl {
     pub name: BasicIdent,
     pub element_suffix: Option<TypeSuffix>,
     pub dimensions: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypedArrayRef {
+    pub name: BasicIdent,
+    pub element_suffix: Option<TypeSuffix>,
+    pub dimensions: usize,
+    pub indices: Vec<Expr>,
+    pub sizeof_axis: Option<usize>,
 }
 
 /// A `record ... end record` declaration: a fixed-layout struct that the
