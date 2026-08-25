@@ -93,7 +93,7 @@ end for
 
 ### Functions and procedures
 
-`function` returns a typed value with explicit `return`; `procedure` is the side-effect-only equivalent. Both transpile to global parameter/result variables plus `GOSUB`.
+`function` returns a typed value with explicit `return`; `procedure` is the side-effect-only equivalent. On the `basic` target they transpile to global parameter/result variables plus `GOSUB`; the C and JVM targets use real callable methods, so `GOSUB` remains a BASIC-only compatibility form for portable source.
 
 ```bascal
 function max%(a%, b%)
