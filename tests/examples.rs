@@ -2,6 +2,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 fn is_library_path(path: &Path) -> bool {
     path.components()
@@ -261,9 +263,25 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
         .expect("child stdin should be piped")
         .write_all(b"11\nxx")
         .expect("failed to write keystrokes to inventory binary");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll inventory binary")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("compiled inventory binary timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
     let run = child
         .wait_with_output()
-        .expect("failed to run compiled inventory binary");
+        .expect("failed to collect inventory binary output");
     assert!(
         run.status.success(),
         "compiled inventory binary failed:\nstdout:\n{}\nstderr:\n{}",
