@@ -48,6 +48,13 @@ it. The next stage is to preserve the typed array reference through that shared
 `SIZEOF` lowering/resolution path, then add end-to-end multidimensional tutorial
 fixtures.
 
+## Latest continuation prompt
+
+The follow-up request was to continue array support while keeping this record
+up to date. This is now part of the implementation workflow: every array
+stage and every prompting clarification is recorded here before the branch is
+considered complete.
+
 ## Relevant commits
 
 - `eeb15ff` — rank-aware JVM array metadata
