@@ -45,6 +45,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 
 - [Short-Circuit && and \|\| <span class="targets">(Basic, C)</span>](16_short_circuit.md)
 - [Labels and Error Handling <span class="targets">(Basic; structured C, JVM)</span>](17_labels_and_error_handling.md)
+  Generated files: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/17_labels_and_error_handling.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.c), [JVM `.j`](https://github.com/johnjoeallen/bascal/blob/main/tests/fixtures/conformance/jvm_try_filter.j)
 - [Standard Library Functions <span class="targets">(Basic, C, JVM)</span>](18_stdlib.md)
 
 </div>
