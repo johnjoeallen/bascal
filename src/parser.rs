@@ -26,6 +26,39 @@ pub struct Parser {
     pending_statements: std::collections::VecDeque<Stmt>,
 }
 
+fn collect_typed_arrays(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayDecl> {
+    let mut arrays = Vec::new();
+    fn visit(statements: &[Stmt], arrays: &mut Vec<crate::ast::TypedArrayDecl>) {
+        for statement in statements {
+            match &statement.kind {
+                Statement::Dim {
+                    name,
+                    is_array: true,
+                    sizes,
+                } => arrays.push(crate::ast::TypedArrayDecl {
+                    name: name.clone(),
+                    element_suffix: name.suffix,
+                    dimensions: sizes.clone(),
+                }),
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, arrays);
+                    visit(else_body, arrays);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => visit(body, arrays),
+                _ => {}
+            }
+        }
+    }
+    visit(statements, &mut arrays);
+    arrays
+}
+
 impl Parser {
     pub fn new(filename: String, tokens: Vec<Token>) -> Self {
         Self {
@@ -125,6 +158,7 @@ impl Parser {
             }
         }
 
+        let typed_arrays = collect_typed_arrays(&statements);
         Ok(Program {
             program_decl,
             library_decl,
@@ -134,7 +168,7 @@ impl Parser {
             statements,
             functions,
             records,
-            typed_arrays: Vec::new(),
+            typed_arrays,
         })
     }
 
