@@ -17,6 +17,14 @@ fn java_available() -> bool {
     Command::new("java").arg("-version").output().is_ok()
 }
 
+fn krak2_available() -> bool {
+    Command::new("krak2").arg("--help").output().is_ok()
+}
+
+fn jvm_runtime_available() -> bool {
+    java_available() && krak2_available()
+}
+
 /// Pending cross-backend record-file compatibility check. This is deliberately
 /// ignored until JVM random-access file I/O exists; enabling it today should
 /// fail because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
@@ -47,8 +55,8 @@ fn jvm_record_binary_compatibility_with_basic_and_c_is_pending() {
 
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
-    if !java_available() {
-        eprintln!("skipping {}: java is unavailable", module_path!());
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/conformance/jvm_try.bcl");
@@ -74,8 +82,8 @@ fn jvm_try_catch_finally_runs_when_available() {
 
 #[test]
 fn jvm_catch_filters_and_source_bindings_run_when_available() {
-    if !java_available() {
-        eprintln!("skipping {}: java is unavailable", module_path!());
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/conformance/jvm_try_filter.bcl");
