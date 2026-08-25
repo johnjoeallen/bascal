@@ -962,6 +962,13 @@ struct FunctionSig {
 }
 
 impl JvmContext {
+    fn array_index(&self, ident: &BasicIdent) -> usize {
+        self.arrays
+            .keys()
+            .position(|key| key == &variable_key(ident))
+            .expect("registered JVM array")
+    }
+
     fn build(
         program: &Program,
         functions: HashMap<String, FunctionSig>,
@@ -1646,6 +1653,19 @@ fn emit_numeric_expr(
             };
             emit_function_call(name, args, signature.result, out, context)?;
             Ok(result)
+        }
+        Expr::ArrayRef { name, indices } => {
+            let shape = context
+                .arrays
+                .get(&variable_key(name))
+                .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
+            if shape.dimensions.len() != 1 || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) || indices.len() != 1 {
+                return Err("JVM indexed access currently supports one-dimensional integer arrays only".to_string());
+            }
+            out.push_str(&format!("    getstatic {}/a{} {}\n", context.class_name, context.array_index(name), array_descriptor(shape)));
+            emit_numeric_expr_as(&indices[0], NumericType::Int, out, context)?;
+            out.push_str("    iaload\n");
+            Ok(NumericType::Int)
         }
         Expr::Binary {
             left,
