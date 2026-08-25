@@ -190,9 +190,26 @@ end
 /// (pre-populating a brand-new `inven.dat` so it doesn't have to be
 /// supplied by hand). Skipped (not failed) when `gcc` isn't available,
 /// matching this file's other C-target tests.
+///
+/// Also skipped on Windows: this test drives the compiled binary's
+/// `INKEY$` prompts by piping keystrokes into its stdin, which works on
+/// POSIX because `bcc_inkey`'s non-Windows arm does a real
+/// `read(STDIN_FILENO, ...)` -- but on Windows `bcc_inkey` uses
+/// `_kbhit()`/`_getch()` (see `INKEY_BODY` in `codegen_c.rs`), which read
+/// the actual console input buffer directly and never see bytes written
+/// to a redirected/piped stdin at all. Against a pipe, `_kbhit()` simply
+/// never reports a key, so any loop waiting on `INKEY$` spins forever --
+/// this is a real, structural platform gap (a compiled BASCAL program
+/// with `INKEY$` genuinely cannot be scripted via piped input on Windows
+/// today, not just this test), not a flaky-CI issue, so there's no retry
+/// or longer timeout that would fix it. Tracked as a real backend gap
+/// separately from this test skip -- see GitHub issue #94.
 #[test]
 fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
     if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    if cfg!(windows) {
         return;
     }
 
