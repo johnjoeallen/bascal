@@ -977,6 +977,7 @@ impl Variable {
 struct JvmContext {
     variables: BTreeMap<String, Variable>,
     arrays: BTreeMap<String, ArrayShape>,
+    array_refs: Vec<crate::ast::TypedArrayRef>,
     constants: HashMap<String, Expr>,
     local_count: usize,
     initializer_start: usize,
@@ -1035,6 +1036,7 @@ impl JvmContext {
         Ok(Self {
             variables,
             arrays,
+            array_refs: program.typed_array_refs.clone(),
             constants,
             local_count: next_slot,
             initializer_start: 1,
@@ -1094,6 +1096,7 @@ impl JvmContext {
         Self {
             variables,
             arrays: parent.arrays.clone(),
+            array_refs: parent.array_refs.clone(),
             constants,
             local_count: next_slot,
             initializer_start,
