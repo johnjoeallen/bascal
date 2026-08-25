@@ -1459,6 +1459,13 @@ fn emit_numeric_expr(
             emit_round_away_from_zero(out);
             Ok(NumericType::Long)
         }
+        Expr::Call { name, args }
+            if (name.name.eq_ignore_ascii_case("csng") || name.name.eq_ignore_ascii_case("cdbl"))
+                && args.len() == 1 =>
+        {
+            emit_numeric_expr_as(&args[0], NumericType::Double, out, context)?;
+            Ok(NumericType::Double)
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             let signature = context.function(name).expect("checked above");
@@ -1622,6 +1629,9 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cint") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("clng") && args.len() == 1 => Ok(NumericType::Long),
+        Expr::Call { name, args }
+            if (name.name.eq_ignore_ascii_case("csng") || name.name.eq_ignore_ascii_case("cdbl"))
+                && args.len() == 1 => Ok(NumericType::Double),
         Expr::Call { name, .. } | Expr::ArrayRef { name, .. }
             if context.function(name).is_some() => match context.function(name).expect("checked above").result {
             JvmType::Numeric(ty) => Ok(ty),
