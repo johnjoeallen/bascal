@@ -1,0 +1,12 @@
+program jvmTryFilter
+
+try
+    throw 7
+catch err%(6, 7), erl%, source$
+    print "caught " + str$(err%)
+    print source$
+finally
+    print "finally"
+end try
+
+end

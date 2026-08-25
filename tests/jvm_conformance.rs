@@ -72,6 +72,34 @@ fn jvm_try_catch_finally_runs_when_available() {
     assert!(stdout.contains("finally"), "{stdout}");
 }
 
+#[test]
+fn jvm_catch_filters_and_source_bindings_run_when_available() {
+    if !java_available() {
+        eprintln!("skipping {}: java is unavailable", module_path!());
+        return;
+    }
+    let source_path = repo_root().join("tests/fixtures/conformance/jvm_try_filter.bcl");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "JVM catch filter fixture failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("caught 7"), "{stdout}");
+    assert!(stdout.contains("jvm_try_filter.bcl"), "{stdout}");
+    assert!(stdout.contains("finally"), "{stdout}");
+}
+
 /// Compile `source_path` to a temporary `.j` file and assemble it through
 /// the CLI, so this exercises the same `krak2` configuration lookup users
 /// get (`BASCAL_KRAK2`, config file, then PATH).  A missing assembler is a

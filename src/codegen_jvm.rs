@@ -347,14 +347,12 @@ impl JvmEmitter<'_> {
         try_body: &[Stmt],
         catch: Option<&crate::ast::TryCatchHandler>,
         finally_body: &[Stmt],
+        source_filename: &str,
         out: &mut String,
     ) -> Result<(), String> {
         let Some(catch) = catch else {
             return Err("JVM TRY currently requires a CATCH clause".to_string());
         };
-        if !catch.error_filter.is_empty() || catch.source_var.is_some() {
-            return Err("JVM CATCH filters and source bindings are not supported yet".to_string());
-        }
         let id = self.next_label;
         self.next_label += 1;
         let start = format!("L_try_{id}_start");
@@ -378,10 +376,40 @@ impl JvmEmitter<'_> {
         let erl = self.context.variable(&catch.erl_var)?;
         out.push_str("    iconst_0\n");
         emit_store(erl, out, self.context);
+        if let Some(source_var) = &catch.source_var {
+            let source = self.context.variable(source_var)?;
+            out.push_str(&format!(
+                "    ldc \"{}\"\n",
+                escape_jvm_string(&crate::diagnostics::display_source_filename(
+                    source_filename
+                ))
+            ));
+            emit_store(source, out, self.context);
+        }
+        let matched = format!("L_try_{id}_matched");
+        let rethrow = format!("L_try_{id}_rethrow");
+        for filter in &catch.error_filter {
+            emit_load(err, out, self.context);
+            emit_numeric_expr_as(filter, NumericType::Int, out, self.context)?;
+            out.push_str(&format!("    if_icmpeq {matched}\n"));
+        }
+        if !catch.error_filter.is_empty() {
+            out.push_str(&format!("    goto {rethrow}\n{matched}:\n"));
+        }
         for statement in &catch.body {
             self.emit_statement(statement, out)?;
         }
-        out.push_str(&format!("    goto {finish}\n{finish}:\n"));
+        out.push_str(&format!("    goto {finish}\n"));
+        if !catch.error_filter.is_empty() {
+            out.push_str(&format!("{rethrow}:\n"));
+            for statement in finally_body {
+                self.emit_statement(statement, out)?;
+            }
+            out.push_str("    new java/lang/RuntimeException\n    dup\n");
+            emit_load(err, out, self.context);
+            out.push_str("    invokestatic java/lang/Integer/toString (I)Ljava/lang/String;\n    invokespecial java/lang/RuntimeException/<init> (Ljava/lang/String;)V\n    athrow\n");
+        }
+        out.push_str(&format!("{finish}:\n"));
         for statement in finally_body {
             self.emit_statement(statement, out)?;
         }
@@ -427,7 +455,13 @@ impl JvmEmitter<'_> {
                 try_body,
                 catch,
                 finally_body,
-            } => self.emit_try_catch(try_body, catch.as_ref(), finally_body, out),
+            } => self.emit_try_catch(
+                try_body,
+                catch.as_ref(),
+                finally_body,
+                &statement.pos.filename,
+                out,
+            ),
             Statement::ThrowStmt { code: Some(code) } | Statement::ErrorStmt { code } => {
                 out.push_str("    new java/lang/RuntimeException\n    dup\n");
                 emit_numeric_expr_as(code, NumericType::Int, out, self.context)?;
@@ -1399,6 +1433,9 @@ fn collect_scalar_declarations(
                         .insert(variable_key(&catch.err_var), type_for_ident(&catch.err_var));
                     declarations
                         .insert(variable_key(&catch.erl_var), type_for_ident(&catch.erl_var));
+                    if let Some(source_var) = &catch.source_var {
+                        declarations.insert(variable_key(source_var), JvmType::String);
+                    }
                     collect_scalar_declarations(&catch.body, declarations, constants);
                 }
                 collect_scalar_declarations(finally_body, declarations, constants);
