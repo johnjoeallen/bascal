@@ -34,7 +34,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 - [Arrays <span class="targets">(Basic, C)</span>](08_arrays.md)
 - [Data, Read, Restore, Swap <span class="targets">(Basic, C)</span>](09_data.md)
 - [File Input and Output <span class="targets">(Basic, C)</span>](10_files.md)
-- [Screen I/O <span class="targets">(Basic, C)</span>](11_screen.md)
+- [Screen I/O <span class="targets">(Basic, C, JVM)</span>](11_screen.md)
 - [Random-Access and Record Files <span class="targets">(Basic, C)</span>](15_random_and_record_files.md)
 
 </div>
