@@ -1,5 +1,7 @@
 [Home](../../) / [Tutorials](../) / Operators and Expressions
 
+JVM assembly: [tutorial/03_arithmetic.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/03_arithmetic.j)
+
 <div class="prose" markdown="1">
 
 Arithmetic (`+ - * / \ MOD ^`), comparison (`= <> < <= > >=`, returning `-1`/`0`), and logical (`AND OR NOT XOR`) all work as in classic BASIC — including the one sharp edge worth knowing up front: `NOT` is bitwise, so `NOT 1 = -2`, not `0`. Test for false with `(expr) = 0`, never `NOT expr`.

@@ -1,5 +1,7 @@
 [Home](../../) / [Tutorials](../) / Variables and Constants
 
+JVM assembly: [tutorial/02_variables.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/02_variables.j)
+
 <div class="prose" markdown="1">
 
 Every name ends with a type suffix that tells the runtime how to store the value: `%` 16-bit integer, `$` string, `!` single, `#` double, `&` long. Variables are global and spring into existence on first use — `dim` is only needed for arrays or when you want to be explicit. `const` names a value that can't change.

@@ -1,5 +1,7 @@
 [Home](../../) / [Tutorials](../) / Select Case
 
+JVM assembly: [tutorial/06_select_case.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.j)
+
 <div class="prose" markdown="1">
 
 `select case` evaluates its expression once, stores it in a transpiler- generated temporary, and dispatches against each `case` clause in order. Patterns can be an exact value, a comma-separated list, an inclusive `lo to hi` range, or an `is <op> value` comparison; `case else` is the default and must come last. See the [control-flow comparison](../../#control-flow) on the homepage for the GOTO dispatch chain this transpiles to.

@@ -1,5 +1,7 @@
 [Home](../../) / [Tutorials](../) / Conditions
 
+JVM assembly: [tutorial/04_conditions.j](https://github.com/johnjoeallen/bascal/blob/main/tutorial/04_conditions.j)
+
 <div class="prose" markdown="1">
 
 BASCAL supports multi-line block `if` statements: `if cond then ... end if`, with optional `else` and any number of `elseif` clauses. It also supports classic BASIC's single-line form — a statement directly after `then` on the same line needs no `end if` at all. A newline right after `then` is what selects the block form instead; that's the only difference. The transpiler transpiles either form to numeric GOTO targets in the generated BASIC — you never write a line number yourself.
