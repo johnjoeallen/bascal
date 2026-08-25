@@ -38,6 +38,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let context = JvmContext::build(program, functions.clone(), class_name.clone())?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
+    emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -98,7 +99,7 @@ fn class_name_for(program: &Program) -> String {
 }
 
 fn emit_fields(context: &JvmContext) -> String {
-    context
+    let mut fields = context
         .variables
         .values()
         .filter(|v| v.is_static)
@@ -109,7 +110,40 @@ fn emit_fields(context: &JvmContext) -> String {
                 v.descriptor()
             )
         })
-        .collect()
+        .collect::<String>();
+    for (index, shape) in context.arrays.values().enumerate() {
+        fields.push_str(&format!(
+            ".field public static a{} {}\n",
+            index,
+            array_descriptor(shape)
+        ));
+    }
+    fields
+}
+
+fn array_descriptor(shape: &ArrayShape) -> String {
+    format!(
+        "{}{}",
+        "[".repeat(shape.dimensions.len()),
+        descriptor(shape.element)
+    )
+}
+
+fn emit_array_initializers(context: &JvmContext, out: &mut String) -> Result<(), String> {
+    for (index, shape) in context.arrays.values().enumerate() {
+        for dimension in &shape.dimensions {
+            emit_numeric_expr_as(dimension, NumericType::Int, out, context)?;
+            out.push_str("    iconst_1\n    iadd\n");
+        }
+        let desc = array_descriptor(shape);
+        out.push_str(&format!(
+            "    multianewarray {desc} {}\n    putstatic {}/a{} {desc}\n",
+            shape.dimensions.len(),
+            context.class_name,
+            index
+        ));
+    }
+    Ok(())
 }
 
 fn emit_load(variable: Variable, out: &mut String, context: &JvmContext) {
