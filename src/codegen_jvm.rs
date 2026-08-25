@@ -219,6 +219,7 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                         )
                         .collect(),
                     result: type_for_ident(&function.name),
+                    returns_void: function.is_procedure,
                 },
             )
         })
@@ -226,9 +227,6 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
 }
 
 fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, String> {
-    if function.is_procedure {
-        return Err("JVM procedures are not supported yet".to_string());
-    }
     let context = JvmContext::for_function(function, parent);
     let mut body = String::new();
     context.emit_initializers(&mut body);
@@ -236,7 +234,7 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         context: &context,
         next_label: 0,
         loop_exits: Vec::new(),
-        return_type: Some(type_for_ident(&function.name)),
+        return_type: (!function.is_procedure).then(|| type_for_ident(&function.name)),
         labels: collect_labels(&function.body),
     };
     for statement in &function.body {
@@ -244,11 +242,15 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
     }
     // Resolver guarantees a return on every reachable path. This fallback
     // keeps the JVM verifier satisfied if an unsupported analysis edge leaks through.
-    match type_for_ident(&function.name) {
-        JvmType::String => body.push_str("    ldc \"\"\n    areturn\n"),
-        JvmType::Numeric(NumericType::Int) => body.push_str("    iconst_0\n    ireturn\n"),
-        JvmType::Numeric(NumericType::Long) => body.push_str("    lconst_0\n    lreturn\n"),
-        JvmType::Numeric(NumericType::Double) => body.push_str("    dconst_0\n    dreturn\n"),
+    if function.is_procedure {
+        body.push_str("    return\n");
+    } else {
+        match type_for_ident(&function.name) {
+            JvmType::String => body.push_str("    ldc \"\"\n    areturn\n"),
+            JvmType::Numeric(NumericType::Int) => body.push_str("    iconst_0\n    ireturn\n"),
+            JvmType::Numeric(NumericType::Long) => body.push_str("    lconst_0\n    lreturn\n"),
+            JvmType::Numeric(NumericType::Double) => body.push_str("    dconst_0\n    dreturn\n"),
+        }
     }
     let sig = parent
         .functions
@@ -259,7 +261,12 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         .iter()
         .map(|ty| descriptor(*ty))
         .collect::<String>();
-    Ok(format!(".method public static {} : ({args}){}\n    .limit stack 16\n    .limit locals {}\n\n{body}.end method\n\n", function.name.name, descriptor(sig.result), context.local_count()))
+    let result = if sig.returns_void {
+        "V"
+    } else {
+        descriptor(sig.result)
+    };
+    Ok(format!(".method public static {} : ({args}){}\n    .limit stack 16\n    .limit locals {}\n\n{body}.end method\n\n", function.name.name, result, context.local_count()))
 }
 
 struct JvmEmitter<'a> {
@@ -288,6 +295,35 @@ impl JvmEmitter<'_> {
                     JvmType::Numeric(ty) => emit_numeric_expr_as(value, ty, out, self.context)?,
                 }
                 emit_store(variable, out, self.context);
+                Ok(())
+            }
+            Statement::ExprStmt(Expr::Call { name, args })
+            | Statement::ExprStmt(Expr::ArrayRef {
+                name,
+                indices: args,
+            }) => {
+                let signature = self
+                    .context
+                    .function(name)
+                    .ok_or_else(|| format!("unknown JVM procedure `{name}`"))?;
+                if !signature.returns_void || signature.params.len() != args.len() {
+                    return Err(format!("invalid JVM procedure call `{name}`"));
+                }
+                for (arg, ty) in args.iter().zip(&signature.params) {
+                    match ty {
+                        JvmType::String => emit_string_expr(arg, out, self.context)?,
+                        JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, self.context)?,
+                    }
+                }
+                let args_descriptor = signature
+                    .params
+                    .iter()
+                    .map(|ty| descriptor(*ty))
+                    .collect::<String>();
+                out.push_str(&format!(
+                    "    invokestatic {}/{} ({args_descriptor})V\n",
+                    self.context.class_name, name.name
+                ));
                 Ok(())
             }
             Statement::If {
@@ -337,6 +373,14 @@ impl JvmEmitter<'_> {
                 }
                 None => Err("RETURN is only supported inside a JVM function".to_string()),
             },
+            Statement::ReturnVoid => {
+                if self.return_type.is_some() {
+                    Err("bare RETURN is only supported inside a JVM procedure".to_string())
+                } else {
+                    out.push_str("    return\n");
+                    Ok(())
+                }
+            }
             Statement::Label(name) => {
                 out.push_str(&format!("{}:\n", jvm_label(name)));
                 Ok(())
@@ -833,6 +877,7 @@ struct JvmContext {
 struct FunctionSig {
     params: Vec<JvmType>,
     result: JvmType,
+    returns_void: bool,
 }
 
 impl JvmContext {
@@ -1251,7 +1296,10 @@ fn emit_function_call(
     let signature = context
         .function(name)
         .ok_or_else(|| format!("unknown JVM function `{name}`"))?;
-    if signature.result != expected || signature.params.len() != args.len() {
+    if signature.returns_void
+        || signature.result != expected
+        || signature.params.len() != args.len()
+    {
         return Err(format!("invalid JVM function call `{name}`"));
     }
     for (arg, ty) in args.iter().zip(&signature.params) {
