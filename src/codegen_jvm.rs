@@ -283,6 +283,27 @@ impl JvmEmitter<'_> {
             Statement::Print { tokens } => emit_print_tokens(tokens, out, self.context),
             Statement::Cls => emit_terminal_escape("\u{1b}[2J\u{1b}[H", out),
             Statement::Beep => emit_terminal_escape("\u{7}", out),
+            Statement::Color { fg, bg } => {
+                let Expr::Integer(fg) = fg else {
+                    return Err(
+                        "JVM COLOR currently requires a literal foreground value".to_string()
+                    );
+                };
+                let code = if let Some(Expr::Integer(bg)) = bg {
+                    format!(
+                        "\u{1b}[{};{}m",
+                        30 + (*fg as i32 % 8),
+                        40 + (*bg as i32 % 8)
+                    )
+                } else if bg.is_none() {
+                    format!("\u{1b}[{}m", 30 + (*fg as i32 % 8))
+                } else {
+                    return Err(
+                        "JVM COLOR currently requires a literal background value".to_string()
+                    );
+                };
+                emit_terminal_escape(&code, out)
+            }
             Statement::Dim {
                 is_array: false, ..
             }
