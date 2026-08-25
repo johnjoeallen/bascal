@@ -216,16 +216,16 @@ end for
 
 ```bascal
 select case expression
-case value
-    ' body
-case value1, value2
-    ' body for either value
-case low to high
-    ' body for values in range [low, high]
-case is > threshold
-    ' body when expression > threshold
-case else
-    ' default body
+    case value
+        ' body
+    case value1, value2
+        ' body for either value
+    case low to high
+        ' body for values in range [low, high]
+    case is > threshold
+        ' body when expression > threshold
+    case else
+        ' default body
 end select
 ```
 

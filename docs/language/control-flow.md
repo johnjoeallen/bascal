@@ -39,12 +39,12 @@ loop until attempts% >= maxAttempts%
 
 ```bascal
 select case score%
-case 90 to 100
-    grade$ = "A"
-case is >= 80
-    grade$ = "B"
-case else
-    grade$ = "C"
+    case 90 to 100
+        grade$ = "A"
+    case is >= 80
+        grade$ = "B"
+    case else
+        grade$ = "C"
 end select
 ```
 

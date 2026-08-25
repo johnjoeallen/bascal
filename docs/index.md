@@ -40,14 +40,14 @@ In practice that means: write the pane on the right below, not the pane on the l
 
 ```bascal
 select case grade%
-case is >= 90
-    print "A"
-case is >= 80
-    print "B"
-case is >= 70
-    print "C"
-case else
-    print "F"
+    case is >= 90
+        print "A"
+    case is >= 80
+        print "B"
+    case is >= 70
+        print "C"
+    case else
+        print "F"
 end select
 ```
 
@@ -131,12 +131,12 @@ Single values, comma lists, `low to high` ranges, and `is <op> value` comparison
 
 ```bascal
 select case grade%
-case 90 to 100
-    print "A"
-case is >= 80
-    print "B"
-case else
-    print "C"
+    case 90 to 100
+        print "A"
+    case is >= 80
+        print "B"
+    case else
+        print "C"
 end select
 ```
 
@@ -275,20 +275,20 @@ GOTO 370
 
 ```bascal
 select case score%
-case 100
-    print "Perfect!"
-case 90 to 99
-    print "A -- Excellent"
-case 80 to 89
-    print "B -- Good"
-case 70 to 79
-    print "C -- Satisfactory"
-case 60 to 69
-    print "D -- Passing"
-case is >= 0
-    print "F -- Fail"
-case else
-    print "Invalid score"
+    case 100
+        print "Perfect!"
+    case 90 to 99
+        print "A -- Excellent"
+    case 80 to 89
+        print "B -- Good"
+    case 70 to 79
+        print "C -- Satisfactory"
+    case 60 to 69
+        print "D -- Passing"
+    case is >= 0
+        print "F -- Fail"
+    case else
+        print "Invalid score"
 end select
 ```
 

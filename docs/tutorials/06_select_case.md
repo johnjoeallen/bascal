@@ -14,14 +14,14 @@ Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutori
 
 ```bascal
 select case temp%
-case is < 0
-    print "Below freezing ("; temp%; "deg)"
-case is < 10
-    print "Cold ("; temp%; "deg)"
-case is < 20
-    print "Cool ("; temp%; "deg)"
-case else
-    print "Hot ("; temp%; "deg)"
+    case is < 0
+        print "Below freezing ("; temp%; "deg)"
+    case is < 10
+        print "Cold ("; temp%; "deg)"
+    case is < 20
+        print "Cool ("; temp%; "deg)"
+    case else
+        print "Hot ("; temp%; "deg)"
 end select
 ```
 
