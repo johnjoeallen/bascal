@@ -249,6 +249,7 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                             function
                                 .params
                                 .iter()
+                                .filter(|param| param.axes.is_none())
                                 .map(|param| type_for_ident(&param.name)),
                         )
                         .collect(),
@@ -361,7 +362,12 @@ impl JvmEmitter<'_> {
                 Ok(())
             }
             Statement::Assignment {
-                target: Expr::ArrayRef { name, indices },
+                target:
+                    Expr::Call {
+                        name,
+                        args: indices,
+                    }
+                    | Expr::ArrayRef { name, indices },
                 value,
             } => {
                 let shape = self
@@ -977,6 +983,7 @@ impl Variable {
 struct JvmContext {
     variables: BTreeMap<String, Variable>,
     arrays: BTreeMap<String, ArrayShape>,
+    array_aliases: BTreeMap<String, String>,
     array_refs: Vec<crate::ast::TypedArrayRef>,
     constants: HashMap<String, Expr>,
     local_count: usize,
@@ -996,9 +1003,11 @@ struct FunctionSig {
 
 impl JvmContext {
     fn array_index(&self, ident: &BasicIdent) -> usize {
+        let key = variable_key(ident);
+        let key = self.array_aliases.get(&key).unwrap_or(&key);
         self.arrays
             .keys()
-            .position(|key| key == &variable_key(ident))
+            .position(|candidate| candidate == key)
             .expect("registered JVM array")
     }
 
@@ -1020,6 +1029,9 @@ impl JvmContext {
                 },
             );
         }
+        if arrays.is_empty() {
+            collect_array_declarations(&program.statements, &mut arrays);
+        }
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -1036,6 +1048,7 @@ impl JvmContext {
         Ok(Self {
             variables,
             arrays,
+            array_aliases: BTreeMap::new(),
             array_refs: program.typed_array_refs.clone(),
             constants,
             local_count: next_slot,
@@ -1063,7 +1076,7 @@ impl JvmContext {
             next_slot += variable.width();
             variables.insert(variable_key(&self_ident), variable);
         }
-        for param in &function.params {
+        for param in function.params.iter().filter(|param| param.axes.is_none()) {
             let variable = Variable {
                 slot: next_slot,
                 ty: type_for_ident(&param.name),
@@ -1093,9 +1106,23 @@ impl JvmContext {
             next_slot += variable.width();
             variables.insert(key, variable);
         }
+        let mut arrays = parent.arrays.clone();
+        let mut array_aliases = parent.array_aliases.clone();
+        for param in function.params.iter().filter(|param| param.axes.is_some()) {
+            if let Some((source, shape)) = parent
+                .arrays
+                .iter()
+                .find(|(_, shape)| shape.dimensions.len() == param.rank().unwrap_or(0))
+            {
+                let key = variable_key(&param.name);
+                arrays.insert(key.clone(), shape.clone());
+                array_aliases.insert(key, source.clone());
+            }
+        }
         Self {
             variables,
-            arrays: parent.arrays.clone(),
+            arrays,
+            array_aliases,
             array_refs: parent.array_refs.clone(),
             constants,
             local_count: next_slot,
@@ -1513,11 +1540,18 @@ fn emit_function_call(
         .ok_or_else(|| format!("unknown JVM function `{name}`"))?;
     if signature.returns_void
         || signature.result != expected
-        || signature.params.len() != args.len()
+        || signature.params.len()
+            != args
+                .iter()
+                .filter(|arg| !matches!(arg, Expr::Ident(name) if context.arrays.contains_key(&variable_key(name))))
+                .count()
     {
         return Err(format!("invalid JVM function call `{name}`"));
     }
-    for (arg, ty) in args.iter().zip(&signature.params) {
+    let scalar_args = args.iter().filter(
+        |arg| !matches!(arg, Expr::Ident(name) if context.arrays.contains_key(&variable_key(name))),
+    );
+    for (arg, ty) in scalar_args.zip(&signature.params) {
         match ty {
             JvmType::String => emit_string_expr(arg, out, context)?,
             JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
@@ -1708,6 +1742,18 @@ fn emit_numeric_expr(
             };
             emit_function_call(name, args, signature.result, out, context)?;
             Ok(result)
+        }
+        Expr::Call { name, args } if context.arrays.contains_key(&variable_key(name)) => {
+            let shape = context.arrays.get(&variable_key(name)).expect("array exists");
+            if args.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
+                return Err("JVM indexed access requires matching integer array dimensions".to_string());
+            }
+            let desc = array_descriptor(shape);
+            out.push_str(&format!("    getstatic {}/a{} {}\n", context.class_name, context.array_index(name), desc));
+            for index in &args[..args.len() - 1] { emit_numeric_expr_as(index, NumericType::Int, out, context)?; out.push_str("    aaload\n"); }
+            emit_numeric_expr_as(args.last().expect("validated index count"), NumericType::Int, out, context)?;
+            out.push_str("    iaload\n");
+            Ok(NumericType::Int)
         }
         Expr::ArrayRef { name, indices } => {
             let shape = context
