@@ -868,6 +868,12 @@ struct Variable {
     is_static: bool,
 }
 
+#[derive(Clone)]
+struct ArrayShape {
+    element: JvmType,
+    dimensions: Vec<Expr>,
+}
+
 impl Variable {
     fn field_name(self) -> String {
         format!("g{}", self.slot)
@@ -904,6 +910,7 @@ impl Variable {
 
 struct JvmContext {
     variables: BTreeMap<String, Variable>,
+    arrays: BTreeMap<String, ArrayShape>,
     constants: HashMap<String, Expr>,
     local_count: usize,
     initializer_start: usize,
@@ -928,7 +935,9 @@ impl JvmContext {
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
+        let mut arrays = BTreeMap::new();
         collect_scalar_declarations(&program.statements, &mut declarations, &mut constants);
+        collect_array_declarations(&program.statements, &mut arrays);
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -944,6 +953,7 @@ impl JvmContext {
             .collect();
         Ok(Self {
             variables,
+            arrays,
             constants,
             local_count: next_slot,
             initializer_start: 1,
@@ -1002,6 +1012,7 @@ impl JvmContext {
         }
         Self {
             variables,
+            arrays: parent.arrays.clone(),
             constants,
             local_count: next_slot,
             initializer_start,
@@ -1174,6 +1185,38 @@ fn collect_scalar_declarations(
             Statement::While { body, .. } | Statement::Do { body, .. } => {
                 collect_scalar_declarations(body, declarations, constants);
             }
+            _ => {}
+        }
+    }
+}
+
+fn collect_array_declarations(statements: &[Stmt], arrays: &mut BTreeMap<String, ArrayShape>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Dim {
+                name,
+                is_array: true,
+                sizes,
+            } => {
+                arrays.insert(
+                    variable_key(name),
+                    ArrayShape {
+                        element: type_for_ident(name),
+                        dimensions: sizes.clone(),
+                    },
+                );
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_array_declarations(then_body, arrays);
+                collect_array_declarations(else_body, arrays);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_array_declarations(body, arrays),
             _ => {}
         }
     }
