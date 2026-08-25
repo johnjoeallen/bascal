@@ -1272,6 +1272,20 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("string") && args.len() == 2 => {
+            emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
+            out.push_str("    newarray char\n    dup\n");
+            if context.is_string_expr(&args[1]) {
+                emit_string_expr(&args[1], out, context)?;
+                out.push_str("    iconst_0\n    invokevirtual java/lang/String/charAt (I)C\n");
+            } else {
+                emit_numeric_expr_as(&args[1], NumericType::Int, out, context)?;
+                out.push_str("    i2c\n");
+            }
+            out.push_str("    invokestatic java/util/Arrays/fill ([CC)V\n    new java/lang/String\n    dup_x1\n    swap\n    invokespecial java/lang/String/<init> ([C)V\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             emit_function_call(name, args, JvmType::String, out, context)
         }
