@@ -50,6 +50,7 @@ pub fn lower(
             statements,
             functions,
             records: Vec::new(),
+            typed_arrays: program.typed_arrays,
         },
         lowerer.synthesized_buffer_names,
     ))

@@ -56,6 +56,16 @@ pub struct Program {
     pub statements: Vec<Stmt>,
     pub functions: Vec<FunctionDef>,
     pub records: Vec<RecordDef>,
+    /// Typed array declarations preserved for backends that need rank and
+    /// element information after source-level lowering.
+    pub typed_arrays: Vec<TypedArrayDecl>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypedArrayDecl {
+    pub name: BasicIdent,
+    pub element_suffix: Option<TypeSuffix>,
+    pub dimensions: Vec<Expr>,
 }
 
 /// A `record ... end record` declaration: a fixed-layout struct that the

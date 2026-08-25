@@ -134,6 +134,7 @@ impl Parser {
             statements,
             functions,
             records,
+            typed_arrays: Vec::new(),
         })
     }
 
