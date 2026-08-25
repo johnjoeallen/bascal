@@ -34,7 +34,7 @@ function insertionSort%(byref arr%(?))
     for i% = 1 to sizeof(arr%) - 1
         key% = arr%(i%)
         j%   = i% - 1
-        while j% >= 0 and arr%(j%) > key%
+        while j% >= 0 && arr%(j%) > key%
             arr%(j% + 1) = arr%(j%)
             j% = j% - 1
         end while

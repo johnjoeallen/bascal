@@ -1007,6 +1007,7 @@ impl JvmContext {
         let key = self.array_aliases.get(&key).unwrap_or(&key);
         self.arrays
             .keys()
+            .filter(|candidate| !self.array_aliases.contains_key(*candidate))
             .position(|candidate| candidate == key)
             .expect("registered JVM array")
     }

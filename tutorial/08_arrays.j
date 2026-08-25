@@ -29,7 +29,7 @@ L_for_0_top:
     ldc 1
     isub
     if_icmpgt L_for_0_end
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 0
     iaload
     istore 2
@@ -46,15 +46,8 @@ L_while_1_top:
     isub
     bipush 31
     ishr
-    i2d
-    dup2
-    ldc2_w 0.5
-    dup2_x2
-    pop2
-    invokestatic java/lang/Math/copySign (DD)D
-    dadd
-    d2l
-    getstatic Arrays/a1 [I
+    ifeq L_while_1_end
+    getstatic Arrays/a0 [I
     iload 1
     iaload
     iload 2
@@ -62,23 +55,12 @@ L_while_1_top:
     ineg
     bipush 31
     ishr
-    i2d
-    dup2
-    ldc2_w 0.5
-    dup2_x2
-    pop2
-    invokestatic java/lang/Math/copySign (DD)D
-    dadd
-    d2l
-    land
-    lconst_0
-    lcmp
     ifeq L_while_1_end
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 1
     ldc 1
     iadd
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 1
     iaload
     iastore
@@ -88,7 +70,7 @@ L_while_1_top:
     istore 1
     goto L_while_1_top
 L_while_1_end:
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 1
     ldc 1
     iadd
@@ -122,7 +104,7 @@ L_for_0_top:
     ldc 1
     isub
     if_icmpgt L_for_0_end
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 1
     iaload
     iload 0
@@ -184,7 +166,7 @@ L_for_0_top:
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    getstatic Arrays/a1 [I
+    getstatic Arrays/a0 [I
     iload 0
     iaload
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
