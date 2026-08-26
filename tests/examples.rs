@@ -33,6 +33,62 @@ fn compiles_every_example_bcl_file() {
     }
 }
 
+/// The normal CI build must exercise tutorials end to end, not only check
+/// that their source parses.  These tutorials are deterministic and do not
+/// require interactive input or external files, so they can be compiled and
+/// run through the C backend on every build machine with gcc.
+#[test]
+fn c_target_builds_and_runs_noninteractive_tutorials() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        eprintln!("skipping tutorial runtime checks: gcc is unavailable");
+        return;
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tutorials = [
+        "01_hello",
+        "02_variables",
+        "03_arithmetic",
+        "04_conditions",
+        "05_loops",
+        "06_select_case",
+        "07_functions",
+        "08_arrays",
+        "09_data",
+        "14_procedures",
+        "16_short_circuit",
+        "18_stdlib",
+        "20_methods",
+        "21_portable_error_handling",
+        "22_restore_data",
+    ];
+
+    for stem in tutorials {
+        let temp = tempfile::tempdir().expect("failed to create tutorial output directory");
+        let mut output_dir = temp.path().join("out").into_os_string();
+        output_dir.push("/");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_bcc"));
+        command
+            .arg(root.join("tutorial").join(format!("{stem}.bcl")))
+            .arg("--target")
+            .arg("c")
+            .arg("--clean")
+            .arg("--run")
+            .arg("-o")
+            .arg(output_dir);
+        let output = command
+            .current_dir(root)
+            .output()
+            .unwrap_or_else(|err| panic!("failed to invoke bcc for tutorial {stem}: {err}"));
+        assert!(
+            output.status.success(),
+            "tutorial {stem} failed to build or run:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
 #[test]
 fn freebasic_runs_sort_driver_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
