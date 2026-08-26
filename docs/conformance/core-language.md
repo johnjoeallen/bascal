@@ -9,6 +9,7 @@
 | C/JVM reject the classic labels/error-handling tutorial | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
 | Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
 | Interactive inventory case study | PASS | PASS | DEFERRED |
+| Random file binary compatibility | PASS | PASS | FAIL |
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
 | Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |

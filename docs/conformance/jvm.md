@@ -4,6 +4,7 @@
 
 | Test description | Result |
 | --- | :---: |
+| Random file binary compatibility | FAIL |
 | Hello-world assembly and execution | UNKNOWN |
 | Expected failure for array byval clone assembly | UNKNOWN |
 | Catch filters and source bindings | UNKNOWN |

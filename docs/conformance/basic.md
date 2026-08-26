@@ -4,6 +4,7 @@
 
 | Test description | Result |
 | --- | :---: |
+| Random file binary compatibility | PASS |
 | Scalar methods match C output | UNKNOWN |
 | Scalar methods match BASCOM | UNKNOWN |
 | BASCOM random-file output is readable by C | UNKNOWN |

@@ -46,6 +46,15 @@ groups = ["core"]
 status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
+id = "core.random_file_binary_compatibility"
+kind = "test"
+source = "core"
+name = "Random file binary compatibility"
+description = "Random file binary compatibility"
+groups = ["core", "basic", "c", "jvm", "files"]
+status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+
+[[test]]
 id = "core.stdlib_functions"
 kind = "test"
 source = "core"
