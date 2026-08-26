@@ -5,19 +5,14 @@
 | Test description | Result |
 | --- | :---: |
 | Random file binary compatibility | PASS |
-| Scalar methods match C output | PASS |
 | Scalar methods match BASCOM | PASS |
 | BASCOM random-file output is readable by C | PASS |
 | C random-file output is readable by BASCOM | PASS |
 | Constants and printing match BASCOM | PASS |
 | MID$ assignment matches BASCOM | PASS |
-| String self-concatenation matches C output | PASS |
 | String self-concatenation matches BASCOM | PASS |
-| Standard-library functions match C output | PASS |
 | Standard-library functions match BASCOM | PASS |
 | Tie-break rounding matches BASCOM | PASS |
-| Deterministic tutorials build and execute | PASS |
-| C rejects classic labels and error handling | PASS |
 | Every supported fixture transpiles successfully | PASS |
 | Built-in scalar methods under FreeBASIC | PASS |
 | MID$ assignment edge cases under FreeBASIC | PASS |
@@ -25,9 +20,6 @@
 | Self-referential string concatenation under FreeBASIC | PASS |
 | Sort driver under FreeBASIC | PASS |
 | Standard-library functions under FreeBASIC | PASS |
-| Interactive inventory case study | PASS |
-| remline case study output | PASS |
-| Nested procedure TRY/CATCH propagation | PASS |
 | Array of records is not yet supported | PASS |
 | Bare dynamic record string fields are not yet supported | PASS |
 | Existing random-file records compile on BASIC and C | PASS |

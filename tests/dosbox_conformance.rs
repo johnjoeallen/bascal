@@ -1,4 +1,4 @@
-// Conformance groups: basic, c, files
+// Conformance groups: basic, c
 // Conformance suite: compiles BASCAL fixtures and runs the generated BASIC
 // through a *real* IBM Personal Computer BASIC Compiler 2.00 ("BASCOM"),
 // under dosbox-x, then diffs its behavior against checked-in golden output.

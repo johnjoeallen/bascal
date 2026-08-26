@@ -78,8 +78,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_c_target"
 description = "Scalar methods match C output"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.builtin_scalar_methods_match_real_bascom"
@@ -87,8 +87,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_real_bascom"
 description = "Scalar methods match BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
@@ -114,8 +114,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "const_and_print_matches_real_bascom"
 description = "Constants and printing match BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
@@ -123,8 +123,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "mid_assign_matches_real_bascom"
 description = "MID$ assignment matches BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_target"
@@ -132,8 +132,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_c_target"
 description = "String self-concatenation matches C output"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_real_bascom"
@@ -141,8 +141,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_real_bascom"
 description = "String self-concatenation matches BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_c_target"
@@ -150,8 +150,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_c_target"
 description = "Standard-library functions match C output"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_real_bascom"
@@ -159,8 +159,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_real_bascom"
 description = "Standard-library functions match BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
@@ -168,8 +168,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "tie_break_rounding_matches_real_bascom"
 description = "Tie-break rounding matches BASCOM"
-groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic"]
+expected = { basic = "PASS", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"
@@ -177,8 +177,8 @@ kind = "test"
 source = "examples"
 name = "c_target_builds_and_runs_noninteractive_tutorials"
 description = "Deterministic tutorials build and execute"
-groups = ["tutorials", "basic", "c"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.c_target_rejects_labels_and_error_handling_tutorial"
@@ -186,8 +186,8 @@ kind = "test"
 source = "examples"
 name = "c_target_rejects_labels_and_error_handling_tutorial"
 description = "C rejects classic labels and error handling"
-groups = ["tutorials", "basic", "c"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.compiles_every_example_bcl_file"
@@ -258,8 +258,8 @@ kind = "test"
 source = "examples"
 name = "gcc_runs_inventory_tutorial_under_c_target_when_available"
 description = "Interactive inventory case study"
-groups = ["tutorials", "basic", "c"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_remline_under_c_target_when_available"
@@ -267,8 +267,8 @@ kind = "test"
 source = "examples"
 name = "gcc_runs_remline_under_c_target_when_available"
 description = "remline case study output"
-groups = ["tutorials", "basic", "c"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
@@ -276,8 +276,8 @@ kind = "test"
 source = "examples"
 name = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
 description = "Nested procedure TRY/CATCH propagation"
-groups = ["tutorials", "basic", "c"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+groups = ["c"]
+expected = { basic = "UNKNOWN", c = "PASS", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.hello_world_transpiles_assembles_and_runs_when_available"

@@ -58,6 +58,28 @@ descriptions = {
     "record_valued_return_currently_fails": "Record-valued returns are not yet supported",
     "standalone_record_literal_currently_fails": "Standalone record literals are not yet supported",
 }
+# Most tests in this module exercise both the BASIC and C targets.  Keep
+# target/file-specific cases in their precise groups rather than inheriting
+# the module-wide default, so generated backend pages do not show unrelated
+# tests or spurious UNKNOWN cells.
+group_overrides = {
+    "builtin_scalar_methods_match_real_bascom": ["basic"],
+    "const_and_print_matches_real_bascom": ["basic"],
+    "mid_assign_matches_real_bascom": ["basic"],
+    "stdlib_functions_match_real_bascom": ["basic"],
+    "self_referential_string_concatenation_matches_real_bascom": ["basic"],
+    "tie_break_rounding_matches_real_bascom": ["basic"],
+    "builtin_scalar_methods_match_c_target": ["c"],
+    "stdlib_functions_match_c_target": ["c"],
+    "self_referential_string_concatenation_matches_c_target": ["c"],
+    "c_target_builds_and_runs_noninteractive_tutorials": ["c"],
+    "c_target_rejects_labels_and_error_handling_tutorial": ["c"],
+    "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available": ["c"],
+    "gcc_runs_inventory_tutorial_under_c_target_when_available": ["c"],
+    "gcc_runs_remline_under_c_target_when_available": ["c"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "c", "files"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["basic", "c", "files"],
+}
 
 for path in sorted((root / "tests").glob("*.rs")):
     text = path.read_text()
@@ -68,7 +90,8 @@ for path in sorted((root / "tests").glob("*.rs")):
         test_id = f"test.{module}.{name}"
         if test_id in ids:
             raise SystemExit(f"duplicate conformance ID: {test_id}")
-        groups = re.search(r"^// Conformance groups:\s*(.+)$", text, re.MULTILINE).group(1).split(", ")
+        module_groups = re.search(r"^// Conformance groups:\s*(.+)$", text, re.MULTILINE).group(1).split(", ")
+        groups = group_overrides.get(name, module_groups)
         expected = {
             backend: (
                 "PASS"
