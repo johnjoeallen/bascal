@@ -172,7 +172,7 @@ end
 
 ### Typed record/file I/O
 
-Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }` generate the matching `OPEN`/`FIELD`/`LSET`/`PUT` calls — see the full comparison below.
+Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }` generate the matching `OPEN`/`FIELD`/`LSET`/`PUT` calls — see the full comparison below. Records used only in memory may also contain plain variable-length `string` members, but those records cannot be used as random-access file types.
 
 ```bascal
 record Student
