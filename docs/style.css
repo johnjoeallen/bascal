@@ -315,7 +315,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation M
 .hl { color: var(--code-hi); font-weight: 600; }
 .dim { opacity: .6; }
 
-/* BASCAL/BASIC syntax highlighting -- tokens assigned by bcl-highlight.js */
+/* BASCAL/BASIC syntax highlighting -- tokens assigned by Pygments */
 .tok-kw { color: var(--tok-kw); font-weight: 600; }
 .tok-str { color: var(--tok-str); }
 .tok-num { color: var(--tok-num); }

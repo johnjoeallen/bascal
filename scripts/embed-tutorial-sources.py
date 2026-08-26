@@ -5,9 +5,8 @@ Each tutorial page ends with a "Full, real, transpiling source: ..."
 paragraph linking out to the .bcl/.bas files on GitHub. This script reads
 that paragraph's own links to find which tutorial/ files a page covers,
 inlines each file's full contents as a collapsible, syntax-highlighted
-<pre><code> block (bcl-highlight.js -- already loaded by every tutorial
-page -- highlights it client-side, same as the hand-picked snippets
-above it), and replaces the GitHub-only links with real embedded source
+<pre><code> block (Pygments highlights it server-side, same as the hand-picked
+snippets above it), and replaces the GitHub-only links with real embedded source
 plus a "View on GitHub" line for permalinking/blame.
 
 Idempotent: re-running it re-reads tutorial/ and refreshes the embedded

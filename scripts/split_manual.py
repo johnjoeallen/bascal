@@ -136,7 +136,6 @@ PAGE_TEMPLATE = """<!doctype html>
   </div>
 </footer>
 
-<script src="../bcl-highlight.js"></script>
 <script src="../theme-toggle.js"></script>
 </body>
 </html>

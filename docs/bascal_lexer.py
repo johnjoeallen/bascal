@@ -24,7 +24,7 @@ class BascalLexer(RegexLexer):
         "print lprint input write data read restore using line random output append binary "
         "randomize and or not xor mod true false option base erase clear width out poke "
         "locate color cls beep stop system kill name chain run date time timer inkey err erl "
-        "len asc chr left right mid instr str val eof sqr abs int fix sgn cint clng csng cdbl "
+        "len asc chr left right lpad rpad mid instr str val eof sqr abs int fix sgn cint clng csng cdbl "
         "sin cos tan atn log exp rnd sizeof lbound ubound tab spc mki mkl mks mkd cvi cvl cvs cvd "
         "int16 int32 float32 float64 string"
     )
