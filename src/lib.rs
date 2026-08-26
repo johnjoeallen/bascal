@@ -6412,14 +6412,15 @@ end
     }
 
     #[test]
-    fn c_target_rejects_a_non_literal_array_bound() {
+    fn c_target_supports_a_runtime_computed_array_bound() {
         let source = "dim n%\nn% = 5\ndim arr%(n%)\nend\n";
-        let diagnostics = compile_source_via_c_target_err(source);
+        let output = compile_source_via_c_target(source);
         assert!(
-            diagnostics
-                .iter()
-                .any(|d| d.message.contains("compile-time-known size")),
-            "unexpected diagnostics: {diagnostics:?}"
+            output.contains("static int *bv_i_arr = NULL;")
+                && output.contains("bv_i_arr_len0 = (bv_i_n) + 1;")
+                && output
+                    .contains("bv_i_arr = calloc((size_t)(bv_i_arr_len0), sizeof(*bv_i_arr));"),
+            "runtime-computed bounds should allocate a flat C array at DIM time:\n{output}"
         );
     }
 

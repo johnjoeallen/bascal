@@ -12,10 +12,9 @@
 //! `!`/`#`; string: `$`, fixed-size `char[256]` buffers written only via
 //! `snprintf`, never `strcpy`/`strcat` -- see
 //! `STRING_BUFFER_SIZE`/`render_string_expr`); `dim`-declared arrays too
-//! (a real, native multi-dimensional C array -- see `ArrayInfo`/
-//! `collect_array_declarations` -- but only with a literal or top-level-
-//! `const`-literal bound in every dimension, since a real C array needs a
-//! compile-time-known size), indexed reads/writes, and `sizeof(arr%)`/
+//! (native C arrays for fixed bounds and flat heap allocations for
+//! runtime-computed bounds -- see `ArrayInfo`/`collect_array_declarations`),
+//! indexed reads/writes, and `sizeof(arr%)`/
 //! `sizeof(grid%, axis)`; `swap` of two scalars or array elements (see
 //! `render_lvalue`); `+` string concatenation,
 //! `if`/`elseif`/`else`/`end if` (including the single-line form, and
@@ -83,11 +82,8 @@
 //! `locate row, col`, `color fg[, bg]`, and `beep` (see `COLOR_HELPER`).
 //! NOT yet supported: array parameters (`byref` or `byval`) -- passing a
 //! whole array into a `function`/`procedure` is a separate wall from
-//! declaring/indexing one at all, which *is* supported (see above); a
-//! `dim` array bound that isn't a literal or a top-level `const` with an
-//! integer-literal value (see `resolve_array_bound_literal` -- a real C
-//! array needs a compile-time-known size, unlike real BASIC's own `dim
-//! arr%(n%)` for a runtime-computed `n%`); `byref` scalar parameters
+//! declaring/indexing one at all, which *is* supported (see above); `byref`
+//! scalar parameters
 //! (byval-only so far); a `function` body that doesn't provably `return`
 //! on every path (see `body_always_returns` -- a `procedure` has no such
 //! requirement); a `FIELD`/`OPEN`/`GET`/`PUT` channel or `FIELD` width
@@ -251,6 +247,7 @@ struct ArrayInfo {
     /// holds only a dummy per-axis placeholder value; only their `len()`
     /// -- the rank -- is real).
     runtime_len: Option<Vec<String>>,
+    dynamic: bool,
 }
 
 type ArrayTable = HashMap<String, ArrayInfo>;
@@ -365,6 +362,7 @@ fn function_scoped_table(
                         .map(|axis| format!("{}_len{axis}", param.c_name))
                         .collect(),
                 ),
+                dynamic: true,
             },
         );
     }
@@ -1878,12 +1876,18 @@ fn collect_array_declarations_into(
                     ));
                 }
                 let mut bounds = Vec::with_capacity(sizes.len());
+                let mut dynamic = false;
                 for size in sizes {
-                    let bound = resolve_array_bound_literal(size, consts)?;
-                    if bound < 0 {
-                        return Err(format!("`dim {name}`'s array bound can't be negative"));
+                    match resolve_array_bound_literal(size, consts) {
+                        Ok(bound) if bound < 0 => {
+                            return Err(format!("`dim {name}`'s array bound can't be negative"));
+                        }
+                        Ok(bound) if !dynamic => bounds.push(bound),
+                        Ok(_) | Err(_) => {
+                            dynamic = true;
+                            bounds.push(0);
+                        }
                     }
-                    bounds.push(bound);
                 }
                 let c_name = c_var_name(
                     name,
@@ -1894,11 +1898,16 @@ fn collect_array_declarations_into(
                     },
                 );
                 arrays.insert(
-                    c_name,
+                    c_name.clone(),
                     ArrayInfo {
                         bounds,
                         element_type,
-                        runtime_len: None,
+                        runtime_len: dynamic.then(|| {
+                            (0..sizes.len())
+                                .map(|axis| format!("{}_len{axis}", c_name))
+                                .collect()
+                        }),
+                        dynamic,
                     },
                 );
             }
@@ -2774,6 +2783,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
 
     let mut prototypes = String::new();
     let mut function_defs = String::new();
+    let mut has_dynamic_arrays = functions.arrays.values().any(|info| info.dynamic);
     for func in &program.functions {
         let sig = functions
             .signature_for(func)
@@ -2793,6 +2803,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         // check, since most functions have no array parameter at all.
         let local_arrays = collect_array_declarations(&func.body, &int_consts)
             .map_err(|message| vec![unsupported(&message)])?;
+        has_dynamic_arrays |= local_arrays.values().any(|info| info.dynamic);
         let scoped_table = function_scoped_table(&functions, sig, &local_arrays);
         let table_for_body = scoped_table.as_ref().unwrap_or(&functions);
         emit_function_def(
@@ -2915,7 +2926,8 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     if file_io.used {
         includes.push_str("#include <stdint.h>\n");
         includes.push_str("#include <stdlib.h>\n");
-    } else if builtin_usage.needs_stdlib_h
+    } else if has_dynamic_arrays
+        || builtin_usage.needs_stdlib_h
         || needs_input
         || needs_randomize
         || needs_error_handling
@@ -2962,6 +2974,18 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut sorted_arrays: Vec<(&String, &ArrayInfo)> = functions.arrays.iter().collect();
     sorted_arrays.sort_by_key(|(name, _)| name.as_str());
     for (c_name, info) in sorted_arrays {
+        if info.dynamic {
+            for len in info.runtime_len.as_ref().expect("dynamic array lengths") {
+                globals_decl.push_str(&format!("static int {len} = 0;\n"));
+            }
+            match info.element_type {
+                Some((c_type, _)) => {
+                    globals_decl.push_str(&format!("static {c_type} *{c_name} = NULL;\n"))
+                }
+                None => globals_decl.push_str(&format!("static char *{c_name} = NULL;\n")),
+            }
+            continue;
+        }
         let dims: String = info
             .bounds
             .iter()
@@ -3343,6 +3367,16 @@ fn emit_function_def(
     let mut sorted_local_arrays: Vec<(&String, &ArrayInfo)> = local_arrays.iter().collect();
     sorted_local_arrays.sort_by_key(|(name, _)| name.as_str());
     for (c_name, info) in &sorted_local_arrays {
+        if info.dynamic {
+            for len in info.runtime_len.as_ref().expect("dynamic array lengths") {
+                body.push_str(&format!("    int {len} = 0;\n"));
+            }
+            match info.element_type {
+                Some((c_type, _)) => body.push_str(&format!("    {c_type} *{c_name} = NULL;\n")),
+                None => body.push_str(&format!("    char *{c_name} = NULL;\n")),
+            }
+            continue;
+        }
         let dims: String = info
             .bounds
             .iter()
@@ -3671,6 +3705,9 @@ fn render_array_index_expr(
             })
             .collect::<Vec<_>>()
             .join(" + ");
+        if info.element_type.is_none() {
+            return Ok(format!("({key} + ({offset}) * {STRING_BUFFER_SIZE})"));
+        }
         return Ok(format!("{key}[{offset}]"));
     }
     let mut out = key;
@@ -4212,12 +4249,40 @@ fn emit_statement(
                 ))
             }
         }
-        // `dim` of an array is likewise a no-op here -- its C declaration
-        // was already hoisted into `generate`'s globals (see
-        // `collect_array_declarations`/`ArrayInfo`), which also already
-        // validated its shape (element type, literal-or-const bounds), so
-        // reaching this arm at all means it's known-good.
-        Statement::Dim { is_array: true, .. } => Ok(()),
+        // Fixed-size arrays are declared up front. Runtime-sized arrays use
+        // a file/function-scope pointer plus frozen per-axis lengths, and
+        // are allocated exactly where the DIM appears so preceding
+        // assignments (for example `n% = 5`) are visible.
+        Statement::Dim {
+            name,
+            is_array: true,
+            sizes,
+        } => {
+            let key = array_c_name(name);
+            let Some(info) = functions.arrays.get(&key) else {
+                return Err(format!("unknown array `{name}`"));
+            };
+            if !info.dynamic {
+                return Ok(());
+            }
+            let lengths = info.runtime_len.as_ref().expect("dynamic array lengths");
+            let mut rendered = Vec::with_capacity(sizes.len());
+            for size in sizes {
+                let (text, is_float) = render_numeric_expr(size, needs_math, functions)?;
+                rendered.push(coerce_numeric(text, is_float, false, needs_math));
+            }
+            for (len, bound) in lengths.iter().zip(rendered.iter()) {
+                out.push_str(&format!("    {len} = ({bound}) + 1;\n"));
+            }
+            let count = lengths.join(" * ");
+            let allocation = if info.element_type.is_none() {
+                format!("calloc((size_t)({count}), {STRING_BUFFER_SIZE})")
+            } else {
+                "calloc((size_t)(".to_string() + &count + "), sizeof(*" + &key + "))"
+            };
+            out.push_str(&format!("    {key} = {allocation};\n"));
+            Ok(())
+        }
         // `arr%(i%) = value` / `country$(i%) = value` -- an indexed
         // write into a `dim`-declared array (see `ArrayInfo`). Real C
         // multi-dimensional indexing (`arr[i]`, `grid[r][c]`) needs no
@@ -4262,8 +4327,13 @@ fn emit_statement(
                 for line in prelude {
                     out.push_str(&line);
                 }
+                let capacity = if info.dynamic {
+                    STRING_BUFFER_SIZE.to_string()
+                } else {
+                    format!("sizeof({c_expr})")
+                };
                 out.push_str(&format!(
-                    "    snprintf({c_expr}, sizeof({c_expr}), \"%s\", {text});\n"
+                    "    snprintf({c_expr}, {capacity}, \"%s\", {text});\n"
                 ));
             } else {
                 let (value_text, value_is_float) =
