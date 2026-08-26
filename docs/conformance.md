@@ -1,8 +1,6 @@
-# Core language and tutorial conformance
+# Conformance tests
 
-The documentation build runs the complete suite with `cargo test --locked`
-before publishing these results. `PASS` means the test passes; `N/A` means the
-backend is not applicable or requires an optional runtime.
+## Core language and tutorial
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
