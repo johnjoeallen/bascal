@@ -7,7 +7,7 @@ source = "metadata"
 name = "All tutorial .bcl sources compile"
 description = "All tutorial .bcl sources compile"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.builtin_scalar_methods"
@@ -16,7 +16,7 @@ source = "metadata"
 name = "Built-in scalar method calls"
 description = "Built-in scalar method calls"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "core.classic_error_handling_rejected"
@@ -25,7 +25,7 @@ source = "metadata"
 name = "C/JVM reject the classic labels/error-handling tutorial"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
-status = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[test]]
 id = "core.deterministic_tutorials_execute"
@@ -34,7 +34,7 @@ source = "metadata"
 name = "Deterministic tutorials build and execute"
 description = "Deterministic tutorials build and execute"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.inventory_case_study"
@@ -43,7 +43,7 @@ source = "metadata"
 name = "Interactive inventory case study"
 description = "Interactive inventory case study"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.random_file_binary_compatibility"
@@ -52,7 +52,7 @@ source = "metadata"
 name = "Random file binary compatibility"
 description = "Random file binary compatibility"
 groups = ["core", "basic", "c", "jvm", "files"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "core.stdlib_functions"
@@ -61,7 +61,7 @@ source = "metadata"
 name = "Standard-library function execution"
 description = "Standard-library function execution"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "core.typed_arrays"
@@ -70,7 +70,7 @@ source = "metadata"
 name = "Typed non-integer arrays and array parameters"
 description = "Typed non-integer arrays and array parameters"
 groups = ["core"]
-status = { basic = "DEFERRED", c = "DEFERRED", jvm = "PASS" }
+expected = { basic = "DEFERRED", c = "DEFERRED", jvm = "PASS" }
 
 [[test]]
 id = "test.dosbox_conformance.builtin_scalar_methods_match_c_target"
@@ -79,7 +79,7 @@ source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_c_target"
 description = "Scalar methods match C output"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.builtin_scalar_methods_match_real_bascom"
@@ -88,7 +88,7 @@ source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_real_bascom"
 description = "Scalar methods match BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
@@ -97,7 +97,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 description = "BASCOM random-file output is readable by C"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
@@ -106,7 +106,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
@@ -115,7 +115,7 @@ source = "dosbox_conformance"
 name = "const_and_print_matches_real_bascom"
 description = "Constants and printing match BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
@@ -124,7 +124,7 @@ source = "dosbox_conformance"
 name = "mid_assign_matches_real_bascom"
 description = "MID$ assignment matches BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_target"
@@ -133,7 +133,7 @@ source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_c_target"
 description = "String self-concatenation matches C output"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_real_bascom"
@@ -142,7 +142,7 @@ source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_real_bascom"
 description = "String self-concatenation matches BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_c_target"
@@ -151,7 +151,7 @@ source = "dosbox_conformance"
 name = "stdlib_functions_match_c_target"
 description = "Standard-library functions match C output"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_real_bascom"
@@ -160,7 +160,7 @@ source = "dosbox_conformance"
 name = "stdlib_functions_match_real_bascom"
 description = "Standard-library functions match BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
@@ -169,7 +169,7 @@ source = "dosbox_conformance"
 name = "tie_break_rounding_matches_real_bascom"
 description = "Tie-break rounding matches BASCOM"
 groups = ["basic", "c", "files"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"
@@ -178,7 +178,7 @@ source = "examples"
 name = "c_target_builds_and_runs_noninteractive_tutorials"
 description = "Deterministic tutorials build and execute"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.c_target_rejects_labels_and_error_handling_tutorial"
@@ -187,7 +187,7 @@ source = "examples"
 name = "c_target_rejects_labels_and_error_handling_tutorial"
 description = "C rejects classic labels and error handling"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.compiles_every_example_bcl_file"
@@ -196,7 +196,7 @@ source = "examples"
 name = "compiles_every_example_bcl_file"
 description = "Every supported fixture transpiles successfully"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_builtin_scalar_methods_when_available"
@@ -205,7 +205,7 @@ source = "examples"
 name = "freebasic_runs_builtin_scalar_methods_when_available"
 description = "Built-in scalar methods under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_mid_assign_edge_cases_when_available"
@@ -214,7 +214,7 @@ source = "examples"
 name = "freebasic_runs_mid_assign_edge_cases_when_available"
 description = "MID$ assignment edge cases under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_remline_when_available"
@@ -223,7 +223,7 @@ source = "examples"
 name = "freebasic_runs_remline_when_available"
 description = "remline output under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_self_referential_string_concatenation_when_available"
@@ -232,7 +232,7 @@ source = "examples"
 name = "freebasic_runs_self_referential_string_concatenation_when_available"
 description = "Self-referential string concatenation under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_sort_driver_when_available"
@@ -241,7 +241,7 @@ source = "examples"
 name = "freebasic_runs_sort_driver_when_available"
 description = "Sort driver under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.freebasic_runs_stdlib_functions_when_available"
@@ -250,7 +250,7 @@ source = "examples"
 name = "freebasic_runs_stdlib_functions_when_available"
 description = "Standard-library functions under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_inventory_tutorial_under_c_target_when_available"
@@ -259,7 +259,7 @@ source = "examples"
 name = "gcc_runs_inventory_tutorial_under_c_target_when_available"
 description = "Interactive inventory case study"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_remline_under_c_target_when_available"
@@ -268,7 +268,7 @@ source = "examples"
 name = "gcc_runs_remline_under_c_target_when_available"
 description = "remline case study output"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.examples.gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
@@ -277,7 +277,7 @@ source = "examples"
 name = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
 description = "Nested procedure TRY/CATCH propagation"
 groups = ["tutorials", "basic", "c"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.hello_world_transpiles_assembles_and_runs_when_available"
@@ -286,7 +286,7 @@ source = "jvm_conformance"
 name = "hello_world_transpiles_assembles_and_runs_when_available"
 description = "Hello-world assembly and execution"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_byval_arrays_expected_failure_is_non_blocking"
@@ -295,7 +295,7 @@ source = "jvm_conformance"
 name = "jvm_byval_arrays_expected_failure_is_non_blocking"
 description = "Expected failure for array byval clone assembly"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_catch_filters_and_source_bindings_run_when_available"
@@ -304,7 +304,7 @@ source = "jvm_conformance"
 name = "jvm_catch_filters_and_source_bindings_run_when_available"
 description = "Catch filters and source bindings"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_mid_assignment_is_non_blocking"
@@ -313,7 +313,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_mid_assignment_is_non_blocking"
 description = "Expected diagnostic for MID$ assignment"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking"
@@ -322,7 +322,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_random_record_io_is_non_blocking"
 description = "Expected diagnostic for random/record file I/O"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_sequential_file_io_is_non_blocking"
@@ -331,7 +331,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_sequential_file_io_is_non_blocking"
 description = "Expected diagnostic for sequential file I/O"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
@@ -340,7 +340,7 @@ source = "jvm_conformance"
 name = "jvm_non_integer_arrays_run_when_available"
 description = "Typed non-integer arrays and array parameters"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_random_file_binary_compatibility_is_pending"
@@ -349,7 +349,7 @@ source = "jvm_conformance"
 name = "jvm_random_file_binary_compatibility_is_pending"
 description = "Random file binary compatibility"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
@@ -358,7 +358,7 @@ source = "jvm_conformance"
 name = "jvm_try_catch_finally_runs_when_available"
 description = "Structured TRY/CATCH/FINALLY execution"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.numeric_literals_and_arithmetic_run_when_available"
@@ -367,7 +367,7 @@ source = "jvm_conformance"
 name = "numeric_literals_and_arithmetic_run_when_available"
 description = "Numeric literals and arithmetic"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.portable_error_handling_tutorial_runs_when_available"
@@ -376,7 +376,7 @@ source = "jvm_conformance"
 name = "portable_error_handling_tutorial_runs_when_available"
 description = "Portable error-handling tutorial"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.scalar_functions_run_when_available"
@@ -385,7 +385,7 @@ source = "jvm_conformance"
 name = "scalar_functions_run_when_available"
 description = "Scalar function calls and returns"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.scalar_variables_and_constants_run_when_available"
@@ -394,7 +394,7 @@ source = "jvm_conformance"
 name = "scalar_variables_and_constants_run_when_available"
 description = "Scalar variables and constants"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.scoped_goto_runs_when_available"
@@ -403,7 +403,7 @@ source = "jvm_conformance"
 name = "scoped_goto_runs_when_available"
 description = "Scoped GOTO labels"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.jvm_conformance.structured_branches_and_while_loops_run_when_available"
@@ -412,7 +412,7 @@ source = "jvm_conformance"
 name = "structured_branches_and_while_loops_run_when_available"
 description = "Structured branches and WHILE loops"
 groups = ["tutorials", "jvm"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.language_conformance.conformance_fixtures_transpile_on_their_supported_backends"
@@ -421,7 +421,7 @@ source = "language_conformance"
 name = "conformance_fixtures_transpile_on_their_supported_backends"
 description = "Every supported fixture transpiles successfully"
 groups = ["core", "tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.array_of_records_currently_fails"
@@ -430,7 +430,7 @@ source = "record_general_purpose"
 name = "array_of_records_currently_fails"
 description = "Array of records is not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_parse"
@@ -439,7 +439,7 @@ source = "record_general_purpose"
 name = "bare_dynamic_string_field_currently_fails_to_parse"
 description = "Bare dynamic record string fields are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
@@ -448,7 +448,7 @@ source = "record_general_purpose"
 name = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
 description = "Existing random-file records compile on BASIC and C"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access_file_records"
@@ -457,7 +457,7 @@ source = "record_general_purpose"
 name = "jvm_backend_does_not_yet_support_random_access_file_records"
 description = "JVM random-file records produce the expected diagnostic"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.nested_record_field_currently_fails"
@@ -466,7 +466,7 @@ source = "record_general_purpose"
 name = "nested_record_field_currently_fails"
 description = "Nested record fields are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.plain_dim_of_record_type_currently_fails"
@@ -475,7 +475,7 @@ source = "record_general_purpose"
 name = "plain_dim_of_record_type_currently_fails"
 description = "Arrays of records are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.record_valued_parameter_currently_fails"
@@ -484,7 +484,7 @@ source = "record_general_purpose"
 name = "record_valued_parameter_currently_fails"
 description = "Record-valued parameters are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.record_valued_return_currently_fails"
@@ -493,7 +493,7 @@ source = "record_general_purpose"
 name = "record_valued_return_currently_fails"
 description = "Record-valued returns are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "test.record_general_purpose.standalone_record_literal_currently_fails"
@@ -502,7 +502,7 @@ source = "record_general_purpose"
 name = "standalone_record_literal_currently_fails"
 description = "Standalone record literals are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
 [[test]]
 id = "tutorial.01_hello"
@@ -511,7 +511,7 @@ source = "01_hello.bcl"
 name = "01 Hello, world"
 description = "01 Hello, world"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.02_variables"
@@ -520,7 +520,7 @@ source = "02_variables.bcl"
 name = "02 Variables and constants"
 description = "02 Variables and constants"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.03_arithmetic"
@@ -529,7 +529,7 @@ source = "03_arithmetic.bcl"
 name = "03 Arithmetic"
 description = "03 Arithmetic"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.04_conditions"
@@ -538,7 +538,7 @@ source = "04_conditions.bcl"
 name = "04 Conditions"
 description = "04 Conditions"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.05_loops"
@@ -547,7 +547,7 @@ source = "05_loops.bcl"
 name = "05 Loops"
 description = "05 Loops"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.06_select_case"
@@ -556,7 +556,7 @@ source = "06_select_case.bcl"
 name = "06 Select case"
 description = "06 Select case"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.07_functions"
@@ -565,7 +565,7 @@ source = "07_functions.bcl"
 name = "07 Functions"
 description = "07 Functions"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.08_arrays"
@@ -574,7 +574,7 @@ source = "08_arrays.bcl"
 name = "08 Arrays"
 description = "08 Arrays"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.09_data"
@@ -583,7 +583,7 @@ source = "09_data.bcl"
 name = "09 DATA and READ"
 description = "09 DATA and READ"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.10_files"
@@ -592,7 +592,7 @@ source = "10_files.bcl"
 name = "10 Sequential files"
 description = "10 Sequential files"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "tutorial.11_screen"
@@ -601,7 +601,7 @@ source = "11_screen.bcl"
 name = "11 Screen I/O"
 description = "11 Screen I/O"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "tutorial.12_require"
@@ -610,7 +610,7 @@ source = "12_require.bcl"
 name = "12 REQUIRE and libraries"
 description = "12 REQUIRE and libraries"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "FAIL", jvm = "PASS" }
+expected = { basic = "PASS", c = "FAIL", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.13_shared.start"
@@ -619,7 +619,7 @@ source = "13_shared/start.bcl"
 name = "13 Shared COMMON"
 description = "13 Shared COMMON"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[test]]
 id = "tutorial.14_procedures"
@@ -628,7 +628,7 @@ source = "14_procedures.bcl"
 name = "14 Procedures"
 description = "14 Procedures"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.15_random_and_record_files"
@@ -637,7 +637,7 @@ source = "15_random_and_record_files.bcl"
 name = "15 Random-access and record files"
 description = "15 Random-access and record files"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "tutorial.16_short_circuit"
@@ -646,7 +646,7 @@ source = "16_short_circuit.bcl"
 name = "16 Short-circuit conditions"
 description = "16 Short-circuit conditions"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.17_labels_and_error_handling"
@@ -655,7 +655,7 @@ source = "17_labels_and_error_handling.bcl"
 name = "17 Classic labels and error handling"
 description = "17 Classic labels and error handling"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[test]]
 id = "tutorial.18_stdlib"
@@ -664,7 +664,7 @@ source = "18_stdlib.bcl"
 name = "18 Standard-library functions"
 description = "18 Standard-library functions"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.20_methods"
@@ -673,7 +673,7 @@ source = "20_methods.bcl"
 name = "20 Scalar methods"
 description = "20 Scalar methods"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.21_portable_error_handling"
@@ -682,7 +682,7 @@ source = "21_portable_error_handling.bcl"
 name = "21 Portable error handling"
 description = "21 Portable error handling"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.22_restore_data"
@@ -691,7 +691,7 @@ source = "22_restore_data.bcl"
 name = "22 RESTORE and DATA"
 description = "22 RESTORE and DATA"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "tutorial.inventory"
@@ -700,4 +700,4 @@ source = "inventory.bcl"
 name = "19 Inventory case study"
 description = "19 Inventory case study"
 groups = ["tutorials"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }

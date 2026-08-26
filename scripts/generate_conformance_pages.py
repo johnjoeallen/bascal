@@ -25,9 +25,9 @@ for group, (filename, title) in pages.items():
     selected = [e for e in entries if group in e.get("groups", [])]
     rows = []
     for entry in selected:
-        status = entry.get("status", {}).get(group if group in ("basic", "c", "jvm") else "basic", "UNKNOWN")
+        status = entry.get("expected", {}).get(group if group in ("basic", "c", "jvm") else "basic", "UNKNOWN")
         if group in ("core", "tutorials"):
-            cells = [entry.get("status", {}).get(b, "UNKNOWN") for b in ("basic", "c", "jvm")]
+            cells = [entry.get("expected", {}).get(b, "UNKNOWN") for b in ("basic", "c", "jvm")]
             rows.append(f"| {entry.get('description', entry['name'])} | {' | '.join(cells)} |")
         else:
             rows.append(f"| {entry.get('description', entry['name'])} | {status} |")

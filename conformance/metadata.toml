@@ -5,46 +5,46 @@
 id = "core.random_file_binary_compatibility"
 description = "Random file binary compatibility"
 groups = ["core", "basic", "c", "jvm", "files"]
-status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "core.all_tutorials_compile"
 description = "All tutorial .bcl sources compile"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.deterministic_tutorials_execute"
 description = "Deterministic tutorials build and execute"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.classic_error_handling_rejected"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
-status = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[test]]
 id = "core.inventory_case_study"
 description = "Interactive inventory case study"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
+expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 
 [[test]]
 id = "core.builtin_scalar_methods"
 description = "Built-in scalar method calls"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "core.stdlib_functions"
 description = "Standard-library function execution"
 groups = ["core"]
-status = { basic = "PASS", c = "PASS", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "core.typed_arrays"
 description = "Typed non-integer arrays and array parameters"
 groups = ["core"]
-status = { basic = "DEFERRED", c = "DEFERRED", jvm = "PASS" }
+expected = { basic = "DEFERRED", c = "DEFERRED", jvm = "PASS" }
