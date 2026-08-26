@@ -11,33 +11,33 @@ not present in the ordinary build). The matrix is kept alongside the tests in
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | All tutorial `.bcl` sources compile | PASS | N/A | N/A |
 | Deterministic tutorials build and execute | N/A | PASS | N/A |
-| C rejects the classic labels/error-handling tutorial | N/A | PASS | N/A |
-| Nested procedure `TRY`/`CATCH` propagation | N/A | PASS | N/A |
+| C rejects the classic labels/error-handling tutorial | N/A | PASS | PASS |
+| Nested procedure `TRY`/`CATCH` propagation | PASS | PASS | PASS |
 | Interactive inventory case study | N/A | PASS | N/A |
-| `remline` case study output | N/A | PASS | N/A |
-| `MID$` assignment edge cases | PASS | N/A | N/A |
-| Self-referential string concatenation | PASS | N/A | N/A |
+| `remline` case study output | PASS | PASS | PASS |
+| `MID$` assignment edge cases | PASS | PASS | PASS |
+| Self-referential string concatenation | PASS | PASS | PASS |
 | Built-in scalar method calls | PASS | N/A | N/A |
 | Standard-library function execution | PASS | N/A | N/A |
 | `remline` under FreeBASIC | PASS | N/A | N/A |
-| Structured `TRY`/`CATCH`/`FINALLY` execution | N/A | N/A | PASS |
+| Structured `TRY`/`CATCH`/`FINALLY` execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | N/A | N/A | PASS |
-| Catch filters and source bindings | N/A | N/A | PASS |
-| Portable error-handling tutorial | N/A | N/A | PASS |
+| Catch filters and source bindings | PASS | PASS | PASS |
+| Portable error-handling tutorial | PASS | PASS | PASS |
 | Hello-world assembly and execution | N/A | N/A | PASS |
-| Numeric literals and arithmetic | N/A | N/A | PASS |
-| Scalar variables and constants | N/A | N/A | PASS |
-| Structured branches and `WHILE` loops | N/A | N/A | PASS |
-| Scalar function calls and returns | N/A | N/A | PASS |
+| Numeric literals and arithmetic | PASS | PASS | PASS |
+| Scalar variables and constants | PASS | PASS | PASS |
+| Structured branches and `WHILE` loops | PASS | PASS | PASS |
+| Scalar function calls and returns | PASS | PASS | PASS |
 | Scoped `GOTO` labels | N/A | N/A | PASS |
 | Pending JVM record binary compatibility check | N/A | N/A | N/A |
 | Constants and printing match BASCOM | PASS | PASS | N/A |
 | `MID$` assignment matches BASCOM | PASS | PASS | N/A |
 | Standard-library functions match BASCOM | PASS | PASS | N/A |
 | Standard-library functions match C output | N/A | PASS | N/A |
-| String self-concatenation matches BASCOM | PASS | PASS | N/A |
+| String self-concatenation matches BASCOM | PASS | PASS | PASS |
 | String self-concatenation matches C output | N/A | PASS | N/A |
-| Scalar methods match BASCOM | PASS | PASS | N/A |
+| Scalar methods match BASCOM | PASS | PASS | PASS |
 | Scalar methods match C output | N/A | PASS | N/A |
 | C random-file output is readable by BASCOM | N/A | PASS | N/A |
 | BASCOM random-file output is readable by C | N/A | PASS | N/A |
