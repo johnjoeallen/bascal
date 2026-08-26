@@ -2,7 +2,7 @@
 
 ## Tutorials
 
-| Tutorial or scenario | BASIC | C | JVM |
+| Tutorial | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
 | 01 Hello, world | PASS | PASS | PASS |
 | 02 Variables and constants | PASS | PASS | PASS |
@@ -26,9 +26,6 @@
 | 20 Scalar methods | PASS | PASS | PASS |
 | 21 Portable error handling | PASS | PASS | PASS |
 | 22 RESTORE and DATA | PASS | PASS | N/A |
-| `sort_driver` case study | PASS | N/A | N/A |
-| `remline` case study | PASS | PASS | N/A |
-| `card_catalog` case study | PASS | PASS | N/A |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Previous: Core language</a>

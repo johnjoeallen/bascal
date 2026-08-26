@@ -1,0 +1,111 @@
+# Tutorial conformance metadata. A tutorial may belong to multiple backend
+# groups; the docs generator turns these entries into the results table.
+[[tutorial]]
+name = "01 Hello, world"
+source = "01_hello.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "02 Variables and constants"
+source = "02_variables.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "03 Arithmetic"
+source = "03_arithmetic.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "04 Conditions"
+source = "04_conditions.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "05 Loops"
+source = "05_loops.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "06 Select case"
+source = "06_select_case.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "07 Functions"
+source = "07_functions.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "08 Arrays"
+source = "08_arrays.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "09 DATA and READ"
+source = "09_data.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "10 Sequential files"
+source = "10_files.bcl"
+backends = ["basic", "c"]
+
+[[tutorial]]
+name = "11 Screen I/O"
+source = "11_screen.bcl"
+backends = ["basic", "c"]
+
+[[tutorial]]
+name = "12 REQUIRE and libraries"
+source = "12_require.bcl"
+backends = ["basic"]
+
+[[tutorial]]
+name = "13 Shared COMMON"
+source = "13_shared/start.bcl"
+backends = ["basic"]
+
+[[tutorial]]
+name = "14 Procedures"
+source = "14_procedures.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "15 Random-access and record files"
+source = "15_random_and_record_files.bcl"
+backends = ["basic", "c"]
+
+[[tutorial]]
+name = "16 Short-circuit conditions"
+source = "16_short_circuit.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "17 Classic labels and error handling"
+source = "17_labels_and_error_handling.bcl"
+backends = ["basic"]
+
+[[tutorial]]
+name = "18 Standard-library functions"
+source = "18_stdlib.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "19 Inventory case study"
+source = "inventory.bcl"
+backends = ["basic", "c"]
+
+[[tutorial]]
+name = "20 Scalar methods"
+source = "20_methods.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "21 Portable error handling"
+source = "21_portable_error_handling.bcl"
+backends = ["basic", "c", "jvm"]
+
+[[tutorial]]
+name = "22 RESTORE and DATA"
+source = "22_restore_data.bcl"
+backends = ["basic", "c"]
