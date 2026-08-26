@@ -39,8 +39,8 @@ require com.bascal.stdlib.error
 
 print "portable try/catch:"
 try
-    throw errFileNotFound%
-catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
+    throw ERR_FILE_NOT_FOUND
+catch err%(ERR_FILE_NOT_FOUND, ERR_FILE_ALREADY_OPEN), erl%, source$
     print "  caught error "; err%; " at "; source$; ":"; erl%
 finally
     print "  cleanup always runs"
@@ -82,39 +82,39 @@ end
 170 ' the *error code itself* has a message, when really this is a lookup
 180 ' table keyed by that code. Stays an ordinary function.
 
-190 errsyntax% = 2
-200 errreturnwithoutgosub% = 3
-210 erroutofdata% = 4
-220 errillegalfunctioncall% = 5
-230 erroverflow% = 6
-240 erroutofmemory% = 7
-250 errsubscriptoutofrange% = 9
-260 errduplicatedefinition% = 10
-270 errdivisionbyzero% = 11
-280 errtypemismatch% = 13
-290 erroutofstringspace% = 14
-300 errnoresume% = 19
-310 errresumewithouterror% = 20
-320 errdevicetimeout% = 24
-330 errdevicefault% = 25
-340 erroutofpaper% = 27
-350 errbadfilenumber% = 52
-360 errfilenotfound% = 53
-370 errbadfilemode% = 54
-380 errfilealreadyopen% = 55
-390 errdeviceio% = 57
-400 errfilealreadyexists% = 58
-410 errdiskfull% = 61
-420 errinputpastend% = 62
-430 errbadrecordnumber% = 63
-440 errbadfilename% = 64
-450 errtoomanyfiles% = 67
-460 errdeviceunavailable% = 68
-470 errdiskwriteprotected% = 70
-480 errdisknotready% = 71
-490 errdiskmediaerror% = 72
-500 errpathfileaccess% = 75
-510 errpathnotfound% = 76
+190 errSYNTAX% = 2
+200 errRETURNWITHOUTGOSUB% = 3
+210 errOUTOFDATA% = 4
+220 errILLEGALFUNCTIONCALL% = 5
+230 errOVERFLOW% = 6
+240 errOUTOFMEMORY% = 7
+250 errSUBSCRIPTOUTOFRANGE% = 9
+260 errDUPLICATEDEFINITION% = 10
+270 errDIVISIONBYZERO% = 11
+280 errTYPEMISMATCH% = 13
+290 errOUTOFSTRINGSPACE% = 14
+300 errNORESUME% = 19
+310 errRESUMEWITHOUTERROR% = 20
+320 errDEVICETIMEOUT% = 24
+330 errDEVICEFAULT% = 25
+340 errOUTOFPAPER% = 27
+350 errBADFILENUMBER% = 52
+360 errFILENOTFOUND% = 53
+370 errBADFILEMODE% = 54
+380 errFILEALREADYOPEN% = 55
+390 errDEVICEIO% = 57
+400 errFILEALREADYEXISTS% = 58
+410 errDISKFULL% = 61
+420 errINPUTPASTEND% = 62
+430 errBADRECORDNUMBER% = 63
+440 errBADFILENAME% = 64
+450 errTOOMANYFILES% = 67
+460 errDEVICEUNAVAILABLE% = 68
+470 errDISKWRITEPROTECTED% = 70
+480 errDISKNOTREADY% = 71
+490 errDISKMEDIAERROR% = 72
+500 errPATHFILEACCESS% = 75
+510 errPATHNOTFOUND% = 76
 
 520 ' Tutorial — Portable Structured Error Handling
 530 '
@@ -124,11 +124,11 @@ end
 560 PRINT "portable try/catch:"
 570 ON ERROR GOTO 620
 580 BCC_TRY_0001_PENDING% = 0
-590     ERROR errfilenotfound%
+590     ERROR err_file_not_found
 600 ON ERROR GOTO 0
 610 GOTO 770
 620     BCC_TRY_0001_PENDING% = ERR
-630     IF (ERR = errfilenotfound%) OR (ERR = errfilealreadyopen%) THEN GOTO 650
+630     IF (ERR = err_file_not_found) OR (ERR = err_file_already_open) THEN GOTO 650
 640     RESUME 770
 650     err% = ERR
 660     erl% = ERL
@@ -151,39 +151,39 @@ end
 
 820 ' function error$(code%)
 830     BCCT3% = errorCode0%
-840     IF (BCCT3% = errsyntax%) <> 0 THEN GOTO 1180
-850     IF (BCCT3% = errreturnwithoutgosub%) <> 0 THEN GOTO 1210
-860     IF (BCCT3% = erroutofdata%) <> 0 THEN GOTO 1240
-870     IF (BCCT3% = errillegalfunctioncall%) <> 0 THEN GOTO 1270
-880     IF (BCCT3% = erroverflow%) <> 0 THEN GOTO 1300
-890     IF (BCCT3% = erroutofmemory%) <> 0 THEN GOTO 1330
-900     IF (BCCT3% = errsubscriptoutofrange%) <> 0 THEN GOTO 1360
-910     IF (BCCT3% = errduplicatedefinition%) <> 0 THEN GOTO 1390
-920     IF (BCCT3% = errdivisionbyzero%) <> 0 THEN GOTO 1420
-930     IF (BCCT3% = errtypemismatch%) <> 0 THEN GOTO 1450
-940     IF (BCCT3% = erroutofstringspace%) <> 0 THEN GOTO 1480
-950     IF (BCCT3% = errnoresume%) <> 0 THEN GOTO 1510
-960     IF (BCCT3% = errresumewithouterror%) <> 0 THEN GOTO 1540
-970     IF (BCCT3% = errdevicetimeout%) <> 0 THEN GOTO 1570
-980     IF (BCCT3% = errdevicefault%) <> 0 THEN GOTO 1600
-990     IF (BCCT3% = erroutofpaper%) <> 0 THEN GOTO 1630
-1000     IF (BCCT3% = errbadfilenumber%) <> 0 THEN GOTO 1660
-1010     IF (BCCT3% = errfilenotfound%) <> 0 THEN GOTO 1690
-1020     IF (BCCT3% = errbadfilemode%) <> 0 THEN GOTO 1720
-1030     IF (BCCT3% = errfilealreadyopen%) <> 0 THEN GOTO 1750
-1040     IF (BCCT3% = errdeviceio%) <> 0 THEN GOTO 1780
-1050     IF (BCCT3% = errfilealreadyexists%) <> 0 THEN GOTO 1810
-1060     IF (BCCT3% = errdiskfull%) <> 0 THEN GOTO 1840
-1070     IF (BCCT3% = errinputpastend%) <> 0 THEN GOTO 1870
-1080     IF (BCCT3% = errbadrecordnumber%) <> 0 THEN GOTO 1900
-1090     IF (BCCT3% = errbadfilename%) <> 0 THEN GOTO 1930
-1100     IF (BCCT3% = errtoomanyfiles%) <> 0 THEN GOTO 1960
-1110     IF (BCCT3% = errdeviceunavailable%) <> 0 THEN GOTO 1990
-1120     IF (BCCT3% = errdiskwriteprotected%) <> 0 THEN GOTO 2020
-1130     IF (BCCT3% = errdisknotready%) <> 0 THEN GOTO 2050
-1140     IF (BCCT3% = errdiskmediaerror%) <> 0 THEN GOTO 2080
-1150     IF (BCCT3% = errpathfileaccess%) <> 0 THEN GOTO 2110
-1160     IF (BCCT3% = errpathnotfound%) <> 0 THEN GOTO 2140
+840     IF (BCCT3% = errSYNTAX%) <> 0 THEN GOTO 1180
+850     IF (BCCT3% = errRETURNWITHOUTGOSUB%) <> 0 THEN GOTO 1210
+860     IF (BCCT3% = errOUTOFDATA%) <> 0 THEN GOTO 1240
+870     IF (BCCT3% = errILLEGALFUNCTIONCALL%) <> 0 THEN GOTO 1270
+880     IF (BCCT3% = errOVERFLOW%) <> 0 THEN GOTO 1300
+890     IF (BCCT3% = errOUTOFMEMORY%) <> 0 THEN GOTO 1330
+900     IF (BCCT3% = errSUBSCRIPTOUTOFRANGE%) <> 0 THEN GOTO 1360
+910     IF (BCCT3% = errDUPLICATEDEFINITION%) <> 0 THEN GOTO 1390
+920     IF (BCCT3% = errDIVISIONBYZERO%) <> 0 THEN GOTO 1420
+930     IF (BCCT3% = errTYPEMISMATCH%) <> 0 THEN GOTO 1450
+940     IF (BCCT3% = errOUTOFSTRINGSPACE%) <> 0 THEN GOTO 1480
+950     IF (BCCT3% = errNORESUME%) <> 0 THEN GOTO 1510
+960     IF (BCCT3% = errRESUMEWITHOUTERROR%) <> 0 THEN GOTO 1540
+970     IF (BCCT3% = errDEVICETIMEOUT%) <> 0 THEN GOTO 1570
+980     IF (BCCT3% = errDEVICEFAULT%) <> 0 THEN GOTO 1600
+990     IF (BCCT3% = errOUTOFPAPER%) <> 0 THEN GOTO 1630
+1000     IF (BCCT3% = errBADFILENUMBER%) <> 0 THEN GOTO 1660
+1010     IF (BCCT3% = errFILENOTFOUND%) <> 0 THEN GOTO 1690
+1020     IF (BCCT3% = errBADFILEMODE%) <> 0 THEN GOTO 1720
+1030     IF (BCCT3% = errFILEALREADYOPEN%) <> 0 THEN GOTO 1750
+1040     IF (BCCT3% = errDEVICEIO%) <> 0 THEN GOTO 1780
+1050     IF (BCCT3% = errFILEALREADYEXISTS%) <> 0 THEN GOTO 1810
+1060     IF (BCCT3% = errDISKFULL%) <> 0 THEN GOTO 1840
+1070     IF (BCCT3% = errINPUTPASTEND%) <> 0 THEN GOTO 1870
+1080     IF (BCCT3% = errBADRECORDNUMBER%) <> 0 THEN GOTO 1900
+1090     IF (BCCT3% = errBADFILENAME%) <> 0 THEN GOTO 1930
+1100     IF (BCCT3% = errTOOMANYFILES%) <> 0 THEN GOTO 1960
+1110     IF (BCCT3% = errDEVICEUNAVAILABLE%) <> 0 THEN GOTO 1990
+1120     IF (BCCT3% = errDISKWRITEPROTECTED%) <> 0 THEN GOTO 2020
+1130     IF (BCCT3% = errDISKNOTREADY%) <> 0 THEN GOTO 2050
+1140     IF (BCCT3% = errDISKMEDIAERROR%) <> 0 THEN GOTO 2080
+1150     IF (BCCT3% = errPATHFILEACCESS%) <> 0 THEN GOTO 2110
+1160     IF (BCCT3% = errPATHNOTFOUND%) <> 0 THEN GOTO 2140
 1170     GOTO 2170
 1180         errorResult0$ = "Syntax error"
 1190         RETURN
@@ -312,6 +312,7 @@ end
 
 // BASCAL generated C -- DO NOT EDIT, ANY CHANGES WILL BE OVERWRITTEN BY THE NEXT COMPILE
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -332,41 +333,43 @@ static const char* bcc_chr(int code);
 static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 
+static float bv_f_err_file_already_open = 0;
+static float bv_f_err_file_not_found = 0;
 static int bv_i_erl = 0;
 static int bv_i_err = 0;
-static int bv_i_errbadfilemode = 0;
-static int bv_i_errbadfilename = 0;
-static int bv_i_errbadfilenumber = 0;
-static int bv_i_errbadrecordnumber = 0;
-static int bv_i_errdevicefault = 0;
-static int bv_i_errdeviceio = 0;
-static int bv_i_errdevicetimeout = 0;
-static int bv_i_errdeviceunavailable = 0;
-static int bv_i_errdiskfull = 0;
-static int bv_i_errdiskmediaerror = 0;
-static int bv_i_errdisknotready = 0;
-static int bv_i_errdiskwriteprotected = 0;
-static int bv_i_errdivisionbyzero = 0;
-static int bv_i_errduplicatedefinition = 0;
-static int bv_i_errfilealreadyexists = 0;
-static int bv_i_errfilealreadyopen = 0;
-static int bv_i_errfilenotfound = 0;
-static int bv_i_errillegalfunctioncall = 0;
-static int bv_i_errinputpastend = 0;
-static int bv_i_errnoresume = 0;
-static int bv_i_erroutofdata = 0;
-static int bv_i_erroutofmemory = 0;
-static int bv_i_erroutofpaper = 0;
-static int bv_i_erroutofstringspace = 0;
-static int bv_i_erroverflow = 0;
-static int bv_i_errpathfileaccess = 0;
-static int bv_i_errpathnotfound = 0;
-static int bv_i_errresumewithouterror = 0;
-static int bv_i_errreturnwithoutgosub = 0;
-static int bv_i_errsubscriptoutofrange = 0;
-static int bv_i_errsyntax = 0;
-static int bv_i_errtoomanyfiles = 0;
-static int bv_i_errtypemismatch = 0;
+static int bv_i_err_bad_file_mode = 0;
+static int bv_i_err_bad_file_name = 0;
+static int bv_i_err_bad_file_number = 0;
+static int bv_i_err_bad_record_number = 0;
+static int bv_i_err_device_fault = 0;
+static int bv_i_err_device_io = 0;
+static int bv_i_err_device_timeout = 0;
+static int bv_i_err_device_unavailable = 0;
+static int bv_i_err_disk_full = 0;
+static int bv_i_err_disk_media_error = 0;
+static int bv_i_err_disk_not_ready = 0;
+static int bv_i_err_disk_write_protected = 0;
+static int bv_i_err_division_by_zero = 0;
+static int bv_i_err_duplicate_definition = 0;
+static int bv_i_err_file_already_exists = 0;
+static int bv_i_err_file_already_open = 0;
+static int bv_i_err_file_not_found = 0;
+static int bv_i_err_illegal_function_call = 0;
+static int bv_i_err_input_past_end = 0;
+static int bv_i_err_no_resume = 0;
+static int bv_i_err_out_of_data = 0;
+static int bv_i_err_out_of_memory = 0;
+static int bv_i_err_out_of_paper = 0;
+static int bv_i_err_out_of_string_space = 0;
+static int bv_i_err_overflow = 0;
+static int bv_i_err_path_file_access = 0;
+static int bv_i_err_path_not_found = 0;
+static int bv_i_err_resume_without_error = 0;
+static int bv_i_err_return_without_gosub = 0;
+static int bv_i_err_subscript_out_of_range = 0;
+static int bv_i_err_syntax = 0;
+static int bv_i_err_too_many_files = 0;
+static int bv_i_err_type_mismatch = 0;
 static char bv_s_source[256] = {0};
 
 void bf_s_error(int bv_i_code, char* bcc_out);
@@ -376,231 +379,231 @@ void bf_s_error(int bv_i_code, char* bcc_out) {
         int bt_sel_0 = bv_i_code;
         int bt_sel_match_1 = 0;
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errsyntax)) {
+            if ((bt_sel_0 == bv_i_err_syntax)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Syntax error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errreturnwithoutgosub)) {
+            if ((bt_sel_0 == bv_i_err_return_without_gosub)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "RETURN without GOSUB");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofdata)) {
+            if ((bt_sel_0 == bv_i_err_out_of_data)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of DATA");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errillegalfunctioncall)) {
+            if ((bt_sel_0 == bv_i_err_illegal_function_call)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Illegal function call");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroverflow)) {
+            if ((bt_sel_0 == bv_i_err_overflow)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Overflow");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofmemory)) {
+            if ((bt_sel_0 == bv_i_err_out_of_memory)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of memory");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errsubscriptoutofrange)) {
+            if ((bt_sel_0 == bv_i_err_subscript_out_of_range)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Subscript out of range");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errduplicatedefinition)) {
+            if ((bt_sel_0 == bv_i_err_duplicate_definition)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Duplicate Definition");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdivisionbyzero)) {
+            if ((bt_sel_0 == bv_i_err_division_by_zero)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Division by zero");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errtypemismatch)) {
+            if ((bt_sel_0 == bv_i_err_type_mismatch)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Type mismatch");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofstringspace)) {
+            if ((bt_sel_0 == bv_i_err_out_of_string_space)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of string space");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errnoresume)) {
+            if ((bt_sel_0 == bv_i_err_no_resume)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "No RESUME");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errresumewithouterror)) {
+            if ((bt_sel_0 == bv_i_err_resume_without_error)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "RESUME without error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdevicetimeout)) {
+            if ((bt_sel_0 == bv_i_err_device_timeout)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device timeout");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdevicefault)) {
+            if ((bt_sel_0 == bv_i_err_device_fault)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device fault");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofpaper)) {
+            if ((bt_sel_0 == bv_i_err_out_of_paper)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of paper");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilenumber)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_number)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file number");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilenotfound)) {
+            if ((bt_sel_0 == bv_i_err_file_not_found)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File not found");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilemode)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_mode)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file mode");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilealreadyopen)) {
+            if ((bt_sel_0 == bv_i_err_file_already_open)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File already open");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdeviceio)) {
+            if ((bt_sel_0 == bv_i_err_device_io)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device I/O error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilealreadyexists)) {
+            if ((bt_sel_0 == bv_i_err_file_already_exists)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File already exists");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskfull)) {
+            if ((bt_sel_0 == bv_i_err_disk_full)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk full");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errinputpastend)) {
+            if ((bt_sel_0 == bv_i_err_input_past_end)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Input past end");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadrecordnumber)) {
+            if ((bt_sel_0 == bv_i_err_bad_record_number)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad record number");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilename)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_name)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file name");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errtoomanyfiles)) {
+            if ((bt_sel_0 == bv_i_err_too_many_files)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Too many files");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdeviceunavailable)) {
+            if ((bt_sel_0 == bv_i_err_device_unavailable)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device unavailable");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskwriteprotected)) {
+            if ((bt_sel_0 == bv_i_err_disk_write_protected)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk write protected");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdisknotready)) {
+            if ((bt_sel_0 == bv_i_err_disk_not_ready)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk not ready");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskmediaerror)) {
+            if ((bt_sel_0 == bv_i_err_disk_media_error)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk media error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errpathfileaccess)) {
+            if ((bt_sel_0 == bv_i_err_path_file_access)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Path/File access error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errpathnotfound)) {
+            if ((bt_sel_0 == bv_i_err_path_not_found)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Path not found");
                 return;
@@ -633,39 +636,39 @@ int main(void) {
     // the *error code itself* has a message, when really this is a lookup
     // table keyed by that code. Stays an ordinary function.
 
-    bv_i_errsyntax = 2;
-    bv_i_errreturnwithoutgosub = 3;
-    bv_i_erroutofdata = 4;
-    bv_i_errillegalfunctioncall = 5;
-    bv_i_erroverflow = 6;
-    bv_i_erroutofmemory = 7;
-    bv_i_errsubscriptoutofrange = 9;
-    bv_i_errduplicatedefinition = 10;
-    bv_i_errdivisionbyzero = 11;
-    bv_i_errtypemismatch = 13;
-    bv_i_erroutofstringspace = 14;
-    bv_i_errnoresume = 19;
-    bv_i_errresumewithouterror = 20;
-    bv_i_errdevicetimeout = 24;
-    bv_i_errdevicefault = 25;
-    bv_i_erroutofpaper = 27;
-    bv_i_errbadfilenumber = 52;
-    bv_i_errfilenotfound = 53;
-    bv_i_errbadfilemode = 54;
-    bv_i_errfilealreadyopen = 55;
-    bv_i_errdeviceio = 57;
-    bv_i_errfilealreadyexists = 58;
-    bv_i_errdiskfull = 61;
-    bv_i_errinputpastend = 62;
-    bv_i_errbadrecordnumber = 63;
-    bv_i_errbadfilename = 64;
-    bv_i_errtoomanyfiles = 67;
-    bv_i_errdeviceunavailable = 68;
-    bv_i_errdiskwriteprotected = 70;
-    bv_i_errdisknotready = 71;
-    bv_i_errdiskmediaerror = 72;
-    bv_i_errpathfileaccess = 75;
-    bv_i_errpathnotfound = 76;
+    bv_i_err_syntax = 2;
+    bv_i_err_return_without_gosub = 3;
+    bv_i_err_out_of_data = 4;
+    bv_i_err_illegal_function_call = 5;
+    bv_i_err_overflow = 6;
+    bv_i_err_out_of_memory = 7;
+    bv_i_err_subscript_out_of_range = 9;
+    bv_i_err_duplicate_definition = 10;
+    bv_i_err_division_by_zero = 11;
+    bv_i_err_type_mismatch = 13;
+    bv_i_err_out_of_string_space = 14;
+    bv_i_err_no_resume = 19;
+    bv_i_err_resume_without_error = 20;
+    bv_i_err_device_timeout = 24;
+    bv_i_err_device_fault = 25;
+    bv_i_err_out_of_paper = 27;
+    bv_i_err_bad_file_number = 52;
+    bv_i_err_file_not_found = 53;
+    bv_i_err_bad_file_mode = 54;
+    bv_i_err_file_already_open = 55;
+    bv_i_err_device_io = 57;
+    bv_i_err_file_already_exists = 58;
+    bv_i_err_disk_full = 61;
+    bv_i_err_input_past_end = 62;
+    bv_i_err_bad_record_number = 63;
+    bv_i_err_bad_file_name = 64;
+    bv_i_err_too_many_files = 67;
+    bv_i_err_device_unavailable = 68;
+    bv_i_err_disk_write_protected = 70;
+    bv_i_err_disk_not_ready = 71;
+    bv_i_err_disk_media_error = 72;
+    bv_i_err_path_file_access = 75;
+    bv_i_err_path_not_found = 76;
 
     // Tutorial — Portable Structured Error Handling
     //
@@ -675,7 +678,7 @@ int main(void) {
     printf("portable try/catch:\n");
     int bcc_try_0_pending = 0;
     bcc_on_error_target = 0;
-    bcc_err = bv_i_errfilenotfound;
+    bcc_err = ((int)round((double)(bv_f_err_file_not_found)));
     bcc_erl = 10;
     bcc_err_file = "tutorial/21_portable_error_handling.bcl";
     goto bcc_try_0_catch;
@@ -684,7 +687,7 @@ int main(void) {
     bcc_try_0_catch: ;
     bcc_in_handler = 0;
     bcc_on_error_target = -1;
-    if (!((bcc_err == bv_i_errfilenotfound) || (bcc_err == bv_i_errfilealreadyopen))) {
+    if (!((bcc_err == ((int)round((double)(bv_f_err_file_not_found)))) || (bcc_err == ((int)round((double)(bv_f_err_file_already_open)))))) {
         bcc_try_0_pending = 1;
         goto bcc_try_0_finally;
     }

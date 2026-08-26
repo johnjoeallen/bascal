@@ -79,8 +79,8 @@ identity%(1, 1) = 1
 program arrays
 
 /* Declare and populate */
-const N% = 6
-dim data%(N%)
+const N = 6
+dim data%(N)
 
 data%(0) = 64
 data%(1) = 25
@@ -380,11 +380,11 @@ static int bv_i_target = 0;
 static int bv_i_data[7] = {0};
 static int bv_i_identity[3][3] = {0};
 
-int bf_i_insertionsort(int* bv_i_arr, int bv_i_arr_len0);
-int bf_i_indexof(int* bv_i_arr_in, int bv_i_arr_len0, int bv_i_target);
-int bf_i_printarray(int* bv_i_arr_in, int bv_i_arr_len0);
+int bf_i_insertionsort(int bv_i_arr_len0, int* bv_i_arr);
+int bf_i_indexof(int bv_i_arr_len0, int* bv_i_arr_in, int bv_i_target);
+int bf_i_printarray(int bv_i_arr_len0, int* bv_i_arr_in);
 
-int bf_i_insertionsort(int* bv_i_arr, int bv_i_arr_len0) {
+int bf_i_insertionsort(int bv_i_arr_len0, int* bv_i_arr) {
     int bv_i_i = 0;
     int bv_i_j = 0;
     int bv_i_key = 0;
@@ -403,8 +403,8 @@ int bf_i_insertionsort(int* bv_i_arr, int bv_i_arr_len0) {
     return 0;
 }
 
-int bf_i_indexof(int* bv_i_arr_in, int bv_i_arr_len0, int bv_i_target) {
-    int bv_i_arr[7] = {0};
+int bf_i_indexof(int bv_i_arr_len0, int* bv_i_arr_in, int bv_i_target) {
+    int bv_i_arr[bv_i_arr_len0];
     for (int bcc_i = 0; bcc_i < bv_i_arr_len0; bcc_i++) { bv_i_arr[bcc_i] = bv_i_arr_in[bcc_i]; }
     int bv_i_i = 0;
 
@@ -418,8 +418,8 @@ int bf_i_indexof(int* bv_i_arr_in, int bv_i_arr_len0, int bv_i_target) {
     return -(1);
 }
 
-int bf_i_printarray(int* bv_i_arr_in, int bv_i_arr_len0) {
-    int bv_i_arr[7] = {0};
+int bf_i_printarray(int bv_i_arr_len0, int* bv_i_arr_in) {
+    int bv_i_arr[bv_i_arr_len0];
     for (int bcc_i = 0; bcc_i < bv_i_arr_len0; bcc_i++) { bv_i_arr[bcc_i] = bv_i_arr_in[bcc_i]; }
     int bv_i_i = 0;
     char bv_s_line[256] = {0};
@@ -481,16 +481,16 @@ int main(void) {
 
     // Before sort
     printf("Before: \n");
-    bv_i_dummy = bf_i_printarray(bv_i_data, 7);
+    bv_i_dummy = bf_i_printarray(7, bv_i_data);
 
     // Sort and show
-    bv_i_dummy = bf_i_insertionsort(bv_i_data, 7);
+    bv_i_dummy = bf_i_insertionsort(7, bv_i_data);
     printf("After:  \n");
-    bv_i_dummy = bf_i_printarray(bv_i_data, 7);
+    bv_i_dummy = bf_i_printarray(7, bv_i_data);
 
     // Search
     bv_i_target = 22;
-    bv_i_idx = bf_i_indexof(bv_i_data, 7, bv_i_target);
+    bv_i_idx = bf_i_indexof(7, bv_i_data, bv_i_target);
     if ((-(bv_i_idx >= 0))) {
         char bt_s_6[256];
         snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bcc_stri(bv_i_target), " found at index ");

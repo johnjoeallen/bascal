@@ -58,15 +58,15 @@ static int bv_i_carolid = 0;
 static int bv_i_carolnametrimi = 0;
 static int bv_i_i = 0;
 static int bv_i_id = 0;
-static int bv_i_numrecs = 0;
-static int bv_i_reclen = 0;
+static int bv_i_num_recs = 0;
+static int bv_i_rec_len = 0;
 static int bv_i_sfacultytrimi = 0;
 static int bv_i_sid = 0;
 static int bv_i_snametrimi = 0;
 static char bv_s_carolfaculty[256] = {0};
 static char bv_s_carolname[256] = {0};
+static char bv_s_db_file[256] = {0};
 static char bv_s_dbfacultybuf[256] = {0};
-static char bv_s_dbfile[256] = {0};
 static char bv_s_dbidbuf[256] = {0};
 static char bv_s_dbnamebuf[256] = {0};
 static char bv_s_dbscorebuf[256] = {0};
@@ -104,7 +104,7 @@ int main(void) {
     //
     // ---- Part 1 primitives ----
     //
-    // open filename$ for random as #n len = recLen%
+    // open filename$ for random as #n len = REC_LEN
     // Open (or create) a random-access file.  len specifies the record length
     // in bytes; every record occupies exactly that many bytes.
     //
@@ -137,9 +137,9 @@ int main(void) {
 
     // trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 
-    bv_i_reclen = 50;
-    bv_i_numrecs = 3;
-    snprintf(bv_s_dbfile, sizeof(bv_s_dbfile), "%s", "tutorial_students.dat");
+    bv_i_rec_len = 50;
+    bv_i_num_recs = 3;
+    snprintf(bv_s_db_file, sizeof(bv_s_db_file), "%s", "tutorial_students.dat");
 
     // ============================================================
     // Part 1 — random-access files, written by hand
@@ -148,8 +148,8 @@ int main(void) {
     // ---- Write three records ----
 
     bcc_raise_retry_0: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 0;
@@ -193,8 +193,8 @@ int main(void) {
 
     printf("Part 1 (hand-written) -- reading records in reverse order:\n");
     bcc_raise_retry_1: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 1;
@@ -212,7 +212,7 @@ int main(void) {
 
     int bt_lim_0 = 1;
     int bt_step_0 = -(1);
-    for (bv_i_i = bv_i_numrecs; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
+    for (bv_i_i = bv_i_num_recs; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         bcc_get_record_fields_1_1(bcc_files[0], bv_i_i, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
         bv_i_id = bcc_cvi(bv_s_idbuf);
         bv_d_score = bcc_cvd(bv_s_scorebuf);
@@ -237,8 +237,8 @@ int main(void) {
     // ---- Update one field in place ----
 
     bcc_raise_retry_2: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 2;
@@ -268,8 +268,8 @@ int main(void) {
     // ---- Update two fields at once ----
 
     bcc_raise_retry_3: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 3;
@@ -302,8 +302,8 @@ int main(void) {
     // ---- Same shape again ----
 
     bcc_raise_retry_4: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 4;
@@ -334,8 +334,8 @@ int main(void) {
 
     printf("Part 1 (hand-written) -- after updates:\n");
     bcc_raise_retry_5: ;
-    bcc_files[0] = fopen(bv_s_dbfile, "rb+");
-    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_dbfile, "wb+");
+    bcc_files[0] = fopen(bv_s_db_file, "rb+");
+    if (!bcc_files[0]) bcc_files[0] = fopen(bv_s_db_file, "wb+");
     if (!bcc_files[0]) {
         bcc_err = 75;
         bcc_resume_id = 5;
@@ -351,7 +351,7 @@ int main(void) {
     }
     bcc_raise_after_5: ;
 
-    int bt_lim_7 = bv_i_numrecs;
+    int bt_lim_7 = bv_i_num_recs;
     int bt_step_7 = 1;
     for (bv_i_i = 1; bt_step_7 >= 0 ? bv_i_i <= bt_lim_7 : bv_i_i >= bt_lim_7; bv_i_i += bt_step_7) {
         bcc_get_record_fields_1_5(bcc_files[0], bv_i_i, bv_s_idbuf, bv_s_namebuf, bv_s_scorebuf, bv_s_facultybuf);
@@ -375,7 +375,7 @@ int main(void) {
     // - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
     // be repeated, identically, in every OPEN block — get it wrong in one
     // of the five and you're reading or writing the wrong bytes.
-    // - recLen% (50) is 2+20+8+20 computed by hand; add a field to the record
+    // - REC_LEN (50) is 2+20+8+20 computed by hand; add a field to the record
     // and every one of those numbers has to be updated together, or the
     // file silently gets corrupted.
     // - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
@@ -399,14 +399,14 @@ int main(void) {
     // record <Name> ... end record
     // Declares a fixed-layout record type. Supported field types: int16,
     // int32, float32, float64, and string(N). The record's total byte width
-    // (used as Part 1's recLen%) is the sum of its field widths, computed
+    // (used as Part 1's REC_LEN) is the sum of its field widths, computed
     // automatically.
     //
     // file <var> as <RecordType> = open(<path>)
     // Opens (or creates) a random-access file sized for one record, and binds
     // FIELD buffer variables for every field. File numbers are allocated
     // automatically, starting at #1, in the order `file` declarations appear.
-    // This one line replaces Part 1's recLen% constant, OPEN, and FIELD.
+    // This one line replaces Part 1's REC_LEN constant, OPEN, and FIELD.
     //
     // <file>[<n>] = { field: value, ... }
     // Whole-record write: packs every field (LSET, MKx$ for numeric fields)
@@ -525,7 +525,7 @@ int main(void) {
 
     // ---- Update one field in place ----
 
-    // Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
+    // Bob just scraped a pass on re-mark. Compare to Part 1: no REC_LEN, no
     // idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
     // db[...].score = ...  (partial-field update)
     double bcc_tmp_24 = 61.5;

@@ -24,6 +24,10 @@ pub struct Parser {
     // the top-level program loop, and a single-line `if`'s body) see the
     // extra statements as if they'd been parsed individually.
     pending_statements: std::collections::VecDeque<Stmt>,
+    // Value-inferred types for constants already declared in this source.
+    // References are annotated as they are parsed so backends receive typed
+    // identifiers even though the source omits a type suffix.
+    const_types: std::collections::HashMap<String, TypeSuffix>,
 }
 
 fn collect_typed_arrays(statements: &[Stmt]) -> Vec<crate::ast::TypedArrayDecl> {
@@ -144,6 +148,7 @@ impl Parser {
             pending_blank: false,
             single_line_if_depth: 0,
             pending_statements: std::collections::VecDeque::new(),
+            const_types: std::collections::HashMap::new(),
         }
     }
 
@@ -1951,9 +1956,19 @@ impl Parser {
 
     fn parse_const(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("const")?;
-        let name = BasicIdent::parse(&self.expect_ident("expected CONST name")?);
+        let mut name = BasicIdent::parse(&self.expect_ident("expected CONST name")?);
         self.expect(TokenKind::Eq, "expected `=` in CONST")?;
         let value = self.parse_expr(0)?;
+        if name.suffix.is_none() {
+            name.suffix = Some(match value {
+                Expr::Integer(_) => TypeSuffix::Integer,
+                Expr::Float(_) => TypeSuffix::Single,
+                Expr::String(_) => TypeSuffix::String,
+                _ => TypeSuffix::Integer,
+            });
+        }
+        self.const_types
+            .insert(name.name.to_ascii_lowercase(), name.suffix.unwrap());
         self.consume_line_end()?;
         Ok(Statement::Const { name, value })
     }
@@ -2113,7 +2128,13 @@ impl Parser {
                 }
             }
             TokenKind::Ident(value) => {
-                let ident = BasicIdent::parse(value);
+                let mut ident = BasicIdent::parse(value);
+                if ident.suffix.is_none() {
+                    ident.suffix = self
+                        .const_types
+                        .get(&ident.name.to_ascii_lowercase())
+                        .copied();
+                }
                 self.advance();
                 // A dotted identifier (`s.id`, `db.close`) already lexes as one
                 // token (see lexer.rs `ident()`) — split on the last `.` to

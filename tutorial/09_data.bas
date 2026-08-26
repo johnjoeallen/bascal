@@ -6,28 +6,28 @@
 50 ' data embeds literal values directly in the program.  read consumes
 60 ' them in sequence.  The data statements may appear anywhere in the program body;
 70 ' the generated BASIC places them after END.
-80 '
+80 ' 
 90 ' swap exchanges two variables atomically — no temporary needed.
-100 '
+100 ' 
 110 ' randomize seeds the BASIC RND function.  Pass timer for a
 120 ' time-based seed; pass a literal for reproducible results.
 
-130 numcapitals% = 5
+130 numCAPITALS% = 5
 
-140 DIM country$(numcapitals%)
-150 BCCT1% = numcapitals%
-160 DIM capital$(numcapitals%)
-170 BCCT2% = numcapitals%
+140 DIM country$(numCAPITALS%)
+150 BCCT1% = numCAPITALS%
+160 DIM capital$(numCAPITALS%)
+170 BCCT2% = numCAPITALS%
 
 180 ' Load the lookup table
-190 FOR i% = 1 TO numcapitals%
+190 FOR i% = 1 TO numCAPITALS%
 200     READ country$(i%), capital$(i%)
 210 NEXT i%
 
 220 ' Print the table
 230 PRINT "Country         Capital"
 240 PRINT "--------------- ---------------"
-250 FOR i% = 1 TO numcapitals%
+250 FOR i% = 1 TO numCAPITALS%
 260     PRINT (country$(i%) + "        ") + capital$(i%)
 270 NEXT i%
 
@@ -39,8 +39,8 @@
 330 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
 
 340 ' Bubble-sort the country array using swap
-350 FOR pass% = 1 TO numcapitals% - 1
-360     FOR i% = 1 TO numcapitals% - pass%
+350 FOR pass% = 1 TO numCAPITALS% - 1
+360     FOR i% = 1 TO numCAPITALS% - pass%
 370         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 400
 380             SWAP country$(i%), country$(i% + 1)
 390             SWAP capital$(i%), capital$(i% + 1)
@@ -48,7 +48,7 @@
 410     NEXT i%
 420 NEXT pass%
 430 PRINT "Sorted by country:"
-440 FOR i% = 1 TO numcapitals%
+440 FOR i% = 1 TO numCAPITALS%
 450     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
 460 NEXT i%
 

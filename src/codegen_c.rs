@@ -112,8 +112,8 @@
 //! `docs/manual/command-line-reference.html#backends` for the up to date
 //! list). `tutorial/08_arrays.bcl`, `12_require.bcl` (its required library
 //! takes an array parameter), `14_procedures.bcl` (byref array params), and
-//! `19_inventory.bcl` still don't, blocked by
-//! the gaps listed above.
+//! `19_inventory.bcl` now transpile successfully as well; the classic labels
+//! and error-handling tutorial remains intentionally rejected by this backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
 //! not reproduce real MBASIC/BASCOM's own numeric `PRINT` convention (a

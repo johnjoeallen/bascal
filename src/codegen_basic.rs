@@ -1881,7 +1881,7 @@ impl CodeGenerator {
             // const_names for why. Checked before the current_function
             // branch below, same as record_buffer_names above.
             return BasicIdent {
-                name: ident.name.to_ascii_lowercase(),
+                name: camel_join(&ident.name.split('_').collect::<Vec<_>>()),
                 suffix: ident.suffix,
             }
             .as_basic();

@@ -9,7 +9,7 @@
 //
 // ---- Part 1 primitives ----
 //
-// open filename$ for random as #n len = recLen%
+// open filename$ for random as #n len = REC_LEN
 //   Open (or create) a random-access file.  len specifies the record length
 //   in bytes; every record occupies exactly that many bytes.
 //
@@ -50,9 +50,9 @@ function trimmed$(s$)
     return s$.left(i%)
 end function
 
-const recLen%  = 50   // 2 bytes id + 20 bytes name + 8 bytes score + 20 bytes faculty
-const numRecs% = 3
-const dbFile$  = "tutorial_students.dat"
+const REC_LEN  = 50   // 2 bytes id + 20 bytes name + 8 bytes score + 20 bytes faculty
+const NUM_RECS = 3
+const DB_FILE  = "tutorial_students.dat"
 
 /* ============================================================ */
 /* Part 1 — random-access files, written by hand                */
@@ -60,7 +60,7 @@ const dbFile$  = "tutorial_students.dat"
 
 /* ---- Write three records ---- */
 
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Record 1: Alice, 95
@@ -89,10 +89,10 @@ close #1
 /* ---- Read records in reverse order ---- */
 
 print "Part 1 (hand-written) -- reading records in reverse order:"
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
-for i% = numRecs% to 1 step -1
+for i% = NUM_RECS to 1 step -1
     get #1, i%
     id%     = cvi(idBuf$)
     score#  = cvd(scoreBuf$)
@@ -103,7 +103,7 @@ close #1
 
 /* ---- Update one field in place ---- */
 
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
@@ -118,7 +118,7 @@ close #1
 
 /* ---- Update two fields at once ---- */
 
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Alice got married and re-sat the exam — `name` and `score` both change,
@@ -136,7 +136,7 @@ close #1
 
 /* ---- Same shape again ---- */
 
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
 // Carol changed her name and improved her score: the exact same
@@ -152,10 +152,10 @@ close #1
 /* ---- Verify the updates ---- */
 
 print "Part 1 (hand-written) -- after updates:"
-open dbFile$ for random as #1 len = recLen%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$, 20 as facultyBuf$
 
-for i% = 1 to numRecs%
+for i% = 1 to NUM_RECS
     get #1, i%
     print "  " + trimmed$(nameBuf$) + ": " + str$(cvd(scoreBuf$))
 end for
@@ -168,7 +168,7 @@ close #1
 //   - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
 //     be repeated, identically, in every OPEN block — get it wrong in one
 //     of the five and you're reading or writing the wrong bytes.
-//   - recLen% (50) is 2+20+8+20 computed by hand; add a field to the record
+//   - REC_LEN (50) is 2+20+8+20 computed by hand; add a field to the record
 //     and every one of those numbers has to be updated together, or the
 //     file silently gets corrupted.
 //   - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
@@ -192,14 +192,14 @@ close #1
 // record <Name> ... end record
 //   Declares a fixed-layout record type. Supported field types: int16,
 //   int32, float32, float64, and string(N). The record's total byte width
-//   (used as Part 1's recLen%) is the sum of its field widths, computed
+//   (used as Part 1's REC_LEN) is the sum of its field widths, computed
 //   automatically.
 //
 // file <var> as <RecordType> = open(<path>)
 //   Opens (or creates) a random-access file sized for one record, and binds
 //   FIELD buffer variables for every field. File numbers are allocated
 //   automatically, starting at #1, in the order `file` declarations appear.
-//   This one line replaces Part 1's recLen% constant, OPEN, and FIELD.
+//   This one line replaces Part 1's REC_LEN constant, OPEN, and FIELD.
 //
 // <file>[<n>] = { field: value, ... }
 //   Whole-record write: packs every field (LSET, MKx$ for numeric fields)
@@ -273,7 +273,7 @@ end for
 
 /* ---- Update one field in place ---- */
 
-// Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
+// Bob just scraped a pass on re-mark. Compare to Part 1: no REC_LEN, no
 // idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
 db[2].score = 61.5
 

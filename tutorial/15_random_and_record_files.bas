@@ -12,7 +12,7 @@
 110 ' 
 120 ' ---- Part 1 primitives ----
 130 ' 
-140 ' open filename$ for random as #n len = recLen%
+140 ' open filename$ for random as #n len = REC_LEN
 150 ' Open (or create) a random-access file.  len specifies the record length
 160 ' in bytes; every record occupies exactly that many bytes.
 170 ' 
@@ -45,9 +45,9 @@
 
 440 ' trimmed$ -- right-trim trailing spaces from a fixed-width FIELD buffer.
 
-450 reclen% = 50
-460 numrecs% = 3
-470 dbfile$ = "tutorial_students.dat"
+450 recLEN% = 50
+460 numRECS% = 3
+470 dbFILE$ = "tutorial_students.dat"
 
 480 ' ============================================================
 490 ' Part 1 — random-access files, written by hand
@@ -55,7 +55,7 @@
 
 510 ' ---- Write three records ----
 
-520 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+520 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 530 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
 540 ' Record 1: Alice, 95
@@ -84,10 +84,10 @@
 730 ' ---- Read records in reverse order ----
 
 740 PRINT "Part 1 (hand-written) -- reading records in reverse order:"
-750 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+750 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 760 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
-770 FOR i% = numrecs% TO 1 STEP -1
+770 FOR i% = numRECS% TO 1 STEP -1
 780     GET #1, i%
 790     id% = CVI(idbuf$)
 800     score# = CVD(scorebuf$)
@@ -100,7 +100,7 @@
 
 860 ' ---- Update one field in place ----
 
-870 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+870 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 880 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
 890 ' Bob just scraped a pass on re-mark. Only scoreBuf$ changes, but PUT
@@ -115,7 +115,7 @@
 
 970 ' ---- Update two fields at once ----
 
-980 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+980 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 990 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
 1000 ' Alice got married and re-sat the exam — `name` and `score` both change,
@@ -133,7 +133,7 @@
 
 1110 ' ---- Same shape again ----
 
-1120 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+1120 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 1130 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
 1140 ' Carol changed her name and improved her score: the exact same
@@ -149,10 +149,10 @@
 1220 ' ---- Verify the updates ----
 
 1230 PRINT "Part 1 (hand-written) -- after updates:"
-1240 OPEN dbfile$ FOR RANDOM AS #1 LEN = reclen%
+1240 OPEN dbFILE$ FOR RANDOM AS #1 LEN = recLEN%
 1250 FIELD #1, 2 AS idbuf$, 20 AS namebuf$, 8 AS scorebuf$, 20 AS facultybuf$
 
-1260 FOR i% = 1 TO numrecs%
+1260 FOR i% = 1 TO numRECS%
 1270     GET #1, i%
 1280     trimmedS0$ = namebuf$
 1290     GOSUB 3500
@@ -167,7 +167,7 @@
 1360 ' - idBuf$/nameBuf$/scoreBuf$ and the FIELD statement binding them had to
 1370 ' be repeated, identically, in every OPEN block — get it wrong in one
 1380 ' of the five and you're reading or writing the wrong bytes.
-1390 ' - recLen% (50) is 2+20+8+20 computed by hand; add a field to the record
+1390 ' - REC_LEN (50) is 2+20+8+20 computed by hand; add a field to the record
 1400 ' and every one of those numbers has to be updated together, or the
 1410 ' file silently gets corrupted.
 1420 ' - Each field's pack/unpack call (mki$/cvi, mkd$/cvd, or nothing for
@@ -191,14 +191,14 @@
 1590 ' record <Name> ... end record
 1600 ' Declares a fixed-layout record type. Supported field types: int16,
 1610 ' int32, float32, float64, and string(N). The record's total byte width
-1620 ' (used as Part 1's recLen%) is the sum of its field widths, computed
+1620 ' (used as Part 1's REC_LEN) is the sum of its field widths, computed
 1630 ' automatically.
 1640 ' 
 1650 ' file <var> as <RecordType> = open(<path>)
 1660 ' Opens (or creates) a random-access file sized for one record, and binds
 1670 ' FIELD buffer variables for every field. File numbers are allocated
 1680 ' automatically, starting at #1, in the order `file` declarations appear.
-1690 ' This one line replaces Part 1's recLen% constant, OPEN, and FIELD.
+1690 ' This one line replaces Part 1's REC_LEN constant, OPEN, and FIELD.
 1700 ' 
 1710 ' <file>[<n>] = { field: value, ... }
 1720 ' Whole-record write: packs every field (LSET, MKx$ for numeric fields)
@@ -299,7 +299,7 @@
 
 2590 ' ---- Update one field in place ----
 
-2600 ' Bob just scraped a pass on re-mark. Compare to Part 1: no recLen%, no
+2600 ' Bob just scraped a pass on re-mark. Compare to Part 1: no REC_LEN, no
 2610 ' idBuf$/nameBuf$/scoreBuf$/facultyBuf$, no mkd$() — just the field that's changing.
 2620 ' db[...].score = ...  (partial-field update)
 2630 IF LOF(#1) < (2) * 50 THEN ERROR 63

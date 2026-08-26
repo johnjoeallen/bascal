@@ -300,19 +300,21 @@ fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Dia
     let diagnostics: Vec<Diagnostic> = tokens
         .iter()
         .enumerate()
-        .filter_map(|(index, token)| match &token.kind {
+        .filter_map(|(_index, token)| match &token.kind {
             // Constants are compile-time names and may use the documented
             // uppercase-snake convention; generated BASIC never reads the
             // source spelling as an identifier.
-            TokenKind::Ident(name) if name.contains('_') && !matches!(tokens.get(index.wrapping_sub(1)).map(|t| &t.kind), Some(TokenKind::Ident(keyword)) if keyword.eq_ignore_ascii_case("const")) => Some(Diagnostic::error(
-                token.pos.clone(),
-                format!(
-                    "identifier `{name}` contains an underscore, which real MBASIC/BASCOM \
+            TokenKind::Ident(name) if name.contains('_') && !is_upper_snake_identifier(name) => {
+                Some(Diagnostic::error(
+                    token.pos.clone(),
+                    format!(
+                        "identifier `{name}` contains an underscore, which real MBASIC/BASCOM \
                      rejects as a syntax error wherever the name is read (not just assigned) -- \
                      use camelCase instead (e.g. `{}`)",
-                    to_suggested_camel_case(name)
-                ),
-            )),
+                        to_suggested_camel_case(name)
+                    ),
+                ))
+            }
             _ => None,
         })
         .collect();
@@ -321,6 +323,13 @@ fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Dia
     } else {
         Err(diagnostics)
     }
+}
+
+fn is_upper_snake_identifier(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch == '_' || ch.is_ascii_uppercase() || ch.is_ascii_digit())
 }
 
 fn to_suggested_camel_case(name: &str) -> String {

@@ -12,12 +12,12 @@ static const char* bcc_chr(int code);
 static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 
-static float bv_f_taxrate = 0;
+static float bv_f_tax_rate = 0;
 static float bv_f_temperature = 0;
-static int bv_i_maxscore = 0;
-static int bv_i_passmark = 0;
+static int bv_i_max_score = 0;
+static int bv_i_pass_mark = 0;
 static int bv_i_score = 0;
-static char bv_s_appname[256] = {0};
+static char bv_s_app_name[256] = {0};
 static char bv_s_greeting[256] = {0};
 static char bv_s_playername[256] = {0};
 
@@ -41,10 +41,10 @@ int main(void) {
     // const names a value that cannot change.  Use it for magic numbers
     // so the intent is clear and the value lives in one place.
 
-    bv_i_maxscore = 100;
-    bv_i_passmark = 60;
-    snprintf(bv_s_appname, sizeof(bv_s_appname), "%s", "Grade Checker");
-    bv_f_taxrate = 0.2;
+    bv_i_max_score = 100;
+    bv_i_pass_mark = 60;
+    snprintf(bv_s_app_name, sizeof(bv_s_app_name), "%s", "Grade Checker");
+    bv_f_tax_rate = 0.2;
 
     // Variable assignment uses =
     snprintf(bv_s_playername, sizeof(bv_s_playername), "%s", "Alice");
@@ -52,12 +52,12 @@ int main(void) {
     bv_f_temperature = 36.6;
 
     // print mixes strings and numbers directly with ; (no str$() needed)
-    printf("%s\n", bv_s_appname);
+    printf("%s\n", bv_s_app_name);
     printf("Player:      %s\n", bv_s_playername);
-    printf("Score:       %d/ %d\n", bv_i_score, bv_i_maxscore);
-    printf("Pass mark:   %d\n", bv_i_passmark);
+    printf("Score:       %d/ %d\n", bv_i_score, bv_i_max_score);
+    printf("Pass mark:   %d\n", bv_i_pass_mark);
     printf("Temperature: %g\n", bv_f_temperature);
-    printf("Tax rate:    %g\n", bv_f_taxrate);
+    printf("Tax rate:    %g\n", bv_f_tax_rate);
 
     // str$() is still available when you need to build a string value
     char bt_s_0[256];

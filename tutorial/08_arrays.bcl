@@ -18,8 +18,8 @@
 program arrays
 
 /* Declare and populate */
-const N% = 6
-dim data%(N%)
+const N = 6
+dim data%(N)
 
 data%(0) = 64
 data%(1) = 25

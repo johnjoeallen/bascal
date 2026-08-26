@@ -19,7 +19,7 @@ static const char* bcc_read_data(void);
 static int bv_i_a = 0;
 static int bv_i_b = 0;
 static int bv_i_i = 0;
-static int bv_i_numcapitals = 0;
+static int bv_i_num_capitals = 0;
 static int bv_i_pass = 0;
 static char bv_s_capital[6][256] = {0};
 static char bv_s_country[6][256] = {0};
@@ -36,11 +36,11 @@ int main(void) {
     // randomize seeds the BASIC RND function.  Pass timer for a
     // time-based seed; pass a literal for reproducible results.
 
-    bv_i_numcapitals = 5;
+    bv_i_num_capitals = 5;
 
 
     // Load the lookup table
-    int bt_lim_0 = bv_i_numcapitals;
+    int bt_lim_0 = bv_i_num_capitals;
     int bt_step_0 = 1;
     for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         snprintf(bv_s_country[(bv_i_i)], sizeof(bv_s_country[(bv_i_i)]), "%s", bcc_read_data());
@@ -50,7 +50,7 @@ int main(void) {
     // Print the table
     printf("Country         Capital\n");
     printf("--------------- ---------------\n");
-    int bt_lim_1 = bv_i_numcapitals;
+    int bt_lim_1 = bv_i_num_capitals;
     int bt_step_1 = 1;
     for (bv_i_i = 1; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
         char bt_s_2[256];
@@ -82,10 +82,10 @@ int main(void) {
     printf("%s\n", bt_s_10);
 
     // Bubble-sort the country array using swap
-    int bt_lim_11 = (bv_i_numcapitals - 1);
+    int bt_lim_11 = (bv_i_num_capitals - 1);
     int bt_step_11 = 1;
     for (bv_i_pass = 1; bt_step_11 >= 0 ? bv_i_pass <= bt_lim_11 : bv_i_pass >= bt_lim_11; bv_i_pass += bt_step_11) {
-        int bt_lim_12 = (bv_i_numcapitals - bv_i_pass);
+        int bt_lim_12 = (bv_i_num_capitals - bv_i_pass);
         int bt_step_12 = 1;
         for (bv_i_i = 1; bt_step_12 >= 0 ? bv_i_i <= bt_lim_12 : bv_i_i >= bt_lim_12; bv_i_i += bt_step_12) {
             if ((-(strcmp(bv_s_country[(bv_i_i)], bv_s_country[((bv_i_i + 1))]) > 0))) {
@@ -101,7 +101,7 @@ int main(void) {
         }
     }
     printf("Sorted by country:\n");
-    int bt_lim_15 = bv_i_numcapitals;
+    int bt_lim_15 = bv_i_num_capitals;
     int bt_step_15 = 1;
     for (bv_i_i = 1; bt_step_15 >= 0 ? bv_i_i <= bt_lim_15 : bv_i_i >= bt_lim_15; bv_i_i += bt_step_15) {
         char bt_s_16[256];

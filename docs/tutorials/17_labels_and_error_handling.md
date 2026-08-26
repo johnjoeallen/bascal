@@ -79,7 +79,7 @@ close #1
 goto afterOpen
 
 handleOpenError:
-if err = errFileNotFound% then
+if err = ERR_FILE_NOT_FOUND then
     print "  caught error "; err; ": "; fileName$; " not found"
     resume afterOpen
 else
@@ -126,39 +126,39 @@ end
 170 ' the *error code itself* has a message, when really this is a lookup
 180 ' table keyed by that code. Stays an ordinary function.
 
-190 errsyntax% = 2
-200 errreturnwithoutgosub% = 3
-210 erroutofdata% = 4
-220 errillegalfunctioncall% = 5
-230 erroverflow% = 6
-240 erroutofmemory% = 7
-250 errsubscriptoutofrange% = 9
-260 errduplicatedefinition% = 10
-270 errdivisionbyzero% = 11
-280 errtypemismatch% = 13
-290 erroutofstringspace% = 14
-300 errnoresume% = 19
-310 errresumewithouterror% = 20
-320 errdevicetimeout% = 24
-330 errdevicefault% = 25
-340 erroutofpaper% = 27
-350 errbadfilenumber% = 52
-360 errfilenotfound% = 53
-370 errbadfilemode% = 54
-380 errfilealreadyopen% = 55
-390 errdeviceio% = 57
-400 errfilealreadyexists% = 58
-410 errdiskfull% = 61
-420 errinputpastend% = 62
-430 errbadrecordnumber% = 63
-440 errbadfilename% = 64
-450 errtoomanyfiles% = 67
-460 errdeviceunavailable% = 68
-470 errdiskwriteprotected% = 70
-480 errdisknotready% = 71
-490 errdiskmediaerror% = 72
-500 errpathfileaccess% = 75
-510 errpathnotfound% = 76
+190 errSYNTAX% = 2
+200 errRETURNWITHOUTGOSUB% = 3
+210 errOUTOFDATA% = 4
+220 errILLEGALFUNCTIONCALL% = 5
+230 errOVERFLOW% = 6
+240 errOUTOFMEMORY% = 7
+250 errSUBSCRIPTOUTOFRANGE% = 9
+260 errDUPLICATEDEFINITION% = 10
+270 errDIVISIONBYZERO% = 11
+280 errTYPEMISMATCH% = 13
+290 errOUTOFSTRINGSPACE% = 14
+300 errNORESUME% = 19
+310 errRESUMEWITHOUTERROR% = 20
+320 errDEVICETIMEOUT% = 24
+330 errDEVICEFAULT% = 25
+340 errOUTOFPAPER% = 27
+350 errBADFILENUMBER% = 52
+360 errFILENOTFOUND% = 53
+370 errBADFILEMODE% = 54
+380 errFILEALREADYOPEN% = 55
+390 errDEVICEIO% = 57
+400 errFILEALREADYEXISTS% = 58
+410 errDISKFULL% = 61
+420 errINPUTPASTEND% = 62
+430 errBADRECORDNUMBER% = 63
+440 errBADFILENAME% = 64
+450 errTOOMANYFILES% = 67
+460 errDEVICEUNAVAILABLE% = 68
+470 errDISKWRITEPROTECTED% = 70
+480 errDISKNOTREADY% = 71
+490 errDISKMEDIAERROR% = 72
+500 errPATHFILEACCESS% = 75
+510 errPATHNOTFOUND% = 76
 
 520 ' Tutorial — Labels and Error Handling
 530 '
@@ -203,7 +203,7 @@ end
 860 CLOSE #1
 870 GOTO 950
 
-880 IF (ERR = errfilenotfound%) = 0 THEN GOTO 920
+880 IF (ERR = err_file_not_found) = 0 THEN GOTO 920
 890     PRINT "  caught error "; ERR; ": "; filename$; " not found"
 900     RESUME 950
 910     GOTO 940
@@ -217,39 +217,39 @@ end
 
 970 ' function error$(code%)
 980     BCCT3% = errorCode0%
-990     IF (BCCT3% = errsyntax%) <> 0 THEN GOTO 1330
-1000     IF (BCCT3% = errreturnwithoutgosub%) <> 0 THEN GOTO 1360
-1010     IF (BCCT3% = erroutofdata%) <> 0 THEN GOTO 1390
-1020     IF (BCCT3% = errillegalfunctioncall%) <> 0 THEN GOTO 1420
-1030     IF (BCCT3% = erroverflow%) <> 0 THEN GOTO 1450
-1040     IF (BCCT3% = erroutofmemory%) <> 0 THEN GOTO 1480
-1050     IF (BCCT3% = errsubscriptoutofrange%) <> 0 THEN GOTO 1510
-1060     IF (BCCT3% = errduplicatedefinition%) <> 0 THEN GOTO 1540
-1070     IF (BCCT3% = errdivisionbyzero%) <> 0 THEN GOTO 1570
-1080     IF (BCCT3% = errtypemismatch%) <> 0 THEN GOTO 1600
-1090     IF (BCCT3% = erroutofstringspace%) <> 0 THEN GOTO 1630
-1100     IF (BCCT3% = errnoresume%) <> 0 THEN GOTO 1660
-1110     IF (BCCT3% = errresumewithouterror%) <> 0 THEN GOTO 1690
-1120     IF (BCCT3% = errdevicetimeout%) <> 0 THEN GOTO 1720
-1130     IF (BCCT3% = errdevicefault%) <> 0 THEN GOTO 1750
-1140     IF (BCCT3% = erroutofpaper%) <> 0 THEN GOTO 1780
-1150     IF (BCCT3% = errbadfilenumber%) <> 0 THEN GOTO 1810
-1160     IF (BCCT3% = errfilenotfound%) <> 0 THEN GOTO 1840
-1170     IF (BCCT3% = errbadfilemode%) <> 0 THEN GOTO 1870
-1180     IF (BCCT3% = errfilealreadyopen%) <> 0 THEN GOTO 1900
-1190     IF (BCCT3% = errdeviceio%) <> 0 THEN GOTO 1930
-1200     IF (BCCT3% = errfilealreadyexists%) <> 0 THEN GOTO 1960
-1210     IF (BCCT3% = errdiskfull%) <> 0 THEN GOTO 1990
-1220     IF (BCCT3% = errinputpastend%) <> 0 THEN GOTO 2020
-1230     IF (BCCT3% = errbadrecordnumber%) <> 0 THEN GOTO 2050
-1240     IF (BCCT3% = errbadfilename%) <> 0 THEN GOTO 2080
-1250     IF (BCCT3% = errtoomanyfiles%) <> 0 THEN GOTO 2110
-1260     IF (BCCT3% = errdeviceunavailable%) <> 0 THEN GOTO 2140
-1270     IF (BCCT3% = errdiskwriteprotected%) <> 0 THEN GOTO 2170
-1280     IF (BCCT3% = errdisknotready%) <> 0 THEN GOTO 2200
-1290     IF (BCCT3% = errdiskmediaerror%) <> 0 THEN GOTO 2230
-1300     IF (BCCT3% = errpathfileaccess%) <> 0 THEN GOTO 2260
-1310     IF (BCCT3% = errpathnotfound%) <> 0 THEN GOTO 2290
+990     IF (BCCT3% = errSYNTAX%) <> 0 THEN GOTO 1330
+1000     IF (BCCT3% = errRETURNWITHOUTGOSUB%) <> 0 THEN GOTO 1360
+1010     IF (BCCT3% = errOUTOFDATA%) <> 0 THEN GOTO 1390
+1020     IF (BCCT3% = errILLEGALFUNCTIONCALL%) <> 0 THEN GOTO 1420
+1030     IF (BCCT3% = errOVERFLOW%) <> 0 THEN GOTO 1450
+1040     IF (BCCT3% = errOUTOFMEMORY%) <> 0 THEN GOTO 1480
+1050     IF (BCCT3% = errSUBSCRIPTOUTOFRANGE%) <> 0 THEN GOTO 1510
+1060     IF (BCCT3% = errDUPLICATEDEFINITION%) <> 0 THEN GOTO 1540
+1070     IF (BCCT3% = errDIVISIONBYZERO%) <> 0 THEN GOTO 1570
+1080     IF (BCCT3% = errTYPEMISMATCH%) <> 0 THEN GOTO 1600
+1090     IF (BCCT3% = errOUTOFSTRINGSPACE%) <> 0 THEN GOTO 1630
+1100     IF (BCCT3% = errNORESUME%) <> 0 THEN GOTO 1660
+1110     IF (BCCT3% = errRESUMEWITHOUTERROR%) <> 0 THEN GOTO 1690
+1120     IF (BCCT3% = errDEVICETIMEOUT%) <> 0 THEN GOTO 1720
+1130     IF (BCCT3% = errDEVICEFAULT%) <> 0 THEN GOTO 1750
+1140     IF (BCCT3% = errOUTOFPAPER%) <> 0 THEN GOTO 1780
+1150     IF (BCCT3% = errBADFILENUMBER%) <> 0 THEN GOTO 1810
+1160     IF (BCCT3% = errFILENOTFOUND%) <> 0 THEN GOTO 1840
+1170     IF (BCCT3% = errBADFILEMODE%) <> 0 THEN GOTO 1870
+1180     IF (BCCT3% = errFILEALREADYOPEN%) <> 0 THEN GOTO 1900
+1190     IF (BCCT3% = errDEVICEIO%) <> 0 THEN GOTO 1930
+1200     IF (BCCT3% = errFILEALREADYEXISTS%) <> 0 THEN GOTO 1960
+1210     IF (BCCT3% = errDISKFULL%) <> 0 THEN GOTO 1990
+1220     IF (BCCT3% = errINPUTPASTEND%) <> 0 THEN GOTO 2020
+1230     IF (BCCT3% = errBADRECORDNUMBER%) <> 0 THEN GOTO 2050
+1240     IF (BCCT3% = errBADFILENAME%) <> 0 THEN GOTO 2080
+1250     IF (BCCT3% = errTOOMANYFILES%) <> 0 THEN GOTO 2110
+1260     IF (BCCT3% = errDEVICEUNAVAILABLE%) <> 0 THEN GOTO 2140
+1270     IF (BCCT3% = errDISKWRITEPROTECTED%) <> 0 THEN GOTO 2170
+1280     IF (BCCT3% = errDISKNOTREADY%) <> 0 THEN GOTO 2200
+1290     IF (BCCT3% = errDISKMEDIAERROR%) <> 0 THEN GOTO 2230
+1300     IF (BCCT3% = errPATHFILEACCESS%) <> 0 THEN GOTO 2260
+1310     IF (BCCT3% = errPATHNOTFOUND%) <> 0 THEN GOTO 2290
 1320     GOTO 2320
 1330         errorResult0$ = "Syntax error"
 1340         RETURN

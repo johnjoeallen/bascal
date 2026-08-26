@@ -67,11 +67,11 @@ printIfPass("Alice", 91)   // printed
 printIfPass("Bob",   54)   // skipped (score < 60)
 printIfPass("Carol", 78)   // printed
 
-const N% = 5
-dim data%(N%)
+const N = 5
+dim data%(N)
 fillRange(data%, 99)
 print "Filled array:"
-for i% = 0 to N% - 1
+for i% = 0 to N - 1
     print "  data%(" + str$(i%) + ") = " + str$(data%(i%))
 end for
 

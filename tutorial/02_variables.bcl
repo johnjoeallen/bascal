@@ -18,10 +18,10 @@
 // so the intent is clear and the value lives in one place.
 program variables
 
-const maxScore%  = 100
-const passMark%  = 60
-const appName$   = "Grade Checker"
-const taxRate!   = 0.2
+const MAX_SCORE  = 100
+const PASS_MARK  = 60
+const APP_NAME   = "Grade Checker"
+const TAX_RATE   = 0.2
 
 // Variable assignment uses =
 playerName$  = "Alice"
@@ -29,12 +29,12 @@ score%       = 87
 temperature! = 36.6
 
 // print mixes strings and numbers directly with ; (no str$() needed)
-print appName$
+print APP_NAME
 print "Player:      "; playerName$
-print "Score:       "; score%; "/ "; maxScore%
-print "Pass mark:   "; passMark%
+print "Score:       "; score%; "/ "; MAX_SCORE
+print "Pass mark:   "; PASS_MARK
 print "Temperature: "; temperature!
-print "Tax rate:    "; taxRate!
+print "Tax rate:    "; TAX_RATE
 
 // str$() is still available when you need to build a string value
 let greeting$ = "Score is " + str$(score%)

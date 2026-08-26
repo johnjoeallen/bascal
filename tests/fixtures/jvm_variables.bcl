@@ -1,9 +1,9 @@
 // JVM-target conformance fixture: scalar locals and compile-time constants.
 program variables
 
-const maxScore% = 100
-const appName$ = "Grade Checker"
-const taxRate! = 0.2
+const MAX_SCORE = 100
+const APP_NAME = "Grade Checker"
+const TAX_RATE = 0.2
 
 dim score%
 playerName$ = "Alice"
@@ -11,12 +11,12 @@ greeting$ = "Hello" + ", " + playerName$ + "!"
 score% = 87
 temperature! = 36.6
 
-print appName$
+print APP_NAME
 print greeting$
 print "Player: "; playerName$
-print "Score: "; score%; "/ "; maxScore%
+print "Score: "; score%; "/ "; MAX_SCORE
 print "Temperature: "; temperature!
-print "Tax rate: "; taxRate!
+print "Tax rate: "; TAX_RATE
 print "Score is " + str$(score%)
 print playerName$ = "Alice"
 print playerName$ <> "Bob"

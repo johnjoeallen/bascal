@@ -122,9 +122,9 @@ end procedure
 //    initializeInventoryFileIfNew(), called once at program entry --
 //    inven.dat no longer has to be pre-populated by hand.
 //  - The three original tab-position constants (T=20, U=25,
-//    V=30) are collapsed into a single `tabCol% = 20`; a couple of
+//    V=30) are collapsed into a single `TAB_COL = 20`; a couple of
 //    screens that used U=25 in the original (see showAddStockScreen
-//    below) keep 25 as a literal rather than reusing tabCol%.
+//    below) keep 25 as a literal rather than reusing TAB_COL.
 //
 // Tracks parts in a fixed 100-record file: check status, add,
 // edit, add/subtract stock, and a reorder report.
@@ -167,8 +167,8 @@ end record
 // be reassigned, and resolves to the same value everywhere,
 // including inside every function/procedure below, with no
 // `global` declaration needed.
-const partCount% = 100
-const tabCol% = 20
+const PART_COUNT = 100
+const TAB_COL = 20
 
 // `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
 // LEN = <record width> plus the FIELD statement fhb wrote out by
@@ -206,7 +206,7 @@ end function
 // manual's "Short-Circuit && and ||" section
 // (https://johnjoeallen.github.io/bascal/manual/).
 function partInRange%(n%)
-    if n% >= 1 && n% <= partCount% then
+    if n% >= 1 && n% <= PART_COUNT then
         return 1
     end if
     return 0
@@ -257,52 +257,52 @@ procedure showMainMenu()
     // preceding string and a `tab(n)` for exactly this reason.
     print tab(30) "Inventory Program"
     print
-    print tab(tabCol%) "1......C)heck a part"
-    print tab(tabCol%) "2......E)dit/overwrite/add a part"
-    print tab(tabCol%) "3......L)ist all" + str$(partCount%) + "parts"
-    print tab(tabCol%) "4......A)dd stock"
-    print tab(tabCol%) "5......S)ubtract stock"
-    print tab(tabCol%) "6......R)eorder Report"
+    print tab(TAB_COL) "1......C)heck a part"
+    print tab(TAB_COL) "2......E)dit/overwrite/add a part"
+    print tab(TAB_COL) "3......L)ist all" + str$(PART_COUNT) + "parts"
+    print tab(TAB_COL) "4......A)dd stock"
+    print tab(TAB_COL) "5......S)ubtract stock"
+    print tab(TAB_COL) "6......R)eorder Report"
     print
-    print tab(tabCol%) "7......eX)it to system"
+    print tab(TAB_COL) "7......eX)it to system"
 end procedure
 
 procedure showBadPartNumber()
     cls
     locate 10, 10
-    print "Part number is out of permissable range of 1 to" + str$(partCount%)
+    print "Part number is out of permissable range of 1 to" + str$(PART_COUNT)
 end procedure
 
 procedure showRangeRetryMessage()
     locate 10, 15
-    print "The Part number is out of permissable range of 1 to" + str$(partCount%)
+    print "The Part number is out of permissable range of 1 to" + str$(PART_COUNT)
     locate 25, 15
     print "Press the Anykey to reenter part number...";
 end procedure
 
 procedure showNullEntryMessage(partStr$)
-    locate 10, tabCol%
+    locate 10, TAB_COL
     print "Part number " + partStr$ + " is a null entry"
 end procedure
 
 procedure showPartStatus(partNum%, desc$, qty%, reorder%, price!)
     cls
     locate 5, 1
-    print tab(tabCol%) "Inventory Status for Individual Part Number"
-    print tab(tabCol%) "==========================================="
+    print tab(TAB_COL) "Inventory Status for Individual Part Number"
+    print tab(TAB_COL) "==========================================="
     print
     print
-    print tab(tabCol%) "     Part number:  " + str$(partNum%)
+    print tab(TAB_COL) "     Part number:  " + str$(partNum%)
     print
-    print tab(tabCol%) "       Item name:  " + desc$
-    print tab(tabCol%) "Quantity on hand:  " + str$(qty%)
-    print tab(tabCol%) "   Reorder level:  " + str$(reorder%)
-    print tab(tabCol%) "      Unit price:  " + str$(price!)
+    print tab(TAB_COL) "       Item name:  " + desc$
+    print tab(TAB_COL) "Quantity on hand:  " + str$(qty%)
+    print tab(TAB_COL) "   Reorder level:  " + str$(reorder%)
+    print tab(TAB_COL) "      Unit price:  " + str$(price!)
 end procedure
 
 procedure printListHeader()
     cls
-    print tab(25) "I N V E N T O R Y   L I S T I N G"; tab(65); str$(partCount%) + "items"
+    print tab(25) "I N V E N T O R Y   L I S T I N G"; tab(65); str$(PART_COUNT) + "items"
     print "                                          Quantity       Reorder"
     print " Partno           Description             on hand         level"
     locate 25, 1
@@ -315,7 +315,7 @@ end procedure
 
 procedure printReorderHeader()
     cls
-    locate 1, tabCol%
+    locate 1, TAB_COL
     print "Reorder Report"; tab(55); date$
     print
     print "                                             Quantity       Reorder"
@@ -331,21 +331,21 @@ end procedure
 // fields for a part directly back into the caller's variables.
 procedure gatherPartDetails(partNum%, byref desc$, byref qty%, byref reorder%, byref price!)
     cls
-    locate 4, tabCol%
+    locate 4, TAB_COL
     print "Adding or Overwriting a Record"
-    locate 8, tabCol%
+    locate 8, TAB_COL
     print "Record/Partno" + str$(partNum%)
     locate 11, 39
     print "------------------------------"
-    locate 10, tabCol%
+    locate 10, TAB_COL
     input "      Description"; desc$
-    locate 12, tabCol%
+    locate 12, TAB_COL
     input "Quantity in stock"; qty%
-    locate 14, tabCol%
+    locate 14, TAB_COL
     input "    Reorder level"; reorder%
-    locate 16, tabCol%
+    locate 16, TAB_COL
     input "       Unit price"; price!
-    locate 18, tabCol%
+    locate 18, TAB_COL
     print "Is information correct (Y/N)?"
 end procedure
 
@@ -355,13 +355,13 @@ procedure showAddStockScreen(partNum%, desc$, qty%, reorder%)
     print "Add to an inventory part number"
     locate 5, 25
     print "==============================="
-    locate 8, tabCol%
+    locate 8, TAB_COL
     print "     Part number: " + str$(partNum%)
-    locate 9, tabCol%
+    locate 9, TAB_COL
     print "Item description: " + desc$
-    locate 10, tabCol%
+    locate 10, TAB_COL
     print "Quantity on hand: " + str$(qty%)
-    locate 11, tabCol%
+    locate 11, TAB_COL
     print "   Reorder Level: " + str$(reorder%)
 end procedure
 
@@ -374,17 +374,17 @@ end procedure
 
 procedure showSubtractStockScreen(partNum%, desc$, qty%, reorder%)
     cls
-    locate 4, tabCol%
+    locate 4, TAB_COL
     print "Subtract an inventory part number"
-    locate 5, tabCol%
+    locate 5, TAB_COL
     print "================================="
-    locate 8, tabCol%
+    locate 8, TAB_COL
     print "         Part number: " + str$(partNum%)
-    locate 9, tabCol%
+    locate 9, TAB_COL
     print "    Item description: " + desc$
-    locate 10, tabCol%
+    locate 10, TAB_COL
     print "    Quantity on hand: " + str$(qty%)
-    locate 11, tabCol%
+    locate 11, TAB_COL
     print "       Reorder Level: " + str$(reorder%)
 end procedure
 
@@ -429,7 +429,7 @@ end procedure
 procedure editRecord()
     global inv
     cls
-    locate 10, tabCol%
+    locate 10, TAB_COL
     partStr$ = readPartNumberInput$()
     part% = val(partStr$)
     if partInRange%(part%) = 0 then
@@ -439,7 +439,7 @@ procedure editRecord()
     end if
     let p = inv[part%]
     if isEmpty%(p.flag) = 0 then
-        locate 12, tabCol%
+        locate 12, TAB_COL
         print "Overwrite existing part data?"
         kp$ = readKey$()
         if kp$ <> "Y" && kp$ <> "y" then
@@ -458,7 +458,7 @@ procedure listAll()
     global inv
     printListHeader()
     scrollCount% = 0
-    for i% = 1 to partCount%
+    for i% = 1 to PART_COUNT
         let p = inv[i%]
         printInventoryLine(i%, p.desc, p.qty, p.reorder)
         scrollCount% = scrollCount% + 1
@@ -495,7 +495,7 @@ procedure addStock()
 
     do
         showAddStockScreen(part%, p.desc, p.qty, p.reorder)
-        locate 14, tabCol%
+        locate 14, TAB_COL
         input " Quantity to add"; addStr$
         addAmt% = val(addStr$)
         if addAmt% < 0 then
@@ -534,7 +534,7 @@ procedure subtractStock()
 
     do
         showSubtractStockScreen(part%, p.desc, p.qty, p.reorder)
-        locate 14, tabCol%
+        locate 14, TAB_COL
         input "Quantity to subtract"; subStr$
         subAmt% = val(subStr$)
         overSubtract% = 0
@@ -547,7 +547,7 @@ procedure subtractStock()
 
     p.qty = p.qty - subAmt%
     if p.qty <= p.reorder then
-        locate 16, tabCol%
+        locate 16, TAB_COL
     end if
     print "quantity now" + str$(p.qty) + " reorder level" + str$(p.reorder)
     inv[part%] = p
@@ -557,7 +557,7 @@ procedure reorderReport()
     global inv
     printReorderHeader()
     reportLineCount% = 0
-    for i% = 1 to partCount%
+    for i% = 1 to PART_COUNT
         let p = inv[i%]
         if p.qty < p.reorder then
             printReorderLine(i%, p.desc, p.qty, p.reorder)
@@ -585,7 +585,7 @@ procedure initializeInventoryFileIfNew()
     global inv
     let p = inv[1]
     if asc(p.flag) = 0 then
-        for i% = 1 to partCount%
+        for i% = 1 to PART_COUNT
             inv[i%] = { flag: chr$(255), desc: "", qty: 0, reorder: 0, price: 0 }
         end for
     end if
@@ -699,39 +699,39 @@ end procedure
 170 ' the *error code itself* has a message, when really this is a lookup
 180 ' table keyed by that code. Stays an ordinary function.
 
-190 errsyntax% = 2
-200 errreturnwithoutgosub% = 3
-210 erroutofdata% = 4
-220 errillegalfunctioncall% = 5
-230 erroverflow% = 6
-240 erroutofmemory% = 7
-250 errsubscriptoutofrange% = 9
-260 errduplicatedefinition% = 10
-270 errdivisionbyzero% = 11
-280 errtypemismatch% = 13
-290 erroutofstringspace% = 14
-300 errnoresume% = 19
-310 errresumewithouterror% = 20
-320 errdevicetimeout% = 24
-330 errdevicefault% = 25
-340 erroutofpaper% = 27
-350 errbadfilenumber% = 52
-360 errfilenotfound% = 53
-370 errbadfilemode% = 54
-380 errfilealreadyopen% = 55
-390 errdeviceio% = 57
-400 errfilealreadyexists% = 58
-410 errdiskfull% = 61
-420 errinputpastend% = 62
-430 errbadrecordnumber% = 63
-440 errbadfilename% = 64
-450 errtoomanyfiles% = 67
-460 errdeviceunavailable% = 68
-470 errdiskwriteprotected% = 70
-480 errdisknotready% = 71
-490 errdiskmediaerror% = 72
-500 errpathfileaccess% = 75
-510 errpathnotfound% = 76
+190 errSYNTAX% = 2
+200 errRETURNWITHOUTGOSUB% = 3
+210 errOUTOFDATA% = 4
+220 errILLEGALFUNCTIONCALL% = 5
+230 errOVERFLOW% = 6
+240 errOUTOFMEMORY% = 7
+250 errSUBSCRIPTOUTOFRANGE% = 9
+260 errDUPLICATEDEFINITION% = 10
+270 errDIVISIONBYZERO% = 11
+280 errTYPEMISMATCH% = 13
+290 errOUTOFSTRINGSPACE% = 14
+300 errNORESUME% = 19
+310 errRESUMEWITHOUTERROR% = 20
+320 errDEVICETIMEOUT% = 24
+330 errDEVICEFAULT% = 25
+340 errOUTOFPAPER% = 27
+350 errBADFILENUMBER% = 52
+360 errFILENOTFOUND% = 53
+370 errBADFILEMODE% = 54
+380 errFILEALREADYOPEN% = 55
+390 errDEVICEIO% = 57
+400 errFILEALREADYEXISTS% = 58
+410 errDISKFULL% = 61
+420 errINPUTPASTEND% = 62
+430 errBADRECORDNUMBER% = 63
+440 errBADFILENAME% = 64
+450 errTOOMANYFILES% = 67
+460 errDEVICEUNAVAILABLE% = 68
+470 errDISKWRITEPROTECTED% = 70
+480 errDISKNOTREADY% = 71
+490 errDISKMEDIAERROR% = 72
+500 errPATHFILEACCESS% = 75
+510 errPATHNOTFOUND% = 76
 
 520 ' ============================================================
 530 ' INVENTORY.BCL -- Random-Access Inventory Program
@@ -765,9 +765,9 @@ end procedure
 810 ' initializeInventoryFileIfNew(), called once at program entry --
 820 ' inven.dat no longer has to be pre-populated by hand.
 830 ' - The three original tab-position constants (T=20, U=25,
-840 ' V=30) are collapsed into a single `tabCol% = 20`; a couple of
+840 ' V=30) are collapsed into a single `TAB_COL = 20`; a couple of
 850 ' screens that used U=25 in the original (see showAddStockScreen
-860 ' below) keep 25 as a literal rather than reusing tabCol%.
+860 ' below) keep 25 as a literal rather than reusing TAB_COL.
 870 '
 880 ' Tracks parts in a fixed 100-record file: check status, add,
 890 ' edit, add/subtract stock, and a reorder report.
@@ -800,8 +800,8 @@ end procedure
 1140 ' be reassigned, and resolves to the same value everywhere,
 1150 ' including inside every function/procedure below, with no
 1160 ' `global` declaration needed.
-1170 partcount% = 100
-1180 tabcol% = 20
+1170 partCOUNT% = 100
+1180 tabCOL% = 20
 
 1190 ' `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
 1200 ' LEN = <record width> plus the FIELD statement fhb wrote out by
@@ -979,39 +979,39 @@ end procedure
 
 2790 ' function error$(code%)
 2800     BCCT8% = errorCode0%
-2810     IF (BCCT8% = errsyntax%) <> 0 THEN GOTO 3150
-2820     IF (BCCT8% = errreturnwithoutgosub%) <> 0 THEN GOTO 3180
-2830     IF (BCCT8% = erroutofdata%) <> 0 THEN GOTO 3210
-2840     IF (BCCT8% = errillegalfunctioncall%) <> 0 THEN GOTO 3240
-2850     IF (BCCT8% = erroverflow%) <> 0 THEN GOTO 3270
-2860     IF (BCCT8% = erroutofmemory%) <> 0 THEN GOTO 3300
-2870     IF (BCCT8% = errsubscriptoutofrange%) <> 0 THEN GOTO 3330
-2880     IF (BCCT8% = errduplicatedefinition%) <> 0 THEN GOTO 3360
-2890     IF (BCCT8% = errdivisionbyzero%) <> 0 THEN GOTO 3390
-2900     IF (BCCT8% = errtypemismatch%) <> 0 THEN GOTO 3420
-2910     IF (BCCT8% = erroutofstringspace%) <> 0 THEN GOTO 3450
-2920     IF (BCCT8% = errnoresume%) <> 0 THEN GOTO 3480
-2930     IF (BCCT8% = errresumewithouterror%) <> 0 THEN GOTO 3510
-2940     IF (BCCT8% = errdevicetimeout%) <> 0 THEN GOTO 3540
-2950     IF (BCCT8% = errdevicefault%) <> 0 THEN GOTO 3570
-2960     IF (BCCT8% = erroutofpaper%) <> 0 THEN GOTO 3600
-2970     IF (BCCT8% = errbadfilenumber%) <> 0 THEN GOTO 3630
-2980     IF (BCCT8% = errfilenotfound%) <> 0 THEN GOTO 3660
-2990     IF (BCCT8% = errbadfilemode%) <> 0 THEN GOTO 3690
-3000     IF (BCCT8% = errfilealreadyopen%) <> 0 THEN GOTO 3720
-3010     IF (BCCT8% = errdeviceio%) <> 0 THEN GOTO 3750
-3020     IF (BCCT8% = errfilealreadyexists%) <> 0 THEN GOTO 3780
-3030     IF (BCCT8% = errdiskfull%) <> 0 THEN GOTO 3810
-3040     IF (BCCT8% = errinputpastend%) <> 0 THEN GOTO 3840
-3050     IF (BCCT8% = errbadrecordnumber%) <> 0 THEN GOTO 3870
-3060     IF (BCCT8% = errbadfilename%) <> 0 THEN GOTO 3900
-3070     IF (BCCT8% = errtoomanyfiles%) <> 0 THEN GOTO 3930
-3080     IF (BCCT8% = errdeviceunavailable%) <> 0 THEN GOTO 3960
-3090     IF (BCCT8% = errdiskwriteprotected%) <> 0 THEN GOTO 3990
-3100     IF (BCCT8% = errdisknotready%) <> 0 THEN GOTO 4020
-3110     IF (BCCT8% = errdiskmediaerror%) <> 0 THEN GOTO 4050
-3120     IF (BCCT8% = errpathfileaccess%) <> 0 THEN GOTO 4080
-3130     IF (BCCT8% = errpathnotfound%) <> 0 THEN GOTO 4110
+2810     IF (BCCT8% = errSYNTAX%) <> 0 THEN GOTO 3150
+2820     IF (BCCT8% = errRETURNWITHOUTGOSUB%) <> 0 THEN GOTO 3180
+2830     IF (BCCT8% = errOUTOFDATA%) <> 0 THEN GOTO 3210
+2840     IF (BCCT8% = errILLEGALFUNCTIONCALL%) <> 0 THEN GOTO 3240
+2850     IF (BCCT8% = errOVERFLOW%) <> 0 THEN GOTO 3270
+2860     IF (BCCT8% = errOUTOFMEMORY%) <> 0 THEN GOTO 3300
+2870     IF (BCCT8% = errSUBSCRIPTOUTOFRANGE%) <> 0 THEN GOTO 3330
+2880     IF (BCCT8% = errDUPLICATEDEFINITION%) <> 0 THEN GOTO 3360
+2890     IF (BCCT8% = errDIVISIONBYZERO%) <> 0 THEN GOTO 3390
+2900     IF (BCCT8% = errTYPEMISMATCH%) <> 0 THEN GOTO 3420
+2910     IF (BCCT8% = errOUTOFSTRINGSPACE%) <> 0 THEN GOTO 3450
+2920     IF (BCCT8% = errNORESUME%) <> 0 THEN GOTO 3480
+2930     IF (BCCT8% = errRESUMEWITHOUTERROR%) <> 0 THEN GOTO 3510
+2940     IF (BCCT8% = errDEVICETIMEOUT%) <> 0 THEN GOTO 3540
+2950     IF (BCCT8% = errDEVICEFAULT%) <> 0 THEN GOTO 3570
+2960     IF (BCCT8% = errOUTOFPAPER%) <> 0 THEN GOTO 3600
+2970     IF (BCCT8% = errBADFILENUMBER%) <> 0 THEN GOTO 3630
+2980     IF (BCCT8% = errFILENOTFOUND%) <> 0 THEN GOTO 3660
+2990     IF (BCCT8% = errBADFILEMODE%) <> 0 THEN GOTO 3690
+3000     IF (BCCT8% = errFILEALREADYOPEN%) <> 0 THEN GOTO 3720
+3010     IF (BCCT8% = errDEVICEIO%) <> 0 THEN GOTO 3750
+3020     IF (BCCT8% = errFILEALREADYEXISTS%) <> 0 THEN GOTO 3780
+3030     IF (BCCT8% = errDISKFULL%) <> 0 THEN GOTO 3810
+3040     IF (BCCT8% = errINPUTPASTEND%) <> 0 THEN GOTO 3840
+3050     IF (BCCT8% = errBADRECORDNUMBER%) <> 0 THEN GOTO 3870
+3060     IF (BCCT8% = errBADFILENAME%) <> 0 THEN GOTO 3900
+3070     IF (BCCT8% = errTOOMANYFILES%) <> 0 THEN GOTO 3930
+3080     IF (BCCT8% = errDEVICEUNAVAILABLE%) <> 0 THEN GOTO 3960
+3090     IF (BCCT8% = errDISKWRITEPROTECTED%) <> 0 THEN GOTO 3990
+3100     IF (BCCT8% = errDISKNOTREADY%) <> 0 THEN GOTO 4020
+3110     IF (BCCT8% = errDISKMEDIAERROR%) <> 0 THEN GOTO 4050
+3120     IF (BCCT8% = errPATHFILEACCESS%) <> 0 THEN GOTO 4080
+3130     IF (BCCT8% = errPATHNOTFOUND%) <> 0 THEN GOTO 4110
 3140     GOTO 4140
 3150         errorResult0$ = "Syntax error"
 3160         RETURN
@@ -1125,7 +1125,7 @@ end procedure
 
 4230 ' function partinrange%(n%)
 4240     IF (partinrangeN0% >= 1) = 0 THEN GOTO 4280
-4250     IF (partinrangeN0% <= partcount%) = 0 THEN GOTO 4280
+4250     IF (partinrangeN0% <= partCOUNT%) = 0 THEN GOTO 4280
 4260         partinrangeResult0% = 1
 4270         RETURN
 4280     REM END IF
@@ -1171,34 +1171,34 @@ end procedure
 4640     ' preceding string and a `tab(n)` for exactly this reason.
 4650     PRINT TAB(30)"Inventory Program"
 4660     PRINT
-4670     PRINT TAB(tabcol%)"1......C)heck a part"
-4680     PRINT TAB(tabcol%)"2......E)dit/overwrite/add a part"
-4690     PRINT TAB(tabcol%)("3......L)ist all" + STR$(partcount%)) + "parts"
-4700     PRINT TAB(tabcol%)"4......A)dd stock"
-4710     PRINT TAB(tabcol%)"5......S)ubtract stock"
-4720     PRINT TAB(tabcol%)"6......R)eorder Report"
+4670     PRINT TAB(tabCOL%)"1......C)heck a part"
+4680     PRINT TAB(tabCOL%)"2......E)dit/overwrite/add a part"
+4690     PRINT TAB(tabCOL%)("3......L)ist all" + STR$(partCOUNT%)) + "parts"
+4700     PRINT TAB(tabCOL%)"4......A)dd stock"
+4710     PRINT TAB(tabCOL%)"5......S)ubtract stock"
+4720     PRINT TAB(tabCOL%)"6......R)eorder Report"
 4730     PRINT
-4740     PRINT TAB(tabcol%)"7......eX)it to system"
+4740     PRINT TAB(tabCOL%)"7......eX)it to system"
 4750     RETURN
 4760 ' end procedure showmainmenu
 
 4770 ' procedure showbadpartnumber()
 4780     CLS
 4790     LOCATE 10, 10
-4800     PRINT "Part number is out of permissable range of 1 to" + STR$(partcount%)
+4800     PRINT "Part number is out of permissable range of 1 to" + STR$(partCOUNT%)
 4810     RETURN
 4820 ' end procedure showbadpartnumber
 
 4830 ' procedure showrangeretrymessage()
 4840     LOCATE 10, 15
-4850     PRINT "The Part number is out of permissable range of 1 to" + STR$(partcount%)
+4850     PRINT "The Part number is out of permissable range of 1 to" + STR$(partCOUNT%)
 4860     LOCATE 25, 15
 4870     PRINT "Press the Anykey to reenter part number...";
 4880     RETURN
 4890 ' end procedure showrangeretrymessage
 
 4900 ' procedure shownullentrymessage(partstr$)
-4910     LOCATE 10, tabcol%
+4910     LOCATE 10, tabCOL%
 4920     PRINT ("Part number " + shownullentrymessagePartStr0$) + " is a null entry"
 4930     RETURN
 4940 ' end procedure shownullentrymessage
@@ -1206,22 +1206,22 @@ end procedure
 4950 ' procedure showpartstatus(partnum%, desc$, qty%, reorder%, price!)
 4960     CLS
 4970     LOCATE 5, 1
-4980     PRINT TAB(tabcol%)"Inventory Status for Individual Part Number"
-4990     PRINT TAB(tabcol%)"==========================================="
+4980     PRINT TAB(tabCOL%)"Inventory Status for Individual Part Number"
+4990     PRINT TAB(tabCOL%)"==========================================="
 5000     PRINT
 5010     PRINT
-5020     PRINT TAB(tabcol%)"     Part number:  " + STR$(showpartstatusPartNum0%)
+5020     PRINT TAB(tabCOL%)"     Part number:  " + STR$(showpartstatusPartNum0%)
 5030     PRINT
-5040     PRINT TAB(tabcol%)"       Item name:  " + showpartstatusDesc0$
-5050     PRINT TAB(tabcol%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
-5060     PRINT TAB(tabcol%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
-5070     PRINT TAB(tabcol%)"      Unit price:  " + STR$(showpartstatusPrice0!)
+5040     PRINT TAB(tabCOL%)"       Item name:  " + showpartstatusDesc0$
+5050     PRINT TAB(tabCOL%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
+5060     PRINT TAB(tabCOL%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
+5070     PRINT TAB(tabCOL%)"      Unit price:  " + STR$(showpartstatusPrice0!)
 5080     RETURN
 5090 ' end procedure showpartstatus
 
 5100 ' procedure printlistheader()
 5110     CLS
-5120     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partcount%) + "items"
+5120     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partCOUNT%) + "items"
 5130     PRINT "                                          Quantity       Reorder"
 5140     PRINT " Partno           Description             on hand         level"
 5150     LOCATE 25, 1
@@ -1236,7 +1236,7 @@ end procedure
 
 5230 ' procedure printreorderheader()
 5240     CLS
-5250     LOCATE 1, tabcol%
+5250     LOCATE 1, tabCOL%
 5260     PRINT "Reorder Report"; TAB(55); DATE$
 5270     PRINT
 5280     PRINT "                                             Quantity       Reorder"
@@ -1252,21 +1252,21 @@ end procedure
 
 5370 ' procedure gatherpartdetails(partnum%, desc$, qty%, reorder%, price!)
 5380     CLS
-5390     LOCATE 4, tabcol%
+5390     LOCATE 4, tabCOL%
 5400     PRINT "Adding or Overwriting a Record"
-5410     LOCATE 8, tabcol%
+5410     LOCATE 8, tabCOL%
 5420     PRINT "Record/Partno" + STR$(gatherpartdetailsPartNum0%)
 5430     LOCATE 11, 39
 5440     PRINT "------------------------------"
-5450     LOCATE 10, tabcol%
+5450     LOCATE 10, tabCOL%
 5460     INPUT "      Description"; gatherpartdetailsDesc0$
-5470     LOCATE 12, tabcol%
+5470     LOCATE 12, tabCOL%
 5480     INPUT "Quantity in stock"; gatherpartdetailsQty0%
-5490     LOCATE 14, tabcol%
+5490     LOCATE 14, tabCOL%
 5500     INPUT "    Reorder level"; gatherpartdetailsReorder0%
-5510     LOCATE 16, tabcol%
+5510     LOCATE 16, tabCOL%
 5520     INPUT "       Unit price"; gatherpartdetailsPrice0!
-5530     LOCATE 18, tabcol%
+5530     LOCATE 18, tabCOL%
 5540     PRINT "Is information correct (Y/N)?"
 5550     RETURN
 5560 ' end procedure gatherpartdetails
@@ -1277,13 +1277,13 @@ end procedure
 5600     PRINT "Add to an inventory part number"
 5610     LOCATE 5, 25
 5620     PRINT "==============================="
-5630     LOCATE 8, tabcol%
+5630     LOCATE 8, tabCOL%
 5640     PRINT "     Part number: " + STR$(showaddstockscreenPartNum0%)
-5650     LOCATE 9, tabcol%
+5650     LOCATE 9, tabCOL%
 5660     PRINT "Item description: " + showaddstockscreenDesc0$
-5670     LOCATE 10, tabcol%
+5670     LOCATE 10, tabCOL%
 5680     PRINT "Quantity on hand: " + STR$(showaddstockscreenQty0%)
-5690     LOCATE 11, tabcol%
+5690     LOCATE 11, tabCOL%
 5700     PRINT "   Reorder Level: " + STR$(showaddstockscreenReorder0%)
 5710     RETURN
 5720 ' end procedure showaddstockscreen
@@ -1298,17 +1298,17 @@ end procedure
 
 5800 ' procedure showsubtractstockscreen(partnum%, desc$, qty%, reorder%)
 5810     CLS
-5820     LOCATE 4, tabcol%
+5820     LOCATE 4, tabCOL%
 5830     PRINT "Subtract an inventory part number"
-5840     LOCATE 5, tabcol%
+5840     LOCATE 5, tabCOL%
 5850     PRINT "================================="
-5860     LOCATE 8, tabcol%
+5860     LOCATE 8, tabCOL%
 5870     PRINT "         Part number: " + STR$(showsubtractstockscreenPartNum0%)
-5880     LOCATE 9, tabcol%
+5880     LOCATE 9, tabCOL%
 5890     PRINT "    Item description: " + showsubtractstockscreenDesc0$
-5900     LOCATE 10, tabcol%
+5900     LOCATE 10, tabCOL%
 5910     PRINT "    Quantity on hand: " + STR$(showsubtractstockscreenQty0%)
-5920     LOCATE 11, tabcol%
+5920     LOCATE 11, tabCOL%
 5930     PRINT "       Reorder Level: " + STR$(showsubtractstockscreenReorder0%)
 5940     RETURN
 5950 ' end procedure showsubtractstockscreen
@@ -1382,7 +1382,7 @@ end procedure
 6600 ' procedure editrecord()
 6610     ' global inv
 6620     CLS
-6630     LOCATE 10, tabcol%
+6630     LOCATE 10, tabCOL%
 6640     GOSUB 4330
 6650     editrecordPartStr0$ = readpartnumberinputResult0$
 6660     editrecordPart0% = VAL(editrecordPartStr0$)
@@ -1415,7 +1415,7 @@ end procedure
 6930     isemptyFlag0$ = editrecordPFlag0$
 6940     GOSUB 4200
 6950     IF (isemptyResult0% = 0) = 0 THEN GOTO 7040
-6960         LOCATE 12, tabcol%
+6960         LOCATE 12, tabCOL%
 6970         PRINT "Overwrite existing part data?"
 6980         GOSUB 4380
 6990         editrecordKp0$ = readkeyResult0$
@@ -1455,7 +1455,7 @@ end procedure
 7310     ' global inv
 7320     GOSUB 5110
 7330     listallScrollCount0% = 0
-7340     FOR listallI0% = 1 TO partcount%
+7340     FOR listallI0% = 1 TO partCOUNT%
 7350         ' let p = inv[...]  (whole-record read)
 7360         GET #1, listallI0%
 7370         listallPFlagTrimI0% = LEN(listallInvFlagBuf0$)
@@ -1542,7 +1542,7 @@ end procedure
 8140         showaddstockscreenQty0% = addstockPQty0%
 8150         showaddstockscreenReorder0% = addstockPReorder0%
 8160         GOSUB 5580
-8170         LOCATE 14, tabcol%
+8170         LOCATE 14, tabCOL%
 8180         INPUT " Quantity to add"; addstockAddStr0$
 8190         addstockAddAmt0% = VAL(addstockAddStr0$)
 8200         IF (addstockAddAmt0% < 0) = 0 THEN GOTO 8230
@@ -1616,7 +1616,7 @@ end procedure
 8830         showsubtractstockscreenQty0% = subtractstockPQty0%
 8840         showsubtractstockscreenReorder0% = subtractstockPReorder0%
 8850         GOSUB 5810
-8860         LOCATE 14, tabcol%
+8860         LOCATE 14, tabCOL%
 8870         INPUT "Quantity to subtract"; subtractstockSubStr0$
 8880         subtractstockSubAmt0% = VAL(subtractstockSubStr0$)
 8890         subtractstockOverSubtract0% = 0
@@ -1633,7 +1633,7 @@ end procedure
 
 9000     subtractstockPQty0% = subtractstockPQty0% - subtractstockSubAmt0%
 9010     IF (subtractstockPQty0% <= subtractstockPReorder0%) = 0 THEN GOTO 9030
-9020         LOCATE 16, tabcol%
+9020         LOCATE 16, tabCOL%
 9030     REM END IF
 9040     PRINT (("quantity now" + STR$(subtractstockPQty0%)) + " reorder level") + STR$(subtractstockPReorder0%)
 9050     ' inv[...] = p  (write back a let-bound record)
@@ -1650,7 +1650,7 @@ end procedure
 9150     ' global inv
 9160     GOSUB 5240
 9170     reorderreportReportLineCount0% = 0
-9180     FOR reorderreportI0% = 1 TO partcount%
+9180     FOR reorderreportI0% = 1 TO partCOUNT%
 9190         ' let p = inv[...]  (whole-record read)
 9200         GET #1, reorderreportI0%
 9210         reorderreportPFlagTrimI0% = LEN(reorderreportInvFlagBuf0$)
@@ -1709,7 +1709,7 @@ end procedure
 9730     initializeinventoryfileifnewPReorder0% = CVI(initializeinventoryfileifnewInvReorderBuf0$)
 9740     initializeinventoryfileifnewPPrice0! = CVS(initializeinventoryfileifnewInvPriceBuf0$)
 9750     IF (ASC(initializeinventoryfileifnewPFlag0$) = 0) = 0 THEN GOTO 9850
-9760         FOR initializeinventoryfileifnewI0% = 1 TO partcount%
+9760         FOR initializeinventoryfileifnewI0% = 1 TO partCOUNT%
 9770             ' inv[...] = { ... }  (whole-record write)
 9780             LSET initializeinventoryfileifnewInvFlagBuf0$ = CHR$(255)
 9790             LSET initializeinventoryfileifnewInvDescBuf0$ = ""
@@ -1754,6 +1754,8 @@ end procedure
 #include <stdlib.h>
 #if defined(_WIN32)
 #include <conio.h>
+#include <windows.h>
+#include <io.h>
 #else
 #include <termios.h>
 #include <unistd.h>
@@ -1801,41 +1803,41 @@ static void bcc_read_line(void);
 
 static int bv_i_erl = 0;
 static int bv_i_err = 0;
-static int bv_i_errbadfilemode = 0;
-static int bv_i_errbadfilename = 0;
-static int bv_i_errbadfilenumber = 0;
-static int bv_i_errbadrecordnumber = 0;
-static int bv_i_errdevicefault = 0;
-static int bv_i_errdeviceio = 0;
-static int bv_i_errdevicetimeout = 0;
-static int bv_i_errdeviceunavailable = 0;
-static int bv_i_errdiskfull = 0;
-static int bv_i_errdiskmediaerror = 0;
-static int bv_i_errdisknotready = 0;
-static int bv_i_errdiskwriteprotected = 0;
-static int bv_i_errdivisionbyzero = 0;
-static int bv_i_errduplicatedefinition = 0;
-static int bv_i_errfilealreadyexists = 0;
-static int bv_i_errfilealreadyopen = 0;
-static int bv_i_errfilenotfound = 0;
-static int bv_i_errillegalfunctioncall = 0;
-static int bv_i_errinputpastend = 0;
-static int bv_i_errnoresume = 0;
-static int bv_i_erroutofdata = 0;
-static int bv_i_erroutofmemory = 0;
-static int bv_i_erroutofpaper = 0;
-static int bv_i_erroutofstringspace = 0;
-static int bv_i_erroverflow = 0;
-static int bv_i_errpathfileaccess = 0;
-static int bv_i_errpathnotfound = 0;
-static int bv_i_errresumewithouterror = 0;
-static int bv_i_errreturnwithoutgosub = 0;
-static int bv_i_errsubscriptoutofrange = 0;
-static int bv_i_errsyntax = 0;
-static int bv_i_errtoomanyfiles = 0;
-static int bv_i_errtypemismatch = 0;
-static int bv_i_partcount = 0;
-static int bv_i_tabcol = 0;
+static int bv_i_err_bad_file_mode = 0;
+static int bv_i_err_bad_file_name = 0;
+static int bv_i_err_bad_file_number = 0;
+static int bv_i_err_bad_record_number = 0;
+static int bv_i_err_device_fault = 0;
+static int bv_i_err_device_io = 0;
+static int bv_i_err_device_timeout = 0;
+static int bv_i_err_device_unavailable = 0;
+static int bv_i_err_disk_full = 0;
+static int bv_i_err_disk_media_error = 0;
+static int bv_i_err_disk_not_ready = 0;
+static int bv_i_err_disk_write_protected = 0;
+static int bv_i_err_division_by_zero = 0;
+static int bv_i_err_duplicate_definition = 0;
+static int bv_i_err_file_already_exists = 0;
+static int bv_i_err_file_already_open = 0;
+static int bv_i_err_file_not_found = 0;
+static int bv_i_err_illegal_function_call = 0;
+static int bv_i_err_input_past_end = 0;
+static int bv_i_err_no_resume = 0;
+static int bv_i_err_out_of_data = 0;
+static int bv_i_err_out_of_memory = 0;
+static int bv_i_err_out_of_paper = 0;
+static int bv_i_err_out_of_string_space = 0;
+static int bv_i_err_overflow = 0;
+static int bv_i_err_path_file_access = 0;
+static int bv_i_err_path_not_found = 0;
+static int bv_i_err_resume_without_error = 0;
+static int bv_i_err_return_without_gosub = 0;
+static int bv_i_err_subscript_out_of_range = 0;
+static int bv_i_err_syntax = 0;
+static int bv_i_err_too_many_files = 0;
+static int bv_i_err_type_mismatch = 0;
+static int bv_i_part_count = 0;
+static int bv_i_tab_col = 0;
 static char bv_s_invdescbuf[256] = {0};
 static char bv_s_invflagbuf[256] = {0};
 static char bv_s_invpricebuf[256] = {0};
@@ -1877,231 +1879,231 @@ void bf_s_error(int bv_i_code, char* bcc_out) {
         int bt_sel_0 = bv_i_code;
         int bt_sel_match_1 = 0;
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errsyntax)) {
+            if ((bt_sel_0 == bv_i_err_syntax)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Syntax error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errreturnwithoutgosub)) {
+            if ((bt_sel_0 == bv_i_err_return_without_gosub)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "RETURN without GOSUB");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofdata)) {
+            if ((bt_sel_0 == bv_i_err_out_of_data)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of DATA");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errillegalfunctioncall)) {
+            if ((bt_sel_0 == bv_i_err_illegal_function_call)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Illegal function call");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroverflow)) {
+            if ((bt_sel_0 == bv_i_err_overflow)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Overflow");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofmemory)) {
+            if ((bt_sel_0 == bv_i_err_out_of_memory)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of memory");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errsubscriptoutofrange)) {
+            if ((bt_sel_0 == bv_i_err_subscript_out_of_range)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Subscript out of range");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errduplicatedefinition)) {
+            if ((bt_sel_0 == bv_i_err_duplicate_definition)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Duplicate Definition");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdivisionbyzero)) {
+            if ((bt_sel_0 == bv_i_err_division_by_zero)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Division by zero");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errtypemismatch)) {
+            if ((bt_sel_0 == bv_i_err_type_mismatch)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Type mismatch");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofstringspace)) {
+            if ((bt_sel_0 == bv_i_err_out_of_string_space)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of string space");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errnoresume)) {
+            if ((bt_sel_0 == bv_i_err_no_resume)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "No RESUME");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errresumewithouterror)) {
+            if ((bt_sel_0 == bv_i_err_resume_without_error)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "RESUME without error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdevicetimeout)) {
+            if ((bt_sel_0 == bv_i_err_device_timeout)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device timeout");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdevicefault)) {
+            if ((bt_sel_0 == bv_i_err_device_fault)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device fault");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_erroutofpaper)) {
+            if ((bt_sel_0 == bv_i_err_out_of_paper)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Out of paper");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilenumber)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_number)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file number");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilenotfound)) {
+            if ((bt_sel_0 == bv_i_err_file_not_found)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File not found");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilemode)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_mode)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file mode");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilealreadyopen)) {
+            if ((bt_sel_0 == bv_i_err_file_already_open)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File already open");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdeviceio)) {
+            if ((bt_sel_0 == bv_i_err_device_io)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device I/O error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errfilealreadyexists)) {
+            if ((bt_sel_0 == bv_i_err_file_already_exists)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "File already exists");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskfull)) {
+            if ((bt_sel_0 == bv_i_err_disk_full)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk full");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errinputpastend)) {
+            if ((bt_sel_0 == bv_i_err_input_past_end)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Input past end");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadrecordnumber)) {
+            if ((bt_sel_0 == bv_i_err_bad_record_number)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad record number");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errbadfilename)) {
+            if ((bt_sel_0 == bv_i_err_bad_file_name)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Bad file name");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errtoomanyfiles)) {
+            if ((bt_sel_0 == bv_i_err_too_many_files)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Too many files");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdeviceunavailable)) {
+            if ((bt_sel_0 == bv_i_err_device_unavailable)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Device unavailable");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskwriteprotected)) {
+            if ((bt_sel_0 == bv_i_err_disk_write_protected)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk write protected");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdisknotready)) {
+            if ((bt_sel_0 == bv_i_err_disk_not_ready)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk not ready");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errdiskmediaerror)) {
+            if ((bt_sel_0 == bv_i_err_disk_media_error)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Disk media error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errpathfileaccess)) {
+            if ((bt_sel_0 == bv_i_err_path_file_access)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Path/File access error");
                 return;
             }
         }
         if (!bt_sel_match_1) {
-            if ((bt_sel_0 == bv_i_errpathnotfound)) {
+            if ((bt_sel_0 == bv_i_err_path_not_found)) {
                 bt_sel_match_1 = 1;
                 snprintf(bcc_out, 256, "%s", "Path not found");
                 return;
@@ -2124,7 +2126,7 @@ int bf_i_isempty(const char* bv_s_flag_in) {
 }
 
 int bf_i_partinrange(int bv_i_n) {
-    if (((-(bv_i_n >= 1)) && (-(bv_i_n <= bv_i_partcount)))) {
+    if (((-(bv_i_n >= 1)) && (-(bv_i_n <= bv_i_part_count)))) {
         return 1;
     }
     return 0;
@@ -2177,32 +2179,32 @@ void bf_i_showmainmenu(void) {
     // preceding string and a `tab(n)` for exactly this reason.
     printf("\x1b[%dGInventory Program\n", 30);
     printf("\n");
-    printf("\x1b[%dG1......C)heck a part\n", bv_i_tabcol);
-    printf("\x1b[%dG2......E)dit/overwrite/add a part\n", bv_i_tabcol);
+    printf("\x1b[%dG1......C)heck a part\n", bv_i_tab_col);
+    printf("\x1b[%dG2......E)dit/overwrite/add a part\n", bv_i_tab_col);
     char bt_s_3[256];
-    snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", "3......L)ist all", bcc_stri(bv_i_partcount));
+    snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", "3......L)ist all", bcc_stri(bv_i_part_count));
     char bt_s_4[256];
     snprintf(bt_s_4, sizeof(bt_s_4), "%s%s", bt_s_3, "parts");
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_4);
-    printf("\x1b[%dG4......A)dd stock\n", bv_i_tabcol);
-    printf("\x1b[%dG5......S)ubtract stock\n", bv_i_tabcol);
-    printf("\x1b[%dG6......R)eorder Report\n", bv_i_tabcol);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_4);
+    printf("\x1b[%dG4......A)dd stock\n", bv_i_tab_col);
+    printf("\x1b[%dG5......S)ubtract stock\n", bv_i_tab_col);
+    printf("\x1b[%dG6......R)eorder Report\n", bv_i_tab_col);
     printf("\n");
-    printf("\x1b[%dG7......eX)it to system\n", bv_i_tabcol);
+    printf("\x1b[%dG7......eX)it to system\n", bv_i_tab_col);
 }
 
 void bf_i_showbadpartnumber(void) {
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 10, 10);
     char bt_s_5[256];
-    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", "Part number is out of permissable range of 1 to", bcc_stri(bv_i_partcount));
+    snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", "Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
     printf("%s\n", bt_s_5);
 }
 
 void bf_i_showrangeretrymessage(void) {
     printf("\x1b[%d;%dH", 10, 15);
     char bt_s_6[256];
-    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "The Part number is out of permissable range of 1 to", bcc_stri(bv_i_partcount));
+    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", "The Part number is out of permissable range of 1 to", bcc_stri(bv_i_part_count));
     printf("%s\n", bt_s_6);
     printf("\x1b[%d;%dH", 25, 15);
     printf("Press the Anykey to reenter part number...");
@@ -2212,7 +2214,7 @@ void bf_i_shownullentrymessage(const char* bv_s_partstr_in) {
     char bv_s_partstr[256];
     snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bv_s_partstr_in);
 
-    printf("\x1b[%d;%dH", 10, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_7[256];
     snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", "Part number ", bv_s_partstr);
     char bt_s_8[256];
@@ -2226,32 +2228,32 @@ void bf_i_showpartstatus(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_qt
 
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 5, 1);
-    printf("\x1b[%dGInventory Status for Individual Part Number\n", bv_i_tabcol);
-    printf("\x1b[%dG===========================================\n", bv_i_tabcol);
+    printf("\x1b[%dGInventory Status for Individual Part Number\n", bv_i_tab_col);
+    printf("\x1b[%dG===========================================\n", bv_i_tab_col);
     printf("\n");
     printf("\n");
     char bt_s_9[256];
     snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", "     Part number:  ", bcc_stri(bv_i_partnum));
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_9);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_9);
     printf("\n");
     char bt_s_10[256];
     snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", "       Item name:  ", bv_s_desc);
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_10);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_10);
     char bt_s_11[256];
     snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", "Quantity on hand:  ", bcc_stri(bv_i_qty));
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_11);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_11);
     char bt_s_12[256];
     snprintf(bt_s_12, sizeof(bt_s_12), "%s%s", "   Reorder level:  ", bcc_stri(bv_i_reorder));
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_12);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_12);
     char bt_s_13[256];
     snprintf(bt_s_13, sizeof(bt_s_13), "%s%s", "      Unit price:  ", bcc_strd(bv_f_price));
-    printf("\x1b[%dG%s\n", bv_i_tabcol, bt_s_13);
+    printf("\x1b[%dG%s\n", bv_i_tab_col, bt_s_13);
 }
 
 void bf_i_printlistheader(void) {
     printf("\x1b[2J\x1b[H");
     char bt_s_14[256];
-    snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", bcc_stri(bv_i_partcount), "items");
+    snprintf(bt_s_14, sizeof(bt_s_14), "%s%s", bcc_stri(bv_i_part_count), "items");
     printf("\x1b[%dGI N V E N T O R Y   L I S T I N G\x1b[%dG%s\n", 25, 65, bt_s_14);
     printf("                                          Quantity       Reorder\n");
     printf(" Partno           Description             on hand         level\n");
@@ -2282,7 +2284,7 @@ void bf_i_printreorderheader(void) {
     char bv_s_date[256] = {0};
 
     printf("\x1b[2J\x1b[H");
-    printf("\x1b[%d;%dH", 1, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 1, bv_i_tab_col);
     printf("Reorder Report\x1b[%dG%s\n", 55, bv_s_date);
     printf("\n");
     printf("                                             Quantity       Reorder\n");
@@ -2319,31 +2321,31 @@ void bf_i_gatherpartdetails(int bv_i_partnum, char* bv_s_desc_in, int* bv_i_qty_
     float bv_f_price = *bv_f_price_in;
 
     printf("\x1b[2J\x1b[H");
-    printf("\x1b[%d;%dH", 4, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 4, bv_i_tab_col);
     printf("Adding or Overwriting a Record\n");
-    printf("\x1b[%d;%dH", 8, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 8, bv_i_tab_col);
     char bt_s_28[256];
     snprintf(bt_s_28, sizeof(bt_s_28), "%s%s", "Record/Partno", bcc_stri(bv_i_partnum));
     printf("%s\n", bt_s_28);
     printf("\x1b[%d;%dH", 11, 39);
     printf("------------------------------\n");
-    printf("\x1b[%d;%dH", 10, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     printf("      Description? ");
     bcc_read_line();
     snprintf(bv_s_desc, sizeof(bv_s_desc), "%s", bcc_input_buf);
-    printf("\x1b[%d;%dH", 12, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 12, bv_i_tab_col);
     printf("Quantity in stock? ");
     bcc_read_line();
     bv_i_qty = atoi(bcc_input_buf);
-    printf("\x1b[%d;%dH", 14, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 14, bv_i_tab_col);
     printf("    Reorder level? ");
     bcc_read_line();
     bv_i_reorder = atoi(bcc_input_buf);
-    printf("\x1b[%d;%dH", 16, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 16, bv_i_tab_col);
     printf("       Unit price? ");
     bcc_read_line();
     bv_f_price = atof(bcc_input_buf);
-    printf("\x1b[%d;%dH", 18, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 18, bv_i_tab_col);
     printf("Is information correct (Y/N)?\n");
     snprintf(bv_s_desc_in, 256, "%s", bv_s_desc);
     *bv_i_qty_in = bv_i_qty;
@@ -2360,19 +2362,19 @@ void bf_i_showaddstockscreen(int bv_i_partnum, const char* bv_s_desc_in, int bv_
     printf("Add to an inventory part number\n");
     printf("\x1b[%d;%dH", 5, 25);
     printf("===============================\n");
-    printf("\x1b[%d;%dH", 8, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 8, bv_i_tab_col);
     char bt_s_29[256];
     snprintf(bt_s_29, sizeof(bt_s_29), "%s%s", "     Part number: ", bcc_stri(bv_i_partnum));
     printf("%s\n", bt_s_29);
-    printf("\x1b[%d;%dH", 9, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
     char bt_s_30[256];
     snprintf(bt_s_30, sizeof(bt_s_30), "%s%s", "Item description: ", bv_s_desc);
     printf("%s\n", bt_s_30);
-    printf("\x1b[%d;%dH", 10, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_31[256];
     snprintf(bt_s_31, sizeof(bt_s_31), "%s%s", "Quantity on hand: ", bcc_stri(bv_i_qty));
     printf("%s\n", bt_s_31);
-    printf("\x1b[%d;%dH", 11, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
     char bt_s_32[256];
     snprintf(bt_s_32, sizeof(bt_s_32), "%s%s", "   Reorder Level: ", bcc_stri(bv_i_reorder));
     printf("%s\n", bt_s_32);
@@ -2390,23 +2392,23 @@ void bf_i_showsubtractstockscreen(int bv_i_partnum, const char* bv_s_desc_in, in
     snprintf(bv_s_desc, sizeof(bv_s_desc), "%s", bv_s_desc_in);
 
     printf("\x1b[2J\x1b[H");
-    printf("\x1b[%d;%dH", 4, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 4, bv_i_tab_col);
     printf("Subtract an inventory part number\n");
-    printf("\x1b[%d;%dH", 5, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 5, bv_i_tab_col);
     printf("=================================\n");
-    printf("\x1b[%d;%dH", 8, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 8, bv_i_tab_col);
     char bt_s_33[256];
     snprintf(bt_s_33, sizeof(bt_s_33), "%s%s", "         Part number: ", bcc_stri(bv_i_partnum));
     printf("%s\n", bt_s_33);
-    printf("\x1b[%d;%dH", 9, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 9, bv_i_tab_col);
     char bt_s_34[256];
     snprintf(bt_s_34, sizeof(bt_s_34), "%s%s", "    Item description: ", bv_s_desc);
     printf("%s\n", bt_s_34);
-    printf("\x1b[%d;%dH", 10, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_35[256];
     snprintf(bt_s_35, sizeof(bt_s_35), "%s%s", "    Quantity on hand: ", bcc_stri(bv_i_qty));
     printf("%s\n", bt_s_35);
-    printf("\x1b[%d;%dH", 11, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 11, bv_i_tab_col);
     char bt_s_36[256];
     snprintf(bt_s_36, sizeof(bt_s_36), "%s%s", "       Reorder Level: ", bcc_stri(bv_i_reorder));
     printf("%s\n", bt_s_36);
@@ -2510,7 +2512,7 @@ void bf_i_editrecord(void) {
 
     // global inv
     printf("\x1b[2J\x1b[H");
-    printf("\x1b[%d;%dH", 10, bv_i_tabcol);
+    printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     char bt_s_42[256];
     bf_s_readpartnumberinput(bt_s_42);
     snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_42);
@@ -2536,7 +2538,7 @@ void bf_i_editrecord(void) {
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if ((-(bf_i_isempty(bv_s_pflag) == 0))) {
-        printf("\x1b[%d;%dH", 12, bv_i_tabcol);
+        printf("\x1b[%d;%dH", 12, bv_i_tab_col);
         printf("Overwrite existing part data?\n");
         char bt_s_43[256];
         bf_s_readkey(bt_s_43);
@@ -2579,7 +2581,7 @@ void bf_i_listall(void) {
     // global inv
     bf_i_printlistheader();
     bv_i_scrollcount = 0;
-    int bt_lim_48 = bv_i_partcount;
+    int bt_lim_48 = bv_i_part_count;
     int bt_step_48 = 1;
     for (bv_i_i = 1; bt_step_48 >= 0 ? bv_i_i <= bt_lim_48 : bv_i_i >= bt_lim_48; bv_i_i += bt_step_48) {
         // let p = inv[...]  (whole-record read)
@@ -2669,7 +2671,7 @@ void bf_i_addstock(void) {
 
     while (1) {
         bf_i_showaddstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
-        printf("\x1b[%d;%dH", 14, bv_i_tabcol);
+        printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf(" Quantity to add? ");
         bcc_read_line();
         snprintf(bv_s_addstr, sizeof(bv_s_addstr), "%s", bcc_input_buf);
@@ -2754,7 +2756,7 @@ void bf_i_subtractstock(void) {
 
     while (1) {
         bf_i_showsubtractstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
-        printf("\x1b[%d;%dH", 14, bv_i_tabcol);
+        printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf("Quantity to subtract? ");
         bcc_read_line();
         snprintf(bv_s_substr, sizeof(bv_s_substr), "%s", bcc_input_buf);
@@ -2771,7 +2773,7 @@ void bf_i_subtractstock(void) {
 
     bv_i_pqty = (bv_i_pqty - bv_i_subamt);
     if ((-(bv_i_pqty <= bv_i_preorder))) {
-        printf("\x1b[%d;%dH", 16, bv_i_tabcol);
+        printf("\x1b[%d;%dH", 16, bv_i_tab_col);
     }
     char bt_s_60[256];
     snprintf(bt_s_60, sizeof(bt_s_60), "%s%s", "quantity now", bcc_stri(bv_i_pqty));
@@ -2806,7 +2808,7 @@ void bf_i_reorderreport(void) {
     // global inv
     bf_i_printreorderheader();
     bv_i_reportlinecount = 0;
-    int bt_lim_66 = bv_i_partcount;
+    int bt_lim_66 = bv_i_part_count;
     int bt_step_66 = 1;
     for (bv_i_i = 1; bt_step_66 >= 0 ? bv_i_i <= bt_lim_66 : bv_i_i >= bt_lim_66; bv_i_i += bt_step_66) {
         // let p = inv[...]  (whole-record read)
@@ -2868,7 +2870,7 @@ void bf_i_initializeinventoryfileifnew(void) {
     bv_i_preorder = bcc_cvi(bv_s_invreorderbuf);
     bv_f_pprice = bcc_cvs(bv_s_invpricebuf);
     if ((-(((int)(unsigned char)bv_s_pflag[0]) == 0))) {
-        int bt_lim_67 = bv_i_partcount;
+        int bt_lim_67 = bv_i_part_count;
         int bt_step_67 = 1;
         for (bv_i_i = 1; bt_step_67 >= 0 ? bv_i_i <= bt_lim_67 : bv_i_i >= bt_lim_67; bv_i_i += bt_step_67) {
             // inv[...] = { ... }  (whole-record write)
@@ -2917,39 +2919,39 @@ int main(void) {
     // the *error code itself* has a message, when really this is a lookup
     // table keyed by that code. Stays an ordinary function.
 
-    bv_i_errsyntax = 2;
-    bv_i_errreturnwithoutgosub = 3;
-    bv_i_erroutofdata = 4;
-    bv_i_errillegalfunctioncall = 5;
-    bv_i_erroverflow = 6;
-    bv_i_erroutofmemory = 7;
-    bv_i_errsubscriptoutofrange = 9;
-    bv_i_errduplicatedefinition = 10;
-    bv_i_errdivisionbyzero = 11;
-    bv_i_errtypemismatch = 13;
-    bv_i_erroutofstringspace = 14;
-    bv_i_errnoresume = 19;
-    bv_i_errresumewithouterror = 20;
-    bv_i_errdevicetimeout = 24;
-    bv_i_errdevicefault = 25;
-    bv_i_erroutofpaper = 27;
-    bv_i_errbadfilenumber = 52;
-    bv_i_errfilenotfound = 53;
-    bv_i_errbadfilemode = 54;
-    bv_i_errfilealreadyopen = 55;
-    bv_i_errdeviceio = 57;
-    bv_i_errfilealreadyexists = 58;
-    bv_i_errdiskfull = 61;
-    bv_i_errinputpastend = 62;
-    bv_i_errbadrecordnumber = 63;
-    bv_i_errbadfilename = 64;
-    bv_i_errtoomanyfiles = 67;
-    bv_i_errdeviceunavailable = 68;
-    bv_i_errdiskwriteprotected = 70;
-    bv_i_errdisknotready = 71;
-    bv_i_errdiskmediaerror = 72;
-    bv_i_errpathfileaccess = 75;
-    bv_i_errpathnotfound = 76;
+    bv_i_err_syntax = 2;
+    bv_i_err_return_without_gosub = 3;
+    bv_i_err_out_of_data = 4;
+    bv_i_err_illegal_function_call = 5;
+    bv_i_err_overflow = 6;
+    bv_i_err_out_of_memory = 7;
+    bv_i_err_subscript_out_of_range = 9;
+    bv_i_err_duplicate_definition = 10;
+    bv_i_err_division_by_zero = 11;
+    bv_i_err_type_mismatch = 13;
+    bv_i_err_out_of_string_space = 14;
+    bv_i_err_no_resume = 19;
+    bv_i_err_resume_without_error = 20;
+    bv_i_err_device_timeout = 24;
+    bv_i_err_device_fault = 25;
+    bv_i_err_out_of_paper = 27;
+    bv_i_err_bad_file_number = 52;
+    bv_i_err_file_not_found = 53;
+    bv_i_err_bad_file_mode = 54;
+    bv_i_err_file_already_open = 55;
+    bv_i_err_device_io = 57;
+    bv_i_err_file_already_exists = 58;
+    bv_i_err_disk_full = 61;
+    bv_i_err_input_past_end = 62;
+    bv_i_err_bad_record_number = 63;
+    bv_i_err_bad_file_name = 64;
+    bv_i_err_too_many_files = 67;
+    bv_i_err_device_unavailable = 68;
+    bv_i_err_disk_write_protected = 70;
+    bv_i_err_disk_not_ready = 71;
+    bv_i_err_disk_media_error = 72;
+    bv_i_err_path_file_access = 75;
+    bv_i_err_path_not_found = 76;
 
     // ============================================================
     // INVENTORY.BCL -- Random-Access Inventory Program
@@ -2983,9 +2985,9 @@ int main(void) {
     // initializeInventoryFileIfNew(), called once at program entry --
     // inven.dat no longer has to be pre-populated by hand.
     // - The three original tab-position constants (T=20, U=25,
-    // V=30) are collapsed into a single `tabCol% = 20`; a couple of
+    // V=30) are collapsed into a single `TAB_COL = 20`; a couple of
     // screens that used U=25 in the original (see showAddStockScreen
-    // below) keep 25 as a literal rather than reusing tabCol%.
+    // below) keep 25 as a literal rather than reusing TAB_COL.
     //
     // Tracks parts in a fixed 100-record file: check status, add,
     // edit, add/subtract stock, and a reorder report.
@@ -3019,8 +3021,8 @@ int main(void) {
     // be reassigned, and resolves to the same value everywhere,
     // including inside every function/procedure below, with no
     // `global` declaration needed.
-    bv_i_partcount = 100;
-    bv_i_tabcol = 20;
+    bv_i_part_count = 100;
+    bv_i_tab_col = 20;
 
     // `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
     // LEN = <record width> plus the FIELD statement fhb wrote out by
@@ -3298,7 +3300,21 @@ static int bcc_instr(const char* s, const char* needle) {
 static const char* bcc_inkey(void) {
     static char buf[2];
 #if defined(_WIN32)
-    if (_kbhit()) {
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD input_type = GetFileType(input);
+    if (input_type == FILE_TYPE_PIPE) {
+        DWORD available = 0;
+        if (PeekNamedPipe(input, NULL, 0, NULL, &available, NULL) && available > 0) {
+            DWORD read_count = 0;
+            ReadFile(input, buf, 1, &read_count, NULL);
+            buf[read_count == 1 ? 1 : 0] = 0;
+        } else {
+            buf[0] = 0;
+        }
+    } else if (input_type == FILE_TYPE_DISK) {
+        int c = _read(_fileno(stdin), buf, 1);
+        buf[c == 1 ? 1 : 0] = 0;
+    } else if (_kbhit()) {
         buf[0] = (char)_getch();
         buf[1] = 0;
     } else {

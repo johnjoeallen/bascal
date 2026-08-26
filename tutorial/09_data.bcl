@@ -10,20 +10,20 @@
 // time-based seed; pass a literal for reproducible results.
 program data
 
-const numCapitals% = 5
+const NUM_CAPITALS = 5
 
-dim country$(numCapitals%)
-dim capital$(numCapitals%)
+dim country$(NUM_CAPITALS)
+dim capital$(NUM_CAPITALS)
 
 /* Load the lookup table */
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     read country$(i%), capital$(i%)
 end for
 
 /* Print the table */
 print "Country         Capital"
 print "--------------- ---------------"
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     print country$(i%) + "        " + capital$(i%)
 end for
 
@@ -35,8 +35,8 @@ swap a%, b%
 print "After swap:  a=" + str$(a%) + " b=" + str$(b%)
 
 /* Bubble-sort the country array using swap */
-for pass% = 1 to numCapitals% - 1
-    for i% = 1 to numCapitals% - pass%
+for pass% = 1 to NUM_CAPITALS - 1
+    for i% = 1 to NUM_CAPITALS - pass%
         if country$(i%) > country$(i% + 1) then
             swap country$(i%), country$(i% + 1)
             swap capital$(i%), capital$(i% + 1)
@@ -44,7 +44,7 @@ for pass% = 1 to numCapitals% - 1
     end for
 end for
 print "Sorted by country:"
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     print "  " + country$(i%) + " -> " + capital$(i%)
 end for
 

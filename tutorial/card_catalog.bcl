@@ -48,18 +48,18 @@ record Header
     reserved: string(58) lpad
 end record
 
-const lastSlot% = 11   // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries
+const LAST_SLOT = 11   // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries
 
 file header  as Header = open("catalog.dat")
 file catalog as Entry  = open("catalog.dat")
 
 /* ---- CHOICE=5 in CLERK.BAS: create/reset the catalog file ---- */
 procedure initCatalog()
-    global lastSlot%
+    global LAST_SLOT
     global header
     global catalog
-    header[1] = { size: lastSlot%, reserved: "" }
-    for i% = 2 to lastSlot%
+    header[1] = { size: LAST_SLOT, reserved: "" }
+    for i% = 2 to LAST_SLOT
         catalog[i%] = { author: "", title: "", subject: "" }
     end for
 end procedure

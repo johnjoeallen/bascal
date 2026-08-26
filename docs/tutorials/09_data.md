@@ -67,20 +67,20 @@ end if
 // time-based seed; pass a literal for reproducible results.
 program data
 
-const numCapitals% = 5
+const NUM_CAPITALS = 5
 
-dim country$(numCapitals%)
-dim capital$(numCapitals%)
+dim country$(NUM_CAPITALS)
+dim capital$(NUM_CAPITALS)
 
 /* Load the lookup table */
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     read country$(i%), capital$(i%)
 end for
 
 /* Print the table */
 print "Country         Capital"
 print "--------------- ---------------"
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     print country$(i%) + "        " + capital$(i%)
 end for
 
@@ -92,8 +92,8 @@ swap a%, b%
 print "After swap:  a=" + str$(a%) + " b=" + str$(b%)
 
 /* Bubble-sort the country array using swap */
-for pass% = 1 to numCapitals% - 1
-    for i% = 1 to numCapitals% - pass%
+for pass% = 1 to NUM_CAPITALS - 1
+    for i% = 1 to NUM_CAPITALS - pass%
         if country$(i%) > country$(i% + 1) then
             swap country$(i%), country$(i% + 1)
             swap capital$(i%), capital$(i% + 1)
@@ -101,7 +101,7 @@ for pass% = 1 to numCapitals% - 1
     end for
 end for
 print "Sorted by country:"
-for i% = 1 to numCapitals%
+for i% = 1 to NUM_CAPITALS
     print "  " + country$(i%) + " -> " + capital$(i%)
 end for
 
@@ -144,22 +144,22 @@ data "Egypt",   "Cairo"
 110 ' randomize seeds the BASIC RND function.  Pass timer for a
 120 ' time-based seed; pass a literal for reproducible results.
 
-130 numcapitals% = 5
+130 numCAPITALS% = 5
 
-140 DIM country$(numcapitals%)
-150 BCCT1% = numcapitals%
-160 DIM capital$(numcapitals%)
-170 BCCT2% = numcapitals%
+140 DIM country$(numCAPITALS%)
+150 BCCT1% = numCAPITALS%
+160 DIM capital$(numCAPITALS%)
+170 BCCT2% = numCAPITALS%
 
 180 ' Load the lookup table
-190 FOR i% = 1 TO numcapitals%
+190 FOR i% = 1 TO numCAPITALS%
 200     READ country$(i%), capital$(i%)
 210 NEXT i%
 
 220 ' Print the table
 230 PRINT "Country         Capital"
 240 PRINT "--------------- ---------------"
-250 FOR i% = 1 TO numcapitals%
+250 FOR i% = 1 TO numCAPITALS%
 260     PRINT (country$(i%) + "        ") + capital$(i%)
 270 NEXT i%
 
@@ -171,8 +171,8 @@ data "Egypt",   "Cairo"
 330 PRINT (("After swap:  a=" + STR$(a%)) + " b=") + STR$(b%)
 
 340 ' Bubble-sort the country array using swap
-350 FOR pass% = 1 TO numcapitals% - 1
-360     FOR i% = 1 TO numcapitals% - pass%
+350 FOR pass% = 1 TO numCAPITALS% - 1
+360     FOR i% = 1 TO numCAPITALS% - pass%
 370         IF (country$(i%) > country$(i% + 1)) = 0 THEN GOTO 400
 380             SWAP country$(i%), country$(i% + 1)
 390             SWAP capital$(i%), capital$(i% + 1)
@@ -180,7 +180,7 @@ data "Egypt",   "Cairo"
 410     NEXT i%
 420 NEXT pass%
 430 PRINT "Sorted by country:"
-440 FOR i% = 1 TO numcapitals%
+440 FOR i% = 1 TO numCAPITALS%
 450     PRINT (("  " + country$(i%)) + " -> ") + capital$(i%)
 460 NEXT i%
 
@@ -230,7 +230,7 @@ static const char* bcc_read_data(void);
 static int bv_i_a = 0;
 static int bv_i_b = 0;
 static int bv_i_i = 0;
-static int bv_i_numcapitals = 0;
+static int bv_i_num_capitals = 0;
 static int bv_i_pass = 0;
 static char bv_s_capital[6][256] = {0};
 static char bv_s_country[6][256] = {0};
@@ -247,11 +247,11 @@ int main(void) {
     // randomize seeds the BASIC RND function.  Pass timer for a
     // time-based seed; pass a literal for reproducible results.
 
-    bv_i_numcapitals = 5;
+    bv_i_num_capitals = 5;
 
 
     // Load the lookup table
-    int bt_lim_0 = bv_i_numcapitals;
+    int bt_lim_0 = bv_i_num_capitals;
     int bt_step_0 = 1;
     for (bv_i_i = 1; bt_step_0 >= 0 ? bv_i_i <= bt_lim_0 : bv_i_i >= bt_lim_0; bv_i_i += bt_step_0) {
         snprintf(bv_s_country[(bv_i_i)], sizeof(bv_s_country[(bv_i_i)]), "%s", bcc_read_data());
@@ -261,7 +261,7 @@ int main(void) {
     // Print the table
     printf("Country         Capital\n");
     printf("--------------- ---------------\n");
-    int bt_lim_1 = bv_i_numcapitals;
+    int bt_lim_1 = bv_i_num_capitals;
     int bt_step_1 = 1;
     for (bv_i_i = 1; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
         char bt_s_2[256];
@@ -293,10 +293,10 @@ int main(void) {
     printf("%s\n", bt_s_10);
 
     // Bubble-sort the country array using swap
-    int bt_lim_11 = (bv_i_numcapitals - 1);
+    int bt_lim_11 = (bv_i_num_capitals - 1);
     int bt_step_11 = 1;
     for (bv_i_pass = 1; bt_step_11 >= 0 ? bv_i_pass <= bt_lim_11 : bv_i_pass >= bt_lim_11; bv_i_pass += bt_step_11) {
-        int bt_lim_12 = (bv_i_numcapitals - bv_i_pass);
+        int bt_lim_12 = (bv_i_num_capitals - bv_i_pass);
         int bt_step_12 = 1;
         for (bv_i_i = 1; bt_step_12 >= 0 ? bv_i_i <= bt_lim_12 : bv_i_i >= bt_lim_12; bv_i_i += bt_step_12) {
             if ((-(strcmp(bv_s_country[(bv_i_i)], bv_s_country[((bv_i_i + 1))]) > 0))) {
@@ -312,7 +312,7 @@ int main(void) {
         }
     }
     printf("Sorted by country:\n");
-    int bt_lim_15 = bv_i_numcapitals;
+    int bt_lim_15 = bv_i_num_capitals;
     int bt_step_15 = 1;
     for (bv_i_i = 1; bt_step_15 >= 0 ? bv_i_i <= bt_lim_15 : bv_i_i >= bt_lim_15; bv_i_i += bt_step_15) {
         char bt_s_16[256];

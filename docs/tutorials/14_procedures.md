@@ -105,11 +105,11 @@ printIfPass("Alice", 91)   // printed
 printIfPass("Bob",   54)   // skipped (score < 60)
 printIfPass("Carol", 78)   // printed
 
-const N% = 5
-dim data%(N%)
+const N = 5
+dim data%(N)
 fillRange(data%, 99)
 print "Filled array:"
-for i% = 0 to N% - 1
+for i% = 0 to N - 1
     print "  data%(" + str$(i%) + ") = " + str$(data%(i%))
 end for
 
@@ -295,7 +295,7 @@ static int bv_i_data[6] = {0};
 void bf_i_printseparator(void);
 void bf_i_printscore(const char* bv_s_label_in, int bv_i_score);
 void bf_i_printifpass(const char* bv_s_name_in, int bv_i_score);
-void bf_i_fillrange(int* bv_i_arr, int bv_i_arr_len0, int bv_i_value);
+void bf_i_fillrange(int bv_i_arr_len0, int* bv_i_arr, int bv_i_value);
 void bf_i_increment(void);
 
 void bf_i_printseparator(void) {
@@ -327,7 +327,7 @@ void bf_i_printifpass(const char* bv_s_name_in, int bv_i_score) {
     printf("%s\n", bt_s_3);
 }
 
-void bf_i_fillrange(int* bv_i_arr, int bv_i_arr_len0, int bv_i_value) {
+void bf_i_fillrange(int bv_i_arr_len0, int* bv_i_arr, int bv_i_value) {
     int bv_i_i = 0;
 
     int bt_lim_4 = (((bv_i_arr_len0 - 1) + 1) - 1);
@@ -390,7 +390,7 @@ int main(void) {
     bf_i_printifpass("Carol", 78);
 
     bv_i_n = 5;
-    bf_i_fillrange(bv_i_data, 6, 99);
+    bf_i_fillrange(6, bv_i_data, 99);
     printf("Filled array:\n");
     int bt_lim_5 = (bv_i_n - 1);
     int bt_step_5 = 1;

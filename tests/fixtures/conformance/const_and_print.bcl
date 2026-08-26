@@ -2,17 +2,17 @@
 // concatenation -- exercises the CONST-is-not-real-BASCOM fix directly.
 program constAndPrint
 
-const maxScore% = 100
-const taxRate!  = 0.2
+const MAX_SCORE = 100
+const TAX_RATE  = 0.2
 
 score% = 87
 bonus% = 5
 total% = score% + bonus%
 
-print "Score: "; total%; " / "; maxScore%
-print "Tax:   "; taxRate!
+print "Score: "; total%; " / "; MAX_SCORE
+print "Tax:   "; TAX_RATE
 
-if total% > maxScore% then
+if total% > MAX_SCORE then
     print "Capped"
 else
     print "Under cap"

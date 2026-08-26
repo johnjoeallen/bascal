@@ -73,10 +73,10 @@ let greeting$ = "Score is " + str$(score%)
 // so the intent is clear and the value lives in one place.
 program variables
 
-const maxScore%  = 100
-const passMark%  = 60
-const appName$   = "Grade Checker"
-const taxRate!   = 0.2
+const MAX_SCORE  = 100
+const PASS_MARK  = 60
+const APP_NAME   = "Grade Checker"
+const TAX_RATE   = 0.2
 
 // Variable assignment uses =
 playerName$  = "Alice"
@@ -84,12 +84,12 @@ score%       = 87
 temperature! = 36.6
 
 // print mixes strings and numbers directly with ; (no str$() needed)
-print appName$
+print APP_NAME
 print "Player:      "; playerName$
-print "Score:       "; score%; "/ "; maxScore%
-print "Pass mark:   "; passMark%
+print "Score:       "; score%; "/ "; MAX_SCORE
+print "Pass mark:   "; PASS_MARK
 print "Temperature: "; temperature!
-print "Tax rate:    "; taxRate!
+print "Tax rate:    "; TAX_RATE
 
 // str$() is still available when you need to build a string value
 let greeting$ = "Score is " + str$(score%)
@@ -133,10 +133,10 @@ end
 190 ' const names a value that cannot change.  Use it for magic numbers
 200 ' so the intent is clear and the value lives in one place.
 
-210 maxscore% = 100
-220 passmark% = 60
-230 appname$ = "Grade Checker"
-240 taxrate! = 0.2
+210 maxSCORE% = 100
+220 passMARK% = 60
+230 appNAME$ = "Grade Checker"
+240 taxRATE! = 0.2
 
 250 ' Variable assignment uses =
 260 playername$ = "Alice"
@@ -144,12 +144,12 @@ end
 280 temperature! = 36.6
 
 290 ' print mixes strings and numbers directly with ; (no str$() needed)
-300 PRINT appname$
+300 PRINT appNAME$
 310 PRINT "Player:      "; playername$
-320 PRINT "Score:       "; score%; "/ "; maxscore%
-330 PRINT "Pass mark:   "; passmark%
+320 PRINT "Score:       "; score%; "/ "; maxSCORE%
+330 PRINT "Pass mark:   "; passMARK%
 340 PRINT "Temperature: "; temperature!
-350 PRINT "Tax rate:    "; taxrate!
+350 PRINT "Tax rate:    "; taxRATE!
 
 360 ' str$() is still available when you need to build a string value
 370 greeting$ = "Score is " + STR$(score%)
@@ -185,12 +185,12 @@ static const char* bcc_chr(int code);
 static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 
-static float bv_f_taxrate = 0;
+static float bv_f_tax_rate = 0;
 static float bv_f_temperature = 0;
-static int bv_i_maxscore = 0;
-static int bv_i_passmark = 0;
+static int bv_i_max_score = 0;
+static int bv_i_pass_mark = 0;
 static int bv_i_score = 0;
-static char bv_s_appname[256] = {0};
+static char bv_s_app_name[256] = {0};
 static char bv_s_greeting[256] = {0};
 static char bv_s_playername[256] = {0};
 
@@ -214,10 +214,10 @@ int main(void) {
     // const names a value that cannot change.  Use it for magic numbers
     // so the intent is clear and the value lives in one place.
 
-    bv_i_maxscore = 100;
-    bv_i_passmark = 60;
-    snprintf(bv_s_appname, sizeof(bv_s_appname), "%s", "Grade Checker");
-    bv_f_taxrate = 0.2;
+    bv_i_max_score = 100;
+    bv_i_pass_mark = 60;
+    snprintf(bv_s_app_name, sizeof(bv_s_app_name), "%s", "Grade Checker");
+    bv_f_tax_rate = 0.2;
 
     // Variable assignment uses =
     snprintf(bv_s_playername, sizeof(bv_s_playername), "%s", "Alice");
@@ -225,12 +225,12 @@ int main(void) {
     bv_f_temperature = 36.6;
 
     // print mixes strings and numbers directly with ; (no str$() needed)
-    printf("%s\n", bv_s_appname);
+    printf("%s\n", bv_s_app_name);
     printf("Player:      %s\n", bv_s_playername);
-    printf("Score:       %d/ %d\n", bv_i_score, bv_i_maxscore);
-    printf("Pass mark:   %d\n", bv_i_passmark);
+    printf("Score:       %d/ %d\n", bv_i_score, bv_i_max_score);
+    printf("Pass mark:   %d\n", bv_i_pass_mark);
     printf("Temperature: %g\n", bv_f_temperature);
-    printf("Tax rate:    %g\n", bv_f_taxrate);
+    printf("Tax rate:    %g\n", bv_f_tax_rate);
 
     // str$() is still available when you need to build a string value
     char bt_s_0[256];

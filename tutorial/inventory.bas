@@ -18,39 +18,39 @@
 170 ' the *error code itself* has a message, when really this is a lookup
 180 ' table keyed by that code. Stays an ordinary function.
 
-190 errsyntax% = 2
-200 errreturnwithoutgosub% = 3
-210 erroutofdata% = 4
-220 errillegalfunctioncall% = 5
-230 erroverflow% = 6
-240 erroutofmemory% = 7
-250 errsubscriptoutofrange% = 9
-260 errduplicatedefinition% = 10
-270 errdivisionbyzero% = 11
-280 errtypemismatch% = 13
-290 erroutofstringspace% = 14
-300 errnoresume% = 19
-310 errresumewithouterror% = 20
-320 errdevicetimeout% = 24
-330 errdevicefault% = 25
-340 erroutofpaper% = 27
-350 errbadfilenumber% = 52
-360 errfilenotfound% = 53
-370 errbadfilemode% = 54
-380 errfilealreadyopen% = 55
-390 errdeviceio% = 57
-400 errfilealreadyexists% = 58
-410 errdiskfull% = 61
-420 errinputpastend% = 62
-430 errbadrecordnumber% = 63
-440 errbadfilename% = 64
-450 errtoomanyfiles% = 67
-460 errdeviceunavailable% = 68
-470 errdiskwriteprotected% = 70
-480 errdisknotready% = 71
-490 errdiskmediaerror% = 72
-500 errpathfileaccess% = 75
-510 errpathnotfound% = 76
+190 errSYNTAX% = 2
+200 errRETURNWITHOUTGOSUB% = 3
+210 errOUTOFDATA% = 4
+220 errILLEGALFUNCTIONCALL% = 5
+230 errOVERFLOW% = 6
+240 errOUTOFMEMORY% = 7
+250 errSUBSCRIPTOUTOFRANGE% = 9
+260 errDUPLICATEDEFINITION% = 10
+270 errDIVISIONBYZERO% = 11
+280 errTYPEMISMATCH% = 13
+290 errOUTOFSTRINGSPACE% = 14
+300 errNORESUME% = 19
+310 errRESUMEWITHOUTERROR% = 20
+320 errDEVICETIMEOUT% = 24
+330 errDEVICEFAULT% = 25
+340 errOUTOFPAPER% = 27
+350 errBADFILENUMBER% = 52
+360 errFILENOTFOUND% = 53
+370 errBADFILEMODE% = 54
+380 errFILEALREADYOPEN% = 55
+390 errDEVICEIO% = 57
+400 errFILEALREADYEXISTS% = 58
+410 errDISKFULL% = 61
+420 errINPUTPASTEND% = 62
+430 errBADRECORDNUMBER% = 63
+440 errBADFILENAME% = 64
+450 errTOOMANYFILES% = 67
+460 errDEVICEUNAVAILABLE% = 68
+470 errDISKWRITEPROTECTED% = 70
+480 errDISKNOTREADY% = 71
+490 errDISKMEDIAERROR% = 72
+500 errPATHFILEACCESS% = 75
+510 errPATHNOTFOUND% = 76
 
 520 ' ============================================================
 530 ' INVENTORY.BCL -- Random-Access Inventory Program
@@ -84,9 +84,9 @@
 810 ' initializeInventoryFileIfNew(), called once at program entry --
 820 ' inven.dat no longer has to be pre-populated by hand.
 830 ' - The three original tab-position constants (T=20, U=25,
-840 ' V=30) are collapsed into a single `tabCol% = 20`; a couple of
+840 ' V=30) are collapsed into a single `TAB_COL = 20`; a couple of
 850 ' screens that used U=25 in the original (see showAddStockScreen
-860 ' below) keep 25 as a literal rather than reusing tabCol%.
+860 ' below) keep 25 as a literal rather than reusing TAB_COL.
 870 ' 
 880 ' Tracks parts in a fixed 100-record file: check status, add,
 890 ' edit, add/subtract stock, and a reorder report.
@@ -119,8 +119,8 @@
 1140 ' be reassigned, and resolves to the same value everywhere,
 1150 ' including inside every function/procedure below, with no
 1160 ' `global` declaration needed.
-1170 partcount% = 100
-1180 tabcol% = 20
+1170 partCOUNT% = 100
+1180 tabCOL% = 20
 
 1190 ' `file ... = open(...)` is sugar for OPEN ... FOR RANDOM AS #n
 1200 ' LEN = <record width> plus the FIELD statement fhb wrote out by
@@ -298,39 +298,39 @@
 
 2790 ' function error$(code%)
 2800     BCCT8% = errorCode0%
-2810     IF (BCCT8% = errsyntax%) <> 0 THEN GOTO 3150
-2820     IF (BCCT8% = errreturnwithoutgosub%) <> 0 THEN GOTO 3180
-2830     IF (BCCT8% = erroutofdata%) <> 0 THEN GOTO 3210
-2840     IF (BCCT8% = errillegalfunctioncall%) <> 0 THEN GOTO 3240
-2850     IF (BCCT8% = erroverflow%) <> 0 THEN GOTO 3270
-2860     IF (BCCT8% = erroutofmemory%) <> 0 THEN GOTO 3300
-2870     IF (BCCT8% = errsubscriptoutofrange%) <> 0 THEN GOTO 3330
-2880     IF (BCCT8% = errduplicatedefinition%) <> 0 THEN GOTO 3360
-2890     IF (BCCT8% = errdivisionbyzero%) <> 0 THEN GOTO 3390
-2900     IF (BCCT8% = errtypemismatch%) <> 0 THEN GOTO 3420
-2910     IF (BCCT8% = erroutofstringspace%) <> 0 THEN GOTO 3450
-2920     IF (BCCT8% = errnoresume%) <> 0 THEN GOTO 3480
-2930     IF (BCCT8% = errresumewithouterror%) <> 0 THEN GOTO 3510
-2940     IF (BCCT8% = errdevicetimeout%) <> 0 THEN GOTO 3540
-2950     IF (BCCT8% = errdevicefault%) <> 0 THEN GOTO 3570
-2960     IF (BCCT8% = erroutofpaper%) <> 0 THEN GOTO 3600
-2970     IF (BCCT8% = errbadfilenumber%) <> 0 THEN GOTO 3630
-2980     IF (BCCT8% = errfilenotfound%) <> 0 THEN GOTO 3660
-2990     IF (BCCT8% = errbadfilemode%) <> 0 THEN GOTO 3690
-3000     IF (BCCT8% = errfilealreadyopen%) <> 0 THEN GOTO 3720
-3010     IF (BCCT8% = errdeviceio%) <> 0 THEN GOTO 3750
-3020     IF (BCCT8% = errfilealreadyexists%) <> 0 THEN GOTO 3780
-3030     IF (BCCT8% = errdiskfull%) <> 0 THEN GOTO 3810
-3040     IF (BCCT8% = errinputpastend%) <> 0 THEN GOTO 3840
-3050     IF (BCCT8% = errbadrecordnumber%) <> 0 THEN GOTO 3870
-3060     IF (BCCT8% = errbadfilename%) <> 0 THEN GOTO 3900
-3070     IF (BCCT8% = errtoomanyfiles%) <> 0 THEN GOTO 3930
-3080     IF (BCCT8% = errdeviceunavailable%) <> 0 THEN GOTO 3960
-3090     IF (BCCT8% = errdiskwriteprotected%) <> 0 THEN GOTO 3990
-3100     IF (BCCT8% = errdisknotready%) <> 0 THEN GOTO 4020
-3110     IF (BCCT8% = errdiskmediaerror%) <> 0 THEN GOTO 4050
-3120     IF (BCCT8% = errpathfileaccess%) <> 0 THEN GOTO 4080
-3130     IF (BCCT8% = errpathnotfound%) <> 0 THEN GOTO 4110
+2810     IF (BCCT8% = errSYNTAX%) <> 0 THEN GOTO 3150
+2820     IF (BCCT8% = errRETURNWITHOUTGOSUB%) <> 0 THEN GOTO 3180
+2830     IF (BCCT8% = errOUTOFDATA%) <> 0 THEN GOTO 3210
+2840     IF (BCCT8% = errILLEGALFUNCTIONCALL%) <> 0 THEN GOTO 3240
+2850     IF (BCCT8% = errOVERFLOW%) <> 0 THEN GOTO 3270
+2860     IF (BCCT8% = errOUTOFMEMORY%) <> 0 THEN GOTO 3300
+2870     IF (BCCT8% = errSUBSCRIPTOUTOFRANGE%) <> 0 THEN GOTO 3330
+2880     IF (BCCT8% = errDUPLICATEDEFINITION%) <> 0 THEN GOTO 3360
+2890     IF (BCCT8% = errDIVISIONBYZERO%) <> 0 THEN GOTO 3390
+2900     IF (BCCT8% = errTYPEMISMATCH%) <> 0 THEN GOTO 3420
+2910     IF (BCCT8% = errOUTOFSTRINGSPACE%) <> 0 THEN GOTO 3450
+2920     IF (BCCT8% = errNORESUME%) <> 0 THEN GOTO 3480
+2930     IF (BCCT8% = errRESUMEWITHOUTERROR%) <> 0 THEN GOTO 3510
+2940     IF (BCCT8% = errDEVICETIMEOUT%) <> 0 THEN GOTO 3540
+2950     IF (BCCT8% = errDEVICEFAULT%) <> 0 THEN GOTO 3570
+2960     IF (BCCT8% = errOUTOFPAPER%) <> 0 THEN GOTO 3600
+2970     IF (BCCT8% = errBADFILENUMBER%) <> 0 THEN GOTO 3630
+2980     IF (BCCT8% = errFILENOTFOUND%) <> 0 THEN GOTO 3660
+2990     IF (BCCT8% = errBADFILEMODE%) <> 0 THEN GOTO 3690
+3000     IF (BCCT8% = errFILEALREADYOPEN%) <> 0 THEN GOTO 3720
+3010     IF (BCCT8% = errDEVICEIO%) <> 0 THEN GOTO 3750
+3020     IF (BCCT8% = errFILEALREADYEXISTS%) <> 0 THEN GOTO 3780
+3030     IF (BCCT8% = errDISKFULL%) <> 0 THEN GOTO 3810
+3040     IF (BCCT8% = errINPUTPASTEND%) <> 0 THEN GOTO 3840
+3050     IF (BCCT8% = errBADRECORDNUMBER%) <> 0 THEN GOTO 3870
+3060     IF (BCCT8% = errBADFILENAME%) <> 0 THEN GOTO 3900
+3070     IF (BCCT8% = errTOOMANYFILES%) <> 0 THEN GOTO 3930
+3080     IF (BCCT8% = errDEVICEUNAVAILABLE%) <> 0 THEN GOTO 3960
+3090     IF (BCCT8% = errDISKWRITEPROTECTED%) <> 0 THEN GOTO 3990
+3100     IF (BCCT8% = errDISKNOTREADY%) <> 0 THEN GOTO 4020
+3110     IF (BCCT8% = errDISKMEDIAERROR%) <> 0 THEN GOTO 4050
+3120     IF (BCCT8% = errPATHFILEACCESS%) <> 0 THEN GOTO 4080
+3130     IF (BCCT8% = errPATHNOTFOUND%) <> 0 THEN GOTO 4110
 3140     GOTO 4140
 3150         errorResult0$ = "Syntax error"
 3160         RETURN
@@ -444,7 +444,7 @@
 
 4230 ' function partinrange%(n%)
 4240     IF (partinrangeN0% >= 1) = 0 THEN GOTO 4280
-4250     IF (partinrangeN0% <= partcount%) = 0 THEN GOTO 4280
+4250     IF (partinrangeN0% <= partCOUNT%) = 0 THEN GOTO 4280
 4260         partinrangeResult0% = 1
 4270         RETURN
 4280     REM END IF
@@ -490,34 +490,34 @@
 4640     ' preceding string and a `tab(n)` for exactly this reason.
 4650     PRINT TAB(30)"Inventory Program"
 4660     PRINT
-4670     PRINT TAB(tabcol%)"1......C)heck a part"
-4680     PRINT TAB(tabcol%)"2......E)dit/overwrite/add a part"
-4690     PRINT TAB(tabcol%)("3......L)ist all" + STR$(partcount%)) + "parts"
-4700     PRINT TAB(tabcol%)"4......A)dd stock"
-4710     PRINT TAB(tabcol%)"5......S)ubtract stock"
-4720     PRINT TAB(tabcol%)"6......R)eorder Report"
+4670     PRINT TAB(tabCOL%)"1......C)heck a part"
+4680     PRINT TAB(tabCOL%)"2......E)dit/overwrite/add a part"
+4690     PRINT TAB(tabCOL%)("3......L)ist all" + STR$(partCOUNT%)) + "parts"
+4700     PRINT TAB(tabCOL%)"4......A)dd stock"
+4710     PRINT TAB(tabCOL%)"5......S)ubtract stock"
+4720     PRINT TAB(tabCOL%)"6......R)eorder Report"
 4730     PRINT
-4740     PRINT TAB(tabcol%)"7......eX)it to system"
+4740     PRINT TAB(tabCOL%)"7......eX)it to system"
 4750     RETURN
 4760 ' end procedure showmainmenu
 
 4770 ' procedure showbadpartnumber()
 4780     CLS
 4790     LOCATE 10, 10
-4800     PRINT "Part number is out of permissable range of 1 to" + STR$(partcount%)
+4800     PRINT "Part number is out of permissable range of 1 to" + STR$(partCOUNT%)
 4810     RETURN
 4820 ' end procedure showbadpartnumber
 
 4830 ' procedure showrangeretrymessage()
 4840     LOCATE 10, 15
-4850     PRINT "The Part number is out of permissable range of 1 to" + STR$(partcount%)
+4850     PRINT "The Part number is out of permissable range of 1 to" + STR$(partCOUNT%)
 4860     LOCATE 25, 15
 4870     PRINT "Press the Anykey to reenter part number...";
 4880     RETURN
 4890 ' end procedure showrangeretrymessage
 
 4900 ' procedure shownullentrymessage(partstr$)
-4910     LOCATE 10, tabcol%
+4910     LOCATE 10, tabCOL%
 4920     PRINT ("Part number " + shownullentrymessagePartStr0$) + " is a null entry"
 4930     RETURN
 4940 ' end procedure shownullentrymessage
@@ -525,22 +525,22 @@
 4950 ' procedure showpartstatus(partnum%, desc$, qty%, reorder%, price!)
 4960     CLS
 4970     LOCATE 5, 1
-4980     PRINT TAB(tabcol%)"Inventory Status for Individual Part Number"
-4990     PRINT TAB(tabcol%)"==========================================="
+4980     PRINT TAB(tabCOL%)"Inventory Status for Individual Part Number"
+4990     PRINT TAB(tabCOL%)"==========================================="
 5000     PRINT
 5010     PRINT
-5020     PRINT TAB(tabcol%)"     Part number:  " + STR$(showpartstatusPartNum0%)
+5020     PRINT TAB(tabCOL%)"     Part number:  " + STR$(showpartstatusPartNum0%)
 5030     PRINT
-5040     PRINT TAB(tabcol%)"       Item name:  " + showpartstatusDesc0$
-5050     PRINT TAB(tabcol%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
-5060     PRINT TAB(tabcol%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
-5070     PRINT TAB(tabcol%)"      Unit price:  " + STR$(showpartstatusPrice0!)
+5040     PRINT TAB(tabCOL%)"       Item name:  " + showpartstatusDesc0$
+5050     PRINT TAB(tabCOL%)"Quantity on hand:  " + STR$(showpartstatusQty0%)
+5060     PRINT TAB(tabCOL%)"   Reorder level:  " + STR$(showpartstatusReorder0%)
+5070     PRINT TAB(tabCOL%)"      Unit price:  " + STR$(showpartstatusPrice0!)
 5080     RETURN
 5090 ' end procedure showpartstatus
 
 5100 ' procedure printlistheader()
 5110     CLS
-5120     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partcount%) + "items"
+5120     PRINT TAB(25)"I N V E N T O R Y   L I S T I N G"; TAB(65); STR$(partCOUNT%) + "items"
 5130     PRINT "                                          Quantity       Reorder"
 5140     PRINT " Partno           Description             on hand         level"
 5150     LOCATE 25, 1
@@ -555,7 +555,7 @@
 
 5230 ' procedure printreorderheader()
 5240     CLS
-5250     LOCATE 1, tabcol%
+5250     LOCATE 1, tabCOL%
 5260     PRINT "Reorder Report"; TAB(55); DATE$
 5270     PRINT
 5280     PRINT "                                             Quantity       Reorder"
@@ -571,21 +571,21 @@
 
 5370 ' procedure gatherpartdetails(partnum%, desc$, qty%, reorder%, price!)
 5380     CLS
-5390     LOCATE 4, tabcol%
+5390     LOCATE 4, tabCOL%
 5400     PRINT "Adding or Overwriting a Record"
-5410     LOCATE 8, tabcol%
+5410     LOCATE 8, tabCOL%
 5420     PRINT "Record/Partno" + STR$(gatherpartdetailsPartNum0%)
 5430     LOCATE 11, 39
 5440     PRINT "------------------------------"
-5450     LOCATE 10, tabcol%
+5450     LOCATE 10, tabCOL%
 5460     INPUT "      Description"; gatherpartdetailsDesc0$
-5470     LOCATE 12, tabcol%
+5470     LOCATE 12, tabCOL%
 5480     INPUT "Quantity in stock"; gatherpartdetailsQty0%
-5490     LOCATE 14, tabcol%
+5490     LOCATE 14, tabCOL%
 5500     INPUT "    Reorder level"; gatherpartdetailsReorder0%
-5510     LOCATE 16, tabcol%
+5510     LOCATE 16, tabCOL%
 5520     INPUT "       Unit price"; gatherpartdetailsPrice0!
-5530     LOCATE 18, tabcol%
+5530     LOCATE 18, tabCOL%
 5540     PRINT "Is information correct (Y/N)?"
 5550     RETURN
 5560 ' end procedure gatherpartdetails
@@ -596,13 +596,13 @@
 5600     PRINT "Add to an inventory part number"
 5610     LOCATE 5, 25
 5620     PRINT "==============================="
-5630     LOCATE 8, tabcol%
+5630     LOCATE 8, tabCOL%
 5640     PRINT "     Part number: " + STR$(showaddstockscreenPartNum0%)
-5650     LOCATE 9, tabcol%
+5650     LOCATE 9, tabCOL%
 5660     PRINT "Item description: " + showaddstockscreenDesc0$
-5670     LOCATE 10, tabcol%
+5670     LOCATE 10, tabCOL%
 5680     PRINT "Quantity on hand: " + STR$(showaddstockscreenQty0%)
-5690     LOCATE 11, tabcol%
+5690     LOCATE 11, tabCOL%
 5700     PRINT "   Reorder Level: " + STR$(showaddstockscreenReorder0%)
 5710     RETURN
 5720 ' end procedure showaddstockscreen
@@ -617,17 +617,17 @@
 
 5800 ' procedure showsubtractstockscreen(partnum%, desc$, qty%, reorder%)
 5810     CLS
-5820     LOCATE 4, tabcol%
+5820     LOCATE 4, tabCOL%
 5830     PRINT "Subtract an inventory part number"
-5840     LOCATE 5, tabcol%
+5840     LOCATE 5, tabCOL%
 5850     PRINT "================================="
-5860     LOCATE 8, tabcol%
+5860     LOCATE 8, tabCOL%
 5870     PRINT "         Part number: " + STR$(showsubtractstockscreenPartNum0%)
-5880     LOCATE 9, tabcol%
+5880     LOCATE 9, tabCOL%
 5890     PRINT "    Item description: " + showsubtractstockscreenDesc0$
-5900     LOCATE 10, tabcol%
+5900     LOCATE 10, tabCOL%
 5910     PRINT "    Quantity on hand: " + STR$(showsubtractstockscreenQty0%)
-5920     LOCATE 11, tabcol%
+5920     LOCATE 11, tabCOL%
 5930     PRINT "       Reorder Level: " + STR$(showsubtractstockscreenReorder0%)
 5940     RETURN
 5950 ' end procedure showsubtractstockscreen
@@ -701,7 +701,7 @@
 6600 ' procedure editrecord()
 6610     ' global inv
 6620     CLS
-6630     LOCATE 10, tabcol%
+6630     LOCATE 10, tabCOL%
 6640     GOSUB 4330
 6650     editrecordPartStr0$ = readpartnumberinputResult0$
 6660     editrecordPart0% = VAL(editrecordPartStr0$)
@@ -734,7 +734,7 @@
 6930     isemptyFlag0$ = editrecordPFlag0$
 6940     GOSUB 4200
 6950     IF (isemptyResult0% = 0) = 0 THEN GOTO 7040
-6960         LOCATE 12, tabcol%
+6960         LOCATE 12, tabCOL%
 6970         PRINT "Overwrite existing part data?"
 6980         GOSUB 4380
 6990         editrecordKp0$ = readkeyResult0$
@@ -774,7 +774,7 @@
 7310     ' global inv
 7320     GOSUB 5110
 7330     listallScrollCount0% = 0
-7340     FOR listallI0% = 1 TO partcount%
+7340     FOR listallI0% = 1 TO partCOUNT%
 7350         ' let p = inv[...]  (whole-record read)
 7360         GET #1, listallI0%
 7370         listallPFlagTrimI0% = LEN(listallInvFlagBuf0$)
@@ -861,7 +861,7 @@
 8140         showaddstockscreenQty0% = addstockPQty0%
 8150         showaddstockscreenReorder0% = addstockPReorder0%
 8160         GOSUB 5580
-8170         LOCATE 14, tabcol%
+8170         LOCATE 14, tabCOL%
 8180         INPUT " Quantity to add"; addstockAddStr0$
 8190         addstockAddAmt0% = VAL(addstockAddStr0$)
 8200         IF (addstockAddAmt0% < 0) = 0 THEN GOTO 8230
@@ -935,7 +935,7 @@
 8830         showsubtractstockscreenQty0% = subtractstockPQty0%
 8840         showsubtractstockscreenReorder0% = subtractstockPReorder0%
 8850         GOSUB 5810
-8860         LOCATE 14, tabcol%
+8860         LOCATE 14, tabCOL%
 8870         INPUT "Quantity to subtract"; subtractstockSubStr0$
 8880         subtractstockSubAmt0% = VAL(subtractstockSubStr0$)
 8890         subtractstockOverSubtract0% = 0
@@ -952,7 +952,7 @@
 
 9000     subtractstockPQty0% = subtractstockPQty0% - subtractstockSubAmt0%
 9010     IF (subtractstockPQty0% <= subtractstockPReorder0%) = 0 THEN GOTO 9030
-9020         LOCATE 16, tabcol%
+9020         LOCATE 16, tabCOL%
 9030     REM END IF
 9040     PRINT (("quantity now" + STR$(subtractstockPQty0%)) + " reorder level") + STR$(subtractstockPReorder0%)
 9050     ' inv[...] = p  (write back a let-bound record)
@@ -969,7 +969,7 @@
 9150     ' global inv
 9160     GOSUB 5240
 9170     reorderreportReportLineCount0% = 0
-9180     FOR reorderreportI0% = 1 TO partcount%
+9180     FOR reorderreportI0% = 1 TO partCOUNT%
 9190         ' let p = inv[...]  (whole-record read)
 9200         GET #1, reorderreportI0%
 9210         reorderreportPFlagTrimI0% = LEN(reorderreportInvFlagBuf0$)
@@ -1028,7 +1028,7 @@
 9730     initializeinventoryfileifnewPReorder0% = CVI(initializeinventoryfileifnewInvReorderBuf0$)
 9740     initializeinventoryfileifnewPPrice0! = CVS(initializeinventoryfileifnewInvPriceBuf0$)
 9750     IF (ASC(initializeinventoryfileifnewPFlag0$) = 0) = 0 THEN GOTO 9850
-9760         FOR initializeinventoryfileifnewI0% = 1 TO partcount%
+9760         FOR initializeinventoryfileifnewI0% = 1 TO partCOUNT%
 9770             ' inv[...] = { ... }  (whole-record write)
 9780             LSET initializeinventoryfileifnewInvFlagBuf0$ = CHR$(255)
 9790             LSET initializeinventoryfileifnewInvDescBuf0$ = ""

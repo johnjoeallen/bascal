@@ -56,8 +56,8 @@ program requireDemo
 
 require stats
 
-const N% = 8
-dim scores%(N% - 1)
+const N = 8
+dim scores%(N - 1)
 
 scores%(0) = 74
 scores%(1) = 91
