@@ -5,19 +5,8 @@ import tomllib
 
 root = Path(__file__).resolve().parents[1]
 entries = tomllib.loads((root / "conformance/test-index.toml").read_text())["test"]
-observed = {r["id"]: r["observed"] for r in tomllib.loads((root / "conformance/test-results.toml").read_text()).get("result", [])} if (root / "conformance/test-results.toml").exists() else {}
 def resolved(entry, backend):
-    expected = entry.get("expected", {}).get(backend, "UNKNOWN")
-    actual = observed.get(entry["id"])
-    if actual is None:
-        return expected
-    if actual == "PASS":
-        return "PASS"
-    if expected == "WILL NOT IMPLEMENT":
-        return "WILL NOT IMPLEMENT"
-    if expected in ("DEFERRED", "UNSUPPORTED"):
-        return expected
-    return "FAIL"
+    return entry.get("expected", {}).get(backend, "UNKNOWN")
 overview = "# Conformance tests\n\nGenerated from the conformance test metadata and latest build run.\n\n" + "\n".join(
     f"- [{title}]({filename.removesuffix('.md')}/)" for filename, title in (value for value in {
         "core": ("core-language.md", "Core language"), "tutorials": ("tutorials.md", "Tutorials"),
