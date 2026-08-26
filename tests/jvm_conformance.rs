@@ -74,9 +74,9 @@ fn jvm_expected_failure_mid_assignment_is_non_blocking() {
     );
 }
 
-/// Pending cross-backend record-file compatibility check. This is deliberately
-/// ignored until JVM random-access file I/O exists; enabling it today should
-/// fail because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
+/// Cross-backend record-file compatibility check. This is deliberately ignored
+/// until JVM random-access file I/O exists; enabling it today should fail
+/// because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
 #[test]
 #[ignore = "expected failure until JVM random-access record I/O is implemented (#105)"]
 fn jvm_record_binary_compatibility_with_basic_and_c_is_pending() {

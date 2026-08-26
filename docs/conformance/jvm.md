@@ -18,7 +18,7 @@
 | Expected diagnostic for random/record file I/O | PASS |
 | Expected diagnostic for `MID$` assignment | PASS |
 | Expected failure for array `byval` clone assembly | PASS |
-| Pending record binary compatibility check | N/A |
+| Record binary compatibility across backends | FAIL |
 
 Expected-failure checks are passing when the JVM backend rejects an
 unsupported feature with its documented diagnostic. They keep known gaps
