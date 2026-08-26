@@ -99,6 +99,8 @@ nav:
       - Overview: conformance.md
       - Core language and tutorials: conformance/core-language.md
       - Backend and runtime: conformance/backend-runtime.md
+      - JVM-specific: conformance/jvm.md
+      - Files and records: conformance/records.md
   - Origin: origin.md
   - Development journey: journey.md
   - Technical challenges: challenges.md
