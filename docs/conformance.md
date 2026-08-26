@@ -4,7 +4,9 @@ This page records the backend conformance tests shipped with BASCAL. `PASS`
 means the test currently passes in the normal test environment; `N/A` means
 that the test does not apply to that backend (or requires an optional runtime
 not present in the ordinary build). The matrix is kept alongside the tests in
-`tests/` and should be updated whenever a backend capability changes.
+`tests/`. The documentation build runs the complete suite with
+`cargo test --locked` before publishing this page, so a documentation build
+cannot produce a green site when conformance tests are failing.
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
