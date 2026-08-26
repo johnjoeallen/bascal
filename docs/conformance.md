@@ -11,5 +11,5 @@ Status cells are rendered as coloured buttons: green for PASS, red for FAIL,
 and gray for N/A.
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="conformance/core-language/">Next: Core language and tutorials →</a>
+  <a href="core-language/">Next: Core language and tutorials →</a>
 </nav>
