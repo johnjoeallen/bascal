@@ -3,7 +3,7 @@
 [[test]]
 id = "core.all_tutorials_compile"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "All tutorial .bcl sources compile"
 description = "All tutorial .bcl sources compile"
 groups = ["core"]
@@ -12,7 +12,7 @@ status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 [[test]]
 id = "core.builtin_scalar_methods"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Built-in scalar method calls"
 description = "Built-in scalar method calls"
 groups = ["core"]
@@ -21,7 +21,7 @@ status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "core.classic_error_handling_rejected"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "C/JVM reject the classic labels/error-handling tutorial"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
@@ -30,7 +30,7 @@ status = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 [[test]]
 id = "core.deterministic_tutorials_execute"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Deterministic tutorials build and execute"
 description = "Deterministic tutorials build and execute"
 groups = ["core"]
@@ -39,7 +39,7 @@ status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 [[test]]
 id = "core.inventory_case_study"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Interactive inventory case study"
 description = "Interactive inventory case study"
 groups = ["core"]
@@ -48,7 +48,7 @@ status = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 [[test]]
 id = "core.random_file_binary_compatibility"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Random file binary compatibility"
 description = "Random file binary compatibility"
 groups = ["core", "basic", "c", "jvm", "files"]
@@ -57,7 +57,7 @@ status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 [[test]]
 id = "core.stdlib_functions"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Standard-library function execution"
 description = "Standard-library function execution"
 groups = ["core"]
@@ -66,7 +66,7 @@ status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "core.typed_arrays"
 kind = "test"
-source = "core"
+source = "metadata"
 name = "Typed non-integer arrays and array parameters"
 description = "Typed non-integer arrays and array parameters"
 groups = ["core"]
