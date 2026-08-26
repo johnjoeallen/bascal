@@ -26,3 +26,8 @@ the three transpilation backends.
 | Scalar variables and constants | PASS | PASS | PASS |
 | Structured branches and `WHILE` loops | PASS | PASS | PASS |
 | Scalar function calls and returns | PASS | PASS | PASS |
+
+<nav class="conformance-nav" aria-label="Conformance results navigation">
+  <a href="../">← Previous: Overview</a>
+  <a href="../backend-runtime/">Next: Backend and runtime →</a>
+</nav>

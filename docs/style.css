@@ -283,6 +283,15 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 .conformance-status.fail { background: #c9362b; border-color: #96251e; }
 .conformance-status.na { background: #68717d; border-color: #4d5660; }
 
+.conformance-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--card-border);
+}
+
 /* single-pane snippet card, used on tutorial pages */
 .snippet {
   background: var(--card-bg);

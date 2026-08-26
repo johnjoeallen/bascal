@@ -33,3 +33,8 @@ backend-specific compatibility boundaries.
 | Bare dynamic record strings are rejected at parse time | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | N/A |
 | JVM random-file records produce the expected diagnostic | N/A | N/A | PASS |
+
+<nav class="conformance-nav" aria-label="Conformance results navigation">
+  <a href="../core-language/">← Previous: Core language and tutorials</a>
+  <a href="../">Back to overview</a>
+</nav>
