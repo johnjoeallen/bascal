@@ -19,10 +19,10 @@ require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase
 require com.bascal.stdlib.error
 
-print "[" + ltrim$("   padded left") + "]"
-print "[" + rtrim$("padded right   ") + "]"
-print ucase$("shout this")
-print lcase$("QUIET THIS DOWN")
+print "[" + "   padded left".ltrim() + "]"
+print "[" + "padded right   ".rtrim() + "]"
+print "shout this".ucase()
+print "QUIET THIS DOWN".lcase()
 ```
 
 </div>

@@ -32,10 +32,10 @@ Despite compiling cleanly, this statement isn't reliable across every real MBASI
 ```bascal
 function midAssign$(target$, start%, len%, value$)
     t$ = value$
-    if LEN(t$) > len% then
-        t$ = LEFT$(t$, len%)
+    if t$.len() > len% then
+        t$ = t$.left(len%)
     end if
-    return LEFT$(target$, start% - 1) + t$ + MID$(target$, start% + LEN(t$))
+    return target$.left(start% - 1) + t$ + target$.mid(start% + t$.len())
 end function
 ```
 

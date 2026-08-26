@@ -13,11 +13,11 @@
 // ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
 // receiver type, using self$ in place of an explicit s$ parameter -- see
 // the "Declare and call a method" chapter. A method's receiver is really
-// just an implicit first parameter, so the ordinary call form below
+// just an implicit first parameter, so the ordinary call form
 // (ltrim$("...")) keeps working exactly as before: it resolves straight to
 // the same method declaration, with the first argument filling self$. The
-// method-call form (below, chained) is the same declaration too -- just
-// written as "...".ltrim() instead. error$ stays an ordinary function: an
+// examples below prefer the method-call form, written as "...".ltrim().
+// error$ stays an ordinary function: an
 // error code is a lookup key, not a value the call is naturally "operating
 // on" the way the others operate on their string.
 //
@@ -31,10 +31,10 @@ require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase
 require com.bascal.stdlib.error
 
-print "[" + ltrim$("   padded left") + "]"
-print "[" + rtrim$("padded right   ") + "]"
-print ucase$("shout this")
-print lcase$("QUIET THIS DOWN")
+print "[" + "   padded left".ltrim() + "]"
+print "[" + "padded right   ".rtrim() + "]"
+print "shout this".ucase()
+print "QUIET THIS DOWN".lcase()
 
 /* Same four functions, called as chained methods instead. */
 print "[" + "  padded both sides  ".ltrim().rtrim() + "]"

@@ -47,7 +47,7 @@ A BASCAL string is a single value with the `$` suffix, not an array indexed by c
 ```bascal
 declare name$
 name$ = "Ada Lovelace"
-print left$(name$, 3) + " " + mid$(name$, 5, 8)
+print name$.left(3) + " " + name$.mid(5, 8)
 print instr(name$, "Love")
 mid$(name$, 1, 3) = "Amy"
 print name$

@@ -90,10 +90,10 @@ end function
 ' word$ -- string to title-case
 function titleCase$(word$)
     ' Capitalise first letter, lowercase remainder.
-    if LEN(word$) = 0 then
+    if word$.len() = 0 then
         return ""
     end if
-    return UCASE$(LEFT$(word$, 1)) + LCASE$(MID$(word$, 2))
+    return word$.left(1).ucase() + word$.mid(2).lcase()
 end function
 ```
 

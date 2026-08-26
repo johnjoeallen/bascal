@@ -81,7 +81,7 @@ lset scoreBuf$ = mkd#(95.0)
 put #1, 1
 
 get #1, 1
-print rtrim$(nameBuf$) + ": " + str$(cvd#(scoreBuf$))
+print nameBuf$.rtrim() + ": " + str$(cvd#(scoreBuf$))
 close #1
 ```
 

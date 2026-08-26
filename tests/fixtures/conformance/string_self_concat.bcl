@@ -3,17 +3,17 @@ program stringSelfConcat
 dim value$
 
 value$ = "abcdefghij"
-value$ = left$(value$, 3) + mid$(value$, 4, 4) + right$(value$, 3)
+value$ = value$.left(3) + value$.mid(4, 4) + value$.right(3)
 print value$
 
-value$ = left$(value$, 2) + mid$(value$, 3, 5) + right$(value$, 4)
-print value$
-
-value$ = "abcdefghij"
-value$ = "[" + right$(value$, 2) + "]" + left$(value$, 4) + mid$(value$, 5, 3)
+value$ = value$.left(2) + value$.mid(3, 5) + value$.right(4)
 print value$
 
 value$ = "abcdefghij"
-value$ = mid$(value$, 6, 2) + "-" + left$(value$, 1) + "-" + right$(value$, 5)
+value$ = "[" + value$.right(2) + "]" + value$.left(4) + value$.mid(5, 3)
+print value$
+
+value$ = "abcdefghij"
+value$ = value$.mid(6, 2) + "-" + value$.left(1) + "-" + value$.right(5)
 print value$
 end
