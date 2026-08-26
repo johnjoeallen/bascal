@@ -4,6 +4,13 @@
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
+| All tutorial .bcl sources compile | PASS | PASS | DEFERRED |
+| Built-in scalar method calls | PASS | PASS | PASS |
+| C/JVM reject the classic labels/error-handling tutorial | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
+| Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
+| Interactive inventory case study | PASS | PASS | DEFERRED |
+| Standard-library function execution | PASS | PASS | PASS |
+| Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
 | Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
 | Array of records is not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
 | Bare dynamic record string fields are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
