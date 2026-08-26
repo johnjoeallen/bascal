@@ -96,7 +96,7 @@ nav:
       - RESTORE and DATA: tutorials/22_restore_data.md
   - Examples: examples.md
   - Conformance results:
-      - Core language and tutorials: conformance.md
+      - Core language: conformance.md
       - Tutorials: conformance/tutorials.md
       - BASIC-specific: conformance/tutorials/basic.md
       - C-specific: conformance/c.md

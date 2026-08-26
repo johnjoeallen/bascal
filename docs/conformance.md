@@ -1,6 +1,6 @@
 # Conformance tests
 
-## Core language and tutorial
+## Core language
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |

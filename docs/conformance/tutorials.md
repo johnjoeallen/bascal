@@ -1,4 +1,6 @@
-# Tutorial conformance
+# Conformance tests
+
+## Tutorials
 
 | Tutorial or scenario | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
