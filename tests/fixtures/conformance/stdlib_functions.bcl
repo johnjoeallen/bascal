@@ -19,7 +19,7 @@ print ucase$("abcXYZ123!")
 print lcase$("abcXYZ123!")
 
 ' Same functions, called as scalar methods instead (GitHub issue #41) --
-' ltrim$/rtrim$/ucase$/lcase$ are declared as method$ ... end method, so the
+' ltrim$/rtrim$/ucase$/lcase$ use scalar method declarations, so the
 ' ordinary-call form above and the chained method-call form below resolve
 ' to the identical declaration.
 print "[" + "   hi".ltrim() + "]"

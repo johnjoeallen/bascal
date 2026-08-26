@@ -683,11 +683,11 @@ end
 
     #[test]
     fn basic_target_lowers_scalar_method_calls_and_chains() {
-        let source = r#"method$ capitalize$()
+        let source = r#"method capitalize$[string]()
     return self$
 end method
 
-method$ pad$(width%)
+method pad$[string](width%)
     return self$
 end method
 
@@ -698,6 +698,25 @@ end
         assert!(output.contains("capitalizeSelf0$ = name$"), "{output}");
         assert!(output.contains("GOSUB"), "{output}");
         assert!(output.contains("result$ = padResult0$"), "{output}");
+    }
+
+    #[test]
+    fn omitted_method_return_yields_its_receiver() {
+        let source = r#"method echo[string]()
+end method
+
+result$ = "hi".echo()
+end
+"#;
+        let basic = compile_source("method_default_return.bcl", source)
+            .expect("method without a return should compile");
+        assert!(basic.contains("echoResult0$ = echoSelf0$"), "{basic}");
+
+        let c = compile_source_via_c_target(source);
+        assert!(
+            c.contains("snprintf(bcc_out, 256, \"%s\", bv_s_self)"),
+            "{c}"
+        );
     }
 
     #[test]
@@ -767,7 +786,7 @@ end
         // follows a user method, and resolving a user method's receiver
         // type when it follows a built-in one, both need the base's real
         // result type, not just its own syntactic shape.
-        let source = r#"method$ shout$()
+        let source = r#"method shout$[string]()
     return self$ + "!"
 end method
 
@@ -806,7 +825,7 @@ end
 
     #[test]
     fn builtin_method_names_stay_reserved_from_user_redeclaration() {
-        let source = "method$ left$(n%)\n    return self$\nend method\nend\n";
+        let source = "method left$[string](n%)\n    return self$\nend method\nend\n";
         let err = compile_source("builtin_reserved.bcl", source)
             .expect_err("a built-in method name should still be reserved");
         assert!(
@@ -821,7 +840,7 @@ end
         // GitHub issue #41: a method is conceptually a function with its
         // receiver as an implicit first parameter, so declaring both is a
         // duplicate declaration, not a valid "dual calling convention".
-        let source = "method$ ltrim$()\n    return self$\nend method\n\
+        let source = "method ltrim$[string]()\n    return self$\nend method\n\
                        function ltrim$(s$)\n    return s$\nend function\nend\n";
         let err = compile_source("fn_method_collision.bcl", source)
             .expect_err("a function and method sharing a name should be rejected");
@@ -840,7 +859,7 @@ end
         // disallowed, ordinary-call syntax (ltrim$(s$)) must resolve
         // straight to the method declaration instead, with the first
         // argument filling the receiver.
-        let source = r#"method$ ltrim$()
+        let source = r#"method ltrim$[string]()
     i% = 1
     while i% <= LEN(self$) && MID$(self$, i%, 1) = " "
         i% = i% + 1
@@ -882,7 +901,7 @@ end
         // any genuinely-undeclared identifier already gets under
         // --target basic (trusting the real BASIC compiler to catch it),
         // and a hard resolver-level error under --target c.
-        let source = "method$ ltrim$()\n    return self$\nend method\n\
+        let source = "method ltrim$[string]()\n    return self$\nend method\n\
                        n% = 5\nprint ltrim$(n%)\nend\n";
         let basic = compile_source("mismatched_receiver.bcl", source).expect("should compile");
         assert!(
@@ -1425,7 +1444,7 @@ END
         fs::create_dir_all(&lib_dir).expect("library directory");
         fs::write(
             lib_dir.join("text.bcl"),
-            "library com.example.text\nmethod$ capitalize$()\nreturn self$\nend method\n",
+            "library com.example.text\nmethod capitalize$[string]()\nreturn self$\nend method\n",
         )
         .expect("library source");
         let input = dir.path().join("main.bcl");
@@ -1447,11 +1466,11 @@ END
 
     #[test]
     fn c_target_lowers_scalar_method_calls_and_chains() {
-        let source = r#"method$ capitalize$()
+        let source = r#"method capitalize$[string]()
     return self$
 end method
 
-method! negate!()
+method negate![single]()
     return -self!
 end method
 

@@ -44,7 +44,7 @@ end function
 A method is a typed function with an implicit scalar receiver named `self`. Calls use a dot and parentheses; the result can become the receiver of the next method.
 
 ```bascal
-method$ shout$()
+method shout[string]()
     return self$ + "!"
 end method
 

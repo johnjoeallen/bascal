@@ -10,8 +10,8 @@
 // section (https://johnjoeallen.github.io/bascal/manual/) for the full
 // story.
 //
-// ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
-// end method), using self$ in place of an explicit s$ parameter -- see
+// ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
+// receiver type, using self$ in place of an explicit s$ parameter -- see
 // the "Declare and call a method" chapter. A method's receiver is really
 // just an implicit first parameter, so the ordinary call form below
 // (ltrim$("...")) keeps working exactly as before: it resolves straight to

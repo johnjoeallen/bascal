@@ -116,7 +116,7 @@ struct Lowerer {
     /// camelCased and should keep that case, while a user-typed one still
     /// gets BASCAL's normal lowercase normalization.
     synthesized_buffer_names: std::collections::HashSet<String>,
-    /// A user-declared `method$`/`method%`/... function's own declared
+    /// A user-declared scalar method's own declared
     /// result type, keyed by (receiver suffix, lowercase method name) --
     /// built once, up front, from `program.functions` (before it's moved
     /// into per-function lowering) since `rewrite_expr`'s own
@@ -124,7 +124,7 @@ struct Lowerer {
     /// resolved *before* it can decide whether the outer `.method()` is one
     /// of the built-in scalar methods (see `scalar_builtins.rs`) -- e.g. in
     /// `s$.trim().left(3)`, resolving `.left()` needs `.trim()`'s own
-    /// declared result type, which only a user `method$` declaration (not
+    /// declared result type, which only a user scalar method declaration (not
     /// this pass) provides.
     user_method_results: HashMap<(TypeSuffix, String), TypeSuffix>,
     /// Every `(lowercase name, suffix)` pair already claimed by an ordinary
@@ -1577,7 +1577,7 @@ impl Lowerer {
     /// receiver type -- see that module's own doc comment for why this
     /// reuses the ordinary-call codegen both backends already have,
     /// instead of teaching `codegen_basic.rs`/`codegen_c.rs` a second,
-    /// built-in source of truth alongside their existing user-`method$`
+    /// built-in source of truth alongside their existing user-method
     /// lookups. `base`/`args` are already fully rewritten by the caller, so
     /// a chain like `s$.trim().left(3)` resolves correctly regardless of
     /// which half is user-defined (`.trim()`, left as `ScalarMethodCall`
@@ -1694,7 +1694,7 @@ impl Lowerer {
     /// scalar type matches `T`. A method is conceptually a function with
     /// its receiver as an implicit first parameter (per the resolver's own
     /// `reject_scalar_methods`, which now rejects a program that declares
-    /// both), so `ltrim$(s$)` resolving to `method$ ltrim$()` with `s$` as
+    /// both), so `ltrim$(s$)` resolving to `method ltrim[string]()` with `s$` as
     /// the receiver keeps the ordinary call syntax working with no
     /// duplicate declaration needed.
     ///

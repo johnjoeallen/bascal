@@ -339,23 +339,60 @@ impl Parser {
 
     fn parse_method(&mut self) -> ParseResult<FunctionDef> {
         let fn_pos = self.current_pos();
-        let receiver = BasicIdent::parse(&self.expect_ident("expected method receiver type")?)
-            .suffix
-            .ok_or_else(|| {
-                self.error("method declarations need a receiver suffix, e.g. `method$`")
-            })?;
-        let name = BasicIdent::parse(&self.expect_ident("expected method name")?);
-        if name.suffix.is_none() {
-            return Err(self.error("method names need a result type suffix"));
+        let keyword = BasicIdent::parse(&self.expect_ident("expected `method`")?);
+        if !keyword.name.eq_ignore_ascii_case("method") {
+            return Err(self.error("expected `method`"));
         }
+        if keyword.suffix.is_some() {
+            return Err(self.error(
+                "method receiver types belong in brackets after the method name -- e.g. `method capitalize[string]()`",
+            ));
+        }
+        let raw_name = self.expect_ident("expected method name")?;
+        let mut name = BasicIdent::parse(&raw_name);
+        self.expect(
+            TokenKind::LBracket,
+            "expected `[` and receiver type after method name",
+        )?;
+        let receiver = self.parse_method_scalar_type("expected scalar method receiver type")?;
+        let explicit_result = if matches!(self.current().kind, TokenKind::Comma) {
+            self.advance();
+            Some(self.parse_method_scalar_type("expected scalar method result type")?)
+        } else {
+            None
+        };
+        self.expect(TokenKind::RBracket, "expected `]` after method types")?;
+        if let (Some(suffix), Some(explicit)) = (name.suffix, explicit_result) {
+            if suffix != explicit {
+                return Err(
+                    self.error("method result suffix disagrees with its bracketed result type")
+                );
+            }
+        }
+        let implicit_self_result = explicit_result.is_none() && name.suffix.is_none();
+        name.suffix = explicit_result.or(name.suffix).or(Some(receiver));
         self.expect(TokenKind::LParen, "expected `(` after method name")?;
         let params = self.parse_param_list()?;
         self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
         self.consume_line_end()?;
-        let body = self.parse_block(&[BlockEnd::EndMethod])?;
+        let mut body = self.parse_block(&[BlockEnd::EndMethod])?;
         self.expect_keyword("end")?;
         self.expect_keyword("method")?;
         self.consume_line_end()?;
+        // A method whose result type is omitted has the receiver's type.
+        // Falling through its body therefore returns `self`, while an
+        // explicit `return` still supplies a method-specific result.
+        if implicit_self_result {
+            body.push(Stmt::new(
+                Statement::Return {
+                    value: Expr::Ident(BasicIdent {
+                        name: "self".to_string(),
+                        suffix: Some(receiver),
+                    }),
+                },
+                fn_pos.clone(),
+            ));
+        }
         Ok(FunctionDef {
             name,
             params,
@@ -364,6 +401,20 @@ impl Parser {
             receiver: Some(receiver),
             pos: fn_pos,
         })
+    }
+
+    fn parse_method_scalar_type(&mut self, message: &str) -> ParseResult<TypeSuffix> {
+        let raw = self.expect_ident(message)?;
+        match raw.to_ascii_lowercase().as_str() {
+            "integer" => Ok(TypeSuffix::Integer),
+            "long" => Ok(TypeSuffix::Long),
+            "single" => Ok(TypeSuffix::Single),
+            "double" => Ok(TypeSuffix::Double),
+            "string" => Ok(TypeSuffix::String),
+            _ => Err(self.error(
+                "method types currently support only integer, long, single, double, or string",
+            )),
+        }
     }
 
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
@@ -3307,7 +3358,7 @@ mod tests {
 
     #[test]
     fn parses_scalar_method_declarations_and_chained_calls() {
-        let program = parse("method$ capitalize$()\nreturn self$\nend method\nmethod$ pad$(n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n");
+        let program = parse("method capitalize$[string]()\nreturn self$\nend method\nmethod pad$[string](n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n");
         assert_eq!(program.functions.len(), 2);
         assert_eq!(program.functions[0].receiver, Some(TypeSuffix::String));
         assert_eq!(program.functions[0].name.as_basic(), "capitalize$");
@@ -3323,5 +3374,29 @@ mod tests {
             },
             other => panic!("expected assignment, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn omitted_method_result_and_return_default_to_self() {
+        let program = parse("method trim[string]()\nend method\nend\n");
+        let method = &program.functions[0];
+        assert_eq!(method.name.as_basic(), "trim$");
+        assert!(matches!(
+            method.body.last().map(|stmt| &stmt.kind),
+            Some(Statement::Return {
+                value: Expr::Ident(BasicIdent { name, suffix: Some(TypeSuffix::String) })
+            }) if name == "self"
+        ));
+    }
+
+    #[test]
+    fn legacy_method_receiver_suffix_has_migration_diagnostic() {
+        let tokens = Lexer::new("test.bcl", "method$ trim$()\nend method\n").lex();
+        let err = Parser::new("test.bcl".to_string(), tokens)
+            .parse_program()
+            .expect_err("legacy method declaration should be rejected");
+        assert!(err.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("receiver types belong in brackets")));
     }
 }

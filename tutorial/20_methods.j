@@ -80,6 +80,8 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -97,6 +99,8 @@ L_for_0_end:
     ldc "!"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -121,6 +125,8 @@ L_for_0_end:
     aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -153,6 +159,8 @@ L_if_1_else:
 L_if_0_end:
     iload 0
     ireturn
+    iload 0
+    ireturn
     iconst_0
     ireturn
 .end method
@@ -167,6 +175,8 @@ L_if_0_end:
     ldc 100
     i2d
     ddiv
+    dreturn
+    dload 0
     dreturn
     dconst_0
     dreturn
@@ -198,9 +208,9 @@ L_if_0_end:
 
     ; Tutorial — Scalar methods
     ;
-    ; A method has a typed scalar receiver, written after `method`, and a typed
-    ; result suffix on its name. The receiver is available as self%/self!/self$
-    ; in the body. Dot calls can chain when each result has the next receiver's
+    ; A method declares its scalar receiver type in brackets after its name.
+    ; Omitting a result type makes it return its self%/self!/self$ receiver.
+    ; Dot calls can chain when each result has the next receiver's
     ; type. Methods transpile to ordinary typed calls for both backends.
 
 

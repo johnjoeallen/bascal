@@ -258,7 +258,7 @@ fn reject_scalar_methods(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     // first parameter -- see `records::Lowerer::rewrite_scalar_method_call`'s
     // own mirror-image rewrite, which lets ordinary-call syntax
     // (`ltrim$(s$)`) resolve straight to a method declaration
-    // (`method$ ltrim$()`) when no ordinary function of that name already
+    // (`method ltrim[string]()` ) when no ordinary function of that name already
     // exists. That means a program can never legitimately declare *both* an
     // ordinary function and a method sharing the same (name, result suffix)
     // -- they'd be two different, ambiguous implementations of what's
@@ -1670,7 +1670,7 @@ mod legacy_form_tests {
     #[test]
     fn scalar_methods_resolve_by_receiver_and_result_type() {
         let program = parse(
-            "method$ capitalize$()\nreturn self$\nend method\nmethod$ pad$(n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n",
+            "method capitalize$[string]()\nreturn self$\nend method\nmethod pad$[string](n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n",
         );
         assert!(validate(&program).is_ok(), "{:?}", validate(&program));
     }

@@ -34,7 +34,7 @@ print "[" + str$(f!.int()) + "]"
 print "[" + str$(f!.fix()) + "]"
 
 ' Chaining a built-in onto a built-in, and a built-in onto a user method.
-method$ shout$()
+method shout$[string]()
     return self$ + "!"
 end method
 print "[" + str$(s$.left(5).len()) + "]"

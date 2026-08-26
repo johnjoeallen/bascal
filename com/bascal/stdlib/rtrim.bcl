@@ -5,7 +5,7 @@
 // works via ordinary-call syntax resolving to this same declaration.
 library rtrim
 
-method$ rtrim$()
+method rtrim[string]()
     i% = LEN(self$)
     while i% > 0 && MID$(self$, i%, 1) = " "
         i% = i% - 1

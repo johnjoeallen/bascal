@@ -4,7 +4,7 @@
 
 Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.j).
 
-A method is a typed operation attached to a scalar value. The suffix after `method` declares the receiver type: `method$` receives a string, `method%` receives an integer, and `method!` receives a single-precision number. The method name has its own result suffix, and the receiver is available as the matching implicit `self` variable.
+A method is a typed operation attached to a scalar value. The bracket after its name declares the receiver type: `method shout[string]()` receives a string. If no result type is supplied, the method returns the receiver's scalar type. A result suffix is accepted as shorthand, and `method name[receiver, result](...)` explicitly names a differing scalar result. The receiver is available as the matching implicit `self` variable; falling through an omitted-result method returns `self`.
 
 </div>
 
@@ -13,7 +13,7 @@ A method is a typed operation attached to a scalar value. The suffix after `meth
 ### Declare and call a method
 
 ```bascal
-method$ shout$()
+method shout[string]()
     return self$.ucase() + "!"
 end method
 
@@ -81,23 +81,23 @@ Full, real, transpiling source: [`20_methods.bcl`](https://github.com/johnjoeall
 
 // Tutorial — Scalar methods
 //
-// A method has a typed scalar receiver, written after `method`, and a typed
-// result suffix on its name. The receiver is available as self%/self!/self$
-// in the body. Dot calls can chain when each result has the next receiver's
+// A method declares its scalar receiver type in brackets after its name.
+// Omitting a result type makes it return its self%/self!/self$ receiver.
+// Dot calls can chain when each result has the next receiver's
 // type. Methods transpile to ordinary typed calls for both backends.
 program methods
 
 require com.bascal.stdlib.ucase
 
-method$ shout$()
+method shout[string]()
     return self$.ucase() + "!"
 end method
 
-method$ surround$(left$, right$)
+method surround[string](left$, right$)
     return left$ + self$ + right$
 end method
 
-method% clamp%(low%, high%)
+method clamp[integer](low%, high%)
     if self% < low% then
         return low%
     elseif self% > high% then
@@ -106,7 +106,7 @@ method% clamp%(low%, high%)
     return self%
 end method
 
-method! percent!(rate!)
+method percent[single](rate!)
     return self! * rate! / 100
 end method
 
@@ -153,9 +153,9 @@ end
 
 80 ' Tutorial — Scalar methods
 90 '
-100 ' A method has a typed scalar receiver, written after `method`, and a typed
-110 ' result suffix on its name. The receiver is available as self%/self!/self$
-120 ' in the body. Dot calls can chain when each result has the next receiver's
+100 ' A method declares its scalar receiver type in brackets after its name.
+110 ' Omitting a result type makes it return its self%/self!/self$ receiver.
+120 ' Dot calls can chain when each result has the next receiver's
 130 ' type. Methods transpile to ordinary typed calls for both backends.
 
 140 name$ = "bascal"
@@ -353,9 +353,9 @@ int main(void) {
 
     // Tutorial — Scalar methods
     //
-    // A method has a typed scalar receiver, written after `method`, and a typed
-    // result suffix on its name. The receiver is available as self%/self!/self$
-    // in the body. Dot calls can chain when each result has the next receiver's
+    // A method declares its scalar receiver type in brackets after its name.
+    // Omitting a result type makes it return its self%/self!/self$ receiver.
+    // Dot calls can chain when each result has the next receiver's
     // type. Methods transpile to ordinary typed calls for both backends.
 
 
@@ -522,6 +522,8 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -539,6 +541,8 @@ L_for_0_end:
     ldc "!"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -563,6 +567,8 @@ L_for_0_end:
     aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -595,6 +601,8 @@ L_if_1_else:
 L_if_0_end:
     iload 0
     ireturn
+    iload 0
+    ireturn
     iconst_0
     ireturn
 .end method
@@ -609,6 +617,8 @@ L_if_0_end:
     ldc 100
     i2d
     ddiv
+    dreturn
+    dload 0
     dreturn
     dconst_0
     dreturn
@@ -640,9 +650,9 @@ L_if_0_end:
 
     ; Tutorial — Scalar methods
     ;
-    ; A method has a typed scalar receiver, written after `method`, and a typed
-    ; result suffix on its name. The receiver is available as self%/self!/self$
-    ; in the body. Dot calls can chain when each result has the next receiver's
+    ; A method declares its scalar receiver type in brackets after its name.
+    ; Omitting a result type makes it return its self%/self!/self$ receiver.
+    ; Dot calls can chain when each result has the next receiver's
     ; type. Methods transpile to ordinary typed calls for both backends.
 
 

@@ -17,14 +17,14 @@ The function name carries the return type suffix. Parameter names also carry typ
 
 ### Scalar methods (front-end)
 
-BASCAL also accepts scalar extension-method declarations. The suffix on `method` selects the receiver type, while the suffix on the method name selects its result type. The receiver is available in the body as the matching implicit `self` variable:
+BASCAL also accepts scalar extension-method declarations. The bracketed type after the method name selects the receiver type. If no result is supplied, it is the same scalar type as the receiver; a suffix on the name is accepted as shorthand for an explicit scalar result. If execution reaches the end of an omitted-result method, it returns `self`. The receiver is available in the body as the matching implicit `self` variable:
 
 ```bascal
-method$ capitalize$()
+method capitalize[string]()
     return UCASE$(self$)
 end method
 
-method$ pad$(width%)
+method pad$[string](width%)
     return self$
 end method
 ```

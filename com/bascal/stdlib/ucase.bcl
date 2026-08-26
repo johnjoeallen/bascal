@@ -5,7 +5,7 @@
 // via ordinary-call syntax resolving to this same declaration.
 library ucase
 
-method$ ucase$()
+method ucase[string]()
     out$ = ""
     for i% = 1 to LEN(self$)
         c% = ASC(MID$(self$, i%, 1))

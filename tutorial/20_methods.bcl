@@ -1,22 +1,22 @@
 // Tutorial — Scalar methods
 //
-// A method has a typed scalar receiver, written after `method`, and a typed
-// result suffix on its name. The receiver is available as self%/self!/self$
-// in the body. Dot calls can chain when each result has the next receiver's
+// A method declares its scalar receiver type in brackets after its name.
+// Omitting a result type makes it return its self%/self!/self$ receiver.
+// Dot calls can chain when each result has the next receiver's
 // type. Methods transpile to ordinary typed calls for both backends.
 program methods
 
 require com.bascal.stdlib.ucase
 
-method$ shout$()
+method shout[string]()
     return self$.ucase() + "!"
 end method
 
-method$ surround$(left$, right$)
+method surround[string](left$, right$)
     return left$ + self$ + right$
 end method
 
-method% clamp%(low%, high%)
+method clamp[integer](low%, high%)
     if self% < low% then
         return low%
     elseif self% > high% then
@@ -25,7 +25,7 @@ method% clamp%(low%, high%)
     return self%
 end method
 
-method! percent!(rate!)
+method percent[single](rate!)
     return self! * rate! / 100
 end method
 

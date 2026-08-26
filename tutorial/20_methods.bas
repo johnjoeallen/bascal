@@ -9,8 +9,8 @@
 
 80 ' Tutorial — Scalar methods
 90 ' 
-100 ' A method has a typed scalar receiver, written after `method`, and a typed
-110 ' result suffix on its name. The receiver is available as self%/self!/self$
+100 ' A method declares its scalar receiver and result types in brackets after
+110 ' its name. The receiver is available as self%/self!/self$
 120 ' in the body. Dot calls can chain when each result has the next receiver's
 130 ' type. Methods transpile to ordinary typed calls for both backends.
 

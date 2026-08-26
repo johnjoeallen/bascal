@@ -142,7 +142,7 @@ pub struct FunctionDef {
     pub params: Vec<Param>,
     pub body: Vec<Stmt>,
     pub is_procedure: bool,
-    /// The scalar receiver type for a `method$`/`method%` declaration.
+    /// The scalar receiver type for a bracketed `method name[type]` declaration.
     /// Methods otherwise share function bodies and return syntax.
     pub receiver: Option<TypeSuffix>,
     /// Source position of the `function`/`procedure` keyword that starts

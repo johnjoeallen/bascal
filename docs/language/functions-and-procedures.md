@@ -21,10 +21,10 @@ Parameters are passed by value unless you say `byref`. That default makes a call
 
 ## Declare and call a method
 
-A scalar method extends a BASIC scalar type instead of standing alone. A method declaration names its receiver type with the suffix on `method`: `method$` receives a string, `method%` an integer, and `method!` a single-precision number. The method name carries its result suffix, and the receiver is available in the body as the matching implicit `self` value.
+A scalar method extends a BASIC scalar type instead of standing alone. Its declaration names the receiver type in brackets after the method name: `method capitalize[string]()` receives a string. With no result type, a method returns the receiver's type; a result suffix is also accepted, so `method capitalize$[string]()` explicitly returns a string. Use `method name[receiver, result](...)` when the scalar result differs from the receiver. The receiver is available in the body as the matching implicit `self` value; if execution reaches the end of an omitted-result method, it returns `self` automatically.
 
 ```bascal
-method$ capitalize$()
+method capitalize[string]()
     return UCASE$(self$)
 end method
 
@@ -40,7 +40,7 @@ result$ = name$.capitalize().pad(20)
 
 Methods are statically typed. Before code generation, the parser and resolver check the receiver suffix, method name, argument count, argument suffixes, result suffix, duplicate declarations, reserved built-in names, and unknown methods. A string receiver cannot call an integer method, and a chain is valid only when each result has the receiver type required by the next call. These checks apply equally to user methods, methods from required libraries, and built-in methods. Both targets transpile methods to ordinary typed calls: the BASIC target uses its global parameter/result variables and `GOSUB`, while the C target emits typed calls and result temporaries.
 
-A method's receiver is really just an implicit first parameter, so ordinary-call syntax works too, with no separate declaration needed: `capitalize$(name$)` resolves straight to `method$ capitalize$()` above, with `name$` filling `self$` — as long as no ordinary function of that name already exists. Because of that, a program can’t declare both a function and a method sharing one name; the two would be ambiguous claims on the same callable identity, and it’s a transpile-time error.
+A method's receiver is really just an implicit first parameter, so ordinary-call syntax works too, with no separate declaration needed: `capitalize$(name$)` resolves straight to `method capitalize[string]()` above, with `name$` filling `self$` — as long as no ordinary function of that name already exists. Because of that, a program can’t declare both a function and a method sharing one name; the two would be ambiguous claims on the same callable identity, and it’s a transpile-time error.
 
 ## Methods from libraries
 
@@ -61,4 +61,4 @@ name$ = "  Ada  "
 print name$.left(5).len()   ' same as len(left$(name$, 5))
 ```
 
-Their names are reserved: a program can’t declare its own `method$ left$(...)`, the same way it can’t declare a function named after a real BASIC builtin. An invalid receiver or argument is rejected during transpilation rather than silently becoming a different ordinary call.
+Their names are reserved: a program can’t declare its own `method left$[string](...)`, the same way it can’t declare a function named after a real BASIC builtin. An invalid receiver or argument is rejected during transpilation rather than silently becoming a different ordinary call.
