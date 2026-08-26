@@ -1878,7 +1878,7 @@ end
     fn record_string_alignment_lowers_to_lset_and_rset() {
         let source = r#"record R
     left: string(8) left
-    right: string(8) right
+    right: string(8) rpad
 end record
 file db as R = open("alignment.dat")
 db[1] = { left: "L", right: "R" }
@@ -1893,7 +1893,7 @@ end
     fn c_target_record_string_alignment_pads_right_aligned_fields() {
         let source = r#"record R
     left: string(8) left
-    right: string(8) right
+    right: string(8) rpad
 end record
 file db as R = open("alignment.dat")
 db[1] = { left: "L", right: "R" }

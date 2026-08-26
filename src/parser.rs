@@ -454,11 +454,15 @@ impl Parser {
                 if width <= 0 {
                     return Err(self.error("string field width must be a positive integer"));
                 }
-                let alignment = if self.check_keyword("right") {
+                // `lpad`/`rpad` are the canonical field-layout spellings:
+                // they describe which side receives the spaces when a value
+                // is packed into its fixed-width file field. Keep `left`/
+                // `right` as source-compatible aliases.
+                let alignment = if self.check_keyword("rpad") || self.check_keyword("right") {
                     self.advance();
                     RecordStringAlignment::Right
                 } else {
-                    if self.check_keyword("left") {
+                    if self.check_keyword("lpad") || self.check_keyword("left") {
                         self.advance();
                     }
                     RecordStringAlignment::Left
@@ -2654,7 +2658,7 @@ mod tests {
     #[test]
     fn parses_record_string_alignment() {
         let program = parse(
-            "record R\n    left: string(8) left\n    right: string(8) right\nend record\nend\n",
+            "record R\n    left: string(8) lpad\n    right: string(8) rpad\nend record\nend\n",
         );
         let fields = &program.records[0].fields;
         assert_eq!(

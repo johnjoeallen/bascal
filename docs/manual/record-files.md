@@ -15,12 +15,12 @@ Declares a fixed-layout record type:
 ```bascal
 record Student
     id:    int16
-    name:  string(20) left
+    name:  string(20) lpad
     score: float64
 end record
 ```
 
-Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). String fields default to `left` alignment; write `string(N) right` to pad with spaces on the left instead. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
+Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` spellings remain accepted as aliases. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
 
 ### file ... as ... = open(...)
 
