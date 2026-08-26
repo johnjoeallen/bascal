@@ -15,7 +15,7 @@
 | Standard-library functions match BASCOM | PASS |
 | Scalar methods match BASCOM | PASS |
 | Tie-break rounding matches BASCOM | PASS |
-| Record binary compatibility across backends | PASS |
+| Random file binary compatibility | N/A |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../tutorials/">← Previous: Tutorials</a>

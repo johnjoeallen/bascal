@@ -14,7 +14,7 @@
 | Scalar methods match C output | PASS |
 | C random-file output is readable by BASCOM | PASS |
 | BASCOM random-file output is readable by C | PASS |
-| Record binary compatibility across backends | PASS |
+| Random file binary compatibility | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../basic/">← Previous: BASIC-specific</a>

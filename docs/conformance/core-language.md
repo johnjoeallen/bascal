@@ -28,7 +28,7 @@ the three transpilation backends.
 | Scalar variables and constants | PASS | PASS | PASS |
 | Structured branches and `WHILE` loops | PASS | PASS | PASS |
 | Scalar function calls and returns | PASS | PASS | PASS |
-| Record binary compatibility across backends | PASS | PASS | FAIL |
+| Random file binary compatibility | N/A | PASS | FAIL |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Previous: Overview</a>
