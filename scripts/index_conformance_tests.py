@@ -79,8 +79,8 @@ group_overrides = {
     "gcc_runs_remline_under_c_target_when_available": ["c"],
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": ["basic", "c", "records"],
     "jvm_backend_does_not_yet_support_random_access_file_records": ["jvm", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "c", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["basic", "c", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["c", "records"],
 }
 
 for path in sorted((root / "tests").glob("*.rs")):

@@ -51,8 +51,8 @@ kind = "test"
 source = "metadata"
 name = "Random file binary compatibility"
 description = "Random file binary compatibility"
-groups = ["core", "basic", "c", "jvm", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+groups = ["c", "records"]
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "core.stdlib_functions"
@@ -96,8 +96,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 description = "BASCOM random-file output is readable by C"
-groups = ["basic", "c", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["basic", "records"]
+expected = { basic = "PASS", c = "NOT APPLICABLE", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
@@ -105,8 +105,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
-groups = ["basic", "c", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["c", "records"]
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"

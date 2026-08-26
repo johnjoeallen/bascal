@@ -4,10 +4,8 @@
 
 | Test description | Result |
 | --- | :---: |
-| Random file binary compatibility | PASS |
 | Scalar methods match BASCOM | PASS |
 | BASCOM random-file output is readable by C | PASS |
-| C random-file output is readable by BASCOM | PASS |
 | Constants and printing match BASCOM | PASS |
 | MID$ assignment matches BASCOM | PASS |
 | String self-concatenation matches BASCOM | PASS |
