@@ -97,7 +97,9 @@ nav:
   - Examples: examples.md
   - Conformance results:
       - Core language and tutorials: conformance.md
-      - Backend and runtime: conformance/backend-runtime.md
+      - Tutorials: conformance/tutorials.md
+      - BASIC-specific: conformance/basic.md
+      - C-specific: conformance/c.md
       - JVM-specific: conformance/jvm.md
       - Files and records: conformance/records.md
   - Origin: origin.md

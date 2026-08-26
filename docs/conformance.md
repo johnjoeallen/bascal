@@ -30,5 +30,5 @@ backend is not applicable or requires an optional runtime.
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Home</a>
-  <a href="backend-runtime/">Next: Backend and runtime →</a>
+  <a href="tutorials/">Next: Tutorials →</a>
 </nav>

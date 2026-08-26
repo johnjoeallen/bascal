@@ -15,6 +15,6 @@
 | Pending record binary compatibility check | N/A |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../backend-runtime/">← Previous: Native runtimes</a>
-  <a href="../records/">Next: Files and records →</a>
+  <a href="../c/">← Previous: C-specific</a>
+  <a href="../">Back to Core language</a>
 </nav>
