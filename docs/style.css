@@ -265,6 +265,14 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 }
 
 /* Conformance result buttons. */
+.conformance-description {
+  display: inline-block;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+}
+
 .conformance-status {
   display: inline-block;
   min-width: 3.2rem;

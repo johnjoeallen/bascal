@@ -36,12 +36,13 @@ for group, (filename, title) in pages.items():
     rows = []
     for entry in selected:
         status = resolved(entry, group if group in ("basic", "c", "jvm") else "basic")
+        description = re.sub(r"^\d+\s+", "", entry.get("description", entry["name"]))
+        description_cell = f'<span class="conformance-description">{description}</span>'
         if group in ("core", "tutorials"):
             cells = [resolved(entry, b) for b in ("basic", "c", "jvm")]
-            description = re.sub(r"^\d+\s+", "", entry.get("description", entry["name"]))
-            rows.append(f"| {description} | {' | '.join(cells)} |")
+            rows.append(f"| {description_cell} | {' | '.join(cells)} |")
         else:
-            rows.append(f"| {entry.get('description', entry['name'])} | {status} |")
+            rows.append(f"| {description_cell} | {status} |")
     if group in ("core", "tutorials"):
         table = "| Test description | BASIC | C | JVM |\n| --- | :---: | :---: | :---: |"
     else:
@@ -61,4 +62,5 @@ for group, (filename, title) in pages.items():
 # The conformance home is the core-language page, not a second link index.
 core_page = (root / "docs/conformance/core-language.md").read_text()
 core_page = core_page.replace("# [Conformance tests](../)", "# Conformance tests", 1)
+core_page = core_page.replace('href="../tutorials/"', 'href="tutorials/"')
 (root / "docs/conformance.md").write_text(core_page)

@@ -4,39 +4,39 @@
 
 | Test description | Result |
 | --- | :---: |
-| Random file binary compatibility | PASS |
-| Scalar methods match C output | PASS |
-| Scalar methods match BASCOM | PASS |
-| BASCOM random-file output is readable by C | PASS |
-| C random-file output is readable by BASCOM | PASS |
-| Constants and printing match BASCOM | PASS |
-| MID$ assignment matches BASCOM | PASS |
-| String self-concatenation matches C output | PASS |
-| String self-concatenation matches BASCOM | PASS |
-| Standard-library functions match C output | PASS |
-| Standard-library functions match BASCOM | PASS |
-| Tie-break rounding matches BASCOM | PASS |
-| Deterministic tutorials build and execute | PASS |
-| C rejects classic labels and error handling | PASS |
-| Every supported fixture transpiles successfully | PASS |
-| Built-in scalar methods under FreeBASIC | PASS |
-| MID$ assignment edge cases under FreeBASIC | PASS |
-| remline output under FreeBASIC | PASS |
-| Self-referential string concatenation under FreeBASIC | PASS |
-| Sort driver under FreeBASIC | PASS |
-| Standard-library functions under FreeBASIC | PASS |
-| Interactive inventory case study | PASS |
-| remline case study output | PASS |
-| Nested procedure TRY/CATCH propagation | PASS |
-| Array of records is not yet supported | PASS |
-| Bare dynamic record string fields are not yet supported | PASS |
-| Existing random-file records compile on BASIC and C | PASS |
-| JVM random-file records produce the expected diagnostic | PASS |
-| Nested record fields are not yet supported | PASS |
-| Arrays of records are not yet supported | PASS |
-| Record-valued parameters are not yet supported | PASS |
-| Record-valued returns are not yet supported | PASS |
-| Standalone record literals are not yet supported | PASS |
+| <span class="conformance-description">Random file binary compatibility</span> | PASS |
+| <span class="conformance-description">Scalar methods match C output</span> | PASS |
+| <span class="conformance-description">Scalar methods match BASCOM</span> | PASS |
+| <span class="conformance-description">BASCOM random-file output is readable by C</span> | PASS |
+| <span class="conformance-description">C random-file output is readable by BASCOM</span> | PASS |
+| <span class="conformance-description">Constants and printing match BASCOM</span> | PASS |
+| <span class="conformance-description">MID$ assignment matches BASCOM</span> | PASS |
+| <span class="conformance-description">String self-concatenation matches C output</span> | PASS |
+| <span class="conformance-description">String self-concatenation matches BASCOM</span> | PASS |
+| <span class="conformance-description">Standard-library functions match C output</span> | PASS |
+| <span class="conformance-description">Standard-library functions match BASCOM</span> | PASS |
+| <span class="conformance-description">Tie-break rounding matches BASCOM</span> | PASS |
+| <span class="conformance-description">Deterministic tutorials build and execute</span> | PASS |
+| <span class="conformance-description">C rejects classic labels and error handling</span> | PASS |
+| <span class="conformance-description">Every supported fixture transpiles successfully</span> | PASS |
+| <span class="conformance-description">Built-in scalar methods under FreeBASIC</span> | PASS |
+| <span class="conformance-description">MID$ assignment edge cases under FreeBASIC</span> | PASS |
+| <span class="conformance-description">remline output under FreeBASIC</span> | PASS |
+| <span class="conformance-description">Self-referential string concatenation under FreeBASIC</span> | PASS |
+| <span class="conformance-description">Sort driver under FreeBASIC</span> | PASS |
+| <span class="conformance-description">Standard-library functions under FreeBASIC</span> | PASS |
+| <span class="conformance-description">Interactive inventory case study</span> | PASS |
+| <span class="conformance-description">remline case study output</span> | PASS |
+| <span class="conformance-description">Nested procedure TRY/CATCH propagation</span> | PASS |
+| <span class="conformance-description">Array of records is not yet supported</span> | PASS |
+| <span class="conformance-description">Bare dynamic record string fields are not yet supported</span> | PASS |
+| <span class="conformance-description">Existing random-file records compile on BASIC and C</span> | PASS |
+| <span class="conformance-description">JVM random-file records produce the expected diagnostic</span> | PASS |
+| <span class="conformance-description">Nested record fields are not yet supported</span> | PASS |
+| <span class="conformance-description">Arrays of records are not yet supported</span> | PASS |
+| <span class="conformance-description">Record-valued parameters are not yet supported</span> | PASS |
+| <span class="conformance-description">Record-valued returns are not yet supported</span> | PASS |
+| <span class="conformance-description">Standalone record literals are not yet supported</span> | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../basic/">← Previous: BASIC-specific</a>
