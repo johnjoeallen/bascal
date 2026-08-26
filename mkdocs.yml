@@ -95,7 +95,10 @@ nav:
       - Portable Structured Error Handling: tutorials/21_portable_error_handling.md
       - RESTORE and DATA: tutorials/22_restore_data.md
   - Examples: examples.md
-  - Conformance results: conformance.md
+  - Conformance results:
+      - Overview: conformance.md
+      - Core language and tutorials: conformance/core-language.md
+      - Backend and runtime: conformance/backend-runtime.md
   - Origin: origin.md
   - Development journey: journey.md
   - Technical challenges: challenges.md
