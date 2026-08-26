@@ -66,6 +66,6 @@ fbc -lang qb tutorial/card_catalog.bas -x tmp/card_catalog
 
 <div class="prose" markdown="1">
 
-Looking for the shared-`COMMON`/`CHAIN` example instead? See [Shared COMMON tutorial](tutorials/13_shared.md) — two programs coordinating score, level, and player state across a `CHAIN`.
+Looking for the shared-`COMMON`/`CHAIN` example instead? See [Shared COMMON tutorial](tutorials/shared.md) — two programs coordinating score, level, and player state across a `CHAIN`.
 
 </div>

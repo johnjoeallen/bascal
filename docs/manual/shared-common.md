@@ -14,7 +14,7 @@ A shared file is a `.bcl` file containing only `dim` declarations (see [DIM Decl
 
 It starts with a mandatory `shared <name>` header, analogous to a regular file's `program <name>` header, and declares its shared variables with ordinary `dim`:
 
-From `tutorial/13_shared/state.bcl`:
+From `tutorial/shared/state.bcl`:
 
 ```bascal
 /*
@@ -54,7 +54,7 @@ When a shared-file name is present, the transpiler: 1. Searches for `state.bcl` 
 
 ### Using a Shared File
 
-From `tutorial/13_shared/` — two programs that share `count%` and `label$`:
+From `tutorial/shared/` — two programs that share `count%` and `label$`:
 
 **`state.bcl`** (shared file):
 

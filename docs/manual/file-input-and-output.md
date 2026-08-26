@@ -4,7 +4,7 @@
 
 <div class="prose" markdown="1">
 
-From `tutorial/10_files.bcl`:
+From `tutorial/files.bcl`:
 
 ### OPEN
 
@@ -131,7 +131,7 @@ print using fmt$; x!; y!; z!
 
 ### The file-handle DSL
 
-From Part 2 of `tutorial/10_files.bcl`. `file <var> = open(<path>) for input|output|append` is sugar over the same `OPEN ... AS #n` above it, except the compiler allocates and remembers the channel number itself, and `<var>.write(...)`/`<var>.read(...)`/`<var>.eof()`/`<var>.close()` replace every subsequent reference to `#n`. It shares its channel-numbering with the [record/file DSL](record-files.md)'s own `file ... as ... = open(...)` — every `file` declaration in a program, sequential or record, is numbered in one sequence, in declaration order, so the two forms can be mixed in the same program without colliding.
+From Part 2 of `tutorial/files.bcl`. `file <var> = open(<path>) for input|output|append` is sugar over the same `OPEN ... AS #n` above it, except the compiler allocates and remembers the channel number itself, and `<var>.write(...)`/`<var>.read(...)`/`<var>.eof()`/`<var>.close()` replace every subsequent reference to `#n`. It shares its channel-numbering with the [record/file DSL](record-files.md)'s own `file ... as ... = open(...)` — every `file` declaration in a program, sequential or record, is numbered in one sequence, in declaration order, so the two forms can be mixed in the same program without colliding.
 
 ```bascal
 file out = open(csvFile$) for output

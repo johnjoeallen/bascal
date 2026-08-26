@@ -18,7 +18,7 @@ The procedure name has **no type suffix** — the absence of a suffix signals th
 
 Parameters may use the same trailing fixed defaults as functions, so `procedure announce(text$, suffix$ = "!")` may be called as `announce("Ready")`. See [parameter defaults](functions.md#parameter-defaults) for the restrictions.
 
-From `tutorial/14_procedures.bcl`:
+From `tutorial/procedures.bcl`:
 
 ```bascal
 procedure printSeparator()

@@ -14,7 +14,7 @@ The compiled binary is `target/release/bcc`.
 
 ### Your First Program
 
-The file `tutorial/01_hello.bcl` demonstrates all three comment styles and a basic PRINT/END structure:
+The file `tutorial/hello.bcl` demonstrates all three comment styles and a basic PRINT/END structure:
 
 ```bascal
 // Tutorial 1 — Hello, World
@@ -34,14 +34,14 @@ END
 Transpile it:
 
 ```bascal
-bcc tutorial/01_hello.bcl
+bcc tutorial/hello.bcl
 ```
 
-This produces `tutorial/01_hello.bas`. To compile and run with FreeBASIC:
+This produces `tutorial/hello.bas`. To compile and run with FreeBASIC:
 
 ```bascal
-bcc tutorial/01_hello.bcl --binary
-./tmp/01_hello
+bcc tutorial/hello.bcl --binary
+./tmp/hello
 ```
 
 ### A Simple Function

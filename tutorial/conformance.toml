@@ -3,100 +3,117 @@
 # fields remain accepted and are normalized by the docs generator.
 [[tutorial]]
 name = "01 Hello, world"
-source = "01_hello.bcl"
+id = "tutorial.01_hello"
+source = "hello.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "02 Variables and constants"
-source = "02_variables.bcl"
+id = "tutorial.02_variables"
+source = "variables.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "03 Arithmetic"
-source = "03_arithmetic.bcl"
+id = "tutorial.03_arithmetic"
+source = "arithmetic.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "04 Conditions"
-source = "04_conditions.bcl"
+id = "tutorial.04_conditions"
+source = "conditions.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "05 Loops"
-source = "05_loops.bcl"
+id = "tutorial.05_loops"
+source = "loops.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "06 Select case"
-source = "06_select_case.bcl"
+id = "tutorial.06_select_case"
+source = "select_case.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "07 Functions"
-source = "07_functions.bcl"
+id = "tutorial.07_functions"
+source = "functions.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "08 Arrays"
-source = "08_arrays.bcl"
+id = "tutorial.08_arrays"
+source = "arrays.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "09 DATA and READ"
-source = "09_data.bcl"
+id = "tutorial.09_data"
+source = "data.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "10 Sequential files"
-source = "10_files.bcl"
+id = "tutorial.10_files"
+source = "files.bcl"
 backends = ["basic", "c"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[tutorial]]
 name = "11 Screen I/O"
-source = "11_screen.bcl"
+id = "tutorial.11_screen"
+source = "screen.bcl"
 backends = ["basic", "c"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[tutorial]]
 name = "12 REQUIRE and libraries"
-source = "12_require.bcl"
+id = "tutorial.12_require"
+source = "require.bcl"
 backends = ["basic", "c", "jvm"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[tutorial]]
 name = "13 Shared COMMON"
-source = "13_shared/start.bcl"
+source = "shared/start.bcl"
 backends = ["basic"]
 wont = ["c", "jvm"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[tutorial]]
 name = "14 Procedures"
-source = "14_procedures.bcl"
+id = "tutorial.14_procedures"
+source = "procedures.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "15 Random-access and record files"
-source = "15_random_and_record_files.bcl"
+id = "tutorial.15_random_and_record_files"
+source = "random_and_record_files.bcl"
 backends = ["basic", "c"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[tutorial]]
 name = "16 Short-circuit conditions"
-source = "16_short_circuit.bcl"
+id = "tutorial.16_short_circuit"
+source = "short_circuit.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "17 Classic labels and error handling"
-source = "17_labels_and_error_handling.bcl"
+id = "tutorial.17_labels_and_error_handling"
+source = "labels_and_error_handling.bcl"
 backends = ["basic"]
 wont = ["c", "jvm"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[tutorial]]
 name = "18 Standard-library functions"
-source = "18_stdlib.bcl"
+id = "tutorial.18_stdlib"
+source = "stdlib.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
@@ -107,16 +124,19 @@ status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[tutorial]]
 name = "20 Scalar methods"
-source = "20_methods.bcl"
+id = "tutorial.20_methods"
+source = "methods.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "21 Portable error handling"
-source = "21_portable_error_handling.bcl"
+id = "tutorial.21_portable_error_handling"
+source = "portable_error_handling.bcl"
 backends = ["basic", "c", "jvm"]
 
 [[tutorial]]
 name = "22 RESTORE and DATA"
-source = "22_restore_data.bcl"
+id = "tutorial.22_restore_data"
+source = "restore_data.bcl"
 backends = ["basic", "c"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }

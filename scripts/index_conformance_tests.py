@@ -127,7 +127,9 @@ import tomllib
 meta = tomllib.loads((root / "tutorial" / "conformance.toml").read_text())
 for item in meta["tutorial"]:
     source = Path(item["source"]).with_suffix("").as_posix().replace("/", ".")
-    test_id = f"tutorial.{source}"
+    # Tutorial IDs are explicit and intentionally independent of the source
+    # path, so files can be renamed without invalidating historical results.
+    test_id = item.get("id", f"tutorial.{source}")
     if test_id in ids:
         raise SystemExit(f"duplicate conformance ID: {test_id}")
     status = dict(item.get("expected", item.get("status", {})))

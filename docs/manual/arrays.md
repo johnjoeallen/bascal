@@ -57,7 +57,7 @@ function indexOf%(arr%(?), target%)
 end function
 ```
 
-From `tutorial/08_arrays.bcl`:
+From `tutorial/arrays.bcl`:
 
 ```bascal
 CONST N% = 6

@@ -218,7 +218,7 @@ fn portable_error_handling_tutorial_runs_when_available() {
         eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
         return;
     }
-    let source_path = repo_root().join("tutorial/21_portable_error_handling.bcl");
+    let source_path = repo_root().join("tutorial/portable_error_handling.bcl");
     let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
         .arg(source_path)
         .arg("--target")
@@ -277,7 +277,7 @@ fn compile_and_assemble(source_path: &Path, output_dir: &Path) -> Option<PathBuf
         );
     }
 
-    Some(output_dir.join("01_hello.j"))
+    Some(output_dir.join("hello.j"))
 }
 
 #[test]
@@ -291,8 +291,8 @@ fn hello_world_transpiles_assembles_and_runs_when_available() {
     }
 
     let repo_root = repo_root();
-    let source_path = repo_root.join("tutorial/01_hello.bcl");
-    let expected_j_path = repo_root.join("tutorial/01_hello.j");
+    let source_path = repo_root.join("tutorial/hello.bcl");
+    let expected_j_path = repo_root.join("tutorial/hello.j");
     let temp_dir = tempfile::tempdir().expect("failed to create JVM conformance temp directory");
     let output_dir = temp_dir.path().join("out");
     fs::create_dir(&output_dir)

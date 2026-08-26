@@ -1277,7 +1277,7 @@ impl CodeGenerator {
     /// `GOTO` out of a handler leaves BASIC's own "currently trapping"
     /// state set, so a *later*, unrelated error elsewhere in the program
     /// would silently fail to trap at all (verified under dosbox-x; see
-    /// tutorial/17_labels_and_error_handling.bcl's matching comment).
+    /// tutorial/labels_and_error_handling.bcl's matching comment).
     fn try_catch(
         &mut self,
         try_body: &[Stmt],

@@ -4,7 +4,7 @@
 
 <div class="prose" markdown="1">
 
-From Part 1 of `tutorial/15_random_and_record_files.bcl`:
+From Part 1 of `tutorial/random_and_record_files.bcl`:
 
 Random-access files store fixed-length records that can be read or written in any order, without scanning from the beginning.
 

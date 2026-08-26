@@ -72,28 +72,28 @@ nav:
       - Windows Setup: manual/windows.md
   - Tutorials:
       - Overview: tutorials/index.md
-      - Hello, World: tutorials/01_hello.md
-      - Variables and Constants: tutorials/02_variables.md
-      - Operators and Expressions: tutorials/03_arithmetic.md
-      - Conditions: tutorials/04_conditions.md
-      - Loops: tutorials/05_loops.md
-      - Select Case: tutorials/06_select_case.md
-      - Functions: tutorials/07_functions.md
-      - Arrays: tutorials/08_arrays.md
-      - Data, Read, Restore, Swap: tutorials/09_data.md
-      - File Input and Output: tutorials/10_files.md
-      - Screen I/O: tutorials/11_screen.md
-      - Require and Multi-File Projects: tutorials/12_require.md
-      - Shared COMMON: tutorials/13_shared.md
-      - Procedures: tutorials/14_procedures.md
-      - Random-Access and Record Files: tutorials/15_random_and_record_files.md
-      - Short-Circuit && and ||: tutorials/16_short_circuit.md
-      - Classic BASIC Error Handling: tutorials/17_labels_and_error_handling.md
-      - Standard Library Functions: tutorials/18_stdlib.md
-      - Case Study: tutorials/19_inventory.md
-      - Scalar Methods: tutorials/20_methods.md
-      - Portable Structured Error Handling: tutorials/21_portable_error_handling.md
-      - RESTORE and DATA: tutorials/22_restore_data.md
+      - Hello, World: tutorials/hello.md
+      - Variables and Constants: tutorials/variables.md
+      - Operators and Expressions: tutorials/arithmetic.md
+      - Conditions: tutorials/conditions.md
+      - Loops: tutorials/loops.md
+      - Select Case: tutorials/select_case.md
+      - Functions: tutorials/functions.md
+      - Arrays: tutorials/arrays.md
+      - Data, Read, Restore, Swap: tutorials/data.md
+      - File Input and Output: tutorials/files.md
+      - Screen I/O: tutorials/screen.md
+      - Require and Multi-File Projects: tutorials/require.md
+      - Shared COMMON: tutorials/shared.md
+      - Procedures: tutorials/procedures.md
+      - Random-Access and Record Files: tutorials/random_and_record_files.md
+      - Short-Circuit && and ||: tutorials/short_circuit.md
+      - Classic BASIC Error Handling: tutorials/labels_and_error_handling.md
+      - Standard Library Functions: tutorials/stdlib.md
+      - Case Study: tutorials/inventory.md
+      - Scalar Methods: tutorials/methods.md
+      - Portable Structured Error Handling: tutorials/portable_error_handling.md
+      - RESTORE and DATA: tutorials/restore_data.md
   - Examples: examples.md
   - Conformance results:
       - Core language: conformance.md

@@ -6,7 +6,7 @@
 
 BASCAL supports multi-file projects through `require` (and its alias `import`). Dependencies are declared at the top of the file, before any statements.
 
-From `tutorial/12_require.bcl` — a program that uses a statistics library:
+From `tutorial/require.bcl` — a program that uses a statistics library:
 
 ```bascal
 require stats
@@ -27,7 +27,7 @@ END
 Transpile with `-L tutorial/lib` so that `require stats` resolves to `tutorial/lib/stats.bcl`:
 
 ```bascal
-bcc tutorial/12_require.bcl -L tutorial/lib
+bcc tutorial/require.bcl -L tutorial/lib
 ```
 
 `tutorial/lib/stats.bcl` defines `mean!`, `maximum%`, `minimum%`, and `rangeOf%` — all merged into the single generated `.bas` output.

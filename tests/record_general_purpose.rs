@@ -14,7 +14,7 @@
 //! binding). `dim` has no `as <Type>` clause, and neither `procedure`/
 //! `function` parameters nor function return types support `as <Type>`
 //! either (BASCAL uses BASCOM-style suffix typing: `%`, `$`, `#`, ... --
-//! see tutorial/14_procedures.bcl, tutorial/07_functions.bcl). So there is
+//! see tutorial/procedures.bcl, tutorial/functions.bcl). So there is
 //! no grammar path to declare an ordinary in-memory record variable, pass
 //! one as a parameter, return one, nest one inside another, build arrays
 //! of them, or use a record literal outside file-write sugar.
@@ -256,7 +256,7 @@ end
 /// record usage (the one thing records ARE for today) still compiles, so
 /// the failures above are attributable to the general-purpose-record gap
 /// specifically and not to a broken test harness or an unrelated
-/// regression. Mirrors tutorial/15_random_and_record_files.bcl.
+/// regression. Mirrors tutorial/random_and_record_files.bcl.
 ///
 /// Basic and C only: the JVM backend is independently "minimal" and
 /// already rejects the `Open`/random-file statement outright

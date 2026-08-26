@@ -35,7 +35,7 @@ if x% > 0 then y% = 1: z% = 2
 
 `elseif` isn't available in the single-line form — same as classic BASIC, it needs the block form above.
 
-From `tutorial/04_conditions.bcl` — a grade classification chain:
+From `tutorial/conditions.bcl` — a grade classification chain:
 
 ```bascal
 score% = 72
@@ -72,7 +72,7 @@ end for
 
 `end for` closes the loop. Bare `end` also works. The `step` clause is optional; the default step is 1.
 
-From `tutorial/05_loops.bcl`:
+From `tutorial/loops.bcl`:
 
 ```bascal
 ' Squares 1..5
@@ -107,7 +107,7 @@ end while
 
 `end while` closes the loop. Bare `end` also works, and so does classic BASIC's own `wend`.
 
-From `tutorial/05_loops.bcl`:
+From `tutorial/loops.bcl`:
 
 ```bascal
 ' Powers of 2 under 100
@@ -155,7 +155,7 @@ loop [while/until condition]
 
 `end do` (bare `end` also works) closes a **pre-check** loop: the optional `while`/`until` clause tests the condition *before* each iteration, so the body may run zero times. `loop [while/until condition]` closes a **post-check** loop instead: the condition is tested *after* the body runs, so the body always runs at least once — the direct BASCAL equivalent of what other languages spell `repeat`/`until`. A bare `do ... loop` with no condition on either end is a plain infinite loop, same as bare `do ... end do`; both need `exit` to terminate.
 
-From `tutorial/05_loops.bcl`:
+From `tutorial/loops.bcl`:
 
 ```bascal
 ' DO WHILE — condition tested before body
@@ -231,7 +231,7 @@ end select
 
 The `select case` expression is evaluated once. Cases are tested in order. `case else` is optional and must be the last clause.
 
-From `tutorial/06_select_case.bcl`:
+From `tutorial/select_case.bcl`:
 
 ```bascal
 ' Numeric score to letter grade
@@ -309,7 +309,7 @@ Unlike `AND`/`OR` (bitwise, always evaluate both sides — see [Logical Operator
 
 `&&`/`||` are only legal directly in the condition of `if`/`elseif`/ `while`/`do [while/until]` — not as a general expression (can't be assigned to a variable, passed as a function argument, etc.). A condition may chain any number of the *same* operator (`a && b && c`); mixing `&&` and `||` in one condition is a transpile-time error — split into nested `if` statements instead.
 
-From `tutorial/16_short_circuit.bcl`, an `&&` guard transpiles to one guarded `IF` per operand — no bitwise `AND`, no wasted call:
+From `tutorial/short_circuit.bcl`, an `&&` guard transpiles to one guarded `IF` per operand — no bitwise `AND`, no wasted call:
 
 ```bascal
 if ptr% >= 0 && isPositive%(scores%(ptr%)) > 0 then

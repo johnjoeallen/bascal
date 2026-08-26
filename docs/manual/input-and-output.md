@@ -40,7 +40,7 @@ Multiple variables may be listed; the user enters values separated by commas.
 
 ### LOCATE
 
-Positions the cursor before printing. From `tutorial/11_screen.bcl`:
+Positions the cursor before printing. From `tutorial/screen.bcl`:
 
 ```bascal
 CLS

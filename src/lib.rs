@@ -1084,7 +1084,7 @@ END
         // require resolution needed), an unresolved *method* call is
         // always strictly validated, so this needs `com.bascal.stdlib`'s
         // require lines to actually resolve.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/functions.bcl");
         let output = compile_file(&input, &CompileOptions::new()).expect("sample should compile");
 
         // repeat$ is called twice; each result must be captured in a$ and b$ separately
@@ -4942,10 +4942,10 @@ resume next
 
     #[test]
     fn c_target_compiles_hello_world_tutorial() {
-        // tutorial/01_hello.bcl uses only `print` of string literals and
+        // tutorial/hello.bcl uses only `print` of string literals and
         // `end` -- the minimal C backend's entire current surface -- so it
         // must compile cleanly under Target::C, unlike most tutorials.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/01_hello.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/hello.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
@@ -4969,7 +4969,7 @@ resume next
         // that does (see `c_target_declares_runtime_helpers_up_top_and_defines_them_at_the_bottom`
         // below), its output should contain no `bcc_*` forward declaration
         // at all.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/01_hello.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/hello.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
@@ -5015,7 +5015,7 @@ resume next
     #[test]
     fn c_target_compiles_arithmetic_and_conditions_tutorials() {
         // The first real, complete tutorials (not just custom test
-        // snippets) the C backend can compile beyond 01_hello -- string
+        // snippets) the C backend can compile beyond hello -- string
         // variables were the last piece both needed. Compiling is checked
         // here (in-process, fast); actual gcc-and-run output was verified
         // manually against each tutorial's own documented `// expect ...`
@@ -5025,10 +5025,10 @@ resume next
             ..CompileOptions::new()
         };
         for tutorial in [
-            "tutorial/03_arithmetic.bcl",
-            "tutorial/04_conditions.bcl",
-            "tutorial/05_loops.bcl",
-            "tutorial/06_select_case.bcl",
+            "tutorial/arithmetic.bcl",
+            "tutorial/conditions.bcl",
+            "tutorial/loops.bcl",
+            "tutorial/select_case.bcl",
         ] {
             let input = Path::new(env!("CARGO_MANIFEST_DIR")).join(tutorial);
             compile_file(&input, &options)
@@ -5436,7 +5436,7 @@ end
     fn c_target_supports_and_in_if_condition() {
         // The "next simplest program" a bitwise AND actually gets used
         // for in practice: a compound if condition, same as
-        // tutorial/03_arithmetic.bcl and tutorial/04_conditions.bcl (both
+        // tutorial/arithmetic.bcl and tutorial/conditions.bcl (both
         // still blocked on string variables, but no longer on AND).
         let source = "age% = 25\nincome% = 45000\nif age% >= 18 and income% >= 30000 then\n    print \"Eligible\"\nelse\n    print \"Not eligible\"\nend if\nend\n";
         let output = compile_source_via_c_target(source);
@@ -6408,7 +6408,7 @@ end
 
     #[test]
     fn c_target_array_bound_accepts_a_top_level_int_const() {
-        // tutorial/09_data.bcl's own shape: `const numCapitals% = 5` then
+        // tutorial/data.bcl's own shape: `const numCapitals% = 5` then
         // `dim country$(numCapitals%)` -- a real C array needs a literal
         // size, so the const's own integer value must be recovered at
         // compile time, not treated as a runtime-only variable read.
@@ -6936,13 +6936,13 @@ end
         // string functions, and (via its two `require`d library
         // functions) the LEN/ASC/CHR$/MID$/LEFT$ builtins all in one
         // real program.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/07_functions.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/functions.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
         compile_file(&input, &options)
-            .unwrap_or_else(|d| panic!("tutorial/07_functions.bcl should compile to C: {d:?}"));
+            .unwrap_or_else(|d| panic!("tutorial/functions.bcl should compile to C: {d:?}"));
     }
 
     #[test]
@@ -6952,13 +6952,13 @@ end
         // `--target basic`'s own real output once `--target basic`'s own
         // array-parameter-copy issue, filed separately, is accounted
         // for); this locks in that it keeps compiling.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/08_arrays.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/arrays.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
         compile_file(&input, &options)
-            .unwrap_or_else(|d| panic!("tutorial/08_arrays.bcl should compile to C: {d:?}"));
+            .unwrap_or_else(|d| panic!("tutorial/arrays.bcl should compile to C: {d:?}"));
     }
 
     #[test]
@@ -6988,13 +6988,13 @@ end
         // verified correct end to end with gcc separately; this just
         // locks in that it keeps compiling.
         let input =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/15_random_and_record_files.bcl");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/random_and_record_files.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
         compile_file(&input, &options).unwrap_or_else(|d| {
-            panic!("tutorial/15_random_and_record_files.bcl should compile to C: {d:?}")
+            panic!("tutorial/random_and_record_files.bcl should compile to C: {d:?}")
         });
     }
 

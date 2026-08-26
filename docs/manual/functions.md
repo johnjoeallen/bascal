@@ -56,7 +56,7 @@ Defaults must be literals (including a signed numeric literal) or a top-level `c
 
 A function or procedure can't be named the same as a real BASIC builtin — `function sqr%(x%)` is a transpile-time error, checked case-insensitively and independent of type suffix (`sqr%` and `sqr$` both collide with `SQR`). Neither shadowing a builtin nor being shadowed by one is ever what a program means; give it a different name instead. Ordinary functions never collide this way — the check is only against the real builtins that pass straight through with no `require` (see [Standard Library Functions](standard-library-functions.md) for the handful BASCAL ships itself, which *are* ordinary functions and don't trigger this check).
 
-From `tutorial/07_functions.bcl`:
+From `tutorial/functions.bcl`:
 
 ```bascal
 ' a% -- first value to compare

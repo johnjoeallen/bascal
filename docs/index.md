@@ -234,7 +234,7 @@ IF (score% > highScore%) = 0 THEN GOTO 10
 
 ## Control flow: structured vs hand-rolled GOTO
 
-The line-numbered dialects `bcc` targets have no `SELECT CASE`, no `DO`/`LOOP`, and no multiline `IF` — every branch and loop is just `IF ... THEN GOTO` threaded by hand. The panes on the left below are what that threading looks like written directly; the panes on the right are what `bcc` lets you write instead. `bcc` still generates the GOTO chain — it just generates it correctly, every time, so you never have to count line numbers or trace jumps yourself. Full sources: [tutorial/06_select_case.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bcl) and [tutorial/05_loops.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/05_loops.bcl).
+The line-numbered dialects `bcc` targets have no `SELECT CASE`, no `DO`/`LOOP`, and no multiline `IF` — every branch and loop is just `IF ... THEN GOTO` threaded by hand. The panes on the left below are what that threading looks like written directly; the panes on the right are what `bcc` lets you write instead. `bcc` still generates the GOTO chain — it just generates it correctly, every time, so you never have to count line numbers or trace jumps yourself. Full sources: [tutorial/select_case.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/select_case.bcl) and [tutorial/loops.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/loops.bcl).
 
 <div class="compare" markdown="1">
 
@@ -296,7 +296,7 @@ end select
 
 </div>
 
-This is what `bcc` emits for the pane on the right — see the generated `IF (BCC_T2% = 100) <> 0 THEN GOTO 250` dispatch chain in [tutorial/06_select_case.bas](https://github.com/johnjoeallen/bascal/blob/main/tutorial/06_select_case.bas). The only difference is that a transpiler numbered and wired every jump, instead of you.
+This is what `bcc` emits for the pane on the right — see the generated `IF (BCC_T2% = 100) <> 0 THEN GOTO 250` dispatch chain in [tutorial/select_case.bas](https://github.com/johnjoeallen/bascal/blob/main/tutorial/select_case.bas). The only difference is that a transpiler numbered and wired every jump, instead of you.
 
 </div>
 
@@ -616,7 +616,7 @@ Multiline `if`/`else if`/`else` is not an exception — it still transpiles to t
 
 ## Record files: BASCAL's record/file syntax vs standard BASIC
 
-BASCAL supports classic random-access file I/O directly (`OPEN ... FOR RANDOM`, `FIELD`, `GET`/`PUT`, `LSET`, `MKx`/`CVx` all still pass through as-is), but writing it by hand is exactly the kind of repetitive, error-prone bookkeeping a transpiler should do instead. The `record`/`file` syntax below is the canonical way to do this in BASCAL: every pane on the right is what you write, and it **generates** the pane on the left — this syntax doesn't change what runs, only how much of it you have to type and keep in sync yourself. Full source: [tutorial/15_random_and_record_files.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/15_random_and_record_files.bcl).
+BASCAL supports classic random-access file I/O directly (`OPEN ... FOR RANDOM`, `FIELD`, `GET`/`PUT`, `LSET`, `MKx`/`CVx` all still pass through as-is), but writing it by hand is exactly the kind of repetitive, error-prone bookkeeping a transpiler should do instead. The `record`/`file` syntax below is the canonical way to do this in BASCAL: every pane on the right is what you write, and it **generates** the pane on the left — this syntax doesn't change what runs, only how much of it you have to type and keep in sync yourself. Full source: [tutorial/random_and_record_files.bcl](https://github.com/johnjoeallen/bascal/blob/main/tutorial/random_and_record_files.bcl).
 
 <div class="compare" markdown="1">
 
@@ -891,25 +891,25 @@ Nothing above runs slower — every line here transpiles to exactly the same `OP
 
 Every tutorial below has its own page with a short walkthrough and a few snippets, plus a link to the real, transpiling `.bcl` source (and its generated `.bas` output) in the repo.
 
-- [Hello world](tutorials/01_hello.md)
-- [Variables](tutorials/02_variables.md)
-- [Arithmetic](tutorials/03_arithmetic.md)
-- [Conditions](tutorials/04_conditions.md)
-- [Loops](tutorials/05_loops.md)
-- [Select case](tutorials/06_select_case.md)
-- [Functions](tutorials/07_functions.md)
-- [Arrays](tutorials/08_arrays.md)
-- [Data statements](tutorials/09_data.md)
-- [File I/O](tutorials/10_files.md)
-- [Screen control](tutorials/11_screen.md)
-- [Require / dependencies](tutorials/12_require.md)
-- [Shared COMMON](tutorials/13_shared.md)
-- [Procedures](tutorials/14_procedures.md)
-- [Random-access & record files](tutorials/15_random_and_record_files.md)
-- [Short-circuit && and \|\|](tutorials/16_short_circuit.md)
-- [Classic BASIC error handling](tutorials/17_labels_and_error_handling.md) and [portable structured error handling](tutorials/21_portable_error_handling.md)
-- [Standard library functions](tutorials/18_stdlib.md)
-- [Methods](tutorials/20_methods.md)
+- [Hello world](tutorials/hello.md)
+- [Variables](tutorials/variables.md)
+- [Arithmetic](tutorials/arithmetic.md)
+- [Conditions](tutorials/conditions.md)
+- [Loops](tutorials/loops.md)
+- [Select case](tutorials/select_case.md)
+- [Functions](tutorials/functions.md)
+- [Arrays](tutorials/arrays.md)
+- [Data statements](tutorials/data.md)
+- [File I/O](tutorials/files.md)
+- [Screen control](tutorials/screen.md)
+- [Require / dependencies](tutorials/require.md)
+- [Shared COMMON](tutorials/shared.md)
+- [Procedures](tutorials/procedures.md)
+- [Random-access & record files](tutorials/random_and_record_files.md)
+- [Short-circuit && and \|\|](tutorials/short_circuit.md)
+- [Classic BASIC error handling](tutorials/labels_and_error_handling.md) and [portable structured error handling](tutorials/portable_error_handling.md)
+- [Standard library functions](tutorials/stdlib.md)
+- [Methods](tutorials/methods.md)
 
 [Open the tutorials index →](tutorials/)
 

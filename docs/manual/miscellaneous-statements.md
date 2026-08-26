@@ -26,7 +26,7 @@ This is distinct from the `mid$()` *function*, which extracts a substring withou
 
 Exchanges the values of two variables — no explicit temporary needed.
 
-From `tutorial/09_data.bcl`:
+From `tutorial/data.bcl`:
 
 ```bascal
 a% = 42

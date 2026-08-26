@@ -6,7 +6,7 @@
 
 `DATA`, `READ`, and `RESTORE` provide an embedded data table read at run time. `DATA` statements may appear anywhere in the program body; the generated BASIC places them after `END`.
 
-From `tutorial/09_data.bcl`:
+From `tutorial/data.bcl`:
 
 ```bascal
 CONST NUM_CAPITALS% = 5

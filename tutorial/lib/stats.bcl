@@ -1,5 +1,5 @@
 // stats.bcl — basic statistics library for the BASCAL tutorial.
-// Loaded by tutorial/12_require.bcl via:
+// Loaded by tutorial/require.bcl via:
 //   require stats
 //
 // Provides: mean!, maximum%, minimum%, rangeOf%

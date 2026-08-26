@@ -207,7 +207,7 @@ loop), emitted the same `DIM` more than once. Classic BASIC has no
 `REDIM`; a second `DIM` on an already-`DIM`ed array is a fatal runtime
 "Duplicate Definition" error. This wasn't hypothetical — it was already
 present in the shipped tutorials before this fix, e.g.
-`tutorial/08_arrays.bcl` calling `printArray%` twice generated `DIM
+`tutorial/arrays.bcl` calling `printArray%` twice generated `DIM
 printarray_arr_0%(...)` twice.
 
 This predates `sizeof()` entirely — it was already true under the
@@ -345,7 +345,7 @@ digging into how array parameters actually copy today.
   argument — regardless of whether the function's own `return` value is
   used. Confirmed via all three call sites that reach `call_lines`
   (`codegen.rs:926`, `947`, `1072`) and via the existing
-  `tutorial/08_arrays.bcl` example, where `insertionSort%` returns an
+  `tutorial/arrays.bcl` example, where `insertionSort%` returns an
   unrelated `0` yet the array comes back sorted — the array copy-out and
   the function's scalar `return` are fully decoupled mechanisms.
 - **Scalars**: copy-in only, always. There is no write-back path for a

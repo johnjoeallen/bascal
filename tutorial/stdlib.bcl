@@ -1,0 +1,49 @@
+// Tutorial — Standard library functions
+//
+// com.bascal.stdlib is an ordinary require-able library, resolved the same
+// way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
+// directory to the search path automatically, so no -L flag is needed to
+// reach it. It exists because LTRIM$, RTRIM$, UCASE$, LCASE$, and ERROR$
+// either aren't real MBASIC/BASCOM 2.00 builtins or don't work at runtime
+// (verified against a real IBM Personal Computer BASIC Compiler 2.00 under
+// dosbox-x) -- see the manual's "String and error-message functions"
+// section (https://johnjoeallen.github.io/bascal/manual/) for the full
+// story.
+//
+// ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
+// receiver type, using self$ in place of an explicit s$ parameter -- see
+// the "Declare and call a method" chapter. A method's receiver is really
+// just an implicit first parameter, so the ordinary call form
+// (ltrim$("...")) keeps working exactly as before: it resolves straight to
+// the same method declaration, with the first argument filling self$. The
+// examples below prefer the method-call form, written as "...".ltrim().
+// error$ stays an ordinary function: an
+// error code is a lookup key, not a value the call is naturally "operating
+// on" the way the others operate on their string.
+//
+// Run with:
+//   bcc tutorial/stdlib.bcl
+program stdlib
+
+require com.bascal.stdlib.ltrim
+require com.bascal.stdlib.rtrim
+require com.bascal.stdlib.ucase
+require com.bascal.stdlib.lcase
+require com.bascal.stdlib.error
+
+print "[" + "   padded left".ltrim() + "]"
+print "[" + "padded right   ".rtrim() + "]"
+print "shout this".ucase()
+print "QUIET THIS DOWN".lcase()
+
+/* Same four functions, called as chained methods instead. */
+print "[" + "  padded both sides  ".ltrim().rtrim() + "]"
+print "  shout this too".ltrim().ucase()
+
+/* ERROR$ maps a classic MBASIC/GW-BASIC/BASCOM error code to a message;
+   pair it with ERR inside an ON ERROR GOTO handler in real code. */
+print error$(53)
+print error$(11)
+print error$(9999)
+
+end

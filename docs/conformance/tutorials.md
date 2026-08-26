@@ -16,7 +16,6 @@
 | Sequential files | PASS | PASS | FAIL |
 | Screen I/O | PASS | PASS | FAIL |
 | REQUIRE and libraries | PASS | PASS | PASS |
-| Shared COMMON | PASS | UNSUPPORTED | UNSUPPORTED |
 | Procedures | PASS | PASS | PASS |
 | Random-access and record files | PASS | PASS | FAIL |
 | Short-circuit conditions | PASS | PASS | PASS |
@@ -26,6 +25,7 @@
 | Portable error handling | PASS | PASS | PASS |
 | RESTORE and DATA | PASS | PASS | FAIL |
 | Inventory case study | PASS | PASS | FAIL |
+| Shared COMMON | PASS | UNSUPPORTED | UNSUPPORTED |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../core/">← Previous: Core language</a>

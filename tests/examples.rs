@@ -48,22 +48,22 @@ fn c_target_builds_and_runs_noninteractive_tutorials() {
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tutorials = [
-        "01_hello",
-        "02_variables",
-        "03_arithmetic",
-        "04_conditions",
-        "05_loops",
-        "06_select_case",
-        "07_functions",
-        "08_arrays",
-        "09_data",
-        "12_require",
-        "14_procedures",
-        "16_short_circuit",
-        "18_stdlib",
-        "20_methods",
-        "21_portable_error_handling",
-        "22_restore_data",
+        "hello",
+        "variables",
+        "arithmetic",
+        "conditions",
+        "loops",
+        "select_case",
+        "functions",
+        "arrays",
+        "data",
+        "require",
+        "procedures",
+        "short_circuit",
+        "stdlib",
+        "methods",
+        "portable_error_handling",
+        "restore_data",
     ];
 
     for stem in tutorials {
@@ -129,7 +129,7 @@ fn freebasic_runs_sort_driver_when_available() {
 #[test]
 fn c_target_rejects_labels_and_error_handling_tutorial() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("tutorial/17_labels_and_error_handling.bcl");
+    let source_path = repo_root.join("tutorial/labels_and_error_handling.bcl");
     let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
         .arg(&source_path)
         .arg("--target")

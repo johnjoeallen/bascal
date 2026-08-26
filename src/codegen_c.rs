@@ -98,21 +98,21 @@
 //! emitting wrong code -- this is a deliberately minimal backend, not a
 //! complete one; see the GitHub issue tracker's `c-target` label for the
 //! current, itemized list. Tutorials that compile end to end today:
-//! `tutorial/01_hello.bcl`, `tutorial/02_variables.bcl`,
-//! `tutorial/03_arithmetic.bcl`, `tutorial/04_conditions.bcl`,
-//! `tutorial/05_loops.bcl`, `tutorial/06_select_case.bcl`,
-//! `tutorial/07_functions.bcl` (including its two `require`d
+//! `tutorial/hello.bcl`, `tutorial/variables.bcl`,
+//! `tutorial/arithmetic.bcl`, `tutorial/conditions.bcl`,
+//! `tutorial/loops.bcl`, `tutorial/select_case.bcl`,
+//! `tutorial/functions.bcl` (including its two `require`d
 //! `com.bascal.stdlib` library functions, `ucase$`/`lcase$`),
-//! `tutorial/09_data.bcl`, `tutorial/10_files.bcl`, `tutorial/11_screen.bcl`,
-//! `tutorial/13_shared/start.bcl` + `tutorial/13_shared/show.bcl`,
-//! `tutorial/15_random_and_record_files.bcl` (both its hand-written Part 1
-//! and DSL-based Part 2), `tutorial/16_short_circuit.bcl`,
-//! `tutorial/18_stdlib.bcl`
+//! `tutorial/data.bcl`, `tutorial/files.bcl`, `tutorial/screen.bcl`,
+//! `tutorial/shared/start.bcl` + `tutorial/shared/show.bcl`,
+//! `tutorial/random_and_record_files.bcl` (both its hand-written Part 1
+//! and DSL-based Part 2), `tutorial/short_circuit.bcl`,
+//! `tutorial/stdlib.bcl`
 //! -- each gcc-compiled and run, not just transpiled (see
 //! `docs/manual/command-line-reference.html#backends` for the up to date
-//! list). `tutorial/08_arrays.bcl`, `12_require.bcl` (its required library
-//! takes an array parameter), `14_procedures.bcl` (byref array params), and
-//! `19_inventory.bcl` now transpile successfully as well; the classic labels
+//! list). `tutorial/arrays.bcl`, `require.bcl` (its required library
+//! takes an array parameter), `procedures.bcl` (byref array params), and
+//! `inventory.bcl` now transpile successfully as well; the classic labels
 //! and error-handling tutorial remains intentionally rejected by this backend.
 //!
 //! Numeric `print` output is plain `%d`/`%g` `printf` formatting -- it does
@@ -905,7 +905,7 @@ struct FieldEntry {
 /// computed once by an up-front whole-program scan: a channel can be
 /// `FIELD`ed more than once over a program's lifetime with a genuinely
 /// different layout each time (reopened for a different purpose, or --
-/// exactly what `tutorial/15_random_and_record_files.bcl` does -- the
+/// exactly what `tutorial/random_and_record_files.bcl` does -- the
 /// same file reopened under a different set of buffer variable names
 /// later in the same program), and each `GET`/`PUT`/`LSET`/`RSET` needs
 /// the layout *most recently established for that channel*, not
@@ -1802,7 +1802,7 @@ fn collect_top_level_const_c_names(statements: &[Stmt]) -> BTreeSet<String> {
 /// Resolves one `dim` array-bound expression to a compile-time `i64` --
 /// either a literal integer, or a bare reference to a top-level `const`
 /// with an integer-literal value (see `collect_top_level_int_consts`;
-/// `tutorial/09_data.bcl`'s own `dim country$(numCapitals%)`, where
+/// `tutorial/data.bcl`'s own `dim country$(numCapitals%)`, where
 /// `numCapitals%` is exactly such a `const`, is why the second form
 /// matters, not just the first). Nothing else is supported -- a runtime-
 /// computed bound (real BASIC's own `dim arr%(n%)` for a plain variable

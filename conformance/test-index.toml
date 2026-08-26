@@ -517,7 +517,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.01_hello"
 kind = "tutorial"
-source = "01_hello.bcl"
+source = "hello.bcl"
 name = "01 Hello, world"
 description = "01 Hello, world"
 groups = ["tutorials"]
@@ -526,7 +526,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.02_variables"
 kind = "tutorial"
-source = "02_variables.bcl"
+source = "variables.bcl"
 name = "02 Variables and constants"
 description = "02 Variables and constants"
 groups = ["tutorials"]
@@ -535,7 +535,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.03_arithmetic"
 kind = "tutorial"
-source = "03_arithmetic.bcl"
+source = "arithmetic.bcl"
 name = "03 Arithmetic"
 description = "03 Arithmetic"
 groups = ["tutorials"]
@@ -544,7 +544,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.04_conditions"
 kind = "tutorial"
-source = "04_conditions.bcl"
+source = "conditions.bcl"
 name = "04 Conditions"
 description = "04 Conditions"
 groups = ["tutorials"]
@@ -553,7 +553,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.05_loops"
 kind = "tutorial"
-source = "05_loops.bcl"
+source = "loops.bcl"
 name = "05 Loops"
 description = "05 Loops"
 groups = ["tutorials"]
@@ -562,7 +562,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.06_select_case"
 kind = "tutorial"
-source = "06_select_case.bcl"
+source = "select_case.bcl"
 name = "06 Select case"
 description = "06 Select case"
 groups = ["tutorials"]
@@ -571,7 +571,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.07_functions"
 kind = "tutorial"
-source = "07_functions.bcl"
+source = "functions.bcl"
 name = "07 Functions"
 description = "07 Functions"
 groups = ["tutorials"]
@@ -580,7 +580,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.08_arrays"
 kind = "tutorial"
-source = "08_arrays.bcl"
+source = "arrays.bcl"
 name = "08 Arrays"
 description = "08 Arrays"
 groups = ["tutorials"]
@@ -589,7 +589,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.09_data"
 kind = "tutorial"
-source = "09_data.bcl"
+source = "data.bcl"
 name = "09 DATA and READ"
 description = "09 DATA and READ"
 groups = ["tutorials"]
@@ -598,7 +598,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.10_files"
 kind = "tutorial"
-source = "10_files.bcl"
+source = "files.bcl"
 name = "10 Sequential files"
 description = "10 Sequential files"
 groups = ["tutorials"]
@@ -607,7 +607,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 [[test]]
 id = "tutorial.11_screen"
 kind = "tutorial"
-source = "11_screen.bcl"
+source = "screen.bcl"
 name = "11 Screen I/O"
 description = "11 Screen I/O"
 groups = ["tutorials"]
@@ -616,25 +616,16 @@ expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 [[test]]
 id = "tutorial.12_require"
 kind = "tutorial"
-source = "12_require.bcl"
+source = "require.bcl"
 name = "12 REQUIRE and libraries"
 description = "12 REQUIRE and libraries"
 groups = ["tutorials"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
-id = "tutorial.13_shared.start"
-kind = "tutorial"
-source = "13_shared/start.bcl"
-name = "13 Shared COMMON"
-description = "13 Shared COMMON"
-groups = ["tutorials"]
-expected = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
-
-[[test]]
 id = "tutorial.14_procedures"
 kind = "tutorial"
-source = "14_procedures.bcl"
+source = "procedures.bcl"
 name = "14 Procedures"
 description = "14 Procedures"
 groups = ["tutorials"]
@@ -643,7 +634,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.15_random_and_record_files"
 kind = "tutorial"
-source = "15_random_and_record_files.bcl"
+source = "random_and_record_files.bcl"
 name = "15 Random-access and record files"
 description = "15 Random-access and record files"
 groups = ["tutorials"]
@@ -652,7 +643,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 [[test]]
 id = "tutorial.16_short_circuit"
 kind = "tutorial"
-source = "16_short_circuit.bcl"
+source = "short_circuit.bcl"
 name = "16 Short-circuit conditions"
 description = "16 Short-circuit conditions"
 groups = ["tutorials"]
@@ -661,7 +652,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.17_labels_and_error_handling"
 kind = "tutorial"
-source = "17_labels_and_error_handling.bcl"
+source = "labels_and_error_handling.bcl"
 name = "17 Classic labels and error handling"
 description = "17 Classic labels and error handling"
 groups = ["tutorials"]
@@ -670,7 +661,7 @@ expected = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 [[test]]
 id = "tutorial.18_stdlib"
 kind = "tutorial"
-source = "18_stdlib.bcl"
+source = "stdlib.bcl"
 name = "18 Standard-library functions"
 description = "18 Standard-library functions"
 groups = ["tutorials"]
@@ -679,7 +670,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.20_methods"
 kind = "tutorial"
-source = "20_methods.bcl"
+source = "methods.bcl"
 name = "20 Scalar methods"
 description = "20 Scalar methods"
 groups = ["tutorials"]
@@ -688,7 +679,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.21_portable_error_handling"
 kind = "tutorial"
-source = "21_portable_error_handling.bcl"
+source = "portable_error_handling.bcl"
 name = "21 Portable error handling"
 description = "21 Portable error handling"
 groups = ["tutorials"]
@@ -697,7 +688,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 [[test]]
 id = "tutorial.22_restore_data"
 kind = "tutorial"
-source = "22_restore_data.bcl"
+source = "restore_data.bcl"
 name = "22 RESTORE and DATA"
 description = "22 RESTORE and DATA"
 groups = ["tutorials"]
@@ -711,3 +702,12 @@ name = "19 Inventory case study"
 description = "19 Inventory case study"
 groups = ["tutorials"]
 expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+
+[[test]]
+id = "tutorial.shared.start"
+kind = "tutorial"
+source = "shared/start.bcl"
+name = "13 Shared COMMON"
+description = "13 Shared COMMON"
+groups = ["tutorials"]
+expected = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }

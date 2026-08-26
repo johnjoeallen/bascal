@@ -1,0 +1,31 @@
+// Tutorial — Shared COMMON, program 1 of 2
+//
+// "program name shared sharedname" tells bcc to load sharedname.bcl and
+// emit its COMMON declarations at the very top of the generated output.
+// Every program referencing the same shared file emits the same COMMON
+// block, so the variables survive a CHAIN to the next program.
+//
+// Compile:
+//   bcc tutorial/shared/start.bcl
+//
+// The generated .bas will open with COMMON count%, label$ followed by
+// the program body below.
+
+program start shared state
+
+label$ = "Counter demo"
+count% = 0
+
+count% = count% + 1
+count% = count% + 1
+count% = count% + 1
+
+print "Initialised: " + label$
+print "Count after 3 increments: " + str$(count%)
+
+/* In a real multi-program application you would chain to the compiled
+   show.exe -- CHAIN takes a program name, not the .bas source it was
+   compiled from (verified against real BASCOM 2.00 under dosbox-x:
+   CHAIN "show.bas" tries to run the source file itself and corrupts): */
+/* CHAIN "show" */
+end

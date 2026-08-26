@@ -1,0 +1,22 @@
+// Tutorial — Shared COMMON, program 2 of 2
+//
+// This program references the same shared file as start.bcl.  Its
+// generated BASIC will begin with the same COMMON block, so count% and
+// label$ contain whatever values start.bas left in them when it CHAINed
+// here.
+//
+// Compile:
+//   bcc tutorial/shared/show.bcl
+
+program show shared state
+
+print "Label:  " + label$
+print "Count:  " + str$(count%)
+
+if count% > 0 then
+    print "Counter was incremented " + str$(count%) + " time(s)."
+else
+    print "Counter was never incremented."
+end if
+
+end

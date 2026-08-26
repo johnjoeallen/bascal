@@ -94,7 +94,7 @@ CONST TAX_RATE   = 0.2
 
 Constants follow the same type-suffix rules as variables. Once declared, a constant may not be reassigned.
 
-From `tutorial/02_variables.bcl`:
+From `tutorial/variables.bcl`:
 
 ```bascal
 CONST PASS_MARK%  = 60
