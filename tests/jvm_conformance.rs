@@ -110,7 +110,7 @@ fn jvm_non_integer_arrays_run_when_available() {
     assert!(
         String::from_utf8_lossy(&output.stdout)
             .replace("\r\n", "\n")
-            .ends_with("4.0\nhello world\n9\n")
+            .ends_with("2\n3\n1\n0\n2\n7\n4.0\nhello world\n9\n")
     );
 }
 

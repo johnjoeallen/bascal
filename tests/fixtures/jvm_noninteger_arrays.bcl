@@ -3,6 +3,7 @@ program jvmNonIntegerArrays
 dim values#(2)
 dim words$(2)
 dim counts&(2)
+dim grid%(1, 2)
 
 procedure fillArrays(byref numbers#(?), byref text$(?), byref whole&(?))
     numbers#(0) = 1.5
@@ -14,6 +15,17 @@ procedure fillArrays(byref numbers#(?), byref text$(?), byref whole&(?))
 end procedure
 
 fillArrays(values#, words$, counts&)
+grid%(1, 2) = 7
+procedure showGrid(byref cells%(?, ?))
+    print sizeof(cells%, 0)
+    print sizeof(cells%, 1)
+    print ubound(cells%, 0)
+    print lbound(cells%, 1)
+    print ubound(cells%, 1)
+    print cells%(1, 2)
+end procedure
+
+showGrid(grid%)
 print values#(1)
 print words$(1)
 print counts&(1)

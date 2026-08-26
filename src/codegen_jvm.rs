@@ -143,6 +143,7 @@ fn emit_array_copy_helper(class_name: &str) -> String {
     format!(".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n    .limit stack 5\n    .limit locals 5\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\nL_copy_int:\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    aload 3\n    areturn\n.end method\n\n")
 }
 
+
 fn array_descriptor(shape: &ArrayShape) -> String {
     format!(
         "{}{}",
@@ -1241,6 +1242,18 @@ impl JvmContext {
         }
     }
 
+    fn emit_array_axis_length(&self, ident: &BasicIdent, axis: usize, out: &mut String) {
+        self.emit_array_load(ident, out);
+        if axis == 0 {
+            out.push_str("    arraylength\n");
+        } else {
+            for _ in 0..axis {
+                out.push_str("    iconst_0\n    aaload\n");
+            }
+            out.push_str("    arraylength\n");
+        }
+    }
+
     fn array_index(&self, ident: &BasicIdent) -> usize {
         let key = variable_key(ident);
         let key = self.array_aliases.get(&key).unwrap_or(&key);
@@ -2010,16 +2023,30 @@ fn emit_numeric_expr(
             out.push_str("    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    iconst_1\n    iadd\n");
             Ok(NumericType::Int)
         }
-        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args } if name.name.eq_ignore_ascii_case("sizeof") && args.len() == 1 => {
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if ["sizeof", "lbound", "ubound"].iter().any(|builtin| name.name.eq_ignore_ascii_case(builtin)) && (1..=2).contains(&args.len()) => {
             let array = match &args[0] {
                 Expr::Ident(array) => array,
                 Expr::ArrayRef { name, indices } if indices.is_empty() => name,
-                _ => return Err("JVM SIZEOF requires an array identifier".to_string()),
+                _ => return Err(format!("JVM {} requires an array identifier", name.name.to_ascii_uppercase())),
             };
             let shape = context.arrays.get(&variable_key(array)).ok_or_else(|| format!("unknown JVM array `{array}`"))?;
-            if shape.dimensions.len() != 1 { return Err("JVM SIZEOF currently supports one-dimensional arrays only".to_string()); }
-            emit_numeric_expr_as(&shape.dimensions[0], NumericType::Int, out, context)?;
-            out.push_str("    iconst_1\n    iadd\n");
+            let axis = match args.get(1) {
+                Some(Expr::Integer(axis)) if *axis >= 0 => *axis as usize,
+                Some(_) => return Err("JVM array bound axis must be a literal integer".to_string()),
+                None if shape.dimensions.len() == 1 => 0,
+                None => return Err(format!("JVM {} requires an axis for multidimensional arrays", name.name.to_ascii_uppercase())),
+            };
+            if axis >= shape.dimensions.len() { return Err(format!("JVM array axis {axis} is out of range")); }
+            if name.name.eq_ignore_ascii_case("lbound") {
+                out.push_str("    iconst_0\n");
+            } else if context.array_slots.contains_key(&variable_key(array)) {
+                context.emit_array_axis_length(array, axis, out);
+                if name.name.eq_ignore_ascii_case("ubound") { out.push_str("    iconst_1\n    isub\n"); }
+            } else {
+                emit_numeric_expr_as(&shape.dimensions[axis], NumericType::Int, out, context)?;
+                if name.name.eq_ignore_ascii_case("sizeof") { out.push_str("    iconst_1\n    iadd\n"); }
+            }
             Ok(NumericType::Int)
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
