@@ -38,8 +38,6 @@ descriptions = {
     "scalar_functions_run_when_available": "Scalar function calls and returns",
     "scoped_goto_runs_when_available": "Scoped GOTO labels",
     "jvm_non_integer_arrays_run_when_available": "Typed non-integer arrays and array parameters",
-    "c_target_random_file_is_binary_compatible_with_real_bascom_c_writes": "C random-file output is readable by BASCOM",
-    "c_target_random_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM creates file; target validates binary compatibility",
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": "Target creates file; BASCOM validates binary compatibility",
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": "Existing random-file records compile on BASIC and C",

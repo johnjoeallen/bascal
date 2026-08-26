@@ -23,8 +23,6 @@ backend-specific compatibility boundaries.
 | String self-concatenation matches C output | UNSUPPORTED | PASS | UNSUPPORTED |
 | Scalar methods match BASCOM | PASS | PASS | PASS |
 | Scalar methods match C output | UNSUPPORTED | PASS | UNSUPPORTED |
-| C random-file output is readable by BASCOM | UNSUPPORTED | PASS | UNSUPPORTED |
-| BASCOM random-file output is readable by C | UNSUPPORTED | PASS | UNSUPPORTED |
 | Tie-break rounding matches BASCOM | PASS | PASS | UNSUPPORTED |
 | Standalone record literals are rejected consistently | PASS | PASS | PASS |
 | Plain record declarations are rejected consistently | PASS | PASS | PASS |
