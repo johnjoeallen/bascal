@@ -4,33 +4,33 @@
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
-| Deterministic tutorials build and execute | UNKNOWN | UNKNOWN | UNKNOWN |
-| C rejects classic labels and error handling | UNKNOWN | UNKNOWN | UNKNOWN |
-| Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
-| Built-in scalar methods under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| MID$ assignment edge cases under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| remline output under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| Self-referential string concatenation under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| Sort driver under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| Standard-library functions under FreeBASIC | UNKNOWN | UNKNOWN | UNKNOWN |
-| Interactive inventory case study | UNKNOWN | UNKNOWN | UNKNOWN |
-| remline case study output | UNKNOWN | UNKNOWN | UNKNOWN |
-| Nested procedure TRY/CATCH propagation | UNKNOWN | UNKNOWN | UNKNOWN |
-| Hello-world assembly and execution | UNKNOWN | UNKNOWN | UNKNOWN |
-| Expected failure for array byval clone assembly | UNKNOWN | UNKNOWN | UNKNOWN |
-| Catch filters and source bindings | UNKNOWN | UNKNOWN | UNKNOWN |
-| Expected diagnostic for MID$ assignment | UNKNOWN | UNKNOWN | UNKNOWN |
-| Expected diagnostic for random/record file I/O | UNKNOWN | UNKNOWN | UNKNOWN |
-| Expected diagnostic for sequential file I/O | UNKNOWN | UNKNOWN | UNKNOWN |
-| Typed non-integer arrays and array parameters | UNKNOWN | UNKNOWN | UNKNOWN |
-| Random file binary compatibility | UNKNOWN | UNKNOWN | UNKNOWN |
-| Structured TRY/CATCH/FINALLY execution | UNKNOWN | UNKNOWN | UNKNOWN |
-| Numeric literals and arithmetic | UNKNOWN | UNKNOWN | UNKNOWN |
-| Portable error-handling tutorial | UNKNOWN | UNKNOWN | UNKNOWN |
-| Scalar function calls and returns | UNKNOWN | UNKNOWN | UNKNOWN |
-| Scalar variables and constants | UNKNOWN | UNKNOWN | UNKNOWN |
-| Scoped GOTO labels | UNKNOWN | UNKNOWN | UNKNOWN |
-| Structured branches and WHILE loops | UNKNOWN | UNKNOWN | UNKNOWN |
+| Deterministic tutorials build and execute | PASS | PASS | UNKNOWN |
+| C rejects classic labels and error handling | PASS | PASS | UNKNOWN |
+| Every supported fixture transpiles successfully | PASS | PASS | UNKNOWN |
+| Built-in scalar methods under FreeBASIC | PASS | PASS | UNKNOWN |
+| MID$ assignment edge cases under FreeBASIC | PASS | PASS | UNKNOWN |
+| remline output under FreeBASIC | PASS | PASS | UNKNOWN |
+| Self-referential string concatenation under FreeBASIC | PASS | PASS | UNKNOWN |
+| Sort driver under FreeBASIC | PASS | PASS | UNKNOWN |
+| Standard-library functions under FreeBASIC | PASS | PASS | UNKNOWN |
+| Interactive inventory case study | PASS | PASS | UNKNOWN |
+| remline case study output | PASS | PASS | UNKNOWN |
+| Nested procedure TRY/CATCH propagation | PASS | PASS | UNKNOWN |
+| Hello-world assembly and execution | UNKNOWN | UNKNOWN | PASS |
+| Expected failure for array byval clone assembly | UNKNOWN | UNKNOWN | PASS |
+| Catch filters and source bindings | UNKNOWN | UNKNOWN | PASS |
+| Expected diagnostic for MID$ assignment | UNKNOWN | UNKNOWN | PASS |
+| Expected diagnostic for random/record file I/O | UNKNOWN | UNKNOWN | PASS |
+| Expected diagnostic for sequential file I/O | UNKNOWN | UNKNOWN | PASS |
+| Typed non-integer arrays and array parameters | UNKNOWN | UNKNOWN | PASS |
+| Random file binary compatibility | UNKNOWN | UNKNOWN | PASS |
+| Structured TRY/CATCH/FINALLY execution | UNKNOWN | UNKNOWN | PASS |
+| Numeric literals and arithmetic | UNKNOWN | UNKNOWN | PASS |
+| Portable error-handling tutorial | UNKNOWN | UNKNOWN | PASS |
+| Scalar function calls and returns | UNKNOWN | UNKNOWN | PASS |
+| Scalar variables and constants | UNKNOWN | UNKNOWN | PASS |
+| Scoped GOTO labels | UNKNOWN | UNKNOWN | PASS |
+| Structured branches and WHILE loops | UNKNOWN | UNKNOWN | PASS |
 | Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
 | 01 Hello, world | PASS | PASS | PASS |
 | 02 Variables and constants | PASS | PASS | PASS |

@@ -69,7 +69,10 @@ for path in sorted((root / "tests").glob("*.rs")):
         if test_id in ids:
             raise SystemExit(f"duplicate conformance ID: {test_id}")
         groups = re.search(r"^// Conformance groups:\s*(.+)$", text, re.MULTILINE).group(1).split(", ")
-        ids[test_id] = ("test", module, name, groups, {})
+        ids[test_id] = ("test", module, name, groups, {
+            backend: ("PASS" if backend in groups else "UNKNOWN")
+            for backend in ("basic", "c", "jvm")
+        })
 
 import tomllib
 meta = tomllib.loads((root / "tutorial" / "conformance.toml").read_text())

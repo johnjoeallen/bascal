@@ -13,15 +13,15 @@
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
 | Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
-| Array of records is not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Bare dynamic record string fields are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Existing random-file records compile on BASIC and C | UNKNOWN | UNKNOWN | UNKNOWN |
-| JVM random-file records produce the expected diagnostic | UNKNOWN | UNKNOWN | UNKNOWN |
-| Nested record fields are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Arrays of records are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Record-valued parameters are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Record-valued returns are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
-| Standalone record literals are not yet supported | UNKNOWN | UNKNOWN | UNKNOWN |
+| Array of records is not yet supported | PASS | PASS | PASS |
+| Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
+| Existing random-file records compile on BASIC and C | PASS | PASS | PASS |
+| JVM random-file records produce the expected diagnostic | PASS | PASS | PASS |
+| Nested record fields are not yet supported | PASS | PASS | PASS |
+| Arrays of records are not yet supported | PASS | PASS | PASS |
+| Record-valued parameters are not yet supported | PASS | PASS | PASS |
+| Record-valued returns are not yet supported | PASS | PASS | PASS |
+| Standalone record literals are not yet supported | PASS | PASS | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Back to conformance overview</a>
