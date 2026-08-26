@@ -7,6 +7,27 @@ root = Path(__file__).resolve().parents[1]
 ids = {}
 valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "UNKNOWN"}
 descriptions = {
+    "builtin_scalar_methods_match_c_target": "Scalar methods match C output",
+    "builtin_scalar_methods_match_real_bascom": "Scalar methods match BASCOM",
+    "const_and_print_matches_real_bascom": "Constants and printing match BASCOM",
+    "mid_assign_matches_real_bascom": "MID$ assignment matches BASCOM",
+    "self_referential_string_concatenation_matches_c_target": "String self-concatenation matches C output",
+    "self_referential_string_concatenation_matches_real_bascom": "String self-concatenation matches BASCOM",
+    "stdlib_functions_match_c_target": "Standard-library functions match C output",
+    "stdlib_functions_match_real_bascom": "Standard-library functions match BASCOM",
+    "tie_break_rounding_matches_real_bascom": "Tie-break rounding matches BASCOM",
+    "c_target_builds_and_runs_noninteractive_tutorials": "Deterministic tutorials build and execute",
+    "c_target_rejects_labels_and_error_handling_tutorial": "C rejects classic labels and error handling",
+    "compiles_every_example_bcl_file": "Every supported fixture transpiles successfully",
+    "freebasic_runs_builtin_scalar_methods_when_available": "Built-in scalar methods under FreeBASIC",
+    "freebasic_runs_mid_assign_edge_cases_when_available": "MID$ assignment edge cases under FreeBASIC",
+    "freebasic_runs_remline_when_available": "remline output under FreeBASIC",
+    "freebasic_runs_self_referential_string_concatenation_when_available": "Self-referential string concatenation under FreeBASIC",
+    "freebasic_runs_sort_driver_when_available": "Sort driver under FreeBASIC",
+    "freebasic_runs_stdlib_functions_when_available": "Standard-library functions under FreeBASIC",
+    "gcc_runs_inventory_tutorial_under_c_target_when_available": "Interactive inventory case study",
+    "gcc_runs_remline_under_c_target_when_available": "remline case study output",
+    "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available": "Nested procedure TRY/CATCH propagation",
     "jvm_try_catch_finally_runs_when_available": "Structured TRY/CATCH/FINALLY execution",
     "jvm_catch_filters_and_source_bindings_run_when_available": "Catch filters and source bindings",
     "portable_error_handling_tutorial_runs_when_available": "Portable error-handling tutorial",
@@ -21,6 +42,11 @@ descriptions = {
     "c_target_random_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": "Existing random-file records compile on BASIC and C",
     "jvm_backend_does_not_yet_support_random_access_file_records": "JVM random-file records produce the expected diagnostic",
+    "jvm_random_file_binary_compatibility_is_pending": "Random file binary compatibility",
+    "jvm_byval_arrays_expected_failure_is_non_blocking": "Expected failure for array byval clone assembly",
+    "jvm_expected_failure_mid_assignment_is_non_blocking": "Expected diagnostic for MID$ assignment",
+    "jvm_expected_failure_random_record_io_is_non_blocking": "Expected diagnostic for random/record file I/O",
+    "jvm_expected_failure_sequential_file_io_is_non_blocking": "Expected diagnostic for sequential file I/O",
 }
 
 for path in sorted((root / "tests").glob("*.rs")):

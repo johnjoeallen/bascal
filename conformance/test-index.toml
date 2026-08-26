@@ -5,7 +5,7 @@ id = "test.dosbox_conformance.builtin_scalar_methods_match_c_target"
 kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_c_target"
-description = "builtin_scalar_methods_match_c_target"
+description = "Scalar methods match C output"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -14,7 +14,7 @@ id = "test.dosbox_conformance.builtin_scalar_methods_match_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_real_bascom"
-description = "builtin_scalar_methods_match_real_bascom"
+description = "Scalar methods match BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -41,7 +41,7 @@ id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "const_and_print_matches_real_bascom"
-description = "const_and_print_matches_real_bascom"
+description = "Constants and printing match BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -50,7 +50,7 @@ id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "mid_assign_matches_real_bascom"
-description = "mid_assign_matches_real_bascom"
+description = "MID$ assignment matches BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -59,7 +59,7 @@ id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_ta
 kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_c_target"
-description = "self_referential_string_concatenation_matches_c_target"
+description = "String self-concatenation matches C output"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -68,7 +68,7 @@ id = "test.dosbox_conformance.self_referential_string_concatenation_matches_real
 kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_real_bascom"
-description = "self_referential_string_concatenation_matches_real_bascom"
+description = "String self-concatenation matches BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -77,7 +77,7 @@ id = "test.dosbox_conformance.stdlib_functions_match_c_target"
 kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_c_target"
-description = "stdlib_functions_match_c_target"
+description = "Standard-library functions match C output"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -86,7 +86,7 @@ id = "test.dosbox_conformance.stdlib_functions_match_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_real_bascom"
-description = "stdlib_functions_match_real_bascom"
+description = "Standard-library functions match BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -95,7 +95,7 @@ id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "tie_break_rounding_matches_real_bascom"
-description = "tie_break_rounding_matches_real_bascom"
+description = "Tie-break rounding matches BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -104,7 +104,7 @@ id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"
 kind = "test"
 source = "examples"
 name = "c_target_builds_and_runs_noninteractive_tutorials"
-description = "c_target_builds_and_runs_noninteractive_tutorials"
+description = "Deterministic tutorials build and execute"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -113,7 +113,7 @@ id = "test.examples.c_target_rejects_labels_and_error_handling_tutorial"
 kind = "test"
 source = "examples"
 name = "c_target_rejects_labels_and_error_handling_tutorial"
-description = "c_target_rejects_labels_and_error_handling_tutorial"
+description = "C rejects classic labels and error handling"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -122,7 +122,7 @@ id = "test.examples.compiles_every_example_bcl_file"
 kind = "test"
 source = "examples"
 name = "compiles_every_example_bcl_file"
-description = "compiles_every_example_bcl_file"
+description = "Every supported fixture transpiles successfully"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -131,7 +131,7 @@ id = "test.examples.freebasic_runs_builtin_scalar_methods_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_builtin_scalar_methods_when_available"
-description = "freebasic_runs_builtin_scalar_methods_when_available"
+description = "Built-in scalar methods under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -140,7 +140,7 @@ id = "test.examples.freebasic_runs_mid_assign_edge_cases_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_mid_assign_edge_cases_when_available"
-description = "freebasic_runs_mid_assign_edge_cases_when_available"
+description = "MID$ assignment edge cases under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -149,7 +149,7 @@ id = "test.examples.freebasic_runs_remline_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_remline_when_available"
-description = "freebasic_runs_remline_when_available"
+description = "remline output under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -158,7 +158,7 @@ id = "test.examples.freebasic_runs_self_referential_string_concatenation_when_av
 kind = "test"
 source = "examples"
 name = "freebasic_runs_self_referential_string_concatenation_when_available"
-description = "freebasic_runs_self_referential_string_concatenation_when_available"
+description = "Self-referential string concatenation under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -167,7 +167,7 @@ id = "test.examples.freebasic_runs_sort_driver_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_sort_driver_when_available"
-description = "freebasic_runs_sort_driver_when_available"
+description = "Sort driver under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -176,7 +176,7 @@ id = "test.examples.freebasic_runs_stdlib_functions_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_stdlib_functions_when_available"
-description = "freebasic_runs_stdlib_functions_when_available"
+description = "Standard-library functions under FreeBASIC"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -185,7 +185,7 @@ id = "test.examples.gcc_runs_inventory_tutorial_under_c_target_when_available"
 kind = "test"
 source = "examples"
 name = "gcc_runs_inventory_tutorial_under_c_target_when_available"
-description = "gcc_runs_inventory_tutorial_under_c_target_when_available"
+description = "Interactive inventory case study"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -194,7 +194,7 @@ id = "test.examples.gcc_runs_remline_under_c_target_when_available"
 kind = "test"
 source = "examples"
 name = "gcc_runs_remline_under_c_target_when_available"
-description = "gcc_runs_remline_under_c_target_when_available"
+description = "remline case study output"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -203,7 +203,7 @@ id = "test.examples.gcc_runs_try_catch_through_nested_procedure_calls_under_c_ta
 kind = "test"
 source = "examples"
 name = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
-description = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
+description = "Nested procedure TRY/CATCH propagation"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -221,7 +221,7 @@ id = "test.jvm_conformance.jvm_byval_arrays_expected_failure_is_non_blocking"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_byval_arrays_expected_failure_is_non_blocking"
-description = "jvm_byval_arrays_expected_failure_is_non_blocking"
+description = "Expected failure for array byval clone assembly"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -239,7 +239,7 @@ id = "test.jvm_conformance.jvm_expected_failure_mid_assignment_is_non_blocking"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_mid_assignment_is_non_blocking"
-description = "jvm_expected_failure_mid_assignment_is_non_blocking"
+description = "Expected diagnostic for MID$ assignment"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -248,7 +248,7 @@ id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_random_record_io_is_non_blocking"
-description = "jvm_expected_failure_random_record_io_is_non_blocking"
+description = "Expected diagnostic for random/record file I/O"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -257,7 +257,7 @@ id = "test.jvm_conformance.jvm_expected_failure_sequential_file_io_is_non_blocki
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_sequential_file_io_is_non_blocking"
-description = "jvm_expected_failure_sequential_file_io_is_non_blocking"
+description = "Expected diagnostic for sequential file I/O"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -275,7 +275,7 @@ id = "test.jvm_conformance.jvm_random_file_binary_compatibility_is_pending"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_random_file_binary_compatibility_is_pending"
-description = "jvm_random_file_binary_compatibility_is_pending"
+description = "Random file binary compatibility"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
