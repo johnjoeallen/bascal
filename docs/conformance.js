@@ -15,7 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
         : value === "DEFERRED" ? "deferred"
         : value === "NOT APPLICABLE" || value === "N/A" ? "not-applicable"
         : expected.has(value) ? "pass"
-        : "unknown";
+        : value === "UNKNOWN" ? "unknown"
+        : null;
       if (!kind) return;
       cell.innerHTML = `<span class="conformance-status ${kind}" role="status" aria-label="${value}">${value}</span>`;
     });
