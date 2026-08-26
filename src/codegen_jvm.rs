@@ -1247,6 +1247,10 @@ impl JvmContext {
         if axis == 0 {
             out.push_str("    arraylength\n");
         } else {
+            // BASCAL dimensions are upper bounds, so allocation always adds
+            // one and validation rejects negative bounds.  Every language-
+            // constructed outer axis is therefore non-empty; descending
+            // through element zero is safe for parameter-bound queries.
             for _ in 0..axis {
                 out.push_str("    iconst_0\n    aaload\n");
             }
