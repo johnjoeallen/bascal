@@ -9,11 +9,10 @@
 | C/JVM reject the classic labels/error-handling tutorial | NOT APPLICABLE | UNSUPPORTED | UNSUPPORTED |
 | Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
 | Interactive inventory case study | PASS | PASS | DEFERRED |
-| Random file binary compatibility | PASS | PASS | FAIL |
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
-| BASCOM random-file output is readable by C | PASS | PASS | FAIL |
-| C random-file output is readable by BASCOM | PASS | PASS | NOT APPLICABLE |
+| BASCOM creates file; target validates binary compatibility | PASS | PASS | FAIL |
+| Target creates file; BASCOM validates binary compatibility | PASS | PASS | FAIL |
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | In-memory records with variable-length string fields are not yet supported | PASS | PASS | PASS |

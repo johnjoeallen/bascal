@@ -40,8 +40,8 @@ descriptions = {
     "jvm_non_integer_arrays_run_when_available": "Typed non-integer arrays and array parameters",
     "c_target_random_file_is_binary_compatible_with_real_bascom_c_writes": "C random-file output is readable by BASCOM",
     "c_target_random_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": "C random-file output is readable by BASCOM",
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM creates file; target validates binary compatibility",
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": "Target creates file; BASCOM validates binary compatibility",
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": "Existing random-file records compile on BASIC and C",
     "jvm_backend_does_not_yet_support_random_access_file_records": "JVM random-file records produce the expected diagnostic",
     "jvm_byval_arrays_expected_failure_is_non_blocking": "Expected failure for array byval clone assembly",
@@ -83,7 +83,7 @@ group_overrides = {
 }
 status_overrides = {
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "PASS", "c": "PASS", "jvm": "NOT APPLICABLE"},
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
     "jvm_byval_arrays_expected_failure_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_expected_failure_mid_assignment_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_expected_failure_random_record_io_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},

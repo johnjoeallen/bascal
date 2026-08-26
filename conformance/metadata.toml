@@ -2,12 +2,6 @@
 # groups, applicability, and expected backend states belong here.
 
 [[test]]
-id = "core.random_file_binary_compatibility"
-description = "Random file binary compatibility"
-groups = ["core", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
-
-[[test]]
 id = "core.all_tutorials_compile"
 description = "All tutorial .bcl sources compile"
 groups = ["core"]

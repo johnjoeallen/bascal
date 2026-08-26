@@ -4,9 +4,8 @@
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
-| Random file binary compatibility | PASS | PASS | FAIL |
-| BASCOM random-file output is readable by C | PASS | PASS | FAIL |
-| C random-file output is readable by BASCOM | PASS | PASS | NOT APPLICABLE |
+| BASCOM creates file; target validates binary compatibility | PASS | PASS | FAIL |
+| Target creates file; BASCOM validates binary compatibility | PASS | PASS | FAIL |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | In-memory records with variable-length string fields are not yet supported | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | NOT APPLICABLE |
