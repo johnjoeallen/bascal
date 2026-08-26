@@ -4,24 +4,24 @@
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
-| <span class="conformance-description">All tutorial .bcl sources compile</span> | PASS | PASS | DEFERRED |
-| <span class="conformance-description">Built-in scalar method calls</span> | PASS | PASS | PASS |
-| <span class="conformance-description">C/JVM reject the classic labels/error-handling tutorial</span> | NOT APPLICABLE | UNSUPPORTED | UNSUPPORTED |
-| <span class="conformance-description">Deterministic tutorials build and execute</span> | PASS | PASS | DEFERRED |
-| <span class="conformance-description">Interactive inventory case study</span> | PASS | PASS | DEFERRED |
-| <span class="conformance-description">Random file binary compatibility</span> | PASS | PASS | FAIL |
-| <span class="conformance-description">Standard-library function execution</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Typed non-integer arrays and array parameters</span> | DEFERRED | DEFERRED | PASS |
-| <span class="conformance-description">Every supported fixture transpiles successfully</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Array of records is not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Bare dynamic record string fields are not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Existing random-file records compile on BASIC and C</span> | PASS | PASS | PASS |
-| <span class="conformance-description">JVM random-file records produce the expected diagnostic</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Nested record fields are not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Arrays of records are not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Record-valued parameters are not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Record-valued returns are not yet supported</span> | PASS | PASS | PASS |
-| <span class="conformance-description">Standalone record literals are not yet supported</span> | PASS | PASS | PASS |
+| All tutorial .bcl sources compile | PASS | PASS | DEFERRED |
+| Built-in scalar method calls | PASS | PASS | PASS |
+| C/JVM reject the classic labels/error-handling tutorial | NOT APPLICABLE | UNSUPPORTED | UNSUPPORTED |
+| Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
+| Interactive inventory case study | PASS | PASS | DEFERRED |
+| Random file binary compatibility | PASS | PASS | FAIL |
+| Standard-library function execution | PASS | PASS | PASS |
+| Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
+| Every supported fixture transpiles successfully | PASS | PASS | PASS |
+| Array of records is not yet supported | PASS | PASS | PASS |
+| Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
+| Existing random-file records compile on BASIC and C | PASS | PASS | PASS |
+| JVM random-file records produce the expected diagnostic | PASS | PASS | PASS |
+| Nested record fields are not yet supported | PASS | PASS | PASS |
+| Arrays of records are not yet supported | PASS | PASS | PASS |
+| Record-valued parameters are not yet supported | PASS | PASS | PASS |
+| Record-valued returns are not yet supported | PASS | PASS | PASS |
+| Standalone record literals are not yet supported | PASS | PASS | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Overview</a>
