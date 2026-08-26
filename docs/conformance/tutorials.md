@@ -14,13 +14,13 @@
 | Arrays | PASS | PASS | PASS |
 | DATA and READ | PASS | PASS | PASS |
 | Sequential files | PASS | PASS | FAIL |
-| Screen I/O | PASS | PASS | N/A |
-| REQUIRE and libraries | PASS | FAIL | FAIL |
-| Shared COMMON | PASS | FAIL | FAIL |
+| Screen I/O | PASS | PASS | FAIL |
+| REQUIRE and libraries | PASS | FAIL | PASS |
+| Shared COMMON | PASS | N/A | N/A |
 | Procedures | PASS | PASS | PASS |
 | Random-access and record files | PASS | PASS | FAIL |
 | Short-circuit conditions | PASS | PASS | PASS |
-| Classic labels and error handling | PASS | FAIL | FAIL |
+| Classic labels and error handling | PASS | N/A | N/A |
 | Standard-library functions | PASS | PASS | PASS |
 | Inventory case study | PASS | PASS | FAIL |
 | Scalar methods | PASS | PASS | PASS |
