@@ -1,6 +1,6 @@
 [Home](../) / Tutorials
 
-Each tutorial names the backend(s) it compiles under — `basic` is the complete target; `--target c` is a mostly-complete native-C backend; `--target jvm` currently covers the first eight core-language tutorials plus selected later tutorials. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
+Each tutorial names the backend(s) it transpiles under — `basic` accepts every tutorial; `--target c` supports all except `12_require` and classic `17_labels_and_error_handling`; `--target jvm` supports the first eight core-language tutorials plus 11, 12, 14, 16, 18, 20, and 21. These labels describe successful backend transpilation; some generated BASIC programs still require a target-specific compiler or runtime. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
 
 <div class="section" markdown="1">
 
@@ -21,7 +21,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 
 - [Functions <span class="targets">(Basic, C, JVM)</span>](07_functions.md)
 - [Scalar Methods <span class="targets">(Basic, C, JVM)</span>](20_methods.md)
-- [Require and Multi-File Projects <span class="targets">(Basic, C)</span>](12_require.md)
+- [Require and Multi-File Projects <span class="targets">(Basic, JVM)</span>](12_require.md)
 - [Shared COMMON <span class="targets">(Basic, C)</span>](13_shared.md)
 - [Procedures <span class="targets">(Basic, C, JVM)</span>](14_procedures.md)
 
@@ -43,7 +43,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 
 ## Control Flow and Runtime
 
-- [Short-Circuit && and \|\| <span class="targets">(Basic, C)</span>](16_short_circuit.md)
+- [Short-Circuit && and \|\| <span class="targets">(Basic, C, JVM)</span>](16_short_circuit.md)
 - [Classic BASIC Error Handling <span class="targets">(Basic)</span>](17_labels_and_error_handling.md)
 - [Portable Structured Error Handling <span class="targets">(Basic, C, JVM)</span>](21_portable_error_handling.md)
 - [RESTORE and DATA <span class="targets">(Basic, C)</span>](22_restore_data.md)
@@ -57,7 +57,7 @@ Each tutorial names the backend(s) it compiles under — `basic` is the complete
 
 A full historic program, not just a feature walkthrough — records, random-access files, procedures, and error handling working together at real-program scale.
 
-- [Case Study: Random-Access Inventory <span class="targets">(Basic)</span>](19_inventory.md)
+- [Case Study: Random-Access Inventory <span class="targets">(Basic, C)</span>](19_inventory.md)
 
 </div>
 
