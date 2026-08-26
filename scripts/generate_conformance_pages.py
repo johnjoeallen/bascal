@@ -19,14 +19,6 @@ def resolved(entry, backend):
     if expected in ("DEFERRED", "UNSUPPORTED", "WILL NOT IMPLEMENT"):
         return expected
     return "FAIL"
-overview = "# Conformance tests\n\nGenerated from the conformance test metadata and latest build run.\n\n" + "\n".join(
-    f"- [{title}]({filename.removesuffix('.md')}/)" for filename, title in (value for value in {
-        "core": ("core-language.md", "Core language"), "tutorials": ("tutorials.md", "Tutorials"),
-        "basic": ("basic.md", "BASIC-specific"), "c": ("c.md", "C-specific"),
-        "jvm": ("jvm.md", "JVM-specific"), "files": ("records.md", "Files and records")
-    }.values())
-) + "\n"
-(root / "docs/conformance.md").write_text(overview)
 pages = {
     "core": ("core-language.md", "Core language"),
     "tutorials": ("tutorials.md", "Tutorials"),
@@ -61,3 +53,8 @@ for group, (filename, title) in pages.items():
     page = f"# [Conformance tests](../)\n\n## {title}\n\n{table}\n{body}\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n{nav}\n</nav>\n"
     (root / "docs/conformance" / filename).write_text(page)
     print(f"generated {filename} from {len(selected)} indexed tests")
+
+# The conformance home is the core-language page, not a second link index.
+core_page = (root / "docs/conformance/core-language.md").read_text()
+core_page = core_page.replace("# [Conformance tests](../)", "# Conformance tests", 1)
+(root / "docs/conformance.md").write_text(core_page)
