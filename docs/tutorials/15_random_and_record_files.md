@@ -298,9 +298,9 @@ close #1
 
 record Student
     id:    int16
-    name:  string(20)
+    name:  string(20) lpad
     score: float64
-    faculty: string(20)
+    faculty: string(20) lpad
 end record
 
 file db as Student = open("tutorial_records.dat")

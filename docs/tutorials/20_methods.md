@@ -177,9 +177,9 @@ end
 
 80 ' Tutorial — Scalar methods
 90 '
-100 ' A method declares its scalar receiver type in brackets after its name.
-110 ' Omitting a result type makes it return its self%/self!/self$ receiver.
-120 ' Dot calls can chain when each result has the next receiver's
+100 ' A method declares its scalar receiver and result types in brackets after
+110 ' its name. The receiver is available as self%/self!/self$
+120 ' in the body. Dot calls can chain when each result has the next receiver's
 130 ' type. Methods transpile to ordinary typed calls for both backends.
 
 140 name$ = "bascal"
@@ -323,6 +323,8 @@ void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     }
     snprintf(bcc_out, 256, "%s", bv_s_out);
     return;
+    snprintf(bcc_out, 256, "%s", bv_s_self);
+    return;
 }
 
 void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out) {
@@ -334,6 +336,8 @@ void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out) {
     char bt_s_3[256];
     snprintf(bt_s_3, sizeof(bt_s_3), "%s%s", bt_s_2, "!");
     snprintf(bcc_out, 256, "%s", bt_s_3);
+    return;
+    snprintf(bcc_out, 256, "%s", bv_s_self);
     return;
 }
 
@@ -351,6 +355,8 @@ void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const c
     snprintf(bt_s_5, sizeof(bt_s_5), "%s%s", bt_s_4, bv_s_right);
     snprintf(bcc_out, 256, "%s", bt_s_5);
     return;
+    snprintf(bcc_out, 256, "%s", bv_s_self);
+    return;
 }
 
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high) {
@@ -362,10 +368,12 @@ int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high) {
         }
     }
     return bv_i_self;
+    return bv_i_self;
 }
 
 float bf_f_percent_f(float bv_f_self, float bv_f_rate) {
     return ((double)(bv_f_self * bv_f_rate) / (double)100);
+    return bv_f_self;
 }
 
 int main(void) {

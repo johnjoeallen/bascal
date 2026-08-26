@@ -71,11 +71,11 @@ print error$(9999) ' Error  9999 (falls through to STR$)
 // ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
 // receiver type, using self$ in place of an explicit s$ parameter -- see
 // the "Declare and call a method" chapter. A method's receiver is really
-// just an implicit first parameter, so the ordinary call form below
+// just an implicit first parameter, so the ordinary call form
 // (ltrim$("...")) keeps working exactly as before: it resolves straight to
 // the same method declaration, with the first argument filling self$. The
-// method-call form (below, chained) is the same declaration too -- just
-// written as "...".ltrim() instead. error$ stays an ordinary function: an
+// examples below prefer the method-call form, written as "...".ltrim().
+// error$ stays an ordinary function: an
 // error code is a lookup key, not a value the call is naturally "operating
 // on" the way the others operate on their string.
 //
@@ -89,10 +89,10 @@ require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase
 require com.bascal.stdlib.error
 
-print "[" + ltrim$("   padded left") + "]"
-print "[" + rtrim$("padded right   ") + "]"
-print ucase$("shout this")
-print lcase$("QUIET THIS DOWN")
+print "[" + "   padded left".ltrim() + "]"
+print "[" + "padded right   ".rtrim() + "]"
+print "shout this".ucase()
+print "QUIET THIS DOWN".lcase()
 
 /* Same four functions, called as chained methods instead. */
 print "[" + "  padded both sides  ".ltrim().rtrim() + "]"
@@ -181,8 +181,8 @@ end
 530 ' section (https://johnjoeallen.github.io/bascal/manual/) for the full
 540 ' story.
 550 '
-560 ' ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
-570 ' receiver type, using self$ in place of an explicit s$ parameter -- see
+560 ' ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
+570 ' end method), using self$ in place of an explicit s$ parameter -- see
 580 ' the "Declare and call a method" chapter. A method's receiver is really
 590 ' just an implicit first parameter, so the ordinary call form below
 600 ' (ltrim$("...")) keeps working exactly as before: it resolves straight to
@@ -834,8 +834,8 @@ int main(void) {
     // section (https://johnjoeallen.github.io/bascal/manual/) for the full
     // story.
     //
-    // ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
-    // receiver type, using self$ in place of an explicit s$ parameter -- see
+    // ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
+    // end method), using self$ in place of an explicit s$ parameter -- see
     // the "Declare and call a method" chapter. A method's receiver is really
     // just an implicit first parameter, so the ordinary call form below
     // (ltrim$("...")) keeps working exactly as before: it resolves straight to
@@ -1645,8 +1645,8 @@ L_select_0_end:
     ; section (https://johnjoeallen.github.io/bascal/manual/) for the full
     ; story.
     ;
-    ; ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
-    ; receiver type, using self$ in place of an explicit s$ parameter -- see
+    ; ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
+    ; end method), using self$ in place of an explicit s$ parameter -- see
     ; the "Declare and call a method" chapter. A method's receiver is really
     ; just an implicit first parameter, so the ordinary call form below
     ; (ltrim$("...")) keeps working exactly as before: it resolves straight to

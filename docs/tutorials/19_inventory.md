@@ -155,8 +155,8 @@ require com.bascal.stdlib.error
 // read/write via `inv[n]` (see checkPart() below) replace fhb's
 // manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
 record Part
-    flag:    string(1)
-    desc:    string(30)
+    flag:    string(1) lpad
+    desc:    string(30) lpad
     qty:     int16
     reorder: int16
     price:   float32
@@ -1799,7 +1799,6 @@ static int bcc_get_record_part(FILE* file, long record, char* field_0, char* fie
 static void bcc_color(int fg, int bg);
 static void bcc_read_line(void);
 
-static float bv_f_inv = 0;
 static int bv_i_erl = 0;
 static int bv_i_err = 0;
 static int bv_i_errbadfilemode = 0;
@@ -2442,6 +2441,7 @@ void bf_i_checkpart(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     char bt_s_39[256];
     bf_s_readpartnumberinput(bt_s_39);
     snprintf(bv_s_partstr, sizeof(bv_s_partstr), "%s", bt_s_39);
@@ -2508,6 +2508,7 @@ void bf_i_editrecord(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 10, bv_i_tabcol);
     char bt_s_42[256];
@@ -2575,6 +2576,7 @@ void bf_i_listall(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     bf_i_printlistheader();
     bv_i_scrollcount = 0;
     int bt_lim_48 = bv_i_partcount;
@@ -2623,6 +2625,7 @@ void bf_i_addstock(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 5, 25);
     printf("A D D I N G   S T O C K\n");
@@ -2707,6 +2710,7 @@ void bf_i_subtractstock(void) {
     char bv_s_pflag[256] = {0};
     char bv_s_substr[256] = {0};
 
+    // global inv
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 5, 20);
     printf("S U B T R A C T I N G    S T O C K\n");
@@ -2799,6 +2803,7 @@ void bf_i_reorderreport(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     bf_i_printreorderheader();
     bv_i_reportlinecount = 0;
     int bt_lim_66 = bv_i_partcount;
@@ -2846,6 +2851,7 @@ void bf_i_initializeinventoryfileifnew(void) {
     char bv_s_pdesc[256] = {0};
     char bv_s_pflag[256] = {0};
 
+    // global inv
     // let p = inv[...]  (whole-record read)
     bcc_get_record_part(bcc_files[0], 1, bv_s_invflagbuf, bv_s_invdescbuf, bv_s_invqtybuf, bv_s_invreorderbuf, bv_s_invpricebuf);
     bv_i_pflagtrimi = ((int)strlen(bv_s_invflagbuf));
