@@ -54,6 +54,7 @@ backends = ["basic", "c"]
 name = "11 Screen I/O"
 source = "11_screen.bcl"
 backends = ["basic", "c"]
+na = ["jvm"]
 
 [[tutorial]]
 name = "12 REQUIRE and libraries"
