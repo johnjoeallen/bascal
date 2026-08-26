@@ -18,5 +18,6 @@
 | Tie-break rounding matches BASCOM | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../">← Back to conformance overview</a>
+  <a href="jvm.md">← Previous: JVM-specific</a>
+  <a href="../">← Overview</a>
 </nav>

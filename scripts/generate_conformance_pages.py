@@ -35,6 +35,7 @@ pages = {
     "jvm": ("jvm.md", "JVM-specific"),
     "files": ("records.md", "Files and records"),
 }
+order = ["core", "tutorials", "basic", "c", "jvm", "files"]
 for group, (filename, title) in pages.items():
     selected = [e for e in entries if group in e.get("groups", [])]
     rows = []
@@ -50,6 +51,13 @@ for group, (filename, title) in pages.items():
     else:
         table = "| Test description | Result |\n| --- | :---: |"
     body = "\n".join(rows) if rows else "| No indexed tests | UNKNOWN |"
-    page = f"# [Conformance tests](../)\n\n## {title}\n\n{table}\n{body}\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n  <a href=\"../\">← Back to conformance overview</a>\n</nav>\n"
+    index = order.index(group)
+    links = ['  <a href="../">← Overview</a>']
+    if index:
+        links.insert(0, f'  <a href="{order[index - 1] if order[index - 1] != "files" else "records"}.md">← Previous: {pages[order[index - 1]][1]}</a>')
+    if index + 1 < len(order):
+        links.append(f'  <a href="{order[index + 1] if order[index + 1] != "files" else "records"}.md">Next: {pages[order[index + 1]][1]} →</a>')
+    nav = "\n".join(links)
+    page = f"# [Conformance tests](../)\n\n## {title}\n\n{table}\n{body}\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n{nav}\n</nav>\n"
     (root / "docs/conformance" / filename).write_text(page)
     print(f"generated {filename} from {len(selected)} indexed tests")

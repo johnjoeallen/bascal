@@ -56,5 +56,7 @@
 | 19 Inventory case study | PASS | PASS | FAIL |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../">← Back to conformance overview</a>
+  <a href="core.md">← Previous: Core language</a>
+  <a href="../">← Overview</a>
+  <a href="basic.md">Next: BASIC-specific →</a>
 </nav>

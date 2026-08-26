@@ -39,5 +39,7 @@
 | Standalone record literals are not yet supported | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../">← Back to conformance overview</a>
+  <a href="basic.md">← Previous: BASIC-specific</a>
+  <a href="../">← Overview</a>
+  <a href="jvm.md">Next: JVM-specific →</a>
 </nav>

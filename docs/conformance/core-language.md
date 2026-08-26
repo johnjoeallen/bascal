@@ -24,5 +24,6 @@
 | Standalone record literals are not yet supported | PASS | PASS | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../">← Back to conformance overview</a>
+  <a href="../">← Overview</a>
+  <a href="tutorials.md">Next: Tutorials →</a>
 </nav>
