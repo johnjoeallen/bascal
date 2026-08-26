@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const kind = value === "FAIL" ? "fail"
         : value === "DEFERRED" ? "deferred"
         : value === "NOT APPLICABLE" || value === "N/A" ? "not-applicable"
+        : value === "UNSUPPORTED" || value === "WILL NOT IMPLEMENT" ? "unsupported"
         : expected.has(value) ? "pass"
         : value === "UNKNOWN" ? "unknown"
         : null;

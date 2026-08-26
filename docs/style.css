@@ -283,6 +283,7 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
 .conformance-status.fail { background: #c9362b; border-color: #96251e; }
 .conformance-status.deferred { background: #b7791f; border-color: #875817; }
 .conformance-status.not-applicable { background: #3d6f9e; border-color: #2b4f72; }
+.conformance-status.unsupported { background: #7651a8; border-color: #563a7d; }
 .conformance-status.unknown { background: #68717d; border-color: #4d5660; }
 
 .conformance-nav {
