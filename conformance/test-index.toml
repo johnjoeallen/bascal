@@ -79,7 +79,7 @@ source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_c_target"
 description = "Scalar methods match C output"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.builtin_scalar_methods_match_real_bascom"
@@ -88,7 +88,7 @@ source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_real_bascom"
 description = "Scalar methods match BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
@@ -97,7 +97,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 description = "BASCOM random-file output is readable by C"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
@@ -106,7 +106,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
@@ -115,7 +115,7 @@ source = "dosbox_conformance"
 name = "const_and_print_matches_real_bascom"
 description = "Constants and printing match BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
@@ -124,7 +124,7 @@ source = "dosbox_conformance"
 name = "mid_assign_matches_real_bascom"
 description = "MID$ assignment matches BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_target"
@@ -133,7 +133,7 @@ source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_c_target"
 description = "String self-concatenation matches C output"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.self_referential_string_concatenation_matches_real_bascom"
@@ -142,7 +142,7 @@ source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_real_bascom"
 description = "String self-concatenation matches BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_c_target"
@@ -151,7 +151,7 @@ source = "dosbox_conformance"
 name = "stdlib_functions_match_c_target"
 description = "Standard-library functions match C output"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.stdlib_functions_match_real_bascom"
@@ -160,7 +160,7 @@ source = "dosbox_conformance"
 name = "stdlib_functions_match_real_bascom"
 description = "Standard-library functions match BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
@@ -169,7 +169,7 @@ source = "dosbox_conformance"
 name = "tie_break_rounding_matches_real_bascom"
 description = "Tie-break rounding matches BASCOM"
 groups = ["basic", "c", "files"]
-expected = { basic = "PASS", c = "PASS", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"

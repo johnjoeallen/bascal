@@ -70,7 +70,13 @@ for path in sorted((root / "tests").glob("*.rs")):
             raise SystemExit(f"duplicate conformance ID: {test_id}")
         groups = re.search(r"^// Conformance groups:\s*(.+)$", text, re.MULTILINE).group(1).split(", ")
         expected = {
-            backend: ("PASS" if backend in groups else "UNKNOWN")
+            backend: (
+                "PASS"
+                if backend in groups
+                else "NOT APPLICABLE"
+                if "files" in groups
+                else "UNKNOWN"
+            )
             for backend in ("basic", "c", "jvm")
         }
         if name == "conformance_fixtures_transpile_on_their_supported_backends":
