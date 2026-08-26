@@ -16,7 +16,7 @@
 | C random-file output is readable by BASCOM | NOT APPLICABLE | PASS | FAIL |
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | Array of records is not yet supported | PASS | PASS | PASS |
-| Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
+| In-memory records with variable-length string fields are not yet supported | PASS | PASS | PASS |
 | Nested record fields are not yet supported | PASS | PASS | PASS |
 | Arrays of records are not yet supported | PASS | PASS | PASS |
 | Record-valued parameters are not yet supported | PASS | PASS | PASS |

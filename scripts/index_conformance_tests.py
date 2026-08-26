@@ -51,7 +51,7 @@ descriptions = {
     "jvm_expected_failure_sequential_file_io_is_non_blocking": "Expected diagnostic for sequential file I/O",
     "conformance_fixtures_transpile_on_their_supported_backends": "Every supported fixture transpiles successfully",
     "array_of_records_currently_fails": "Array of records is not yet supported",
-    "bare_dynamic_string_field_currently_fails_to_parse": "Bare dynamic record string fields are not yet supported",
+    "bare_dynamic_string_field_currently_fails_to_parse": "In-memory records with variable-length string fields are not yet supported",
     "nested_record_field_currently_fails": "Nested record fields are not yet supported",
     "plain_dim_of_record_type_currently_fails": "Arrays of records are not yet supported",
     "record_valued_parameter_currently_fails": "Record-valued parameters are not yet supported",

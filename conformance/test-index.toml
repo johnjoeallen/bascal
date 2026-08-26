@@ -437,7 +437,7 @@ id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_p
 kind = "test"
 source = "record_general_purpose"
 name = "bare_dynamic_string_field_currently_fails_to_parse"
-description = "Bare dynamic record string fields are not yet supported"
+description = "In-memory records with variable-length string fields are not yet supported"
 groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
