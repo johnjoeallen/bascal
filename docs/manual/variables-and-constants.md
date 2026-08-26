@@ -80,13 +80,16 @@ erase names$, codes%     ' erase multiple at once
 
 ### CONST
 
-Declares a named constant. The value must be a literal.
+Declares a named constant. The value must be a literal. Constant types are
+inferred from the value, so a constant name does not need a BASIC type suffix.
+Use uppercase `SNAKE_CASE` names; non-compliant names (and legacy suffixes)
+produce warnings only.
 
 ```bascal
-CONST PASS_MARK%  = 60
-CONST APP_NAME$   = "Grade Checker"
-CONST PI!         = 3.14159
-CONST TAX_RATE!   = 0.2
+CONST PASS_MARK  = 60
+CONST APP_NAME   = "Grade Checker"
+CONST PI         = 3.14159
+CONST TAX_RATE   = 0.2
 ```
 
 Constants follow the same type-suffix rules as variables. Once declared, a constant may not be reassigned.

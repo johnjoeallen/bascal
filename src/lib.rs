@@ -78,6 +78,7 @@ pub fn compile_source(
     inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
     print_legacy_form_warnings(&program);
+    print_const_convention_warnings(&program);
     let conflicts = codegen::check_generated_name_conflicts(&program);
     if !conflicts.is_empty() {
         return Err(conflicts);
@@ -147,6 +148,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     inject_mid_assign_helper_if_used(&mut program)?;
     resolver::validate(&program)?;
     print_legacy_form_warnings(&program);
+    print_const_convention_warnings(&program);
     match options.target {
         Target::Basic => {
             let basic = CodeGenerator::new()
@@ -233,6 +235,12 @@ fn print_legacy_form_warnings(program: &ast::Program) {
     }
 }
 
+fn print_const_convention_warnings(program: &ast::Program) {
+    for finding in resolver::check_const_conventions(program) {
+        eprintln!("{finding}");
+    }
+}
+
 fn program_uses_mid_assign(program: &ast::Program) -> bool {
     statements_use_mid_assign(&program.statements)
         || program
@@ -291,8 +299,12 @@ fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diag
 fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Diagnostic>> {
     let diagnostics: Vec<Diagnostic> = tokens
         .iter()
-        .filter_map(|token| match &token.kind {
-            TokenKind::Ident(name) if name.contains('_') => Some(Diagnostic::error(
+        .enumerate()
+        .filter_map(|(index, token)| match &token.kind {
+            // Constants are compile-time names and may use the documented
+            // uppercase-snake convention; generated BASIC never reads the
+            // source spelling as an identifier.
+            TokenKind::Ident(name) if name.contains('_') && !matches!(tokens.get(index.wrapping_sub(1)).map(|t| &t.kind), Some(TokenKind::Ident(keyword)) if keyword.eq_ignore_ascii_case("const")) => Some(Diagnostic::error(
                 token.pos.clone(),
                 format!(
                     "identifier `{name}` contains an underscore, which real MBASIC/BASCOM \

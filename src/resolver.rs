@@ -22,6 +22,38 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
+/// Reports advisory naming/type-suffix findings for constants. Constants are
+/// type-inferred from their value; suffixes remain accepted for migration but
+/// are discouraged, and names conventionally use upper snake case.
+pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
+    let mut findings = Vec::new();
+    for statement in &program.statements {
+        if let Statement::Const { name, .. } = &statement.kind {
+            if name.suffix.is_some() {
+                findings.push(Diagnostic::warning(
+                    SourcePos::new("<validation>", 1, 1),
+                    format!("constant `{name}` has a type suffix; constant types are inferred from their values"),
+                ));
+            }
+            if !is_upper_snake_case(&name.name) {
+                findings.push(Diagnostic::warning(
+                    SourcePos::new("<validation>", 1, 1),
+                    format!("constant `{name}` is not uppercase snake case; use names such as `MAX_COUNT`"),
+                ));
+            }
+        }
+    }
+    findings
+}
+
+fn is_upper_snake_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
+        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && !name.contains("__")
+        && !name.ends_with('_')
+}
+
 fn reject_invalid_parameter_defaults(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     let fixed_consts: HashSet<String> = program
         .statements
