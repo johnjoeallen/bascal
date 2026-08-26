@@ -17,7 +17,7 @@
 | Self-referential string concatenation under FreeBASIC | PASS |
 | Sort driver under FreeBASIC | PASS |
 | Standard-library functions under FreeBASIC | PASS |
-| Existing random-file records compile on BASIC and C | PASS |
+| Existing random-file records compile on all targets | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../tutorials/">← Previous: Tutorials</a>

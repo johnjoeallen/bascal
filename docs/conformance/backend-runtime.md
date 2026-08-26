@@ -31,7 +31,7 @@ backend-specific compatibility boundaries.
 | Record-valued returns are rejected consistently | PASS | PASS | PASS |
 | Nested record fields are rejected consistently | PASS | PASS | PASS |
 | Bare dynamic record strings are rejected at parse time | PASS | PASS | PASS |
-| Existing random-file records compile on BASIC and C | PASS | PASS | UNSUPPORTED |
+| Existing random-file records compile on all targets | PASS | PASS | FAIL |
 | JVM random-file records produce the expected diagnostic | UNSUPPORTED | UNSUPPORTED | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">

@@ -25,7 +25,8 @@ source = "metadata"
 name = "C/JVM reject the classic labels/error-handling tutorial"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
-expected = { basic = "NOT APPLICABLE", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "PASS" }
+validation = "EXPECTED_REJECTION"
 
 [[test]]
 id = "core.deterministic_tutorials_execute"
@@ -87,8 +88,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 description = "BASCOM creates file; target validates binary compatibility"
-groups = ["core", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+groups = ["core", "records", "c"]
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
@@ -96,8 +97,8 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "Target creates file; BASCOM validates binary compatibility"
-groups = ["core", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+groups = ["core", "records", "c"]
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
@@ -334,6 +335,24 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
+id = "test.jvm_conformance.jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
+description = "BASCOM creates file; JVM validates binary compatibility"
+groups = ["core", "records", "jvm"]
+expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
+
+[[test]]
+id = "test.jvm_conformance.jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes"
+kind = "test"
+source = "jvm_conformance"
+name = "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes"
+description = "JVM creates file; BASCOM validates binary compatibility"
+groups = ["core", "records", "jvm"]
+expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
+
+[[test]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
@@ -433,13 +452,13 @@ groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
-id = "test.record_general_purpose.existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
+id = "test.record_general_purpose.existing_random_access_file_record_usage_still_compiles_on_all_targets"
 kind = "test"
 source = "record_general_purpose"
-name = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
-description = "Existing random-file records compile on BASIC and C"
-groups = ["basic", "c", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
+name = "existing_random_access_file_record_usage_still_compiles_on_all_targets"
+description = "Existing random-file records compile on all targets"
+groups = ["core", "basic", "c", "jvm", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access_file_records"

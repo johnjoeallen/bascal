@@ -17,7 +17,11 @@ expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 id = "core.classic_error_handling_rejected"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
-expected = { basic = "NOT APPLICABLE", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+# The backends are expected to reject this BASIC-only syntax.  A successful
+# conformance test therefore means the rejection behaved correctly, so the
+# report state is PASS (the test itself fails if the source is accepted).
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "PASS" }
+validation = "EXPECTED_REJECTION"
 
 [[test]]
 id = "core.inventory_case_study"

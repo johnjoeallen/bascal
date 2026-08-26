@@ -40,7 +40,9 @@ descriptions = {
     "jvm_non_integer_arrays_run_when_available": "Typed non-integer arrays and array parameters",
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM creates file; target validates binary compatibility",
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": "Target creates file; BASCOM validates binary compatibility",
-    "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": "Existing random-file records compile on BASIC and C",
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM creates file; JVM validates binary compatibility",
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes": "JVM creates file; BASCOM validates binary compatibility",
+    "existing_random_access_file_record_usage_still_compiles_on_all_targets": "Existing random-file records compile on all targets",
     "jvm_backend_does_not_yet_support_random_access_file_records": "JVM random-file records produce the expected diagnostic",
     "jvm_byval_arrays_expected_failure_is_non_blocking": "Expected failure for array byval clone assembly",
     "jvm_expected_failure_mid_assignment_is_non_blocking": "Expected diagnostic for MID$ assignment",
@@ -75,14 +77,19 @@ group_overrides = {
     "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available": ["c"],
     "gcc_runs_inventory_tutorial_under_c_target_when_available": ["c"],
     "gcc_runs_remline_under_c_target_when_available": ["c"],
-    "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": ["basic", "c", "records"],
+    "existing_random_access_file_record_usage_still_compiles_on_all_targets": ["core", "basic", "c", "jvm", "records"],
     "jvm_backend_does_not_yet_support_random_access_file_records": ["jvm", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["core", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["core", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["core", "records", "c"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["core", "records", "c"],
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["core", "records", "jvm"],
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes": ["core", "records", "jvm"],
 }
 status_overrides = {
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "NOT APPLICABLE", "c": "PASS", "jvm": "NOT APPLICABLE"},
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "NOT APPLICABLE", "c": "PASS", "jvm": "NOT APPLICABLE"},
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "NOT APPLICABLE", "c": "NOT APPLICABLE", "jvm": "FAIL"},
+    "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes": {"basic": "NOT APPLICABLE", "c": "NOT APPLICABLE", "jvm": "FAIL"},
+    "existing_random_access_file_record_usage_still_compiles_on_all_targets": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
     "jvm_byval_arrays_expected_failure_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_expected_failure_mid_assignment_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_expected_failure_random_record_io_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
@@ -114,7 +121,7 @@ for path in sorted((root / "tests").glob("*.rs")):
         if name == "conformance_fixtures_transpile_on_their_supported_backends":
             expected = {backend: "PASS" for backend in ("basic", "c", "jvm")}
         expected.update(status_overrides.get(name, {}))
-        ids[test_id] = ("test", module, name, groups, expected)
+        ids[test_id] = ("test", module, name, groups, expected, None)
 
 import tomllib
 meta = tomllib.loads((root / "tutorial" / "conformance.toml").read_text())
@@ -137,20 +144,24 @@ for item in meta["tutorial"]:
     invalid = {backend: state for backend, state in status.items() if state.upper() not in valid_statuses}
     if invalid:
         raise SystemExit(f"{test_id}: invalid status values: {invalid}")
-    ids[test_id] = ("tutorial", item["source"], item["name"], ["tutorials"], status)
+    ids[test_id] = ("tutorial", item["source"], item["name"], ["tutorials"], status, None)
 
 metadata = tomllib.loads((root / "conformance" / "metadata.toml").read_text())
 for item in metadata["test"]:
     test_id = item["id"]
     if test_id in ids:
         raise SystemExit(f"duplicate conformance ID: {test_id}")
-    ids[test_id] = ("test", "metadata", item["description"], item["groups"], item["expected"])
+    ids[test_id] = (
+        "test", "metadata", item["description"], item["groups"],
+        item["expected"], item.get("validation"),
+    )
 
 out = ["# Generated by scripts/index_conformance_tests.py", ""]
-for test_id, (kind, source, name, groups, status) in sorted(ids.items()):
+for test_id, (kind, source, name, groups, status, validation) in sorted(ids.items()):
     group_text = "[" + ", ".join(f'\"{group}\"' for group in groups) + "]"
     description = descriptions.get(name, name).replace('"', '\\"')
-    out.append(f'[[test]]\nid = "{test_id}"\nkind = "{kind}"\nsource = "{source}"\nname = "{name}"\ndescription = "{description}"\ngroups = {group_text}\nexpected = {{ basic = "{status.get("basic", "UNKNOWN")}", c = "{status.get("c", "UNKNOWN")}", jvm = "{status.get("jvm", "UNKNOWN")}" }}\n')
+    validation_line = f'validation = "{validation}"\n' if validation else ""
+    out.append(f'[[test]]\nid = "{test_id}"\nkind = "{kind}"\nsource = "{source}"\nname = "{name}"\ndescription = "{description}"\ngroups = {group_text}\nexpected = {{ basic = "{status.get("basic", "UNKNOWN")}", c = "{status.get("c", "UNKNOWN")}", jvm = "{status.get("jvm", "UNKNOWN")}" }}\n{validation_line}')
 (root / "conformance").mkdir(exist_ok=True)
 (root / "conformance" / "test-index.toml").write_text("\n".join(out))
 print(f"indexed {len(ids)} conformance tests/tutorials")

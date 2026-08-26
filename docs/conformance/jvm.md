@@ -11,6 +11,8 @@
 | Expected diagnostic for random/record file I/O | FAIL |
 | Expected diagnostic for sequential file I/O | FAIL |
 | Typed non-integer arrays and array parameters | PASS |
+| BASCOM creates file; JVM validates binary compatibility | FAIL |
+| JVM creates file; BASCOM validates binary compatibility | FAIL |
 | Structured TRY/CATCH/FINALLY execution | PASS |
 | Numeric literals and arithmetic | PASS |
 | Portable error-handling tutorial | PASS |
@@ -18,6 +20,7 @@
 | Scalar variables and constants | PASS |
 | Scoped GOTO labels | PASS |
 | Structured branches and WHILE loops | PASS |
+| Existing random-file records compile on all targets | FAIL |
 | JVM random-file records produce the expected diagnostic | FAIL |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">

@@ -264,7 +264,7 @@ end
 /// backend yet") -- a pre-existing gap unrelated to whether records are
 /// general-purpose.
 #[test]
-fn existing_random_access_file_record_usage_still_compiles_on_basic_and_c() {
+fn existing_random_access_file_record_usage_still_compiles_on_all_targets() {
     let source = r#"program studentFileTest
 
 record Student

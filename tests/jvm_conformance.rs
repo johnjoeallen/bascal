@@ -66,6 +66,25 @@ fn jvm_expected_failure_random_record_io_is_non_blocking() {
     );
 }
 
+/// The JVM backend does not implement random-access record I/O yet. Keep the
+/// BASCOM-to-target compatibility direction visible in the conformance report
+/// so its expected failure is tracked independently from C.
+#[test]
+fn jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes() {
+    assert_jvm_expected_failure(
+        "program jvmRandomRead\nrecord R\n value: int16\nend record\nfile db as R = open(\"records.dat\")\nend\n",
+        "not supported by the minimal JVM backend yet",
+    );
+}
+
+#[test]
+fn jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes() {
+    assert_jvm_expected_failure(
+        "program jvmRandomWrite\nrecord R\n value: int16\nend record\nfile db as R = open(\"records.dat\")\nend\n",
+        "not supported by the minimal JVM backend yet",
+    );
+}
+
 #[test]
 fn jvm_expected_failure_mid_assignment_is_non_blocking() {
     assert_jvm_expected_failure(
