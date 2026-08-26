@@ -570,20 +570,29 @@ impl JvmEmitter<'_> {
                     .context
                     .function(name)
                     .ok_or_else(|| format!("unknown JVM procedure `{name}`"))?;
-                if !signature.returns_void || signature.params.len() != args.len() {
+                if !signature.returns_void || signature.source_param_count != args.len() {
                     return Err(format!("invalid JVM procedure call `{name}`"));
                 }
-                for (arg, ty) in args.iter().zip(&signature.params) {
-                    match ty {
+                let mut scalars = signature.params.iter();
+                for (position, arg) in args.iter().enumerate() {
+                    if let Some(array) = signature.array_params.iter().find(|array| array.position == position) {
+                        let Expr::Ident(array_name) = arg else {
+                            return Err(format!("array parameter {position} of `{name}` needs a plain array argument"));
+                        };
+                        let shape = self.context.arrays.get(&variable_key(array_name)).ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
+                        if shape.dimensions.len() != array.rank || shape.element != array.element {
+                            return Err(format!("array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"));
+                        }
+                        self.context.emit_array_load(array_name, out);
+                    } else {
+                        let ty = scalars.next().expect("scalar source parameter");
+                        match ty {
                         JvmType::String => emit_string_expr(arg, out, self.context)?,
                         JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, self.context)?,
+                        }
                     }
                 }
-                let args_descriptor = signature
-                    .params
-                    .iter()
-                    .map(|ty| descriptor(*ty))
-                    .collect::<String>();
+                let args_descriptor = signature.descriptor_params().join("");
                 out.push_str(&format!(
                     "    invokestatic {}/{} ({args_descriptor})V\n",
                     self.context.class_name, name.name
