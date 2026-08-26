@@ -79,7 +79,7 @@ fn jvm_expected_failure_mid_assignment_is_non_blocking() {
 /// because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
 #[test]
 #[ignore = "expected failure until JVM random-access record I/O is implemented (#105)"]
-fn jvm_random_file_binary_compatibility_is_pending() {
+fn jvm_random_file_output_is_readable_by_bascom() {
     let source_path = repo_root().join("tests/fixtures/conformance/cross_write.bcl");
     let temp_dir = tempfile::tempdir().expect("failed to create JVM record test directory");
     let mut output_arg = temp_dir.path().as_os_str().to_owned();

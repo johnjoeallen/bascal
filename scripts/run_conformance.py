@@ -5,8 +5,14 @@ import re
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
-proc = subprocess.run(["cargo", "test", "--locked", "--", "--color", "never"], cwd=root, text=True, capture_output=True)
-output = proc.stdout + proc.stderr
+proc = subprocess.run(
+    ["cargo", "test", "--locked", "--", "--color", "never"],
+    cwd=root,
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+)
+output = proc.stdout
 current = "unknown"
 results = {}
 for line in output.splitlines():

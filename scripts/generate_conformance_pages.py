@@ -13,6 +13,12 @@ if results_path.exists():
 def resolved(entry, backend):
     expected = entry.get("expected", {}).get(backend, "UNKNOWN")
     actual = observed.get(entry["id"])
+    # A metadata FAIL deliberately describes an unsupported/invalidating
+    # backend result.  Keep it visible as FAIL even when the harness test
+    # itself passes by asserting the expected diagnostic; the test runner
+    # remains green because that assertion is non-blocking.
+    if expected == "FAIL":
+        return "FAIL"
     if actual is None:
         return expected
     if actual == "PASS":

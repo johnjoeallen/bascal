@@ -106,7 +106,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
 groups = ["core", "records"]
-expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "FAIL" }
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
@@ -295,7 +295,7 @@ source = "jvm_conformance"
 name = "jvm_byval_arrays_expected_failure_is_non_blocking"
 description = "Expected failure for array byval clone assembly"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_catch_filters_and_source_bindings_run_when_available"
@@ -313,7 +313,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_mid_assignment_is_non_blocking"
 description = "Expected diagnostic for MID$ assignment"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking"
@@ -322,7 +322,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_random_record_io_is_non_blocking"
 description = "Expected diagnostic for random/record file I/O"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_expected_failure_sequential_file_io_is_non_blocking"
@@ -331,7 +331,7 @@ source = "jvm_conformance"
 name = "jvm_expected_failure_sequential_file_io_is_non_blocking"
 description = "Expected diagnostic for sequential file I/O"
 groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "FAIL" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
@@ -343,13 +343,13 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_random_file_binary_compatibility_is_pending"
+id = "test.jvm_conformance.jvm_random_file_output_is_readable_by_bascom"
 kind = "test"
 source = "jvm_conformance"
-name = "jvm_random_file_binary_compatibility_is_pending"
-description = "Random file binary compatibility"
-groups = ["tutorials", "jvm"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
+name = "jvm_random_file_output_is_readable_by_bascom"
+description = "JVM random-file output is readable by BASCOM"
+groups = ["core", "records"]
+expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "DEFERRED" }
 
 [[test]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
@@ -457,7 +457,7 @@ source = "record_general_purpose"
 name = "jvm_backend_does_not_yet_support_random_access_file_records"
 description = "JVM random-file records produce the expected diagnostic"
 groups = ["jvm", "records"]
-expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "PASS" }
+expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "FAIL" }
 
 [[test]]
 id = "test.record_general_purpose.nested_record_field_currently_fails"
