@@ -11,7 +11,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "PASS", "DEFERRED", "UNSUPPORTED", "WILL NOT IMPLEMENT",
         "NOT APPLICABLE", "N/A"
       ]);
-      const kind = value === "FAIL" ? "fail" : expected.has(value) ? "pass" : "unknown";
+      const kind = value === "FAIL" ? "fail"
+        : value === "DEFERRED" ? "deferred"
+        : value === "NOT APPLICABLE" || value === "N/A" ? "not-applicable"
+        : expected.has(value) ? "pass"
+        : "unknown";
       if (!kind) return;
       cell.innerHTML = `<span class="conformance-status ${kind}" role="status" aria-label="${value}">${value}</span>`;
     });
