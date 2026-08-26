@@ -30,6 +30,9 @@ branch and extended incrementally.
 11. Connected parser-shaped `Expr::Call` array references to JVM reads and
     writes, and represented array parameters as rank-aware aliases to the
     program's static array storage so tutorial 08 now transpiles.
+12. Replaced that temporary alias with real JVM array method parameters.
+    Integer `byref` parameters receive the caller's reference directly;
+    `byval` parameters deep-clone ranks 1 through 8 in the callee prologue.
 
 Each stage was committed separately and the existing JVM conformance suite
 continued to pass.
@@ -51,14 +54,15 @@ continued to pass.
 
 Tutorial 08 now transpiles, assembles, and runs for the JVM target, including
 one- and two-dimensional integer reads, writes, `SIZEOF`, and array-parameter
-calls. The verified run sorts the sample array, searches it, and prints the
-identity matrix. Runtime array-parameter copying and non-integer element
-arrays remain future work.
+calls. Integer function array parameters now use native JVM references:
+`byref` aliases the caller's array, while `byval` deep-copies ranks 1 through
+8. Per-call bounds/`SIZEOF`, procedure calls with arrays, and non-integer
+element arrays remain future work.
 
 Tracked follow-up work:
 
 - [#112](https://github.com/johnjoeallen/bascal/issues/112): complete JVM
-  array-parameter `byval`/`byref` semantics and per-call bounds.
+  array-parameter per-call bounds/`SIZEOF` and procedure-call support.
 - [#111](https://github.com/johnjoeallen/bascal/issues/111): support
   non-integer array element types.
 - [#113](https://github.com/johnjoeallen/bascal/issues/113): implement
