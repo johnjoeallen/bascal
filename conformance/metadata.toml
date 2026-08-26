@@ -4,8 +4,8 @@
 [[test]]
 id = "core.random_file_binary_compatibility"
 description = "Random file binary compatibility"
-groups = ["c", "records"]
-expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "NOT APPLICABLE" }
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "core.all_tutorials_compile"

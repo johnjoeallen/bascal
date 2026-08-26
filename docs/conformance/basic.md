@@ -5,7 +5,6 @@
 | Test description | Result |
 | --- | :---: |
 | Scalar methods match BASCOM | PASS |
-| BASCOM random-file output is readable by C | PASS |
 | Constants and printing match BASCOM | PASS |
 | MID$ assignment matches BASCOM | PASS |
 | String self-concatenation matches BASCOM | PASS |

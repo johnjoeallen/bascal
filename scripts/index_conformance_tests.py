@@ -79,8 +79,12 @@ group_overrides = {
     "gcc_runs_remline_under_c_target_when_available": ["c"],
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": ["basic", "c", "records"],
     "jvm_backend_does_not_yet_support_random_access_file_records": ["jvm", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "records"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["c", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["core", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["core", "records"],
+}
+status_overrides = {
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
 }
 
 for path in sorted((root / "tests").glob("*.rs")):
@@ -106,6 +110,7 @@ for path in sorted((root / "tests").glob("*.rs")):
         }
         if name == "conformance_fixtures_transpile_on_their_supported_backends":
             expected = {backend: "PASS" for backend in ("basic", "c", "jvm")}
+        expected.update(status_overrides.get(name, {}))
         ids[test_id] = ("test", module, name, groups, expected)
 
 import tomllib

@@ -4,9 +4,7 @@
 
 | Test description | Result |
 | --- | :---: |
-| Random file binary compatibility | PASS |
 | Scalar methods match C output | PASS |
-| C random-file output is readable by BASCOM | PASS |
 | String self-concatenation matches C output | PASS |
 | Standard-library functions match C output | PASS |
 | Deterministic tutorials build and execute | PASS |
