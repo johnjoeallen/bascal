@@ -264,6 +264,25 @@ section p.lede { color: var(--fg-dim); max-width: 46rem; margin-top: 0; }
   color: var(--fg-dim);
 }
 
+/* Conformance result buttons. */
+.conformance-status {
+  display: inline-block;
+  min-width: 3.2rem;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.conformance-status.pass { background: #218739; border-color: #17652a; }
+.conformance-status.fail { background: #c9362b; border-color: #96251e; }
+.conformance-status.na { background: #68717d; border-color: #4d5660; }
+
 /* single-pane snippet card, used on tutorial pages */
 .snippet {
   background: var(--card-bg);

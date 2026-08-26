@@ -15,6 +15,7 @@ extra_css:
   - style.css
 extra_javascript:
   - theme-toggle.js
+  - conformance.js
 markdown_extensions:
   - attr_list
   - md_in_html
