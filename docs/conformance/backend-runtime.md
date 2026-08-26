@@ -35,6 +35,6 @@ backend-specific compatibility boundaries.
 | JVM random-file records produce the expected diagnostic | N/A | N/A | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../core-language/">← Previous: Core language and tutorials</a>
+  <a href="../">← Previous: Core language and tutorials</a>
   <a href="../jvm/">Next: JVM-specific →</a>
 </nav>

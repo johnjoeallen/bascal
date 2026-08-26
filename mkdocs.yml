@@ -96,8 +96,7 @@ nav:
       - RESTORE and DATA: tutorials/22_restore_data.md
   - Examples: examples.md
   - Conformance results:
-      - Overview: conformance.md
-      - Core language and tutorials: conformance/core-language.md
+      - Core language and tutorials: conformance.md
       - Backend and runtime: conformance/backend-runtime.md
       - JVM-specific: conformance/jvm.md
       - Files and records: conformance/records.md
