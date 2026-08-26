@@ -177,7 +177,7 @@ Declare a fixed-layout record once; `file ... = open(...)` and `db[i] = { ... }`
 ```bascal
 record Student
     id:    int16
-    name:  string(20)
+    name:  string(20) lpad
     score: float64
 end record
 
@@ -647,7 +647,7 @@ field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 ```bascal
 record Student
     id:    int16
-    name:  string(20)
+    name:  string(20) lpad
     score: float64
 end record
 

@@ -31,9 +31,9 @@ For fixed-size random-access data, BASCAL lets you express the record layout in 
 ```bascal
 record Student
     id:      int16
-    name:    string(20)
+    name:    string(20) lpad
     score:   float64
-    faculty: string(20)
+    faculty: string(20) lpad
 end record
 
 file students as Student = open("students.dat")

@@ -58,8 +58,8 @@ Methods are not limited to scalar receivers in the language model. A future reco
 
 ```bascal
 record Card
-    title: string(40)
-    author: string(40)
+    title: string(40) lpad
+    author: string(40) lpad
 end record
 
 ' Planned syntax — not accepted by the current parser yet.

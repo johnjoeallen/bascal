@@ -34,9 +34,9 @@
 program cardCatalog
 
 record Entry
-    author:  string(20)
-    title:   string(20)
-    subject: string(20)
+    author:  string(20) lpad
+    title:   string(20) lpad
+    subject: string(20) lpad
 end record
 
 // The header occupies slot 1 of the same file, sized to match Entry's
@@ -45,7 +45,7 @@ end record
 // CLERK.BAS's own S = CVI(F$) header field.
 record Header
     size:     int16
-    reserved: string(58)
+    reserved: string(58) lpad
 end record
 
 const lastSlot% = 11   // 10 usable entry slots + 1 -- slot 1 is the header, 2..11 are entries

@@ -63,8 +63,8 @@ require com.bascal.stdlib.error
 // read/write via `inv[n]` (see checkPart() below) replace fhb's
 // manual GET/PUT plus LSET/RSET and MKI$/MKS$/CVI$/CVS$ packing.
 record Part
-    flag:    string(1)
-    desc:    string(30)
+    flag:    string(1) lpad
+    desc:    string(30) lpad
     qty:     int16
     reorder: int16
     price:   float32
