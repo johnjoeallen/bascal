@@ -23,7 +23,7 @@ def resolved(entry, backend):
         return expected
     if actual == "PASS":
         return "PASS"
-    if expected in ("DEFERRED", "UNSUPPORTED", "WILL NOT IMPLEMENT"):
+    if expected in ("DEFERRED", "UNIMPLEMENTED", "UNSUPPORTED", "WILL NOT IMPLEMENT"):
         return expected
     return "FAIL"
 pages = {

@@ -6,7 +6,7 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 meta = tomllib.loads(root.joinpath("conformance/test-index.toml").read_text())
-valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "UNKNOWN"}
+valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "UNIMPLEMENTED", "DEFERRED", "UNKNOWN"}
 rows = []
 for item in (entry for entry in meta["test"] if entry["kind"] == "tutorial"):
     missing = not root.joinpath("tutorial", item["source"]).exists()
@@ -26,6 +26,6 @@ for item in (entry for entry in meta["test"] if entry["kind"] == "tutorial"):
     rows.append(f"| {display_name} | {' | '.join(cells)} |")
 page = """# [Conformance tests](../)\n\n## Tutorials\n\n| Tutorial | BASIC | C | JVM |\n| --- | :---: | :---: | :---: |\n""" + "\n".join(rows) + """\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n  <a href=\"../\">← Previous: Core language</a>\n  <a href=\"basic/\">Next: BASIC-specific →</a>\n</nav>\n"""
 target = root / "docs/conformance/tutorials.md"
-page += "\n`FAIL` means a required check ran and failed. `UNSUPPORTED` means the backend will not implement the feature. `DEFERRED` means support is expected but validation is not yet in the suite. `UNKNOWN` means no metadata defines the test/backend combination yet.\n"
+page += "\n`FAIL` means a required check ran and failed. `UNSUPPORTED` means the backend will not implement the feature. `UNIMPLEMENTED` means it is planned for priority implementation. `DEFERRED` means support is expected but validation is being postponed. `UNKNOWN` means no metadata defines the test/backend combination yet.\n"
 target.write_text(page)
 print(f"generated {target} from {len(rows)} tutorial annotations")

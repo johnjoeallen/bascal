@@ -5,7 +5,7 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 ids = {}
-valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "WILL NOT IMPLEMENT", "NOT APPLICABLE", "UNKNOWN"}
+valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "UNIMPLEMENTED", "DEFERRED", "WILL NOT IMPLEMENT", "NOT APPLICABLE", "UNKNOWN"}
 descriptions = {
     "builtin_scalar_methods_match_c_target": "Scalar methods match C output",
     "builtin_scalar_methods_match_real_bascom": "Scalar methods match BASCOM",
