@@ -32,4 +32,4 @@
   <a href="basic/">Next: BASIC-specific →</a>
 </nav>
 
-`FAIL` means a required check ran and failed. `UNSUPPORTED` means the backend will not implement the feature. `DEFERRED` means support is expected but validation is not yet in the suite.
+`FAIL` means a required check ran and failed. `UNSUPPORTED` means the backend will not implement the feature. `DEFERRED` means support is expected but validation is not yet in the suite. `UNKNOWN` means no metadata defines the test/backend combination yet.

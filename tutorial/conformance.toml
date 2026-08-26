@@ -1,5 +1,5 @@
 # Tutorial conformance metadata. `status` may explicitly set each backend to
-# PASS, FAIL, UNSUPPORTED, or DEFERRED. Legacy `backends`, `na`, and `wont`
+# PASS, FAIL, UNSUPPORTED, DEFERRED, or UNKNOWN. Legacy `backends`, `na`, and `wont`
 # fields remain accepted and are normalized by the docs generator.
 [[tutorial]]
 name = "01 Hello, world"
