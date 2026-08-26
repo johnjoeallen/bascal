@@ -22,10 +22,10 @@
 | Short-circuit conditions | PASS | PASS | PASS |
 | Classic labels and error handling | PASS | UNSUPPORTED | UNSUPPORTED |
 | Standard-library functions | PASS | PASS | PASS |
-| Inventory case study | PASS | PASS | FAIL |
 | Scalar methods | PASS | PASS | PASS |
 | Portable error handling | PASS | PASS | PASS |
 | RESTORE and DATA | PASS | PASS | FAIL |
+| Inventory case study | PASS | PASS | FAIL |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Previous: Core language</a>

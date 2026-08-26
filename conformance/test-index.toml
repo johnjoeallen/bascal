@@ -390,7 +390,7 @@ kind = "tutorial"
 source = "01_hello.bcl"
 name = "01 Hello, world"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.02_variables"
@@ -398,7 +398,7 @@ kind = "tutorial"
 source = "02_variables.bcl"
 name = "02 Variables and constants"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.03_arithmetic"
@@ -406,7 +406,7 @@ kind = "tutorial"
 source = "03_arithmetic.bcl"
 name = "03 Arithmetic"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.04_conditions"
@@ -414,7 +414,7 @@ kind = "tutorial"
 source = "04_conditions.bcl"
 name = "04 Conditions"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.05_loops"
@@ -422,7 +422,7 @@ kind = "tutorial"
 source = "05_loops.bcl"
 name = "05 Loops"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.06_select_case"
@@ -430,7 +430,7 @@ kind = "tutorial"
 source = "06_select_case.bcl"
 name = "06 Select case"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.07_functions"
@@ -438,7 +438,7 @@ kind = "tutorial"
 source = "07_functions.bcl"
 name = "07 Functions"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.08_arrays"
@@ -446,7 +446,7 @@ kind = "tutorial"
 source = "08_arrays.bcl"
 name = "08 Arrays"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.09_data"
@@ -454,7 +454,7 @@ kind = "tutorial"
 source = "09_data.bcl"
 name = "09 DATA and READ"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.10_files"
@@ -494,7 +494,7 @@ kind = "tutorial"
 source = "14_procedures.bcl"
 name = "14 Procedures"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.15_random_and_record_files"
@@ -510,7 +510,7 @@ kind = "tutorial"
 source = "16_short_circuit.bcl"
 name = "16 Short-circuit conditions"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.17_labels_and_error_handling"
@@ -526,7 +526,7 @@ kind = "tutorial"
 source = "18_stdlib.bcl"
 name = "18 Standard-library functions"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.20_methods"
@@ -534,7 +534,7 @@ kind = "tutorial"
 source = "20_methods.bcl"
 name = "20 Scalar methods"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.21_portable_error_handling"
@@ -542,7 +542,7 @@ kind = "tutorial"
 source = "21_portable_error_handling.bcl"
 name = "21 Portable error handling"
 groups = ["tutorials"]
-status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.22_restore_data"

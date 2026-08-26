@@ -5,25 +5,19 @@ import tomllib
 import re
 
 root = Path(__file__).resolve().parents[1]
-meta = tomllib.loads(root.joinpath("tutorial/conformance.toml").read_text())
+meta = tomllib.loads(root.joinpath("conformance/test-index.toml").read_text())
 valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "UNKNOWN"}
 rows = []
-for item in meta["tutorial"]:
+for item in (entry for entry in meta["test"] if entry["kind"] == "tutorial"):
     missing = not root.joinpath("tutorial", item["source"]).exists()
     if missing:
         raise SystemExit(f"missing tutorial source: {item['source']}")
     statuses = item.get("status", {})
-    not_applicable = set(item.get("na", []))
-    will_not_implement = set(item.get("wont", []))
     cells = []
     for backend in ("basic", "c", "jvm"):
         state = statuses.get(backend)
-        if state is None and statuses:
+        if state is None:
             state = "UNKNOWN"
-        elif state is None:
-            state = "UNSUPPORTED" if backend in not_applicable or backend in will_not_implement else (
-                "PASS" if backend in item["backends"] else "DEFERRED"
-            )
         state = state.upper()
         if state not in valid_statuses:
             raise SystemExit(f"{item['name']}: invalid {backend} status {state!r}")
