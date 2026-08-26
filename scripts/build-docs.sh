@@ -5,5 +5,6 @@ set -euo pipefail
 # embeds them in the tutorial pages.
 env -u RUSTC_WRAPPER cargo build --quiet
 env -u RUSTC_WRAPPER cargo test --locked --quiet
+python3 scripts/check_conformance_groups.py
 python3 scripts/embed_tutorial_markdown.py
 mkdocs build --strict

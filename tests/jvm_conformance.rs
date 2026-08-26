@@ -4,6 +4,7 @@
 //! runs the resulting class.  Neither tool is a Rust dependency, so this
 //! suite follows the other external-tool suites and skips rather than fails
 //! when a prerequisite is unavailable.
+// Conformance groups: tutorials, jvm
 
 use std::fs;
 use std::path::{Path, PathBuf};

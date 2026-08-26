@@ -4,6 +4,7 @@
 //! matrix records which backends are expected to accept it; backend-specific
 //! runtime tests live beside this file (for example in `jvm_conformance.rs`
 //! and `dosbox_conformance.rs`).
+// Conformance groups: core, tutorials
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
