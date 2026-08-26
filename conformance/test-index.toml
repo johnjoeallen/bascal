@@ -23,7 +23,7 @@ id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_w
 kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
-description = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
+description = "BASCOM random-file output is readable by C"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -32,7 +32,7 @@ id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_w
 kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
-description = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
+description = "C random-file output is readable by BASCOM"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -347,7 +347,7 @@ id = "test.language_conformance.conformance_fixtures_transpile_on_their_supporte
 kind = "test"
 source = "language_conformance"
 name = "conformance_fixtures_transpile_on_their_supported_backends"
-description = "conformance_fixtures_transpile_on_their_supported_backends"
+description = "Every supported fixture transpiles successfully"
 groups = ["core", "tutorials"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -356,7 +356,7 @@ id = "test.record_general_purpose.array_of_records_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "array_of_records_currently_fails"
-description = "array_of_records_currently_fails"
+description = "Array of records is not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -365,7 +365,7 @@ id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_p
 kind = "test"
 source = "record_general_purpose"
 name = "bare_dynamic_string_field_currently_fails_to_parse"
-description = "bare_dynamic_string_field_currently_fails_to_parse"
+description = "Bare dynamic record string fields are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -392,7 +392,7 @@ id = "test.record_general_purpose.nested_record_field_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "nested_record_field_currently_fails"
-description = "nested_record_field_currently_fails"
+description = "Nested record fields are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -401,7 +401,7 @@ id = "test.record_general_purpose.plain_dim_of_record_type_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "plain_dim_of_record_type_currently_fails"
-description = "plain_dim_of_record_type_currently_fails"
+description = "Arrays of records are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -410,7 +410,7 @@ id = "test.record_general_purpose.record_valued_parameter_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "record_valued_parameter_currently_fails"
-description = "record_valued_parameter_currently_fails"
+description = "Record-valued parameters are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -419,7 +419,7 @@ id = "test.record_general_purpose.record_valued_return_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "record_valued_return_currently_fails"
-description = "record_valued_return_currently_fails"
+description = "Record-valued returns are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -428,7 +428,7 @@ id = "test.record_general_purpose.standalone_record_literal_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "standalone_record_literal_currently_fails"
-description = "standalone_record_literal_currently_fails"
+description = "Standalone record literals are not yet supported"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 

@@ -40,6 +40,8 @@ descriptions = {
     "jvm_non_integer_arrays_run_when_available": "Typed non-integer arrays and array parameters",
     "c_target_random_file_is_binary_compatible_with_real_bascom_c_writes": "C random-file output is readable by BASCOM",
     "c_target_random_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": "BASCOM random-file output is readable by C",
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": "C random-file output is readable by BASCOM",
     "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": "Existing random-file records compile on BASIC and C",
     "jvm_backend_does_not_yet_support_random_access_file_records": "JVM random-file records produce the expected diagnostic",
     "jvm_random_file_binary_compatibility_is_pending": "Random file binary compatibility",
@@ -47,6 +49,14 @@ descriptions = {
     "jvm_expected_failure_mid_assignment_is_non_blocking": "Expected diagnostic for MID$ assignment",
     "jvm_expected_failure_random_record_io_is_non_blocking": "Expected diagnostic for random/record file I/O",
     "jvm_expected_failure_sequential_file_io_is_non_blocking": "Expected diagnostic for sequential file I/O",
+    "conformance_fixtures_transpile_on_their_supported_backends": "Every supported fixture transpiles successfully",
+    "array_of_records_currently_fails": "Array of records is not yet supported",
+    "bare_dynamic_string_field_currently_fails_to_parse": "Bare dynamic record string fields are not yet supported",
+    "nested_record_field_currently_fails": "Nested record fields are not yet supported",
+    "plain_dim_of_record_type_currently_fails": "Arrays of records are not yet supported",
+    "record_valued_parameter_currently_fails": "Record-valued parameters are not yet supported",
+    "record_valued_return_currently_fails": "Record-valued returns are not yet supported",
+    "standalone_record_literal_currently_fails": "Standalone record literals are not yet supported",
 }
 
 for path in sorted((root / "tests").glob("*.rs")):
