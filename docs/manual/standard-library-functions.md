@@ -17,7 +17,7 @@ BASCAL recognises the classic BASIC functions below without a declaration or `re
 
 `SIN`, `COS`, `TAN`, and `ATN` use radians. `LOG` is the natural logarithm. `RANDOMIZE` is the companion statement that seeds `RND`.
 
-`LEFT$`, `RIGHT$`, `MID$`, `LEN`, and `INSTR` (string receiver), and `ABS`, `SQR`, `SIN`, `COS`, `TAN`, `INT`, `FIX`, and `SGN` (any numeric receiver) are also callable as scalar methods with no declaration needed — `s$.left(3)` is exactly the same call as `LEFT$(s$, 3)`. See [Built-in methods](../language/functions-and-procedures.md#built-in-methods) in the language book.
+`LEFT$`, `RIGHT$`, `MID$`, `LEN`, and `INSTR` (string receiver), and `ABS`, `SQR`, `SIN`, `COS`, `TAN`, `INT`, `FIX`, and `SGN` (any numeric receiver) are also callable as scalar methods with no declaration needed — `s$.left(3)` is exactly the same call as `LEFT$(s$, 3)`. See [Built-in methods](../language/methods.md#calling-and-chaining) in the language book.
 
 ### MID\$ assignment
 
@@ -45,7 +45,7 @@ The two-argument form (`MID$(target$, start) = replacement$`) behaves as if `len
 
 ### String and error-message functions
 
-`LTRIM$`, `RTRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00 builtins, and `ERROR$` compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`), as an ordinary `require`-able library under `com.bascal.stdlib` — the same mechanism as any other BASCAL library (see [Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md#dependencies-require-and-import)), not something auto-injected by call-site detection. `ltrim$`/`rtrim$`/`ucase$`/`lcase$` are declared as scalar methods, so `s$.ltrim()` and `ltrim$(s$)` both call the identical declaration (see [Built-in methods](../language/functions-and-procedures.md#built-in-methods)); `error$` stays an ordinary function, since an error code is a lookup key rather than a value the call naturally operates on:
+`LTRIM$`, `RTRIM$`, `UCASE$`, and `LCASE$` are not real MBASIC/BASCOM 2.00 builtins, and `ERROR$` compiles and links but silently returns an empty string at runtime instead of a real message (all verified against a real IBM Personal Computer BASIC Compiler 2.00 running under dosbox-x). BASCAL ships its own implementations, built from genuinely portable primitives (`LEFT$`/`MID$`/`LEN`/`ASC`/`CHR$`, loops — no `PEEK`/`POKE`, no `VARPTR`), as an ordinary `require`-able library under `com.bascal.stdlib` — the same mechanism as any other BASCAL library (see [Dependencies — REQUIRE and IMPORT](dependencies-require-and-import.md#dependencies-require-and-import)), not something auto-injected by call-site detection. `ltrim$`/`rtrim$`/`ucase$`/`lcase$` are declared as scalar methods, so `s$.ltrim()` and `ltrim$(s$)` both call the identical declaration (see [Methods](../language/methods.md)); `error$` stays an ordinary function, since an error code is a lookup key rather than a value the call naturally operates on:
 
 ```bascal
 require com.bascal.stdlib.ltrim

@@ -27,7 +27,7 @@ The BASIC target supports the complete list above. The C backend is almost compl
 
 ## Functions BASCAL supplies
 
-Real MBASIC/BASCOM does not provide every useful text function. BASCAL supplies `ltrim$`, `rtrim$`, `ucase$`, and `lcase$` as scalar methods (see [Declare and call a method](functions-and-procedures.md#declare-and-call-a-method)), and `error$` as an ordinary function -- each needs its own `require` line:
+Real MBASIC/BASCOM does not provide every useful text function. BASCAL supplies `ltrim$`, `rtrim$`, `ucase$`, and `lcase$` as scalar methods (see the [Methods](methods.md) chapter), and `error$` as an ordinary function -- each needs its own `require` line:
 
 ```bascal
 require com.bascal.stdlib.ltrim

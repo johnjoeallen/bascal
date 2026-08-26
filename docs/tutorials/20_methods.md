@@ -1,10 +1,10 @@
-[Home](../../) / [Tutorials](../) / Scalar Methods
+[Home](../../) / [Tutorials](../) / Methods
 
 <div class="prose" markdown="1">
 
 Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/20_methods.j).
 
-A method is a typed operation attached to a scalar value. The bracket after its name declares the receiver type: `method shout[string]()` receives a string. If no result type is supplied, the method returns the receiver's scalar type. A result suffix is accepted as shorthand, and `method name[receiver, result](...)` explicitly names a differing scalar result. The receiver is available as the matching implicit `self` variable; falling through an omitted-result method returns `self`.
+A method is a typed operation attached to a receiver. Scalar receivers are supported today; record receivers are the planned extension described below. The bracket after a scalar method's name declares its receiver type: `method shout[string]()` receives a string. If no result type is supplied, the method returns the receiver's scalar type. A result suffix is accepted as shorthand, and `method name[receiver, result](...)` explicitly names a differing scalar result. The receiver is available as the matching implicit `self` variable; falling through an omitted-result method returns `self`.
 
 </div>
 
@@ -37,6 +37,30 @@ print score%.clamp(0, 100)
 ```
 
 `left` returns a string, so another string method can follow it. `clamp%` returns an integer, so its result can be assigned to an integer variable or passed where an integer is expected.
+
+</div>
+
+<div class="snippet" markdown="1">
+
+### Record methods (planned)
+
+Methods are not fundamentally limited to scalars. Once general-purpose record values are implemented, a record type will be a valid method receiver and `self` will expose its fields. The intended shape is:
+
+```bascal
+record Card
+    title: string(40)
+    author: string(40)
+end record
+
+' Planned syntax — not accepted by the current parser yet.
+method display[Card, string]()
+    return self.title + " by " + self.author
+end method
+
+print card.display()
+```
+
+Record methods are intended to support record parameters, record results, record arrays, and method chains while preserving compile-time field and type checks. Their `byval`/`byref` copy behavior will be defined together with general-purpose records; the existing random-access `file`/record DSL is separate. This section documents the design direction only—record method receivers and results are not implemented yet. See [issue #128](https://github.com/johnjoeallen/bascal/issues/128).
 
 </div>
 

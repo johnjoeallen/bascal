@@ -7,7 +7,7 @@
 
 BASCAL is a structured superset of classic Microsoft BASIC, inspired mainly
 by Pascal. Its `bcc` transpiler turns readable `.bcl` source — structured
-control flow, functions and procedures, scalar methods, typed records, and
+control flow, functions and procedures, methods, typed records, and
 path-style `require` dependencies — into plain 1980s BASIC (compiled
 with a period compiler like BASCOM, or FreeBASIC's QB-compatible mode),
 native C (mostly complete, no BASIC compiler involved), or JVM bytecode

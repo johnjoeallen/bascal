@@ -15,9 +15,9 @@ end function
 
 The function name carries the return type suffix. Parameter names also carry type suffixes. Functions may have zero or more parameters.
 
-### Scalar methods (front-end)
+### Methods (front-end)
 
-BASCAL also accepts scalar extension-method declarations. The bracketed type after the method name selects the receiver type. If no result is supplied, it is the same scalar type as the receiver; a suffix on the name is accepted as shorthand for an explicit scalar result. If execution reaches the end of an omitted-result method, it returns `self`. The receiver is available in the body as the matching implicit `self` variable:
+BASCAL also accepts method declarations. Scalar receiver types are supported today; record receiver types are planned. The bracketed type after the method name selects the receiver type. If no result is supplied, it is the same scalar type as the receiver; a suffix on the name is accepted as shorthand for an explicit scalar result. If execution reaches the end of an omitted-result method, it returns `self`. The receiver is available in the body as the matching implicit `self` variable. See the book's full [Methods](../language/methods.md) chapter for chaining, built-ins, and planned record methods:
 
 ```bascal
 method capitalize[string]()

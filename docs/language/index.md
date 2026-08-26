@@ -29,13 +29,14 @@ The core ideas needed to read and write a BASCAL program.
 
 Ways to grow beyond a single page without losing the simplicity of BASIC.
 
-1.  [<span><span class="chapter-title">Functions, procedures, and methods</span><span class="chapter-summary">Give operations names, pass data deliberately, and declare typed scalar methods you can chain.</span></span>](functions-and-procedures.md)
-2.  [<span><span class="chapter-title">Libraries</span><span class="chapter-summary">Reuse code across files, and across functions, procedures, and methods, through `require`.</span></span>](libraries.md)
-3.  [<span><span class="chapter-title">Data that outlives a run</span><span class="chapter-summary">Work with sequential input and output, then let typed records remove random-file bookkeeping.</span></span>](data-and-files.md)
-4.  [<span><span class="chapter-title">Errors and labels</span><span class="chapter-summary">Handle runtime errors portably with `try`/`catch`, use BASIC-only recovery when needed, and reach for a label when structure genuinely can't reach.</span></span>](errors-labels-and-data.md)
-5.  [<span><span class="chapter-title">Embedded data</span><span class="chapter-summary">Ship small constant tables with `data`/`read` and rewind them with `restore`.</span></span>](embedded-data.md)
-6.  [<span><span class="chapter-title">The standard library</span><span class="chapter-summary">The built-in math, string, and conversion functions every BASCAL program can already call.</span></span>](standard-library.md)
-7.  [<span><span class="chapter-title">Running and combining programs</span><span class="chapter-summary">`bcc`'s command line, and linking separately-run programs together with `shared`/`COMMON`/`CHAIN`.</span></span>](running-and-combining-programs.md)
-8.  [<span><span class="chapter-title">The targets beneath the program</span><span class="chapter-summary">Understand the BASIC and C targets without programming at either level every day.</span></span>](the-basic-beneath.md)
+1.  [<span><span class="chapter-title">Functions and procedures</span><span class="chapter-summary">Give operations names, return values deliberately, and pass data through typed parameters.</span></span>](functions-and-procedures.md)
+2.  [<span><span class="chapter-title">Methods</span><span class="chapter-summary">Attach operations to scalar values today, and understand the planned record-method model.</span></span>](methods.md)
+3.  [<span><span class="chapter-title">Libraries</span><span class="chapter-summary">Reuse code across files, and across functions, procedures, and methods, through `require`.</span></span>](libraries.md)
+4.  [<span><span class="chapter-title">Data that outlives a run</span><span class="chapter-summary">Work with sequential input and output, then let typed records remove random-file bookkeeping.</span></span>](data-and-files.md)
+5.  [<span><span class="chapter-title">Errors and labels</span><span class="chapter-summary">Handle runtime errors portably with `try`/`catch`, use BASIC-only recovery when needed, and reach for a label when structure genuinely can't reach.</span></span>](errors-labels-and-data.md)
+6.  [<span><span class="chapter-title">Embedded data</span><span class="chapter-summary">Ship small constant tables with `data`/`read` and rewind them with `restore`.</span></span>](embedded-data.md)
+7.  [<span><span class="chapter-title">The standard library</span><span class="chapter-summary">The built-in math, string, and conversion functions every BASCAL program can already call.</span></span>](standard-library.md)
+8.  [<span><span class="chapter-title">Running and combining programs</span><span class="chapter-summary">`bcc`'s command line, and linking separately-run programs together with `shared`/`COMMON`/`CHAIN`.</span></span>](running-and-combining-programs.md)
+9.  [<span><span class="chapter-title">The targets beneath the program</span><span class="chapter-summary">Understand the BASIC and C targets without programming at either level every day.</span></span>](the-basic-beneath.md)
 
 </div>
