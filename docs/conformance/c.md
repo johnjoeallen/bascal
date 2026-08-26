@@ -1,4 +1,6 @@
-# C-specific conformance
+# [Conformance tests](../)
+
+## C-specific conformance
 
 | Test description | Result |
 | --- | :---: |

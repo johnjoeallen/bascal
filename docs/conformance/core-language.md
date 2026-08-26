@@ -1,4 +1,6 @@
-# Core language and tutorial coverage
+# [Conformance tests](../)
+
+## Core language and tutorial coverage
 
 These tests exercise language constructs and complete tutorial programs across
 the three transpilation backends.

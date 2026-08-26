@@ -1,4 +1,6 @@
-# Backend and runtime compatibility
+# [Conformance tests](../)
+
+## Backend and runtime compatibility
 
 These tests compare generated programs with native runtimes and record the
 backend-specific compatibility boundaries.

@@ -1,4 +1,6 @@
-# JVM-specific conformance
+# [Conformance tests](../)
+
+## JVM-specific conformance
 
 | Test description | Result |
 | --- | :---: |

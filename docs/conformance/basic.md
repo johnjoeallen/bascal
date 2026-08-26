@@ -1,4 +1,6 @@
-# BASIC-specific conformance
+# [Conformance tests](../)
+
+## BASIC-specific conformance
 
 | Test description | Result |
 | --- | :---: |
