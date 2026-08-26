@@ -157,7 +157,11 @@ id = "test.record_general_purpose.array_of_records_currently_fails"
 observed = "PASS"
 
 [[result]]
-id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_parse"
+id = "test.record_general_purpose.bare_dynamic_string_record_is_rejected_as_file_type"
+observed = "PASS"
+
+[[result]]
+id = "test.record_general_purpose.bare_dynamic_string_record_members_are_supported"
 observed = "PASS"
 
 [[result]]

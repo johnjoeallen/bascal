@@ -42,6 +42,8 @@ students[1] = { id: 1, name: "Alice", score: 95.0, faculty: "Engineering" }
 
 The source says that a file contains students and that the first student has four named fields. It does not ask you to repeat field offsets and buffer assignments at every write. A `{ ... }` literal must supply every declared field, in any order; a value of the wrong type, or a string too wide for its `string(N)` field, is rejected when the program is compiled rather than discovered later against real data.
 
+Records may also declare a plain `string` member when they are used in memory. Such a member is variable-length and therefore has no packed byte width; a record containing one cannot be used in a random-access `file` declaration.
+
 ## Changing part of a record
 
 Rewriting an entire record just to change one field would mean reading it first by hand. `?{ ... }` does that for you: name only the fields you are changing, and the rest keep whatever is already on disk.

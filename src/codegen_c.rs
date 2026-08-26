@@ -6210,7 +6210,7 @@ fn record_field_c_type(ty: RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "int32_t",
         RecordFieldType::Float32 => "float",
         RecordFieldType::Float64 => "double",
-        RecordFieldType::Str(..) => unreachable!(
+        RecordFieldType::Str(..) | RecordFieldType::StrDynamic => unreachable!(
             "string record fields are passed as const char*/char*, never through record_field_c_type"
         ),
     }

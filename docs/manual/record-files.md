@@ -20,7 +20,7 @@ record Student
 end record
 ```
 
-Supported field types and their packed width: `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` spellings remain accepted as aliases. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its field widths, in declaration order.
+Supported fixed-width file field types and their packed width are `int16` (2 bytes), `int32` (4 bytes), `float32` (4 bytes), `float64` (8 bytes), and `string(N)` (N bytes). String fields default to `lpad` (spaces on the right); write `string(N) rpad` to pad with spaces on the left instead. The older `left`/`right` spellings remain accepted as aliases. A plain `string` member is variable-length and may be used on an in-memory record, but a record containing one cannot be used as a random-access file type because its packed width is undefined. The record's total width — used as the `OPEN ... LEN =` value — is the sum of its fixed-width field widths, in declaration order.
 
 ### file ... as ... = open(...)
 
@@ -114,7 +114,7 @@ Sugar for `for i = 3 to 1 step -1`; ascending `for i = A to B` is unchanged.
 
 ### Type checking
 
-The transpilation pass rejects, at transpile time: field names not declared on the record (in a record literal or a `.field` access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its `string(N)` field, a string literal assigned to a numeric field (or vice versa), an unknown record type named by `file ... as ...`, and any reference to a `file` or `let`-bound record variable that was never declared.
+The transpilation pass rejects, at transpile time: field names not declared on the record (in a record literal or a `.field` access), a record literal that is missing a declared field or repeats one, a string literal that is wider than its `string(N)` field, a string literal assigned to a numeric field (or vice versa), a variable-length record (one with a plain `string` member) named by `file ... as ...`, an unknown record type named by `file ... as ...`, and any reference to a `file` or `let`-bound record variable that was never declared.
 
 </div>
 

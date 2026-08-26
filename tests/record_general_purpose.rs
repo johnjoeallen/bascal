@@ -206,13 +206,11 @@ end
     );
 }
 
-/// Case: a record meant purely for in-memory use should ideally permit a
-/// dynamic (non-fixed-width) `string` field. Per the investigation,
-/// `parse_record_field_type` requires `string(N)` unconditionally for
-/// every record -- there is no in-memory-only record path where bare
-/// `string` is legal.
+/// Bare `string` members are variable-length and are valid for records used
+/// in memory. They have no fixed packed width, so they are rejected when the
+/// record is declared as a random-access file type (tested below).
 #[test]
-fn bare_dynamic_string_field_currently_fails_to_parse() {
+fn bare_dynamic_string_record_members_are_supported() {
     let source = r#"program thingTest
 
 record Thing
@@ -224,9 +222,33 @@ end
 "#;
     let result = try_compile("bare_dynamic_string_field", source, Target::Basic);
     assert!(
-        result.is_err(),
-        "expected a record field declared as bare `string` (no width) to currently fail to parse. Output: {:?}",
+        result.is_ok(),
+        "expected bare string record members to compile for in-memory records. Output: {:?}",
         result
+    );
+}
+
+#[test]
+fn bare_dynamic_string_record_is_rejected_as_file_type() {
+    let source = r#"program thingFile
+
+record Thing
+    name: string
+end record
+
+file db as Thing = open("thing.dat")
+end
+"#;
+    let result = try_compile("bare_dynamic_string_file", source, Target::Basic);
+    let diagnostics = result.expect_err("variable-width record file should be rejected");
+    let text = format!("{diagnostics:?}");
+    assert!(
+        text.contains("variable-length string"),
+        "unexpected diagnostics: {text}"
+    );
+    assert!(
+        text.contains("random-access file type"),
+        "unexpected diagnostics: {text}"
     );
 }
 

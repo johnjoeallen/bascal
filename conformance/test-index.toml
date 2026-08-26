@@ -415,11 +415,20 @@ groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
-id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_parse"
+id = "test.record_general_purpose.bare_dynamic_string_record_is_rejected_as_file_type"
 kind = "test"
 source = "record_general_purpose"
-name = "bare_dynamic_string_field_currently_fails_to_parse"
-description = "In-memory records with variable-length string fields are not yet supported"
+name = "bare_dynamic_string_record_is_rejected_as_file_type"
+description = "Variable-length string records are rejected as random-access file types"
+groups = ["core", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+
+[[test]]
+id = "test.record_general_purpose.bare_dynamic_string_record_members_are_supported"
+kind = "test"
+source = "record_general_purpose"
+name = "bare_dynamic_string_record_members_are_supported"
+description = "In-memory records support variable-length string fields"
 groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 

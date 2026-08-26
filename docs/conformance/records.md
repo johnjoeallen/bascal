@@ -7,7 +7,8 @@
 | BASCOM creates file; target validates binary compatibility | PASS | PASS | FAIL |
 | Target creates file; BASCOM validates binary compatibility | PASS | PASS | FAIL |
 | Array of records is not yet supported | PASS | PASS | PASS |
-| In-memory records with variable-length string fields are not yet supported | PASS | PASS | PASS |
+| Variable-length string records are rejected as random-access file types | PASS | PASS | PASS |
+| In-memory records support variable-length string fields | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | NOT APPLICABLE |
 | JVM random-file records produce the expected diagnostic | NOT APPLICABLE | NOT APPLICABLE | FAIL |
 | Nested record fields are not yet supported | PASS | PASS | PASS |

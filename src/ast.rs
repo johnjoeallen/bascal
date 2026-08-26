@@ -100,6 +100,7 @@ pub enum RecordFieldType {
     Float32,
     Float64,
     Str(u32, RecordStringAlignment),
+    StrDynamic,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

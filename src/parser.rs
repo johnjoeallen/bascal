@@ -448,6 +448,9 @@ impl Parser {
             "float32" => Ok(RecordFieldType::Float32),
             "float64" => Ok(RecordFieldType::Float64),
             "string" => {
+                if !matches!(self.current().kind, TokenKind::LParen) {
+                    return Ok(RecordFieldType::StrDynamic);
+                }
                 self.expect(TokenKind::LParen, "expected `(` after `string`")?;
                 let width = self.expect_number_literal("expected string field width")?;
                 self.expect(TokenKind::RParen, "expected `)` after string field width")?;
