@@ -26,9 +26,9 @@ pages = {
     "basic": ("basic.md", "BASIC-specific"),
     "c": ("c.md", "C-specific"),
     "jvm": ("jvm.md", "JVM-specific"),
-    "files": ("records.md", "Files and records"),
+    "records": ("records.md", "Files and records"),
 }
-order = ["core", "tutorials", "basic", "c", "jvm", "files"]
+order = ["core", "tutorials", "basic", "c", "jvm", "records"]
 for group, (filename, title) in pages.items():
     selected = [e for e in entries if group in e.get("groups", [])]
     if group == "tutorials":
@@ -37,12 +37,12 @@ for group, (filename, title) in pages.items():
     for entry in selected:
         status = resolved(entry, group if group in ("basic", "c", "jvm") else "basic")
         description = re.sub(r"^\d+\s+", "", entry.get("description", entry["name"]))
-        if group in ("core", "tutorials", "files"):
+        if group in ("core", "tutorials", "records"):
             cells = [resolved(entry, b) for b in ("basic", "c", "jvm")]
             rows.append(f"| {description} | {' | '.join(cells)} |")
         else:
             rows.append(f"| {description} | {status} |")
-    if group in ("core", "tutorials", "files"):
+    if group in ("core", "tutorials", "records"):
         table = "| Test description | BASIC | C | JVM |\n| --- | :---: | :---: | :---: |"
     else:
         table = "| Test description | Result |\n| --- | :---: |"
@@ -50,9 +50,9 @@ for group, (filename, title) in pages.items():
     index = order.index(group)
     links = ['  <a href="../">← Overview</a>']
     if index:
-        links.insert(0, f'  <a href="../{order[index - 1] if order[index - 1] != "files" else "records"}/">← Previous: {pages[order[index - 1]][1]}</a>')
+        links.insert(0, f'  <a href="../{order[index - 1]}/">← Previous: {pages[order[index - 1]][1]}</a>')
     if index + 1 < len(order):
-        links.append(f'  <a href="../{order[index + 1] if order[index + 1] != "files" else "records"}/">Next: {pages[order[index + 1]][1]} →</a>')
+        links.append(f'  <a href="../{order[index + 1]}/">Next: {pages[order[index + 1]][1]} →</a>')
     nav = "\n".join(links)
     page = f"# [Conformance tests](../)\n\n## {title}\n\n{table}\n{body}\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n{nav}\n</nav>\n"
     (root / "docs/conformance" / filename).write_text(page)

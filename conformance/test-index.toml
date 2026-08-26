@@ -106,7 +106,7 @@ source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
 groups = ["core", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
+expected = { basic = "NOT APPLICABLE", c = "PASS", jvm = "FAIL" }
 
 [[test]]
 id = "test.dosbox_conformance.const_and_print_matches_real_bascom"

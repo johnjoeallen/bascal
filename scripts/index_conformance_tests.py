@@ -84,7 +84,7 @@ group_overrides = {
 }
 status_overrides = {
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "PASS", "c": "PASS", "jvm": "FAIL"},
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "NOT APPLICABLE", "c": "PASS", "jvm": "FAIL"},
 }
 
 for path in sorted((root / "tests").glob("*.rs")):

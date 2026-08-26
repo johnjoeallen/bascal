@@ -13,7 +13,7 @@
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
 | BASCOM random-file output is readable by C | PASS | PASS | FAIL |
-| C random-file output is readable by BASCOM | PASS | PASS | FAIL |
+| C random-file output is readable by BASCOM | NOT APPLICABLE | PASS | FAIL |
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |

@@ -6,7 +6,7 @@
 | --- | :---: | :---: | :---: |
 | Random file binary compatibility | PASS | PASS | FAIL |
 | BASCOM random-file output is readable by C | PASS | PASS | FAIL |
-| C random-file output is readable by BASCOM | PASS | PASS | FAIL |
+| C random-file output is readable by BASCOM | NOT APPLICABLE | PASS | FAIL |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | NOT APPLICABLE |
