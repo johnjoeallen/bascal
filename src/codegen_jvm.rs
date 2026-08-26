@@ -140,7 +140,7 @@ fn emit_fields(context: &JvmContext) -> String {
 /// two or greater are `Object[]` at each outer level, so a shallow clone plus
 /// recursive replacement of every child preserves the concrete array class.
 fn emit_array_copy_helper(class_name: &str) -> String {
-    format!(".method private static bccCopyIntArray : (Ljava/lang/Object;I)Ljava/lang/Object;\n    .limit stack 4\n    .limit locals 4\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 2\n    iconst_0\n    istore 3\nL_copy_loop:\n    iload 3\n    aload 2\n    arraylength\n    if_icmpge L_copy_done\n    aload 2\n    iload 3\n    aload 2\n    iload 3\n    aaload\n    iload 1\n    iconst_1\n    isub\n    invokestatic {class_name}/bccCopyIntArray (Ljava/lang/Object;I)Ljava/lang/Object;\n    aastore\n    iinc 3 1\n    goto L_copy_loop\nL_copy_done:\n    aload 2\n    areturn\n.end method\n\n")
+    format!(".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n    .limit stack 5\n    .limit locals 5\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\nL_copy_int:\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    aload 3\n    areturn\n.end method\n\n")
 }
 
 fn array_descriptor(shape: &ArrayShape) -> String {
@@ -332,12 +332,18 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
             continue;
         }
         let rank = array.rank;
-        if !(1..=8).contains(&rank) || array.element != JvmType::Numeric(NumericType::Int) {
-            return Err(format!("JVM byval array parameter `{}` needs an integer rank between 1 and 8", param.name));
+        if !(1..=8).contains(&rank) {
+            return Err(format!("JVM byval array parameter `{}` needs a rank between 1 and 8", param.name));
         }
         let slot = context.array_slots[&variable_key(&param.name)];
         let desc = format!("{}I", "[".repeat(rank));
-        body.push_str(&format!("    aload {slot}\n    bipush {rank}\n    invokestatic {}/bccCopyIntArray (Ljava/lang/Object;I)Ljava/lang/Object;\n    checkcast {desc}\n    astore {slot}\n", context.class_name));
+        let kind = match array.element {
+            JvmType::Numeric(NumericType::Int) => 0,
+            JvmType::Numeric(NumericType::Long) => 1,
+            JvmType::Numeric(NumericType::Double) => 2,
+            JvmType::String => 3,
+        };
+        body.push_str(&format!("    aload {slot}\n    bipush {rank}\n    bipush {kind}\n    invokestatic {}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    checkcast {desc}\n    astore {slot}\n", context.class_name));
     }
     let mut emitter = JvmEmitter {
         context: &context,
