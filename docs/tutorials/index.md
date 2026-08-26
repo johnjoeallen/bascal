@@ -21,7 +21,7 @@ Each tutorial names the backend(s) it transpiles under — `basic` accepts every
 
 - [Functions <span class="targets">(Basic, C, JVM)</span>](07_functions.md)
 - [Scalar Methods <span class="targets">(Basic, C, JVM)</span>](20_methods.md)
-- [Require and Multi-File Projects <span class="targets">(Basic, JVM)</span>](12_require.md)
+- [Require and Multi-File Projects <span class="targets">(Basic, C, JVM)</span>](12_require.md)
 - [Shared COMMON <span class="targets">(Basic, C)</span>](13_shared.md)
 - [Procedures <span class="targets">(Basic, C, JVM)</span>](14_procedures.md)
 
@@ -33,9 +33,9 @@ Each tutorial names the backend(s) it transpiles under — `basic` accepts every
 
 - [Arrays <span class="targets">(Basic, C, JVM)</span>](08_arrays.md)
 - [Data, Read, Swap <span class="targets">(Basic, C)</span>](09_data.md)
-- [File Input and Output <span class="targets">(Basic, C)</span>](10_files.md)
+- [File Input and Output <span class="targets">(Basic, C, JVM)</span>](10_files.md)
 - [Screen I/O <span class="targets">(Basic, C, JVM)</span>](11_screen.md)
-- [Random-Access and Record Files <span class="targets">(Basic, C)</span>](15_random_and_record_files.md)
+- [Random-Access and Record Files <span class="targets">(Basic, C, JVM)</span>](15_random_and_record_files.md)
 
 </div>
 
@@ -46,7 +46,7 @@ Each tutorial names the backend(s) it transpiles under — `basic` accepts every
 - [Short-Circuit && and \|\| <span class="targets">(Basic, C, JVM)</span>](16_short_circuit.md)
 - [Classic BASIC Error Handling <span class="targets">(Basic)</span>](17_labels_and_error_handling.md)
 - [Portable Structured Error Handling <span class="targets">(Basic, C, JVM)</span>](21_portable_error_handling.md)
-- [RESTORE and DATA <span class="targets">(Basic, C)</span>](22_restore_data.md)
+- [RESTORE and DATA <span class="targets">(Basic, C, JVM)</span>](22_restore_data.md)
 - [Standard Library Functions <span class="targets">(Basic, C, JVM)</span>](18_stdlib.md)
 
 </div>
@@ -57,7 +57,7 @@ Each tutorial names the backend(s) it transpiles under — `basic` accepts every
 
 A full historic program, not just a feature walkthrough — records, random-access files, procedures, and error handling working together at real-program scale.
 
-- [Case Study: Random-Access Inventory <span class="targets">(Basic, C)</span>](19_inventory.md)
+- [Case Study: Random-Access Inventory <span class="targets">(Basic, C, JVM)</span>](19_inventory.md)
 
 </div>
 
