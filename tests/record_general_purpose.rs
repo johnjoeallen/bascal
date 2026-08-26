@@ -1,4 +1,4 @@
-// Conformance groups: core, basic, c, jvm, records
+// Conformance groups: core, records
 //! Probes whether `record` currently works as a general-purpose,
 //! file-independent BASCAL value type. This test makes NO changes to
 //! `src/`; it only documents current behavior so future work can be

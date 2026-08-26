@@ -77,8 +77,10 @@ group_overrides = {
     "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available": ["c"],
     "gcc_runs_inventory_tutorial_under_c_target_when_available": ["c"],
     "gcc_runs_remline_under_c_target_when_available": ["c"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "c", "files"],
-    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["basic", "c", "files"],
+    "existing_random_access_file_record_usage_still_compiles_on_basic_and_c": ["basic", "c", "records"],
+    "jvm_backend_does_not_yet_support_random_access_file_records": ["jvm", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": ["basic", "c", "records"],
+    "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": ["basic", "c", "records"],
 }
 
 for path in sorted((root / "tests").glob("*.rs")):
@@ -95,9 +97,9 @@ for path in sorted((root / "tests").glob("*.rs")):
         expected = {
             backend: (
                 "PASS"
-                if backend in groups
+                if backend in groups or "core" in groups
                 else "NOT APPLICABLE"
-                if "files" in groups
+                if "files" in groups or "records" in groups
                 else "UNKNOWN"
             )
             for backend in ("basic", "c", "jvm")

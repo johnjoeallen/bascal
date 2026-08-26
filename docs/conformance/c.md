@@ -22,15 +22,7 @@
 | Interactive inventory case study | PASS |
 | remline case study output | PASS |
 | Nested procedure TRY/CATCH propagation | PASS |
-| Array of records is not yet supported | PASS |
-| Bare dynamic record string fields are not yet supported | PASS |
 | Existing random-file records compile on BASIC and C | PASS |
-| JVM random-file records produce the expected diagnostic | PASS |
-| Nested record fields are not yet supported | PASS |
-| Arrays of records are not yet supported | PASS |
-| Record-valued parameters are not yet supported | PASS |
-| Record-valued returns are not yet supported | PASS |
-| Standalone record literals are not yet supported | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../basic/">← Previous: BASIC-specific</a>

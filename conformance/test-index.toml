@@ -51,7 +51,7 @@ kind = "test"
 source = "metadata"
 name = "Random file binary compatibility"
 description = "Random file binary compatibility"
-groups = ["core", "basic", "c", "jvm", "files"]
+groups = ["core", "basic", "c", "jvm", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
@@ -96,7 +96,7 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 description = "BASCOM random-file output is readable by C"
-groups = ["basic", "c", "files"]
+groups = ["basic", "c", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
@@ -105,7 +105,7 @@ kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 description = "C random-file output is readable by BASCOM"
-groups = ["basic", "c", "files"]
+groups = ["basic", "c", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
@@ -429,7 +429,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "array_of_records_currently_fails"
 description = "Array of records is not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -438,7 +438,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "bare_dynamic_string_field_currently_fails_to_parse"
 description = "Bare dynamic record string fields are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -447,8 +447,8 @@ kind = "test"
 source = "record_general_purpose"
 name = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
 description = "Existing random-file records compile on BASIC and C"
-groups = ["core", "basic", "c", "jvm", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+groups = ["basic", "c", "records"]
+expected = { basic = "PASS", c = "PASS", jvm = "NOT APPLICABLE" }
 
 [[test]]
 id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access_file_records"
@@ -456,8 +456,8 @@ kind = "test"
 source = "record_general_purpose"
 name = "jvm_backend_does_not_yet_support_random_access_file_records"
 description = "JVM random-file records produce the expected diagnostic"
-groups = ["core", "basic", "c", "jvm", "records"]
-expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
+groups = ["jvm", "records"]
+expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "PASS" }
 
 [[test]]
 id = "test.record_general_purpose.nested_record_field_currently_fails"
@@ -465,7 +465,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "nested_record_field_currently_fails"
 description = "Nested record fields are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -474,7 +474,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "plain_dim_of_record_type_currently_fails"
 description = "Arrays of records are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -483,7 +483,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "record_valued_parameter_currently_fails"
 description = "Record-valued parameters are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -492,7 +492,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "record_valued_return_currently_fails"
 description = "Record-valued returns are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
@@ -501,7 +501,7 @@ kind = "test"
 source = "record_general_purpose"
 name = "standalone_record_literal_currently_fails"
 description = "Standalone record literals are not yet supported"
-groups = ["core", "basic", "c", "jvm", "records"]
+groups = ["core", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]

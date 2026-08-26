@@ -4,7 +4,7 @@
 [[test]]
 id = "core.random_file_binary_compatibility"
 description = "Random file binary compatibility"
-groups = ["core", "basic", "c", "jvm", "files"]
+groups = ["core", "basic", "c", "jvm", "records"]
 expected = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
 [[test]]
