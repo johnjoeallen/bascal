@@ -251,7 +251,7 @@ end
 /// supplied by hand). Skipped (not failed) when `gcc` isn't available,
 /// matching this file's other C-target tests.
 ///
-/// Also skipped on Windows: this test drives the compiled binary's
+/// This test drives the compiled binary's
 /// `INKEY$` prompts by piping keystrokes into its stdin, which works on
 /// POSIX because `bcc_inkey`'s non-Windows arm does a real
 /// `read(STDIN_FILENO, ...)` -- but on Windows `bcc_inkey` uses
@@ -269,10 +269,6 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
     if Command::new("gcc").arg("--version").output().is_err() {
         return;
     }
-    if cfg!(windows) {
-        return;
-    }
-
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let source_path = repo_root.join("tutorial/inventory.bcl");
     let dir = tempfile::tempdir().unwrap();

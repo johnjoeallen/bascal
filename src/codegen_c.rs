@@ -760,10 +760,10 @@ const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_r
 /// whatever partial, unbuffered bytes happened to be sitting there
 /// instead of a real line). The per-call toggle costs two extra syscalls
 /// each time, negligible against a human's own keystroke timing. A real,
-/// documented divergence from real BASIC: this only works against an
-/// interactive terminal or Windows console, not redirected standard input.
+/// On Windows, console input uses `_kbhit`/`_getch`; pipes use
+/// `PeekNamedPipe`/`ReadFile`, and redirected files use `_read`.
 const INKEY_PROTO: &str = "static const char* bcc_inkey(void);\n";
-const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char buf[2];\n#if defined(_WIN32)\n    if (_kbhit()) {\n        buf[0] = (char)_getch();\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n#else\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n#endif\n    return buf;\n}\n\n";
+const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char buf[2];\n#if defined(_WIN32)\n    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);\n    DWORD input_type = GetFileType(input);\n    if (input_type == FILE_TYPE_PIPE) {\n        DWORD available = 0;\n        if (PeekNamedPipe(input, NULL, 0, NULL, &available, NULL) && available > 0) {\n            DWORD read_count = 0;\n            ReadFile(input, buf, 1, &read_count, NULL);\n            buf[read_count == 1 ? 1 : 0] = 0;\n        } else {\n            buf[0] = 0;\n        }\n    } else if (input_type == FILE_TYPE_DISK) {\n        int c = _read(_fileno(stdin), buf, 1);\n        buf[c == 1 ? 1 : 0] = 0;\n    } else if (_kbhit()) {\n        buf[0] = (char)_getch();\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n#else\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n#endif\n    return buf;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
 /// `emit_raise_block`'s own doc comment for how these are used.
@@ -2935,7 +2935,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         includes.push_str("#include <time.h>\n");
     }
     if builtin_usage.needs_inkey_helper {
-        includes.push_str("#if defined(_WIN32)\n#include <conio.h>\n#else\n#include <termios.h>\n#include <unistd.h>\n#endif\n");
+        includes.push_str("#if defined(_WIN32)\n#include <conio.h>\n#include <windows.h>\n#include <io.h>\n#else\n#include <termios.h>\n#include <unistd.h>\n#endif\n");
     }
 
     let mut globals_decl = String::new();
