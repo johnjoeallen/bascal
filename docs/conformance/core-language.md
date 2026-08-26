@@ -6,7 +6,7 @@
 | --- | :---: | :---: | :---: |
 | All tutorial .bcl sources compile | PASS | PASS | DEFERRED |
 | Built-in scalar method calls | PASS | PASS | PASS |
-| C/JVM reject the classic labels/error-handling tutorial | UNSUPPORTED | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
+| C/JVM reject the classic labels/error-handling tutorial | NOT APPLICABLE | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
 | Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
 | Interactive inventory case study | PASS | PASS | DEFERRED |
 | Random file binary compatibility | PASS | PASS | FAIL |
