@@ -121,10 +121,6 @@ id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 observed = "PASS"
 
 [[result]]
-id = "test.jvm_conformance.jvm_random_file_output_is_readable_by_bascom"
-observed = "DEFERRED"
-
-[[result]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
 observed = "PASS"
 

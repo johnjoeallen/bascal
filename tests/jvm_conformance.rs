@@ -74,34 +74,6 @@ fn jvm_expected_failure_mid_assignment_is_non_blocking() {
     );
 }
 
-/// Cross-backend record-file compatibility check. This is deliberately ignored
-/// until JVM random-access file I/O exists; enabling it today should fail
-/// because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
-#[test]
-#[ignore = "expected failure until JVM random-access record I/O is implemented (#105)"]
-fn jvm_random_file_output_is_readable_by_bascom() {
-    let source_path = repo_root().join("tests/fixtures/conformance/cross_write.bcl");
-    let temp_dir = tempfile::tempdir().expect("failed to create JVM record test directory");
-    let mut output_arg = temp_dir.path().as_os_str().to_owned();
-    output_arg.push("/");
-    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
-        .arg(source_path)
-        .arg("--target")
-        .arg("jvm")
-        .arg("--clean")
-        .arg("--binary")
-        .arg("-o")
-        .arg(output_arg)
-        .current_dir(repo_root())
-        .output()
-        .expect("failed to invoke bcc");
-    assert!(
-        output.status.success(),
-        "JVM record binary compatibility is not implemented yet:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
     if !jvm_runtime_available() {

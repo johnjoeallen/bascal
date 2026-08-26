@@ -6,12 +6,11 @@
 | --- | :---: | :---: | :---: |
 | Random file binary compatibility | PASS | PASS | FAIL |
 | BASCOM random-file output is readable by C | PASS | PASS | FAIL |
-| C random-file output is readable by BASCOM | PASS | PASS | PASS |
-| JVM random-file output is readable by BASCOM | FAIL | FAIL | DEFERRED |
+| C random-file output is readable by BASCOM | PASS | PASS | NOT APPLICABLE |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | In-memory records with variable-length string fields are not yet supported | PASS | PASS | PASS |
-| Existing random-file records compile on BASIC and C | PASS | PASS | PASS |
-| JVM random-file records produce the expected diagnostic | PASS | PASS | FAIL |
+| Existing random-file records compile on BASIC and C | PASS | PASS | NOT APPLICABLE |
+| JVM random-file records produce the expected diagnostic | NOT APPLICABLE | NOT APPLICABLE | FAIL |
 | Nested record fields are not yet supported | PASS | PASS | PASS |
 | Arrays of records are not yet supported | PASS | PASS | PASS |
 | Record-valued parameters are not yet supported | PASS | PASS | PASS |

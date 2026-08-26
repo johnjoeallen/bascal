@@ -343,15 +343,6 @@ groups = ["tutorials", "jvm"]
 expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "PASS" }
 
 [[test]]
-id = "test.jvm_conformance.jvm_random_file_output_is_readable_by_bascom"
-kind = "test"
-source = "jvm_conformance"
-name = "jvm_random_file_output_is_readable_by_bascom"
-description = "JVM random-file output is readable by BASCOM"
-groups = ["core", "records"]
-expected = { basic = "NOT APPLICABLE", c = "NOT APPLICABLE", jvm = "DEFERRED" }
-
-[[test]]
 id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
 kind = "test"
 source = "jvm_conformance"

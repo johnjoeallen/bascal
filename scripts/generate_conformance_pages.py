@@ -19,6 +19,8 @@ def resolved(entry, backend):
     # remains green because that assertion is non-blocking.
     if expected == "FAIL":
         return "FAIL"
+    if expected == "NOT APPLICABLE":
+        return expected
     if actual is None:
         return expected
     if actual == "PASS":
