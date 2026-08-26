@@ -169,12 +169,17 @@ jobs:
             "<!doctype html><meta charset='utf-8'><title>BASCAL $name</title><pre>$encoded</pre>" |
               Set-Content (Join-Path $packageDir "$name.html") -Encoding utf8
           }
-          $files = @("LICENSE", "docs/hero-computer.svg", "docs/favicon.svg") +
+          $files = @("LICENSE") +
             (git ls-files tutorial com | Where-Object { $_ -notmatch '\.md$' })
           foreach ($file in $files) {
             $destination = Join-Path $packageDir $file
             New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
             Copy-Item $file $destination
+          }
+          Copy-Item "docs/hero-computer.svg" (Join-Path $packageDir "logo.svg")
+          Copy-Item "docs/favicon.svg" (Join-Path $packageDir "favicon.svg")
+          if (Get-ChildItem $packageDir -Recurse -Filter *.md) {
+            throw "Windows package must not contain Markdown files"
           }
           # Archive the package contents directly; do not add a redundant
           # top-level directory that makes Explorer extraction confusing.
