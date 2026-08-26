@@ -421,7 +421,7 @@ source = "language_conformance"
 name = "conformance_fixtures_transpile_on_their_supported_backends"
 description = "Every supported fixture transpiles successfully"
 groups = ["core", "tutorials"]
-expected = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "test.record_general_purpose.array_of_records_currently_fails"

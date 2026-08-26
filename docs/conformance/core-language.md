@@ -12,7 +12,7 @@
 | Random file binary compatibility | PASS | PASS | FAIL |
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
-| Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
+| Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | PASS |
