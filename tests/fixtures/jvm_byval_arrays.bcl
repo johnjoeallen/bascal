@@ -1,0 +1,15 @@
+// JVM-target conformance fixture: array byval receives a private deep copy.
+program jvmByvalArrays
+
+dim values%(1)
+values%(0) = 1
+values%(1) = 2
+
+procedure changeCopy(arr%(?))
+    arr%(0) = 99
+end procedure
+
+changeCopy(values%)
+print values%(0)
+print values%(1)
+end

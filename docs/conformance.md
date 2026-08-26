@@ -19,7 +19,6 @@
 | Structured `TRY`/`CATCH`/`FINALLY` execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | N/A | N/A | PASS |
 | Catch filters and source bindings | PASS | PASS | PASS |
-| Portable error-handling tutorial | PASS | PASS | PASS |
 | Hello-world assembly and execution | N/A | N/A | PASS |
 | Numeric literals and arithmetic | PASS | PASS | PASS |
 | Scalar variables and constants | PASS | PASS | PASS |

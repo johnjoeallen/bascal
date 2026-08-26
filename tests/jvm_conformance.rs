@@ -26,6 +26,48 @@ fn jvm_runtime_available() -> bool {
     java_available() && krak2_available()
 }
 
+fn assert_jvm_expected_failure(source: &str, expected: &str) {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create JVM expected-failure fixture");
+    fs::write(file.path(), source).expect("failed to write JVM expected-failure fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(!output.status.success(), "JVM fixture unexpectedly succeeded");
+    let diagnostics = String::from_utf8_lossy(&output.stderr);
+    assert!(diagnostics.contains(expected), "expected `{expected}` in diagnostics:\n{diagnostics}");
+}
+
+#[test]
+fn jvm_expected_failure_sequential_file_io_is_non_blocking() {
+    assert_jvm_expected_failure(
+        "program jvmSequentialFile\nopen \"missing.dat\" for input as #1\nend\n",
+        "not supported by the minimal JVM backend yet",
+    );
+}
+
+#[test]
+fn jvm_expected_failure_random_record_io_is_non_blocking() {
+    assert_jvm_expected_failure(
+        "program jvmRandomFile\nopen \"records.dat\" for random as #1 len = 12\nend\n",
+        "not supported by the minimal JVM backend yet",
+    );
+}
+
+#[test]
+fn jvm_expected_failure_mid_assignment_is_non_blocking() {
+    assert_jvm_expected_failure(
+        "program jvmMid\ntext$ = \"abcdef\"\nmid$(text$, 1, 2) = \"x\"\nend\n",
+        "not supported by the minimal JVM backend yet",
+    );
+}
+
 /// Pending cross-backend record-file compatibility check. This is deliberately
 /// ignored until JVM random-access file I/O exists; enabling it today should
 /// fail because the JVM backend rejects `OPEN`/`FIELD`/`GET`/`PUT`.
@@ -112,6 +154,35 @@ fn jvm_non_integer_arrays_run_when_available() {
         String::from_utf8_lossy(&output.stdout)
             .replace("\r\n", "\n")
             .ends_with("2\n3\n1\n0\n2\n7\n4.0\nhello world\n9\n")
+    );
+}
+
+#[test]
+fn jvm_byval_arrays_expected_failure_is_non_blocking() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let source_path = repo_root().join("tests/fixtures/jvm_byval_arrays.bcl");
+    let temp_dir = tempfile::tempdir().expect("failed to create JVM byval array test directory");
+    let mut output_arg = temp_dir.path().as_os_str().to_owned();
+    output_arg.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_arg)
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(!output.status.success(), "JVM byval array fixture unexpectedly succeeded");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("krak2 failed assembling"),
+        "expected the known JVM byval clone assembly failure, got:\n{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 
