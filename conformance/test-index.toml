@@ -610,7 +610,7 @@ source = "12_require.bcl"
 name = "12 REQUIRE and libraries"
 description = "12 REQUIRE and libraries"
 groups = ["tutorials"]
-expected = { basic = "PASS", c = "FAIL", jvm = "PASS" }
+expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
 id = "tutorial.13_shared.start"

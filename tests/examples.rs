@@ -57,6 +57,7 @@ fn c_target_builds_and_runs_noninteractive_tutorials() {
         "07_functions",
         "08_arrays",
         "09_data",
+        "12_require",
         "14_procedures",
         "16_short_circuit",
         "18_stdlib",
@@ -76,6 +77,8 @@ fn c_target_builds_and_runs_noninteractive_tutorials() {
             .arg("c")
             .arg("--clean")
             .arg("--run")
+            .arg("-L")
+            .arg(root.join("tutorial").join("lib"))
             .arg("-o")
             .arg(output_dir);
         let output = command

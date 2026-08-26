@@ -37,12 +37,12 @@ for group, (filename, title) in pages.items():
     for entry in selected:
         status = resolved(entry, group if group in ("basic", "c", "jvm") else "basic")
         description = re.sub(r"^\d+\s+", "", entry.get("description", entry["name"]))
-        if group in ("core", "tutorials"):
+        if group in ("core", "tutorials", "files"):
             cells = [resolved(entry, b) for b in ("basic", "c", "jvm")]
             rows.append(f"| {description} | {' | '.join(cells)} |")
         else:
             rows.append(f"| {description} | {status} |")
-    if group in ("core", "tutorials"):
+    if group in ("core", "tutorials", "files"):
         table = "| Test description | BASIC | C | JVM |\n| --- | :---: | :---: | :---: |"
     else:
         table = "| Test description | Result |\n| --- | :---: |"

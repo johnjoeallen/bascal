@@ -61,8 +61,8 @@ status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 [[tutorial]]
 name = "12 REQUIRE and libraries"
 source = "12_require.bcl"
-backends = ["basic", "jvm"]
-status = { basic = "PASS", c = "FAIL", jvm = "PASS" }
+backends = ["basic", "c", "jvm"]
+status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[tutorial]]
 name = "13 Shared COMMON"

@@ -15,7 +15,7 @@
 | DATA and READ | PASS | PASS | PASS |
 | Sequential files | PASS | PASS | FAIL |
 | Screen I/O | PASS | PASS | FAIL |
-| REQUIRE and libraries | PASS | FAIL | PASS |
+| REQUIRE and libraries | PASS | PASS | PASS |
 | Shared COMMON | PASS | UNSUPPORTED | UNSUPPORTED |
 | Procedures | PASS | PASS | PASS |
 | Random-access and record files | PASS | PASS | FAIL |
