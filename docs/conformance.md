@@ -5,8 +5,8 @@
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
-| All tutorial `.bcl` sources compile | PASS | N/A | N/A |
-| Deterministic tutorials build and execute | N/A | PASS | N/A |
+| All tutorial `.bcl` sources compile | PASS | UNSUPPORTED | UNSUPPORTED |
+| Deterministic tutorials build and execute | UNSUPPORTED | PASS | UNSUPPORTED |
 | C rejects the classic labels/error-handling tutorial | N/A | PASS | PASS |
 | Nested procedure `TRY`/`CATCH` propagation | PASS | PASS | PASS |
 | Interactive inventory case study | N/A | PASS | N/A |

@@ -16,11 +16,11 @@
 | Sequential files | PASS | PASS | FAIL |
 | Screen I/O | PASS | PASS | FAIL |
 | REQUIRE and libraries | PASS | FAIL | PASS |
-| Shared COMMON | PASS | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
+| Shared COMMON | PASS | UNSUPPORTED | UNSUPPORTED |
 | Procedures | PASS | PASS | PASS |
 | Random-access and record files | PASS | PASS | FAIL |
 | Short-circuit conditions | PASS | PASS | PASS |
-| Classic labels and error handling | PASS | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
+| Classic labels and error handling | PASS | UNSUPPORTED | UNSUPPORTED |
 | Standard-library functions | PASS | PASS | PASS |
 | Inventory case study | PASS | PASS | FAIL |
 | Scalar methods | PASS | PASS | PASS |
@@ -32,4 +32,4 @@
   <a href="basic/">Next: BASIC-specific →</a>
 </nav>
 
-`FAIL` means the backend is required to support the tutorial but does not yet pass it. `UNSUPPORTED` means it is not currently supported; `WILL NOT IMPLEMENT` marks a permanently out-of-scope feature.
+`FAIL` means a required check ran and failed. `UNSUPPORTED` means the backend will not implement the feature. `DEFERRED` means support is expected but validation is not yet in the suite.
