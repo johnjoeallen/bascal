@@ -13,5 +13,5 @@
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Previous: Core language</a>
-  <a href="basic/">Next: BASIC-specific →</a>
+  <a href="../basic/">Next: BASIC-specific →</a>
 </nav>
