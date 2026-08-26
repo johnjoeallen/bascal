@@ -160,13 +160,25 @@ jobs:
           $packageDir = Join-Path "dist" $packageName
           New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
           Copy-Item "target/release/bcc.exe" $packageDir
-          $files = @("README.md", "intro.md", "LICENSE") + (git ls-files tutorial com)
+          # Windows Explorer users should get browsable HTML, not Markdown
+          # source files. Keep the original text inside a simple, portable
+          # preformatted HTML page so no extra converter is required.
+          foreach ($source in @("README.md", "intro.md")) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($source)
+            $encoded = [System.Net.WebUtility]::HtmlEncode((Get-Content $source -Raw))
+            "<!doctype html><meta charset='utf-8'><title>BASCAL $name</title><pre>$encoded</pre>" |
+              Set-Content (Join-Path $packageDir "$name.html") -Encoding utf8
+          }
+          $files = @("LICENSE", "docs/hero-computer.svg", "docs/favicon.svg") +
+            (git ls-files tutorial com | Where-Object { $_ -notmatch '\.md$' })
           foreach ($file in $files) {
             $destination = Join-Path $packageDir $file
             New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
             Copy-Item $file $destination
           }
-          Compress-Archive -Path $packageDir -DestinationPath "dist/$packageName.zip" -Force
+          # Archive the package contents directly; do not add a redundant
+          # top-level directory that makes Explorer extraction confusing.
+          Compress-Archive -Path (Join-Path $packageDir '*') -DestinationPath "dist/$packageName.zip" -Force
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v6

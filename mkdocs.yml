@@ -68,6 +68,7 @@ nav:
       - Command-Line Reference: manual/command-line-reference.md
       - Statement Quick Reference: manual/statement-quick-reference.md
       - Standard Library Functions: manual/standard-library-functions.md
+      - Windows Setup: manual/windows.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Hello, World: tutorials/01_hello.md

@@ -23,3 +23,4 @@
 21. [<span class="num">21</span> Command-Line Reference](command-line-reference.md)
 22. [<span class="num">22</span> Statement Quick Reference](statement-quick-reference.md)
 23. [<span class="num">23</span> Standard Library Functions](standard-library-functions.md)
+24. [<span class="num">24</span> Windows Setup](windows.md)
