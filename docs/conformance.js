@@ -1,11 +1,19 @@
-// Turn the compact Markdown status markers into coloured, accessible buttons.
+// Turn every compact Markdown status marker into a coloured, accessible button.
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("table").forEach((table) => {
     table.querySelectorAll("tbody td").forEach((cell) => {
       const value = cell.textContent.trim().toUpperCase();
-      const kind = value === "PASS" ? "pass" : value === "FAIL" ? "fail" : value === "N/A" ? "na" : null;
+      // PASS and known expected outcomes are good (green).  FAIL is an
+      // observed unexpected result (red); an absent/unclassified result is
+      // unknown (grey).  Keep the label itself so the distinction remains
+      // visible without colour perception.
+      const expected = new Set([
+        "PASS", "DEFERRED", "UNSUPPORTED", "WILL NOT IMPLEMENT",
+        "NOT APPLICABLE", "N/A"
+      ]);
+      const kind = value === "FAIL" ? "fail" : expected.has(value) ? "pass" : "unknown";
       if (!kind) return;
-      cell.innerHTML = `<span class="conformance-status ${kind}" role="status">${value}</span>`;
+      cell.innerHTML = `<span class="conformance-status ${kind}" role="status" aria-label="${value}">${value}</span>`;
     });
   });
 });

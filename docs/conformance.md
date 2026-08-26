@@ -6,13 +6,13 @@
 | --- | :---: | :---: | :---: |
 | All tutorial .bcl sources compile | PASS | PASS | DEFERRED |
 | Built-in scalar method calls | PASS | PASS | PASS |
-| C/JVM reject the classic labels/error-handling tutorial | UNSUPPORTED | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
+| C/JVM reject the classic labels/error-handling tutorial | NOT APPLICABLE | UNSUPPORTED | UNSUPPORTED |
 | Deterministic tutorials build and execute | PASS | PASS | DEFERRED |
 | Interactive inventory case study | PASS | PASS | DEFERRED |
 | Random file binary compatibility | PASS | PASS | FAIL |
 | Standard-library function execution | PASS | PASS | PASS |
 | Typed non-integer arrays and array parameters | DEFERRED | DEFERRED | PASS |
-| Every supported fixture transpiles successfully | UNKNOWN | UNKNOWN | UNKNOWN |
+| Every supported fixture transpiles successfully | PASS | PASS | PASS |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | Bare dynamic record string fields are not yet supported | PASS | PASS | PASS |
 | Existing random-file records compile on BASIC and C | PASS | PASS | PASS |
@@ -25,5 +25,5 @@
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Overview</a>
-  <a href="tutorials.md">Next: Tutorials →</a>
+  <a href="../tutorials/">Next: Tutorials →</a>
 </nav>
