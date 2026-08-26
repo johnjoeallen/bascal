@@ -251,6 +251,24 @@ fn descriptor(ty: JvmType) -> &'static str {
     }
 }
 
+fn array_load_opcode(ty: JvmType) -> &'static str {
+    match ty {
+        JvmType::String => "aaload",
+        JvmType::Numeric(NumericType::Int) => "iaload",
+        JvmType::Numeric(NumericType::Long) => "laload",
+        JvmType::Numeric(NumericType::Double) => "daload",
+    }
+}
+
+fn array_store_opcode(ty: JvmType) -> &'static str {
+    match ty {
+        JvmType::String => "aastore",
+        JvmType::Numeric(NumericType::Int) => "iastore",
+        JvmType::Numeric(NumericType::Long) => "lastore",
+        JvmType::Numeric(NumericType::Double) => "dastore",
+    }
+}
+
 fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
     functions
         .iter()
@@ -541,10 +559,8 @@ impl JvmEmitter<'_> {
                     .arrays
                     .get(&variable_key(name))
                     .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
-                if indices.len() != shape.dimensions.len()
-                    || !matches!(shape.element, JvmType::Numeric(NumericType::Int))
-                {
-                    return Err("JVM indexed assignment currently supports one-dimensional integer arrays only".to_string());
+                if indices.len() != shape.dimensions.len() {
+                    return Err("JVM indexed assignment has the wrong number of dimensions".to_string());
                 }
                 self.context.emit_array_load(name, out);
                 for index in &indices[..indices.len() - 1] {
@@ -557,8 +573,11 @@ impl JvmEmitter<'_> {
                     out,
                     self.context,
                 )?;
-                emit_numeric_expr_as(value, NumericType::Int, out, self.context)?;
-                out.push_str("    iastore\n");
+                match shape.element {
+                    JvmType::String => emit_string_expr(value, out, self.context)?,
+                    JvmType::Numeric(ty) => emit_numeric_expr_as(value, ty, out, self.context)?,
+                }
+                out.push_str(&format!("    {}\n", array_store_opcode(shape.element)));
                 Ok(())
             }
             Statement::ExprStmt(Expr::Call { name, args })
@@ -1406,6 +1425,16 @@ impl JvmContext {
             {
                 true
             }
+            Expr::Call { name, args }
+            | Expr::ArrayRef {
+                name,
+                indices: args,
+            } if self
+                .arrays
+                .get(&variable_key(name))
+                .is_some_and(|shape| {
+                    args.len() == shape.dimensions.len() && shape.element == JvmType::String
+                }) => true,
             Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => self
                 .function(name)
                 .is_some_and(|signature| matches!(signature.result, JvmType::String)),
@@ -1718,6 +1747,22 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if context.arrays.contains_key(&variable_key(name)) =>
+        {
+            let shape = context.arrays.get(&variable_key(name)).expect("array exists");
+            if args.len() != shape.dimensions.len() || shape.element != JvmType::String {
+                return Err("JVM string-array access has the wrong type or dimensions".to_string());
+            }
+            context.emit_array_load(name, out);
+            for index in &args[..args.len() - 1] {
+                emit_numeric_expr_as(index, NumericType::Int, out, context)?;
+                out.push_str("    aaload\n");
+            }
+            emit_numeric_expr_as(args.last().expect("validated index count"), NumericType::Int, out, context)?;
+            out.push_str("    aaload\n");
+            Ok(())
+        }
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if context.function(name).is_some() => {
             emit_function_call(name, args, JvmType::String, out, context)
         }
@@ -1982,22 +2027,25 @@ fn emit_numeric_expr(
         }
         Expr::Call { name, args } if context.arrays.contains_key(&variable_key(name)) => {
             let shape = context.arrays.get(&variable_key(name)).expect("array exists");
-            if args.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
-                return Err("JVM indexed access requires matching integer array dimensions".to_string());
+            if args.len() != shape.dimensions.len() {
+                return Err("JVM indexed access has the wrong number of dimensions".to_string());
             }
             context.emit_array_load(name, out);
             for index in &args[..args.len() - 1] { emit_numeric_expr_as(index, NumericType::Int, out, context)?; out.push_str("    aaload\n"); }
             emit_numeric_expr_as(args.last().expect("validated index count"), NumericType::Int, out, context)?;
-            out.push_str("    iaload\n");
-            Ok(NumericType::Int)
+            out.push_str(&format!("    {}\n", array_load_opcode(shape.element)));
+            match shape.element {
+                JvmType::Numeric(ty) => Ok(ty),
+                JvmType::String => Err("string array used where a numeric value was expected".to_string()),
+            }
         }
         Expr::ArrayRef { name, indices } => {
             let shape = context
                 .arrays
                 .get(&variable_key(name))
                 .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
-            if indices.len() != shape.dimensions.len() || !matches!(shape.element, JvmType::Numeric(NumericType::Int)) {
-                return Err("JVM indexed access currently supports integer arrays with matching dimensions".to_string());
+            if indices.len() != shape.dimensions.len() {
+                return Err("JVM indexed access has the wrong number of dimensions".to_string());
             }
             context.emit_array_load(name, out);
             for index in &indices[..indices.len() - 1] {
@@ -2005,8 +2053,11 @@ fn emit_numeric_expr(
                 out.push_str("    aaload\n");
             }
             emit_numeric_expr_as(indices.last().expect("validated index count"), NumericType::Int, out, context)?;
-            out.push_str("    iaload\n");
-            Ok(NumericType::Int)
+            out.push_str(&format!("    {}\n", array_load_opcode(shape.element)));
+            match shape.element {
+                JvmType::Numeric(ty) => Ok(ty),
+                JvmType::String => Err("string array used where a numeric value was expected".to_string()),
+            }
         }
         Expr::Binary {
             left,
