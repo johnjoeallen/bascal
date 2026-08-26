@@ -49,7 +49,9 @@ pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
 fn is_upper_snake_case(name: &str) -> bool {
     let mut chars = name.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
-        && name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
         && !name.contains("__")
         && !name.ends_with('_')
 }

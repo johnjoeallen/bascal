@@ -39,9 +39,15 @@ fn assert_jvm_expected_failure(source: &str, expected: &str) {
         .arg("--clean")
         .output()
         .expect("failed to invoke bcc");
-    assert!(!output.status.success(), "JVM fixture unexpectedly succeeded");
+    assert!(
+        !output.status.success(),
+        "JVM fixture unexpectedly succeeded"
+    );
     let diagnostics = String::from_utf8_lossy(&output.stderr);
-    assert!(diagnostics.contains(expected), "expected `{expected}` in diagnostics:\n{diagnostics}");
+    assert!(
+        diagnostics.contains(expected),
+        "expected `{expected}` in diagnostics:\n{diagnostics}"
+    );
 }
 
 #[test]
@@ -150,11 +156,9 @@ fn jvm_non_integer_arrays_run_when_available() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(
-        String::from_utf8_lossy(&output.stdout)
-            .replace("\r\n", "\n")
-            .ends_with("2\n3\n1\n0\n2\n7\n4.0\nhello world\n9\n")
-    );
+    assert!(String::from_utf8_lossy(&output.stdout)
+        .replace("\r\n", "\n")
+        .ends_with("2\n3\n1\n0\n2\n7\n4.0\nhello world\n9\n"));
 }
 
 #[test]
@@ -178,7 +182,10 @@ fn jvm_byval_arrays_expected_failure_is_non_blocking() {
         .current_dir(repo_root())
         .output()
         .expect("failed to invoke bcc");
-    assert!(!output.status.success(), "JVM byval array fixture unexpectedly succeeded");
+    assert!(
+        !output.status.success(),
+        "JVM byval array fixture unexpectedly succeeded"
+    );
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("krak2 failed assembling"),
         "expected the known JVM byval clone assembly failure, got:\n{}",

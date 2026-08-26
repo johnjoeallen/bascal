@@ -8,9 +8,9 @@
 //! a "not supported yet" diagnostic rather than panicking or emitting wrong
 //! code -- a walking skeleton, not a real backend yet.
 //!
-//! Output is Krakatau assembly text (`.j`), not a `.class` file directly --
-//! same "emit text, let an external tool own the binary format" split
-//! `codegen_c.rs` has with `gcc`, just with `krak2` assembling `.j` -> `.class`
+//! Output is Krakatau assembly text (`.j`); the command-line driver also has a
+//! small internal class-file writer for return-only programs, while general
+//! output still uses `krak2` to assemble `.j` -> `.class`.
 //! and any JRE's `java` running it (see `main.rs`'s eventual
 //! `invoke_krak2`/`invoke_java`). `krak2` is `Storyyeller/Krakatau`'s `v2`
 //! branch -- itself a Rust/Cargo project, pinned by commit since it has no
@@ -27,8 +27,8 @@ use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::{
-    BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, ParamMode, PrintToken, Program, Statement, Stmt,
-    TypeSuffix, UnaryOp,
+    BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, ParamMode, PrintToken, Program, Statement,
+    Stmt, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -77,7 +77,12 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             &emit_function(function, &context).map_err(|message| vec![unsupported(&message)])?,
         );
     }
-    if program.functions.iter().any(|function| function.params.iter().any(|param| param.axes.is_some() && param.mode != ParamMode::ByRef)) {
+    if program.functions.iter().any(|function| {
+        function
+            .params
+            .iter()
+            .any(|param| param.axes.is_some() && param.mode != ParamMode::ByRef)
+    }) {
         methods.push_str(&emit_array_copy_helper(&class_name));
     }
     Ok(format!(
@@ -142,7 +147,6 @@ fn emit_fields(context: &JvmContext) -> String {
 fn emit_array_copy_helper(class_name: &str) -> String {
     format!(".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n    .limit stack 5\n    .limit locals 5\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\nL_copy_int:\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    aload 3\n    areturn\n.end method\n\n")
 }
-
 
 fn array_descriptor(shape: &ArrayShape) -> String {
     format!(
@@ -326,7 +330,11 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         .get(&function_key(&function.name))
         .expect("registered function");
     for (position, param) in function.params.iter().enumerate() {
-        let Some(array) = signature.array_params.iter().find(|array| array.position == position) else {
+        let Some(array) = signature
+            .array_params
+            .iter()
+            .find(|array| array.position == position)
+        else {
             continue;
         };
         if array.by_ref {
@@ -334,7 +342,10 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         }
         let rank = array.rank;
         if !(1..=8).contains(&rank) {
-            return Err(format!("JVM byval array parameter `{}` needs a rank between 1 and 8", param.name));
+            return Err(format!(
+                "JVM byval array parameter `{}` needs a rank between 1 and 8",
+                param.name
+            ));
         }
         let slot = context.array_slots[&variable_key(&param.name)];
         let desc = format!("{}I", "[".repeat(rank));
@@ -567,7 +578,9 @@ impl JvmEmitter<'_> {
                     .get(&variable_key(name))
                     .ok_or_else(|| format!("unknown JVM array `{name}`"))?;
                 if indices.len() != shape.dimensions.len() {
-                    return Err("JVM indexed assignment has the wrong number of dimensions".to_string());
+                    return Err(
+                        "JVM indexed assignment has the wrong number of dimensions".to_string()
+                    );
                 }
                 self.context.emit_array_load(name, out);
                 for index in &indices[..indices.len() - 1] {
@@ -601,11 +614,19 @@ impl JvmEmitter<'_> {
                 }
                 let mut scalars = signature.params.iter();
                 for (position, arg) in args.iter().enumerate() {
-                    if let Some(array) = signature.array_params.iter().find(|array| array.position == position) {
+                    if let Some(array) = signature
+                        .array_params
+                        .iter()
+                        .find(|array| array.position == position)
+                    {
                         let Expr::Ident(array_name) = arg else {
                             return Err(format!("array parameter {position} of `{name}` needs a plain array argument"));
                         };
-                        let shape = self.context.arrays.get(&variable_key(array_name)).ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
+                        let shape = self
+                            .context
+                            .arrays
+                            .get(&variable_key(array_name))
+                            .ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
                         if shape.dimensions.len() != array.rank || shape.element != array.element {
                             return Err(format!("array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"));
                         }
@@ -613,8 +634,10 @@ impl JvmEmitter<'_> {
                     } else {
                         let ty = scalars.next().expect("scalar source parameter");
                         match ty {
-                        JvmType::String => emit_string_expr(arg, out, self.context)?,
-                        JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, self.context)?,
+                            JvmType::String => emit_string_expr(arg, out, self.context)?,
+                            JvmType::Numeric(ty) => {
+                                emit_numeric_expr_as(arg, *ty, out, self.context)?
+                            }
                         }
                     }
                 }
@@ -1221,8 +1244,16 @@ impl FunctionSig {
             out.push(descriptor(*scalars.next().expect("receiver scalar")).to_string());
         }
         for position in 0..self.source_param_count {
-            if let Some(array) = self.array_params.iter().find(|array| array.position == position) {
-                out.push(format!("{}{}", "[".repeat(array.rank), descriptor(array.element)));
+            if let Some(array) = self
+                .array_params
+                .iter()
+                .find(|array| array.position == position)
+            {
+                out.push(format!(
+                    "{}{}",
+                    "[".repeat(array.rank),
+                    descriptor(array.element)
+                ));
             } else {
                 out.push(descriptor(*scalars.next().expect("scalar source parameter")).to_string());
             }
@@ -1238,7 +1269,12 @@ impl JvmContext {
             out.push_str(&format!("    aload {slot}\n"));
         } else {
             let shape = self.arrays.get(&key).expect("registered JVM array");
-            out.push_str(&format!("    getstatic {}/a{} {}\n", self.class_name, self.array_index(ident), array_descriptor(shape)));
+            out.push_str(&format!(
+                "    getstatic {}/a{} {}\n",
+                self.class_name,
+                self.array_index(ident),
+                array_descriptor(shape)
+            ));
         }
     }
 
@@ -1375,10 +1411,13 @@ impl JvmContext {
         let array_aliases = parent.array_aliases.clone();
         for param in function.params.iter().filter(|param| param.axes.is_some()) {
             let key = variable_key(&param.name);
-            arrays.insert(key, ArrayShape {
-                element: type_for_ident(&param.name),
-                dimensions: vec![Expr::Integer(0); param.rank().unwrap_or(0)],
-            });
+            arrays.insert(
+                key,
+                ArrayShape {
+                    element: type_for_ident(&param.name),
+                    dimensions: vec![Expr::Integer(0); param.rank().unwrap_or(0)],
+                },
+            );
         }
         Self {
             variables,
@@ -1452,12 +1491,12 @@ impl JvmContext {
             | Expr::ArrayRef {
                 name,
                 indices: args,
-            } if self
-                .arrays
-                .get(&variable_key(name))
-                .is_some_and(|shape| {
-                    args.len() == shape.dimensions.len() && shape.element == JvmType::String
-                }) => true,
+            } if self.arrays.get(&variable_key(name)).is_some_and(|shape| {
+                args.len() == shape.dimensions.len() && shape.element == JvmType::String
+            }) =>
+            {
+                true
+            }
             Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => self
                 .function(name)
                 .is_some_and(|signature| matches!(signature.result, JvmType::String)),
@@ -1844,25 +1883,39 @@ fn emit_function_call(
     let signature = context
         .function(name)
         .ok_or_else(|| format!("unknown JVM function `{name}`"))?;
-    if signature.returns_void || signature.result != expected || args.len() != signature.source_param_count {
+    if signature.returns_void
+        || signature.result != expected
+        || args.len() != signature.source_param_count
+    {
         return Err(format!("invalid JVM function call `{name}`"));
     }
     let mut scalars = signature.params.iter();
     for (position, arg) in args.iter().enumerate() {
-        if let Some(array) = signature.array_params.iter().find(|array| array.position == position) {
+        if let Some(array) = signature
+            .array_params
+            .iter()
+            .find(|array| array.position == position)
+        {
             let Expr::Ident(array_name) = arg else {
-                return Err(format!("array parameter {position} of `{name}` needs a plain array argument"));
+                return Err(format!(
+                    "array parameter {position} of `{name}` needs a plain array argument"
+                ));
             };
-            let shape = context.arrays.get(&variable_key(array_name)).ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
+            let shape = context
+                .arrays
+                .get(&variable_key(array_name))
+                .ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
             if shape.dimensions.len() != array.rank || shape.element != array.element {
-                return Err(format!("array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"));
+                return Err(format!(
+                    "array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"
+                ));
             }
             context.emit_array_load(array_name, out);
         } else {
             let ty = scalars.next().expect("scalar source parameter");
             match ty {
-            JvmType::String => emit_string_expr(arg, out, context)?,
-            JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
+                JvmType::String => emit_string_expr(arg, out, context)?,
+                JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
             }
         }
     }

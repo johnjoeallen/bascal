@@ -360,9 +360,11 @@ fn function_scoped_table(
             ArrayInfo {
                 bounds: vec![0; param.array.as_ref().expect("checked").rank],
                 element_type: Some(("int", param.is_float)),
-                runtime_len: Some((0..param.array.as_ref().expect("checked").rank)
-                    .map(|axis| format!("{}_len{axis}", param.c_name))
-                    .collect()),
+                runtime_len: Some(
+                    (0..param.array.as_ref().expect("checked").rank)
+                        .map(|axis| format!("{}_len{axis}", param.c_name))
+                        .collect(),
+                ),
             },
         );
     }
@@ -423,7 +425,10 @@ fn render_call_args(
                 format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
             })?;
             let lengths = info.runtime_len.clone().unwrap_or_else(|| {
-                info.bounds.iter().map(|bound| (bound + 1).to_string()).collect()
+                info.bounds
+                    .iter()
+                    .map(|bound| (bound + 1).to_string())
+                    .collect()
             });
             arg_texts.extend(lengths);
             arg_texts.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {
@@ -3635,20 +3640,37 @@ fn render_array_index_expr(
             indices.len()
         ));
     }
-    let rendered_indices = indices.iter().map(|index| {
-        let (index_text, index_is_float) = render_numeric_expr(index, needs_math, functions)?;
-        Ok(if index_is_float {
-            *needs_math = true;
-            format!("((int)round((double)({index_text})))")
-        } else {
-            format!("({index_text})")
+    let rendered_indices = indices
+        .iter()
+        .map(|index| {
+            let (index_text, index_is_float) = render_numeric_expr(index, needs_math, functions)?;
+            Ok(if index_is_float {
+                *needs_math = true;
+                format!("((int)round((double)({index_text})))")
+            } else {
+                format!("({index_text})")
+            })
         })
-    }).collect::<Result<Vec<_>, String>>()?;
+        .collect::<Result<Vec<_>, String>>()?;
     if let Some(lengths) = &info.runtime_len {
-        let offset = rendered_indices.iter().enumerate().map(|(axis, index)| {
-            let stride = lengths.iter().skip(axis + 1).cloned().collect::<Vec<_>>().join(" * ");
-            if stride.is_empty() { index.clone() } else { format!("{index} * ({stride})") }
-        }).collect::<Vec<_>>().join(" + ");
+        let offset = rendered_indices
+            .iter()
+            .enumerate()
+            .map(|(axis, index)| {
+                let stride = lengths
+                    .iter()
+                    .skip(axis + 1)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" * ");
+                if stride.is_empty() {
+                    index.clone()
+                } else {
+                    format!("{index} * ({stride})")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" + ");
         return Ok(format!("{key}[{offset}]"));
     }
     let mut out = key;
@@ -7916,7 +7938,10 @@ fn render_numeric_call(
                 format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
             })?;
             let lengths = info.runtime_len.clone().unwrap_or_else(|| {
-                info.bounds.iter().map(|bound| (bound + 1).to_string()).collect()
+                info.bounds
+                    .iter()
+                    .map(|bound| (bound + 1).to_string())
+                    .collect()
             });
             arg_texts.extend(lengths);
             arg_texts.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {

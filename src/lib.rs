@@ -6773,7 +6773,8 @@ end
         // A byval parameter forwarded to another byval parameter used to
         // require a globally inferred maximum capacity. C99 VLAs let each
         // invocation size its copy from the real hidden length instead.
-        let source = "function inner%(arr%(?))\n    arr%(0) = 9\n    return arr%(0)\nend function\n\
+        let source =
+            "function inner%(arr%(?))\n    arr%(0) = 9\n    return arr%(0)\nend function\n\
                        function outer%(arr%(?))\n    return inner%(arr%)\nend function\n\
                        dim data%(2)\n\
                        print outer%(data%)\n\
@@ -6796,8 +6797,14 @@ end
                        print setCell%(grid%)\n\
                        end\n";
         let output = compile_source_via_c_target(source);
-        assert!(output.contains("int bv_i_grid_len0, int bv_i_grid_len1, int* bv_i_grid"), "2-D parameters need both runtime lengths:\n{output}");
-        assert!(output.contains("bv_i_grid[(1) * (bv_i_grid_len1) + (2)]"), "2-D parameter indexing should flatten with the passed stride:\n{output}");
+        assert!(
+            output.contains("int bv_i_grid_len0, int bv_i_grid_len1, int* bv_i_grid"),
+            "2-D parameters need both runtime lengths:\n{output}"
+        );
+        assert!(
+            output.contains("bv_i_grid[(1) * (bv_i_grid_len1) + (2)]"),
+            "2-D parameter indexing should flatten with the passed stride:\n{output}"
+        );
         assert!(output.contains("bf_i_setcell(3, 4, &bv_i_grid[0][0])"), "the caller should pass the contiguous first element and both real axis lengths:\n{output}");
     }
 

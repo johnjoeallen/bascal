@@ -36,9 +36,15 @@ fn conformance_fixtures_transpile_on_their_supported_backends() {
         let source = if source.exists() {
             source
         } else {
-            repo_root().join("tests/fixtures").join(format!("{fixture}.bcl"))
+            repo_root()
+                .join("tests/fixtures")
+                .join(format!("{fixture}.bcl"))
         };
-        assert!(source.exists(), "missing conformance fixture {}", source.display());
+        assert!(
+            source.exists(),
+            "missing conformance fixture {}",
+            source.display()
+        );
 
         for target in *targets {
             let temp = tempfile::tempdir().expect("failed to create conformance output directory");

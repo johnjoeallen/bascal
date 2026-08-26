@@ -6,6 +6,8 @@ use std::process::{Command, ExitCode};
 use bcc::{compile_file, default_output_path, CompileOptions, Target};
 use clap::Parser;
 
+mod jvm_classfile;
+
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
 /// (the `basic` target, complete), a mostly-complete native-C backend (the
 /// `c` target), or a brand-new, bootstrap-stage native-JVM backend (the
@@ -520,6 +522,13 @@ fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
     fs::create_dir_all(&binary_dir)
         .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
     let class_path = binary_dir.join(format!("{class_name}.class"));
+
+    if let Some(bytes) = jvm_classfile::generate_return_only(&source) {
+        fs::write(&class_path, bytes)
+            .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
+        println!("binary: {} (generated internally)", class_path.display());
+        return Ok(class_path);
+    }
 
     let krak2 = resolve_krak2_path();
     let status = Command::new(&krak2)
