@@ -50,9 +50,9 @@ for group, (filename, title) in pages.items():
     index = order.index(group)
     links = ['  <a href="../">← Overview</a>']
     if index:
-        links.insert(0, f'  <a href="{order[index - 1] if order[index - 1] != "files" else "records"}.md">← Previous: {pages[order[index - 1]][1]}</a>')
+        links.insert(0, f'  <a href="../{order[index - 1] if order[index - 1] != "files" else "records"}/">← Previous: {pages[order[index - 1]][1]}</a>')
     if index + 1 < len(order):
-        links.append(f'  <a href="{order[index + 1] if order[index + 1] != "files" else "records"}.md">Next: {pages[order[index + 1]][1]} →</a>')
+        links.append(f'  <a href="../{order[index + 1] if order[index + 1] != "files" else "records"}/">Next: {pages[order[index + 1]][1]} →</a>')
     nav = "\n".join(links)
     page = f"# [Conformance tests](../)\n\n## {title}\n\n{table}\n{body}\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n{nav}\n</nav>\n"
     (root / "docs/conformance" / filename).write_text(page)

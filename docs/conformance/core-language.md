@@ -25,5 +25,5 @@
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Overview</a>
-  <a href="tutorials.md">Next: Tutorials →</a>
+  <a href="../tutorials/">Next: Tutorials →</a>
 </nav>

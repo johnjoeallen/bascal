@@ -31,7 +31,7 @@
 | Standalone record literals are not yet supported | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="c.md">← Previous: C-specific</a>
+  <a href="../c/">← Previous: C-specific</a>
   <a href="../">← Overview</a>
-  <a href="records.md">Next: Files and records →</a>
+  <a href="../records/">Next: Files and records →</a>
 </nav>
