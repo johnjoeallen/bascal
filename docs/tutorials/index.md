@@ -1,6 +1,6 @@
 [Home](../) / Tutorials
 
-Each tutorial names the backend(s) it transpiles under — `basic` accepts every tutorial; `--target c` supports all except classic `17_labels_and_error_handling`; `--target jvm` supports the first eight core-language tutorials plus 11, 12, 14, 16, 18, 20, and 21. These labels describe successful backend transpilation; some generated BASIC programs still require a target-specific compiler or runtime. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
+Each tutorial names the backend(s) it transpiles under — `basic` accepts every tutorial; `--target c` supports every tutorial except classic labels and error handling; `--target jvm` supports Hello World, Variables and Constants, Operators and Expressions, Conditions, Loops, Select Case, Functions, Arrays, Screen I/O, Require and Multi-File Projects, Procedures, Short-Circuit Conditions, Standard Library Functions, Scalar Methods, and Portable Error Handling. These labels describe successful backend transpilation; some generated BASIC programs still require a target-specific compiler or runtime. See the manual's [Backends](../manual/command-line-reference.md#backends) section for what each currently supports.
 
 <div class="section" markdown="1">
 
