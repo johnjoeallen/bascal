@@ -1,0 +1,20 @@
+program jvmNonIntegerArrays
+
+dim values#(2)
+dim words$(2)
+dim counts&(2)
+
+procedure fillArrays(byref numbers#(?), byref text$(?), byref whole&(?))
+    numbers#(0) = 1.5
+    numbers#(1) = numbers#(0) + 2.5
+    text$(0) = "hello"
+    text$(1) = text$(0) + " world"
+    whole&(0) = 4
+    whole&(1) = whole&(0) + 5
+end procedure
+
+fillArrays(values#, words$, counts&)
+print values#(1)
+print words$(1)
+print counts&(1)
+end

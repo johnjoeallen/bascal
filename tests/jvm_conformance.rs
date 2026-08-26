@@ -81,6 +81,40 @@ fn jvm_try_catch_finally_runs_when_available() {
 }
 
 #[test]
+fn jvm_non_integer_arrays_run_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let source_path = repo_root().join("tests/fixtures/jvm_noninteger_arrays.bcl");
+    let temp_dir = tempfile::tempdir().expect("failed to create JVM array test directory");
+    let mut output_arg = temp_dir.path().as_os_str().to_owned();
+    output_arg.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(output_arg)
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "JVM non-integer array fixture failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout)
+            .replace("\r\n", "\n")
+            .ends_with("4.0\nhello world\n9\n")
+    );
+}
+
+#[test]
 fn jvm_catch_filters_and_source_bindings_run_when_available() {
     if !jvm_runtime_available() {
         eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
