@@ -22,7 +22,7 @@ for item in (entry for entry in meta["test"] if entry["kind"] == "tutorial"):
         if state not in valid_statuses:
             raise SystemExit(f"{item['name']}: invalid {backend} status {state!r}")
         cells.append(state)
-    display_name = re.sub(r"^\d+\s+", "", item["name"])
+    display_name = re.sub(r"^\d+\s+", "", item.get("description", item["name"]))
     rows.append(f"| {display_name} | {' | '.join(cells)} |")
 page = """# [Conformance tests](../)\n\n## Tutorials\n\n| Tutorial | BASIC | C | JVM |\n| --- | :---: | :---: | :---: |\n""" + "\n".join(rows) + """\n\n<nav class=\"conformance-nav\" aria-label=\"Conformance results navigation\">\n  <a href=\"../\">← Previous: Core language</a>\n  <a href=\"basic/\">Next: BASIC-specific →</a>\n</nav>\n"""
 target = root / "docs/conformance/tutorials.md"

@@ -5,6 +5,7 @@ id = "test.dosbox_conformance.builtin_scalar_methods_match_c_target"
 kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_c_target"
+description = "builtin_scalar_methods_match_c_target"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -13,6 +14,7 @@ id = "test.dosbox_conformance.builtin_scalar_methods_match_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "builtin_scalar_methods_match_real_bascom"
+description = "builtin_scalar_methods_match_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -21,6 +23,7 @@ id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_w
 kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
+description = "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -29,6 +32,7 @@ id = "test.dosbox_conformance.c_target_random_access_file_is_binary_compatible_w
 kind = "test"
 source = "dosbox_conformance"
 name = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
+description = "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -37,6 +41,7 @@ id = "test.dosbox_conformance.const_and_print_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "const_and_print_matches_real_bascom"
+description = "const_and_print_matches_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -45,6 +50,7 @@ id = "test.dosbox_conformance.mid_assign_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "mid_assign_matches_real_bascom"
+description = "mid_assign_matches_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -53,6 +59,7 @@ id = "test.dosbox_conformance.self_referential_string_concatenation_matches_c_ta
 kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_c_target"
+description = "self_referential_string_concatenation_matches_c_target"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -61,6 +68,7 @@ id = "test.dosbox_conformance.self_referential_string_concatenation_matches_real
 kind = "test"
 source = "dosbox_conformance"
 name = "self_referential_string_concatenation_matches_real_bascom"
+description = "self_referential_string_concatenation_matches_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -69,6 +77,7 @@ id = "test.dosbox_conformance.stdlib_functions_match_c_target"
 kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_c_target"
+description = "stdlib_functions_match_c_target"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -77,6 +86,7 @@ id = "test.dosbox_conformance.stdlib_functions_match_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "stdlib_functions_match_real_bascom"
+description = "stdlib_functions_match_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -85,6 +95,7 @@ id = "test.dosbox_conformance.tie_break_rounding_matches_real_bascom"
 kind = "test"
 source = "dosbox_conformance"
 name = "tie_break_rounding_matches_real_bascom"
+description = "tie_break_rounding_matches_real_bascom"
 groups = ["basic", "c", "files"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -93,6 +104,7 @@ id = "test.examples.c_target_builds_and_runs_noninteractive_tutorials"
 kind = "test"
 source = "examples"
 name = "c_target_builds_and_runs_noninteractive_tutorials"
+description = "c_target_builds_and_runs_noninteractive_tutorials"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -101,6 +113,7 @@ id = "test.examples.c_target_rejects_labels_and_error_handling_tutorial"
 kind = "test"
 source = "examples"
 name = "c_target_rejects_labels_and_error_handling_tutorial"
+description = "c_target_rejects_labels_and_error_handling_tutorial"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -109,6 +122,7 @@ id = "test.examples.compiles_every_example_bcl_file"
 kind = "test"
 source = "examples"
 name = "compiles_every_example_bcl_file"
+description = "compiles_every_example_bcl_file"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -117,6 +131,7 @@ id = "test.examples.freebasic_runs_builtin_scalar_methods_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_builtin_scalar_methods_when_available"
+description = "freebasic_runs_builtin_scalar_methods_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -125,6 +140,7 @@ id = "test.examples.freebasic_runs_mid_assign_edge_cases_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_mid_assign_edge_cases_when_available"
+description = "freebasic_runs_mid_assign_edge_cases_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -133,6 +149,7 @@ id = "test.examples.freebasic_runs_remline_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_remline_when_available"
+description = "freebasic_runs_remline_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -141,6 +158,7 @@ id = "test.examples.freebasic_runs_self_referential_string_concatenation_when_av
 kind = "test"
 source = "examples"
 name = "freebasic_runs_self_referential_string_concatenation_when_available"
+description = "freebasic_runs_self_referential_string_concatenation_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -149,6 +167,7 @@ id = "test.examples.freebasic_runs_sort_driver_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_sort_driver_when_available"
+description = "freebasic_runs_sort_driver_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -157,6 +176,7 @@ id = "test.examples.freebasic_runs_stdlib_functions_when_available"
 kind = "test"
 source = "examples"
 name = "freebasic_runs_stdlib_functions_when_available"
+description = "freebasic_runs_stdlib_functions_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -165,6 +185,7 @@ id = "test.examples.gcc_runs_inventory_tutorial_under_c_target_when_available"
 kind = "test"
 source = "examples"
 name = "gcc_runs_inventory_tutorial_under_c_target_when_available"
+description = "gcc_runs_inventory_tutorial_under_c_target_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -173,6 +194,7 @@ id = "test.examples.gcc_runs_remline_under_c_target_when_available"
 kind = "test"
 source = "examples"
 name = "gcc_runs_remline_under_c_target_when_available"
+description = "gcc_runs_remline_under_c_target_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -181,6 +203,7 @@ id = "test.examples.gcc_runs_try_catch_through_nested_procedure_calls_under_c_ta
 kind = "test"
 source = "examples"
 name = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
+description = "gcc_runs_try_catch_through_nested_procedure_calls_under_c_target_when_available"
 groups = ["tutorials", "basic", "c"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -189,6 +212,7 @@ id = "test.jvm_conformance.hello_world_transpiles_assembles_and_runs_when_availa
 kind = "test"
 source = "jvm_conformance"
 name = "hello_world_transpiles_assembles_and_runs_when_available"
+description = "hello_world_transpiles_assembles_and_runs_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -197,6 +221,7 @@ id = "test.jvm_conformance.jvm_byval_arrays_expected_failure_is_non_blocking"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_byval_arrays_expected_failure_is_non_blocking"
+description = "jvm_byval_arrays_expected_failure_is_non_blocking"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -205,6 +230,7 @@ id = "test.jvm_conformance.jvm_catch_filters_and_source_bindings_run_when_availa
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_catch_filters_and_source_bindings_run_when_available"
+description = "jvm_catch_filters_and_source_bindings_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -213,6 +239,7 @@ id = "test.jvm_conformance.jvm_expected_failure_mid_assignment_is_non_blocking"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_mid_assignment_is_non_blocking"
+description = "jvm_expected_failure_mid_assignment_is_non_blocking"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -221,6 +248,7 @@ id = "test.jvm_conformance.jvm_expected_failure_random_record_io_is_non_blocking
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_random_record_io_is_non_blocking"
+description = "jvm_expected_failure_random_record_io_is_non_blocking"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -229,6 +257,7 @@ id = "test.jvm_conformance.jvm_expected_failure_sequential_file_io_is_non_blocki
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_expected_failure_sequential_file_io_is_non_blocking"
+description = "jvm_expected_failure_sequential_file_io_is_non_blocking"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -237,6 +266,7 @@ id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_non_integer_arrays_run_when_available"
+description = "jvm_non_integer_arrays_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -245,6 +275,7 @@ id = "test.jvm_conformance.jvm_random_file_binary_compatibility_is_pending"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_random_file_binary_compatibility_is_pending"
+description = "jvm_random_file_binary_compatibility_is_pending"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -253,6 +284,7 @@ id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_try_catch_finally_runs_when_available"
+description = "jvm_try_catch_finally_runs_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -261,6 +293,7 @@ id = "test.jvm_conformance.numeric_literals_and_arithmetic_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "numeric_literals_and_arithmetic_run_when_available"
+description = "numeric_literals_and_arithmetic_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -269,6 +302,7 @@ id = "test.jvm_conformance.portable_error_handling_tutorial_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "portable_error_handling_tutorial_runs_when_available"
+description = "portable_error_handling_tutorial_runs_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -277,6 +311,7 @@ id = "test.jvm_conformance.scalar_functions_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scalar_functions_run_when_available"
+description = "scalar_functions_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -285,6 +320,7 @@ id = "test.jvm_conformance.scalar_variables_and_constants_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scalar_variables_and_constants_run_when_available"
+description = "scalar_variables_and_constants_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -293,6 +329,7 @@ id = "test.jvm_conformance.scoped_goto_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scoped_goto_runs_when_available"
+description = "scoped_goto_runs_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -301,6 +338,7 @@ id = "test.jvm_conformance.structured_branches_and_while_loops_run_when_availabl
 kind = "test"
 source = "jvm_conformance"
 name = "structured_branches_and_while_loops_run_when_available"
+description = "structured_branches_and_while_loops_run_when_available"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -309,6 +347,7 @@ id = "test.language_conformance.conformance_fixtures_transpile_on_their_supporte
 kind = "test"
 source = "language_conformance"
 name = "conformance_fixtures_transpile_on_their_supported_backends"
+description = "conformance_fixtures_transpile_on_their_supported_backends"
 groups = ["core", "tutorials"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -317,6 +356,7 @@ id = "test.record_general_purpose.array_of_records_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "array_of_records_currently_fails"
+description = "array_of_records_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -325,6 +365,7 @@ id = "test.record_general_purpose.bare_dynamic_string_field_currently_fails_to_p
 kind = "test"
 source = "record_general_purpose"
 name = "bare_dynamic_string_field_currently_fails_to_parse"
+description = "bare_dynamic_string_field_currently_fails_to_parse"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -333,6 +374,7 @@ id = "test.record_general_purpose.existing_random_access_file_record_usage_still
 kind = "test"
 source = "record_general_purpose"
 name = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
+description = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -341,6 +383,7 @@ id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access
 kind = "test"
 source = "record_general_purpose"
 name = "jvm_backend_does_not_yet_support_random_access_file_records"
+description = "jvm_backend_does_not_yet_support_random_access_file_records"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -349,6 +392,7 @@ id = "test.record_general_purpose.nested_record_field_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "nested_record_field_currently_fails"
+description = "nested_record_field_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -357,6 +401,7 @@ id = "test.record_general_purpose.plain_dim_of_record_type_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "plain_dim_of_record_type_currently_fails"
+description = "plain_dim_of_record_type_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -365,6 +410,7 @@ id = "test.record_general_purpose.record_valued_parameter_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "record_valued_parameter_currently_fails"
+description = "record_valued_parameter_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -373,6 +419,7 @@ id = "test.record_general_purpose.record_valued_return_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "record_valued_return_currently_fails"
+description = "record_valued_return_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -381,6 +428,7 @@ id = "test.record_general_purpose.standalone_record_literal_currently_fails"
 kind = "test"
 source = "record_general_purpose"
 name = "standalone_record_literal_currently_fails"
+description = "standalone_record_literal_currently_fails"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -389,6 +437,7 @@ id = "tutorial.01_hello"
 kind = "tutorial"
 source = "01_hello.bcl"
 name = "01 Hello, world"
+description = "01 Hello, world"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -397,6 +446,7 @@ id = "tutorial.02_variables"
 kind = "tutorial"
 source = "02_variables.bcl"
 name = "02 Variables and constants"
+description = "02 Variables and constants"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -405,6 +455,7 @@ id = "tutorial.03_arithmetic"
 kind = "tutorial"
 source = "03_arithmetic.bcl"
 name = "03 Arithmetic"
+description = "03 Arithmetic"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -413,6 +464,7 @@ id = "tutorial.04_conditions"
 kind = "tutorial"
 source = "04_conditions.bcl"
 name = "04 Conditions"
+description = "04 Conditions"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -421,6 +473,7 @@ id = "tutorial.05_loops"
 kind = "tutorial"
 source = "05_loops.bcl"
 name = "05 Loops"
+description = "05 Loops"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -429,6 +482,7 @@ id = "tutorial.06_select_case"
 kind = "tutorial"
 source = "06_select_case.bcl"
 name = "06 Select case"
+description = "06 Select case"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -437,6 +491,7 @@ id = "tutorial.07_functions"
 kind = "tutorial"
 source = "07_functions.bcl"
 name = "07 Functions"
+description = "07 Functions"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -445,6 +500,7 @@ id = "tutorial.08_arrays"
 kind = "tutorial"
 source = "08_arrays.bcl"
 name = "08 Arrays"
+description = "08 Arrays"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -453,6 +509,7 @@ id = "tutorial.09_data"
 kind = "tutorial"
 source = "09_data.bcl"
 name = "09 DATA and READ"
+description = "09 DATA and READ"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -461,6 +518,7 @@ id = "tutorial.10_files"
 kind = "tutorial"
 source = "10_files.bcl"
 name = "10 Sequential files"
+description = "10 Sequential files"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
@@ -469,6 +527,7 @@ id = "tutorial.11_screen"
 kind = "tutorial"
 source = "11_screen.bcl"
 name = "11 Screen I/O"
+description = "11 Screen I/O"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
@@ -477,6 +536,7 @@ id = "tutorial.12_require"
 kind = "tutorial"
 source = "12_require.bcl"
 name = "12 REQUIRE and libraries"
+description = "12 REQUIRE and libraries"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "FAIL", jvm = "PASS" }
 
@@ -485,6 +545,7 @@ id = "tutorial.13_shared.start"
 kind = "tutorial"
 source = "13_shared/start.bcl"
 name = "13 Shared COMMON"
+description = "13 Shared COMMON"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
@@ -493,6 +554,7 @@ id = "tutorial.14_procedures"
 kind = "tutorial"
 source = "14_procedures.bcl"
 name = "14 Procedures"
+description = "14 Procedures"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -501,6 +563,7 @@ id = "tutorial.15_random_and_record_files"
 kind = "tutorial"
 source = "15_random_and_record_files.bcl"
 name = "15 Random-access and record files"
+description = "15 Random-access and record files"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
@@ -509,6 +572,7 @@ id = "tutorial.16_short_circuit"
 kind = "tutorial"
 source = "16_short_circuit.bcl"
 name = "16 Short-circuit conditions"
+description = "16 Short-circuit conditions"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -517,6 +581,7 @@ id = "tutorial.17_labels_and_error_handling"
 kind = "tutorial"
 source = "17_labels_and_error_handling.bcl"
 name = "17 Classic labels and error handling"
+description = "17 Classic labels and error handling"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
@@ -525,6 +590,7 @@ id = "tutorial.18_stdlib"
 kind = "tutorial"
 source = "18_stdlib.bcl"
 name = "18 Standard-library functions"
+description = "18 Standard-library functions"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -533,6 +599,7 @@ id = "tutorial.20_methods"
 kind = "tutorial"
 source = "20_methods.bcl"
 name = "20 Scalar methods"
+description = "20 Scalar methods"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -541,6 +608,7 @@ id = "tutorial.21_portable_error_handling"
 kind = "tutorial"
 source = "21_portable_error_handling.bcl"
 name = "21 Portable error handling"
+description = "21 Portable error handling"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
@@ -549,6 +617,7 @@ id = "tutorial.22_restore_data"
 kind = "tutorial"
 source = "22_restore_data.bcl"
 name = "22 RESTORE and DATA"
+description = "22 RESTORE and DATA"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
 
@@ -557,5 +626,6 @@ id = "tutorial.inventory"
 kind = "tutorial"
 source = "inventory.bcl"
 name = "19 Inventory case study"
+description = "19 Inventory case study"
 groups = ["tutorials"]
 status = { basic = "PASS", c = "PASS", jvm = "FAIL" }
