@@ -19,6 +19,7 @@
 | Expected diagnostic for `MID$` assignment | PASS |
 | Expected failure for array `byval` clone assembly | PASS |
 | Random file binary compatibility | FAIL |
+| Classic BASIC error handling | N/A |
 
 Expected-failure checks are passing when the JVM backend rejects an
 unsupported feature with its documented diagnostic. They keep known gaps
