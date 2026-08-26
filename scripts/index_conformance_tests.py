@@ -5,7 +5,7 @@ import re
 
 root = Path(__file__).resolve().parents[1]
 ids = {}
-valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "UNKNOWN"}
+valid_statuses = {"PASS", "FAIL", "UNSUPPORTED", "DEFERRED", "WILL NOT IMPLEMENT", "UNKNOWN"}
 descriptions = {
     "builtin_scalar_methods_match_c_target": "Scalar methods match C output",
     "builtin_scalar_methods_match_real_bascom": "Scalar methods match BASCOM",
@@ -81,7 +81,9 @@ for item in meta["tutorial"]:
     status = dict(item.get("expected", item.get("status", {})))
     for backend in ("basic", "c", "jvm"):
         if backend not in status:
-            if backend in item.get("na", []) or backend in item.get("wont", []):
+            if backend in item.get("wont", []):
+                status[backend] = "WILL NOT IMPLEMENT"
+            elif backend in item.get("na", []):
                 status[backend] = "UNSUPPORTED"
             elif backend in item.get("backends", []):
                 status[backend] = "PASS"

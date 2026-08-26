@@ -68,7 +68,7 @@ status = { basic = "PASS", c = "FAIL", jvm = "PASS" }
 name = "13 Shared COMMON"
 source = "13_shared/start.bcl"
 backends = ["basic"]
-na = ["c", "jvm"]
+wont = ["c", "jvm"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[tutorial]]
@@ -91,7 +91,7 @@ backends = ["basic", "c", "jvm"]
 name = "17 Classic labels and error handling"
 source = "17_labels_and_error_handling.bcl"
 backends = ["basic"]
-na = ["c", "jvm"]
+wont = ["c", "jvm"]
 status = { basic = "PASS", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
 
 [[tutorial]]

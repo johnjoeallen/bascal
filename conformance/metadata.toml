@@ -23,7 +23,7 @@ expected = { basic = "PASS", c = "PASS", jvm = "DEFERRED" }
 id = "core.classic_error_handling_rejected"
 description = "C/JVM reject the classic labels/error-handling tutorial"
 groups = ["core"]
-expected = { basic = "UNSUPPORTED", c = "UNSUPPORTED", jvm = "UNSUPPORTED" }
+expected = { basic = "UNSUPPORTED", c = "WILL NOT IMPLEMENT", jvm = "WILL NOT IMPLEMENT" }
 
 [[test]]
 id = "core.inventory_case_study"
