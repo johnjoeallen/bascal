@@ -16,7 +16,7 @@
 | Scalar methods match BASCOM | PASS |
 | Tie-break rounding matches BASCOM | PASS |
 | Classic BASIC error handling | PASS |
-| Random file binary compatibility | N/A |
+| Random file binary compatibility | UNSUPPORTED |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../tutorials/">← Previous: Tutorials</a>

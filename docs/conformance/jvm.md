@@ -19,7 +19,7 @@
 | Expected diagnostic for `MID$` assignment | FAIL |
 | Expected failure for array `byval` clone assembly | FAIL |
 | Random file binary compatibility | FAIL |
-| Classic BASIC error handling | N/A |
+| Classic BASIC error handling | WILL NOT IMPLEMENT |
 
 The expected-failure checks themselves pass when the JVM backend rejects an
 unsupported feature with its documented diagnostic; the conformance result is

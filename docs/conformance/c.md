@@ -15,7 +15,7 @@
 | C random-file output is readable by BASCOM | PASS |
 | BASCOM random-file output is readable by C | PASS |
 | Random file binary compatibility | PASS |
-| Classic BASIC error handling | N/A |
+| Classic BASIC error handling | WILL NOT IMPLEMENT |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../basic/">← Previous: BASIC-specific</a>

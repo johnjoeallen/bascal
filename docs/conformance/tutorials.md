@@ -16,11 +16,11 @@
 | Sequential files | PASS | PASS | FAIL |
 | Screen I/O | PASS | PASS | FAIL |
 | REQUIRE and libraries | PASS | FAIL | PASS |
-| Shared COMMON | PASS | N/A | N/A |
+| Shared COMMON | PASS | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
 | Procedures | PASS | PASS | PASS |
 | Random-access and record files | PASS | PASS | FAIL |
 | Short-circuit conditions | PASS | PASS | PASS |
-| Classic labels and error handling | PASS | N/A | N/A |
+| Classic labels and error handling | PASS | WILL NOT IMPLEMENT | WILL NOT IMPLEMENT |
 | Standard-library functions | PASS | PASS | PASS |
 | Inventory case study | PASS | PASS | FAIL |
 | Scalar methods | PASS | PASS | PASS |
@@ -32,4 +32,4 @@
   <a href="basic/">Next: BASIC-specific →</a>
 </nav>
 
-`FAIL` means the backend is required to support the tutorial but does not yet pass it. `N/A` is reserved for tests explicitly not applicable (such as an optional runtime).
+`FAIL` means the backend is required to support the tutorial but does not yet pass it. `UNSUPPORTED` means it is not currently supported; `WILL NOT IMPLEMENT` marks a permanently out-of-scope feature.

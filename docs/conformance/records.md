@@ -4,20 +4,20 @@
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
-| Constants and printing match BASCOM | PASS | PASS | N/A |
-| `MID$` assignment matches BASCOM | PASS | PASS | N/A |
-| Standard-library functions match BASCOM | PASS | PASS | N/A |
-| Standard-library functions match C output | N/A | PASS | N/A |
-| C random-file output is readable by BASCOM | N/A | PASS | N/A |
-| BASCOM random-file output is readable by C | N/A | PASS | N/A |
+| Constants and printing match BASCOM | PASS | PASS | UNSUPPORTED |
+| `MID$` assignment matches BASCOM | PASS | PASS | UNSUPPORTED |
+| Standard-library functions match BASCOM | PASS | PASS | UNSUPPORTED |
+| Standard-library functions match C output | UNSUPPORTED | PASS | UNSUPPORTED |
+| C random-file output is readable by BASCOM | UNSUPPORTED | PASS | UNSUPPORTED |
+| BASCOM random-file output is readable by C | UNSUPPORTED | PASS | UNSUPPORTED |
 | Standalone record literals are rejected consistently | PASS | PASS | PASS |
 | Plain record declarations are rejected consistently | PASS | PASS | PASS |
 | Record arrays are rejected consistently | PASS | PASS | PASS |
 | Record-valued parameters are rejected consistently | PASS | PASS | PASS |
 | Record-valued returns are rejected consistently | PASS | PASS | PASS |
 | Nested record fields are rejected consistently | PASS | PASS | PASS |
-| Existing random-file records compile on BASIC and C | PASS | PASS | N/A |
-| JVM random-file records produce the expected diagnostic | N/A | N/A | PASS |
+| Existing random-file records compile on BASIC and C | PASS | PASS | UNSUPPORTED |
+| JVM random-file records produce the expected diagnostic | UNSUPPORTED | UNSUPPORTED | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../jvm/">← Previous: JVM-specific</a>

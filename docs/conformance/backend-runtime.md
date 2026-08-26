@@ -7,25 +7,25 @@ backend-specific compatibility boundaries.
 
 | Test description | BASIC | C | JVM |
 | --- | :---: | :---: | :---: |
-| JVM numeric literals and arithmetic | N/A | N/A | PASS |
-| JVM scalar variables and constants | N/A | N/A | PASS |
-| JVM scoped `GOTO` labels | N/A | N/A | PASS |
-| JVM structured branches and loops | N/A | N/A | PASS |
-| JVM scalar functions | N/A | N/A | PASS |
-| JVM catch filters and source bindings | N/A | N/A | PASS |
-| JVM portable error-handling tutorial | N/A | N/A | PASS |
-| JVM pending record binary compatibility check | N/A | N/A | N/A |
-| Constants and printing match BASCOM | PASS | PASS | N/A |
-| `MID$` assignment matches BASCOM | PASS | PASS | N/A |
-| Standard-library functions match BASCOM | PASS | PASS | N/A |
-| Standard-library functions match C output | N/A | PASS | N/A |
+| JVM numeric literals and arithmetic | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM scalar variables and constants | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM scoped `GOTO` labels | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM structured branches and loops | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM scalar functions | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM catch filters and source bindings | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM portable error-handling tutorial | UNSUPPORTED | UNSUPPORTED | PASS |
+| JVM pending record binary compatibility check | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
+| Constants and printing match BASCOM | PASS | PASS | UNSUPPORTED |
+| `MID$` assignment matches BASCOM | PASS | PASS | UNSUPPORTED |
+| Standard-library functions match BASCOM | PASS | PASS | UNSUPPORTED |
+| Standard-library functions match C output | UNSUPPORTED | PASS | UNSUPPORTED |
 | String self-concatenation matches BASCOM | PASS | PASS | PASS |
-| String self-concatenation matches C output | N/A | PASS | N/A |
+| String self-concatenation matches C output | UNSUPPORTED | PASS | UNSUPPORTED |
 | Scalar methods match BASCOM | PASS | PASS | PASS |
-| Scalar methods match C output | N/A | PASS | N/A |
-| C random-file output is readable by BASCOM | N/A | PASS | N/A |
-| BASCOM random-file output is readable by C | N/A | PASS | N/A |
-| Tie-break rounding matches BASCOM | PASS | PASS | N/A |
+| Scalar methods match C output | UNSUPPORTED | PASS | UNSUPPORTED |
+| C random-file output is readable by BASCOM | UNSUPPORTED | PASS | UNSUPPORTED |
+| BASCOM random-file output is readable by C | UNSUPPORTED | PASS | UNSUPPORTED |
+| Tie-break rounding matches BASCOM | PASS | PASS | UNSUPPORTED |
 | Standalone record literals are rejected consistently | PASS | PASS | PASS |
 | Plain record declarations are rejected consistently | PASS | PASS | PASS |
 | Record arrays are rejected consistently | PASS | PASS | PASS |
@@ -33,8 +33,8 @@ backend-specific compatibility boundaries.
 | Record-valued returns are rejected consistently | PASS | PASS | PASS |
 | Nested record fields are rejected consistently | PASS | PASS | PASS |
 | Bare dynamic record strings are rejected at parse time | PASS | PASS | PASS |
-| Existing random-file records compile on BASIC and C | PASS | PASS | N/A |
-| JVM random-file records produce the expected diagnostic | N/A | N/A | PASS |
+| Existing random-file records compile on BASIC and C | PASS | PASS | UNSUPPORTED |
+| JVM random-file records produce the expected diagnostic | UNSUPPORTED | UNSUPPORTED | PASS |
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../">← Previous: Core language and tutorials</a>
