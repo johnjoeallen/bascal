@@ -16,107 +16,107 @@
 // table keyed by that code. Stays an ordinary function.
 library error
 
-const errSyntax% = 2
-const errReturnWithoutGosub% = 3
-const errOutOfData% = 4
-const errIllegalFunctionCall% = 5
-const errOverflow% = 6
-const errOutOfMemory% = 7
-const errSubscriptOutOfRange% = 9
-const errDuplicateDefinition% = 10
-const errDivisionByZero% = 11
-const errTypeMismatch% = 13
-const errOutOfStringSpace% = 14
-const errNoResume% = 19
-const errResumeWithoutError% = 20
-const errDeviceTimeout% = 24
-const errDeviceFault% = 25
-const errOutOfPaper% = 27
-const errBadFileNumber% = 52
-const errFileNotFound% = 53
-const errBadFileMode% = 54
-const errFileAlreadyOpen% = 55
-const errDeviceIo% = 57
-const errFileAlreadyExists% = 58
-const errDiskFull% = 61
-const errInputPastEnd% = 62
-const errBadRecordNumber% = 63
-const errBadFileName% = 64
-const errTooManyFiles% = 67
-const errDeviceUnavailable% = 68
-const errDiskWriteProtected% = 70
-const errDiskNotReady% = 71
-const errDiskMediaError% = 72
-const errPathFileAccess% = 75
-const errPathNotFound% = 76
+const ERR_SYNTAX = 2
+const ERR_RETURN_WITHOUT_GOSUB = 3
+const ERR_OUT_OF_DATA = 4
+const ERR_ILLEGAL_FUNCTION_CALL = 5
+const ERR_OVERFLOW = 6
+const ERR_OUT_OF_MEMORY = 7
+const ERR_SUBSCRIPT_OUT_OF_RANGE = 9
+const ERR_DUPLICATE_DEFINITION = 10
+const ERR_DIVISION_BY_ZERO = 11
+const ERR_TYPE_MISMATCH = 13
+const ERR_OUT_OF_STRING_SPACE = 14
+const ERR_NO_RESUME = 19
+const ERR_RESUME_WITHOUT_ERROR = 20
+const ERR_DEVICE_TIMEOUT = 24
+const ERR_DEVICE_FAULT = 25
+const ERR_OUT_OF_PAPER = 27
+const ERR_BAD_FILE_NUMBER = 52
+const ERR_FILE_NOT_FOUND = 53
+const ERR_BAD_FILE_MODE = 54
+const ERR_FILE_ALREADY_OPEN = 55
+const ERR_DEVICE_IO = 57
+const ERR_FILE_ALREADY_EXISTS = 58
+const ERR_DISK_FULL = 61
+const ERR_INPUT_PAST_END = 62
+const ERR_BAD_RECORD_NUMBER = 63
+const ERR_BAD_FILE_NAME = 64
+const ERR_TOO_MANY_FILES = 67
+const ERR_DEVICE_UNAVAILABLE = 68
+const ERR_DISK_WRITE_PROTECTED = 70
+const ERR_DISK_NOT_READY = 71
+const ERR_DISK_MEDIA_ERROR = 72
+const ERR_PATH_FILE_ACCESS = 75
+const ERR_PATH_NOT_FOUND = 76
 
 function error$(code%)
     select case code%
-        case errSyntax%
+        case ERR_SYNTAX
             return "Syntax error"
-        case errReturnWithoutGosub%
+        case ERR_RETURN_WITHOUT_GOSUB
             return "RETURN without GOSUB"
-        case errOutOfData%
+        case ERR_OUT_OF_DATA
             return "Out of DATA"
-        case errIllegalFunctionCall%
+        case ERR_ILLEGAL_FUNCTION_CALL
             return "Illegal function call"
-        case errOverflow%
+        case ERR_OVERFLOW
             return "Overflow"
-        case errOutOfMemory%
+        case ERR_OUT_OF_MEMORY
             return "Out of memory"
-        case errSubscriptOutOfRange%
+        case ERR_SUBSCRIPT_OUT_OF_RANGE
             return "Subscript out of range"
-        case errDuplicateDefinition%
+        case ERR_DUPLICATE_DEFINITION
             return "Duplicate Definition"
-        case errDivisionByZero%
+        case ERR_DIVISION_BY_ZERO
             return "Division by zero"
-        case errTypeMismatch%
+        case ERR_TYPE_MISMATCH
             return "Type mismatch"
-        case errOutOfStringSpace%
+        case ERR_OUT_OF_STRING_SPACE
             return "Out of string space"
-        case errNoResume%
+        case ERR_NO_RESUME
             return "No RESUME"
-        case errResumeWithoutError%
+        case ERR_RESUME_WITHOUT_ERROR
             return "RESUME without error"
-        case errDeviceTimeout%
+        case ERR_DEVICE_TIMEOUT
             return "Device timeout"
-        case errDeviceFault%
+        case ERR_DEVICE_FAULT
             return "Device fault"
-        case errOutOfPaper%
+        case ERR_OUT_OF_PAPER
             return "Out of paper"
-        case errBadFileNumber%
+        case ERR_BAD_FILE_NUMBER
             return "Bad file number"
-        case errFileNotFound%
+        case ERR_FILE_NOT_FOUND
             return "File not found"
-        case errBadFileMode%
+        case ERR_BAD_FILE_MODE
             return "Bad file mode"
-        case errFileAlreadyOpen%
+        case ERR_FILE_ALREADY_OPEN
             return "File already open"
-        case errDeviceIo%
+        case ERR_DEVICE_IO
             return "Device I/O error"
-        case errFileAlreadyExists%
+        case ERR_FILE_ALREADY_EXISTS
             return "File already exists"
-        case errDiskFull%
+        case ERR_DISK_FULL
             return "Disk full"
-        case errInputPastEnd%
+        case ERR_INPUT_PAST_END
             return "Input past end"
-        case errBadRecordNumber%
+        case ERR_BAD_RECORD_NUMBER
             return "Bad record number"
-        case errBadFileName%
+        case ERR_BAD_FILE_NAME
             return "Bad file name"
-        case errTooManyFiles%
+        case ERR_TOO_MANY_FILES
             return "Too many files"
-        case errDeviceUnavailable%
+        case ERR_DEVICE_UNAVAILABLE
             return "Device unavailable"
-        case errDiskWriteProtected%
+        case ERR_DISK_WRITE_PROTECTED
             return "Disk write protected"
-        case errDiskNotReady%
+        case ERR_DISK_NOT_READY
             return "Disk not ready"
-        case errDiskMediaError%
+        case ERR_DISK_MEDIA_ERROR
             return "Disk media error"
-        case errPathFileAccess%
+        case ERR_PATH_FILE_ACCESS
             return "Path/File access error"
-        case errPathNotFound%
+        case ERR_PATH_NOT_FOUND
             return "Path not found"
         case else
             return "Error " + STR$(code%)

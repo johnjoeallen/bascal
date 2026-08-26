@@ -29,7 +29,11 @@ pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
     let mut findings = Vec::new();
     for statement in &program.statements {
         if let Statement::Const { name, .. } = &statement.kind {
-            if name.suffix.is_some() {
+            // Parser-inferred suffixes are also stored on the IR node so
+            // backends retain the constant's type. Do not report those as
+            // source suffixes when the declaration already follows the
+            // canonical uppercase-snake convention.
+            if name.suffix.is_some() && !is_upper_snake_case(&name.name) {
                 findings.push(Diagnostic::warning(
                     SourcePos::new("<validation>", 1, 1),
                     format!("constant `{name}` has a type suffix; constant types are inferred from their values"),

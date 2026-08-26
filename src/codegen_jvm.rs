@@ -1449,7 +1449,19 @@ impl JvmContext {
     }
 
     fn constant(&self, ident: &BasicIdent) -> Option<&Expr> {
-        self.constants.get(&variable_key(ident))
+        self.constants.get(&variable_key(ident)).or_else(|| {
+            // Required libraries may declare an inferred constant with a
+            // typed internal suffix while the importing source refers to it
+            // suffixlessly. Resolve that reference by the stable source name
+            // and retain the declaration's inferred value/type.
+            let name = ident.name.to_ascii_lowercase();
+            self.constants
+                .iter()
+                .find(|(key, _)| {
+                    key.trim_end_matches(|ch| matches!(ch, '%' | '$' | '!' | '#' | '&')) == name
+                })
+                .map(|(_, value)| value)
+        })
     }
 
     fn function(&self, ident: &BasicIdent) -> Option<FunctionSig> {

@@ -7,8 +7,8 @@ require com.bascal.stdlib.error
 
 print "portable try/catch:"
 try
-    throw errFileNotFound%
-catch err%(errFileNotFound%, errFileAlreadyOpen%), erl%, source$
+    throw ERR_FILE_NOT_FOUND
+catch err%(ERR_FILE_NOT_FOUND, ERR_FILE_ALREADY_OPEN), erl%, source$
     print "  caught error "; err%; " at "; source$; ":"; erl%
 finally
     print "  cleanup always runs"

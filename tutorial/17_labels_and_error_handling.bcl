@@ -51,7 +51,7 @@ close #1
 goto afterOpen
 
 handleOpenError:
-if err = errFileNotFound% then
+if err = ERR_FILE_NOT_FOUND then
     print "  caught error "; err; ": "; fileName$; " not found"
     resume afterOpen
 else
