@@ -1,31 +1,10 @@
 # Conformance tests
 
-## Core language
+Generated from the conformance test metadata and latest build run.
 
-| Test description | BASIC | C | JVM |
-| --- | :---: | :---: | :---: |
-| Every supported fixture transpiles successfully | PASS | PASS | PASS |
-| All tutorial `.bcl` sources compile | PASS | UNSUPPORTED | UNSUPPORTED |
-| Deterministic tutorials build and execute | UNSUPPORTED | PASS | UNSUPPORTED |
-| C rejects the classic labels/error-handling tutorial | N/A | PASS | PASS |
-| Nested procedure `TRY`/`CATCH` propagation | PASS | PASS | PASS |
-| Interactive inventory case study | N/A | PASS | N/A |
-| `remline` case study output | PASS | PASS | PASS |
-| `MID$` assignment edge cases | PASS | PASS | PASS |
-| Self-referential string concatenation | PASS | PASS | PASS |
-| Built-in scalar method calls | PASS | N/A | N/A |
-| Standard-library function execution | PASS | N/A | N/A |
-| `remline` under FreeBASIC | PASS | N/A | N/A |
-| Structured `TRY`/`CATCH`/`FINALLY` execution | PASS | PASS | PASS |
-| Typed non-integer arrays and array parameters | N/A | N/A | PASS |
-| Catch filters and source bindings | PASS | PASS | PASS |
-| Hello-world assembly and execution | N/A | N/A | PASS |
-| Numeric literals and arithmetic | PASS | PASS | PASS |
-| Scalar variables and constants | PASS | PASS | PASS |
-| Structured branches and `WHILE` loops | PASS | PASS | PASS |
-| Scalar function calls and returns | PASS | PASS | PASS |
-
-<nav class="conformance-nav" aria-label="Conformance results navigation">
-  <a href="../">← Home</a>
-  <a href="tutorials/">Next: Tutorials →</a>
-</nav>
+- [Core language](core-language/)
+- [Tutorials](tutorials/)
+- [BASIC-specific](basic/)
+- [C-specific](c/)
+- [JVM-specific](jvm/)
+- [Files and records](records/)
