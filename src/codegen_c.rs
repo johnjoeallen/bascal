@@ -210,22 +210,11 @@ struct FnParam {
 /// doc comment for the byref/byval split.
 #[derive(Clone)]
 struct ArrayParamInfo {
-    /// The parameter's own explicit literal capacity (`arr%(100)` -- one
-    /// more than the declared bound, matching `ArrayInfo::bounds`' own
-    /// inclusive-bound convention), or `None` for an inferred `arr%(?)`
-    /// one -- see `apply_byval_array_capacities`, which fills in
-    /// `byval_capacity` from this (or, when this is `None`, from the
-    /// largest call site it can resolve).
-    declared_capacity: Option<i64>,
-    /// The fixed size of the local C array a `byval` array parameter's
-    /// own copy-in buffer is declared with (see `emit_function_def`) --
-    /// `0` (never read) for a `byref` array parameter, which uses the
-    /// caller's own storage directly instead of copying into a local
-    /// buffer at all. Filled in by `apply_byval_array_capacities`, once,
-    /// right after `build_function_table` runs (which can only see a
-    /// parameter's own declared axis, not the call sites that decide an
-    /// inferred `?` axis's real capacity).
-    byval_capacity: i64,
+    // Marker for an array parameter. Its actual bounds travel in the
+    // hidden `*_len0` argument; a byval parameter allocates its local C99
+    // VLA from that value at each invocation, while byref uses the incoming
+    // pointer directly.
+    rank: usize,
 }
 
 type FunctionMap = HashMap<(String, Option<TypeSuffix>), FnSig>;
@@ -369,9 +358,11 @@ fn function_scoped_table(
         arrays.insert(
             param.c_name.clone(),
             ArrayInfo {
-                bounds: vec![0],
+                bounds: vec![0; param.array.as_ref().expect("checked").rank],
                 element_type: Some(("int", param.is_float)),
-                runtime_len: Some(vec![format!("{}_len0", param.c_name)]),
+                runtime_len: Some((0..param.array.as_ref().expect("checked").rank)
+                    .map(|axis| format!("{}_len{axis}", param.c_name))
+                    .collect()),
             },
         );
     }
@@ -431,14 +422,15 @@ fn render_call_args(
             let info = functions.arrays.get(&key).ok_or_else(|| {
                 format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
             })?;
-            let len_text = info
-                .runtime_len
-                .as_ref()
-                .and_then(|v| v.first())
-                .cloned()
-                .unwrap_or_else(|| (info.bounds[0] + 1).to_string());
-            arg_texts.push(key);
-            arg_texts.push(len_text);
+            let lengths = info.runtime_len.clone().unwrap_or_else(|| {
+                info.bounds.iter().map(|bound| (bound + 1).to_string()).collect()
+            });
+            arg_texts.extend(lengths);
+            arg_texts.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {
+                key
+            } else {
+                format!("&{key}{}", "[0]".repeat(info.bounds.len()))
+            });
         } else if param.by_ref {
             let Expr::Ident(ident) = arg else {
                 return Err(
@@ -613,123 +605,6 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         crate::codegen_basic::visit_body_exprs(&func.body, &mut visit);
     }
     usage
-}
-
-/// Every `Expr::Call`/`Expr::ArrayRef` site in the whole program -- top
-/// level plus every function/procedure body -- as `(callee name, argument
-/// list)` pairs, regardless of which of the two shapes parsed it (a
-/// zero- or one-argument call always parses as `Expr::ArrayRef`, not
-/// `Expr::Call` -- see `is_known_callable`'s own doc comment): used by
-/// `apply_byval_array_capacities`, which filters these down to just the
-/// ones actually calling a function with a `byval` array parameter.
-fn collect_call_sites(program: &Program) -> Vec<(BasicIdent, Vec<Expr>)> {
-    let mut sites: Vec<(BasicIdent, Vec<Expr>)> = Vec::new();
-    let mut visit = |expr: &Expr| match expr {
-        Expr::Call { name, args } => sites.push((name.clone(), args.clone())),
-        Expr::ArrayRef { name, indices } => sites.push((name.clone(), indices.clone())),
-        _ => {}
-    };
-    crate::codegen_basic::visit_body_exprs(&program.statements, &mut visit);
-    for func in &program.functions {
-        crate::codegen_basic::visit_body_exprs(&func.body, &mut visit);
-    }
-    sites
-}
-
-/// Fills in `byval_capacity` on every `byval` array parameter's
-/// `ArrayParamInfo` (see its own doc comment) -- the fixed size of the
-/// local C array `emit_function_def` copies the caller's array into. Run
-/// once, right after `build_function_table`, before any codegen: a
-/// `byref` array parameter is skipped entirely (it has no local buffer to
-/// size at all -- see `FnParam::by_ref`'s doc comment).
-///
-/// Deliberately narrow, mirroring `codegen_basic::infer_array_param_capacities`'s
-/// own call-site scan but far simpler: only a call site whose argument is
-/// a bare reference to a *top-level* `dim`'d array (`arrays`, this
-/// backend's only concept of "a compile-time-known array size" -- see the
-/// module doc comment) is understood. An explicit capacity
-/// (`arr%(100)`) is used as-is (still cross-checked against every
-/// resolvable call site, the same compile-time-provable overflow check
-/// `codegen_basic` does); an inferred one (`arr%(?)`) needs at least one
-/// resolvable call site, and every call site to that parameter must
-/// resolve -- an unresolvable one (an expression, or a forwarded array
-/// parameter from another function) is rejected outright rather than
-/// silently under-sizing the buffer, since there would be no way to prove
-/// the buffer is big enough.
-fn apply_byval_array_capacities(
-    funcs: &mut FunctionMap,
-    program: &Program,
-    arrays: &ArrayTable,
-) -> Result<(), String> {
-    let call_sites = collect_call_sites(program);
-    let keys: Vec<(String, Option<TypeSuffix>)> = funcs.keys().cloned().collect();
-    for key in keys {
-        let param_count = funcs[&key].params.len();
-        for idx in 0..param_count {
-            let (needs_capacity, declared) = match &funcs[&key].params[idx].array {
-                Some(arr) if !funcs[&key].params[idx].by_ref => (true, arr.declared_capacity),
-                _ => (false, None),
-            };
-            if !needs_capacity {
-                continue;
-            }
-            let mut max_actual: Option<i64> = None;
-            let mut any_site = false;
-            let mut any_unresolved = false;
-            for (name, args) in &call_sites {
-                if fn_key(name) != key {
-                    continue;
-                }
-                let Some(arg) = args.get(idx) else {
-                    continue;
-                };
-                any_site = true;
-                match arg {
-                    Expr::Ident(arg_ident) => match arrays.get(&array_c_name(arg_ident)) {
-                        Some(info) => {
-                            let actual = info.bounds[0] + 1;
-                            max_actual = Some(max_actual.map_or(actual, |m: i64| m.max(actual)));
-                            if let Some(cap) = declared {
-                                if actual > cap {
-                                    return Err(format!(
-                                        "a call to `{name}` passes {actual} elements to its \
-                                         array parameter, but its storage is only sized for \
-                                         {cap} -- give it a bigger explicit capacity"
-                                    ));
-                                }
-                            }
-                        }
-                        None => any_unresolved = true,
-                    },
-                    _ => any_unresolved = true,
-                }
-            }
-            let capacity = match declared {
-                Some(cap) => cap,
-                None if any_site && !any_unresolved => max_actual.unwrap_or(1),
-                None => {
-                    return Err(format!(
-                        "can't automatically size `{name}`'s storage for its array parameter -- \
-                         at least one call site (or none at all) can't be resolved to a \
-                         top-level array at compile time. Give it an explicit capacity instead \
-                         of `?`, e.g. `(100)`",
-                        name = key.0
-                    ));
-                }
-            };
-            funcs
-                .get_mut(&key)
-                .unwrap()
-                .params
-                .get_mut(idx)
-                .unwrap()
-                .array
-                .as_mut()
-                .unwrap()
-                .byval_capacity = capacity.max(1);
-        }
-    }
-    Ok(())
 }
 
 /// `bcc_mid`/`bcc_chr` -- `MID$`/`LEFT$` and `CHR$` -- both return
@@ -2527,15 +2402,6 @@ fn build_function_table(
         for param in &func.params {
             let by_ref = param.mode == ParamMode::ByRef;
             if let Some(axes) = &param.axes {
-                if axes.len() != 1 {
-                    return Err(format!(
-                        "array parameters with more than one dimension aren't supported by the \
-                         minimal C backend yet (`{}`'s parameter `{}` has {} dimensions)",
-                        func.name,
-                        param.name,
-                        axes.len()
-                    ));
-                }
                 let Some(suffix) = param.name.suffix else {
                     return Err(format!(
                         "array parameter `{}` of `{}` isn't supported by the minimal C backend \
@@ -2557,10 +2423,7 @@ fn build_function_table(
                     default: None,
                     suffix,
                     by_ref,
-                    array: Some(ArrayParamInfo {
-                        declared_capacity: axes[0].map(|n| n + 1),
-                        byval_capacity: 0,
-                    }),
+                    array: Some(ArrayParamInfo { rank: axes.len() }),
                 });
                 continue;
             }
@@ -2765,12 +2628,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         return Err(legacy_error_diagnostics);
     }
 
-    let (mut funcs, methods) =
+    let (funcs, methods) =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
     let int_consts = collect_top_level_int_consts(&program.statements);
     let arrays = collect_array_declarations(&program.statements, &int_consts)
-        .map_err(|message| vec![unsupported(&message)])?;
-    apply_byval_array_capacities(&mut funcs, program, &arrays)
         .map_err(|message| vec![unsupported(&message)])?;
     let mut functions = FunctionTable {
         funcs,
@@ -3335,12 +3196,14 @@ fn function_signature(func: &FunctionDef, sig: &FnSig, is_try_reachable: bool) -
     for fp in &sig.params {
         if fp.array.is_some() {
             let (c_type, _) = numeric_c_type(fp.suffix).expect("validated by build_function_table");
+            let rank = fp.array.as_ref().expect("checked").rank;
             let pointer_name = if fp.by_ref {
                 fp.c_name.clone()
             } else {
                 format!("{}_in", fp.c_name)
             };
-            params.push(format!("{c_type}* {pointer_name}, int {}_len0", fp.c_name));
+            params.extend((0..rank).map(|axis| format!("int {}_len{axis}", fp.c_name)));
+            params.push(format!("{c_type}* {pointer_name}"));
         } else if fp.by_ref {
             if fp.is_string {
                 params.push(format!("char* {}_in", fp.c_name));
@@ -3418,26 +3281,26 @@ fn emit_function_def(
 
     let mut body = String::new();
     for fp in &sig.params {
-        if let Some(arr) = &fp.array {
+        if fp.array.is_some() {
             // A `byref` array parameter needs no local buffer at all -- its
             // incoming pointer, named plainly `<c_name>` (see
             // `function_signature`), already gives live read/write access
             // to the caller's own storage, exactly matching real BASIC's
             // own byref array semantics. A `byval` one gets its own local
-            // copy, sized to fit the largest call site this program could
-            // resolve (see `apply_byval_array_capacities`), filled in from
-            // the incoming pointer up to its real element count (the
-            // hidden `<c_name>_len0` parameter) -- so later writes inside
-            // the function body never reach the caller's own array.
+            // copy, a C99 VLA sized from the incoming call's real element
+            // count -- so later writes inside the function body never
+            // reach the caller's own array.
             if !fp.by_ref {
                 let (c_type, _) =
                     numeric_c_type(fp.suffix).expect("validated by build_function_table");
+                let rank = fp.array.as_ref().expect("checked").rank;
+                let count = (0..rank)
+                    .map(|axis| format!("{0}_len{axis}", fp.c_name))
+                    .collect::<Vec<_>>()
+                    .join(" * ");
+                body.push_str(&format!("    {c_type} {0}[{count}];\n", fp.c_name));
                 body.push_str(&format!(
-                    "    {c_type} {0}[{1}] = {{0}};\n",
-                    fp.c_name, arr.byval_capacity
-                ));
-                body.push_str(&format!(
-                    "    for (int bcc_i = 0; bcc_i < {0}_len0; bcc_i++) {{ {0}[bcc_i] = \
+                    "    for (int bcc_i = 0; bcc_i < {count}; bcc_i++) {{ {0}[bcc_i] = \
                      {0}_in[bcc_i]; }}\n",
                     fp.c_name
                 ));
@@ -3772,15 +3635,24 @@ fn render_array_index_expr(
             indices.len()
         ));
     }
-    let mut out = key;
-    for index in indices {
+    let rendered_indices = indices.iter().map(|index| {
         let (index_text, index_is_float) = render_numeric_expr(index, needs_math, functions)?;
-        let index_text = if index_is_float {
+        Ok(if index_is_float {
             *needs_math = true;
             format!("((int)round((double)({index_text})))")
         } else {
             format!("({index_text})")
-        };
+        })
+    }).collect::<Result<Vec<_>, String>>()?;
+    if let Some(lengths) = &info.runtime_len {
+        let offset = rendered_indices.iter().enumerate().map(|(axis, index)| {
+            let stride = lengths.iter().skip(axis + 1).cloned().collect::<Vec<_>>().join(" * ");
+            if stride.is_empty() { index.clone() } else { format!("{index} * ({stride})") }
+        }).collect::<Vec<_>>().join(" + ");
+        return Ok(format!("{key}[{offset}]"));
+    }
+    let mut out = key;
+    for index_text in rendered_indices {
         out.push('[');
         out.push_str(&index_text);
         out.push(']');
@@ -8043,14 +7915,15 @@ fn render_numeric_call(
             let info = functions.arrays.get(&key).ok_or_else(|| {
                 format!("`{ident}` isn't a known array, so it can't be passed as an array argument")
             })?;
-            let len_text = info
-                .runtime_len
-                .as_ref()
-                .and_then(|v| v.first())
-                .cloned()
-                .unwrap_or_else(|| (info.bounds[0] + 1).to_string());
-            arg_texts.push(key);
-            arg_texts.push(len_text);
+            let lengths = info.runtime_len.clone().unwrap_or_else(|| {
+                info.bounds.iter().map(|bound| (bound + 1).to_string()).collect()
+            });
+            arg_texts.extend(lengths);
+            arg_texts.push(if info.bounds.len() == 1 || info.runtime_len.is_some() {
+                key
+            } else {
+                format!("&{key}{}", "[0]".repeat(info.bounds.len()))
+            });
         } else if param.by_ref {
             let Expr::Ident(ident) = arg else {
                 return Err(

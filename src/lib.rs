@@ -6751,9 +6751,42 @@ end
             "byref array parameter shouldn't need a copy-in loop at all:\n{output}"
         );
         assert!(
-            output.contains("bf_i_doublefirst(bv_i_data,"),
+            output.contains("bf_i_doublefirst(3, bv_i_data)"),
             "byref array argument should pass the real array pointer directly:\n{output}"
         );
+    }
+
+    #[test]
+    fn c_target_byval_array_parameters_use_per_call_storage() {
+        // A byval parameter forwarded to another byval parameter used to
+        // require a globally inferred maximum capacity. C99 VLAs let each
+        // invocation size its copy from the real hidden length instead.
+        let source = "function inner%(arr%(?))\n    arr%(0) = 9\n    return arr%(0)\nend function\n\
+                       function outer%(arr%(?))\n    return inner%(arr%)\nend function\n\
+                       dim data%(2)\n\
+                       print outer%(data%)\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("int bv_i_arr[bv_i_arr_len0];"),
+            "byval array storage should be a per-call VLA:\n{output}"
+        );
+        assert!(
+            output.contains("bf_i_inner(bv_i_arr_len0, bv_i_arr)"),
+            "a forwarded array should pass its actual runtime length:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_supports_multidimensional_byref_array_parameters() {
+        let source = "function setCell%(byref grid%(?, ?))\n    grid%(1, 2) = 7\n    return grid%(1, 2)\nend function\n\
+                       dim grid%(2, 3)\n\
+                       print setCell%(grid%)\n\
+                       end\n";
+        let output = compile_source_via_c_target(source);
+        assert!(output.contains("int bv_i_grid_len0, int bv_i_grid_len1, int* bv_i_grid"), "2-D parameters need both runtime lengths:\n{output}");
+        assert!(output.contains("bv_i_grid[(1) * (bv_i_grid_len1) + (2)]"), "2-D parameter indexing should flatten with the passed stride:\n{output}");
+        assert!(output.contains("bf_i_setcell(3, 4, &bv_i_grid[0][0])"), "the caller should pass the contiguous first element and both real axis lengths:\n{output}");
     }
 
     #[test]

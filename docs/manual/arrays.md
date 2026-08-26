@@ -26,7 +26,7 @@ An array parameter must declare its rank right in the signature — one `?` per 
 
 At the call site, just write the plain array name — **no `()` needed**. The transpiler already knows that parameter is an array from its declaration, so there's nothing left for the call site to mark.
 
-And separately: `byref` does **not** give the function a real reference to the caller's array — BASIC has no pointers or aliasing at this level. `byref` copies the array's elements in before the call and copies them back out after; `byval` (the default) only does the copy-in half. Either way the function always works on its own private copy — `byref` just *simulates* "the caller sees the result" by copying twice instead of once. See [byref / byval](#byref-byval) for the full mechanism.
+At the language level, `byval` gives the callable a private array value and `byref` makes mutations visible to the caller. The implementation is backend-specific: the BASIC target uses generated copy-in/copy-out storage; the C target passes contiguous numeric storage with hidden per-axis lengths, aliases it directly for `byref`, and allocates a per-call VLA copy for `byval`; the JVM target passes integer-array references directly for `byref` and deep-clones them for `byval` (ranks 1 through 8). See [byref / byval](#byref-byval) for the source-level rules.
 
 `insertionSort%` mutates the array in place, so its `arr%` parameter needs `byref`; `indexOf%` only reads it, so the unmarked (`byval`) default is correct as-is:
 
@@ -77,7 +77,7 @@ See [byref / byval](#byref-byval) for exactly what gets copied, and when.
 
 ### `byref` / `byval`
 
-Every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:
+On the BASIC target, every parameter — scalar or array — is copied into its generated storage before the call. Whether that value is copied back to the caller afterward depends on how the parameter is declared:
 
 ```bascal
 function insertionSort%(byref arr%(?))   ' byref: copied in, then back out
@@ -87,9 +87,9 @@ function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
 - **`byval`** (the default — an unmarked parameter is `byval`): the function gets its own private copy. Nothing is written back when the call returns, no matter what the function does to its copy internally.
 - **`byref`**: copied in before the call, same as `byval` — but also copied back out to the caller after the call returns.
 
-This applies uniformly to both parameter kinds:
+This describes the BASIC target's implementation. C and JVM use native array references internally, while preserving the same observable `byval`/`byref` behavior:
 
-- **Array parameters**: `byval` copies elements in; `byref` copies them in *and* back out. A function that only reads its array argument (like `indexOf%` above) should stay `byval` — a `byref` array with no writes is just a slower `byval`, since the transpiler still generates the copy-out loop.
+- **Array parameters**: on the BASIC target, `byval` copies elements in and `byref` copies them in *and* back out. C and JVM use native references for `byref` and private copies for `byval`, with the same source-level result. A function that only reads its array argument (like `indexOf%` above) should stay `byval`.
 
 - **Scalar parameters**: `byval` is the classic behavior scalar parameters have always had — a plain assignment in, nothing written back. `byref` turns a scalar parameter into a true output parameter:
 
@@ -148,7 +148,9 @@ Either mismatch is caught before it ever reaches generated BASIC: the two shapes
 
 ### Array Parameter Storage Capacity
 
-An array parameter's storage is one shared, generated variable, reused by every call to that function — the same reason a scalar parameter's storage is shared. Arrays additionally need a fixed *size*, though, and classic BASIC has no `REDIM`: once an array is `DIM`ed, it can never be resized, and a second `DIM` on the same array is a fatal runtime error. So a parameter's storage is `DIM`ed exactly once, at the very top of the generated program — before any call happens — sized to the biggest array anything anywhere ever passes it.
+On the BASIC target, an array parameter's storage is one shared, generated variable, reused by every call to that function — the same reason a scalar parameter's storage is shared. Arrays additionally need a fixed *size*, though, and classic BASIC has no `REDIM`: once an array is `DIM`ed, it can never be resized, and a second `DIM` on the same array is a fatal runtime error. So a parameter's storage is `DIM`ed exactly once, at the very top of the generated program — before any call happens — sized to the biggest array anything anywhere ever passes it.
+
+The C and JVM targets do not use this global-capacity model. C receives the actual length of every axis and sizes each `byval` copy per invocation; JVM array parameters receive native references, with integer `byval` parameters deep-cloned at the call. JVM per-call bounds and `SIZEOF` remain tracked in [issue #126](https://github.com/johnjoeallen/bascal/issues/126).
 
 Normally this needs no attention at all. Write `?` for every axis, same as always; the transpiler works out a safe capacity itself by scanning every call site in the program and taking the largest resolved size. Below, `sumArr%`'s storage ends up sized for 10 elements even though its first call only ever passes it 3:
 
