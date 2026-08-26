@@ -212,7 +212,7 @@ id = "test.jvm_conformance.hello_world_transpiles_assembles_and_runs_when_availa
 kind = "test"
 source = "jvm_conformance"
 name = "hello_world_transpiles_assembles_and_runs_when_available"
-description = "hello_world_transpiles_assembles_and_runs_when_available"
+description = "Hello-world assembly and execution"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -230,7 +230,7 @@ id = "test.jvm_conformance.jvm_catch_filters_and_source_bindings_run_when_availa
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_catch_filters_and_source_bindings_run_when_available"
-description = "jvm_catch_filters_and_source_bindings_run_when_available"
+description = "Catch filters and source bindings"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -266,7 +266,7 @@ id = "test.jvm_conformance.jvm_non_integer_arrays_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_non_integer_arrays_run_when_available"
-description = "jvm_non_integer_arrays_run_when_available"
+description = "Typed non-integer arrays and array parameters"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -284,7 +284,7 @@ id = "test.jvm_conformance.jvm_try_catch_finally_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "jvm_try_catch_finally_runs_when_available"
-description = "jvm_try_catch_finally_runs_when_available"
+description = "Structured TRY/CATCH/FINALLY execution"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -293,7 +293,7 @@ id = "test.jvm_conformance.numeric_literals_and_arithmetic_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "numeric_literals_and_arithmetic_run_when_available"
-description = "numeric_literals_and_arithmetic_run_when_available"
+description = "Numeric literals and arithmetic"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -302,7 +302,7 @@ id = "test.jvm_conformance.portable_error_handling_tutorial_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "portable_error_handling_tutorial_runs_when_available"
-description = "portable_error_handling_tutorial_runs_when_available"
+description = "Portable error-handling tutorial"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -311,7 +311,7 @@ id = "test.jvm_conformance.scalar_functions_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scalar_functions_run_when_available"
-description = "scalar_functions_run_when_available"
+description = "Scalar function calls and returns"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -320,7 +320,7 @@ id = "test.jvm_conformance.scalar_variables_and_constants_run_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scalar_variables_and_constants_run_when_available"
-description = "scalar_variables_and_constants_run_when_available"
+description = "Scalar variables and constants"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -329,7 +329,7 @@ id = "test.jvm_conformance.scoped_goto_runs_when_available"
 kind = "test"
 source = "jvm_conformance"
 name = "scoped_goto_runs_when_available"
-description = "scoped_goto_runs_when_available"
+description = "Scoped GOTO labels"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -338,7 +338,7 @@ id = "test.jvm_conformance.structured_branches_and_while_loops_run_when_availabl
 kind = "test"
 source = "jvm_conformance"
 name = "structured_branches_and_while_loops_run_when_available"
-description = "structured_branches_and_while_loops_run_when_available"
+description = "Structured branches and WHILE loops"
 groups = ["tutorials", "jvm"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -374,7 +374,7 @@ id = "test.record_general_purpose.existing_random_access_file_record_usage_still
 kind = "test"
 source = "record_general_purpose"
 name = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
-description = "existing_random_access_file_record_usage_still_compiles_on_basic_and_c"
+description = "Existing random-file records compile on BASIC and C"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
@@ -383,7 +383,7 @@ id = "test.record_general_purpose.jvm_backend_does_not_yet_support_random_access
 kind = "test"
 source = "record_general_purpose"
 name = "jvm_backend_does_not_yet_support_random_access_file_records"
-description = "jvm_backend_does_not_yet_support_random_access_file_records"
+description = "JVM random-file records produce the expected diagnostic"
 groups = ["core", "basic", "c", "jvm", "records"]
 status = { basic = "UNKNOWN", c = "UNKNOWN", jvm = "UNKNOWN" }
 
