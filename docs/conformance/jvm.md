@@ -14,16 +14,17 @@
 | Structured branches and `WHILE` loops | PASS |
 | Scalar function calls and returns | PASS |
 | Scoped `GOTO` labels | PASS |
-| Expected diagnostic for sequential file I/O | PASS |
-| Expected diagnostic for random/record file I/O | PASS |
-| Expected diagnostic for `MID$` assignment | PASS |
-| Expected failure for array `byval` clone assembly | PASS |
+| Expected diagnostic for sequential file I/O | FAIL |
+| Expected diagnostic for random/record file I/O | FAIL |
+| Expected diagnostic for `MID$` assignment | FAIL |
+| Expected failure for array `byval` clone assembly | FAIL |
 | Random file binary compatibility | FAIL |
 | Classic BASIC error handling | N/A |
 
-Expected-failure checks are passing when the JVM backend rejects an
-unsupported feature with its documented diagnostic. They keep known gaps
-visible without treating an unimplemented feature as a broken build.
+The expected-failure checks themselves pass when the JVM backend rejects an
+unsupported feature with its documented diagnostic; the conformance result is
+still FAIL because the required feature is not implemented. This keeps known
+gaps visible without breaking the build.
 
 <nav class="conformance-nav" aria-label="Conformance results navigation">
   <a href="../c/">← Previous: C-specific</a>
