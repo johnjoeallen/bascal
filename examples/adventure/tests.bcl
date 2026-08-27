@@ -1,0 +1,58 @@
+// Model-level regression tests for the planned full BASCAL record model.
+program adventure_tests
+
+require adventure.model.constants
+require adventure.model.types
+require adventure.world.build
+require adventure.game.commands
+require adventure.game.persistence
+
+dim rooms%(ROOM_COUNT - 1) as Room
+dim things%(THING_COUNT - 1) as Thing
+declare player as Actor
+
+/**
+ * Stops the test program when an expected condition is false.
+ * @param condition% non-zero when the test passes.
+ * @param message$ explanation printed if the test fails.
+ * @effects prints and throws when condition% is zero.
+ */
+procedure expect(condition%, message$)
+    if condition% = 0 then
+        print "FAIL: " + message$
+        throw 1
+    end if
+end procedure
+
+buildWorld(rooms%, things%, player)
+expect(player.room = ROOM_0, "initial player room")
+expect(rooms%(ROOM_0).exit(EAST) = ROOM_1, "east exit")
+expect(rooms%(ROOM_4).exit(NORTH) = ROOM_2, "north exit")
+
+movePlayer(rooms%, player, EAST)
+expect(player.room = ROOM_1, "valid movement")
+movePlayer(rooms%, player, NORTH)
+expect(player.room = ROOM_1, "blocked movement")
+
+expect(findThing%(things%, ROOM_0, "Coin") = 2, "thing lookup")
+takeThing(things%, player, "Elvish Sword")
+expect(things%(3).location = INVENTORY, "taking an item")
+takeThing(things%, player, "Coin")
+expect(things%(2).location = ROOM_0, "taking an absent item")
+dropThing(things%, player, "Elvish Sword")
+expect(things%(3).location = ROOM_1, "dropping an item")
+dropThing(things%, player, "Coin")
+expect(things%(2).location = ROOM_0, "dropping an absent item")
+
+expect(rooms%(ROOM_3).description = "A throne room", "room description")
+rooms%(ROOM_5).setExit(EAST, ROOM_0)
+expect(rooms%(ROOM_5).exit(EAST) = ROOM_0, "record method and fluent mutation")
+
+saveGame(player, things%, "adventure-test.save")
+player.room = ROOM_0
+things%(3).location = NOWHERE
+loadGame(player, things%, "adventure-test.save")
+expect(player.room = ROOM_1 && things%(3).location = ROOM_1, "save/load")
+
+print "PASS: adventure game model"
+end

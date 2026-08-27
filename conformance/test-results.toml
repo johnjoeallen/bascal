@@ -161,6 +161,10 @@ id = "test.language_conformance.conformance_fixtures_transpile_on_their_supporte
 observed = "PASS"
 
 [[result]]
+id = "test.record_general_purpose.adventure_port_compiles_without_codegen"
+observed = "PASS"
+
+[[result]]
 id = "test.record_general_purpose.array_of_records_currently_fails"
 observed = "PASS"
 

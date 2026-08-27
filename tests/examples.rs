@@ -101,7 +101,7 @@ fn freebasic_runs_sort_driver_when_available() {
     }
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("tutorial/sort_driver.bcl");
+    let source_path = repo_root.join("examples/sort_driver/sort_driver.bcl");
     let output_path = repo_root.join("output/sort_driver.bas");
 
     compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
@@ -374,11 +374,11 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
 
 /// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
 /// `dim`'d string array element (`rawLine$(lineCount%)` in
-/// `tutorial/remline/com/bascal/examples/remline/transform.bcl`) now
+/// `examples/remline/com/bascal/examples/remline/transform.bcl`) now
 /// compiles and runs correctly under `--target c`, producing output
 /// identical to `--target basic`'s own (see
 /// `freebasic_runs_remline_when_available`'s matching assertion against
-/// the same `tutorial/remline/sample/expected.bas` fixture).
+/// the same `examples/remline/sample/expected.bas` fixture).
 #[test]
 fn gcc_runs_remline_under_c_target_when_available() {
     if Command::new("gcc").arg("--version").output().is_err() {
@@ -386,8 +386,8 @@ fn gcc_runs_remline_under_c_target_when_available() {
     }
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("tutorial/remline/remline.bcl");
-    let sample_output_path = repo_root.join("tutorial/remline/sample/output.bas");
+    let source_path = repo_root.join("examples/remline/remline.bcl");
+    let sample_output_path = repo_root.join("examples/remline/sample/output.bas");
     let output_dir = repo_root.join("output/c_target_remline");
     fs::create_dir_all(&output_dir)
         .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
@@ -403,7 +403,7 @@ fn gcc_runs_remline_under_c_target_when_available() {
         .arg("--target")
         .arg("C")
         .arg("-L")
-        .arg("tutorial/remline")
+        .arg("examples/remline")
         .arg("--clean")
         .arg("--binary")
         .status()
@@ -424,7 +424,7 @@ fn gcc_runs_remline_under_c_target_when_available() {
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let expected = fs::read_to_string(repo_root.join("tutorial/remline/sample/expected.bas"))
+    let expected = fs::read_to_string(repo_root.join("examples/remline/sample/expected.bas"))
         .expect("expected output should be readable");
     let actual = fs::read_to_string(&sample_output_path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", sample_output_path.display()));
@@ -590,16 +590,16 @@ fn freebasic_runs_remline_when_available() {
     }
 
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_path = repo_root.join("tutorial/remline/remline.bcl");
+    let source_path = repo_root.join("examples/remline/remline.bcl");
     let output_path = repo_root.join("output/remline/remline.bas");
-    let sample_output_path = repo_root.join("tutorial/remline/sample/output.bas");
+    let sample_output_path = repo_root.join("examples/remline/sample/output.bas");
 
     let _ = fs::remove_file(&sample_output_path);
 
     compile_with_cli(
         &source_path,
         &output_path,
-        &["-L", "tutorial/remline", "--clean", "--binary"],
+        &["-L", "examples/remline", "--clean", "--binary"],
     );
 
     let executable_path = repo_root.join("tmp/remline");
@@ -613,7 +613,7 @@ fn freebasic_runs_remline_when_available() {
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let expected = fs::read_to_string(repo_root.join("tutorial/remline/sample/expected.bas"))
+    let expected = fs::read_to_string(repo_root.join("examples/remline/sample/expected.bas"))
         .expect("expected output should be readable");
     let actual = fs::read_to_string(&sample_output_path)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", sample_output_path.display()));

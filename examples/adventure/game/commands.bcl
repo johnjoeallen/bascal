@@ -1,0 +1,171 @@
+// Console commands replace the VCL buttons in the Delphi program. Coordination
+// stays procedural; methods remain on Room and Actor where they fit naturally.
+library commands
+
+require adventure.model.constants
+require adventure.model.types
+require adventure.game.persistence
+
+/**
+ * Finds a named thing at a single location using a case-insensitive match.
+ * @param things% every thing in the world.
+ * @param location% the room or INVENTORY to search.
+ * @param wanted$ the player-supplied thing name.
+ * @return the matching thing index, or NOWHERE when it is absent.
+ */
+function findThing%(things%(?) as Thing, location%, wanted$)
+    wanted$ = wanted$.trim().upper()
+    for i% = 0 to THING_COUNT - 1
+        if things%(i%).location = location% && things%(i%).name.upper() = wanted$ then
+            return i%
+        end if
+    end for
+    return NOWHERE
+end function
+
+/**
+ * Lists all things currently at one location.
+ * @param things% every thing in the world.
+ * @param location% the room or INVENTORY to display.
+ * @effects writes the matching things, or "nothing", to the console.
+ */
+procedure showThings(things%(?) as Thing, location%)
+    found% = 0
+    for i% = 0 to THING_COUNT - 1
+        if things%(i%).location = location% then
+            print "  - " + things%(i%).name + ": " + things%(i%).description
+            found% = 1
+        end if
+    end for
+    if found% = 0 then
+        print "  nothing."
+    end if
+end procedure
+
+/**
+ * Describes the current room and lists its visible things.
+ * @param rooms% every room in the world.
+ * @param things% every thing in the world.
+ * @param player the actor whose current room is described.
+ * @effects writes the room description and contents to the console.
+ */
+procedure lookAt(rooms%(?) as Room, things%(?) as Thing, player as Actor)
+    rooms%(player.room).describe()
+    print "Here you can see:"
+    showThings(things%, player.room)
+end procedure
+
+/**
+ * Lists the things held in the player's inventory.
+ * @param things% every thing in the world.
+ * @effects writes the inventory contents to the console.
+ */
+procedure showInventory(things%(?) as Thing)
+    print "You have:"
+    showThings(things%, INVENTORY)
+end procedure
+
+/**
+ * Moves the player through a valid exit, or reports a blocked direction.
+ * @param rooms% every room in the world.
+ * @param player the actor to move.
+ * @param direction% the requested compass direction.
+ * @effects may change player.room and writes the result to the console.
+ */
+procedure movePlayer(byref rooms%(?) as Room, byref player as Actor, direction%)
+    destination% = rooms%(player.room).exit(direction%)
+    if destination% = NO_EXIT then
+        print "No exit!"
+        return
+    end if
+    player.moveTo(destination%)
+    print "Exit to " + rooms%(destination%).name
+end procedure
+
+/**
+ * Transfers a named thing from the current room to the inventory.
+ * @param things% every thing in the world.
+ * @param player the actor taking the thing.
+ * @param wanted$ the player-supplied thing name.
+ * @effects may change one Thing.location and writes the result to the console.
+ */
+procedure takeThing(byref things%(?) as Thing, player as Actor, wanted$)
+    // game02 permits any named object in the room to be taken, including scenery.
+    if wanted$.trim() = "" then
+        print "I don't know what you want to take!"
+        return
+    end if
+    index% = findThing%(things%, player.room, wanted$)
+    if index% = NOWHERE then
+        print "There is no " + wanted$ + " here!"
+        return
+    end if
+    things%(index%).location = INVENTORY
+    print "Ok. " + things%(index%).name + " taken"
+end procedure
+
+/**
+ * Transfers a named inventory thing into the player's current room.
+ * @param things% every thing in the world.
+ * @param player the actor dropping the thing.
+ * @param wanted$ the player-supplied thing name.
+ * @effects may change one Thing.location and writes the result to the console.
+ */
+procedure dropThing(byref things%(?) as Thing, player as Actor, wanted$)
+    if wanted$.trim() = "" then
+        print "I don't know what you want to drop!"
+        return
+    end if
+    index% = findThing%(things%, INVENTORY, wanted$)
+    if index% = NOWHERE then
+        print "You have no " + wanted$ + "!"
+        return
+    end if
+    things%(index%).location = player.room
+    print "Ok. " + things%(index%).name + " dropped"
+end procedure
+
+/**
+ * Parses and performs one console command from the game02 command vocabulary.
+ * @param rooms% every room in the world.
+ * @param things% every thing in the world.
+ * @param player the actor controlled by the player.
+ * @param line$ the raw console input.
+ * @param running% set to zero by QUIT to end the command loop.
+ * @effects may change game state, persist it, and write a response to the console.
+ */
+procedure executeCommand(byref rooms%(?) as Room, byref things%(?) as Thing, byref player as Actor, line$, byref running%)
+    // This small parser intentionally covers only game02's command vocabulary.
+    line$ = line$.trim()
+    command$ = line$.upper()
+    select case command$
+        case "N", "NORTH"
+            movePlayer(rooms%, player, NORTH)
+        case "S", "SOUTH"
+            movePlayer(rooms%, player, SOUTH)
+        case "W", "WEST"
+            movePlayer(rooms%, player, WEST)
+        case "E", "EAST"
+            movePlayer(rooms%, player, EAST)
+        case "LOOK"
+            lookAt(rooms%, things%, player)
+        case "I", "INVENTORY"
+            showInventory(things%)
+        case "SAVE"
+            saveGame(player, things%, "adventure.save")
+            print "Game saved."
+        case "LOAD"
+            loadGame(player, things%, "adventure.save")
+            print "Game loaded."
+        case "QUIT"
+            running% = 0
+        case else
+            if command$.left(5) = "TAKE " then
+                takeThing(things%, player, line$.mid(6))
+            elseif command$.left(5) = "DROP " then
+                dropThing(things%, player, line$.mid(6))
+            else
+                print "I do not understand that command."
+            end if
+    end select
+end procedure

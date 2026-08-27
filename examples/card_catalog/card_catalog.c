@@ -43,9 +43,8 @@ static int bcc_put_record_entry(FILE* file, long record, const char* field_0, co
 static int bcc_get_record_entry(FILE* file, long record, char* field_0, char* field_1, char* field_2);
 static void bcc_read_line(void);
 
-static float bv_f_catalog = 0;
-static float bv_f_header = 0;
-static int bv_i_lastslot = 0;
+static float bv_f_last_slot = 0;
+static int bv_i_last_slot = 0;
 static char bv_s_catalogauthorbuf[256] = {0};
 static char bv_s_catalogsubjectbuf[256] = {0};
 static char bv_s_catalogtitlebuf[256] = {0};
@@ -63,10 +62,12 @@ void bf_i_mainmenu(void);
 void bf_i_initcatalog(void) {
     int bv_i_i = 0;
 
+    // global header
+    // global catalog
     // header[...] = { ... }  (whole-record write)
-    int16_t bcc_tmp_0 = bv_i_lastslot;
+    int16_t bcc_tmp_0 = bv_i_last_slot;
     bcc_put_record_header(bcc_files[0], 1, &bcc_tmp_0, "");
-    int bt_lim_1 = bv_i_lastslot;
+    int bt_lim_1 = bv_i_last_slot;
     int bt_step_1 = 1;
     for (bv_i_i = 2; bt_step_1 >= 0 ? bv_i_i <= bt_lim_1 : bv_i_i >= bt_lim_1; bv_i_i += bt_step_1) {
         // catalog[...] = { ... }  (whole-record write)
@@ -98,6 +99,8 @@ void bf_i_additem(const char* bv_s_author_in, const char* bv_s_title_in, const c
     char bv_s_headersizebuf[256] = {0};
     char bv_s_hreserved[256] = {0};
 
+    // global header
+    // global catalog
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
@@ -162,6 +165,8 @@ void bf_i_listall(void) {
     char bv_s_headersizebuf[256] = {0};
     char bv_s_hreserved[256] = {0};
 
+    // global header
+    // global catalog
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
@@ -223,6 +228,8 @@ void bf_i_searchbyauthor(const char* bv_s_author_in) {
     char bv_s_headersizebuf[256] = {0};
     char bv_s_hreserved[256] = {0};
 
+    // global header
+    // global catalog
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
@@ -286,6 +293,8 @@ void bf_i_searchbyauthortitle(const char* bv_s_author_in, const char* bv_s_title
     char bv_s_headersizebuf[256] = {0};
     char bv_s_hreserved[256] = {0};
 
+    // global header
+    // global catalog
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
@@ -350,6 +359,8 @@ void bf_i_deleteitem(const char* bv_s_author_in, const char* bv_s_title_in) {
     char bv_s_headersizebuf[256] = {0};
     char bv_s_hreserved[256] = {0};
 
+    // global header
+    // global catalog
     // let h = header[...]  (whole-record read)
     bcc_get_record_header(bcc_files[0], 1, bv_s_headersizebuf, bv_s_headerreservedbuf);
     bv_i_hsize = bcc_cvi(bv_s_headersizebuf);
@@ -541,7 +552,7 @@ int main(void) {
     // slot starts. size is the last valid entry slot number, mirroring
     // CLERK.BAS's own S = CVI(F$) header field.
 
-    bv_i_lastslot = 11;
+    bv_i_last_slot = 11;
 
     // file header as Header = open(...)  [60 bytes/record]
     bcc_raise_retry_0: ;
@@ -551,7 +562,7 @@ int main(void) {
         bcc_err = 75;
         bcc_resume_id = 0;
         bcc_erl = 53;
-        bcc_err_file = "tutorial/card_catalog.bcl";
+        bcc_err_file = "examples/card_catalog/card_catalog.bcl";
         if (bcc_on_error_target < 0 || bcc_in_handler) {
             fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
             exit(1);
@@ -569,7 +580,7 @@ int main(void) {
         bcc_err = 75;
         bcc_resume_id = 1;
         bcc_erl = 54;
-        bcc_err_file = "tutorial/card_catalog.bcl";
+        bcc_err_file = "examples/card_catalog/card_catalog.bcl";
         if (bcc_on_error_target < 0 || bcc_in_handler) {
             fprintf(stderr, "unhandled BASIC error %d\n", bcc_err);
             exit(1);

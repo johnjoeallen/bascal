@@ -1,0 +1,19 @@
+// Shared world identifiers.  Room IDs are intentional: the Delphi map also
+// stores integer exits, so BASCAL does not need object-reference semantics.
+library constants
+const NO_EXIT = -1
+const NORTH = 0
+const SOUTH = 1
+const WEST = 2
+const EAST = 3
+const ROOM_0 = 0
+const ROOM_1 = 1
+const ROOM_2 = 2
+const ROOM_3 = 3
+const ROOM_4 = 4
+const ROOM_5 = 5
+const ROOM_COUNT = 6
+// A thing is in one room, the player's inventory, or nowhere.
+const INVENTORY = -2
+const NOWHERE = -3
+const THING_COUNT = 10

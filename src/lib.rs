@@ -165,6 +165,33 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     }
 }
 
+/// Parses the root source file and every transitively required library, but
+/// deliberately stops before record lowering, name/type resolution, and any
+/// backend generation. This is useful while a program uses accepted planned
+/// syntax whose typed IR or backend support is still under development.
+pub fn check_file(input: &Path, options: &CompileOptions) -> Result<(), Vec<Diagnostic>> {
+    let mut options = options.clone();
+    if let Some(parent) = input.parent() {
+        let parent = parent.to_path_buf();
+        if !options.library_dirs.contains(&parent) {
+            options.library_dirs.insert(0, parent);
+        }
+    }
+
+    let mut visited = HashSet::new();
+    let program = load_program_recursive(input, true, &options, &mut visited)?;
+    if let Some(shared_name) = program
+        .program_decl
+        .as_ref()
+        .and_then(|d| d.shared.as_deref())
+    {
+        if let Some(shared_path) = resolve_shared_path(shared_name, input, &options) {
+            load_shared_file(&shared_path, shared_name)?;
+        }
+    }
+    Ok(())
+}
+
 /// If `program` uses `MID$` statement-form assignment anywhere (top-level
 /// or inside any function body) and hasn't already defined or required its
 /// own `midAssign$`, splices in `com.bascal.stdlib.midAssign` -- resolved
@@ -999,9 +1026,9 @@ end
 
     #[test]
     fn compiles_sort_driver_sample() {
-        let source = include_str!("../tutorial/sort_driver.bcl");
+        let source = include_str!("../examples/sort_driver/sort_driver.bcl");
         let output =
-            compile_source("tutorial/sort_driver.bcl", source).expect("sample should compile");
+            compile_source("examples/sort_driver/sort_driver.bcl", source).expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         // Without the sort library bubbleSort% is not in the symbol table;
         // it is emitted lowercase like any other user symbol, not uppercased.
@@ -1427,7 +1454,7 @@ END
 
     #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let output =
             compile_file(&input, &CompileOptions::new()).expect("sort driver should compile");
 
@@ -6824,9 +6851,9 @@ end
         // its own real local C array declared in that function's own
         // prologue -- see `collect_array_declarations`'s call site in
         // `generate` and `function_scoped_table`'s own doc comment. This
-        // is exactly the shape `tutorial/com/bascal/sort/quickSort.bcl`
+        // is exactly the shape `examples/sort_driver/com/bascal/sort/quickSort.bcl`
         // needs for its explicit partition-bounds stack (`sLow%`/
-        // `sHigh%`), which `tutorial/sort_driver.bcl` depends on.
+        // `sHigh%`), which `examples/sort_driver/sort_driver.bcl` depends on.
         let source = "function useLocal%(byref arr%(?))\n    \
                        dim scratch%(3)\n    \
                        scratch%(0) = 10\n    \
@@ -6972,13 +6999,13 @@ end
         // gcc separately (all four sorts report OK on both a 50- and a
         // 5000-element reverse-sorted input); this locks in that it
         // keeps compiling.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/sort_driver.bcl");
+        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
         compile_file(&input, &options)
-            .unwrap_or_else(|d| panic!("tutorial/sort_driver.bcl should compile to C: {d:?}"));
+            .unwrap_or_else(|d| panic!("examples/sort_driver/sort_driver.bcl should compile to C: {d:?}"));
     }
 
     #[test]
@@ -7053,7 +7080,7 @@ end
         // emitted *before* the top-level FIELD declarations that establish
         // a channel's layout, even though those declarations always run
         // first at actual program execution -- found via
-        // tutorial/card_catalog.bcl while implementing procedure support.
+        // examples/card_catalog/card_catalog.bcl while implementing procedure support.
         let source = r#"record Header
     size: int16
 end record
@@ -7370,7 +7397,7 @@ end
         // GitHub issue #29: `LINE INPUT #` used to reject any target that
         // wasn't a bare string variable -- `render_lvalue` (already used
         // by `READ`/`SWAP`) also accepts a `dim`'d string array's own
-        // indexed element, which `tutorial/remline/...transform.bcl`
+        // indexed element, which `examples/remline/...transform.bcl`
         // needs (`LINE INPUT #1, rawLine$(lineCount%)`).
         let source = "dim line$(4)\nopen \"f.txt\" for input as #1\ni% = 0\nline input #1, line$(i%)\nclose #1\nend\n";
         let output = compile_source_via_c_target(source);

@@ -16,6 +16,7 @@
 | BASCOM creates file; JVM validates binary compatibility | NOT APPLICABLE | NOT APPLICABLE | FAIL |
 | JVM creates file; BASCOM validates binary compatibility | NOT APPLICABLE | NOT APPLICABLE | FAIL |
 | Every supported fixture transpiles successfully | PASS | PASS | PASS |
+| Adventure game compiles through the front end without backend code generation | UNIMPLEMENTED | UNIMPLEMENTED | UNIMPLEMENTED |
 | Array of records is not yet supported | PASS | PASS | PASS |
 | Variable-length string records are rejected as random-access file types | PASS | PASS | PASS |
 | In-memory records support variable-length string fields | PASS | PASS | PASS |

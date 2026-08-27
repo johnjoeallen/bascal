@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use bcc::{compile_file, default_output_path, CompileOptions, Target};
+use bcc::{check_file, compile_file, default_output_path, CompileOptions, Target};
 use clap::Parser;
 
 mod jvm_classfile;
@@ -58,6 +58,10 @@ struct Cli {
     /// Re-transpile even if the output is already up to date
     #[arg(short = 'c', long)]
     clean: bool,
+
+    /// Parse this source and every required library without resolving or generating a backend output file
+    #[arg(long)]
+    check: bool,
 
     /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
@@ -268,6 +272,30 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
 
 fn run(cli: Cli) -> Result<(), String> {
     let target = cli.target.unwrap_or_else(resolve_default_target);
+
+    if cli.check {
+        if cli.binary || cli.run {
+            return Err("error: --check cannot be combined with --binary or --run".to_string());
+        }
+        let options = CompileOptions {
+            library_dirs: cli.library_dirs,
+            libraries: cli.libraries,
+            line_numbers: cli.line_numbers || !cli.sparse_line_numbers,
+            target,
+            strict_vars: false,
+            strict_vars_warn: false,
+        };
+        check_file(&cli.input, &options).map_err(|diagnostics| {
+            diagnostics
+                .into_iter()
+                .map(|diagnostic| diagnostic.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })?;
+        println!("check passed: {}", cli.input.display());
+        return Ok(());
+    }
+
     // `--run` implies `--binary` -- there's no point building a binary
     // without one, and no way to run the program without building it
     // first.
@@ -663,6 +691,7 @@ mod tests {
             line_numbers: true,
             sparse_line_numbers: false,
             clean: false,
+            check: false,
             binary: false,
             run: false,
             target: None,

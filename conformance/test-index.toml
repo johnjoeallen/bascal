@@ -425,6 +425,16 @@ groups = ["core", "tutorials"]
 expected = { basic = "PASS", c = "PASS", jvm = "PASS" }
 
 [[test]]
+id = "test.record_general_purpose.adventure_port_compiles_without_codegen"
+kind = "test"
+source = "record_general_purpose"
+name = "adventure_port_compiles_without_codegen"
+description = "Adventure game compiles through the front end without backend code generation"
+groups = ["core", "records"]
+expected = { basic = "UNIMPLEMENTED", c = "UNIMPLEMENTED", jvm = "UNIMPLEMENTED" }
+validation = "FRONTEND_ONLY"
+
+[[test]]
 id = "test.record_general_purpose.array_of_records_currently_fails"
 kind = "test"
 source = "record_general_purpose"

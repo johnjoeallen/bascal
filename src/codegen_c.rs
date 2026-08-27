@@ -1060,7 +1060,7 @@ fn apply_field_statement(
             ty: field_types
                 .as_ref()
                 .and_then(|items| items.get(entries.len()))
-                .copied(),
+                .cloned(),
             right_align: field_types
                 .as_ref()
                 .and_then(|items| items.get(entries.len()))
@@ -6210,7 +6210,9 @@ fn record_field_c_type(ty: RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "int32_t",
         RecordFieldType::Float32 => "float",
         RecordFieldType::Float64 => "double",
-        RecordFieldType::Str(..) | RecordFieldType::StrDynamic => unreachable!(
+        RecordFieldType::Str(..)
+        | RecordFieldType::StrDynamic
+        | RecordFieldType::Named(_) => unreachable!(
             "string record fields are passed as const char*/char*, never through record_field_c_type"
         ),
     }
@@ -6308,23 +6310,23 @@ fn ensure_dsl_record_helpers(record_type: &str, fields: &[FieldEntry], file_io: 
     }
 
     let reclen: u32 = fields.iter().map(|field| field.width).sum();
-    let put_params = fields
-        .iter()
-        .enumerate()
-        .map(|(index, field)| {
-            if field.is_string {
-                format!("const char* field_{index}")
-            } else {
-                let ty = record_field_c_type(
-                    field
-                        .ty
-                        .expect("a DSL record field always carries its declared RecordFieldType"),
-                );
-                format!("const {ty}* field_{index}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+    let put_params =
+        fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                if field.is_string {
+                    format!("const char* field_{index}")
+                } else {
+                    let ty =
+                        record_field_c_type(field.ty.clone().expect(
+                            "a DSL record field always carries its declared RecordFieldType",
+                        ));
+                    format!("const {ty}* field_{index}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
     let get_params = fields
         .iter()
         .enumerate()
@@ -6524,6 +6526,7 @@ fn emit_get_or_put(
                     render_numeric_expr(&raw_value, needs_math, functions)?;
                 let ty = field
                     .ty
+                    .clone()
                     .expect("a DSL record field always carries its declared RecordFieldType");
                 let target_is_float =
                     matches!(ty, RecordFieldType::Float32 | RecordFieldType::Float64);

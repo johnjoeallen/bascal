@@ -223,6 +223,8 @@ impl Parser {
                 functions.push(self.parse_function()?);
             } else if self.check_keyword("procedure") {
                 functions.push(self.parse_procedure()?);
+            } else if self.check_keyword("fluent") {
+                functions.push(self.parse_fluent_method()?);
             } else if self.check_method_keyword() {
                 functions.push(self.parse_method()?);
             } else if self.check_keyword("record") {
@@ -338,6 +340,14 @@ impl Parser {
         })
     }
 
+    fn parse_fluent_method(&mut self) -> ParseResult<FunctionDef> {
+        self.expect_keyword("fluent")?;
+        if !self.check_method_keyword() {
+            return Err(self.error("expected `method` after `fluent`"));
+        }
+        self.parse_method()
+    }
+
     fn check_method_keyword(&self) -> bool {
         matches!(&self.current().kind, TokenKind::Ident(raw) if BasicIdent::parse(raw).name.eq_ignore_ascii_case("method"))
     }
@@ -353,6 +363,36 @@ impl Parser {
                 "method receiver types belong in brackets after the method name -- e.g. `method capitalize[string]()`",
             ));
         }
+        // Planned general-purpose records use `method[Room] name()` while
+        // scalar extension methods retain `method name[integer]()`.
+        if self.eat(TokenKind::LBracket) {
+            self.expect_ident("expected record type after `method[`")?;
+            self.expect(TokenKind::RBracket, "expected `]` after record type")?;
+            let name = BasicIdent::parse(&self.expect_ident("expected method name")?);
+            self.expect(TokenKind::LParen, "expected `(` after method name")?;
+            let params = self.parse_param_list()?;
+            self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
+            if self.check_keyword("returns") {
+                self.advance();
+                self.expect_ident("expected result type after `returns`")?;
+            }
+            self.consume_line_end()?;
+            let body = self.parse_block(&[BlockEnd::EndMethod])?;
+            self.expect_keyword("end")?;
+            self.expect_keyword("method")?;
+            self.consume_line_end()?;
+            return Ok(FunctionDef {
+                name,
+                params,
+                body,
+                is_procedure: false,
+                // Type-scoped record dispatch is deliberately parser-only
+                // until the typed record IR is implemented.
+                receiver: None,
+                pos: fn_pos,
+            });
+        }
+
         let raw_name = self.expect_ident("expected method name")?;
         let mut name = BasicIdent::parse(&raw_name);
         self.expect(
@@ -449,7 +489,7 @@ impl Parser {
         let raw = self.expect_ident("expected record field type")?;
         match raw.to_ascii_lowercase().as_str() {
             "int16" => Ok(RecordFieldType::Int16),
-            "int32" => Ok(RecordFieldType::Int32),
+            "int" | "int32" => Ok(RecordFieldType::Int32),
             "float32" => Ok(RecordFieldType::Float32),
             "float64" => Ok(RecordFieldType::Float64),
             "string" => {
@@ -477,9 +517,7 @@ impl Parser {
                 };
                 Ok(RecordFieldType::Str(width as u32, alignment))
             }
-            other => Err(self.error(format!(
-                "unknown record field type `{other}`; expected int16, int32, float32, float64, or string(N)"
-            ))),
+            other => Ok(RecordFieldType::Named(other.to_string())),
         }
     }
 
@@ -605,6 +643,10 @@ impl Parser {
             } else {
                 None
             };
+            if self.check_keyword("as") {
+                self.advance();
+                self.expect_ident("expected type name after `as`")?;
+            }
             items.push(Param {
                 name,
                 mode,
@@ -655,6 +697,8 @@ impl Parser {
             self.parse_def_fn()
         } else if self.check_dim_keyword() {
             self.parse_dim()
+        } else if self.check_keyword("declare") {
+            self.parse_declare()
         } else if self.check_keyword("file") {
             self.parse_file_decl()
         } else if self.check_keyword("record") {
@@ -888,6 +932,22 @@ impl Parser {
         })
     }
 
+    /// Parses the planned `declare value as Type` spelling. The current AST
+    /// preserves this as a scalar declaration; the record type becomes part
+    /// of the typed IR when general-purpose record resolution is added.
+    fn parse_declare(&mut self) -> ParseResult<Statement> {
+        self.expect_keyword("declare")?;
+        let name = BasicIdent::parse(&self.expect_ident("expected declared variable name")?);
+        self.expect_keyword("as")?;
+        self.expect_ident("expected type name after `as`")?;
+        self.consume_line_end()?;
+        Ok(Statement::Dim {
+            name,
+            is_array: false,
+            sizes: Vec::new(),
+        })
+    }
+
     fn parse_dim_one(&mut self) -> ParseResult<(BasicIdent, bool, Vec<Expr>)> {
         let name = BasicIdent::parse(&self.expect_ident("expected DIM variable name")?);
         let (is_array, sizes) = if self.eat(TokenKind::LParen) {
@@ -904,6 +964,10 @@ impl Parser {
         } else {
             (false, Vec::new())
         };
+        if self.check_keyword("as") {
+            self.advance();
+            self.expect_ident("expected type name after `as`")?;
+        }
         Ok((name, is_array, sizes))
     }
 

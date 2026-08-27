@@ -1,0 +1,39 @@
+// Delphi serializes the complete object graph through TFileStream. The port
+// rebuilds immutable world data, then saves only mutable game state: player
+// location followed by the location of each thing.
+library persistence
+
+require adventure.model.constants
+require adventure.model.types
+
+/**
+ * Saves the mutable portion of the game state in a portable logical format.
+ * @param player the actor whose room is persisted.
+ * @param things% every thing whose location is persisted.
+ * @param filename$ destination file name.
+ * @effects creates or replaces filename$ with the player and thing locations.
+ */
+procedure saveGame(player as Actor, things%(?) as Thing, filename$)
+    file saveFile = open(filename$) for output
+    saveFile.write(player.room)
+    for i% = 0 to THING_COUNT - 1
+        saveFile.write(things%(i%).location)
+    end for
+    saveFile.close()
+end procedure
+
+/**
+ * Restores the mutable game state written by saveGame.
+ * @param player the actor whose room is restored.
+ * @param things% every thing whose location is restored.
+ * @param filename$ source file name.
+ * @effects reads filename$ and updates the supplied player and things.
+ */
+procedure loadGame(byref player as Actor, byref things%(?) as Thing, filename$)
+    file saveFile = open(filename$) for input
+    saveFile.read(player.room)
+    for i% = 0 to THING_COUNT - 1
+        saveFile.read(things%(i%).location)
+    end for
+    saveFile.close()
+end procedure

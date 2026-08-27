@@ -6,7 +6,7 @@
 
 From Part 2 of `tutorial/random_and_record_files.bcl`:
 
-The `record` / `file` DSL is sugar over everything in [Random-Access File I/O](random-access-file-io.md#random-access-file-io) above. It computes the record's byte width, allocates the file number, and generates the `OPEN`/`FIELD`/`LSET`/`RSET`/`PUT`/`GET`/`MKx`/`CVx` calls for you — nothing about the *generated* BASIC changes; only the BASCAL source you write does.
+The `record` / `file` DSL is sugar over everything in [Random-Access File I/O](random-access-file-io.md) above. It computes the record's byte width, allocates the file number, and generates the `OPEN`/`FIELD`/`LSET`/`RSET`/`PUT`/`GET`/`MKx`/`CVx` calls for you — nothing about the *generated* BASIC changes; only the BASCAL source you write does.
 
 ### record ... end record
 

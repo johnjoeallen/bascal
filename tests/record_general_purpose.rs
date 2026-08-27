@@ -26,7 +26,7 @@
 //! literals, array-of-record element assignment, etc. -- should get their
 //! own positive conformance fixtures under tests/fixtures/conformance/).
 
-use bcc::{compile_file, diagnostics::Diagnostic, CompileOptions, Target};
+use bcc::{check_file, compile_file, diagnostics::Diagnostic, CompileOptions, Target};
 use std::fs;
 use std::path::PathBuf;
 
@@ -40,6 +40,19 @@ fn try_compile(name: &str, source: &str, target: Target) -> Result<String, Vec<D
         ..CompileOptions::new()
     };
     compile_file(&path, &options)
+}
+
+/// The adventure port compiles through the front end without code generation.
+/// This exercises nested records, typed arrays and parameters, record methods,
+/// record literals, and dotted requires together.
+#[test]
+fn adventure_port_compiles_without_codegen() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/adventure/main.bcl");
+    let options = CompileOptions {
+        library_dirs: vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples")],
+        ..CompileOptions::new()
+    };
+    check_file(&path, &options).expect("adventure port should parse with --check");
 }
 
 /// Case: an ordinary record variable, populated via a standalone record

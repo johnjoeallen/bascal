@@ -1,0 +1,34 @@
+// World construction is separate from play state so LOAD can rebuild the
+// immutable map and restore only the mutable locations.
+library build
+require adventure.model.constants
+require adventure.model.types
+
+/**
+ * Creates the complete immutable game02 map and its initial game state.
+ * @param rooms% storage for every room in the world.
+ * @param things% storage for every thing in the world.
+ * @param player the actor record representing the player.
+ * @effects assigns every room, thing, and the player's starting room.
+ */
+procedure buildWorld(byref rooms%(?) as Room, byref things%(?) as Thing, byref player as Actor)
+    // These six rooms and all exits match Delphi/game02/gameform.pas.
+    rooms%(ROOM_0) = { name: "Room0", description: "A dank cavern", exits: { north: NO_EXIT, south: ROOM_2, west: NO_EXIT, east: ROOM_1 } }
+    rooms%(ROOM_1) = { name: "Room1", description: "A lovely garden", exits: { north: NO_EXIT, south: NO_EXIT, west: ROOM_0, east: NO_EXIT } }
+    rooms%(ROOM_2) = { name: "Room2", description: "A dark place", exits: { north: ROOM_0, south: ROOM_4, west: NO_EXIT, east: ROOM_3 } }
+    rooms%(ROOM_3) = { name: "Room3", description: "A throne room", exits: { north: NO_EXIT, south: ROOM_5, west: ROOM_2, east: NO_EXIT } }
+    rooms%(ROOM_4) = { name: "Room4", description: "A crystal dome", exits: { north: ROOM_2, south: NO_EXIT, west: NO_EXIT, east: ROOM_5 } }
+    rooms%(ROOM_5) = { name: "Room5", description: "A gloomy dungeon", exits: { north: ROOM_3, south: NO_EXIT, west: ROOM_4, east: NO_EXIT } }
+    // Location replaces Delphi's remove/add transfer between TLists.
+    things%(0) = { name: "Bit of Fluff", description: "A sticky fluffy ball", location: ROOM_0 }
+    things%(1) = { name: "Popcorn", description: "An inedible lump", location: ROOM_0 }
+    things%(2) = { name: "Coin", description: "A threepenny bit", location: ROOM_0 }
+    things%(3) = { name: "Elvish Sword", description: "A magical weapon [glowing]", location: ROOM_1 }
+    things%(4) = { name: "Potto", description: "An animal with big, round, staring eyes", location: ROOM_1 }
+    things%(5) = { name: "Throne", description: "A golden chair", location: ROOM_3 }
+    things%(6) = { name: "Wombat", description: "A cuddly wombat [asleep]", location: ROOM_4 }
+    things%(7) = { name: "Pot of jam", description: "A sticky jar", location: ROOM_4 }
+    things%(8) = { name: "A Nameless Horror", description: "\"   \"", location: ROOM_5 }
+    things%(9) = { name: "Lamp", description: "A lantern [providing light]", location: INVENTORY }
+    player = { name: "You", description: "You look just like You!", room: ROOM_0 }
+end procedure

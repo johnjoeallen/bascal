@@ -1,0 +1,29 @@
+// Console port of Huw Collingbourne's Delphi/Object Pascal game02.
+// The dotted requires demonstrate a normal multi-file BASCAL application.
+program adventure
+
+require adventure.model.constants
+require adventure.model.types
+require adventure.world.build
+require adventure.game.commands
+
+// These record arrays are deliberately part of the planned full BASCAL model.
+dim rooms%(ROOM_COUNT - 1) as Room
+dim things%(THING_COUNT - 1) as Thing
+declare player as Actor
+
+// World construction establishes all immutable map and object data.
+buildWorld(rooms%, things%, player)
+
+print "Huw Collingbourne's Adventure Game -- BASCAL console port"
+print "Commands: N S E W, LOOK, TAKE <thing>, DROP <thing>, INVENTORY, SAVE, LOAD, QUIT"
+lookAt(rooms%, things%, player)
+
+running% = 1
+while running%
+    input "> "; command$
+    executeCommand(rooms%, things%, player, command$, running%)
+end while
+
+print "Goodbye."
+end

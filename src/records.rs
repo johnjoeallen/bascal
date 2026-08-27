@@ -211,6 +211,16 @@ impl Lowerer {
                     ));
                     continue;
                 }
+                if matches!(f.ty, RecordFieldType::Named(_)) {
+                    self.diagnostics.push(Diagnostic::error(
+                        generated_pos(),
+                        format!(
+                            "record `{}` has a nested record field `{}`; general-purpose record resolution is not implemented yet",
+                            rec.name, f.name
+                        ),
+                    ));
+                    continue;
+                }
                 if matches!(f.ty, RecordFieldType::StrDynamic) {
                     variable_width = true;
                 } else {
@@ -218,7 +228,7 @@ impl Lowerer {
                 }
                 fields.push(FieldSpec {
                     name: f.name.clone(),
-                    ty: f.ty,
+                    ty: f.ty.clone(),
                 });
             }
             self.records.insert(
@@ -858,7 +868,7 @@ impl Lowerer {
                     })
                     .collect(),
             ),
-            field_types: Some(rec.fields.iter().map(|field| field.ty).collect()),
+            field_types: Some(rec.fields.iter().map(|field| field.ty.clone()).collect()),
         });
     }
 
@@ -1974,6 +1984,7 @@ fn field_width(ty: &RecordFieldType) -> u32 {
         RecordFieldType::Float64 => 8,
         RecordFieldType::Str(n, _) => *n,
         RecordFieldType::StrDynamic => 0,
+        RecordFieldType::Named(_) => 0,
     }
 }
 
@@ -1994,7 +2005,9 @@ fn field_suffix(ty: &RecordFieldType) -> TypeSuffix {
         RecordFieldType::Int32 => TypeSuffix::Long,
         RecordFieldType::Float32 => TypeSuffix::Single,
         RecordFieldType::Float64 => TypeSuffix::Double,
-        RecordFieldType::Str(..) | RecordFieldType::StrDynamic => TypeSuffix::String,
+        RecordFieldType::Str(..) | RecordFieldType::StrDynamic | RecordFieldType::Named(_) => {
+            TypeSuffix::String
+        }
     }
 }
 
@@ -2007,7 +2020,7 @@ fn pack_fn_name(ty: &RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "mkl$",
         RecordFieldType::Float32 => "mks$",
         RecordFieldType::Float64 => "mkd$",
-        RecordFieldType::Str(..) | RecordFieldType::StrDynamic => {
+        RecordFieldType::Str(..) | RecordFieldType::StrDynamic | RecordFieldType::Named(_) => {
             unreachable!("string fields are not packed")
         }
     }
@@ -2023,7 +2036,7 @@ fn unpack_fn_name(ty: &RecordFieldType) -> &'static str {
         RecordFieldType::Int32 => "cvl",
         RecordFieldType::Float32 => "cvs",
         RecordFieldType::Float64 => "cvd",
-        RecordFieldType::Str(..) | RecordFieldType::StrDynamic => {
+        RecordFieldType::Str(..) | RecordFieldType::StrDynamic | RecordFieldType::Named(_) => {
             unreachable!("string fields are trimmed, not unpacked via a function call")
         }
     }

@@ -99,7 +99,11 @@ nav:
       - Scalar Methods: tutorials/methods.md
       - Portable Structured Error Handling: tutorials/portable_error_handling.md
       - RESTORE and DATA: tutorials/restore_data.md
-  - Examples: examples.md
+  - Examples:
+      - Sort Driver: examples/sort-driver.md
+      - REMLINE: examples/remline.md
+      - Card Catalog: examples/card-catalog.md
+      - Adventure Game: examples/adventure.md
   - Conformance results:
       - Core language: conformance.md
       - Tutorials: conformance/tutorials.md

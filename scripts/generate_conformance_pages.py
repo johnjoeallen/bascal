@@ -12,6 +12,11 @@ if results_path.exists():
     observed = {r["id"]: r["observed"] for r in tomllib.loads(results_path.read_text()).get("result", [])}
 def resolved(entry, backend):
     expected = entry.get("expected", {}).get(backend, "UNKNOWN")
+    # A front-end-only test intentionally exercises parsing/loading without
+    # selecting a backend. Its passing harness result must not imply that any
+    # code generator implements the planned syntax.
+    if entry.get("validation") == "FRONTEND_ONLY":
+        return expected
     actual = observed.get(entry["id"])
     # A metadata FAIL deliberately describes an unsupported/invalidating
     # backend result.  Keep it visible as FAIL even when the harness test

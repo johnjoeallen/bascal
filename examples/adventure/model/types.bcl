@@ -1,0 +1,82 @@
+// The Delphi Thing -> ThingHolder -> Room/Actor hierarchy supplied common
+// fields and a TList.  This game needs neither runtime subtype dispatch nor
+// object ownership: record values plus a Thing.location express it directly.
+library types
+require adventure.model.constants
+
+record Exits
+    north: int
+    south: int
+    west: int
+    east: int
+end record
+record Room
+    name: string
+    description: string
+    exits: Exits             // nested record keeps the map cohesive
+end record
+record Thing
+    name: string
+    description: string
+    location: int
+end record
+record Actor
+    name: string
+    description: string
+    room: int
+end record
+
+/**
+ * Returns the room reached by travelling in one direction.
+ * @param direction% one of NORTH, SOUTH, WEST, or EAST.
+ * @return the destination room ID, or NO_EXIT when there is no exit.
+ */
+method[Room] exit(direction%) returns int
+    select case direction%
+        case NORTH
+            return self.exits.north
+        case SOUTH
+            return self.exits.south
+        case WEST
+            return self.exits.west
+        case EAST
+            return self.exits.east
+    end select
+    return NO_EXIT
+end method
+/**
+ * Changes one directional exit and returns this room for fluent map setup.
+ * @param direction% one of NORTH, SOUTH, WEST, or EAST.
+ * @param destination% the destination room ID, or NO_EXIT.
+ * @return self, with the selected exit changed.
+ */
+fluent method[Room] setExit(direction%, destination%)
+    select case direction%
+        case NORTH
+            self.exits.north = destination%
+        case SOUTH
+            self.exits.south = destination%
+        case WEST
+            self.exits.west = destination%
+        case EAST
+            self.exits.east = destination%
+    end select
+end method
+
+/**
+ * Prints the room name and its long description.
+ * @effects writes two lines to the console.
+ */
+method[Room] describe()
+    print self.name
+    print self.description
+end method
+
+/**
+ * Moves an actor to a room.
+ * @param room% the destination room ID.
+ * @effects updates self.room.
+ */
+method[Actor] moveTo(room%)
+    self.room = room%
+end method

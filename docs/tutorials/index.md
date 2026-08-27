@@ -65,6 +65,6 @@ A full historic program, not just a feature walkthrough — records, random-acce
 
 ## Examples
 
-Three complete, worked programs, each picking a real task to exercise a different part of the language end to end — sort driver, REMLINE, and card catalog. See the [Examples](../examples.md) page.
+Three complete, worked programs, each picking a real task to exercise a different part of the language end to end — sort driver, REMLINE, card catalog, and the adventure game. Start with the [Examples](../examples/sort-driver.md) section.
 
 </div>

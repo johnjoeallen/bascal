@@ -93,7 +93,7 @@ pub struct RecordFieldDef {
     pub ty: RecordFieldType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecordFieldType {
     Int16,
     Int32,
@@ -101,6 +101,10 @@ pub enum RecordFieldType {
     Float64,
     Str(u32, RecordStringAlignment),
     StrDynamic,
+    /// A field whose type is another general-purpose record.  This is kept
+    /// in the parsed AST so front-end-only checking can validate the planned
+    /// record syntax before record value semantics reach the resolver.
+    Named(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

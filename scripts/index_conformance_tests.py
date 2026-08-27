@@ -57,6 +57,7 @@ descriptions = {
     "record_valued_parameter_currently_fails": "Record-valued parameters are not yet supported",
     "record_valued_return_currently_fails": "Record-valued returns are not yet supported",
     "standalone_record_literal_currently_fails": "Standalone record literals are not yet supported",
+    "adventure_port_compiles_without_codegen": "Adventure game compiles through the front end without backend code generation",
 }
 # Most tests in this module exercise both the BASIC and C targets.  Keep
 # target/file-specific cases in their precise groups rather than inheriting
@@ -85,6 +86,7 @@ group_overrides = {
     "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes": ["core", "records", "jvm"],
 }
 status_overrides = {
+    "adventure_port_compiles_without_codegen": {"basic": "UNIMPLEMENTED", "c": "UNIMPLEMENTED", "jvm": "UNIMPLEMENTED"},
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "NOT APPLICABLE", "c": "PASS", "jvm": "NOT APPLICABLE"},
     "c_target_random_access_file_is_binary_compatible_with_real_bascom_c_writes": {"basic": "NOT APPLICABLE", "c": "PASS", "jvm": "NOT APPLICABLE"},
     "jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes": {"basic": "NOT APPLICABLE", "c": "NOT APPLICABLE", "jvm": "FAIL"},
@@ -95,6 +97,9 @@ status_overrides = {
     "jvm_expected_failure_random_record_io_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_expected_failure_sequential_file_io_is_non_blocking": {"basic": "UNKNOWN", "c": "UNKNOWN", "jvm": "FAIL"},
     "jvm_backend_does_not_yet_support_random_access_file_records": {"basic": "NOT APPLICABLE", "c": "NOT APPLICABLE", "jvm": "FAIL"},
+}
+validation_overrides = {
+    "adventure_port_compiles_without_codegen": "FRONTEND_ONLY",
 }
 
 for path in sorted((root / "tests").glob("*.rs")):
@@ -121,7 +126,7 @@ for path in sorted((root / "tests").glob("*.rs")):
         if name == "conformance_fixtures_transpile_on_their_supported_backends":
             expected = {backend: "PASS" for backend in ("basic", "c", "jvm")}
         expected.update(status_overrides.get(name, {}))
-        ids[test_id] = ("test", module, name, groups, expected, None)
+        ids[test_id] = ("test", module, name, groups, expected, validation_overrides.get(name))
 
 import tomllib
 meta = tomllib.loads((root / "tutorial" / "conformance.toml").read_text())
