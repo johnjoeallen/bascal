@@ -21,7 +21,8 @@ building a real 2026 application. See
 [language book](https://johnjoeallen.github.io/bascal/language/), tutorials,
 worked examples, side-by-side syntax comparisons, and the full
 [language manual](https://johnjoeallen.github.io/bascal/manual/) — the
-complete language reference.
+complete language reference. Current backend and feature coverage is listed
+in the [conformance results](https://johnjoeallen.github.io/bascal/conformance/).
 
 ## Licence and generated programs
 
