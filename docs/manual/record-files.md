@@ -42,6 +42,19 @@ Note `MKx$` always carries a `$` suffix, never a type suffix matching the value 
 
 A record literal missing a declared field is a **transpile-time error** — this is a safety net that real BASIC's raw `FIELD`/`LSET`/`PUT` gives you no equivalent of (see [Partial-record write](#partial-record-write) for the deliberately-incomplete form).
 
+### In-memory record values
+
+A complete literal can also initialise an ordinary in-memory record, without a `file` declaration. The field set identifies the record type, so every declared field must appear exactly once:
+
+```bcl
+let s = { id: 1, name: "Alice", score: 95.0 }
+let copy = s
+copy.name = "Ada"
+print copy.name
+```
+
+Assignment copies every member, so changing `copy` does not change `s`. Reading and assigning a member (`copy.name`) are ordinary typed value operations; they perform no file I/O. A `?{ ... }` literal remains the partial-update form for a record file only.
+
 ### Partial-record write
 
 ```bascal

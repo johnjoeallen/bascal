@@ -873,6 +873,27 @@ impl Lowerer {
     }
 
     fn lower_assignment(&mut self, target: Expr, value: Expr, out: &mut Vec<Statement>) {
+        // An ordinary record value is represented after lowering by one
+        // scalar per member, just like a value read from a record file.  A
+        // complete literal establishes the record type (there is no runtime
+        // record object for either BASIC or C to carry), and later record
+        // assignments expand to member-wise copies.  Keeping this here, in
+        // the same typed lowering pass as file records, means subsequent
+        // resolver and backend stages only see ordinary, fully typed scalar
+        // assignments.
+        if let (Expr::Ident(target), Expr::RecordLit { fields, partial }) = (&target, &value) {
+            let target = target.clone();
+            let fields = fields.clone();
+            self.lower_record_literal_init(target, fields, *partial, out);
+            return;
+        }
+        if let (Expr::Ident(target), Expr::Ident(source)) = (&target, &value) {
+            let target = target.clone();
+            let source = source.clone();
+            if self.lower_record_copy(target, source, out) {
+                return;
+            }
+        }
         if let (Expr::FileIndex { var, index }, Expr::RecordLit { fields, partial }) =
             (&target, &value)
         {
@@ -919,6 +940,155 @@ impl Lowerer {
         let target = self.rewrite_expr(target).0;
         let value = self.rewrite_expr(value).0;
         out.push(Statement::Assignment { target, value });
+    }
+
+    /// Initializes (or replaces) an in-memory record value from a complete
+    /// literal.  The field names identify the record type unambiguously;
+    /// requiring every field avoids silently guessing a type from a partial
+    /// shape.  `?{...}` remains specifically a file partial-update syntax.
+    fn lower_record_literal_init(
+        &mut self,
+        target: BasicIdent,
+        pairs: Vec<(String, Expr)>,
+        partial: bool,
+        out: &mut Vec<Statement>,
+    ) {
+        if partial {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                "a partial record literal `?{ ... }` may only update a record file".to_string(),
+            ));
+            return;
+        }
+        let Some((type_name, rec)) = self.record_type_for_literal(&pairs) else {
+            return;
+        };
+        let target_key = target.name.to_ascii_lowercase();
+        if let Some(existing) = self.record_vars.get(&target_key) {
+            if !existing.eq_ignore_ascii_case(&type_name) {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!(
+                        "cannot assign a `{type_name}` literal to `{}`, which is a `{existing}` record",
+                        target.name
+                    ),
+                ));
+                return;
+            }
+        }
+
+        let values: HashMap<String, Expr> = pairs
+            .into_iter()
+            .map(|(name, value)| (name.to_ascii_lowercase(), value))
+            .collect();
+        for field in &rec.fields {
+            let value = values
+                .get(&field.name.to_ascii_lowercase())
+                .expect("record_type_for_literal validated every field")
+                .clone();
+            self.check_field_value_type(&value, &field.ty, &field.name, &type_name);
+            out.push(Statement::Assignment {
+                target: Expr::Ident(BasicIdent {
+                    name: camel_join(&[&target.name, &field.name]),
+                    suffix: Some(field_suffix(&field.ty)),
+                }),
+                value: self.rewrite_expr(value).0,
+            });
+        }
+        self.record_vars.insert(target_key, type_name);
+    }
+
+    /// Expands `let destination = source` for ordinary in-memory records.
+    /// Both names must have the same resolved record type, preserving the
+    /// normal value-copy semantics while retaining scalar types for codegen.
+    fn lower_record_copy(
+        &mut self,
+        target: BasicIdent,
+        source: BasicIdent,
+        out: &mut Vec<Statement>,
+    ) -> bool {
+        let source_key = source.name.to_ascii_lowercase();
+        let Some(source_type) = self.record_vars.get(&source_key).cloned() else {
+            return false;
+        };
+        let target_key = target.name.to_ascii_lowercase();
+        if let Some(target_type) = self.record_vars.get(&target_key) {
+            if !target_type.eq_ignore_ascii_case(&source_type) {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!(
+                        "cannot assign `{}` (a `{source_type}`) to `{}` (a `{target_type}`)",
+                        source.name, target.name
+                    ),
+                ));
+                return true;
+            }
+        }
+        let rec = self.records[&source_type.to_ascii_lowercase()].clone();
+        for field in rec.fields {
+            out.push(Statement::Assignment {
+                target: Expr::Ident(BasicIdent {
+                    name: camel_join(&[&target.name, &field.name]),
+                    suffix: Some(field_suffix(&field.ty)),
+                }),
+                value: Expr::Ident(BasicIdent {
+                    name: camel_join(&[&source.name, &field.name]),
+                    suffix: Some(field_suffix(&field.ty)),
+                }),
+            });
+        }
+        self.record_vars.insert(target_key, source_type);
+        true
+    }
+
+    /// Finds the sole record declaration whose complete field set matches a
+    /// literal, reporting helpful errors for unknown, duplicate, incomplete,
+    /// or ambiguous shapes.
+    fn record_type_for_literal(
+        &mut self,
+        pairs: &[(String, Expr)],
+    ) -> Option<(String, RecordType)> {
+        let mut supplied = HashSet::new();
+        for (name, _) in pairs {
+            if !supplied.insert(name.to_ascii_lowercase()) {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!("field `{name}` specified more than once in record literal"),
+                ));
+                return None;
+            }
+        }
+        let matches: Vec<(String, RecordType)> = self
+            .records
+            .iter()
+            .filter(|(_, rec)| {
+                rec.fields.len() == supplied.len()
+                    && rec
+                        .fields
+                        .iter()
+                        .all(|f| supplied.contains(&f.name.to_ascii_lowercase()))
+            })
+            .map(|(name, rec)| (name.clone(), rec.clone()))
+            .collect();
+        match matches.as_slice() {
+            [(type_name, rec)] => Some((type_name.clone(), rec.clone())),
+            [] => {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    "record literal does not supply exactly the fields of a declared record type"
+                        .to_string(),
+                ));
+                None
+            }
+            _ => {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    "record literal is ambiguous; more than one record type has these fields"
+                        .to_string(),
+                ));
+                None
+            }
+        }
     }
 
     /// `db[i] = { ... }` (`partial: false`, every declared field required —

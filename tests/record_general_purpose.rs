@@ -55,13 +55,11 @@ fn adventure_port_compiles_without_codegen() {
     check_file(&path, &options).expect("adventure port should parse with --check");
 }
 
-/// Case: an ordinary record variable, populated via a standalone record
-/// literal, with no `file`/DSL write anywhere in the program. Today
-/// `RecordLit`/`FieldAccess` only ever get resolved for file-DSL-bound
-/// names (populated inside `lower_file_decl`), so a bare `let room = {...}`
-/// with no file in sight should fail.
+/// An ordinary record value can be initialized from a complete literal,
+/// copied by assignment, read through members, and updated through members
+/// without involving a random-access file.
 #[test]
-fn standalone_record_literal_currently_fails() {
+fn standalone_record_supports_init_assign_get_and_member_set() {
     let source = r#"program roomTest
 
 record Room
@@ -74,16 +72,25 @@ record Room
 end record
 
 let room = { name: "Hall", description: "A large entrance hall.", north: 2, south: 0, east: 0, west: 0 }
-print room.name
+let copy = room
+copy.name = "Foyer"
+copy.north = room.north + 1
+print copy.name
+print copy.north
 
 end
 "#;
-    let result = try_compile("standalone_record_literal", source, Target::Basic);
-    assert!(
-        result.is_err(),
-        "expected a standalone record literal (no file DSL) to currently fail to compile. Output: {:?}",
-        result
-    );
+    for target in [Target::Basic, Target::C] {
+        let output = try_compile("standalone_record_literal", source, target).unwrap_or_else(
+            |diagnostics| {
+                panic!("record operations should compile for {target:?}: {diagnostics:?}")
+            },
+        );
+        assert!(
+            output.contains("copyname"),
+            "expected generated member storage: {output}"
+        );
+    }
 }
 
 /// Case: `dim` has no `as <Type>` clause at all, so an ordinary declared
