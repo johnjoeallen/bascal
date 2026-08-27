@@ -80,16 +80,23 @@ print copy.north
 
 end
 "#;
-    for target in [Target::Basic, Target::C] {
+    for target in [Target::Basic, Target::C, Target::Jvm] {
         let output = try_compile("standalone_record_literal", source, target).unwrap_or_else(
             |diagnostics| {
                 panic!("record operations should compile for {target:?}: {diagnostics:?}")
             },
         );
-        assert!(
-            output.contains("copyname"),
-            "expected generated member storage: {output}"
-        );
+        if target == Target::Jvm {
+            assert!(
+                output.contains("RoomTest/g") && output.contains("println"),
+                "expected JVM field storage and member reads: {output}"
+            );
+        } else {
+            assert!(
+                output.contains("copyname"),
+                "expected generated member storage: {output}"
+            );
+        }
     }
 }
 
