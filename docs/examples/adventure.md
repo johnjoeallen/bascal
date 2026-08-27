@@ -4,9 +4,7 @@
 
 # Case Study: Huw Collingbourne's Adventure Game
 
-Source: [examples/adventure](https://github.com/johnjoeallen/bascal/tree/main/examples/adventure)
-
-This is a console port of `Delphi/game02` from Huw Collingbourne's Adventure
+This [console port](https://github.com/johnjoeallen/bascal/tree/main/examples/adventure) of `Delphi/game02` comes from Huw Collingbourne's Adventure
 Games source archive. The original is a VCL application. Its form is replaced
 by a command loop, but its six-room map, room descriptions, exits, player,
 inventory, take/drop behaviour, and save/load state are preserved.

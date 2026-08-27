@@ -2,8 +2,6 @@
 
 # REMLINE
 
-Source: [examples/remline](https://github.com/johnjoeallen/bascal/tree/main/examples/remline)
-
 [REMLINE](https://github.com/johnjoeallen/bascal/tree/main/examples/remline) analyses a line-numbered BASIC program and removes unnecessary line numbers while preserving real jump targets. Parsing, reference collection, transformation, and string helpers are separate dotted-path libraries within the example folder.
 
 ```text

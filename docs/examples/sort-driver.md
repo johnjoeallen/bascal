@@ -2,8 +2,6 @@
 
 # Sort Driver
 
-Source: [examples/sort_driver](https://github.com/johnjoeallen/bascal/tree/main/examples/sort_driver)
-
 The [Sort Driver](https://github.com/johnjoeallen/bascal/tree/main/examples/sort_driver) exercises recursive `require`, array argument passing, and timing. It fills 5000 reverse-sorted elements and runs bubble, shaker, shell, and quick sort implementations loaded by dotted path from its own `com/bascal/sort/` library tree.
 
 ```text
