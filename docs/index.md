@@ -2,61 +2,48 @@
 
 ## Why BASCAL exists
 
-BASCAL traces back to a preprocessor I wrote for a real BASIC shop in 1985, built to solve a real distribution problem: we had a shared set of library routines, and every change had to be merged by hand across a distributed dev team's copies, then merged again into the full application suite. That preprocessor supported directives like `@include`, `@if`, `@case`, `@function`, and `@procedure`, plus `{label}` in place of raw line numbers. I always wanted to build a proper modern equivalent — the tool I wish I'd had the skills and tools for back in 1985 — and building a real transpiler, rather than another preprocessor, was finally within reach with Claude and Codex doing the heavy lifting. BASCAL is that reconstruction in Rust, and the language itself is significantly more advanced than the original: more structured, easier to read, easier to write, and organized into reusable files. The idea hasn't changed, though — a real transpiler, not a text preprocessor, that still respects the classic BASIC it targets. The goal has stayed the same since 1985 — make BASIC more pleasant to write, without pretending it is a different runtime. Read the [full origin story](origin.md).
+BASIC was once one of the most widely used programming languages, but today it has largely disappeared from mainstream software development. Its descendants remain in use, particularly in legacy applications and automation, but classic BASIC belongs to an earlier generation of computing.
 
-BASCAL keeps BASIC's global runtime model — functions transpile to `GOSUB` and generated storage is global — while giving source variables lexical scope. A variable used inside a function or procedure is local unless that body explicitly declares it with `global` to access a top-level variable.
+BASCAL revisits classic BASIC with a straightforward question: **what would BASIC look like with structured syntax and modern language tooling, while still remaining BASIC?**
 
-BASCAL started as a strict superset of classic BASIC, and its `basic` target still is one — bitwise `AND`/`OR`/`NOT` and hand-written `OPEN`/`FIELD`/`GET`/`PUT` still pass through unchanged there. `GOTO`/`GOSUB` are raw BASIC too, but with one difference: BASCAL manages line numbering itself, so their targets are always a `name:` label declared in source, never a raw line number like `GOTO 140`. Beyond that, wherever BASCAL has its own construct for something, that construct is the canonical way to write it in `.bcl` source — treat the original BASIC syntax as what you're transpiling *away from*, not an equally-good alternative.
+From a programmer's perspective, this raises several questions. How can BASIC be made easier to structure, read and maintain? Which language features are useful without losing the simplicity that made BASIC accessible? How can larger applications be organised effectively? And how can the same source work with a classic Microsoft BASIC environment while also supporting C and the JVM?
 
-Compiling to more than one runtime came at a cost, though: `--target c` and `--target jvm` each have to drop a small, permanent set of raw-BASIC forms that don't translate safely onto a real C call stack or the JVM's own method model — BASCAL as a whole is now a **partial** superset, not a strict one. `--target basic` remains the most complete, closest-to-strict superset; see [Portability across backends](manual/command-line-reference.md#portability-across-backends) for exactly what each other backend gives up and its structured, portable equivalent.
+These are the questions this guide sets out to answer.
 
-In practice that means: write the pane on the right below, not the pane on the left.
+BASCAL traces its origins to 1985 and a preprocessor I wrote for a commercial BASIC development environment. We maintained a shared set of library routines across an application suite developed by a distributed team. Changes to those routines had to be merged manually into each developer's copy and subsequently into the applications that used them.
 
-<div class="compare" markdown="1">
+The preprocessor was written to address those problems. It allowed applications to be divided into multiple source files which were assembled into a single BASIC program for compilation. Shared library components could be maintained separately rather than copied and edited within each application. It also provided directives such as `@include`, `@if`, `@case`, `@function` and `@procedure`, together with `{label}` as an alternative to working directly with BASIC line numbers.
 
-<div class="compare-grid" markdown="1">
+This made it considerably easier to maintain a suite of BASIC applications and to work across multiple developers and locations. Source files and common components could be managed independently, while the preprocessor dealt with assembling them into the form expected by the BASIC compiler.
 
-<div class="pane old" markdown="1">
+I always intended to develop the idea further, but the tools and experience available to me in 1985 limited what was practical. Four decades later, modern development tools, including Claude and Codex, made it possible to revisit the idea and implement BASCAL as a transpiler rather than a text preprocessor.
 
-<span class="tag">Classic MBASIC — avoid</span>
+BASCAL is that modern implementation, written in Rust.
 
-```bascal
-100 IF grade% >= 90 THEN GOTO 140
-110 IF grade% >= 80 THEN GOTO 160
-120 IF grade% >= 70 THEN GOTO 180
-130 GOTO 200
-140 PRINT "A" : GOTO 210
-160 PRINT "B" : GOTO 210
-180 PRINT "C" : GOTO 210
-200 PRINT "F"
-210 REM ...
-```
+The language has developed considerably beyond its 1985 predecessor. It retains the familiar foundations of BASIC while adding structured syntax, scoped variables, functions, procedures and reusable source files. Its compiler processes BASCAL as a language in its own right and can generate code for several target environments.
 
-</div>
+BASCAL builds on a direction that was already apparent in later BASIC dialects such as Microsoft QuickBASIC. QuickBASIC introduced structured procedures and functions, local variables, `SELECT CASE` and support for organising larger applications into separately compiled modules. BASCAL develops these ideas further while also drawing on concepts from languages such as Pascal, C, Java and Groovy where they provide a natural fit.
 
-<div class="pane new" markdown="1">
+As a result, many BASCAL concepts will be familiar to programmers accustomed to more modern languages, while the resulting source remains recognisably BASIC. The purpose is not to turn BASIC into an unrecognisable language, but to provide a more structured and consistent way of writing it.
 
-<span class="tag">BASCAL — write this instead</span>
+BASCAL began as a strict superset of classic BASIC, and the `basic` target remains the closest expression of that approach. A substantial amount of existing BASIC syntax can be used directly, including facilities for bitwise operations and traditional file handling.
 
-```bascal
-select case grade%
-    case is >= 90
-        print "A"
-    case is >= 80
-        print "B"
-    case is >= 70
-        print "C"
-    case else
-        print "F"
-end select
-```
+`GOTO` and `GOSUB` are also supported, with one deliberate difference: BASCAL manages line numbering. Branch targets are therefore expressed as named labels rather than physical line numbers such as `GOTO 140`.
+
+Where BASCAL provides its own construct, that construct is the preferred form for `.bcl` source. Classic BASIC syntax should be regarded as something BASCAL is intended to steer new code away from, rather than as an equally preferred alternative. For the C and JVM targets, some BASIC-specific syntax is not supported, and mixing BASCAL constructs with equivalent classic BASIC forms is deliberately restricted. This keeps source code consistent and makes its intended behaviour clear across different targets.
+
+BASCAL also retains an important connection with the BASIC environment it targets. Its structured features do not require the underlying BASIC runtime to provide capabilities it does not have. BASCAL handles those details during translation while presenting a cleaner and more structured source language to the programmer.
+
+The same BASCAL source can also target C or the JVM. These environments differ significantly from classic BASIC, so a small number of BASIC-specific constructs cannot be supported consistently across every target. BASCAL as a whole is therefore a **partial superset** of classic BASIC, while the `basic` target provides the greatest compatibility. Code intended to be portable across targets should use BASCAL's structured constructs wherever an equivalent is provided.
+
+This distinction between the language and its targets is an important part of BASCAL's design. The BASIC backend maintains compatibility with the environment that inspired the original project. The C backend provides native compilation and portability, while the JVM backend provides access to a modern managed runtime. In each case, the programmer writes BASCAL; the compiler handles the requirements of the selected target.
+
+The objectives remain much the same as they were in 1985: **make BASIC easier to write, structure and maintain, while respecting the environment in which it runs.** The original preprocessor allowed applications to be divided into multiple source files and assembled into a single BASIC program, making shared libraries easier to maintain and reducing the effort required to merge changes across multi-developer and distributed teams. BASCAL carries those ideas forward with structured source code, reusable components and a modern development model, while still producing code appropriate to its target environment.
+
+The [full origin story](https://johnjoeallen.github.io/bascal/origin/) provides more background on the original preprocessor and the development of BASCAL. [Portability across backends](https://johnjoeallen.github.io/bascal/manual/command-line-reference/#portability-across-backends) describes the differences between the BASIC, C and JVM targets and the BASCAL constructs to use when writing portable programs.
 
 </div>
 
-</div>
+---
 
-Both panes run on the same classic BASIC. `bcc` transpiles the pane on the right straight down to the pane on the left's shape — you just never have to number the branches or wire the `GOTO`s by hand. See the [structured control-flow chapter](home/control-flow.md) for loops and short-circuit conditions.
-
-</div>
-
-</div>
+[Next: What BASCAL adds →](home/features.md)

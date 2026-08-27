@@ -28,6 +28,7 @@ end for
 
 </div>
 
+
 <div class="snippet" markdown="1">
 
 ### Functions and procedures
@@ -168,3 +169,7 @@ IF (score% > highScore%) = 0 THEN GOTO 10
 </div>
 
 </div>
+
+---
+
+[← Previous: Why BASCAL exists](../index.md) · [Next: Structured control flow →](control-flow.md)

@@ -28,6 +28,7 @@ field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 
 </div>
 
+
 <div class="pane new" markdown="1">
 
 <span class="tag">BASCAL</span>
@@ -272,3 +273,7 @@ db.close()
 Nothing above runs slower — every line here transpiles to exactly the same `OPEN`/`FIELD`/`LSET`/`PUT`/`GET`/`MKx`/`CVx` calls shown on the left, generated for you instead of typed and kept in sync by hand. See the [Record Files section of the manual](../manual/record-files.md) for the full semantics, including the exact static rule for when a partial write needs a `GET`.
 
 </div>
+
+---
+
+[← Previous: Structured control flow](control-flow.md) · [Next: Tutorials and examples →](tutorials.md)

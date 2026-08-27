@@ -39,6 +39,7 @@ GOTO 370
 
 </div>
 
+
 <div class="pane new" markdown="1">
 
 <span class="tag">BASCAL</span>
@@ -381,3 +382,7 @@ Multiline `if`/`else if`/`else` is not an exception — it still transpiles to t
 </div>
 
 </div>
+
+---
+
+[← Previous: What BASCAL adds](features.md) · [Next: Record files →](record-files.md)
