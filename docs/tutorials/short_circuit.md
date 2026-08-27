@@ -2,7 +2,7 @@
 
 <div class="prose" markdown="1">
 
-Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there's no short-circuit primitive in the generated BASIC at all. `&&`/`||` give BASCAL real short-circuit evaluation instead: the second operand is only evaluated once the first one hasn't already decided the answer. They're only usable directly in the condition of `if`/`elseif`/ `while`/`do` — not as a general expression. A condition may chain any number of the *same* operator; mixing `&&` and `||` in one condition is a transpile-time error — split into nested `if` statements instead. See the [control-flow comparison](../../#control-flow) on the homepage for the exact generated `IF`/`GOTO` shape.
+Classic BASIC's `AND`/`OR` are bitwise and always evaluate both sides — there's no short-circuit primitive in the generated BASIC at all. `&&`/`||` give BASCAL real short-circuit evaluation instead: the second operand is only evaluated once the first one hasn't already decided the answer. They're only usable directly in the condition of `if`/`elseif`/ `while`/`do` — not as a general expression. A condition may chain any number of the *same* operator; mixing `&&` and `||` in one condition is a transpile-time error — split into nested `if` statements instead. See the [structured control-flow chapter](../home/control-flow.md) for the exact generated `IF`/`GOTO` shape.
 
 </div>
 

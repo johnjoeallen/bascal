@@ -28,7 +28,13 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.superfences
 nav:
-  - Home: index.md
+  - Home:
+      - Overview: index.md
+      - Why BASCAL exists: home/why-bascal.md
+      - What BASCAL adds: home/features.md
+      - Structured control flow: home/control-flow.md
+      - Record files: home/record-files.md
+      - Tutorials and examples: home/tutorials.md
   - Language Book:
       - Overview: language/index.md
       - Preface: language/preface.md

@@ -2,7 +2,7 @@
 
 <div class="prose" markdown="1">
 
-This tutorial writes one program twice: first with classic random-access primitives (`OPEN ... FOR RANDOM`, `FIELD`, `GET`/`PUT`, `LSET`, `MKx`/`CVx`), then again with BASCAL's typed `record`/`file` syntax, which generates exactly that primitive code for you. The full seven-way, side-by-side breakdown — including the `?{ ... }` partial-write syntax and why it's spelled that way — lives on the [homepage](../../#tutorial); this page just shows where the two halves of the file meet.
+This tutorial writes one program twice: first with classic random-access primitives (`OPEN ... FOR RANDOM`, `FIELD`, `GET`/`PUT`, `LSET`, `MKx`/`CVx`), then again with BASCAL's typed `record`/`file` syntax, which generates exactly that primitive code for you. The [record-files chapter](../home/record-files.md) introduces the `?{ ... }` partial-write syntax; this page shows where the two halves of the file meet.
 
 </div>
 

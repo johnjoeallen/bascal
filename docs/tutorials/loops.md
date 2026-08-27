@@ -4,7 +4,7 @@ Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutori
 
 <div class="prose" markdown="1">
 
-BASCAL has three loop constructs: counted `for ... to [step n] ... end for`, pre-check `while ... end while` (classic BASIC's own `wend` works too), and `do`, which comes in two forms — `do [while/until cond] ... end do` tests the condition at the top (may run zero times), and `do ... loop [while/until cond]` tests it at the bottom (always runs at least once — BASCAL's direct `repeat`/`until` equivalent). All three loops share one early-exit statement, unqualified `exit` — not `exit for`/ `exit while`/`exit do` — the transpiler already knows which loop it's inside. See the [control-flow comparison](../../#control-flow) on the homepage for what each one transpiles down to.
+BASCAL has three loop constructs: counted `for ... to [step n] ... end for`, pre-check `while ... end while` (classic BASIC's own `wend` works too), and `do`, which comes in two forms — `do [while/until cond] ... end do` tests the condition at the top (may run zero times), and `do ... loop [while/until cond]` tests it at the bottom (always runs at least once — BASCAL's direct `repeat`/`until` equivalent). All three loops share one early-exit statement, unqualified `exit` — not `exit for`/ `exit while`/`exit do` — the transpiler already knows which loop it's inside. See the [structured control-flow chapter](../home/control-flow.md) for what each one transpiles down to.
 
 </div>
 
