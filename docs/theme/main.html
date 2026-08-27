@@ -17,7 +17,11 @@
   <main class="book-main book-width">{{ page.content }}{% if page.url != 'language/' %}<nav class="chapter-nav">{% if page.previous_page %}<a href="{{ page.previous_page.url | url }}">← {{ page.previous_page.title }}</a>{% else %}<span></span>{% endif %}{% if page.next_page %}<a href="{{ page.next_page.url | url }}">{{ page.next_page.title }} →</a>{% else %}<span></span>{% endif %}</nav>{% endif %}</main>
   <footer class="book-footer"><div class="book-width"><p><a href="{{ 'language/' | url }}">The BASCAL Programming Language</a></p></div></footer>
   {% else %}
+  {% if page and page.url == '' %}
+  <header class="hero"><div class="wrap"><img class="hero-art" src="{{ 'hero-computer.svg' | url }}" width="220" height="211" alt="A retro all-in-one computer showing green phosphor BASIC code, with a violet cursor blinking at the prompt"><h1>BASCAL</h1><p class="backronym"><strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage</p><p class="tagline">A structured compiler for classic BASIC, C, and the JVM.</p></div></header>
+  {% else %}
   <header class="hero compact"><div class="wrap"><h1>{{ page.title if page else config.site_name }}</h1></div></header>
+  {% endif %}
   <nav class="subnav"><div class="wrap"><a href="{{ nav.homepage.url | url }}">Home</a><a href="{{ 'language/' | url }}">Language Book</a><a href="{{ 'manual/' | url }}">Manual</a><a href="{{ 'tutorials/' | url }}">Tutorials</a><a href="{{ 'examples/' | url }}">Examples</a><a href="{{ 'conformance/' | url }}">Conformance</a><a href="{{ 'journey/' | url }}">Development Journey</a><a href="{{ config.repo_url }}">GitHub</a><button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button></div></nav>
   <main class="wrap"><div class="prose">{{ page.content }}</div></main>
   <footer><div class="wrap">BASCAL is licensed under the <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.</div></footer>
