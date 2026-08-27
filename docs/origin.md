@@ -54,4 +54,4 @@ I don't expect anyone to actually reach for BASCAL to ship a real application in
 
 </div>
 
-[← Back to Why BASCAL](home/why-bascal.md)  ·  [Read the development journey →](journey.md)
+[← Back to Why BASCAL](index.md)  ·  [Read the development journey →](journey.md)

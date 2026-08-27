@@ -29,8 +29,7 @@ markdown_extensions:
   - pymdownx.superfences
 nav:
   - Home:
-      - Overview: index.md
-      - Why BASCAL exists: home/why-bascal.md
+      - Why BASCAL exists: index.md
       - What BASCAL adds: home/features.md
       - Structured control flow: home/control-flow.md
       - Record files: home/record-files.md
