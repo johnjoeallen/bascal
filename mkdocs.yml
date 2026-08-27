@@ -1,5 +1,5 @@
 site_name: BASCAL
-site_description: A structured language that transpiles to classic BASIC.
+site_description: A structured language compiler for BASIC, C, and the JVM.
 site_url: https://johnjoeallen.github.io/bascal/
 repo_url: https://github.com/johnjoeallen/bascal
 repo_name: johnjoeallen/bascal

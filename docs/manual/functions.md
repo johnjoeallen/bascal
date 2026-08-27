@@ -42,9 +42,9 @@ The parser and resolver check receiver types, duplicate declarations, reserved b
 A trailing scalar `byval` parameter may specify a default with `=`. Callers may then omit it; BASCAL supplies the value at the call site.
 
 ```bascal
-const defaultGreeting$ = "Hello"
+const DEFAULT_GREETING = "Hello"
 
-function greet$(name$, greeting$ = defaultGreeting$)
+function greet$(name$, greeting$ = DEFAULT_GREETING)
     return greeting$ + ", " + name$
 end function
 

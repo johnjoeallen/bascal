@@ -39,13 +39,13 @@ dim cube%(3, 4, 5)     ' 3-D: up to 8 dimensions supported
 The bounds expression for each dimension may be any integer expression, including a constant. Elements are indexed from 0 to *bound* in each dimension (following `OPTION BASE 0`, the default):
 
 ```bascal
-const rows% = 4
-const cols% = 4
-dim matrix%(rows% - 1, cols% - 1)
+const ROWS = 4
+const COLS = 4
+dim matrix%(ROWS - 1, COLS - 1)
 
-for r% = 0 to rows% - 1
-    for c% = 0 to cols% - 1
-        matrix%(r%, c%) = r% * cols% + c%
+for r% = 0 to ROWS - 1
+    for c% = 0 to COLS - 1
+        matrix%(r%, c%) = r% * COLS + c%
     end for
 end for
 ```
@@ -92,19 +92,19 @@ CONST PI         = 3.14159
 CONST TAX_RATE   = 0.2
 ```
 
-Constants follow the same type-suffix rules as variables. Once declared, a constant may not be reassigned.
+Once declared, a constant may not be reassigned.
 
 From `tutorial/variables.bcl`:
 
 ```bascal
-CONST PASS_MARK%  = 60
-CONST APP_NAME$   = "Grade Checker"
+CONST PASS_MARK  = 60
+CONST APP_NAME   = "Grade Checker"
 
 score%       = 87
 playerName$  = "Alice"
 
-if score% >= PASS_MARK% then
-    PRINT APP_NAME$ + ": " + playerName$ + " passed with " + STR$(score%)
+if score% >= PASS_MARK then
+    PRINT APP_NAME + ": " + playerName$ + " passed with " + STR$(score%)
 end if
 ```
 

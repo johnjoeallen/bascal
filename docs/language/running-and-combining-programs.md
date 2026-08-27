@@ -1,21 +1,29 @@
 ## Compiling and running from the command line
 
-`bcc` is the whole toolchain: one invocation resolves every `require`, transpiles, and — if asked — compiles and runs the result.
+`bcc` is the BASCAL compiler: one invocation resolves every `require`,
+compiles the program for its selected target, and — if asked — builds and runs
+the result.
 
 ```bascal
 bcc hello.bcl                       # writes hello.bas next to it
 bcc hello.bcl -o build/              # writes build/hello.bas -- name inferred
 bcc hello.bcl -L lib --run          # add a library search path, then run it
-bcc hello.bcl --target c --binary   # emit C and compile it with gcc
+bcc hello.bcl --target c --binary   # transpile to C and compile it with gcc
+bcc hello.bcl --target jvm --run    # emit JVM assembly, assemble, and run it
 ```
 
 `-o` always names a directory — existing, or just written with a trailing slash for one that doesn’t exist yet — never an exact output file path to spell out by hand. The file inside it is auto-named the same way an omitted `-o` would: the source’s own name, with the target’s extension. Missing parent directories are created along the way.
 
 `-L dir` adds a directory `require` searches, beyond the source file’s own directory; repeat it for more than one.
 
-`--target` (or `-t`) chooses `basic` or `c`; omit it and `bcc` falls back to whatever `BASCAL_TARGET` or a config file says, or `basic` failing all of that.
+`--target` (or `-t`) chooses `basic`, `c`, or `jvm`; omit it and `bcc` falls
+back to whatever `BASCAL_TARGET` or a config file says, or `basic` failing all
+of that.
 
-`--binary` additionally compiles the generated output with the target’s own toolchain (`fbc` for BASIC, `gcc` for C); `--run` implies `--binary` and then runs it, with the program’s own stdin/stdout/stderr connected directly to your terminal.
+`--binary` additionally builds the generated output with the target’s own
+toolchain (`fbc` for BASIC, `gcc` for C, or `krak2` for JVM assembly); `--run`
+implies `--binary` and then runs it, with the program’s own stdin/stdout/stderr
+connected directly to your terminal.
 
 `bcc` skips redoing work that’s already up to date — pass `--clean` to force a full retranspile.
 

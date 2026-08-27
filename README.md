@@ -6,12 +6,12 @@
 **L**anguage.
 
 BASCAL is a structured superset of classic Microsoft BASIC, inspired mainly
-by Pascal. Its `bcc` transpiler turns readable `.bcl` source — structured
+by Pascal. Its `bcc` compiler accepts readable `.bcl` source — structured
 control flow, functions and procedures, methods, typed records, and
-path-style `require` dependencies — into plain 1980s BASIC (compiled
-with a period compiler like BASCOM, or FreeBASIC's QB-compatible mode),
-native C (mostly complete, no BASIC compiler involved), or JVM bytecode
-(`--target jvm`, a brand-new backend that's just beginning).
+path-style `require` dependencies. The BASIC and C backends transpile it to
+plain 1980s BASIC (for a period compiler such as BASCOM or FreeBASIC's
+QB-compatible mode) or native C; the JVM backend emits low-level Krakatau
+assembly for a JVM class file.
 
 *A fun project, built mostly to see what's possible — not really meant for
 building a real 2026 application. See

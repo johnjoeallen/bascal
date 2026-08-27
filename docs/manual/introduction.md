@@ -4,7 +4,7 @@
 
 <div class="prose" markdown="1">
 
-**BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication **L**anguage — is transpiled by `bcc`, which has three backends: `--target basic` (the default, and the most complete) produces line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and FreeBASIC's QB compatibility mode; `--target c` is a native-C backend aiming to eventually produce native Linux/macOS/Win32 binaries directly, with no BASIC compiler involved at all; `--target jvm` is an early-stage native-JVM backend with scalar expressions and structured control flow. See the [Backends](command-line-reference.md#backends) section of the [Command-Line Reference](command-line-reference.md) for exactly what each supports today. Everything else in this manual describes the `basic` target, unless a section says otherwise.
+**BASCAL** — **B**eginner's **A**ll-purpose **S**tructured **C**omputer **A**pplication **L**anguage — is compiled by `bcc`, which has three backends: `--target basic` (the default, and the most complete) transpiles to line-numbered Microsoft BASIC programs (`.bas`) compatible with BASCOM and FreeBASIC's QB compatibility mode; `--target c` transpiles to native C; and `--target jvm` emits low-level Krakatau assembly that is assembled into JVM class files. See the [Backends](command-line-reference.md#backends) section of the [Command-Line Reference](command-line-reference.md) for exactly what each supports today. Everything else in this manual describes the `basic` target, unless a section says otherwise.
 
 BASCAL adds structured programming constructs on top of BASIC's run-time semantics:
 

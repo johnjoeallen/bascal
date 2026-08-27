@@ -5,9 +5,9 @@ Some data is naturally a stream: lines of text, written once and read back in or
 ## Sequential files
 
 ```bascal
-const scoreFile$ = "scores.csv"
+const SCORE_FILE = "scores.csv"
 
-file scores = open(scoreFile$) for output
+file scores = open(SCORE_FILE) for output
 scores.write("Ada", 98.5)
 scores.write("Grace", 92.0)
 scores.close()

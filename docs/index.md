@@ -16,7 +16,7 @@ The preprocessor was written to address those problems. It allowed applications 
 
 This made it considerably easier to maintain a suite of BASIC applications and to work across multiple developers and locations. Source files and common components could be managed independently, while the preprocessor dealt with assembling them into the form expected by the BASIC compiler.
 
-I always intended to develop the idea further, but the tools and experience available to me in 1985 limited what was practical. Four decades later, modern development tools, including Claude and Codex, made it possible to revisit the idea and implement BASCAL as a transpiler rather than a text preprocessor.
+I always intended to develop the idea further, but the tools and experience available to me in 1985 limited what was practical. Four decades later, modern development tools, including Claude and Codex, made it possible to revisit the idea and implement BASCAL as a compiler rather than a text preprocessor.
 
 BASCAL is that modern implementation, written in Rust.
 

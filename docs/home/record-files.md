@@ -19,10 +19,10 @@ BASCAL sums the field widths for you and generates the matching `FIELD` binding 
 <span class="tag">Generated BASIC</span>
 
 ```bascal
-const rec_len%  = 30   ' 2+20+8, by hand
-const db_file$  = "students.dat"
+const REC_LEN  = 30   ' 2+20+8, by hand
+const DB_FILE  = "students.dat"
 
-open db_file$ for random as #1 len = rec_len%
+open DB_FILE for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 ```
 

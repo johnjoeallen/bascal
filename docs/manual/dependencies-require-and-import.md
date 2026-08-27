@@ -11,8 +11,8 @@ From `tutorial/require.bcl` — a program that uses a statistics library:
 ```bascal
 require stats
 
-CONST N% = 8
-DIM scores%(N%)
+CONST N = 8
+DIM scores%(N)
 
 scores%(0) = 74 : scores%(1) = 91 : scores%(2) = 63 : scores%(3) = 88
 scores%(4) = 55 : scores%(5) = 97 : scores%(6) = 72 : scores%(7) = 84

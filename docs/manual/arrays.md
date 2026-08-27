@@ -60,8 +60,8 @@ end function
 From `tutorial/arrays.bcl`:
 
 ```bascal
-CONST N% = 6
-DIM data%(N%)
+CONST N = 6
+DIM data%(N)
 data%(0) = 64 : data%(1) = 25 : data%(2) = 12
 data%(3) = 22 : data%(4) =  3 : data%(5) = 11
 

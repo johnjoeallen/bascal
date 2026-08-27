@@ -9,18 +9,18 @@
 From `tutorial/data.bcl`:
 
 ```bascal
-CONST NUM_CAPITALS% = 5
+CONST NUM_CAPITALS = 5
 
-DIM country$(NUM_CAPITALS%)
-DIM capital$(NUM_CAPITALS%)
+DIM country$(NUM_CAPITALS)
+DIM capital$(NUM_CAPITALS)
 
-for i% = 1 to NUM_CAPITALS%
+for i% = 1 to NUM_CAPITALS
     READ country$(i%), capital$(i%)
 end for
 
 PRINT "Country         Capital"
 PRINT "--------------- ---------------"
-for i% = 1 to NUM_CAPITALS%
+for i% = 1 to NUM_CAPITALS
     PRINT country$(i%) + "        " + capital$(i%)
 end for
 

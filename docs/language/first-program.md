@@ -1,6 +1,9 @@
 ## Start with the whole
 
-The BASCAL compiler (`bcc`) transpiles `.bcl` source files into classic Microsoft BASIC or C. Start by describing the work in the order a reader expects to see it.
+The BASCAL compiler (`bcc`) compiles `.bcl` source for classic Microsoft BASIC,
+C, or the JVM. It transpiles the first two to source code and emits JVM
+assembly for the third. Start by describing the work in the order a reader
+expects to see it.
 
 ```bascal
 program hello
@@ -18,7 +21,11 @@ end if
 end
 ```
 
-Save this as `hello.bcl` and run `bcc hello.bcl`. The default backend creates `hello.bas`; `bcc --target c hello.bcl` emits C instead. This example compiles with both backends. The C backend is almost complete, and the manual’s [Backends](../manual/command-line-reference.md#backends) section lists its remaining limits.
+Save this as `hello.bcl` and run `bcc hello.bcl`. The default backend creates
+`hello.bas`; `bcc --target c hello.bcl` emits C, and `bcc --target jvm
+hello.bcl` emits JVM assembly. This example compiles with all three backends.
+The manual’s [Backends](../manual/command-line-reference.md#backends) section
+lists their limits.
 
 ## Every file declares what it is
 

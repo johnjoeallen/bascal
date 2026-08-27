@@ -6,7 +6,11 @@ It is a structured superset of BASIC, inspired mainly by Pascal. Blocks show cho
 
 ## The source and its targets
 
-The BASCAL compiler (`bcc`) transpiles `.bcl` source files to line-numbered Microsoft BASIC by default, or to C with `--target c`. The C backend still has a small number of documented gaps. You can read, inspect, and compile the generated output with the appropriate toolchain.
+The BASCAL compiler (`bcc`) compiles `.bcl` source for three targets. The
+`basic` and `c` backends transpile it to line-numbered Microsoft BASIC or C;
+the `jvm` backend emits low-level Krakatau assembly for a JVM class file. The
+C and JVM backends have documented gaps. You can read, inspect, and compile or
+assemble the generated output with the appropriate toolchain.
 
 The usual advice is simple: use a BASCAL construct when one fits the job. Prefer structured `if` statements and loops to hand-wired jumps, and `record`/`file` to hand-written random-file bookkeeping. Raw BASIC remains available when a program genuinely needs target-specific behaviour.
 

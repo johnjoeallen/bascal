@@ -3,7 +3,7 @@ name = "bcc"
 version = "0.99.45"
 edition = "2021"
 license = "GPL-3.0-only"
-description = "Translates structured .bcl source into plain 1980s Microsoft BASIC"
+description = "Compiles structured .bcl source to BASIC, C, or JVM assembly"
 
 [package.metadata.deb]
 name = "bascal"
@@ -11,7 +11,7 @@ maintainer = "BASCAL contributors"
 copyright = "2026 BASCAL contributors"
 license-file = ["LICENSE", "0"]
 extended-description = """\
-BASCAL translates structured .bcl source into plain 1980s Microsoft BASIC.\
+BASCAL compiles structured .bcl source to BASIC, C, or JVM assembly.\
 """
 section = "devel"
 priority = "optional"

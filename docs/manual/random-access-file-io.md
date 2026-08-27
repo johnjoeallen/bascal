@@ -70,9 +70,9 @@ Numeric values must be packed into strings before storing in a `FIELD` buffer, a
 Example — writing and reading a numeric score:
 
 ```bascal
-const rec_len% = 30
+const REC_LEN = 30
 
-open "students.dat" for random as #1 len = rec_len%
+open "students.dat" for random as #1 len = REC_LEN
 field #1, 2 as idBuf$, 20 as nameBuf$, 8 as scoreBuf$
 
 lset idBuf$    = mki%(1)
