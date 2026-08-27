@@ -2,13 +2,20 @@
 
 <div class="prose" markdown="1">
 
-Seven problems from this stretch of BASCAL's development that didn't have an obvious right answer on the first pass — each with the actual options that were tried, what was learned from trying them, and the reasoning behind what finally shipped. Grounded in `git log`, the actual diffs, and (for the last one) two real compilers. This is the engineering detail behind [BASCAL: The Journey](journey.md)'s chronological story — read that first for the narrative, come here for the "why," topic by topic.
+This page records seven design and implementation problems from BASCAL's
+development: the alternatives considered, the resulting decisions, and their
+evidence in the commit history, code changes, and, for array storage, two real
+compilers. It complements the chronological [Development Journey](journey.md)
+with the technical rationale for each topic.
 
-Every challenge in this series shares one constraint, worth stating once instead of repeating seven times: **BASCAL's target has no call stack, no heap, and no `REDIM`.** Its only real primitives are `GOSUB`/`RETURN` and global variables. Every challenge below is a different angle on the same question — what does a modern convenience (real parameters, array passing, `sizeof()`, recursion safety) have to look like when it's built honestly out of only those two things?
+These topics share a constraint: **BASCAL's classic-BASIC target has no call
+stack, no heap, and no `REDIM`.** Its relevant primitives are `GOSUB`/`RETURN`
+and global variables. Parameters, array passing, `sizeof()`, and recursion
+safety must therefore be represented using those facilities.
 
 ------------------------------------------------------------------------
 
-## Challenge 1 — Parameter Copy Semantics: When Does a Callee's Change Reach the Caller?
+## Challenge 1 — Parameter copy semantics
 
 ### The problem
 
@@ -46,7 +53,7 @@ function indexOf%(arr%(?), target%)      ' unmarked = byval: copied in only
 
 ------------------------------------------------------------------------
 
-## Challenge 2 — Justifying Copy-In/Copy-Out Instead of Just Using Globals
+## Challenge 2 — Copy-in/copy-out and global storage
 
 ### The problem
 
@@ -65,7 +72,7 @@ With only `GOSUB` and global variables as primitives, giving `.bcl` functions re
 
 ------------------------------------------------------------------------
 
-## Challenge 3 — Multi-Dimensional Arrays: The Bug Hiding Under the Missing Feature
+## Challenge 3 — Multi-dimensional array parameters
 
 ### The problem
 
@@ -85,7 +92,7 @@ Array parameter rank is now inferred from how the function's own body indexes it
 
 ------------------------------------------------------------------------
 
-## Challenge 4 — Declaring an Array Parameter's Shape
+## Challenge 4 — Array parameter rank declarations
 
 ### The problem
 
@@ -114,7 +121,7 @@ A scalar parameter stays a bare name; an array parameter states its rank directl
 
 ------------------------------------------------------------------------
 
-## Challenge 5 — Stopping Recursion Before It Corrupts Shared State
+## Challenge 5 — Recursion safety
 
 ### The problem
 
@@ -135,7 +142,7 @@ Implementing the full version turned out to be cheaper than it sounded, because 
 
 ------------------------------------------------------------------------
 
-## Challenge 6 — Telling a Callee How Big Its Array Argument Is
+## Challenge 6 — Array parameter bounds
 
 ### The problem
 
@@ -173,7 +180,7 @@ print sumGrid%(g%)
 
 ------------------------------------------------------------------------
 
-## Challenge 7 — Sizing an Array Parameter's Shared Storage, Once, Safely
+## Challenge 7 — Array parameter storage capacity
 
 ### The problem
 

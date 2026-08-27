@@ -23,7 +23,7 @@ directives from ordinary BASIC. Later versions also supported separate
 compilation and reuse of generated BASIC.
 
 Ramtech BASIC was not a replacement runtime or a new BASIC compiler. It
-prepared structured source and generated ordinary BASIC for the tools already
+scanned structured source and generated ordinary BASIC for the tools already
 in use. The point was simply to keep common routines in one place, assemble
 programs from source files, and make larger BASIC programs less fragile.
 
