@@ -18,7 +18,7 @@
   <footer class="book-footer"><div class="book-width"><p><a href="{{ 'language/' | url }}">The BASCAL Programming Language</a></p></div></footer>
   {% else %}
   {% if page and page.url == '' %}
-  <header class="hero"><div class="wrap"><img class="hero-art" src="{{ 'hero-computer.svg' | url }}" width="220" height="211" alt="A retro all-in-one computer showing green phosphor BASIC code, with a violet cursor blinking at the prompt"><h1>BASCAL</h1><p class="backronym"><strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage</p><p class="tagline">A structured compiler for classic BASIC, C, and the JVM.</p></div></header>
+  <header class="hero"><div class="wrap"><img class="hero-art" src="{{ 'hero-computer.svg' | url }}" width="220" height="211" alt="A retro all-in-one computer showing green phosphor BASIC code, with a violet cursor blinking at the prompt"><h1>BASCAL</h1><p class="backronym"><strong>B</strong>eginner's <strong>A</strong>ll-purpose <strong>S</strong>tructured <strong>C</strong>omputer <strong>A</strong>pplication <strong>L</strong>anguage</p><p class="tagline">A structured BASCAL compiler targeting classic BASIC, C, and the JVM.</p></div></header>
   {% else %}
   <header class="hero compact"><div class="wrap"><h1>{{ page.title if page else config.site_name }}</h1></div></header>
   {% endif %}
