@@ -5,700 +5,27 @@ mod codegen_c;
 mod codegen_jvm;
 pub mod diagnostics;
 pub mod lexer;
+mod lower;
 pub mod parser;
 pub mod records;
 pub mod resolver;
 mod scalar_builtins;
 
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+mod driver;
 
-use codegen::CodeGenerator;
-pub use codegen::Target;
-use diagnostics::Diagnostic;
-use lexer::{Lexer, TokenKind};
-use parser::Parser;
-
-#[derive(Debug, Clone)]
-pub struct CompileOptions {
-    pub library_dirs: Vec<PathBuf>,
-    pub libraries: Vec<String>,
-    /// Number every output line (BASCOM strict mode). When false, only lines
-    /// that are branch targets receive a line number.
-    pub line_numbers: bool,
-    /// Which backend to generate code for. Defaults to `Target::Basic` --
-    /// the only backend `compile_file` can actually produce output for
-    /// today; `Target::C` always fails with a "not supported" diagnostic
-    /// (see `codegen_c::generate`).
-    pub target: Target,
-    /// Pascal-style mandatory variable declaration, opt-in and off by
-    /// default -- turning it on is *not* a superset of BASIC any more, so
-    /// it never applies unless asked for. An identifier used as a plain
-    /// scalar/array variable (not a call, not a builtin) that was never
-    /// introduced by `dim`/`declare`, `const`, a `for` loop's own counter,
-    /// or a function/procedure parameter is rejected. Checked only against
-    /// the root program's own statements and functions -- never a
-    /// `require`d library's, which may not itself be written this way (see
-    /// `resolver::check_strict_vars`). Mutually exclusive in effect with
-    /// `strict_vars_warn`; if both are set, this one wins.
-    pub strict_vars: bool,
-    /// Same check as `strict_vars`, but every finding is printed to stderr
-    /// as a warning instead of failing the compile -- for trying strict
-    /// mode against an existing program without committing to it yet.
-    pub strict_vars_warn: bool,
-}
-
-impl CompileOptions {
-    pub fn new() -> Self {
-        Self {
-            library_dirs: Vec::new(),
-            libraries: Vec::new(),
-            line_numbers: false,
-            target: Target::Basic,
-            strict_vars: false,
-            strict_vars_warn: false,
-        }
-    }
-}
-
-impl Default for CompileOptions {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub fn compile_source(
-    filename: impl Into<String>,
-    source: &str,
-) -> Result<String, Vec<Diagnostic>> {
-    let filename = filename.into();
-    let program = parse_source(filename, source)?;
-    let (mut program, synthesized_buffer_names) = records::lower(program)?;
-    inject_mid_assign_helper_if_used(&mut program)?;
-    resolver::validate(&program)?;
-    print_legacy_form_warnings(&program);
-    print_const_convention_warnings(&program);
-    let conflicts = codegen::check_generated_name_conflicts(&program);
-    if !conflicts.is_empty() {
-        return Err(conflicts);
-    }
-    CodeGenerator::new()
-        .with_synthesized_buffer_names(synthesized_buffer_names)
-        .generate(&program)
-}
-
-/// The most common case: just the primary generated file (the whole
-/// `.bas` for `Target::Basic`, or the single self-contained `.c` for
-/// `Target::C` -- see `codegen_c::GeneratedC`'s own doc comment for why
-/// that `.c` needs no paired file alongside it).
-pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Vec<Diagnostic>> {
-    let mut options = options.clone();
-    if let Some(parent) = input.parent() {
-        let parent = parent.to_path_buf();
-        if !options.library_dirs.contains(&parent) {
-            options.library_dirs.insert(0, parent);
-        }
-    }
-    let options = &options;
-
-    if options.strict_vars || options.strict_vars_warn {
-        // Checked against the root file's own parse, on its own -- not the
-        // merged `program` below, whose `require`d functions (BASCAL's own
-        // `com.bascal.stdlib` included) were never written to satisfy this,
-        // and not the DSL-lowered form, which invents buffer/scalar
-        // variables no one is expected to `dim` by hand. See resolver.rs's
-        // own `check_strict_vars` doc comment.
-        let source = fs::read_to_string(input).map_err(|err| {
-            vec![Diagnostic::error(
-                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-                format!("failed to read source file: {err}"),
-            )]
-        })?;
-        let root_only = parse_source(input.display().to_string(), &source)?;
-        let findings = resolver::check_strict_vars(&root_only, options.strict_vars_warn);
-        if options.strict_vars {
-            if !findings.is_empty() {
-                return Err(findings);
-            }
-        } else {
-            for finding in &findings {
-                eprintln!("{finding}");
-            }
-        }
-    }
-
-    let mut visited = HashSet::new();
-    let mut program = load_program_recursive(input, true, options, &mut visited)?;
-
-    // Resolve the shared COMMON block if the program declares one.
-    if let Some(shared_name) = program
-        .program_decl
-        .as_ref()
-        .and_then(|d| d.shared.as_deref())
-        .map(str::to_string)
-    {
-        if let Some(shared_path) = resolve_shared_path(&shared_name, input, options) {
-            program.common = load_shared_file(&shared_path, &shared_name)?;
-        }
-        // Shared file not found → compile without COMMON (silent; it may not exist yet).
-    }
-
-    let (mut program, synthesized_buffer_names) = records::lower(program)?;
-    inject_mid_assign_helper_if_used(&mut program)?;
-    resolver::validate(&program)?;
-    print_legacy_form_warnings(&program);
-    print_const_convention_warnings(&program);
-    match options.target {
-        Target::Basic => {
-            let basic = CodeGenerator::new()
-                .with_line_numbers(options.line_numbers)
-                .with_synthesized_buffer_names(synthesized_buffer_names)
-                .generate(&program)?;
-            Ok(basic)
-        }
-        Target::C => {
-            let generated = codegen_c::generate(&program)?;
-            Ok(generated.app)
-        }
-        Target::Jvm => codegen_jvm::generate(&program),
-    }
-}
-
-/// Parses the root source file and every transitively required library, but
-/// deliberately stops before record lowering, name/type resolution, and any
-/// backend generation. This is useful while a program uses accepted planned
-/// syntax whose typed IR or backend support is still under development.
-pub fn check_file(input: &Path, options: &CompileOptions) -> Result<(), Vec<Diagnostic>> {
-    let mut options = options.clone();
-    if let Some(parent) = input.parent() {
-        let parent = parent.to_path_buf();
-        if !options.library_dirs.contains(&parent) {
-            options.library_dirs.insert(0, parent);
-        }
-    }
-
-    let mut visited = HashSet::new();
-    let program = load_program_recursive(input, true, &options, &mut visited)?;
-    if let Some(shared_name) = program
-        .program_decl
-        .as_ref()
-        .and_then(|d| d.shared.as_deref())
-    {
-        if let Some(shared_path) = resolve_shared_path(shared_name, input, &options) {
-            load_shared_file(&shared_path, shared_name)?;
-        }
-    }
-    Ok(())
-}
-
-/// If `program` uses `MID$` statement-form assignment anywhere (top-level
-/// or inside any function body) and hasn't already defined or required its
-/// own `midAssign$`, splices in `com.bascal.stdlib.midAssign` -- resolved
-/// via `stdlib_search_roots()`, the same on-disk library `require
-/// com.bascal.stdlib.*` resolves against, just triggered by the AST shape
-/// instead of an explicit `require` line, since nothing in the user's own
-/// source ever names this function -- the transpiler synthesizes the call
-/// (see `codegen::MID_ASSIGN_HELPER_NAME`).
-fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Vec<Diagnostic>> {
-    let already_defined = program.functions.iter().any(|f| {
-        f.name
-            .name
-            .eq_ignore_ascii_case(codegen::MID_ASSIGN_HELPER_NAME)
-    });
-    if already_defined || !program_uses_mid_assign(program) {
-        return Ok(());
-    }
-
-    let symbol = format!("com.bascal.stdlib.{}", codegen::MID_ASSIGN_HELPER_NAME);
-    let relative = required_symbol_to_path(&symbol);
-    let path = stdlib_search_roots()
-        .into_iter()
-        .map(|root| root.join(&relative))
-        .find(|candidate| candidate.exists())
-        .ok_or_else(|| {
-            vec![Diagnostic::error(
-                diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
-                format!(
-                    "internal error: this program uses MID$ statement-form assignment, which \
-                     needs BASCAL's own {symbol} helper, but {} could not be found -- this \
-                     looks like a broken install; check that `com/` shipped alongside `bcc`",
-                    relative.display()
-                ),
-            )]
-        })?;
-
-    let source = fs::read_to_string(&path).map_err(|err| {
-        vec![Diagnostic::error(
-            diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
-            format!("internal error: failed to read {}: {err}", path.display()),
-        )]
-    })?;
-    let filename = path.display().to_string();
-    let helper_program = parse_source(filename.clone(), &source)?;
-    let [function]: [ast::FunctionDef; 1] =
-        helper_program
-            .functions
-            .try_into()
-            .unwrap_or_else(|functions: Vec<ast::FunctionDef>| {
-                panic!(
-                    "BASCAL bug: {filename} must declare exactly one function, found {}",
-                    functions.len()
-                )
-            });
-    program.functions.push(function);
-    Ok(())
-}
-
-/// Prints every legacy-form finding from `resolver::check_legacy_forms` to
-/// stderr as a warning -- advisory only, so unlike `resolver::validate`
-/// this never turns into an `Err`; a legacy BASIC form with a BASCAL
-/// equivalent still compiles, it just gets named so new/edited source can
-/// be steered toward the structured spelling (see resolver.rs's own doc
-/// comment on `check_legacy_forms`).
-fn print_legacy_form_warnings(program: &ast::Program) {
-    for finding in resolver::check_legacy_forms(program) {
-        eprintln!("{finding}");
-    }
-}
-
-fn print_const_convention_warnings(program: &ast::Program) {
-    for finding in resolver::check_const_conventions(program) {
-        eprintln!("{finding}");
-    }
-}
-
-fn program_uses_mid_assign(program: &ast::Program) -> bool {
-    statements_use_mid_assign(&program.statements)
-        || program
-            .functions
-            .iter()
-            .any(|f| statements_use_mid_assign(&f.body))
-}
-
-fn statements_use_mid_assign(statements: &[ast::Stmt]) -> bool {
-    statements.iter().any(statement_uses_mid_assign)
-}
-
-fn statement_uses_mid_assign(statement: &ast::Stmt) -> bool {
-    use ast::Statement::*;
-    match &statement.kind {
-        MidAssign { .. } => true,
-        If {
-            then_body,
-            else_body,
-            ..
-        } => statements_use_mid_assign(then_body) || statements_use_mid_assign(else_body),
-        For { body, .. } | While { body, .. } | Do { body, .. } => statements_use_mid_assign(body),
-        SelectCase {
-            cases, else_body, ..
-        } => {
-            cases.iter().any(|c| statements_use_mid_assign(&c.body))
-                || statements_use_mid_assign(else_body)
-        }
-        _ => false,
-    }
-}
-
-pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
-    let extension = match target {
-        Target::Basic => "bas",
-        Target::C => "c",
-        Target::Jvm => "j",
-    };
-    input.with_extension(extension)
-}
-
-fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diagnostic>> {
-    let tokens = Lexer::new(&filename, source).lex();
-    reject_underscored_identifiers(&tokens)?;
-    let mut parser = Parser::new(filename, tokens);
-    parser.parse_program()
-}
-
-/// An identifier with an underscore is a syntax error on real MBASIC/BASCOM
-/// whenever it's read as an expression operand (it's only tolerated as an
-/// assignment target) -- discovered by compiling against a real BASCOM 2.00
-/// transpiler. Since almost every variable gets read somewhere, and BASCAL
-/// can't safely rewrite a user's own chosen name, the underscore is rejected
-/// outright at parse time, with camelCase suggested as the fix -- matching
-/// the convention the transpiler's own generated names already use.
-fn reject_underscored_identifiers(tokens: &[lexer::Token]) -> Result<(), Vec<Diagnostic>> {
-    let diagnostics: Vec<Diagnostic> = tokens
-        .iter()
-        .enumerate()
-        .filter_map(|(_index, token)| match &token.kind {
-            // Constants are compile-time names and may use the documented
-            // uppercase-snake convention; generated BASIC never reads the
-            // source spelling as an identifier.
-            TokenKind::Ident(name) if name.contains('_') && !is_upper_snake_identifier(name) => {
-                Some(Diagnostic::error(
-                    token.pos.clone(),
-                    format!(
-                        "identifier `{name}` contains an underscore, which real MBASIC/BASCOM \
-                     rejects as a syntax error wherever the name is read (not just assigned) -- \
-                     use camelCase instead (e.g. `{}`)",
-                        to_suggested_camel_case(name)
-                    ),
-                ))
-            }
-            _ => None,
-        })
-        .collect();
-    if diagnostics.is_empty() {
-        Ok(())
-    } else {
-        Err(diagnostics)
-    }
-}
-
-fn is_upper_snake_identifier(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .chars()
-            .all(|ch| ch == '_' || ch.is_ascii_uppercase() || ch.is_ascii_digit())
-}
-
-fn to_suggested_camel_case(name: &str) -> String {
-    let mut result = String::new();
-    let mut capitalize_next = false;
-    for ch in name.chars() {
-        if ch == '_' {
-            capitalize_next = true;
-        } else if capitalize_next {
-            result.extend(ch.to_uppercase());
-            capitalize_next = false;
-        } else {
-            result.push(ch);
-        }
-    }
-    result
-}
-
-fn load_program_recursive(
-    input: &Path,
-    is_root: bool,
-    options: &CompileOptions,
-    visited: &mut HashSet<PathBuf>,
-) -> Result<ast::Program, Vec<Diagnostic>> {
-    let input = normalize_path(input);
-    if !visited.insert(input.clone()) {
-        return Ok(ast::Program {
-            program_decl: None,
-            library_decl: None,
-            shared_decl: None,
-            declarations: Vec::new(),
-            common: Vec::new(),
-            statements: Vec::new(),
-            functions: Vec::new(),
-            records: Vec::new(),
-            typed_arrays: Vec::new(),
-            typed_array_refs: Vec::new(),
-        });
-    }
-
-    let source = fs::read_to_string(&input).map_err(|err| {
-        vec![Diagnostic::error(
-            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-            format!("failed to read source file: {err}"),
-        )]
-    })?;
-    let program = parse_source(input.display().to_string(), &source)?;
-
-    let mut errors = Vec::new();
-
-    if !is_root && program.program_decl.is_some() {
-        errors.push(Diagnostic::error(
-            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-            format!(
-                "`program` declaration is not allowed in library modules (`{}`)",
-                input.display()
-            ),
-        ));
-    }
-
-    if is_root && program.library_decl.is_some() {
-        errors.push(Diagnostic::error(
-            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-            format!(
-                "`library` declaration is not allowed in the root program file (`{}`) -- only files loaded via `require`/`import` may declare `library`",
-                input.display()
-            ),
-        ));
-    }
-
-    if program.shared_decl.is_some() {
-        errors.push(Diagnostic::error(
-            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-            format!(
-                "`shared` declaration is only valid in shared-variable files, not in `{}`",
-                input.display()
-            ),
-        ));
-    }
-
-    // Every file must declare exactly one of `program`/`library`/`shared`.
-    // Gated on `shared_decl.is_none()` so a file that already errored above
-    // for a stray `shared` header doesn't also get a confusing second error
-    // about a missing `program`/`library` header.
-    if program.shared_decl.is_none() {
-        if is_root && program.program_decl.is_none() {
-            errors.push(Diagnostic::error(
-                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-                format!(
-                    "file `{}` must start with `program <name>` -- only files loaded via `require`/`import` may omit it (and only if they declare `library <name>` instead)",
-                    input.display()
-                ),
-            ));
-        } else if !is_root && program.library_decl.is_none() && program.program_decl.is_none() {
-            errors.push(Diagnostic::error(
-                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-                format!(
-                    "required file `{}` must declare `library <name>` -- only files declared `library` may be `require`d/`import`ed",
-                    input.display()
-                ),
-            ));
-        }
-    }
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-
-    let mut merged = ast::Program {
-        program_decl: program.program_decl,
-        library_decl: None,
-        shared_decl: None,
-        declarations: Vec::new(),
-        common: Vec::new(),
-        statements: Vec::new(),
-        functions: Vec::new(),
-        records: Vec::new(),
-        typed_arrays: program.typed_arrays.clone(),
-        typed_array_refs: program.typed_array_refs.clone(),
-    };
-
-    for declaration in &program.declarations {
-        match declaration {
-            ast::DependencyDecl::Require(symbol) | ast::DependencyDecl::Import(symbol) => {
-                let dependency_path = resolve_required_symbol(&symbol.raw, &input, options)?;
-                let dependency = load_program_recursive(&dependency_path, false, options, visited)?;
-                merged.statements.extend(dependency.statements);
-                merged.functions.extend(dependency.functions);
-                merged.records.extend(dependency.records);
-            }
-        }
-    }
-
-    merged.statements.extend(program.statements);
-    merged.functions.extend(program.functions);
-    merged.records.extend(program.records);
-    Ok(merged)
-}
-
-fn load_shared_file(
-    path: &Path,
-    shared_name: &str,
-) -> Result<Vec<ast::CommonBlock>, Vec<Diagnostic>> {
-    let source = fs::read_to_string(path).map_err(|err| {
-        vec![Diagnostic::error(
-            diagnostics::SourcePos::new(path.display().to_string(), 1, 1),
-            format!("failed to read shared file: {err}"),
-        )]
-    })?;
-    let program = parse_source(path.display().to_string(), &source)?;
-
-    let pos = diagnostics::SourcePos::new(path.display().to_string(), 1, 1);
-    let mut errors = Vec::new();
-
-    // Every top-level `dim` becomes a CommonVar below -- a `shared <name>`
-    // file's variables are COMMON by default, with no separate keyword to
-    // opt in.
-    if program.statements.iter().any(|s| match &s.kind {
-        ast::Statement::BlankLine
-        | ast::Statement::BlockComment(_)
-        | ast::Statement::Dim { .. } => false,
-        ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
-        _ => true,
-    }) {
-        errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` may only contain DIM declarations (no other statements)",
-                path.display()
-            ),
-        ));
-    }
-    if !program.functions.is_empty() {
-        errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` may only contain DIM declarations (no functions)",
-                path.display()
-            ),
-        ));
-    }
-    if !program.declarations.is_empty() {
-        errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` may only contain DIM declarations (no require/import)",
-                path.display()
-            ),
-        ));
-    }
-    if program.program_decl.is_some() {
-        errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` may only contain DIM declarations (no program declaration)",
-                path.display()
-            ),
-        ));
-    }
-    if program.library_decl.is_some() {
-        errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` may only contain DIM declarations (no library declaration)",
-                path.display()
-            ),
-        ));
-    }
-    // The `shared <name>` header is mandatory -- every file must declare
-    // exactly one of `program`/`library`/`shared` -- and it must name the
-    // same shared file this was actually resolved as, catching a
-    // copy-pasted header pointing at the wrong filename.
-    match &program.shared_decl {
-        None => errors.push(Diagnostic::error(
-            pos.clone(),
-            format!("shared file `{}` must declare `shared {shared_name}`", path.display()),
-        )),
-        Some(declared) if declared != shared_name => errors.push(Diagnostic::error(
-            pos.clone(),
-            format!(
-                "shared file `{}` declares `shared {declared}`, but was loaded as `{shared_name}` -- its filename must be `{declared}.bcl`",
-                path.display()
-            ),
-        )),
-        Some(_) => {}
-    }
-
-    // Every `dim name[()]` in the file becomes one more shared variable,
-    // collected into a single COMMON block (declaration order matters for
-    // CHAIN).
-    let dim_vars: Vec<ast::CommonVar> = program
-        .statements
-        .iter()
-        .filter_map(|s| match &s.kind {
-            ast::Statement::Dim { name, is_array, .. } => Some(ast::CommonVar {
-                name: name.clone(),
-                is_array: *is_array,
-            }),
-            _ => None,
-        })
-        .collect();
-
-    if dim_vars.is_empty() {
-        errors.push(Diagnostic::error(
-            pos,
-            format!(
-                "shared file `{}` contains no DIM declarations",
-                path.display()
-            ),
-        ));
-    }
-
-    if !errors.is_empty() {
-        return Err(errors);
-    }
-
-    Ok(vec![ast::CommonBlock { vars: dim_vars }])
-}
-
-fn resolve_shared_path(
-    shared_name: &str,
-    source_file: &Path,
-    options: &CompileOptions,
-) -> Option<PathBuf> {
-    let filename = format!("{shared_name}.bcl");
-    for root in search_roots(source_file, options) {
-        let candidate = root.join(&filename);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
-fn resolve_required_symbol(
-    raw: &str,
-    source_file: &Path,
-    options: &CompileOptions,
-) -> Result<PathBuf, Vec<Diagnostic>> {
-    let relative = required_symbol_to_path(raw);
-    for root in search_roots(source_file, options) {
-        let candidate = root.join(&relative);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(vec![Diagnostic::error(
-        diagnostics::SourcePos::new(source_file.display().to_string(), 1, 1),
-        format!(
-            "failed to resolve required BASCAL symbol `{raw}` as {}",
-            relative.display()
-        ),
-    )])
-}
-
-fn required_symbol_to_path(raw: &str) -> PathBuf {
-    let mut path = raw.split('.').collect::<PathBuf>();
-    path.set_extension("bcl");
-    path
-}
-
-fn search_roots(source_file: &Path, options: &CompileOptions) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(parent) = source_file.parent() {
-        roots.push(parent.to_path_buf());
-    }
-    roots.extend(options.library_dirs.iter().cloned());
-    roots.extend(stdlib_search_roots());
-    roots
-}
-
-/// Where the bundled `com.bascal.stdlib.*` library lives, checked last so an
-/// explicit `-L` (or a same-named file next to the source) can still shadow
-/// it. Two on-disk layouts are supported, since release packages don't all
-/// place the binary and its data the same way:
-///   - portable (zip/tarball): `com/` sits right next to `bcc`.
-///   - FHS (deb/rpm): `bcc` installs to `.../bin/bcc` and `com/` installs to
-///     `.../share/bascal/com/`, the standard split those packages expect --
-///     reached from the binary via `../share/bascal`, the same relative hop
-///     tools like `git` and `gcc` use to find their own bundled data.
-/// `CARGO_MANIFEST_DIR` covers `cargo build`/`cargo test`, since it's baked
-/// in at compile time from wherever this crate was built.
-fn stdlib_search_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            roots.push(dir.to_path_buf());
-            roots.push(dir.join("../share/bascal"));
-        }
-    }
-    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    roots
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
+#[doc(inline)]
+pub use driver::{
+    check_file, compile_file, compile_source, default_output_path, CompileOptions, Target,
+};
+pub(crate) use driver::{parse_source, required_symbol_to_path, stdlib_search_roots};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostics::Diagnostic;
+    use crate::driver::*;
+    use std::fs;
+    use std::path::Path;
 
     #[test]
     fn trailing_fixed_parameter_defaults_are_inserted_at_call_sites() {
@@ -1027,8 +354,8 @@ end
     #[test]
     fn compiles_sort_driver_sample() {
         let source = include_str!("../examples/sort_driver/sort_driver.bcl");
-        let output =
-            compile_source("examples/sort_driver/sort_driver.bcl", source).expect("sample should compile");
+        let output = compile_source("examples/sort_driver/sort_driver.bcl", source)
+            .expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         // Without the sort library bubbleSort% is not in the symbol table;
         // it is emitted lowercase like any other user symbol, not uppercased.
@@ -1454,7 +781,8 @@ END
 
     #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
+        let input =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let output =
             compile_file(&input, &CompileOptions::new()).expect("sort driver should compile");
 
@@ -2736,14 +2064,30 @@ end
         // (WHILE_0001_TOP, ...). User labels are short, ordinary words, so
         // a label named `done` must not corrupt `PRINT "...done..."` text
         // on some unrelated line that just happens to contain that word.
+        //
+        // Label references are now emitted sentinel-wrapped and resolved by
+        // structural match in `number_basic_lines`, so neither string text nor
+        // comment text is a substitution candidate at all.
         let source = r#"goto done
 print "we are done, done, done!"
+' this comment mentions done as an ordinary word
 done:
 print "finished"
 end
 "#;
         let output = compile_source("collide.bcl", source).expect("should compile");
         assert!(output.contains(r#"PRINT "we are done, done, done!""#));
+        assert!(output.contains("' this comment mentions done as an ordinary word"));
+        // No label sentinel delimiters may leak into the emitted BASIC.
+        assert!(!output.contains('\u{1}') && !output.contains('\u{2}'));
+        // The `goto done` really was resolved to the line number of `PRINT
+        // "finished"`.
+        let finished_num = output
+            .lines()
+            .find(|l| l.contains(r#"PRINT "finished""#))
+            .and_then(|l| l.trim().split_whitespace().next())
+            .expect("numbered line for PRINT \"finished\"");
+        assert!(output.contains(&format!("GOTO {finished_num}")));
     }
 
     #[test]
@@ -6999,13 +6343,15 @@ end
         // gcc separately (all four sorts report OK on both a 50- and a
         // 5000-element reverse-sorted input); this locks in that it
         // keeps compiling.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
+        let input =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
-        compile_file(&input, &options)
-            .unwrap_or_else(|d| panic!("examples/sort_driver/sort_driver.bcl should compile to C: {d:?}"));
+        compile_file(&input, &options).unwrap_or_else(|d| {
+            panic!("examples/sort_driver/sort_driver.bcl should compile to C: {d:?}")
+        });
     }
 
     #[test]
