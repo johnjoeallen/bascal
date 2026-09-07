@@ -1,7 +1,66 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::ast::*;
 use crate::diagnostics::{Diagnostic, SourcePos};
+
+/// A validated program plus the whole-program semantic facts a backend would
+/// otherwise each have to re-derive from the bare AST. Built once by
+/// [`resolve`] and threaded to codegen; see
+/// `proposals/frontend-pipeline-architecture.md` suggestion 2.
+///
+/// This is a thin first cut: the facts here are the ones `codegen_basic`
+/// previously recomputed at the top of every `generate()` call. The pure
+/// AST scans that produce them still live in `codegen_basic` (they have
+/// other callers there); `resolve` just runs them once, up front, so no
+/// backend re-derives them.
+pub struct ResolvedProgram {
+    pub program: Program,
+    /// Lowercase BASIC names of every record/file `FIELD` buffer variable.
+    /// Structurally global — the per-procedure name allocator must never
+    /// localize one (this is the fact the "FIELD buffer re-namespaced per
+    /// procedure" bug got wrong).
+    pub record_buffer_names: HashSet<String>,
+    /// Lowercase BASIC names of every `const` declaration anywhere.
+    pub const_names: HashSet<String>,
+    /// Declared rank of every top-level array, lowercase name -> rank.
+    pub top_level_array_ranks: HashMap<String, usize>,
+    /// Lowercase names of every procedure named as an `on error goto`
+    /// target — proven by [`validate`] to never fall through, so codegen
+    /// must not append an implicit trailing RETURN for one.
+    pub error_handler_procedures: HashSet<String>,
+    /// Whether any `catch` binds the optional third (source-filename)
+    /// variable — gates all of codegen_basic's per-statement source-file
+    /// tracking.
+    pub uses_catch_source_var: bool,
+}
+
+/// Validate `program`, then compute the whole-program facts codegen needs.
+/// Returns the owned program wrapped in a [`ResolvedProgram`].
+pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
+    validate(&program)?;
+
+    let error_handler_procedures = error_handler_targets(&program)
+        .iter()
+        .map(|ident| ident.name.to_ascii_lowercase())
+        .collect();
+    let record_buffer_names = crate::codegen_basic::collect_record_buffer_names(&program);
+    let const_names = {
+        let mut consts = HashMap::new();
+        crate::codegen_basic::collect_consts(&program.statements, &mut consts);
+        consts.keys().map(|k| k.to_ascii_lowercase()).collect()
+    };
+    let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
+    let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
+
+    Ok(ResolvedProgram {
+        program,
+        record_buffer_names,
+        const_names,
+        top_level_array_ranks,
+        error_handler_procedures,
+        uses_catch_source_var,
+    })
+}
 
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();

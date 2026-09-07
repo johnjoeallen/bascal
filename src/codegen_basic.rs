@@ -193,8 +193,12 @@ impl CodeGenerator {
         self
     }
 
-    pub fn generate(mut self, program: &Program) -> Result<String, Vec<Diagnostic>> {
-        self.needs_source_lookup = program_uses_catch_source_var(program);
+    pub fn generate(
+        mut self,
+        resolved: &crate::resolver::ResolvedProgram,
+    ) -> Result<String, Vec<Diagnostic>> {
+        let program = &resolved.program;
+        self.needs_source_lookup = resolved.uses_catch_source_var;
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
         // later functions cannot collide with earlier ones either.
@@ -221,17 +225,10 @@ impl CodeGenerator {
             ));
         }
         self.functions = functions;
-        self.error_handler_procedures = crate::resolver::error_handler_targets(program)
-            .iter()
-            .map(|ident| ident.name.to_ascii_lowercase())
-            .collect();
-        self.top_level_array_ranks = dim_ranks_in_body(&program.statements);
-        self.record_buffer_names = collect_record_buffer_names(program);
-        {
-            let mut consts = HashMap::new();
-            collect_consts(&program.statements, &mut consts);
-            self.const_names = consts.keys().map(|k| k.to_ascii_lowercase()).collect();
-        }
+        self.error_handler_procedures = resolved.error_handler_procedures.clone();
+        self.top_level_array_ranks = resolved.top_level_array_ranks.clone();
+        self.record_buffer_names = resolved.record_buffer_names.clone();
+        self.const_names = resolved.const_names.clone();
         *self.taken_names.borrow_mut() = taken;
 
         self.known_callables = self
@@ -2816,7 +2813,7 @@ fn infer_param_ranks(
 /// body, top-level and every function/procedure's own alike, so a program
 /// gets exactly the same output it always has unless it actually writes
 /// `catch err%, erl%, source$` somewhere.
-fn program_uses_catch_source_var(program: &Program) -> bool {
+pub(crate) fn program_uses_catch_source_var(program: &Program) -> bool {
     statements_use_catch_source_var(&program.statements)
         || program
             .functions
@@ -2863,7 +2860,7 @@ fn statements_use_catch_source_var(statements: &[Stmt]) -> bool {
 /// Declared rank (number of DIM dimensions) of every array DIMed anywhere
 /// in `body`, lowercase name -> rank. `dim arr%()` (no bounds written) has
 /// no rank recorded here -- there's nothing to check it against.
-fn dim_ranks_in_body(body: &[Stmt]) -> HashMap<String, usize> {
+pub(crate) fn dim_ranks_in_body(body: &[Stmt]) -> HashMap<String, usize> {
     let mut ranks = HashMap::new();
     collect_dim_ranks(body, &mut ranks);
     ranks
@@ -2973,7 +2970,7 @@ fn const_eval(expr: &Expr, consts: &HashMap<String, Vec<Expr>>, depth: u32) -> O
 /// blocks), keyed by lowercase name. More than one definition under the
 /// same name is tracked (not merged) so `const_eval` can refuse to guess
 /// which one a reference means.
-fn collect_consts(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>) {
+pub(crate) fn collect_consts(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>) {
     for stmt in body {
         match &stmt.kind {
             Statement::Const { name, value } => {
@@ -3389,7 +3386,7 @@ fn collect_globals(body: &[Stmt]) -> HashSet<String> {
 /// identically everywhere it's referenced, so this set is exactly the set
 /// of names `ident()` must resolve to their bare global form, no matter
 /// which function/procedure body an LSET/GET/PUT referencing one appears in.
-fn collect_record_buffer_names(program: &Program) -> HashSet<String> {
+pub(crate) fn collect_record_buffer_names(program: &Program) -> HashSet<String> {
     let mut names = HashSet::new();
     collect_record_buffer_names_in(&program.statements, &mut names);
     for func in &program.functions {

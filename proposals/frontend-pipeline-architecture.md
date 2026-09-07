@@ -1,7 +1,8 @@
 # Analysis: `bcc` front-end & pipeline architecture
 
-Status: **analysis + refactor proposal**. Suggestions 1, 3, and 5 are now
-implemented (see "Refactor suggestions" below); the rest is unimplemented. Describes
+Status: **analysis + refactor proposal**. Suggestions 1, 3, and 5 are
+implemented, and suggestion 2 is partly implemented (see "Refactor suggestions"
+below); the rest is unimplemented. Describes
 the pipeline as it stands at the time of writing and argues for a cleaner
 lexer → parser → AST → lowering → resolve → emit separation, motivated by two
 already-shipped bug classes (FIELD-buffer re-namespacing, label substitution in
@@ -125,12 +126,20 @@ transformed into successive typed forms.
 - **`resolver::validate(&Program) -> Result<(), Vec<Diagnostic>>` returns `()`.**
   It is a pure checker. It computes name resolution, ranks, strict-var
   enforcement, error-handler reachability proofs, etc. — **and throws all of it
-  away.** No annotated / typed IR reaches the backends.
+  away.** No annotated / typed IR reaches the backends. *(Partly addressed
+  Sept 2026 — suggestion 2: `resolver::resolve` now returns a `ResolvedProgram`
+  carrying the whole-program facts codegen_basic used to recompute per
+  `generate()` call.)*
 - Consequently **each backend re-derives everything** from the bare AST via its
   own `collect_*` scans: `collect_program_names`, `collect_record_buffer_names`,
   `collect_consts`, `infer_array_param_capacities`, `dim_ranks_in_body`,
   `collect_call_sites`, `error_handler_targets`, ... The `CodeGenerator` struct is
-  largely a cache of these re-derived facts. This contradicts `AGENTS.md`'s
+  largely a cache of these re-derived facts. *(Sept 2026: `record_buffer_names`,
+  `const_names`, `top_level_array_ranks`, `error_handler_procedures`, and the
+  `catch`-source-var flag now come pre-computed on `ResolvedProgram`;
+  `collect_program_names` / `infer_array_param_capacities` still run in
+  `generate()` — the first seeds a set that is then mutated, the second emits
+  diagnostics.)* This contradicts `AGENTS.md`'s
   "Typed Intermediate Representation ... backends must consume this resolved
   typed IR; they must not re-infer" — the note reads as an aspiration the code
   has not met.
@@ -251,6 +260,22 @@ Ordered by payoff for isolating the bug classes above.
    `codegen_basic` / `codegen_c` / `codegen_jvm`. "Is this a global buffer var"
    becomes a field lookup, not an AST re-scan that can miss a case. This is the
    change `AGENTS.md` already asks for.
+
+   **Partly implemented, Sept 2026.** `resolver::resolve(Program) -> Result<
+   ResolvedProgram, _>` runs `validate` then computes, once, the whole-program
+   facts `codegen_basic` previously rebuilt at the top of every `generate()`:
+   `record_buffer_names` (the field the "FIELD buffer re-namespaced per
+   procedure" bug got wrong — now a struct field, not a re-scan),
+   `const_names`, `top_level_array_ranks`, `error_handler_procedures`, and the
+   `catch`-source-var flag. `CodeGenerator::generate` takes `&ResolvedProgram`.
+   The pure AST scans that feed these still physically live in `codegen_basic`
+   (they have other callers there) and are called by `resolve`; a later move
+   into a dedicated analysis module is possible but not required for the
+   payoff. Not done: `collect_program_names` (seeds a set `generate` then
+   mutates), `infer_array_param_capacities` (emits diagnostics, deeply
+   call-site-specific), and wiring `codegen_c` / `codegen_jvm` — which have
+   their *own* separate analysis, not copies of `codegen_basic`'s, so the
+   "duplicated across three backends" framing overstated the overlap.
 
 3. **Introduce one explicit lowering phase.** Fold `records::lower`,
    `inject_mid_assign_helper_if_used`, and the `lib.rs` `common` / `typed_array`

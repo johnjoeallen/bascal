@@ -79,16 +79,16 @@ pub fn compile_source(
         program,
         synthesized_buffer_names,
     } = lower::lower(program)?;
-    resolver::validate(&program)?;
-    print_legacy_form_warnings(&program);
-    print_const_convention_warnings(&program);
-    let conflicts = codegen::check_generated_name_conflicts(&program);
+    let resolved = resolver::resolve(program)?;
+    print_legacy_form_warnings(&resolved.program);
+    print_const_convention_warnings(&resolved.program);
+    let conflicts = codegen::check_generated_name_conflicts(&resolved.program);
     if !conflicts.is_empty() {
         return Err(conflicts);
     }
     CodeGenerator::new()
         .with_synthesized_buffer_names(synthesized_buffer_names)
-        .generate(&program)
+        .generate(&resolved)
 }
 
 /// The most common case: just the primary generated file (the whole
@@ -151,22 +151,22 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         program,
         synthesized_buffer_names,
     } = lower::lower(program)?;
-    resolver::validate(&program)?;
-    print_legacy_form_warnings(&program);
-    print_const_convention_warnings(&program);
+    let resolved = resolver::resolve(program)?;
+    print_legacy_form_warnings(&resolved.program);
+    print_const_convention_warnings(&resolved.program);
     match options.target {
         Target::Basic => {
             let basic = CodeGenerator::new()
                 .with_line_numbers(options.line_numbers)
                 .with_synthesized_buffer_names(synthesized_buffer_names)
-                .generate(&program)?;
+                .generate(&resolved)?;
             Ok(basic)
         }
         Target::C => {
-            let generated = codegen_c::generate(&program)?;
+            let generated = codegen_c::generate(&resolved.program)?;
             Ok(generated.app)
         }
-        Target::Jvm => codegen_jvm::generate(&program),
+        Target::Jvm => codegen_jvm::generate(&resolved.program),
     }
 }
 
