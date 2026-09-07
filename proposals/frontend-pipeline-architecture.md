@@ -1,8 +1,8 @@
 # Analysis: `bcc` front-end & pipeline architecture
 
-Status: **analysis + refactor proposal**. Suggestions 1, 3, and 5 are
+Status: **analysis + refactor proposal**. Suggestions 1, 3, 5, and 6 are
 implemented, and suggestion 2 is partly implemented (see "Refactor suggestions"
-below); the rest is unimplemented. Describes
+below); suggestions 4, 7, and 8 are unimplemented. Describes
 the pipeline as it stands at the time of writing and argues for a cleaner
 lexer → parser → AST → lowering → resolve → emit separation, motivated by two
 already-shipped bug classes (FIELD-buffer re-namespacing, label substitution in
@@ -323,6 +323,13 @@ Ordered by payoff for isolating the bug classes above.
    `require`-resolution *and* the bulk of the test suite. Move `compile_source` /
    `compile_file` / `search_roots` / `load_program_recursive` into a `driver.rs`;
    the pipeline shape should be readable in ~100 lines.
+
+   **Implemented, Sept 2026.** All non-test code moved to `src/driver.rs`
+   (~600 lines): the entry points, `CompileOptions`, and the `require` /
+   `shared`-file resolution. `lib.rs` is now the module list plus a re-export
+   of the public API (`pub use driver::{compile_file, compile_source,
+   check_file, default_output_path, CompileOptions, Target}`) and the test
+   module. Pure movement — no API change.
 
 7. **Lex keywords, or at least intern them.** The `check_keyword` if-chain in
    `parse_statement_kind` re-does a case-insensitive string compare per candidate
