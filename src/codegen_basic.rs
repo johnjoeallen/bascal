@@ -790,7 +790,7 @@ impl CodeGenerator {
                 self.line("CLEAR");
             }
             Statement::Label(name) => {
-                self.line(&format!("{name}:"));
+                self.line(&format!("{}:", user_label_token(name)));
             }
             Statement::Goto(target) => {
                 self.line(&format!("GOTO {}", self.label_target_text(target)));
@@ -1995,7 +1995,7 @@ impl CodeGenerator {
         match target {
             Expr::Ident(ident) => match self.function_info(ident) {
                 Some(info) => info.label.clone(),
-                None => ident.as_basic(),
+                None => user_label_token(&ident.as_basic()),
             },
             Expr::Integer(0) => "0".to_string(),
             _ => unreachable!(
@@ -4127,6 +4127,17 @@ fn number_basic_lines(source: &str, full: bool) -> (String, Vec<(usize, String)>
         })
         .collect();
 
+    // Names that came from a user `name:` label. Their references are
+    // sentinel-wrapped and resolved structurally; every other label is an
+    // internal, distinctively-prefixed control-flow label whose references are
+    // still resolved by whole-word text match.
+    let user_labels: HashSet<String> = lines
+        .iter()
+        .filter(|line| is_user_label_line(line))
+        .filter_map(|line| is_label_line(line))
+        .map(str::to_string)
+        .collect();
+
     // Every numbered line's (number, file) pair, in ascending-number
     // (= source) order, collapsed to just the highest number reached
     // within each contiguous same-file run -- see
@@ -4170,12 +4181,23 @@ fn number_basic_lines(source: &str, full: bool) -> (String, Vec<(usize, String)>
         } else {
             raw.to_string()
         };
-        // Comment lines are user text, not code — never rewrite label words
-        // inside them, even if a label name happens to appear as an ordinary
-        // word in the comment.
+        // User-label references are sentinel-wrapped: an exact structural
+        // replace, safe to run unconditionally because the sentinel cannot
+        // appear in a comment or a string literal.
+        for (label, number) in &label_numbers {
+            if user_labels.contains(label) {
+                text = text.replace(&user_label_token(label), &number.to_string());
+            }
+        }
+        // Internal control-flow labels are still resolved by whole-word text
+        // match. Comment lines are user text, not code — never rewrite label
+        // words inside them, even if a label name happens to appear as an
+        // ordinary word in the comment.
         if !text.trim_start().starts_with('\'') {
             for (label, number) in &label_numbers {
-                text = replace_label_word(&text, label, &number.to_string());
+                if !user_labels.contains(label) {
+                    text = replace_label_word(&text, label, &number.to_string());
+                }
             }
         }
         if let Some(&number) = index_to_number.get(&index) {
@@ -4236,11 +4258,44 @@ fn expr_type_suffix(expr: &Expr) -> &'static str {
 fn is_label_line(line: &str) -> Option<&str> {
     let trimmed = line.trim();
     let label = trimmed.strip_suffix(':')?;
+    // A user label (`Statement::Label`) is emitted sentinel-wrapped; strip the
+    // delimiters so the bare name is what gets mapped to a line number.
+    let label = strip_user_label_token(label).unwrap_or(label);
     if !label.is_empty() && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         Some(label)
     } else {
         None
     }
+}
+
+/// Sentinel delimiters wrapping a *user* label (`Statement::Label`) at both its
+/// declaration line and every `GOTO` / `GOSUB` / `ON ERROR GOTO` / `RESUME` /
+/// `RESTORE` / `ON ... GOTO` reference. `\x01` / `\x02` cannot occur in
+/// generated code, in a re-emitted comment, or inside a string literal, so
+/// `number_basic_lines` resolves these references by an exact structural match
+/// on the sentinel instead of by whole-word text substitution. That is what
+/// lets a user label named `done` or `loop` coexist with the same word
+/// appearing in a `PRINT` string or a comment without being corrupted.
+const USER_LABEL_OPEN: char = '\u{1}';
+const USER_LABEL_CLOSE: char = '\u{2}';
+
+fn user_label_token(name: &str) -> String {
+    format!("{USER_LABEL_OPEN}{name}{USER_LABEL_CLOSE}")
+}
+
+fn strip_user_label_token(text: &str) -> Option<&str> {
+    text.strip_prefix(USER_LABEL_OPEN)?
+        .strip_suffix(USER_LABEL_CLOSE)
+}
+
+/// True for a label *declaration* line that came from a user `name:` label
+/// (as opposed to a transpiler-internal control-flow label like
+/// `WHILE_0001_TOP:`).
+fn is_user_label_line(line: &str) -> bool {
+    line.trim()
+        .strip_suffix(':')
+        .and_then(strip_user_label_token)
+        .is_some()
 }
 
 /// Replace whole-word occurrences of `label` in `text` with `replacement`,

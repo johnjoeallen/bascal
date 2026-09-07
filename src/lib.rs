@@ -2736,14 +2736,30 @@ end
         // (WHILE_0001_TOP, ...). User labels are short, ordinary words, so
         // a label named `done` must not corrupt `PRINT "...done..."` text
         // on some unrelated line that just happens to contain that word.
+        //
+        // Label references are now emitted sentinel-wrapped and resolved by
+        // structural match in `number_basic_lines`, so neither string text nor
+        // comment text is a substitution candidate at all.
         let source = r#"goto done
 print "we are done, done, done!"
+' this comment mentions done as an ordinary word
 done:
 print "finished"
 end
 "#;
         let output = compile_source("collide.bcl", source).expect("should compile");
         assert!(output.contains(r#"PRINT "we are done, done, done!""#));
+        assert!(output.contains("' this comment mentions done as an ordinary word"));
+        // No label sentinel delimiters may leak into the emitted BASIC.
+        assert!(!output.contains('\u{1}') && !output.contains('\u{2}'));
+        // The `goto done` really was resolved to the line number of `PRINT
+        // "finished"`.
+        let finished_num = output
+            .lines()
+            .find(|l| l.contains(r#"PRINT "finished""#))
+            .and_then(|l| l.trim().split_whitespace().next())
+            .expect("numbered line for PRINT \"finished\"");
+        assert!(output.contains(&format!("GOTO {finished_num}")));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 # Analysis: `bcc` front-end & pipeline architecture
 
-Status: **analysis + refactor proposal**, nothing here is implemented. Describes
+Status: **analysis + refactor proposal**. Suggestions 1 and 5 are now
+implemented (see "Refactor suggestions" below); the rest is unimplemented. Describes
 the pipeline as it stands at the time of writing and argues for a cleaner
 lexer → parser → AST → lowering → resolve → emit separation, motivated by two
 already-shipped bug classes (FIELD-buffer re-namespacing, label substitution in
@@ -204,7 +205,7 @@ same root cause:**
 
 | Bug | Regression test | Stage that let it through | Why |
 |---|---|---|---|
-| Label substitution corrupting comments / string text | `label_name_matching_string_literal_text_is_not_corrupted` (lib.rs); guard at codegen_basic.rs:4176 | Emission layer — `number_basic_lines` | Label references are resolved by *whole-word text replacement on rendered lines*, not by resolving a typed "label reference" node. A user label named `done` / `loop` collides with the same word in `PRINT "...done..."` or a comment. Fixed twice by plaster: `replace_label_word` skips `"..."` spans, and line 4176 skips lines starting with `'`. Both patches exist *because* resolution is textual. |
+| Label substitution corrupting comments / string text | `label_name_matching_string_literal_text_is_not_corrupted` (lib.rs); guard at codegen_basic.rs:4176 | Emission layer — `number_basic_lines` | Label references are resolved by *whole-word text replacement on rendered lines*, not by resolving a typed "label reference" node. A user label named `done` / `loop` collides with the same word in `PRINT "...done..."` or a comment. Fixed twice by plaster: `replace_label_word` skips `"..."` spans, and line 4176 skips lines starting with `'`. Both patches exist *because* resolution is textual. **Resolved Sept 2026 (suggestion 1/5): user-label references are sentinel-wrapped and resolved structurally — a string or comment can no longer be a candidate.** |
 | FIELD buffer variables re-namespaced per procedure | `FIELD buffer names must never be re-namespaced per procedure` (lib.rs) | Emission layer — `CodeGenerator::ident` name-mangling | The per-function local-name allocator didn't know a name was a `records::lower`-created FIELD buffer (which must stay one global name so the FIELD binding holds program-wide). The fact was established by lowering but not carried as a typed property — the backend re-discovers it via `collect_record_buffer_names(program)` scanning for `Statement::Field`, and the fix is a `HashSet` exclusion check inside `ident`. |
 
 Neither bug is a lexer or parser bug. Both are *"the backend re-derived a fact by
@@ -223,6 +224,21 @@ Ordered by payoff for isolating the bug classes above.
    comment or string to be a substitution target. Kills the label-in-comment bug
    class outright (delete `replace_label_word`'s string-skipping and the
    `starts_with('\'')` guard). Small, self-contained, high value.
+
+   **Implemented (partial), Sept 2026.** Rather than a full `Vec<Segment>`
+   rewrite of every emission site, `codegen_basic` now wraps every *user*-label
+   reference (`Statement::Label` targets of `GOTO` / `GOSUB` / `ON ERROR GOTO` /
+   `RESUME` / `RESTORE` / `ON ... GOTO`) in `\x01`/`\x02` sentinel delimiters at
+   both the declaration line and each reference (`user_label_token`).
+   `number_basic_lines` resolves those by exact structural replacement — a
+   comment or string literal can never be a candidate. Transpiler-internal
+   control-flow labels (`WHILE_0001_TOP`, `FN_foo`, …) keep the whole-word
+   `replace_label_word` path: their distinctive prefixes make collision a
+   non-issue, and the `starts_with('\'')` guard is retained as cheap insurance
+   for the `FN_<user-name>` case. This kills the user-label half of the bug
+   class — the half that ever actually bit — without touching the thousands of
+   non-label `self.line` call sites. A later full segment-list pass can subsume
+   it.
 
 2. **Have `resolver` return a `ResolvedProgram`, and make backends consume it.**
    Even a thin wrapper — `ResolvedProgram { ast, name_binding, array_ranks,
@@ -251,6 +267,16 @@ Ordered by payoff for isolating the bug classes above.
    Assign each label a `LabelId` during resolution and make
    `Goto` / `Gosub` / `OnErrorGoto` / `Resume` carry `LabelId`. Then (1) has
    nothing to string-match at all.
+
+   **Implemented, Sept 2026 — as a codegen-local token rather than an AST
+   `LabelId`.** BASIC has one flat label namespace and the resolver already
+   rejects duplicate labels, so a label *name* is already a unique identifier;
+   threading a numeric `LabelId` through the AST and all three backends (only
+   `codegen_basic` does text matching — `codegen_c` / `codegen_jvm` emit real
+   labels) bought little. Instead the name is carried inside the `\x01`/`\x02`
+   sentinel described under (1), which gives the reference the same "structural,
+   not textual" property a `LabelId` would. If the AST ever grows a `LabelId`
+   for other reasons, the sentinel payload becomes that id.
 
 6. **Split `lib.rs` (~8 300 lines).** It is the orchestrator *and*
    `require`-resolution *and* the bulk of the test suite. Move `compile_source` /
