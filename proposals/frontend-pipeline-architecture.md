@@ -1,6 +1,6 @@
 # Analysis: `bcc` front-end & pipeline architecture
 
-Status: **analysis + refactor proposal**. Suggestions 1 and 5 are now
+Status: **analysis + refactor proposal**. Suggestions 1, 3, and 5 are now
 implemented (see "Refactor suggestions" below); the rest is unimplemented. Describes
 the pipeline as it stands at the time of writing and argues for a cleaner
 lexer → parser → AST → lowering → resolve → emit separation, motivated by two
@@ -21,10 +21,11 @@ Parser (src/parser.rs, hand-written recursive descent + Pratt expressions)
    ▼
 AST    (src/ast.rs: Program { statements, functions, records, ... })
    │
-   ├─► records::lower(program)          AST ──► AST  (record/file DSL desugar → FIELD/GET/PUT + buffer vars)
-   │                                     └─ also returns synthesized_buffer_names (tuple side channel)
-   ├─► lib::inject_mid_assign_helper_if_used(&mut program)   AST mutation (appends a stdlib FunctionDef)
-   ├─► lib.rs populates Program.common / typed_arrays        (fields filled *after* parse)
+   ├─► lower::lower(program) -> Lowered   (src/lower.rs — ordered post-parse AST→AST sub-passes)
+   │      1. records::lower   record/file DSL desugar → FIELD/GET/PUT + buffer vars
+   │      2. inject_mid_assign_helper_if_used   appends the midAssign stdlib FunctionDef when used
+   │      └─ Lowered { program, synthesized_buffer_names }   (named, not a bare tuple)
+   ├─► lib.rs populates Program.common   (IO: needs the `shared` file + CompileOptions; runs before lower)
    │
    ▼
 resolver::validate(&Program) -> Result<(), Vec<Diagnostic>>   ← pure checker, returns (), produces no IR
@@ -197,6 +198,9 @@ Conflated stages:
   `inject_mid_assign_helper_if_used` (an ad-hoc AST mutation), and
   `Program.common` / `typed_arrays` population (in `lib.rs`) are three different
   places that transform the AST post-parse, with no unifying "lowering" phase.
+  *(Resolved Sept 2026 — suggestion 3. `src/lower.rs` is now that phase;
+  `Program.common` load stays in the driver as IO, `typed_arrays` turned out to
+  be parser-populated.)*
 - **Three backends independently re-derive semantics** from the AST instead of
   consuming resolver output.
 
@@ -253,6 +257,18 @@ Ordered by payoff for isolating the bug classes above.
    population into a single `lower(Program) -> Program` (or `-> LoweredProgram`)
    with an ordered list of sub-passes. A named phase also gives the
    `synthesized_buffer_names` side channel a home instead of a tuple return.
+
+   **Implemented, Sept 2026.** New `src/lower.rs` exposes
+   `lower(Program) -> Result<Lowered, _>` running the ordered sub-passes
+   (`records::lower`, then `inject_mid_assign_helper_if_used`, both moved here).
+   `Lowered { program, synthesized_buffer_names }` replaces `records::lower`'s
+   bare tuple return, giving that side channel a named home. Both
+   `compile_source` and `compile_file` now call the single `lower::lower`.
+   Two things stayed out: `typed_arrays` / `typed_array_refs` are populated by
+   the *parser* (`parser.rs`), not post-parse in `lib.rs` — the original note
+   was inaccurate — so there is nothing to fold; and `Program.common` needs
+   filesystem + `CompileOptions` context to locate the `shared` file, so it
+   stays in the IO-aware driver and runs just before `lower`.
 
 4. **Name allocation as a pass, not a lazy `RefCell` side effect.**
    `taken_names: RefCell<HashSet<String>>` mutated during the emission recursion

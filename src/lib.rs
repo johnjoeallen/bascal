@@ -5,6 +5,7 @@ mod codegen_c;
 mod codegen_jvm;
 pub mod diagnostics;
 pub mod lexer;
+mod lower;
 pub mod parser;
 pub mod records;
 pub mod resolver;
@@ -74,8 +75,10 @@ pub fn compile_source(
 ) -> Result<String, Vec<Diagnostic>> {
     let filename = filename.into();
     let program = parse_source(filename, source)?;
-    let (mut program, synthesized_buffer_names) = records::lower(program)?;
-    inject_mid_assign_helper_if_used(&mut program)?;
+    let lower::Lowered {
+        program,
+        synthesized_buffer_names,
+    } = lower::lower(program)?;
     resolver::validate(&program)?;
     print_legacy_form_warnings(&program);
     print_const_convention_warnings(&program);
@@ -144,8 +147,10 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         // Shared file not found → compile without COMMON (silent; it may not exist yet).
     }
 
-    let (mut program, synthesized_buffer_names) = records::lower(program)?;
-    inject_mid_assign_helper_if_used(&mut program)?;
+    let lower::Lowered {
+        program,
+        synthesized_buffer_names,
+    } = lower::lower(program)?;
     resolver::validate(&program)?;
     print_legacy_form_warnings(&program);
     print_const_convention_warnings(&program);
@@ -192,64 +197,6 @@ pub fn check_file(input: &Path, options: &CompileOptions) -> Result<(), Vec<Diag
     Ok(())
 }
 
-/// If `program` uses `MID$` statement-form assignment anywhere (top-level
-/// or inside any function body) and hasn't already defined or required its
-/// own `midAssign$`, splices in `com.bascal.stdlib.midAssign` -- resolved
-/// via `stdlib_search_roots()`, the same on-disk library `require
-/// com.bascal.stdlib.*` resolves against, just triggered by the AST shape
-/// instead of an explicit `require` line, since nothing in the user's own
-/// source ever names this function -- the transpiler synthesizes the call
-/// (see `codegen::MID_ASSIGN_HELPER_NAME`).
-fn inject_mid_assign_helper_if_used(program: &mut ast::Program) -> Result<(), Vec<Diagnostic>> {
-    let already_defined = program.functions.iter().any(|f| {
-        f.name
-            .name
-            .eq_ignore_ascii_case(codegen::MID_ASSIGN_HELPER_NAME)
-    });
-    if already_defined || !program_uses_mid_assign(program) {
-        return Ok(());
-    }
-
-    let symbol = format!("com.bascal.stdlib.{}", codegen::MID_ASSIGN_HELPER_NAME);
-    let relative = required_symbol_to_path(&symbol);
-    let path = stdlib_search_roots()
-        .into_iter()
-        .map(|root| root.join(&relative))
-        .find(|candidate| candidate.exists())
-        .ok_or_else(|| {
-            vec![Diagnostic::error(
-                diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
-                format!(
-                    "internal error: this program uses MID$ statement-form assignment, which \
-                     needs BASCAL's own {symbol} helper, but {} could not be found -- this \
-                     looks like a broken install; check that `com/` shipped alongside `bcc`",
-                    relative.display()
-                ),
-            )]
-        })?;
-
-    let source = fs::read_to_string(&path).map_err(|err| {
-        vec![Diagnostic::error(
-            diagnostics::SourcePos::new("<transpiler-internal>", 1, 1),
-            format!("internal error: failed to read {}: {err}", path.display()),
-        )]
-    })?;
-    let filename = path.display().to_string();
-    let helper_program = parse_source(filename.clone(), &source)?;
-    let [function]: [ast::FunctionDef; 1] =
-        helper_program
-            .functions
-            .try_into()
-            .unwrap_or_else(|functions: Vec<ast::FunctionDef>| {
-                panic!(
-                    "BASCAL bug: {filename} must declare exactly one function, found {}",
-                    functions.len()
-                )
-            });
-    program.functions.push(function);
-    Ok(())
-}
-
 /// Prints every legacy-form finding from `resolver::check_legacy_forms` to
 /// stderr as a warning -- advisory only, so unlike `resolver::validate`
 /// this never turns into an `Err`; a legacy BASIC form with a BASCAL
@@ -268,38 +215,6 @@ fn print_const_convention_warnings(program: &ast::Program) {
     }
 }
 
-fn program_uses_mid_assign(program: &ast::Program) -> bool {
-    statements_use_mid_assign(&program.statements)
-        || program
-            .functions
-            .iter()
-            .any(|f| statements_use_mid_assign(&f.body))
-}
-
-fn statements_use_mid_assign(statements: &[ast::Stmt]) -> bool {
-    statements.iter().any(statement_uses_mid_assign)
-}
-
-fn statement_uses_mid_assign(statement: &ast::Stmt) -> bool {
-    use ast::Statement::*;
-    match &statement.kind {
-        MidAssign { .. } => true,
-        If {
-            then_body,
-            else_body,
-            ..
-        } => statements_use_mid_assign(then_body) || statements_use_mid_assign(else_body),
-        For { body, .. } | While { body, .. } | Do { body, .. } => statements_use_mid_assign(body),
-        SelectCase {
-            cases, else_body, ..
-        } => {
-            cases.iter().any(|c| statements_use_mid_assign(&c.body))
-                || statements_use_mid_assign(else_body)
-        }
-        _ => false,
-    }
-}
-
 pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
     let extension = match target {
         Target::Basic => "bas",
@@ -309,7 +224,10 @@ pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
     input.with_extension(extension)
 }
 
-fn parse_source(filename: String, source: &str) -> Result<ast::Program, Vec<Diagnostic>> {
+pub(crate) fn parse_source(
+    filename: String,
+    source: &str,
+) -> Result<ast::Program, Vec<Diagnostic>> {
     let tokens = Lexer::new(&filename, source).lex();
     reject_underscored_identifiers(&tokens)?;
     let mut parser = Parser::new(filename, tokens);
@@ -653,7 +571,7 @@ fn resolve_required_symbol(
     )])
 }
 
-fn required_symbol_to_path(raw: &str) -> PathBuf {
+pub(crate) fn required_symbol_to_path(raw: &str) -> PathBuf {
     let mut path = raw.split('.').collect::<PathBuf>();
     path.set_extension("bcl");
     path
@@ -680,7 +598,7 @@ fn search_roots(source_file: &Path, options: &CompileOptions) -> Vec<PathBuf> {
 ///     tools like `git` and `gcc` use to find their own bundled data.
 /// `CARGO_MANIFEST_DIR` covers `cargo build`/`cargo test`, since it's baked
 /// in at compile time from wherever this crate was built.
-fn stdlib_search_roots() -> Vec<PathBuf> {
+pub(crate) fn stdlib_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -1027,8 +945,8 @@ end
     #[test]
     fn compiles_sort_driver_sample() {
         let source = include_str!("../examples/sort_driver/sort_driver.bcl");
-        let output =
-            compile_source("examples/sort_driver/sort_driver.bcl", source).expect("sample should compile");
+        let output = compile_source("examples/sort_driver/sort_driver.bcl", source)
+            .expect("sample should compile");
         assert!(output.contains("' require com.bascal.sort.bubbleSort"));
         // Without the sort library bubbleSort% is not in the symbol table;
         // it is emitted lowercase like any other user symbol, not uppercased.
@@ -1454,7 +1372,8 @@ END
 
     #[test]
     fn compile_file_recursively_includes_required_bcl_files() {
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
+        let input =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let output =
             compile_file(&input, &CompileOptions::new()).expect("sort driver should compile");
 
@@ -7015,13 +6934,15 @@ end
         // gcc separately (all four sorts report OK on both a 50- and a
         // 5000-element reverse-sorted input); this locks in that it
         // keeps compiling.
-        let input = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
+        let input =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sort_driver/sort_driver.bcl");
         let options = CompileOptions {
             target: Target::C,
             ..CompileOptions::new()
         };
-        compile_file(&input, &options)
-            .unwrap_or_else(|d| panic!("examples/sort_driver/sort_driver.bcl should compile to C: {d:?}"));
+        compile_file(&input, &options).unwrap_or_else(|d| {
+            panic!("examples/sort_driver/sort_driver.bcl should compile to C: {d:?}")
+        });
     }
 
     #[test]
