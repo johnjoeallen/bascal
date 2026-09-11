@@ -137,6 +137,22 @@
 //! `emit_input` now brackets its `readLine()` with `stty sane` /
 //! `emit_inkey_setup`'s raw mode again (see `emit_input`'s own doc comment
 //! and `jvm_input_after_inkey_reads_the_typed_value_when_available`).
+//!
+//! `STR$`/bare-numeric `PRINT` of a `single`/`double` value (every
+//! `single`/`double` is a JVM `double` -- see `TypeSuffix::Single |
+//! TypeSuffix::Double`) is routed through `bccStr` (`emit_double_str_helper`)
+//! rather than Java's own `String.valueOf(double)`, which always prints
+//! full round-trip precision: a real BASIC `single` unpacked from its
+//! 32-bit on-disk form and widened to `double` made that widening's own
+//! rounding noise visible verbatim (`0.03` printed as
+//! `0.029999999329447746` -- `inventory.bcl`'s own `price!` field, found
+//! interactively). `bccStr` rounds to 6 significant digits and drops
+//! trailing zeros, matching `codegen_c.rs`'s own `bcc_strd` (`"% g"`
+//! `snprintf` formatting). The helper is only emitted when something
+//! actually calls it (checked by scanning the already-emitted method text
+//! for its own call site), so a program with no `single`/`double` anywhere
+//! (like `tutorial/hello.bcl`, whose checked-in `hello.j` fixture stays
+//! byte-for-byte unchanged) carries no dead bytecode for it.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -203,6 +219,17 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
             .any(|param| param.axes.is_some() && param.mode != ParamMode::ByRef)
     }) {
         methods.push_str(&emit_array_copy_helper(&class_name));
+    }
+    // Only pull in `bccStr` (see its own doc comment) when something in the
+    // program actually calls it -- checking the already-emitted `body`/
+    // `methods` text for the exact call site `STR$`/bare-numeric `PRINT`
+    // emit is simpler and more reliably exhaustive than re-deriving "does
+    // any expression anywhere evaluate to a `double`" from the AST a second
+    // time, and keeps a program with no `single`/`double` value anywhere
+    // (like `tutorial/hello.bcl`) free of dead helper bytecode.
+    let bcc_str_call = format!("invokestatic {class_name}/bccStr (D)Ljava/lang/String;\n");
+    if body.contains(&bcc_str_call) || methods.contains(&bcc_str_call) {
+        methods.push_str(&emit_double_str_helper());
     }
     Ok(format!(
         ".version 50 0\n.class public {class_name}\n.super java/lang/Object\n\n{}{methods}\
@@ -456,6 +483,48 @@ fn emit_inkey_restore(context: &JvmContext, out: &mut String) {
 /// recursive replacement of every child preserves the concrete array class.
 fn emit_array_copy_helper(class_name: &str) -> String {
     format!(".method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;\n    .limit stack 5\n    .limit locals 5\n\n    iload 1\n    iconst_1\n    if_icmpne L_copy_nested\n    iload 2\n    tableswitch 0\n        L_copy_int\n        L_copy_long\n        L_copy_double\n        L_copy_object\nL_copy_int:\n    aload 0\n    checkcast [I\n    invokevirtual [I/clone ()Ljava/lang/Object;\n    areturn\nL_copy_long:\n    aload 0\n    checkcast [J\n    invokevirtual [J/clone ()Ljava/lang/Object;\n    areturn\nL_copy_double:\n    aload 0\n    checkcast [D\n    invokevirtual [D/clone ()Ljava/lang/Object;\n    areturn\nL_copy_object:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    areturn\nL_copy_nested:\n    aload 0\n    checkcast [Ljava/lang/Object;\n    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;\n    checkcast [Ljava/lang/Object;\n    astore 3\n    iconst_0\n    istore 4\nL_copy_loop:\n    iload 4\n    aload 3\n    arraylength\n    if_icmpge L_copy_done\n    aload 3\n    iload 4\n    aload 3\n    iload 4\n    aaload\n    iload 1\n    iconst_1\n    isub\n    iload 2\n    invokestatic {class_name}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    aastore\n    iinc 4 1\n    goto L_copy_loop\nL_copy_done:\n    aload 3\n    areturn\n.end method\n\n")
+}
+
+/// Formats a `double` the way `STR$`/bare-numeric `PRINT` need for a
+/// BASCAL `single`/`double` value, instead of Java's own
+/// `String.valueOf(double)`/`Double.toString`, which always prints full
+/// round-trip precision (17 significant digits) -- for a real BASIC
+/// `single` unpacked from its 32-bit on-disk representation and widened to
+/// `double` (`CVS`, or any `!`-suffixed variable, which this backend always
+/// represents as a JVM `double` -- see `TypeSuffix::Single |
+/// TypeSuffix::Double => JvmType::Numeric(NumericType::Double)`), that
+/// widening's own rounding noise becomes visible verbatim: `0.03` printed
+/// as `0.029999999329447746`. Real BASIC/`codegen_c.rs`'s own `bcc_strd`
+/// (`snprintf(..., "% g", value)`) round to 6 significant digits and drop
+/// trailing zeros; `BigDecimal.round(new MathContext(6))` +
+/// `stripTrailingZeros()` + `toPlainString()` is the JVM-side equivalent
+/// (deliberately not chasing `%g`'s scientific-notation threshold for very
+/// large/small magnitudes -- `toPlainString()` always expands to plain
+/// digits, an accepted narrower gap for values realistic BASCAL programs
+/// don't produce, the same spirit as this backend's other documented
+/// simplifications).
+fn emit_double_str_helper() -> String {
+    "\
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
+"
+    .to_string()
 }
 
 fn array_descriptor(shape: &ArrayShape) -> String {
@@ -1815,6 +1884,31 @@ fn next_condition_label(context: &JvmContext) -> String {
 /// Emits each PRINT value directly to `System.out`.  Separators currently
 /// follow the bootstrap C backend's simple rule: they only suppress the
 /// final newline; they do not implement BASCOM's tab-zone formatting.
+/// Emits a bare numeric `PRINT` value and returns the descriptor its
+/// `PrintStream` call should use. `Int`/`Long` print via the JVM's own
+/// native formatting, unchanged; a `Double` (BASCAL `single`/`double`,
+/// always represented as a JVM `double` -- see `TypeSuffix::Single |
+/// TypeSuffix::Double`) is routed through `bccStr` instead of
+/// `PrintStream.print(double)`'s own full-round-trip-precision formatting,
+/// the same fix `STR$`'s `Double` branch needs and for the same reason --
+/// see `emit_double_str_helper`'s own doc comment.
+fn emit_numeric_print_value(
+    expr: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<&'static str, String> {
+    let ty = emit_numeric_expr(expr, out, context)?;
+    if ty == NumericType::Double {
+        out.push_str(&format!(
+            "    invokestatic {}/bccStr (D)Ljava/lang/String;\n",
+            context.class_name
+        ));
+        Ok("(Ljava/lang/String;)V")
+    } else {
+        Ok(ty.print_descriptor())
+    }
+}
+
 fn emit_print_tokens(
     tokens: &[PrintToken],
     out: &mut String,
@@ -1849,13 +1943,13 @@ fn emit_print_tokens(
                 emit_string_expr(expr, out, context)?;
                 "(Ljava/lang/String;)V"
             } else {
-                emit_numeric_expr(expr, out, context)?.print_descriptor()
+                emit_numeric_print_value(expr, out, context)?
             }
         } else if context.is_string_expr(expr) {
             emit_string_expr(expr, out, context)?;
             "(Ljava/lang/String;)V"
         } else {
-            emit_numeric_expr(expr, out, context)?.print_descriptor()
+            emit_numeric_print_value(expr, out, context)?
         };
         let method = if Some(index) == last_expr && !trailing_separator {
             "println"
@@ -3287,12 +3381,24 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             if name.name.eq_ignore_ascii_case("str") && args.len() == 1 =>
         {
             let ty = emit_numeric_expr(&args[0], out, context)?;
-            let descriptor = match ty {
-                NumericType::Int => "(I)Ljava/lang/String;",
-                NumericType::Long => "(J)Ljava/lang/String;",
-                NumericType::Double => "(D)Ljava/lang/String;",
-            };
-            out.push_str(&format!("    invokestatic java/lang/String/valueOf {descriptor}\n"));
+            match ty {
+                NumericType::Int => {
+                    out.push_str(
+                        "    invokestatic java/lang/String/valueOf (I)Ljava/lang/String;\n",
+                    );
+                }
+                NumericType::Long => {
+                    out.push_str(
+                        "    invokestatic java/lang/String/valueOf (J)Ljava/lang/String;\n",
+                    );
+                }
+                NumericType::Double => {
+                    out.push_str(&format!(
+                        "    invokestatic {}/bccStr (D)Ljava/lang/String;\n",
+                        context.class_name
+                    ));
+                }
+            }
             Ok(())
         }
         Expr::Binary {

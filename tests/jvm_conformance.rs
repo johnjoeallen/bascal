@@ -399,7 +399,7 @@ fn jvm_non_integer_arrays_run_when_available() {
     );
     assert!(String::from_utf8_lossy(&output.stdout)
         .replace("\r\n", "\n")
-        .ends_with("2\n3\n1\n0\n2\n7\n4.0\nhello world\n9\n"));
+        .ends_with("2\n3\n1\n0\n2\n7\n4\nhello world\n9\n"));
 }
 
 #[test]
@@ -1338,5 +1338,57 @@ fn jvm_input_after_inkey_reads_the_typed_value_when_available() {
     assert!(
         stdout.contains("got: X") && stdout.contains("you typed:42"),
         "expected INKEY$ then INPUT to both read correctly:\n{stdout}"
+    );
+}
+
+/// Regression test for a real bug: `STR$`/bare-numeric `PRINT` of a
+/// `single`/`double` value used Java's own `String.valueOf(double)`, which
+/// always prints full round-trip precision (17 significant digits). A real
+/// BASIC `single` unpacked from its 32-bit on-disk form and widened to
+/// `double` (this backend represents every `single`/`double` as a JVM
+/// `double` -- see `TypeSuffix::Single | TypeSuffix::Double`) makes that
+/// widening's own rounding noise visible verbatim: `0.03` printed as
+/// `0.029999999329447746` (`tutorial/inventory.bcl`'s own `price!` field,
+/// found interactively). `emit_double_str_helper`'s `bccStr` now rounds to
+/// 6 significant digits and drops trailing zeros first, matching
+/// `codegen_c.rs`'s own `bcc_strd` (`"% g"` `snprintf` formatting).
+#[test]
+fn jvm_double_to_string_rounds_to_six_significant_digits_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM double-formatting test directory");
+    let source_path = dir.path().join("double_format.bcl");
+    fs::write(
+        &source_path,
+        "program doubleFormat\n\
+         p! = 0.03\n\
+         print str$(p!)\n\
+         q! = 42\n\
+         print str$(q!)\n\
+         print 2 ^ 8\n\
+         end\n",
+    )
+    .expect("failed to write double-formatting fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "double-formatting fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    assert!(
+        stdout.ends_with("0.03\n42\n256\n"),
+        "expected rounded, trailing-zero-free formatting:\n{stdout}"
     );
 }
