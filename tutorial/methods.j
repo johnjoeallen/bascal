@@ -14,7 +14,7 @@
 .field public static g12 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 7
 
     iconst_0
     istore 1
@@ -91,7 +91,7 @@ L_for_0_end:
 
 .method public static shout : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 1
+    .limit locals 4
 
     new java/lang/StringBuilder
     dup
@@ -111,7 +111,7 @@ L_for_0_end:
 
 .method public static surround : (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 3
+    .limit locals 6
 
     new java/lang/StringBuilder
     dup
@@ -137,7 +137,7 @@ L_for_0_end:
 
 .method public static clamp : (III)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 6
 
     iload 0
     iload 1
@@ -170,7 +170,7 @@ L_if_0_end:
 
 .method public static percent : (DD)D
     .limit stack 16
-    .limit locals 4
+    .limit locals 7
 
     dload 0
     dload 2
@@ -185,45 +185,123 @@ L_if_0_end:
     dreturn
 .end method
 
-.method public static cardRestock : (Ljava/lang/String;Ljava/lang/String;JI)V
+.method public static cardRestock : ([Ljava/lang/String;[Ljava/lang/String;[JI)V
     .limit stack 16
-    .limit locals 5
+    .limit locals 11
 
-    lload 2
-    iload 4
+    aload 0
+    iconst_0
+    aaload
+    astore 4
+    aload 1
+    iconst_0
+    aaload
+    astore 5
+    aload 2
+    iconst_0
+    laload
+    lstore 6
+    lload 6
+    iload 3
     i2l
     ladd
-    lstore 2
+    lstore 6
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
     return
 .end method
 
-.method public static cardDisplay : (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+.method public static cardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 10
 
-    new java/lang/StringBuilder
-    dup
-    invokespecial java/lang/StringBuilder/<init> ()V
-    new java/lang/StringBuilder
-    dup
-    invokespecial java/lang/StringBuilder/<init> ()V
     aload 0
+    iconst_0
+    aaload
+    astore 3
+    aload 1
+    iconst_0
+    aaload
+    astore 4
+    aload 2
+    iconst_0
+    laload
+    lstore 5
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    aload 3
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " by "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 1
+    aload 4
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    aload 0
+    iconst_0
+    aload 3
+    aastore
+    aload 1
+    iconst_0
+    aload 4
+    aastore
+    aload 2
+    iconst_0
+    lload 5
+    lastore
     areturn
+    aload 0
+    iconst_0
+    aload 3
+    aastore
+    aload 1
+    iconst_0
+    aload 4
+    aastore
+    aload 2
+    iconst_0
+    lload 5
+    lastore
     ldc ""
+    areturn
+.end method
+
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
     areturn
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 13
+    .limit locals 16
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;
@@ -323,7 +401,8 @@ L_if_0_end:
     ldc 15
     i2d
     invokestatic Methods/percent (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Methods/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     getstatic Methods/g7 Ljava/lang/String;
     iconst_0
@@ -355,10 +434,43 @@ L_if_0_end:
     i2l
     putstatic Methods/g2 J
     getstatic java/lang/System/out Ljava/io/PrintStream;
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g4 Ljava/lang/String;
+    aastore
+    astore 13
+    aload 13
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g1 Ljava/lang/String;
+    aastore
+    astore 14
+    aload 14
+    iconst_1
+    newarray long
+    dup
+    iconst_0
     getstatic Methods/g2 J
-    invokestatic Methods/cardDisplay (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+    lastore
+    astore 15
+    aload 15
+    invokestatic Methods/cardDisplay ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
+    aload 13
+    iconst_0
+    aaload
+    putstatic Methods/g4 Ljava/lang/String;
+    aload 14
+    iconst_0
+    aaload
+    putstatic Methods/g1 Ljava/lang/String;
+    aload 15
+    iconst_0
+    laload
+    putstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "copies on hand = "
@@ -367,11 +479,44 @@ L_if_0_end:
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
 
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g4 Ljava/lang/String;
+    aastore
+    astore 13
+    aload 13
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g1 Ljava/lang/String;
+    aastore
+    astore 14
+    aload 14
+    iconst_1
+    newarray long
+    dup
+    iconst_0
     getstatic Methods/g2 J
+    lastore
+    astore 15
+    aload 15
     ldc 3
-    invokestatic Methods/cardRestock (Ljava/lang/String;Ljava/lang/String;JI)V
+    invokestatic Methods/cardRestock ([Ljava/lang/String;[Ljava/lang/String;[JI)V
+    aload 13
+    iconst_0
+    aaload
+    putstatic Methods/g4 Ljava/lang/String;
+    aload 14
+    iconst_0
+    aaload
+    putstatic Methods/g1 Ljava/lang/String;
+    aload 15
+    iconst_0
+    laload
+    putstatic Methods/g2 J
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "copies after restock = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
