@@ -32,7 +32,8 @@
 //! supported yet" diagnostic rather than panicking or emitting wrong code.
 //!
 //! Random-access record I/O (`OPEN ... FOR RANDOM`, `FIELD`, `GET`, `PUT`,
-//! `LSET`/`RSET`, `MKI$`/`CVI`) is implemented via three parallel static
+//! `LSET`/`RSET`, `MKI$`/`MKL$`/`MKS$`/`MKD$`/`CVI`/`CVL`/`CVS`/`CVD`) is
+//! implemented via three parallel static
 //! arrays (`bccFiles: RandomAccessFile[]`, `bccBufs: byte[][]`,
 //! `bccRecLen: int[]`, each sized to `JVM_MAX_CHANNELS`, initialized once at
 //! the top of `main` -- see `emit_file_io_initializers`), indexed at runtime
@@ -47,17 +48,19 @@
 //! `emit_field_var_load`/`emit_lset`/`emit_rset`). Every packed/decoded byte
 //! goes through ISO-8859-1, which maps bytes 0-255 to chars 0-255 one-to-one
 //! -- unlike real UTF-8/platform-default decoding, this can't corrupt a
-//! packed numeric field's raw bytes. `MKI$`/`CVI` (16-bit int, little-
-//! endian, matching real MBASIC/BASCOM's own on-disk layout) are the only
-//! packed numeric type implemented; `MKL$`/`MKS$`/`MKD$`/`CVL`/`CVS`/`CVD`
-//! aren't yet, so a record field of a type wider than `int16` only fails
-//! once something actually tries to read or write it (declaring the field
-//! and simply `OPEN`ing/`CLOSE`ing its file compiles fine, since `FIELD`
-//! itself never touches the packing functions -- see
-//! `record_general_purpose.rs`'s `jvm_backend_compiles_random_access_file_
-//! records`).  Sequential file I/O (`OPEN ... FOR INPUT`/`OUTPUT`/`APPEND`)
-//! and `MID$(...) = ...` statement-form assignment still aren't implemented
-//! at all.
+//! packed numeric field's raw bytes. `MKI$`/`CVI` (16-bit int) and `MKL$`/
+//! `CVL` (32-bit int) are little-endian, matching real MBASIC/BASCOM's own
+//! on-disk layout exactly; `MKS$`/`CVS` (32-bit float) and `MKD$`/`CVD`
+//! (64-bit double) use plain IEEE 754 instead of real BASIC's Microsoft
+//! Binary Format -- the same real, documented divergence `codegen_c.rs`'s
+//! own `bcc_mks`/`bcc_mkd`/`bcc_cvs`/`bcc_cvd` accept (see their doc
+//! comment there): a `single`/`double` record field this backend writes
+//! isn't binary-compatible with one real BASCOM wrote, unlike an `int16`/
+//! `int32`/`string(N)` field, which is (see `tests/jvm_conformance.rs`'s
+//! `jvm_random_and_record_files_tutorial_runs_when_available`, which
+//! exercises the full family). Sequential file I/O (`OPEN ... FOR INPUT`/
+//! `OUTPUT`/`APPEND`) and `MID$(...) = ...` statement-form assignment still
+//! aren't implemented at all.
 //!
 //! Interactive `INPUT ["prompt";] var` is implemented (one plain-identifier
 //! target only -- no comma-separated multi-variable form): a shared
@@ -1627,6 +1630,21 @@ fn emit_wrap_bytes_as_string(out: &mut String) {
     );
 }
 
+/// Converts an already-computed `String` (top of stack) into a little-
+/// endian `ByteBuffer` over its raw ISO-8859-1 bytes -- the shared prefix
+/// every `CVI`/`CVL`/`CVS`/`CVD` unpack starts with (see `MKI$`'s own doc
+/// comment in `emit_string_expr` for why ISO-8859-1). Each caller appends
+/// its own `getShort`/`getInt`/`getFloat`/`getDouble`.
+fn emit_wrap_string_as_little_endian_bytebuffer(out: &mut String) {
+    out.push_str(
+        "    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
+         invokevirtual java/lang/String/getBytes (Ljava/nio/charset/Charset;)[B\n    \
+         invokestatic java/nio/ByteBuffer/wrap ([B)Ljava/nio/ByteBuffer;\n    \
+         getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+         invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n",
+    );
+}
+
 /// Pushes a `String` of `width` ASCII spaces -- the same
 /// `newarray`/`Arrays.fill`/`new String` idiom `SPACE$`/`STRING$` already
 /// use (see `emit_string_expr`'s own `"space"` arm), just with a compile-
@@ -2461,6 +2479,67 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             emit_wrap_bytes_as_string(out);
             Ok(())
         }
+        // `MKL$(n)` -- packs `n` as a raw little-endian 32-bit int (real
+        // BASIC's "long"), the same layout `CVL` and an `int32` record field
+        // need. Same little-endian rationale as `MKI$`.
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("mkl") && args.len() == 1 => {
+            out.push_str(
+                "    ldc 4\n    invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n",
+            );
+            emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
+            out.push_str(
+                "    invokevirtual java/nio/ByteBuffer/putInt (I)Ljava/nio/ByteBuffer;\n    \
+                 invokevirtual java/nio/ByteBuffer/array ()[B\n",
+            );
+            emit_wrap_bytes_as_string(out);
+            Ok(())
+        }
+        // `MKS$(n)` -- packs `n` as a raw little-endian 32-bit IEEE 754
+        // float (`d2f` narrows this backend's internal `double`
+        // representation of a BASIC single -- see `type_for_ident`'s own
+        // doc comment on why `!`/`#` share one JVM type). Plain IEEE 754,
+        // not real BASIC's Microsoft Binary Format -- the same real,
+        // documented divergence `codegen_c.rs`'s `bcc_mks`/`bcc_cvs` accept
+        // (see `FILE_IO_BODY`'s doc comment there): a `single`/`double`
+        // record field this backend writes isn't binary-compatible with one
+        // real BASCOM wrote, unlike an `int16`/`int32`/`string(N)` field.
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("mks") && args.len() == 1 => {
+            out.push_str(
+                "    ldc 4\n    invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n",
+            );
+            emit_numeric_expr_as(&args[0], NumericType::Double, out, context)?;
+            out.push_str(
+                "    d2f\n    invokevirtual java/nio/ByteBuffer/putFloat (F)Ljava/nio/ByteBuffer;\n    \
+                 invokevirtual java/nio/ByteBuffer/array ()[B\n",
+            );
+            emit_wrap_bytes_as_string(out);
+            Ok(())
+        }
+        // `MKD$(n)` -- packs `n` as a raw little-endian 64-bit IEEE 754
+        // double. Same real, documented MBF divergence as `MKS$` (see its
+        // own doc comment) -- `codegen_c.rs`'s `bcc_mkd`/`bcc_cvd` accept
+        // the identical one.
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("mkd") && args.len() == 1 => {
+            out.push_str(
+                "    ldc 8\n    invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n",
+            );
+            emit_numeric_expr_as(&args[0], NumericType::Double, out, context)?;
+            out.push_str(
+                "    invokevirtual java/nio/ByteBuffer/putDouble (D)Ljava/nio/ByteBuffer;\n    \
+                 invokevirtual java/nio/ByteBuffer/array ()[B\n",
+            );
+            emit_wrap_bytes_as_string(out);
+            Ok(())
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if name.name.eq_ignore_ascii_case("mid") && args.len() == 3 => {
             emit_string_expr(&args[0], out, context)?;
@@ -2700,15 +2779,35 @@ fn emit_numeric_expr(
         // recovers the original packed bytes bit-for-bit.
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvi") && args.len() == 1 => {
             emit_string_expr(&args[0], out, context)?;
-            out.push_str(
-                "    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
-                 invokevirtual java/lang/String/getBytes (Ljava/nio/charset/Charset;)[B\n    \
-                 invokestatic java/nio/ByteBuffer/wrap ([B)Ljava/nio/ByteBuffer;\n    \
-                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
-                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n    \
-                 invokevirtual java/nio/ByteBuffer/getShort ()S\n",
-            );
+            emit_wrap_string_as_little_endian_bytebuffer(out);
+            out.push_str("    invokevirtual java/nio/ByteBuffer/getShort ()S\n");
             Ok(NumericType::Int)
+        }
+        // `CVL(s$)` -- unpacks a raw little-endian 32-bit int (see `MKL$`'s
+        // own doc comment).
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvl") && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_wrap_string_as_little_endian_bytebuffer(out);
+            out.push_str("    invokevirtual java/nio/ByteBuffer/getInt ()I\n");
+            Ok(NumericType::Int)
+        }
+        // `CVS(s$)` -- unpacks a raw little-endian 32-bit IEEE 754 float
+        // (see `MKS$`'s own doc comment on the real, documented MBF
+        // divergence this shares with `codegen_c.rs`), widened to this
+        // backend's internal `double` representation of a BASIC single.
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvs") && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_wrap_string_as_little_endian_bytebuffer(out);
+            out.push_str("    invokevirtual java/nio/ByteBuffer/getFloat ()F\n    f2d\n");
+            Ok(NumericType::Double)
+        }
+        // `CVD(s$)` -- unpacks a raw little-endian 64-bit IEEE 754 double
+        // (see `MKD$`'s own doc comment).
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvd") && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_wrap_string_as_little_endian_bytebuffer(out);
+            out.push_str("    invokevirtual java/nio/ByteBuffer/getDouble ()D\n");
+            Ok(NumericType::Double)
         }
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("abs") && args.len() == 1 => {
             let ty = emit_numeric_expr(&args[0], out, context)?;
@@ -3054,6 +3153,9 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvi") && args.len() == 1 => Ok(NumericType::Int),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvl") && args.len() == 1 => Ok(NumericType::Int),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvs") && args.len() == 1 => Ok(NumericType::Double),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvd") && args.len() == 1 => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cint") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("clng") && args.len() == 1 => Ok(NumericType::Long),
         Expr::Call { name, args }

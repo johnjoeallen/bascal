@@ -129,6 +129,60 @@ fn jvm_random_access_file_round_trips_when_available() {
     );
 }
 
+/// `tutorial/random_and_record_files.bcl` exercises the full `MKx$`/`CVx$`
+/// packing family (`MKI$`/`CVI` 16-bit int, `MKL$`/`CVL` 32-bit int,
+/// `MKS$`/`CVS` 32-bit float, `MKD$`/`CVD` 64-bit double), both via raw
+/// hand-written `FIELD` and via the record/file DSL, split across two
+/// record types read/written from separate procedures. Checks the numeric
+/// values themselves round-trip correctly (a whole-number double prints
+/// with a trailing `.0` under this backend -- a cosmetic PRINT-formatting
+/// difference from the BASIC/C backends, not a data bug, so the assertion
+/// is on substrings rather than an exact match).
+#[test]
+fn jvm_random_and_record_files_tutorial_runs_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-random-and-record-files");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+
+    let source_path = repo_root().join("tutorial/random_and_record_files.bcl");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(work_dir.join("out/"))
+        .current_dir(&work_dir)
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "random_and_record_files.bcl failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    for expected in [
+        "[3] Carol -- 78",
+        "[2] Bob -- 54",
+        "[1] Alice -- 95",
+        "Alice Smith: 91",
+        "Bob: 61.5",
+        "Carol Jones: 88",
+    ] {
+        assert_eq!(
+            stdout.matches(expected).count(),
+            2,
+            "expected `{expected}` twice (hand-written FIELD, then the record/file DSL):\n{stdout}"
+        );
+    }
+}
+
 #[test]
 fn jvm_expected_failure_mid_assignment_is_non_blocking() {
     assert_jvm_expected_failure(
