@@ -191,6 +191,57 @@ fn jvm_expected_failure_mid_assignment_is_non_blocking() {
     );
 }
 
+/// Regression test for a real, pre-existing bug: `COLOR`'s ANSI translation
+/// used a naive `30 + fg % 8`, which only happens to agree with the correct
+/// CGA-to-ANSI reorder table (see `ANSI_FG`/`ANSI_BG` in codegen_jvm.rs) for
+/// green/cyan/white/black -- `COLOR 1` (blue) and `COLOR 4` (red) rendered
+/// as each other outright. Checks against the exact codes `codegen_c.rs`'s
+/// already-correct implementation produces for the same statements.
+#[test]
+fn jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let source_path = repo_root().join("tutorial/screen.bcl");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "screen.bcl failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // color 14, 1 (bright yellow on blue), color 10 (bright green),
+    // color 12 (bright red), color 11 (bright cyan) -- codegen_c.rs's own
+    // bcc_ansi_fg/bcc_ansi_bg tables give exactly these codes for the same
+    // CGA numbers.
+    assert!(
+        stdout.contains("\u{1b}[93;44m"),
+        "expected bright-yellow-on-blue:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\u{1b}[92m"),
+        "expected bright green:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\u{1b}[91m"),
+        "expected bright red:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("\u{1b}[96m"),
+        "expected bright cyan:\n{stdout}"
+    );
+}
+
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
     if !jvm_runtime_available() {
@@ -645,6 +696,42 @@ fn jvm_select_case_registers_variables_declared_only_inside_a_case_clause() {
         output.status.success(),
         "a variable declared only inside a `select case` clause should compile under \
          --target jvm:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// `INSTR(s$, needle$)` (2-argument form) and `STOP`/`SYSTEM` (both compile
+/// to `System.exit(0)`, usable from anywhere, unlike a plain `return` which
+/// would only unwind one call frame). Needs no `java`/`krak2` -- transpiling
+/// already exercises both.
+#[test]
+fn jvm_instr_and_stop_and_system_compile() {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create instr/stop/system fixture");
+    fs::write(
+        file.path(),
+        "program instrStopSystemTest\n\
+         kp$ = \"c\"\n\
+         if instr(\"1234567cCeElLaAsSrRxX\", kp$) <> 0 then\n\
+         \x20   print \"matched\"\n\
+         \x20   stop\n\
+         end if\n\
+         system\n\
+         end\n",
+    )
+    .expect("failed to write instr/stop/system fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "INSTR/STOP/SYSTEM should compile under --target jvm:\nstderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

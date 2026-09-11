@@ -824,20 +824,30 @@ impl JvmEmitter<'_> {
             Statement::Lprint(tokens) => emit_print_tokens(tokens, out, self.context),
             Statement::Cls => emit_terminal_escape("\u{1b}[2J\u{1b}[H", out),
             Statement::Beep => emit_terminal_escape("\u{7}", out),
+            // `STOP`/`SYSTEM` -- both halt the whole program outright,
+            // same as `codegen_c.rs`'s own treatment (see its doc comment
+            // there): `System.exit(0)`, not a plain `return`, since either
+            // can appear inside a function/procedure body too, where
+            // `return` would just unwind that one call frame -- wrong,
+            // since both need to halt the entire JVM regardless of call
+            // depth. Real BASIC's STOP is an interactive breakpoint-style
+            // halt (resumable with CONT in an interpreter); meaningless for
+            // a compiled program, so indistinguishable from SYSTEM here.
+            Statement::Stop | Statement::System => {
+                out.push_str("    iconst_0\n    invokestatic java/lang/System/exit (I)V\n");
+                Ok(())
+            }
             Statement::Color { fg, bg } => {
                 let Expr::Integer(fg) = fg else {
                     return Err(
                         "JVM COLOR currently requires a literal foreground value".to_string()
                     );
                 };
+                let fg_code = ANSI_FG[(*fg as usize) & 15];
                 let code = if let Some(Expr::Integer(bg)) = bg {
-                    format!(
-                        "\u{1b}[{};{}m",
-                        30 + (*fg as i32 % 8),
-                        40 + (*bg as i32 % 8)
-                    )
+                    format!("\u{1b}[{};{}m", fg_code, ANSI_BG[(*bg as usize) & 7])
                 } else if bg.is_none() {
-                    format!("\u{1b}[{}m", 30 + (*fg as i32 % 8))
+                    format!("\u{1b}[{fg_code}m")
                 } else {
                     return Err(
                         "JVM COLOR currently requires a literal background value".to_string()
@@ -1498,6 +1508,19 @@ fn emit_print_tokens(
     }
     Ok(())
 }
+
+/// `COLOR fg[, bg]`'s CGA-to-ANSI-SGR color index table -- CGA's 0-15
+/// ordering (black, blue, green, cyan, red, magenta, brown, white, then the
+/// same eight again "bright") does *not* match ANSI's 0-7 ordering (black,
+/// red, green, yellow, blue, magenta, cyan, white), so a naive `30 + fg`
+/// swaps blue and red (and cyan and yellow) outright -- exactly the bug this
+/// table fixes. Mirrors `codegen_c.rs`'s own `bcc_ansi_fg`/`bcc_ansi_bg`
+/// tables (and their real CGA palette doc comment) exactly, so a `COLOR`
+/// value renders the same way under both targets.
+const ANSI_FG: [i32; 16] = [
+    30, 34, 32, 36, 31, 35, 33, 37, 90, 94, 92, 96, 91, 95, 93, 97,
+];
+const ANSI_BG: [i32; 8] = [40, 44, 42, 46, 41, 45, 43, 47];
 
 fn emit_terminal_escape(value: &str, out: &mut String) -> Result<(), String> {
     out.push_str(&format!(
@@ -2771,6 +2794,23 @@ fn emit_numeric_expr(
             out.push_str("    invokevirtual java/lang/String/length ()I\n");
             Ok(NumericType::Int)
         }
+        // `INSTR(s$, needle$)` -- the 1-based position of the first match,
+        // or 0. Scoped to this 2-argument form only, matching what
+        // `docs/language/arrays-and-strings.html` documents and what
+        // `codegen_c.rs`'s own `bcc_instr` implements -- real BASCOM's
+        // optional leading `start%` argument (`INSTR(start%, s$, needle$)`)
+        // isn't implemented. `String.indexOf` is 0-based-or--1; `+ 1` maps
+        // that straight onto BASIC's 1-based-or-0 convention in one step
+        // (`-1 + 1 == 0`).
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("instr") && args.len() == 2 => {
+            emit_string_expr(&args[0], out, context)?;
+            emit_string_expr(&args[1], out, context)?;
+            out.push_str(
+                "    invokevirtual java/lang/String/indexOf (Ljava/lang/String;)I\n    \
+                 iconst_1\n    iadd\n",
+            );
+            Ok(NumericType::Int)
+        }
         // `CVI(s$)` -- unpacks a raw little-endian 16-bit int from `s$`'s
         // first two bytes (see `MKI$`'s own doc comment in
         // `emit_string_expr`). Works on any string, not just a `FIELD`
@@ -3152,6 +3192,7 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
         Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("instr") && args.len() == 2 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvi") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvl") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvs") && args.len() == 1 => Ok(NumericType::Double),

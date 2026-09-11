@@ -7,10 +7,10 @@
     .limit locals 1
 
     ; Tutorial — Screen I/O: cls, locate, color, beep, lprint
-    ;
+    ; 
     ; These statements control the terminal display and connected hardware.
     ; They map directly to the same-named BASCOM statements.
-    ;
+    ; 
     ; cls             — clear the screen
     ; locate row, col — move cursor; rows and columns are 1-based (80×25)
     ; color fg[, bg]  — CGA colour numbers: 0-15 foreground, 0-7 background
@@ -19,7 +19,7 @@
     ; 8-15: bright versions of 0-7
     ; beep            — sound the system bell
     ; lprint expr     — send output to the line printer
-    ;
+    ; 
     ; stop   — halt execution (may invoke debugger)
     ; system — exit to the operating system immediately
 
@@ -29,7 +29,7 @@
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
 
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[36;41m"
+    ldc "[93;44m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[1;30H"
@@ -53,7 +53,7 @@
     ldc "[5;1H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[32m"
+    ldc "[92m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Green text"
@@ -62,7 +62,7 @@
     ldc "[6;1H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[34m"
+    ldc "[91m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Red text"
@@ -71,7 +71,7 @@
     ldc "[7;1H"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[33m"
+    ldc "[96m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Cyan text"
