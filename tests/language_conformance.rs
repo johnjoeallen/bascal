@@ -23,7 +23,7 @@ fn conformance_fixtures_transpile_on_their_supported_backends() {
         ("tie_break_rounding", &["basic", "c", "jvm"]),
         ("string_self_concat", &["basic", "c"]),
         ("builtin_scalar_methods", &["basic", "c"]),
-        ("mid_assign", &["basic"]),
+        ("mid_assign", &["basic", "c"]),
         ("jvm_try", &["basic", "jvm"]),
         ("jvm_try_filter", &["basic", "jvm"]),
         ("jvm_noninteger_arrays", &["basic", "jvm"]),

@@ -472,6 +472,66 @@ fn freebasic_runs_mid_assign_edge_cases_when_available() {
     );
 }
 
+/// `MID$(...) = ...` statement-form assignment under `--target C`, checked
+/// against the same real-BASCOM-verified expectation
+/// `freebasic_runs_mid_assign_edge_cases_when_available` already pins for
+/// FreeBASIC and `tests/dosbox_conformance.rs`'s
+/// `mid_assign_matches_real_bascom` pins for real BASCOM 2.00 -- one
+/// fixture, three backends, same expected output. Skipped (not failed) when
+/// `gcc` isn't available, matching this file's other C-target tests.
+#[test]
+fn gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/conformance/mid_assign.bcl");
+    let dir = tempfile::tempdir().unwrap();
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/mid_assign");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled mid_assign binary");
+    assert!(
+        run.status.success(),
+        "compiled mid_assign binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let expected =
+        fs::read_to_string(repo_root.join("tests/fixtures/conformance/mid_assign.expected.txt"))
+            .expect("expected output should be readable");
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert_eq!(
+        normalize_newlines(&stdout),
+        normalize_newlines(&expected),
+        "MID$ assignment under --target c should match the real-BASCOM-verified expectation"
+    );
+}
+
 #[test]
 fn freebasic_runs_self_referential_string_concatenation_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
