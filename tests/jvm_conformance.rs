@@ -7,8 +7,11 @@
 // Conformance groups: tutorials, jvm
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -547,4 +550,131 @@ fn scoped_goto_runs_when_available() {
         String::from_utf8_lossy(&run.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&run.stdout), "start\nfinish\n");
+}
+
+/// Regression test for a real, pre-existing gap: `collect_scalar_
+/// declarations`/`collect_array_declarations`/`collect_global_names`/
+/// `collect_labels` used to skip `select case` clause bodies entirely, so a
+/// variable/array/label/`global` only ever appearing inside a `case` clause
+/// silently failed to register -- surfaced by `examples/card_catalog/
+/// card_catalog.bcl`'s own menu dispatch, where every branch is a `case`.
+/// Needs no `java`/`krak2` -- transpiling (not running) already exercises
+/// the fix.
+#[test]
+fn jvm_select_case_registers_variables_declared_only_inside_a_case_clause() {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create select-case fixture");
+    fs::write(
+        file.path(),
+        "program selectVarTest\n\
+         x% = 1\n\
+         select case x%\n\
+         \x20   case 1\n\
+         \x20       y% = 5\n\
+         \x20       print y%\n\
+         \x20   case else\n\
+         \x20       print \"no\"\n\
+         end select\n\
+         end\n",
+    )
+    .expect("failed to write select-case fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "a variable declared only inside a `select case` clause should compile under \
+         --target jvm:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// End-to-end confirmation that `examples/card_catalog/card_catalog.bcl` --
+/// the flagship record/file DSL + procedures example -- runs correctly
+/// under `--target jvm`: adds one entry through the interactive menu, then
+/// lists it back, proving the random-access write (`addItem`/`PUT`) and
+/// read (`listAll`/`GET`) round-trip through the real file, not just
+/// in-memory state. Skipped (not failed) when `java`/`krak2` aren't
+/// available, matching this file's other end-to-end tests.
+#[test]
+fn card_catalog_example_runs_under_jvm_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-card-catalog");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+
+    let source_path = repo_root().join("examples/card_catalog/card_catalog.bcl");
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--binary")
+        .arg("-o")
+        .arg(work_dir.join("out/"))
+        .current_dir(&work_dir)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/assemble card_catalog.bcl under --target jvm"
+    );
+
+    let mut child = Command::new("java")
+        .arg("-cp")
+        .arg(work_dir.join("tmp"))
+        .arg("CardCatalog")
+        .current_dir(&work_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn CardCatalog");
+    // 2 (new item), the three field prompts, 1 (list all), 6 (stop).
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"2\nTwain\nHuck Finn\nFiction\n1\n6\n")
+        .expect("failed to write keystrokes to CardCatalog");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll CardCatalog")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("CardCatalog timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect CardCatalog output");
+    assert!(
+        run.status.success(),
+        "CardCatalog exited non-zero:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        stdout.contains("Twain") && stdout.contains("Huck Finn") && stdout.contains("Fiction"),
+        "expected the newly added entry to be listed back:\n{stdout}"
+    );
 }

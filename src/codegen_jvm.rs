@@ -58,6 +58,30 @@
 //! records`).  Sequential file I/O (`OPEN ... FOR INPUT`/`OUTPUT`/`APPEND`)
 //! and `MID$(...) = ...` statement-form assignment still aren't implemented
 //! at all.
+//!
+//! Interactive `INPUT ["prompt";] var` is implemented (one plain-identifier
+//! target only -- no comma-separated multi-variable form): a shared
+//! `bccStdin: BufferedReader` (see `emit_input_initializer`, same
+//! initialize-in-`main` convention as the file-I/O arrays) backs
+//! `emit_input`, which prints `prompt` + BASIC's own `"? "` suffix, reads
+//! one line, and parses it for a numeric target or stores it verbatim for a
+//! string one.
+//!
+//! `collect_scalar_declarations`/`collect_array_declarations`/
+//! `collect_global_names`/`collect_labels` (plus this file's own
+//! `collect_field_vars`/`program_uses_random_open`/`program_uses_input`) all
+//! now recurse into `select case` clause bodies -- a real, pre-existing gap
+//! (any variable/array/label/`global`/`FIELD`/`OPEN`/`INPUT` that only
+//! appeared inside a `case` clause silently failed to register) that
+//! `examples/card_catalog/card_catalog.bcl`'s own menu dispatch (every
+//! branch is a `case`) surfaced immediately once file I/O and `INPUT`
+//! stopped being the blocker.
+//!
+//! `examples/card_catalog/card_catalog.bcl` -- the flagship record/file DSL
+//! and procedures example -- compiles and runs correctly end to end under
+//! `--target jvm` as of this paragraph, verified interactively (add an
+//! item, list it back, confirming the random-access write/read round-trip)
+//! with real `java` and `krak2`.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -76,6 +100,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     context.emit_initializers(&mut body);
     emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
     emit_file_io_initializers(&context, &mut body);
+    emit_input_initializer(&context, &mut body);
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -181,6 +206,9 @@ fn emit_fields(context: &JvmContext) -> String {
              .field public static bccRecLen [I\n",
         );
     }
+    if context.needs_input {
+        fields.push_str(".field public static bccStdin Ljava/io/BufferedReader;\n");
+    }
     fields
 }
 
@@ -209,6 +237,78 @@ fn emit_file_io_initializers(context: &JvmContext, out: &mut String) {
         "    ldc {JVM_MAX_CHANNELS}\n    newarray int\n    putstatic {}/bccRecLen [I\n",
         context.class_name
     ));
+}
+
+/// Allocates the shared `bccStdin` reader once, at the very top of `main`
+/// -- same convention/reasoning as `emit_file_io_initializers`.
+fn emit_input_initializer(context: &JvmContext, out: &mut String) {
+    if !context.needs_input {
+        return;
+    }
+    out.push_str(&format!(
+        "    new java/io/BufferedReader\n    dup\n    new java/io/InputStreamReader\n    dup\n    \
+         getstatic java/lang/System/in Ljava/io/InputStream;\n    \
+         invokespecial java/io/InputStreamReader/<init> (Ljava/io/InputStream;)V\n    \
+         invokespecial java/io/BufferedReader/<init> (Ljava/io/Reader;)V\n    \
+         putstatic {}/bccStdin Ljava/io/BufferedReader;\n",
+        context.class_name
+    ));
+}
+
+/// `INPUT ["prompt";] var` -- prints `prompt` followed by real BASIC's own
+/// `"? "` suffix (suppressed only by `INPUT "prompt", var`'s comma form,
+/// which isn't implemented -- nothing exercising this backend's INPUT yet
+/// uses it), reads one line from the shared `bccStdin`, and stores it into
+/// `var`: verbatim for a string target, or through `Integer.parseInt`/
+/// `Long.parseLong`/`Double.parseDouble` (on the trimmed line, so leading/
+/// trailing whitespace in the typed response doesn't fail the parse) for a
+/// numeric one. Only a single plain-identifier target is supported --
+/// real BASIC's comma-separated multi-variable `INPUT` isn't implemented,
+/// since nothing exercising this backend's INPUT yet uses it.
+fn emit_input(
+    prompt: Option<&str>,
+    vars: &[Expr],
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    let [Expr::Ident(name)] = vars else {
+        return Err(
+            "INPUT with other than exactly one plain variable isn't supported under --target jvm"
+                .to_string(),
+        );
+    };
+    let variable = context.variable(name)?;
+    if let Some(prompt) = prompt {
+        out.push_str(&format!(
+            "    getstatic java/lang/System/out Ljava/io/PrintStream;\n    ldc \"{}? \"\n    \
+             invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V\n",
+            escape_jvm_string(prompt)
+        ));
+    }
+    out.push_str(&format!(
+        "    getstatic {}/bccStdin Ljava/io/BufferedReader;\n    \
+         invokevirtual java/io/BufferedReader/readLine ()Ljava/lang/String;\n",
+        context.class_name
+    ));
+    match variable.ty {
+        JvmType::String => {}
+        JvmType::Numeric(ty) => {
+            out.push_str("    invokevirtual java/lang/String/trim ()Ljava/lang/String;\n");
+            out.push_str(match ty {
+                NumericType::Int => {
+                    "    invokestatic java/lang/Integer/parseInt (Ljava/lang/String;)I\n"
+                }
+                NumericType::Long => {
+                    "    invokestatic java/lang/Long/parseLong (Ljava/lang/String;)J\n"
+                }
+                NumericType::Double => {
+                    "    invokestatic java/lang/Double/parseDouble (Ljava/lang/String;)D\n"
+                }
+            });
+        }
+    }
+    emit_store(variable, out, context);
+    Ok(())
 }
 
 /// Deep-clones a nested integer array.  BASCAL permits at most eight axes;
@@ -301,6 +401,14 @@ fn collect_labels(statements: &[Stmt]) -> HashSet<String> {
                 Statement::For { body, .. }
                 | Statement::While { body, .. }
                 | Statement::Do { body, .. } => visit(body, labels),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        visit(&case.body, labels);
+                    }
+                    visit(else_body, labels);
+                }
                 _ => {}
             }
         }
@@ -384,6 +492,14 @@ fn collect_field_vars(
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_field_vars(body, out)?,
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_field_vars(&case.body, out)?;
+                }
+                collect_field_vars(else_body, out)?;
+            }
             _ => {}
         }
     }
@@ -409,6 +525,37 @@ fn program_uses_random_open(statements: &[Stmt]) -> bool {
         Statement::For { body, .. }
         | Statement::While { body, .. }
         | Statement::Do { body, .. } => program_uses_random_open(body),
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases
+                .iter()
+                .any(|case| program_uses_random_open(&case.body))
+                || program_uses_random_open(else_body)
+        }
+        _ => false,
+    })
+}
+
+/// Whether `statements` (recursing into every block form) contains any
+/// interactive `INPUT` -- decides whether `generate()` declares/
+/// initializes the shared `bccStdin` reader at all.
+fn program_uses_input(statements: &[Stmt]) -> bool {
+    statements.iter().any(|stmt| match &stmt.kind {
+        Statement::Input { .. } => true,
+        Statement::If {
+            then_body,
+            else_body,
+            ..
+        } => program_uses_input(then_body) || program_uses_input(else_body),
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => program_uses_input(body),
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases.iter().any(|case| program_uses_input(&case.body)) || program_uses_input(else_body)
+        }
         _ => false,
     })
 }
@@ -776,6 +923,9 @@ impl JvmEmitter<'_> {
                         format!("`{var}` isn't a FIELD-declared variable under --target jvm")
                     })?;
                 emit_rset(field, value, out, self.context)
+            }
+            Statement::Input { prompt, vars } => {
+                emit_input(prompt.as_deref(), vars, out, self.context)
             }
             Statement::Assignment {
                 target: Expr::Ident(name),
@@ -1688,6 +1838,9 @@ struct JvmContext {
     /// Whether the program uses `OPEN ... FOR RANDOM` anywhere -- gates
     /// declaring/initializing `bccFiles`/`bccBufs`/`bccRecLen` at all.
     needs_file_io: bool,
+    /// Whether the program uses interactive `INPUT` anywhere -- gates
+    /// declaring/initializing the shared `bccStdin` reader at all.
+    needs_input: bool,
 }
 
 #[derive(Clone)]
@@ -1814,6 +1967,11 @@ impl JvmContext {
                 .functions
                 .iter()
                 .any(|f| program_uses_random_open(&f.body));
+        let needs_input = program_uses_input(&program.statements)
+            || program
+                .functions
+                .iter()
+                .any(|f| program_uses_input(&f.body));
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -1842,6 +2000,7 @@ impl JvmContext {
             initialize_static: true,
             field_vars,
             needs_file_io,
+            needs_input,
         })
     }
 
@@ -1925,6 +2084,7 @@ impl JvmContext {
             initialize_static: false,
             field_vars: parent.field_vars.clone(),
             needs_file_io: parent.needs_file_io,
+            needs_input: parent.needs_input,
         }
     }
 
@@ -2096,6 +2256,13 @@ fn collect_scalar_declarations(
             } => {
                 declarations.insert(variable_key(name), type_for_ident(name));
             }
+            Statement::Input { vars, .. } => {
+                for var in vars {
+                    if let Expr::Ident(name) = var {
+                        declarations.insert(variable_key(name), type_for_ident(name));
+                    }
+                }
+            }
             Statement::Const { name, value } => {
                 constants.insert(variable_key(name), value.clone());
             }
@@ -2132,6 +2299,14 @@ fn collect_scalar_declarations(
                 }
                 collect_scalar_declarations(finally_body, declarations, constants);
             }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_scalar_declarations(&case.body, declarations, constants);
+                }
+                collect_scalar_declarations(else_body, declarations, constants);
+            }
             _ => {}
         }
     }
@@ -2164,6 +2339,14 @@ fn collect_array_declarations(statements: &[Stmt], arrays: &mut BTreeMap<String,
             Statement::For { body, .. }
             | Statement::While { body, .. }
             | Statement::Do { body, .. } => collect_array_declarations(body, arrays),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_array_declarations(&case.body, arrays);
+                }
+                collect_array_declarations(else_body, arrays);
+            }
             _ => {}
         }
     }
@@ -2186,6 +2369,14 @@ fn collect_global_names(statements: &[Stmt]) -> Vec<BasicIdent> {
                 Statement::For { body, .. }
                 | Statement::While { body, .. }
                 | Statement::Do { body, .. } => visit(body, names),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        visit(&case.body, names);
+                    }
+                    visit(else_body, names);
+                }
                 _ => {}
             }
         }
