@@ -372,6 +372,131 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
     );
 }
 
+/// Regression test for a real, source-level bug in `tutorial/inventory.bcl`
+/// itself (present identically under every target -- `--target basic`,
+/// `--target C`, `--target jvm` -- since it's a print/`LOCATE` sequencing
+/// bug, not a codegen one): `printListHeader()` used to `LOCATE 25, 1` and
+/// print "Press the AnyKey to scroll listing..." immediately, before any
+/// item had been listed -- nothing actually paused there, so the very next
+/// statement (`listAll()`'s first item) kept printing from that same
+/// cursor position, gluing item 1 onto the end of that line. Every 20
+/// items, `waitAnyKey()` then did `LOCATE 25, 10` -- rewinding the cursor
+/// back to that *same* row -- and overwrote from column 10 onward with
+/// "Press the AnyKey to continue...". Since the first prompt started at
+/// column 1, columns 1-9 ("Press the") survived underneath the second
+/// message, producing `"Press thePress the AnyKey to continue..."` on any
+/// terminal tall enough that the collision isn't scrolled away by
+/// accident before it's ever visible (BASCAL has no `VIEW PRINT`
+/// scroll-region support -- see the tutorial's own header note -- so
+/// nothing bounds where a fixed-row prompt can collide with unbounded
+/// scrolling content). Fixed by dropping the premature prompt from
+/// `printListHeader()`/`printReorderHeader()` and redrawing the header on
+/// each new page after `waitAnyKey()`, so `waitAnyKey()`'s own row-25
+/// write always lands on a freshly-cleared row. This test needs no pty
+/// (the bug is pure print/CLS ordering, not terminal-size-dependent
+/// timing): pipes are sufficient to catch a regression back to the
+/// glued/doubled text.
+#[test]
+fn gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    // A distinct filename stem from `gcc_runs_inventory_tutorial_under_c_
+    // target_when_available`'s own `tutorial/inventory.bcl` compile --
+    // `bcc --binary`'s output always lands at `tmp/<stem>` regardless of
+    // `-o` (see `native_binary_path_from_stem` in main.rs), a fixed,
+    // repo-relative path shared across the whole test binary; two tests
+    // compiling the same stem in parallel race on that one file.
+    let source_path = dir.path().join("inventory_list_all.bcl");
+    fs::copy(repo_root.join("tutorial/inventory.bcl"), &source_path)
+        .expect("failed to copy tutorial/inventory.bcl");
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/inventory_list_all");
+    // "3" selects "List all" (100 parts, 20 per page -- 5 pages, 5
+    // `waitAnyKey()` calls); one "x" per page to dismiss its prompt, then
+    // "7" to exit back at the main menu.
+    let mut child = Command::new(&executable_path)
+        .current_dir(dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn compiled inventory binary");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"3xxxxx7")
+        .expect("failed to write keystrokes to inventory binary");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll inventory binary")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("compiled inventory binary timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect inventory binary output");
+    assert!(
+        run.status.success(),
+        "compiled inventory binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.contains("Press thePress the"),
+        "the initial header prompt and waitAnyKey()'s own prompt collided \
+         on the same row:\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("I N V E N T O R Y   L I S T I N G").count(),
+        5,
+        "expected one freshly-redrawn header per page (5 pages of 20 for \
+         100 parts):\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("Press the AnyKey to continue").count(),
+        5,
+        "expected exactly one wait prompt per page, each on its own \
+         freshly-cleared row:\n{stdout}"
+    );
+}
+
 /// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
 /// `dim`'d string array element (`rawLine$(lineCount%)` in
 /// `examples/remline/com/bascal/examples/remline/transform.bcl`) now

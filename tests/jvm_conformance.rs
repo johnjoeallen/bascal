@@ -1496,3 +1496,105 @@ fn jvm_print_without_trailing_newline_flushes_stdout() {
          in a newline):\n{generated}"
     );
 }
+
+/// Regression test for a real, source-level bug in `tutorial/inventory.bcl`
+/// itself -- see `tests/examples.rs`'s own
+/// `gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available`
+/// for the full mechanism (present identically under every target, since
+/// it's a print/`LOCATE` sequencing bug in the `.bcl` source, not a
+/// codegen one). Needs no pty: the bug is pure print/CLS ordering, not
+/// terminal-size-dependent scroll timing, so piped stdin is sufficient to
+/// catch a regression back to the glued/doubled
+/// `"Press thePress the AnyKey..."` text.
+#[test]
+fn jvm_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-inventory-list-all");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+
+    let source_path = repo_root().join("tutorial/inventory.bcl");
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--binary")
+        .arg("-o")
+        .arg(work_dir.join("out/"))
+        .current_dir(&work_dir)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/assemble inventory.bcl under --target jvm"
+    );
+
+    // "3" selects "List all" (100 parts, 20 per page -- 5 pages, 5
+    // `waitAnyKey()` calls); one "x" per page to dismiss its prompt, then
+    // "7" to exit back at the main menu.
+    let mut child = Command::new("java")
+        .arg("-cp")
+        .arg(work_dir.join("tmp"))
+        .arg("Inventory")
+        .current_dir(&work_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn Inventory");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"3xxxxx7")
+        .expect("failed to write keystrokes to Inventory");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll Inventory")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("Inventory timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect Inventory output");
+    assert!(
+        run.status.success(),
+        "Inventory exited non-zero:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.contains("Press thePress the"),
+        "the initial header prompt and waitAnyKey()'s own prompt collided \
+         on the same row:\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("I N V E N T O R Y   L I S T I N G").count(),
+        5,
+        "expected one freshly-redrawn header per page (5 pages of 20 for \
+         100 parts):\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("Press the AnyKey to continue").count(),
+        5,
+        "expected exactly one wait prompt per page, each on its own \
+         freshly-cleared row:\n{stdout}"
+    );
+}

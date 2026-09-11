@@ -390,6 +390,7 @@ void bf_s_readpartnumberinput(char* bcc_out) {
     char bv_s_s[256] = {0};
 
     printf("Input part number? ");
+    fflush(stdout);
     bcc_read_line();
     snprintf(bv_s_s, sizeof(bv_s_s), "%s", bcc_input_buf);
     snprintf(bcc_out, 256, "%s", bv_s_s);
@@ -412,6 +413,7 @@ void bf_i_waitanykey(void) {
 
     printf("\x1b[%d;%dH", 25, 10);
     printf("Press the AnyKey to continue...");
+    fflush(stdout);
     while (1) {
         snprintf(bv_s_k, sizeof(bv_s_k), "%s", bcc_inkey());
         if ((-(strcmp(bv_s_k, "") != 0))) break;
@@ -462,6 +464,7 @@ void bf_i_showrangeretrymessage(void) {
     printf("%s\n", bt_s_6);
     printf("\x1b[%d;%dH", 25, 15);
     printf("Press the Anykey to reenter part number...");
+    fflush(stdout);
 }
 
 void bf_i_shownullentrymessage(const char* bv_s_partstr_in) {
@@ -511,8 +514,6 @@ void bf_i_printlistheader(void) {
     printf("\x1b[%dGI N V E N T O R Y   L I S T I N G\x1b[%dG%s\n", 25, 65, bt_s_14);
     printf("                                          Quantity       Reorder\n");
     printf(" Partno           Description             on hand         level\n");
-    printf("\x1b[%d;%dH", 25, 1);
-    printf("Press the AnyKey to scroll listing...");
 }
 
 void bf_i_printinventoryline(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_qty, int bv_i_reorder) {
@@ -583,18 +584,22 @@ void bf_i_gatherpartdetails(int bv_i_partnum, char* bv_s_desc_in, int* bv_i_qty_
     printf("------------------------------\n");
     printf("\x1b[%d;%dH", 10, bv_i_tab_col);
     printf("      Description? ");
+    fflush(stdout);
     bcc_read_line();
     snprintf(bv_s_desc, sizeof(bv_s_desc), "%s", bcc_input_buf);
     printf("\x1b[%d;%dH", 12, bv_i_tab_col);
     printf("Quantity in stock? ");
+    fflush(stdout);
     bcc_read_line();
     bv_i_qty = atoi(bcc_input_buf);
     printf("\x1b[%d;%dH", 14, bv_i_tab_col);
     printf("    Reorder level? ");
+    fflush(stdout);
     bcc_read_line();
     bv_i_reorder = atoi(bcc_input_buf);
     printf("\x1b[%d;%dH", 16, bv_i_tab_col);
     printf("       Unit price? ");
+    fflush(stdout);
     bcc_read_line();
     bv_f_price = atof(bcc_input_buf);
     printf("\x1b[%d;%dH", 18, bv_i_tab_col);
@@ -637,6 +642,7 @@ void bf_i_shownegativeqtywarning(void) {
     printf("The quantity to add must NOT be a negative number\n");
     printf("\x1b[%d;%dH", 25, 1);
     printf("Please press the Anykey to reenter quantity to add...");
+    fflush(stdout);
 }
 
 void bf_i_showsubtractstockscreen(int bv_i_partnum, const char* bv_s_desc_in, int bv_i_qty, int bv_i_reorder) {
@@ -677,6 +683,7 @@ void bf_i_showoversubtractwarning(int bv_i_onhand) {
     printf("%s\n", bt_s_38);
     printf("\x1b[%d;%dH", 25, 1);
     printf("Please press the Anykey to reenter quantity to subtract...");
+    fflush(stdout);
 }
 
 void bf_i_checkpart(void) {
@@ -856,6 +863,12 @@ void bf_i_listall(void) {
         if ((-(bv_i_scrollcount == 20))) {
             bf_i_waitanykey();
             bv_i_scrollcount = 0;
+            // Redraw for the next page rather than let it keep scrolling
+            // past row 25 -- see printListHeader()'s own note on why a
+            // fixed-row prompt can't coexist with unbounded scrolling.
+            if ((-(bv_i_i < bv_i_part_count))) {
+                bf_i_printlistheader();
+            }
         }
     }
 }
@@ -925,6 +938,7 @@ void bf_i_addstock(void) {
         bf_i_showaddstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
         printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf(" Quantity to add? ");
+        fflush(stdout);
         bcc_read_line();
         snprintf(bv_s_addstr, sizeof(bv_s_addstr), "%s", bcc_input_buf);
         bv_i_addamt = ((int)round((double)(atof(bv_s_addstr))));
@@ -1010,6 +1024,7 @@ void bf_i_subtractstock(void) {
         bf_i_showsubtractstockscreen(bv_i_part, bv_s_pdesc, bv_i_pqty, bv_i_preorder);
         printf("\x1b[%d;%dH", 14, bv_i_tab_col);
         printf("Quantity to subtract? ");
+        fflush(stdout);
         bcc_read_line();
         snprintf(bv_s_substr, sizeof(bv_s_substr), "%s", bcc_input_buf);
         bv_i_subamt = ((int)round((double)(atof(bv_s_substr))));
@@ -1084,6 +1099,13 @@ void bf_i_reorderreport(void) {
             if ((-(bv_i_reportlinecount > 15))) {
                 bf_i_waitanykey();
                 bv_i_reportlinecount = 0;
+                // Redraw for the next page rather than let it keep
+                // scrolling past row 25 -- see printListHeader()'s own
+                // note (same underlying issue, same fix) on why a
+                // fixed-row prompt can't coexist with unbounded scrolling.
+                if ((-(bv_i_i < bv_i_part_count))) {
+                    bf_i_printreorderheader();
+                }
             }
         }
     }
@@ -1355,6 +1377,14 @@ int main(void) {
 
 
 
+    // BASCAL-ism: no `VIEW PRINT` (see the header note above), so this
+    // deliberately does NOT pin a "press any key" line to a fixed row the way
+    // fhb's original does -- a bare `LOCATE 25, ...` sitting under content
+    // that keeps printing past it (listAll()'s own items) collides with
+    // whatever's later written there, since nothing here scrolls a bounded
+    // region: waitAnyKey() is the only thing that ever touches row 25, and
+    // only right when it actually blocks (see listAll()'s own redraw-per-page
+    // structure below).
 
 
 
