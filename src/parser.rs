@@ -693,141 +693,100 @@ impl Parser {
     }
 
     fn parse_statement_kind(&mut self) -> ParseResult<Statement> {
-        if self.check_keyword("def") && self.check_next_keyword("fn") {
-            self.parse_def_fn()
-        } else if self.check_dim_keyword() {
-            self.parse_dim()
-        } else if self.check_keyword("declare") {
-            self.parse_declare()
-        } else if self.check_keyword("file") {
-            self.parse_file_decl()
-        } else if self.check_keyword("record") {
-            Err(self.error("`record` declarations are only valid at program level"))
-        } else if matches!(self.current().kind, TokenKind::Comment(_)) {
-            self.parse_comment()
-        } else if matches!(self.current().kind, TokenKind::BlockComment(_)) {
-            self.parse_block_comment()
-        } else if self.check_keyword("print") {
-            self.parse_print()
-        } else if self.check_keyword("lprint") {
-            self.parse_lprint()
-        } else if self.check_keyword("open") {
-            self.parse_open()
-        } else if self.check_keyword("line") && self.check_next_keyword("input") {
-            self.parse_line_input()
-        } else if self.check_keyword("input") {
-            self.parse_input()
-        } else if self.check_keyword("write") {
-            self.parse_write()
-        } else if self.check_keyword("field") {
-            self.parse_field()
-        } else if self.check_keyword("get") {
-            self.parse_get()
-        } else if self.check_keyword("put") {
-            self.parse_put()
-        } else if self.check_keyword("lset") {
-            self.parse_lset()
-        } else if self.check_keyword("rset") {
-            self.parse_rset()
-        } else if self.check_keyword("seek") {
-            self.parse_seek()
-        } else if self.check_keyword("kill") {
-            self.parse_kill()
-        } else if self.check_keyword("name") {
-            self.parse_name()
-        } else if self.check_keyword("close") {
-            self.parse_close()
-        } else if self.check_keyword("global") {
-            self.parse_global_decl()
-        } else if self.check_keyword("return") {
-            self.parse_return()
-        } else if self.check_keyword("if") {
-            self.parse_if()
-        } else if self.check_keyword("for") {
-            self.parse_for()
-        } else if self.check_keyword("while") {
-            self.parse_while()
-        } else if self.check_keyword("do") {
-            self.parse_do()
-        } else if self.check_keyword("select") && self.check_next_keyword("case") {
-            self.parse_select_case()
-        } else if self.check_keyword("try") {
-            self.parse_try_catch()
-        } else if self.check_keyword("end") {
-            self.parse_end_statement()
-        } else if self.check_keyword("exit") {
-            self.parse_exit()
-        } else if self.check_keyword("goto") {
-            self.parse_goto()
-        } else if self.check_keyword("gosub") {
-            self.parse_gosub()
-        } else if self.check_keyword("on") {
-            self.parse_on()
-        } else if self.check_keyword("resume") {
-            self.parse_resume()
-        } else if self.check_keyword("error") {
-            self.parse_error_stmt()
-        } else if self.check_keyword("throw") {
-            self.parse_throw_stmt()
-        } else if self.check_keyword("option") {
-            self.parse_option_base()
-        } else if self.check_keyword("erase") {
-            self.parse_erase()
-        } else if self.check_keyword("stop") {
-            self.advance();
-            self.consume_line_end()?;
-            Ok(Statement::Stop)
-        } else if self.check_keyword("cls") {
-            self.advance();
-            self.consume_line_end()?;
-            Ok(Statement::Cls)
-        } else if self.check_keyword("beep") {
-            self.advance();
-            self.consume_line_end()?;
-            Ok(Statement::Beep)
-        } else if self.check_keyword("system") {
-            self.advance();
-            self.consume_line_end()?;
-            Ok(Statement::System)
-        } else if self.check_keyword("randomize") {
-            self.parse_randomize()
-        } else if self.check_keyword("poke") {
-            self.parse_poke()
-        } else if self.check_keyword("out") {
-            self.parse_out()
-        } else if self.check_keyword("width") {
-            self.parse_width()
-        } else if self.check_keyword("clear") {
-            self.advance();
-            self.consume_line_end()?;
-            Ok(Statement::Clear)
-        } else if self.check_keyword("swap") {
-            self.parse_swap()
-        } else if self.check_keyword("data") {
-            self.parse_data()
-        } else if self.check_keyword("read") {
-            self.parse_read()
-        } else if self.check_keyword("restore") {
-            self.parse_restore()
-        } else if self.check_keyword("const") {
-            self.parse_const()
-        } else if self.check_keyword("locate") {
-            self.parse_locate()
-        } else if self.check_keyword("color") {
-            self.parse_color()
-        } else if self.check_keyword("let") {
-            self.parse_let()
-        } else if self.check_keyword("common") {
-            Err(self.error(
+        match self.current_keyword() {
+            Some(Kw::Def) if self.check_next_keyword("fn") => self.parse_def_fn(),
+            Some(Kw::Dim) => self.parse_dim(),
+            Some(Kw::File) => self.parse_file_decl(),
+            Some(Kw::Record) => {
+                Err(self.error("`record` declarations are only valid at program level"))
+            }
+            _ if matches!(self.current().kind, TokenKind::Comment(_)) => self.parse_comment(),
+            _ if matches!(self.current().kind, TokenKind::BlockComment(_)) => {
+                self.parse_block_comment()
+            }
+            Some(Kw::Print) => self.parse_print(),
+            Some(Kw::Lprint) => self.parse_lprint(),
+            Some(Kw::Open) => self.parse_open(),
+            Some(Kw::Line) if self.check_next_keyword("input") => self.parse_line_input(),
+            Some(Kw::Input) => self.parse_input(),
+            Some(Kw::Write) => self.parse_write(),
+            Some(Kw::Field) => self.parse_field(),
+            Some(Kw::Get) => self.parse_get(),
+            Some(Kw::Put) => self.parse_put(),
+            Some(Kw::Lset) => self.parse_lset(),
+            Some(Kw::Rset) => self.parse_rset(),
+            Some(Kw::Seek) => self.parse_seek(),
+            Some(Kw::Kill) => self.parse_kill(),
+            Some(Kw::Name) => self.parse_name(),
+            Some(Kw::Close) => self.parse_close(),
+            Some(Kw::Global) => self.parse_global_decl(),
+            Some(Kw::Return) => self.parse_return(),
+            Some(Kw::If) => self.parse_if(),
+            Some(Kw::For) => self.parse_for(),
+            Some(Kw::While) => self.parse_while(),
+            Some(Kw::Do) => self.parse_do(),
+            Some(Kw::Select) if self.check_next_keyword("case") => self.parse_select_case(),
+            Some(Kw::Try) => self.parse_try_catch(),
+            Some(Kw::End) => self.parse_end_statement(),
+            Some(Kw::Exit) => self.parse_exit(),
+            Some(Kw::Goto) => self.parse_goto(),
+            Some(Kw::Gosub) => self.parse_gosub(),
+            Some(Kw::On) => self.parse_on(),
+            Some(Kw::Resume) => self.parse_resume(),
+            Some(Kw::Error) => self.parse_error_stmt(),
+            Some(Kw::Throw) => self.parse_throw_stmt(),
+            Some(Kw::Option) => self.parse_option_base(),
+            Some(Kw::Erase) => self.parse_erase(),
+            Some(Kw::Stop) => {
+                self.advance();
+                self.consume_line_end()?;
+                Ok(Statement::Stop)
+            }
+            Some(Kw::Cls) => {
+                self.advance();
+                self.consume_line_end()?;
+                Ok(Statement::Cls)
+            }
+            Some(Kw::Beep) => {
+                self.advance();
+                self.consume_line_end()?;
+                Ok(Statement::Beep)
+            }
+            Some(Kw::System) => {
+                self.advance();
+                self.consume_line_end()?;
+                Ok(Statement::System)
+            }
+            Some(Kw::Randomize) => self.parse_randomize(),
+            Some(Kw::Poke) => self.parse_poke(),
+            Some(Kw::Out) => self.parse_out(),
+            Some(Kw::Width) => self.parse_width(),
+            Some(Kw::Clear) => {
+                self.advance();
+                self.consume_line_end()?;
+                Ok(Statement::Clear)
+            }
+            Some(Kw::Swap) => self.parse_swap(),
+            Some(Kw::Data) => self.parse_data(),
+            Some(Kw::Read) => self.parse_read(),
+            Some(Kw::Restore) => self.parse_restore(),
+            Some(Kw::Const) => self.parse_const(),
+            Some(Kw::Locate) => self.parse_locate(),
+            Some(Kw::Color) => self.parse_color(),
+            Some(Kw::Let) => self.parse_let(),
+            Some(Kw::Common) => Err(self.error(
                 "the `common` keyword has been removed -- declare shared variables with `dim` \
                  inside a `shared <name>` file instead",
-            ))
-        } else if self.check_keyword("program") {
-            Err(self.error("`program` declaration must appear before any statements"))
-        } else if matches!(self.current().kind, TokenKind::Ident(_)) && self.check_next_is_colon() {
-            self.parse_label()
-        } else {
-            self.parse_assignment_or_expr()
+            )),
+            Some(Kw::Program) => {
+                Err(self.error("`program` declaration must appear before any statements"))
+            }
+            _ if matches!(self.current().kind, TokenKind::Ident(_))
+                && self.check_next_is_colon() =>
+            {
+                self.parse_label()
+            }
+            _ => self.parse_assignment_or_expr(),
         }
     }
 
@@ -929,22 +888,6 @@ impl Parser {
             name,
             is_array,
             sizes,
-        })
-    }
-
-    /// Parses the planned `declare value as Type` spelling. The current AST
-    /// preserves this as a scalar declaration; the record type becomes part
-    /// of the typed IR when general-purpose record resolution is added.
-    fn parse_declare(&mut self) -> ParseResult<Statement> {
-        self.expect_keyword("declare")?;
-        let name = BasicIdent::parse(&self.expect_ident("expected declared variable name")?);
-        self.expect_keyword("as")?;
-        self.expect_ident("expected type name after `as`")?;
-        self.consume_line_end()?;
-        Ok(Statement::Dim {
-            name,
-            is_array: false,
-            sizes: Vec::new(),
         })
     }
 
@@ -2490,6 +2433,18 @@ impl Parser {
         }
     }
 
+    /// The current token's statement-leading keyword, if it has one --
+    /// `None` for a plain identifier, a literal, punctuation, or a keyword
+    /// this table doesn't cover (most keywords used only mid-statement,
+    /// like `then`/`as`/`step`, stay on the string-based `check_keyword`
+    /// path; only `parse_statement_kind`'s dispatch uses this).
+    fn current_keyword(&self) -> Option<Kw> {
+        match &self.current().kind {
+            TokenKind::Ident(value) => classify_keyword(value),
+            _ => None,
+        }
+    }
+
     fn check_keyword(&self, keyword: &str) -> bool {
         matches!(&self.current().kind, TokenKind::Ident(value) if keyword_eq(value, keyword))
     }
@@ -2609,6 +2564,146 @@ fn normalize_assignment_target(expr: Expr) -> Expr {
 
 fn keyword_eq(value: &str, keyword: &str) -> bool {
     value.eq_ignore_ascii_case(keyword)
+}
+
+/// Every keyword `parse_statement_kind` dispatches on. One variant per
+/// *statement shape*, not per spelling -- `Dim` covers both `dim` and its
+/// synonym `declare` (see `check_dim_keyword`'s own doc comment), so the
+/// dispatcher can't grow a second, unreachable arm for a spelling that's
+/// really just another name for the same statement (this table replaced a
+/// dead `check_keyword("declare")` arm that could never fire, shadowed by
+/// the `dim`/`declare` check above it).
+///
+/// Soft keywords: this table only classifies the token at *statement start*
+/// -- an identifier that also happens to spell a keyword is unaffected
+/// everywhere else (as a variable, field, or parameter name, an expression
+/// operand, ...), since the lexer never produces anything but `Ident` and
+/// nothing outside `parse_statement_kind` consults this classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Kw {
+    Def,
+    Dim,
+    File,
+    Record,
+    Print,
+    Lprint,
+    Open,
+    Line,
+    Input,
+    Write,
+    Field,
+    Get,
+    Put,
+    Lset,
+    Rset,
+    Seek,
+    Kill,
+    Name,
+    Close,
+    Global,
+    Return,
+    If,
+    For,
+    While,
+    Do,
+    Select,
+    Try,
+    End,
+    Exit,
+    Goto,
+    Gosub,
+    On,
+    Resume,
+    Error,
+    Throw,
+    Option,
+    Erase,
+    Stop,
+    Cls,
+    Beep,
+    System,
+    Randomize,
+    Poke,
+    Out,
+    Width,
+    Clear,
+    Swap,
+    Data,
+    Read,
+    Restore,
+    Const,
+    Locate,
+    Color,
+    Let,
+    Common,
+    Program,
+}
+
+/// Classifies one identifier's text as a statement-leading keyword, case-
+/// insensitively -- a single jump-table `match` in place of the linear chain
+/// of `check_keyword` string comparisons `parse_statement_kind` used to run,
+/// one per candidate, on every statement (proposal suggestion 7: "lex
+/// keywords, or at least intern them").
+fn classify_keyword(value: &str) -> Option<Kw> {
+    Some(match value.to_ascii_lowercase().as_str() {
+        "def" => Kw::Def,
+        "dim" | "declare" => Kw::Dim,
+        "file" => Kw::File,
+        "record" => Kw::Record,
+        "print" => Kw::Print,
+        "lprint" => Kw::Lprint,
+        "open" => Kw::Open,
+        "line" => Kw::Line,
+        "input" => Kw::Input,
+        "write" => Kw::Write,
+        "field" => Kw::Field,
+        "get" => Kw::Get,
+        "put" => Kw::Put,
+        "lset" => Kw::Lset,
+        "rset" => Kw::Rset,
+        "seek" => Kw::Seek,
+        "kill" => Kw::Kill,
+        "name" => Kw::Name,
+        "close" => Kw::Close,
+        "global" => Kw::Global,
+        "return" => Kw::Return,
+        "if" => Kw::If,
+        "for" => Kw::For,
+        "while" => Kw::While,
+        "do" => Kw::Do,
+        "select" => Kw::Select,
+        "try" => Kw::Try,
+        "end" => Kw::End,
+        "exit" => Kw::Exit,
+        "goto" => Kw::Goto,
+        "gosub" => Kw::Gosub,
+        "on" => Kw::On,
+        "resume" => Kw::Resume,
+        "error" => Kw::Error,
+        "throw" => Kw::Throw,
+        "option" => Kw::Option,
+        "erase" => Kw::Erase,
+        "stop" => Kw::Stop,
+        "cls" => Kw::Cls,
+        "beep" => Kw::Beep,
+        "system" => Kw::System,
+        "randomize" => Kw::Randomize,
+        "poke" => Kw::Poke,
+        "out" => Kw::Out,
+        "width" => Kw::Width,
+        "clear" => Kw::Clear,
+        "swap" => Kw::Swap,
+        "data" => Kw::Data,
+        "read" => Kw::Read,
+        "restore" => Kw::Restore,
+        "const" => Kw::Const,
+        "locate" => Kw::Locate,
+        "color" => Kw::Color,
+        "let" => Kw::Let,
+        "common" => Kw::Common,
+        "program" => Kw::Program,
+        _ => return None,
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2774,6 +2869,25 @@ mod tests {
         };
         assert_eq!(kinds(&dim_program), kinds(&declare_program));
         match &*declare_program.statements[0] {
+            Statement::Dim { name, is_array, .. } => {
+                assert_eq!(name.name, "x");
+                assert!(!is_array);
+            }
+            other => panic!("expected Dim, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn declare_with_a_type_annotation_still_parses_as_plain_dim() {
+        // `declare x as Integer` used to route to a dedicated `parse_declare`
+        // that was actually unreachable: `check_dim_keyword` (dim OR declare)
+        // always matched first and sent this to `parse_dim`, whose
+        // `parse_dim_one` already consumes a trailing `as <type>` itself
+        // (discarding it -- the AST has no typed-scalar-declaration form
+        // yet). `classify_keyword` merging "dim"/"declare" into one `Kw::Dim`
+        // makes that the only reachable path, matching what actually ran.
+        let program = parse("declare x as Integer\nend\n");
+        match &*program.statements[0] {
             Statement::Dim { name, is_array, .. } => {
                 assert_eq!(name.name, "x");
                 assert!(!is_array);
