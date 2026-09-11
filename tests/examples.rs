@@ -938,3 +938,59 @@ fn line_payload_is_comment(line: &str) -> bool {
 fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n")
 }
+
+/// Regression test for a real bug: glibc's stdout is line-buffered against
+/// a real terminal (fully buffered otherwise), flushing only on a `\n`
+/// byte -- so a `print "...";`/`print "...",` (no trailing newline --
+/// `tutorial/inventory.bcl`'s `waitAnyKey()` own `"Press the AnyKey..."`)
+/// or `INPUT`'s own `"...? "` prompt sat invisible in the buffer until
+/// something else happened to flush it (neither `bcc_inkey`'s `read()` nor
+/// `bcc_read_line`'s `fgets` flushes stdout first). Observed on a real
+/// terminal as the prompt appearing only *after* a keystroke was read
+/// blind, with whatever printed next arriving all at once right alongside
+/// it. `Statement::Print`'s and `Statement::Input`'s C codegen now emit an
+/// explicit `fflush(stdout);` right after any printf with no trailing
+/// `\n`. Needs no `gcc`: this pins the exact generated C text, which is
+/// sufficient (the bug was entirely about whether the `fflush` call gets
+/// emitted at all).
+#[test]
+fn c_print_without_trailing_newline_flushes_stdout() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().expect("failed to create print-flush fixture directory");
+    let source_path = dir.path().join("print_flush.bcl");
+    fs::write(
+        &source_path,
+        "program printFlush\nprint \"prompt\";\ninput \"n\"; x%\nprint \"done\"\nend\n",
+    )
+    .expect("failed to write print-flush fixture");
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile {source_path:?} under --target C"
+    );
+
+    let generated = fs::read_to_string(output_dir.join("print_flush.c"))
+        .expect("failed to read generated print_flush.c");
+    let flush_count = generated.matches("fflush(stdout);").count();
+    assert_eq!(
+        flush_count, 2,
+        "expected a flush after both the bare `print \"prompt\";` and the \
+         INPUT prompt (but not after `print \"done\"`, which already ends \
+         in a newline):\n{generated}"
+    );
+}

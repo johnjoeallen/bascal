@@ -1447,3 +1447,52 @@ fn jvm_inkey_setup_does_not_disable_output_postprocessing() {
          translation for the rest of the run:\n{generated}"
     );
 }
+
+/// Regression test for a real bug: `System.out`'s autoflush only triggers
+/// on a `\n` byte or a `println` call, so a `print "...";`/`print "...",`
+/// (no trailing newline -- `waitAnyKey()`'s own `"Press the AnyKey..."` in
+/// `tutorial/inventory.bcl`) or `INPUT`'s own `"...? "` prompt sat
+/// invisible in the buffer, on a real terminal, until something else
+/// happened to flush it -- observed as the prompt only appearing *after* a
+/// keystroke was read blind, with whatever printed next arriving all at
+/// once right alongside it. `emit_print_tokens`/`emit_input` now flush
+/// `System.out` explicitly right after a non-newline-terminated `print`/an
+/// `INPUT` prompt. Needs no `java`/`krak2`: this pins the flush call in the
+/// generated assembly text directly, which is sufficient (the bug was
+/// entirely about whether the flush call is emitted at all).
+#[test]
+fn jvm_print_without_trailing_newline_flushes_stdout() {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create print-flush fixture");
+    fs::write(
+        file.path(),
+        "program printFlush\nprint \"prompt\";\ninput \"n\"; x%\nprint \"done\"\nend\n",
+    )
+    .expect("failed to write print-flush fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "print-flush fixture failed to compile under --target jvm:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let j_path = file.path().with_extension("j");
+    let generated = fs::read_to_string(&j_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", j_path.display()));
+    let flush_count = generated
+        .matches("invokevirtual java/io/PrintStream/flush ()V")
+        .count();
+    assert_eq!(
+        flush_count, 2,
+        "expected a flush after both the bare `print \"prompt\";` and the \
+         INPUT prompt (but not after `print \"done\"`, which already ends \
+         in a newline):\n{generated}"
+    );
+}

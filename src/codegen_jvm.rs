@@ -379,9 +379,18 @@ fn emit_input(
     };
     let variable = context.variable(name)?;
     if let Some(prompt) = prompt {
+        // `.print()`, not `.println()` -- real BASIC's own trailing `"? "`
+        // (appended below) stays on the same line as whatever's typed
+        // next. `System.out`'s autoflush only triggers on a `\n` byte or a
+        // `println` call, so without the explicit flush here the prompt
+        // would sit invisible in the buffer until something else flushed
+        // it -- see `emit_print_tokens`'s own doc comment on this same gap
+        // (and its fix) for `print ...;`/`print ...,`.
         out.push_str(&format!(
             "    getstatic java/lang/System/out Ljava/io/PrintStream;\n    ldc \"{}? \"\n    \
-             invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V\n",
+             invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V\n    \
+             getstatic java/lang/System/out Ljava/io/PrintStream;\n    \
+             invokevirtual java/io/PrintStream/flush ()V\n",
             escape_jvm_string(prompt)
         ));
     }
@@ -1896,9 +1905,6 @@ fn next_condition_label(context: &JvmContext) -> String {
     format!("L_condition_{id}")
 }
 
-/// Emits each PRINT value directly to `System.out`.  Separators currently
-/// follow the bootstrap C backend's simple rule: they only suppress the
-/// final newline; they do not implement BASCOM's tab-zone formatting.
 /// Emits a bare numeric `PRINT` value and returns the descriptor its
 /// `PrintStream` call should use. `Int`/`Long` print via the JVM's own
 /// native formatting, unchanged; a `Double` (BASCAL `single`/`double`,
@@ -1924,6 +1930,24 @@ fn emit_numeric_print_value(
     }
 }
 
+/// Emits each PRINT value directly to `System.out`.  Separators currently
+/// follow the bootstrap C backend's simple rule: they only suppress the
+/// final newline; they do not implement BASCOM's tab-zone formatting.
+///
+/// When a trailing `;`/`,` suppresses that final newline (`print`, not
+/// `println`), this also flushes `System.out` explicitly right after --
+/// `System.out`'s own autoflush only triggers on a `\n` byte or a
+/// `println` call, so a prompt like `waitAnyKey()`'s own `"Press the
+/// AnyKey..."` (`tutorial/inventory.bcl`) or `INPUT`'s `"...? "`
+/// (`emit_input`) would otherwise sit in the stream's internal buffer,
+/// invisible on the real terminal, until something else happened to flush
+/// it -- which, since neither `INKEY$`'s polling read nor `INPUT`'s
+/// `readLine()` flushes either, could be arbitrarily later. A real run
+/// showed the prompt appearing only *after* a keystroke was read blind,
+/// with whatever printed next arriving all at once right alongside it --
+/// a real bug, not print-ordering in the BCL source (`codegen_c.rs`'s
+/// `printf`/`fflush(stdout)` has the identical gap and fix, for the same
+/// reason: C's own stdio buffering).
 fn emit_print_tokens(
     tokens: &[PrintToken],
     out: &mut String,
@@ -1974,6 +1998,9 @@ fn emit_print_tokens(
         out.push_str(&format!(
             "    invokevirtual java/io/PrintStream/{method} {descriptor}\n"
         ));
+    }
+    if trailing_separator {
+        out.push_str("    getstatic java/lang/System/out Ljava/io/PrintStream;\n    invokevirtual java/io/PrintStream/flush ()V\n");
     }
     Ok(())
 }

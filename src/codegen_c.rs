@@ -4179,6 +4179,22 @@ fn emit_statement(
             }
             call.push(')');
             out.push_str(&format!("    {call};\n"));
+            if !needs_newline {
+                // A trailing `;`/`,` suppresses the newline glibc's stdio
+                // would otherwise flush stdout on (it's line-buffered
+                // against a real terminal, fully buffered otherwise) --
+                // without an explicit flush here, a prompt like `INPUT`'s
+                // own `"...? "` (see `Statement::Input`'s own arm) or
+                // `waitAnyKey()`'s `"Press the AnyKey..."`
+                // (`tutorial/inventory.bcl`) stays invisible in the
+                // buffer until something else flushes it, which can be
+                // arbitrarily later: `bcc_inkey`/`bcc_read_line` don't
+                // flush either, so a real run showed the prompt appearing
+                // only *after* a keystroke was read blind, with whatever
+                // printed next arriving all at once -- a real bug, not
+                // print-ordering in the BCL source.
+                out.push_str("    fflush(stdout);\n");
+            }
             Ok(())
         }
         Statement::End => {
@@ -4230,6 +4246,13 @@ fn emit_statement(
                 None => "? ".to_string(),
             };
             out.push_str(&format!("    printf(\"{prompt_text}\");\n"));
+            // No trailing `\n` in `prompt_text` -- glibc's line-buffered
+            // stdout (against a real terminal) wouldn't otherwise flush
+            // this prompt before `bcc_read_line`'s blocking `fgets` reads
+            // a line, leaving it invisible until something else flushed
+            // the buffer (see `Statement::Print`'s own `fflush` for the
+            // identical gap/fix on a bare `print ...;`/`print ...,`).
+            out.push_str("    fflush(stdout);\n");
             out.push_str("    bcc_read_line();\n");
             if ident.suffix == Some(TypeSuffix::String) {
                 let c_name = c_var_name(ident, TypeSuffix::String);
