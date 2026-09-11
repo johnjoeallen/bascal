@@ -12,9 +12,13 @@
 .field public static g10 Ljava/lang/String;
 .field public static g11 I
 .field public static g12 Ljava/lang/String;
+.field public static g13 Ljava/lang/String;
+.field public static g14 J
+.field public static g16 Ljava/lang/String;
+.field public static g17 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 7
+    .limit locals 8
 
     iconst_0
     istore 1
@@ -91,7 +95,7 @@ L_for_0_end:
 
 .method public static shout : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 5
 
     new java/lang/StringBuilder
     dup
@@ -111,7 +115,7 @@ L_for_0_end:
 
 .method public static surround : (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 6
+    .limit locals 7
 
     new java/lang/StringBuilder
     dup
@@ -137,7 +141,7 @@ L_for_0_end:
 
 .method public static clamp : (III)I
     .limit stack 16
-    .limit locals 6
+    .limit locals 7
 
     iload 0
     iload 1
@@ -170,7 +174,7 @@ L_if_0_end:
 
 .method public static percent : (DD)D
     .limit stack 16
-    .limit locals 7
+    .limit locals 8
 
     dload 0
     dload 2
@@ -187,7 +191,7 @@ L_if_0_end:
 
 .method public static cardRestock : ([Ljava/lang/String;[Ljava/lang/String;[JI)V
     .limit stack 16
-    .limit locals 11
+    .limit locals 12
 
     aload 0
     iconst_0
@@ -221,9 +225,53 @@ L_if_0_end:
     return
 .end method
 
+.method public static signedcardRestock : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
+    .limit stack 16
+    .limit locals 14
+
+    aload 0
+    iconst_0
+    aaload
+    astore 5
+    aload 1
+    iconst_0
+    aaload
+    astore 6
+    aload 2
+    iconst_0
+    laload
+    lstore 7
+    aload 3
+    iconst_0
+    aaload
+    astore 9
+    lload 7
+    iload 4
+    i2l
+    ladd
+    lstore 7
+    aload 0
+    iconst_0
+    aload 5
+    aastore
+    aload 1
+    iconst_0
+    aload 6
+    aastore
+    aload 2
+    iconst_0
+    lload 7
+    lastore
+    aload 3
+    iconst_0
+    aload 9
+    aastore
+    return
+.end method
+
 .method public static cardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
     .limit stack 16
-    .limit locals 10
+    .limit locals 11
 
     aload 0
     iconst_0
@@ -281,6 +329,92 @@ L_if_0_end:
     areturn
 .end method
 
+.method public static signedcardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 13
+
+    aload 0
+    iconst_0
+    aaload
+    astore 4
+    aload 1
+    iconst_0
+    aaload
+    astore 5
+    aload 2
+    iconst_0
+    laload
+    lstore 6
+    aload 3
+    iconst_0
+    aaload
+    astore 8
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    aload 4
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc " by "
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    aload 5
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc ", signed "
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    aload 8
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
+    aload 3
+    iconst_0
+    aload 8
+    aastore
+    areturn
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
+    aload 3
+    iconst_0
+    aload 8
+    aastore
+    ldc ""
+    areturn
+.end method
+
 .method public static bccStr : (D)Ljava/lang/String;
     .limit stack 6
     .limit locals 2
@@ -301,7 +435,7 @@ L_if_0_end:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 16
+    .limit locals 22
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;
@@ -323,6 +457,14 @@ L_if_0_end:
     putstatic Methods/g11 I
     ldc ""
     putstatic Methods/g12 Ljava/lang/String;
+    ldc ""
+    putstatic Methods/g13 Ljava/lang/String;
+    lconst_0
+    putstatic Methods/g14 J
+    ldc ""
+    putstatic Methods/g16 Ljava/lang/String;
+    ldc ""
+    putstatic Methods/g17 Ljava/lang/String;
     ; Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
@@ -440,34 +582,34 @@ L_if_0_end:
     iconst_0
     getstatic Methods/g4 Ljava/lang/String;
     aastore
-    astore 13
-    aload 13
+    astore 18
+    aload 18
     iconst_1
     anewarray java/lang/String
     dup
     iconst_0
     getstatic Methods/g1 Ljava/lang/String;
     aastore
-    astore 14
-    aload 14
+    astore 19
+    aload 19
     iconst_1
     newarray long
     dup
     iconst_0
     getstatic Methods/g2 J
     lastore
-    astore 15
-    aload 15
+    astore 20
+    aload 20
     invokestatic Methods/cardDisplay ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
-    aload 13
+    aload 18
     iconst_0
     aaload
     putstatic Methods/g4 Ljava/lang/String;
-    aload 14
+    aload 19
     iconst_0
     aaload
     putstatic Methods/g1 Ljava/lang/String;
-    aload 15
+    aload 20
     iconst_0
     laload
     putstatic Methods/g2 J
@@ -485,35 +627,35 @@ L_if_0_end:
     iconst_0
     getstatic Methods/g4 Ljava/lang/String;
     aastore
-    astore 13
-    aload 13
+    astore 18
+    aload 18
     iconst_1
     anewarray java/lang/String
     dup
     iconst_0
     getstatic Methods/g1 Ljava/lang/String;
     aastore
-    astore 14
-    aload 14
+    astore 19
+    aload 19
     iconst_1
     newarray long
     dup
     iconst_0
     getstatic Methods/g2 J
     lastore
-    astore 15
-    aload 15
+    astore 20
+    aload 20
     ldc 3
     invokestatic Methods/cardRestock ([Ljava/lang/String;[Ljava/lang/String;[JI)V
-    aload 13
+    aload 18
     iconst_0
     aaload
     putstatic Methods/g4 Ljava/lang/String;
-    aload 14
+    aload 19
     iconst_0
     aaload
     putstatic Methods/g1 Ljava/lang/String;
-    aload 15
+    aload 20
     iconst_0
     laload
     putstatic Methods/g2 J
@@ -522,6 +664,132 @@ L_if_0_end:
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
+    invokevirtual java/io/PrintStream/println (J)V
+
+    ; `mixin` is structural field composition only, not inheritance:
+    ; SignedCard's own field list is Card's fields (title, author, copies)
+    ; followed by its own (signature), so its record literal accepts all
+    ; four -- but Card's methods aren't mixed in. SignedCard needs its own
+    ; display() (below); calling signed.restock(...) without declaring
+    ; SignedCard's own restock() would be a compile error, since a method
+    ; is only ever visible for the exact record type it was declared for.
+
+
+    ldc "Dune"
+    putstatic Methods/g17 Ljava/lang/String;
+    ldc "Frank Herbert"
+    putstatic Methods/g13 Ljava/lang/String;
+    ldc 1
+    i2l
+    putstatic Methods/g14 J
+    ldc "F.H."
+    putstatic Methods/g16 Ljava/lang/String;
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g17 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g13 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
+    getstatic Methods/g14 J
+    lastore
+    astore 20
+    aload 20
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g16 Ljava/lang/String;
+    aastore
+    astore 21
+    aload 21
+    invokestatic Methods/signedcardDisplay ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g17 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g13 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g14 J
+    aload 21
+    iconst_0
+    aaload
+    putstatic Methods/g16 Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g17 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g13 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
+    getstatic Methods/g14 J
+    lastore
+    astore 20
+    aload 20
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g16 Ljava/lang/String;
+    aastore
+    astore 21
+    aload 21
+    ldc 2
+    invokestatic Methods/signedcardRestock ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g17 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g13 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g14 J
+    aload 21
+    iconst_0
+    aaload
+    putstatic Methods/g16 Ljava/lang/String;
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    ldc "signed copies after restock = "
+    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    getstatic Methods/g14 J
     invokevirtual java/io/PrintStream/println (J)V
 
     return

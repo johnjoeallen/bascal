@@ -117,7 +117,7 @@ card.bump(4)
 print card.qty          ' 5
 ```
 
-BASCAL records have no inheritance (`extends`/subtype relationships aren't part of the language): a variable has exactly one declared record type, with no upcast, downcast, or covariance between unrelated record types. Two different record types may each declare a same-named method with no ambiguity or collision — method resolution always uses the receiver's own exact declared type, never a dynamic/runtime one:
+BASCAL records have no inheritance or subtype relationships: a variable has exactly one declared record type, with no upcast, downcast, or covariance between unrelated record types. Two different record types may each declare a same-named method with no ambiguity or collision — method resolution always uses the receiver's own exact declared type, never a dynamic/runtime one:
 
 ```bascal
 record Animal
@@ -140,6 +140,84 @@ end record
 
 `Animal.speak` and `Dog.speak` are two entirely separate callables. There is no virtual override, no vtable, and no runtime dispatch mechanism of any kind — a method call is resolved once, at compile time, from whichever exact record type its receiver expression was declared with.
 
+### Structural composition with `mixin`
+
+A record mixin contributes the fields of one or more existing record types to a new record type. Mixins provide structural composition only: they do not imply inheritance, subtype compatibility, polymorphism, or method inheritance. All effective field names must be unique; duplicate field names are compile-time errors.
+
+`record Dog mixin Animal` makes `Dog` composed of `Animal`'s fields, accessed directly:
+
+```bascal
+record Animal
+    species: string(20)
+end record
+
+record Dog mixin Animal
+    breed: string(20)
+end record
+
+let d = { species: "Canis", breed: "Labrador" }
+print d.species              ' "Canis" -- Animal's own field
+print d.breed                ' "Labrador" -- Dog's own field
+```
+
+`Dog`'s *effective* field list is `Animal`'s fields followed by `Dog`'s own (`species`, `breed`), so a `Dog` record literal accepts all of them, and `d.species` is ordinary field access exactly like any other field. Multiple sources can be mixed in, comma-separated, and mixins can be transitive (a mixed-in record can itself mixin others) — every source's effective fields are computed first, then combined, before any duplicate checking:
+
+```bascal
+record Pet
+    called: string(20)
+end record
+
+record Dog mixin Animal, Pet
+    breed: string(20)
+end record
+```
+
+`Dog` now has `species` (from `Animal`), `called` (from `Pet`), and `breed` (its own).
+
+**Mixins never contribute methods.** A method declared for an `Animal` receiver applies only to an `Animal` receiver, even when `Dog` is composed of every one of `Animal`'s fields:
+
+```bascal
+record Animal
+    species: string(20)
+
+    method describe(): $
+        return "a " + self.species
+    end method
+end record
+
+record Dog mixin Animal
+    breed: string(20)
+end record
+
+let d = { species: "Canis", breed: "Labrador" }
+print d.describe()           ' compile-time error -- no describe() for Dog
+```
+
+If `Dog` needs that behavior, it declares its own method — inline or external, same as any other record method:
+
+```bascal
+method describe[Dog](): $
+    return self.breed + " (" + self.species + ")"
+end method
+```
+
+`mixin` does **not** make `Dog` assignable to or from `Animal`. Each remains its own exact record type:
+
+```bascal
+dim a as Animal
+dim d as Dog
+
+a = d   ' rejected -- Dog is not assignable to Animal
+d = a   ' rejected -- Animal is not assignable to Dog
+```
+
+There is no upcast, no downcast, no covariance, and no runtime containment of any kind. A record mixing in an undeclared type, or mixing in itself (directly or through a longer cycle), is a compile-time error. A duplicate field name — whether contributed by two different mixin sources, reached through two different transitive mixin paths, or colliding with a field the record declares directly — is always a compile-time error too; BASCAL introduces no aliasing, qualification, or "last one wins" rule to paper over it:
+
+```text
+Duplicate field 'name' in record 'Dog':
+field contributed by both 'Animal' and 'Pet'
+```
+
 ### Calling and chaining
 
 Method calls always use parentheses. Scalar method chaining works the same as before — the receiver is written before the dot, and the method's result becomes the receiver for the next call when its type matches:
@@ -157,7 +235,7 @@ Built-in scalar methods such as `left`, `len`, `abs`, and `sin` are syntax for t
 
 Every method — scalar or record, inline or external — is fully resolved before any backend runs: by the time BASIC, C, or JVM codegen sees the program, a method is indistinguishable from a hand-written ordinary function. A record method's `self` becomes one ordinary parameter per record field (`byref`, so mutations propagate back to the caller); a call site becomes an ordinary call, the receiver's own fields passed as its leading arguments.
 
-The JVM backend in particular never needs `invokevirtual`, a Java interface, a vtable, or any other object-oriented dispatch mechanism to implement this: `card.display()` lowers to loading `card`'s own fields and an ordinary `invokestatic`, the same as any other function call. (Receiver-mutation write-back through the JVM backend specifically depends on its own `byref` scalar parameter support, which landed after this feature and may not yet be present in every build — check `bump()`-style output if in doubt; the read-only case, like `display()` above, is unaffected either way.) Conceptually:
+The JVM backend in particular never needs `invokevirtual`, a Java interface, a vtable, or any other object-oriented dispatch mechanism to implement this: `card.display()` lowers to loading `card`'s own fields and an ordinary `invokestatic`, the same as any other function call. Conceptually:
 
 ```text
 method display[Card](): $
@@ -179,4 +257,4 @@ None of this creates a runtime method object, and none of it requires the three 
 
 ### What record methods do not do
 
-Record methods do not give BASCAL runtime polymorphism, inheritance-based dispatch, or Java-style object semantics. A record is a fixed-layout value type, not a class; a record variable's type is fixed at declaration and never changes at runtime; and there is no way for two record types to share a method identity the way a subclass overrides a parent's method in an object-oriented language. If BASCAL ever adds structural record reuse (`extends`-style field aggregation), that reuse does not imply assignability or method-dispatch substitutability between the two record types — each retains its own exact type and its own exact method resolution.
+Record methods do not give BASCAL runtime polymorphism, inheritance-based dispatch, or Java-style object semantics. A record is a fixed-layout value type, not a class; a record variable's type is fixed at declaration and never changes at runtime; and there is no way for two record types to share a method identity the way a subclass overrides a parent's method in an object-oriented language. `mixin` (see above) reuses field declarations only — it does not mix in methods, and it does not imply assignability or method-dispatch substitutability between the mixing record and its sources — each retains its own exact type and its own exact method resolution.

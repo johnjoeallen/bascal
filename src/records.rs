@@ -287,7 +287,22 @@ impl Lowerer {
         }
     }
 
+    /// `record Dog mixin Animal, Pet` is structural field composition only
+    /// -- `Dog`'s effective field list is `Animal`'s effective fields, then
+    /// `Pet`'s, then `Dog`'s own declared fields, in that order. This is
+    /// NOT inheritance, subtyping, or polymorphism of any kind: `Dog`,
+    /// `Animal`, and `Pet` remain three entirely distinct record types
+    /// afterward (`self.records` holds separate, unrelated entries) --
+    /// nothing here makes a `Dog` value assignable to/from an `Animal` or
+    /// `Pet` variable (see `lower_record_copy`/`record_type_for_literal`'s
+    /// own exact-type checks, untouched by this) -- and methods are never
+    /// mixed in at all: a method declared for `Animal` never applies to a
+    /// `Dog` receiver, even though `Dog` mixes in `Animal`'s fields (see
+    /// `rewrite_record_method_call`, which only ever looks up a method
+    /// under the receiver's own exact type -- there is no ancestor-walking
+    /// fallback of any kind here, unlike this feature's field composition).
     fn build_record_table(&mut self, records: &[RecordDef]) {
+        let mut raw: HashMap<String, (&RecordDef, Vec<FieldSpec>)> = HashMap::new();
         let mut seen_names = std::collections::HashSet::new();
         for rec in records {
             let key = rec.name.to_ascii_lowercase();
@@ -300,8 +315,6 @@ impl Lowerer {
             }
             let mut seen_fields = std::collections::HashSet::new();
             let mut fields = Vec::new();
-            let mut width = 0u32;
-            let mut variable_width = false;
             for f in &rec.fields {
                 if !seen_fields.insert(f.name.to_ascii_lowercase()) {
                     self.diagnostics.push(Diagnostic::error(
@@ -320,15 +333,28 @@ impl Lowerer {
                     ));
                     continue;
                 }
-                if matches!(f.ty, RecordFieldType::StrDynamic) {
-                    variable_width = true;
-                } else {
-                    width += field_width(&f.ty);
-                }
                 fields.push(FieldSpec {
                     name: f.name.clone(),
                     ty: f.ty.clone(),
                 });
+            }
+            raw.insert(key, (rec, fields));
+        }
+
+        let mut resolved: HashMap<String, Vec<(FieldSpec, String)>> = HashMap::new();
+        for key in raw.keys().cloned().collect::<Vec<_>>() {
+            let mut visiting = Vec::new();
+            let attributed =
+                self.resolve_effective_fields(&key, &raw, &mut resolved, &mut visiting);
+            let fields: Vec<FieldSpec> = attributed.iter().map(|(f, _)| f.clone()).collect();
+            let mut width = 0u32;
+            let mut variable_width = false;
+            for field in &fields {
+                if matches!(field.ty, RecordFieldType::StrDynamic) {
+                    variable_width = true;
+                } else {
+                    width += field_width(&field.ty);
+                }
             }
             self.records.insert(
                 key,
@@ -339,6 +365,107 @@ impl Lowerer {
                 },
             );
         }
+    }
+
+    /// Computes `key`'s complete effective field set -- each listed
+    /// `mixin` source's own effective fields (already resolved, memoized
+    /// in `resolved` so a source mixed into several records is only ever
+    /// walked once), in declaration order, followed by `key`'s own
+    /// directly-declared fields -- checking for a duplicate field name
+    /// across the *entire* combined set as it goes, regardless of how deep
+    /// a transitive `mixin` chain contributed it (see the module doc
+    /// comment's `D mixin B, C` example, where `value` reaching `D` through
+    /// two different transitive paths must still be caught). Each field is
+    /// paired with a source label purely for the duplicate diagnostic
+    /// (`"Animal"`/`"Pet"`/`"declared directly in Dog"`) -- a field
+    /// re-flattened through an intermediate mixin is re-labeled with that
+    /// intermediate's own name here, not traced back to its ultimate
+    /// origin, which keeps the diagnostic simple and always names something
+    /// the record's own source directly lists.
+    ///
+    /// `visiting` detects a mixin cycle (`A mixin B` + `B mixin A`, or a
+    /// longer one); an already-diagnosed record (an unresolvable `mixin`
+    /// target, met earlier while resolving a different record first) or a
+    /// self-referential lookup miss short-circuits to an empty field list
+    /// rather than cascading more errors. A `mixin` naming an undeclared
+    /// record is diagnosed here (not in `build_record_table`'s own loop)
+    /// since the target might be a record declared later in iteration
+    /// order, not yet known to be missing until every raw entry has been
+    /// collected.
+    fn resolve_effective_fields(
+        &mut self,
+        key: &str,
+        raw: &HashMap<String, (&RecordDef, Vec<FieldSpec>)>,
+        resolved: &mut HashMap<String, Vec<(FieldSpec, String)>>,
+        visiting: &mut Vec<String>,
+    ) -> Vec<(FieldSpec, String)> {
+        if let Some(fields) = resolved.get(key) {
+            return fields.clone();
+        }
+        let Some(&(rec, ref own_fields)) = raw.get(key) else {
+            return Vec::new();
+        };
+        if visiting.iter().any(|seen| seen.eq_ignore_ascii_case(key)) {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!(
+                    "record `{}` mixes in itself, directly or indirectly",
+                    rec.name
+                ),
+            ));
+            resolved.insert(key.to_string(), Vec::new());
+            return Vec::new();
+        }
+        visiting.push(key.to_string());
+        let mut fields: Vec<(FieldSpec, String)> = Vec::new();
+        let mut seen: HashMap<String, String> = HashMap::new();
+        for mixin in &rec.mixins {
+            let mixin_key = mixin.to_ascii_lowercase();
+            if !raw.contains_key(&mixin_key) {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!(
+                        "record `{}` mixes in `{mixin}`, which is not a declared record type",
+                        rec.name
+                    ),
+                ));
+                continue;
+            }
+            let source_fields = self.resolve_effective_fields(&mixin_key, raw, resolved, visiting);
+            for (field, _) in &source_fields {
+                let field_key = field.name.to_ascii_lowercase();
+                if let Some(existing_source) = seen.get(&field_key) {
+                    self.diagnostics.push(Diagnostic::error(
+                        generated_pos(),
+                        format!(
+                            "duplicate field `{}` in record `{}`: field contributed by both `{existing_source}` and `{mixin}`",
+                            field.name, rec.name
+                        ),
+                    ));
+                    continue;
+                }
+                seen.insert(field_key, mixin.clone());
+                fields.push((field.clone(), mixin.clone()));
+            }
+        }
+        for field in own_fields {
+            let field_key = field.name.to_ascii_lowercase();
+            if let Some(existing_source) = seen.get(&field_key) {
+                self.diagnostics.push(Diagnostic::error(
+                    generated_pos(),
+                    format!(
+                        "duplicate field `{}` in record `{}`: field contributed by both `{existing_source}` and declared directly in `{}`",
+                        field.name, rec.name, rec.name
+                    ),
+                ));
+                continue;
+            }
+            seen.insert(field_key, rec.name.clone());
+            fields.push((field.clone(), rec.name.clone()));
+        }
+        visiting.pop();
+        resolved.insert(key.to_string(), fields.clone());
+        fields
     }
 
     /// Resolves every record method's declared receiver against
@@ -2001,6 +2128,13 @@ impl Lowerer {
     /// mutations (a record method's own `self.field = ...` assignments)
     /// come back out through those same arguments once the call returns,
     /// exactly like any other BASCAL `byref` parameter.
+    ///
+    /// Only ever looks up `record_type`'s own exact methods -- never a
+    /// mixed-in source's. Methods are not mixed in: `record Dog mixin
+    /// Animal` gives `Dog` `Animal`'s *fields*, but a method declared for
+    /// an `Animal` receiver still only ever applies to an `Animal`
+    /// receiver. `Dog` needs its own `method describe[Dog](): $` if it
+    /// wants one.
     fn rewrite_record_method_call(
         &mut self,
         var: BasicIdent,
