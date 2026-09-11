@@ -666,11 +666,11 @@ L_if_0_end:
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
 
-    ; `mixin` is structural field composition only, not inheritance:
+    ; `combines` is structural field composition only, not inheritance:
     ; SignedCard's own field list is Card's fields (title, author, copies)
     ; followed by its own (signature), so its record literal accepts all
-    ; four -- but Card's methods aren't mixed in. SignedCard needs its own
-    ; display() (below); calling signed.restock(...) without declaring
+    ; four -- but Card's methods aren't combined in. SignedCard needs its
+    ; own display() (below); calling signed.restock(...) without declaring
     ; SignedCard's own restock() would be a compile error, since a method
     ; is only ever visible for the exact record type it was declared for.
 

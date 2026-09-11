@@ -140,18 +140,18 @@ end record
 
 `Animal.speak` and `Dog.speak` are two entirely separate callables. There is no virtual override, no vtable, and no runtime dispatch mechanism of any kind — a method call is resolved once, at compile time, from whichever exact record type its receiver expression was declared with.
 
-### Structural composition with `mixin`
+### Structural composition with `combines`
 
-A record mixin contributes the fields of one or more existing record types to a new record type. Mixins provide structural composition only: they do not imply inheritance, subtype compatibility, polymorphism, or method inheritance. All effective field names must be unique; duplicate field names are compile-time errors.
+A record can combine the fields of one or more existing record types into a new record type. `combines` provides structural composition only: it does not imply inheritance, subtype compatibility, polymorphism, or method inheritance. All effective field names must be unique; duplicate field names are compile-time errors.
 
-`record Dog mixin Animal` makes `Dog` composed of `Animal`'s fields, accessed directly:
+`record Dog combines Animal` makes `Dog` composed of `Animal`'s fields, accessed directly:
 
 ```bascal
 record Animal
     species: string(20)
 end record
 
-record Dog mixin Animal
+record Dog combines Animal
     breed: string(20)
 end record
 
@@ -160,21 +160,21 @@ print d.species              ' "Canis" -- Animal's own field
 print d.breed                ' "Labrador" -- Dog's own field
 ```
 
-`Dog`'s *effective* field list is `Animal`'s fields followed by `Dog`'s own (`species`, `breed`), so a `Dog` record literal accepts all of them, and `d.species` is ordinary field access exactly like any other field. Multiple sources can be mixed in, comma-separated, and mixins can be transitive (a mixed-in record can itself mixin others) — every source's effective fields are computed first, then combined, before any duplicate checking:
+`Dog`'s *effective* field list is `Animal`'s fields followed by `Dog`'s own (`species`, `breed`), so a `Dog` record literal accepts all of them, and `d.species` is ordinary field access exactly like any other field. Multiple sources can be combined, comma-separated, and combination can be transitive (a combined record can itself combine others) — every source's effective fields are computed first, then combined, before any duplicate checking:
 
 ```bascal
 record Pet
     called: string(20)
 end record
 
-record Dog mixin Animal, Pet
+record Dog combines Animal, Pet
     breed: string(20)
 end record
 ```
 
 `Dog` now has `species` (from `Animal`), `called` (from `Pet`), and `breed` (its own).
 
-**Mixins never contribute methods.** A method declared for an `Animal` receiver applies only to an `Animal` receiver, even when `Dog` is composed of every one of `Animal`'s fields:
+**Combining records never combines methods.** A method declared for an `Animal` receiver applies only to an `Animal` receiver, even when `Dog` is composed of every one of `Animal`'s fields:
 
 ```bascal
 record Animal
@@ -185,7 +185,7 @@ record Animal
     end method
 end record
 
-record Dog mixin Animal
+record Dog combines Animal
     breed: string(20)
 end record
 
@@ -201,7 +201,7 @@ method describe[Dog](): $
 end method
 ```
 
-`mixin` does **not** make `Dog` assignable to or from `Animal`. Each remains its own exact record type:
+`combines` does **not** make `Dog` assignable to or from `Animal`. Each remains its own exact record type:
 
 ```bascal
 dim a as Animal
@@ -211,7 +211,7 @@ a = d   ' rejected -- Dog is not assignable to Animal
 d = a   ' rejected -- Animal is not assignable to Dog
 ```
 
-There is no upcast, no downcast, no covariance, and no runtime containment of any kind. A record mixing in an undeclared type, or mixing in itself (directly or through a longer cycle), is a compile-time error. A duplicate field name — whether contributed by two different mixin sources, reached through two different transitive mixin paths, or colliding with a field the record declares directly — is always a compile-time error too; BASCAL introduces no aliasing, qualification, or "last one wins" rule to paper over it:
+There is no upcast, no downcast, no covariance, and no runtime containment of any kind. A record combining an undeclared type, or combining itself (directly or through a longer cycle), is a compile-time error. A duplicate field name — whether contributed by two different combined sources, reached through two different transitive combination paths, or colliding with a field the record declares directly — is always a compile-time error too; BASCAL introduces no aliasing, qualification, or "last one wins" rule to paper over it:
 
 ```text
 Duplicate field 'name' in record 'Dog':
@@ -257,4 +257,4 @@ None of this creates a runtime method object, and none of it requires the three 
 
 ### What record methods do not do
 
-Record methods do not give BASCAL runtime polymorphism, inheritance-based dispatch, or Java-style object semantics. A record is a fixed-layout value type, not a class; a record variable's type is fixed at declaration and never changes at runtime; and there is no way for two record types to share a method identity the way a subclass overrides a parent's method in an object-oriented language. `mixin` (see above) reuses field declarations only — it does not mix in methods, and it does not imply assignability or method-dispatch substitutability between the mixing record and its sources — each retains its own exact type and its own exact method resolution.
+Record methods do not give BASCAL runtime polymorphism, inheritance-based dispatch, or Java-style object semantics. A record is a fixed-layout value type, not a class; a record variable's type is fixed at declaration and never changes at runtime; and there is no way for two record types to share a method identity the way a subclass overrides a parent's method in an object-oriented language. `combines` (see above) reuses field declarations only — it never combines methods, and it does not imply assignability or method-dispatch substitutability between the combining record and its sources — each retains its own exact type and its own exact method resolution.

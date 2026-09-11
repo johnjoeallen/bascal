@@ -255,9 +255,9 @@ fn builtin_scalar_method_syntax_is_unaffected() {
 
 /// Two unrelated record types each declaring a same-named method resolve
 /// statically from the receiver's own exact declared type -- see the
-/// `mixin`-specific tests below for the same guarantee when one record
-/// mixes in the other's fields (methods still aren't shared); no dynamic
-/// dispatch mechanism exists either way.
+/// `combines`-specific tests below for the same guarantee when one
+/// record combines the other's fields (methods still aren't shared); no
+/// dynamic dispatch mechanism exists either way.
 #[test]
 fn same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type() {
     let source = "program p\n\
@@ -297,21 +297,21 @@ fn assigning_between_unrelated_record_types_is_rejected() {
     );
 }
 
-// ── `record ... mixin ...` (structural field composition) ──────────────
+// ── `record ... combines ...` (structural field composition) ───────────
 //
-// A record mixin contributes the fields of one or more existing record
-// types to a new record type. Mixins provide structural composition
-// only: they do not imply inheritance, subtype compatibility,
-// polymorphism, or method inheritance. All effective field names must be
-// unique; duplicate field names are compile-time errors.
+// A record combines the fields of one or more existing record types into
+// a new record type. `combines` provides structural composition only: it
+// does not imply inheritance, subtype compatibility, polymorphism, or
+// method inheritance. All effective field names must be unique;
+// duplicate field names are compile-time errors.
 
-/// A single mixin contributes its source's fields to the new record,
+/// A single combined source contributes its fields to the new record,
 /// accessed directly alongside the new record's own fields.
 #[test]
-fn mixin_single_source_contributes_its_fields() {
+fn combines_single_source_contributes_its_fields() {
     let source = "program p\n\
          record Animal\n    species: string(20)\nend record\n\
-         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         record Dog combines Animal\n    breed: string(20)\nend record\n\
          let d = { species: \"Canis\", breed: \"Labrador\" }\n\
          print d.species\nprint d.breed\nend\n";
     let out = run_basic_via_bas(source);
@@ -320,15 +320,15 @@ fn mixin_single_source_contributes_its_fields() {
     assert_eq!(lines[1].trim(), "Labrador");
 }
 
-/// Multiple, comma-separated mixin sources all contribute their fields,
+/// Multiple, comma-separated sources all contribute their fields,
 /// combined with the record's own -- `species` (from `Animal`), `called`
 /// (from `Pet`), and `breed` (`Dog`'s own) are all accessed directly.
 #[test]
-fn mixin_multiple_sources_all_contribute_fields() {
+fn combines_multiple_sources_all_contribute_fields() {
     let source = "program p\n\
          record Animal\n    species: string(20)\nend record\n\
          record Pet\n    called: string(20)\nend record\n\
-         record Dog mixin Animal, Pet\n    breed: string(20)\nend record\n\
+         record Dog combines Animal, Pet\n    breed: string(20)\nend record\n\
          let d = { species: \"Canis\", called: \"Rex\", breed: \"Labrador\" }\n\
          print d.species\nprint d.called\nprint d.breed\nend\n";
     let out = run_basic_via_bas(source);
@@ -338,15 +338,16 @@ fn mixin_multiple_sources_all_contribute_fields() {
     assert_eq!(lines[2].trim(), "Labrador");
 }
 
-/// Transitive mixins: `Dog mixin Animal`, `Animal mixin Named` -- `Dog`'s
-/// effective fields include `Named`'s (`name`), `Animal`'s (`species`),
-/// and `Dog`'s own (`breed`), computed before any duplicate checking.
+/// Transitive combination: `Dog combines Animal`, `Animal combines Named`
+/// -- `Dog`'s effective fields include `Named`'s (`name`), `Animal`'s
+/// (`species`), and `Dog`'s own (`breed`), computed before any duplicate
+/// checking.
 #[test]
-fn mixin_resolves_transitively_through_multiple_levels() {
+fn combines_resolves_transitively_through_multiple_levels() {
     let source = "program p\n\
          record Named\n    name: string(20)\nend record\n\
-         record Animal mixin Named\n    species: string(20)\nend record\n\
-         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         record Animal combines Named\n    species: string(20)\nend record\n\
+         record Dog combines Animal\n    breed: string(20)\nend record\n\
          let d = { name: \"Rex\", species: \"Canis\", breed: \"Labrador\" }\n\
          print d.name\nprint d.species\nprint d.breed\nend\n";
     let out = run_basic_via_bas(source);
@@ -356,20 +357,20 @@ fn mixin_resolves_transitively_through_multiple_levels() {
     assert_eq!(lines[2].trim(), "Labrador");
 }
 
-/// A `mixin` never implies assignability: a `Dog` value is still not
-/// assignable to/from an `Animal` variable, even though `Dog` mixes in
+/// `combines` never implies assignability: a `Dog` value is still not
+/// assignable to/from an `Animal` variable, even though `Dog` combines
 /// every one of `Animal`'s fields -- each remains its own exact type.
 #[test]
-fn mixin_does_not_imply_assignability() {
+fn combines_does_not_imply_assignability() {
     let source = "program p\n\
          record Animal\n    species: string(20)\nend record\n\
-         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         record Dog combines Animal\n    breed: string(20)\nend record\n\
          let a = { species: \"Canis\" }\n\
          let d = { species: \"Canis\", breed: \"Labrador\" }\n\
          a = d\n\
          end\n";
     let err = compile(source, Target::Basic)
-        .expect_err("Dog should not be assignable to Animal despite mixin");
+        .expect_err("Dog should not be assignable to Animal despite combines");
     let message = first_message(&err).to_ascii_lowercase();
     assert!(
         message.contains("dog") && message.contains("animal"),
@@ -377,16 +378,16 @@ fn mixin_does_not_imply_assignability() {
     );
 }
 
-/// Methods are not mixed in: `Dog mixin Animal` gives `Dog` `Animal`'s
-/// fields, but a method declared for an `Animal` receiver never applies
-/// to a `Dog` receiver -- `Dog` needs its own declaration.
+/// Methods are not combined: `Dog combines Animal` makes `Dog` composed
+/// of `Animal`'s fields, but a method declared for an `Animal` receiver
+/// never applies to a `Dog` receiver -- `Dog` needs its own declaration.
 #[test]
-fn mixin_does_not_mix_in_methods() {
+fn combines_does_not_combine_methods() {
     let source = "program p\n\
          record Animal\n    species: string(20)\n\n    \
          method describe(): $\n        return \"a \" + self.species\n    end method\n\
          end record\n\
-         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         record Dog combines Animal\n    breed: string(20)\nend record\n\
          let d = { species: \"Canis\", breed: \"Labrador\" }\n\
          print d.describe()\nend\n";
     let err = compile(source, Target::Basic)
@@ -394,16 +395,17 @@ fn mixin_does_not_mix_in_methods() {
     assert!(first_message(&err).contains("no method"), "{err:?}");
 }
 
-/// A separate, explicitly-declared method for the mixing record's own
-/// exact type works normally -- mixins reuse structure only, so behavior
-/// still has to be declared per record, exactly as the docs specify.
+/// A separate, explicitly-declared method for the combining record's own
+/// exact type works normally -- `combines` reuses structure only, so
+/// behavior still has to be declared per record, exactly as the docs
+/// specify.
 #[test]
-fn mixin_with_its_own_explicitly_declared_method_works() {
+fn combines_with_its_own_explicitly_declared_method_works() {
     let source = "program p\n\
          record Animal\n    species: string(20)\n\n    \
          method describe(): $\n        return \"a \" + self.species\n    end method\n\
          end record\n\
-         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         record Dog combines Animal\n    breed: string(20)\nend record\n\
          method describe[Dog](): $\n    return self.breed + \" (\" + self.species + \")\"\nend method\n\
          let a = { species: \"Canis\" }\n\
          let d = { species: \"Canis\", breed: \"Labrador\" }\n\
@@ -415,16 +417,16 @@ fn mixin_with_its_own_explicitly_declared_method_works() {
 }
 
 /// An inline method stays associated with the record it's declared
-/// inside, even when that record is also the source of a mixin --
-/// mixing `Dog`'s fields into `Puppy` doesn't move or duplicate `Dog`'s
-/// own inline method onto `Puppy`.
+/// inside, even when that record is also a combined source -- combining
+/// `Dog`'s fields into `Puppy` doesn't move or duplicate `Dog`'s own
+/// inline method onto `Puppy`.
 #[test]
-fn mixin_inline_method_stays_with_its_own_declaring_record() {
+fn combines_inline_method_stays_with_its_own_declaring_record() {
     let source = "program p\n\
          record Dog\n    breed: string(20)\n\n    \
          method bark(): $\n        return self.breed + \" says woof\"\n    end method\n\
          end record\n\
-         record Puppy mixin Dog\n    age: int\nend record\n\
+         record Puppy combines Dog\n    age: int\nend record\n\
          let d = { breed: \"Labrador\" }\n\
          let p = { breed: \"Labrador\", age: 1 }\n\
          print d.bark()\nend\n";
@@ -432,12 +434,12 @@ fn mixin_inline_method_stays_with_its_own_declaring_record() {
     let out = run_basic_via_bas(source);
     assert_eq!(out.trim_end(), "Labrador says woof");
 
-    // ...but is not visible on Puppy, which only mixed in Dog's fields.
+    // ...but is not visible on Puppy, which only combined Dog's fields.
     let calls_on_puppy = "program p\n\
          record Dog\n    breed: string(20)\n\n    \
          method bark(): $\n        return self.breed + \" says woof\"\n    end method\n\
          end record\n\
-         record Puppy mixin Dog\n    age: int\nend record\n\
+         record Puppy combines Dog\n    age: int\nend record\n\
          let p = { breed: \"Labrador\", age: 1 }\n\
          print p.bark()\nend\n";
     let err = compile(calls_on_puppy, Target::Basic)
@@ -445,32 +447,32 @@ fn mixin_inline_method_stays_with_its_own_declaring_record() {
     assert!(first_message(&err).contains("no method"), "{err:?}");
 }
 
-/// Two mixed-in sources contributing the same field name is a
+/// Two combined sources contributing the same field name is a
 /// compile-time error naming the field and both contributing sources --
 /// no aliasing, qualification, or "last one wins".
 #[test]
-fn mixin_duplicate_field_between_two_sources_is_rejected() {
+fn combines_duplicate_field_between_two_sources_is_rejected() {
     let source = "program p\n\
          record Animal\n    name: string(20)\nend record\n\
          record Pet\n    name: string(20)\nend record\n\
-         record Dog mixin Animal, Pet\nend record\nend\n";
+         record Dog combines Animal, Pet\nend record\nend\n";
     let err = compile(source, Target::Basic)
-        .expect_err("a field duplicated across two mixin sources should be rejected");
+        .expect_err("a field duplicated across two combined sources should be rejected");
     let message = first_message(&err);
     assert!(message.contains("name"), "{message}");
     assert!(message.contains("Animal"), "{message}");
     assert!(message.contains("Pet"), "{message}");
 }
 
-/// A field declared directly on the mixing record that collides with a
-/// mixed-in field is also a compile-time error.
+/// A field declared directly on the combining record that collides with
+/// a combined field is also a compile-time error.
 #[test]
-fn mixin_duplicate_field_between_source_and_local_declaration_is_rejected() {
+fn combines_duplicate_field_between_source_and_local_declaration_is_rejected() {
     let source = "program p\n\
          record Animal\n    species: string(20)\nend record\n\
-         record Dog mixin Animal\n    species: string(20)\nend record\nend\n";
+         record Dog combines Animal\n    species: string(20)\nend record\nend\n";
     let err = compile(source, Target::Basic)
-        .expect_err("a field colliding with a mixed-in one should be rejected");
+        .expect_err("a field colliding with a combined one should be rejected");
     let message = first_message(&err);
     assert!(
         message.contains("species") && message.contains("Animal"),
@@ -479,51 +481,52 @@ fn mixin_duplicate_field_between_source_and_local_declaration_is_rejected() {
 }
 
 /// A duplicate field reaching a record through two different transitive
-/// mixin paths (`D mixin B, C`, where `B` transitively mixes in `A`,
-/// and `A`/`C` both declare `value`) must still be caught.
+/// combination paths (`D combines B, C`, where `B` transitively combines
+/// `A`, and `A`/`C` both declare `value`) must still be caught.
 #[test]
-fn mixin_duplicate_field_through_transitive_paths_is_rejected() {
+fn combines_duplicate_field_through_transitive_paths_is_rejected() {
     let source = "program p\n\
          record A\n    value: int\nend record\n\
-         record B mixin A\nend record\n\
+         record B combines A\nend record\n\
          record C\n    value: int\nend record\n\
-         record D mixin B, C\nend record\nend\n";
+         record D combines B, C\nend record\nend\n";
     let err = compile(source, Target::Basic)
-        .expect_err("a field duplicated through transitive mixins should be rejected");
+        .expect_err("a field duplicated through transitive combination should be rejected");
     assert!(first_message(&err).contains("value"), "{:?}", err);
 }
 
-/// Mixing in an undeclared record is a clear compile error, not a panic
-/// or a silently-ignored `mixin` clause.
+/// Combining an undeclared record is a clear compile error, not a panic
+/// or a silently-ignored `combines` clause.
 #[test]
-fn mixin_of_an_undeclared_record_is_rejected() {
-    let source = "program p\nrecord Dog mixin Cat\n    breed: string(20)\nend record\nend\n";
+fn combines_of_an_undeclared_record_is_rejected() {
+    let source = "program p\nrecord Dog combines Cat\n    breed: string(20)\nend record\nend\n";
     let err =
-        compile(source, Target::Basic).expect_err("mixing in an unknown record should be rejected");
+        compile(source, Target::Basic).expect_err("combining an unknown record should be rejected");
     assert!(first_message(&err).contains("Cat"), "{err:?}");
 }
 
-/// A cyclic mixin graph (`A mixin B` + `B mixin A`, or a longer cycle) is
-/// rejected rather than looping forever.
+/// A cyclic combination graph (`A combines B` + `B combines A`, or a
+/// longer cycle) is rejected rather than looping forever.
 #[test]
-fn mixin_cycle_is_rejected() {
+fn combines_cycle_is_rejected() {
     let source = "program p\n\
-         record A mixin B\n    x: int\nend record\n\
-         record B mixin A\n    y: int\nend record\nend\n";
-    let err = compile(source, Target::Basic).expect_err("a mixin cycle should be rejected");
-    assert!(first_message(&err).contains("mixes in itself"), "{err:?}");
+         record A combines B\n    x: int\nend record\n\
+         record B combines A\n    y: int\nend record\nend\n";
+    let err = compile(source, Target::Basic).expect_err("a combines cycle should be rejected");
+    assert!(first_message(&err).contains("combines itself"), "{err:?}");
 }
 
-/// The same multi-mixin example, verified on the C and (when
-/// `java`/`krak2` are available) JVM backends too -- mixins are resolved
-/// entirely in `records.rs`, before any backend runs, so all three must
-/// produce an identical effective record layout and identical output.
+/// The same multi-source example, verified on the C and (when
+/// `java`/`krak2` are available) JVM backends too -- `combines` is
+/// resolved entirely in `records.rs`, before any backend runs, so all
+/// three must produce an identical effective record layout and identical
+/// output.
 #[test]
-fn mixin_runs_identically_on_c_and_jvm_when_available() {
+fn combines_runs_identically_on_c_and_jvm_when_available() {
     let source = "program p\n\
          record Animal\n    species: string(20)\nend record\n\
          record Pet\n    called: string(20)\nend record\n\
-         record Dog mixin Animal, Pet\n    breed: string(20)\nend record\n\
+         record Dog combines Animal, Pet\n    breed: string(20)\nend record\n\
          let d = { species: \"Canis\", called: \"Rex\", breed: \"Labrador\" }\n\
          print d.species\nprint d.called\nprint d.breed\nend\n";
 
