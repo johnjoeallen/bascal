@@ -25,9 +25,9 @@ toolchain for the target you need:
   BASCOM on the generated `.bas`. The same workflow works on Linux and macOS
   with DOSBox-X; see the [BASCOM fixture instructions](https://github.com/johnjoeallen/bascal/blob/main/test-fixtures/README.md)
   for the verified compiler setup and conformance command.
-- **JVM target:** install a Java runtime (Java 8 or newer is recommended) and
-  Krakatau's `krak2` assembler. Set `BASCAL_KRAK2` to the `krak2` executable,
-  or place it on `PATH`.
+- **JVM target:** install a Java runtime (Java 8 or newer is recommended) to
+  run the compiled class. The assembler itself (Krakatau's `krak2`) is linked
+  directly into `bcc.exe` -- no separate install or `PATH` entry needed.
 
 Check each installation from PowerShell:
 
@@ -36,7 +36,6 @@ bcc.exe --help
 gcc --version
 fbc --version
 java -version
-krak2 --help
 ```
 
 Only install the tools for the backend you plan to use. The compiler itself

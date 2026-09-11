@@ -32,6 +32,15 @@ assets = [
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+# The `--target jvm` backend's assembler (Krakatau's `v2`, itself GPL-3.0,
+# same as this project): pinned to a commit on our own fork's `bascal-lib`
+# branch, which adds a `[lib]` target exposing `assemble()` -- upstream
+# (https://github.com/Storyyeller/Krakatau) has no `[lib]` target at all
+# today, so it can't be depended on directly yet. That patch is proposed
+# upstream at https://github.com/Storyyeller/Krakatau/pull/216; once
+# merged, switch this back to `https://github.com/Storyyeller/Krakatau`
+# directly and drop the fork.
+krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9028b6b7cdb2c5bef267e12c3e74ab42" }
 
 [dev-dependencies]
 tempfile = "3"

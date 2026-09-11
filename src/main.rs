@@ -202,37 +202,6 @@ fn resolve_default_target() -> Target {
     Target::Basic
 }
 
-/// The `krak2` executable to invoke for `--target jvm`'s `.j` -> `.class`
-/// assembly step -- same lookup cascade/precedence as `resolve_default_target`
-/// (env var, then per-user config, then system config), but resolving to a
-/// command name/path instead of a `Target`, and always falling back to the
-/// bare name `krak2` (assumed on `PATH`) rather than requiring it be set.
-/// `krak2` (https://github.com/Storyyeller/Krakatau, `v2` branch) has no
-/// installed-by-default story the way `fbc`/`gcc` might on some systems, so
-/// this exists specifically to let it be pointed at a locally-built binary
-/// without needing it on `PATH` at all.
-fn resolve_krak2_path() -> String {
-    if let Ok(value) = env::var("BASCAL_KRAK2") {
-        if !value.trim().is_empty() {
-            return value;
-        }
-    }
-    if let Ok(home) = env::var("HOME") {
-        let user_config = PathBuf::from(home).join(".config/bascal/config");
-        if let Ok(contents) = fs::read_to_string(&user_config) {
-            if let Some(value) = parse_config_value(&contents, "krak2") {
-                return value;
-            }
-        }
-    }
-    if let Ok(contents) = fs::read_to_string("/etc/default/bascal") {
-        if let Some(value) = parse_config_value(&contents, "krak2") {
-            return value;
-        }
-    }
-    "krak2".to_string()
-}
-
 /// The `-o` value's *effective* output path. `-o` only ever names a
 /// directory -- already existing as one, or written with a trailing path
 /// separator even if it doesn't exist yet (`-o out/` for output that
@@ -525,12 +494,15 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
 }
 
 /// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` via
-/// `krak2` (see `resolve_krak2_path`). Unlike `invoke_fbc`/`invoke_gcc`, the
-/// output's file name can't just be the input's stem: `java`'s launcher
-/// requires the `.class` file on disk to match the class's own simple name,
-/// so this reads that name back out of the `.j` text's `.class public
-/// <name>` line -- the same name `codegen_jvm::class_name_for` chose --
-/// rather than assuming anything about the input path.
+/// `krakatau2::assemble` -- linked directly into `bcc` as a library (see
+/// `Cargo.toml`'s own comment on the pinned fork/upstream PR), not shelled
+/// out to a separate `krak2` binary/subprocess the way this used to work.
+/// Unlike `invoke_fbc`/`invoke_gcc`, the output's file name can't just be
+/// the input's stem: `java`'s launcher requires the `.class` file on disk
+/// to match the class's own simple name, so this reads that name back out
+/// of the `.j` text's `.class public <name>` line -- the same name
+/// `codegen_jvm::class_name_for` chose -- rather than assuming anything
+/// about the input path.
 fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
     let source = fs::read_to_string(j_path)
         .map_err(|err| format!("error: failed to read {}: {err}", j_path.display()))?;
@@ -558,26 +530,24 @@ fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
         return Ok(class_path);
     }
 
-    let krak2 = resolve_krak2_path();
-    let status = Command::new(&krak2)
-        .arg("asm")
-        .arg(j_path)
-        .arg("-o")
-        .arg(&class_path)
-        .status()
-        .map_err(|err| {
-            format!(
-                "error: failed to invoke krak2 (looked for `{krak2}`; override with \
-                 `krak2=/path/to/krak2` in ~/.config/bascal/config or the BASCAL_KRAK2 env var): \
-                 {err}"
-            )
-        })?;
-    if !status.success() {
-        return Err(format!(
-            "error: krak2 failed assembling {}",
+    let classes = krakatau2::assemble(&source, krakatau2::AssemblerOptions {}).map_err(|err| {
+        // `Error::display` is krakatau2's own pretty, source-excerpt-aware
+        // printer (writes straight to stderr) -- matches what the old
+        // subprocess's own inherited stdio would have shown; the `Result`
+        // this function returns only ever needs a short top-level summary
+        // on top of that, the same way a nonzero `krak2` exit status used
+        // to.
+        err.display(&j_path.display().to_string(), &source);
+        format!("error: failed to assemble {}", j_path.display())
+    })?;
+    let (_, bytes) = classes.into_iter().next().ok_or_else(|| {
+        format!(
+            "internal error: krakatau2::assemble produced no classes for {}",
             j_path.display()
-        ));
-    }
+        )
+    })?;
+    fs::write(&class_path, bytes)
+        .map_err(|err| format!("error: failed to write {}: {err}", class_path.display()))?;
     println!("binary: {}", class_path.display());
     Ok(class_path)
 }

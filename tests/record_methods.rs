@@ -80,7 +80,7 @@ fn external_record_receiver_method_compiles_and_runs() {
 }
 
 /// The exact `Card`/`display` example from the language spec, verbatim,
-/// across all three backends -- BASIC, C, and (when `java`/`krak2` are
+/// across all three backends -- BASIC, C, and (when `java` is
 /// available) JVM all must agree.
 #[test]
 fn spec_card_display_example_runs_identically_across_backends() {
@@ -100,11 +100,11 @@ fn spec_card_display_example_runs_identically_across_backends() {
         eprintln!("skipping C runtime check: gcc unavailable");
     }
 
-    if java_and_krak2_available() {
+    if java_available() {
         let stdout = run_jvm_source(source, "P");
         assert_eq!(stdout.trim_end(), "Dune by Frank Herbert");
     } else {
-        eprintln!("skipping JVM runtime check: java or krak2 unavailable");
+        eprintln!("skipping JVM runtime check: java unavailable");
     }
 }
 
@@ -516,10 +516,10 @@ fn combines_cycle_is_rejected() {
     assert!(first_message(&err).contains("combines itself"), "{err:?}");
 }
 
-/// The same multi-source example, verified on the C and (when
-/// `java`/`krak2` are available) JVM backends too -- `combines` is
-/// resolved entirely in `records.rs`, before any backend runs, so all
-/// three must produce an identical effective record layout and identical
+/// The same multi-source example, verified on the C and (when `java` is
+/// available) JVM backends too -- `combines` is resolved entirely in
+/// `records.rs`, before any backend runs, so all three must produce an
+/// identical effective record layout and identical
 /// output.
 #[test]
 fn combines_runs_identically_on_c_and_jvm_when_available() {
@@ -541,14 +541,14 @@ fn combines_runs_identically_on_c_and_jvm_when_available() {
         eprintln!("skipping C check: gcc unavailable");
     }
 
-    if java_and_krak2_available() {
+    if java_available() {
         let out = run_jvm_source(source, "P");
         let lines: Vec<&str> = out.lines().collect();
         assert_eq!(lines[0].trim(), "Canis");
         assert_eq!(lines[1].trim(), "Rex");
         assert_eq!(lines[2].trim(), "Labrador");
     } else {
-        eprintln!("skipping JVM check: java or krak2 unavailable");
+        eprintln!("skipping JVM check: java unavailable");
     }
 }
 
@@ -640,7 +640,7 @@ fn adventure_port_method_declarations_still_parse() {
 // ── JVM lowering: explicit receiver, no invokevirtual ───────────────────
 
 /// Structural check on the generated JVM assembly text, needing only
-/// `bcc` itself (no `java`/`krak2`): a record method call lowers to a
+/// `bcc` itself (no `java`): a record method call lowers to a
 /// plain `invokestatic` with the receiver's fields passed explicitly as
 /// leading arguments -- never `invokevirtual`, an interface, or any other
 /// JVM-inheritance/dispatch mechanism, because there is no runtime
@@ -667,13 +667,13 @@ fn jvm_lowering_uses_invokestatic_with_explicit_receiver_never_invokevirtual() {
     );
 }
 
-/// End-to-end JVM runtime check (skipped, not failed, when `java`/`krak2`
-/// aren't available): the same record method example actually runs and
+/// End-to-end JVM runtime check (skipped, not failed, when `java` isn't
+/// available): the same record method example actually runs and
 /// produces the right output, not just plausible-looking assembly.
 #[test]
 fn jvm_record_method_runs_when_available() {
-    if !java_and_krak2_available() {
-        eprintln!("skipping: java or krak2 is unavailable");
+    if !java_available() {
+        eprintln!("skipping: java is unavailable");
         return;
     }
     let source =
@@ -737,9 +737,11 @@ fn run_c(generated_c: &str) -> String {
     String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n")
 }
 
-fn java_and_krak2_available() -> bool {
+/// `krakatau2::assemble` is linked directly into `bcc` (see `Cargo.toml`'s
+/// own comment), so assembly itself needs no external tool; a JRE is the
+/// one remaining prerequisite to actually *run* a compiled JVM class.
+fn java_available() -> bool {
     Command::new("java").arg("-version").output().is_ok()
-        && Command::new("krak2").arg("--help").output().is_ok()
 }
 
 fn run_jvm_source(source: &str, class_name: &str) -> String {

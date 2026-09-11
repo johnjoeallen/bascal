@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Builds bcc and installs it under ~/.local, laid out the same way
-# scripts/fetch-krak2.sh installs krak2 (and the way this machine's other
-# debkit-installed tools already work): a versioned build under
-# ~/.local/share/bascal-versions/<version>/, a "current" symlink pointing
-# at it, and ~/.local/bin/bcc symlinked through that.
+# Builds bcc and installs it under ~/.local, laid out the same way this
+# machine's other debkit-installed tools already work: a versioned build
+# under ~/.local/share/bascal-versions/<version>/, a "current" symlink
+# pointing at it, and ~/.local/bin/bcc symlinked through that.
 #
 # By default this builds from the repo checkout this script lives in (its
 # own working tree, uncommitted changes included -- handy right after
