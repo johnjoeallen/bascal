@@ -10,12 +10,13 @@
 //!
 //! Output is Krakatau assembly text (`.j`); the command-line driver also has a
 //! small internal class-file writer for return-only programs, while general
-//! output still uses `krak2` to assemble `.j` -> `.class`.
-//! and any JRE's `java` running it (see `main.rs`'s eventual
-//! `invoke_krak2`/`invoke_java`). `krak2` is `Storyyeller/Krakatau`'s `v2`
-//! branch -- itself a Rust/Cargo project, pinned by commit since it has no
-//! versioned releases (confirmed working end to end with a hand-written
-//! `.j` file: `krak2 asm` + `java` before this codegen existed).
+//! output is assembled `.j` -> `.class` via the `krakatau2` crate (linked
+//! directly into `bcc`, not shelled out to a separate binary -- see
+//! `Cargo.toml`'s own comment and `main.rs`'s `invoke_krak2`), and run by any
+//! JRE's `java`. `krakatau2` is `Storyyeller/Krakatau`'s `v2` branch -- itself
+//! a Rust/Cargo project, pinned by commit since it has no versioned releases
+//! (confirmed working end to end with a hand-written `.j` file: `krak2 asm`
+//! + `java` before this codegen existed).
 //!
 //! The generated classes deliberately use class-file version 50.  That lets
 //! the JVM's legacy verifier infer frames for the supported `if` branches,

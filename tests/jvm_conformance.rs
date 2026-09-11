@@ -1,9 +1,12 @@
 //! Opt-in end-to-end conformance tests for the bootstrap JVM target.
 //!
-//! `krak2` assembles the Krakatau text emitted by `--target jvm`, and a JRE
-//! runs the resulting class.  Neither tool is a Rust dependency, so this
-//! suite follows the other external-tool suites and skips rather than fails
-//! when a prerequisite is unavailable.
+//! `krakatau2::assemble` (linked directly into `bcc`, not a separate
+//! `krak2` binary/subprocess -- see `Cargo.toml`'s own comment) turns the
+//! Krakatau text emitted by `--target jvm` into a real `.class`, so
+//! assembly itself is always available once `bcc` builds. A JRE is still
+//! needed to actually *run* the resulting class, which is the one
+//! remaining external, opt-in prerequisite this suite skips rather than
+//! fails on.
 // Conformance groups: tutorials, jvm
 
 use std::fs;
@@ -21,12 +24,8 @@ fn java_available() -> bool {
     Command::new("java").arg("-version").output().is_ok()
 }
 
-fn krak2_available() -> bool {
-    Command::new("krak2").arg("--help").output().is_ok()
-}
-
 fn jvm_runtime_available() -> bool {
-    java_available() && krak2_available()
+    java_available()
 }
 
 fn assert_jvm_expected_failure(source: &str, expected: &str) {
@@ -90,7 +89,7 @@ fn jvm_expected_failure_random_record_io_is_non_blocking() {
 #[test]
 fn jvm_random_access_file_round_trips_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-cross");
@@ -141,7 +140,7 @@ fn jvm_random_access_file_round_trips_when_available() {
 #[test]
 fn jvm_random_and_record_files_tutorial_runs_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-random-and-record-files");
@@ -200,7 +199,7 @@ fn jvm_expected_failure_mid_assignment_is_non_blocking() {
 #[test]
 fn jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tutorial/screen.bcl");
@@ -249,7 +248,7 @@ fn jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available() {
 #[test]
 fn jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM TAB/SPC/LOCATE test directory");
@@ -305,7 +304,7 @@ fn jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available() {
 #[test]
 fn jvm_date_dollar_matches_mm_dd_yyyy_format_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create DATE$ fixture directory");
@@ -346,7 +345,7 @@ fn jvm_date_dollar_matches_mm_dd_yyyy_format_when_available() {
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/conformance/jvm_try.bcl");
@@ -373,7 +372,7 @@ fn jvm_try_catch_finally_runs_when_available() {
 #[test]
 fn jvm_non_integer_arrays_run_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/jvm_noninteger_arrays.bcl");
@@ -405,7 +404,7 @@ fn jvm_non_integer_arrays_run_when_available() {
 #[test]
 fn jvm_byval_arrays_expected_failure_is_non_blocking() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/jvm_byval_arrays.bcl");
@@ -428,7 +427,7 @@ fn jvm_byval_arrays_expected_failure_is_non_blocking() {
         "JVM byval array fixture unexpectedly succeeded"
     );
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("krak2 failed assembling"),
+        String::from_utf8_lossy(&output.stderr).contains("failed to assemble"),
         "expected the known JVM byval clone assembly failure, got:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -437,7 +436,7 @@ fn jvm_byval_arrays_expected_failure_is_non_blocking() {
 #[test]
 fn jvm_catch_filters_and_source_bindings_run_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tests/fixtures/conformance/jvm_try_filter.bcl");
@@ -465,7 +464,7 @@ fn jvm_catch_filters_and_source_bindings_run_when_available() {
 #[test]
 fn portable_error_handling_tutorial_runs_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let source_path = repo_root().join("tutorial/portable_error_handling.bcl");
@@ -490,11 +489,10 @@ fn portable_error_handling_tutorial_runs_when_available() {
     assert!(stdout.contains("cleanup always runs"), "{stdout}");
 }
 
-/// Compile `source_path` to a temporary `.j` file and assemble it through
-/// the CLI, so this exercises the same `krak2` configuration lookup users
-/// get (`BASCAL_KRAK2`, config file, then PATH).  A missing assembler is a
-/// skipped optional prerequisite; an assembler which rejects generated text
-/// is a real test failure.
+/// Compile `source_path` to a temporary `.j` file and assemble it. Assembly
+/// (`krakatau2::assemble`) is linked directly into `bcc` -- see
+/// `Cargo.toml`'s own comment -- so there's no external tool to be missing
+/// here; a failure is always a real test failure.
 fn compile_and_assemble(source_path: &Path, output_dir: &Path) -> Option<PathBuf> {
     let mut output_arg = output_dir.as_os_str().to_owned();
     output_arg.push("/");
@@ -511,19 +509,11 @@ fn compile_and_assemble(source_path: &Path, output_dir: &Path) -> Option<PathBuf
         .expect("failed to invoke bcc");
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("failed to invoke krak2") {
-            eprintln!(
-                "skipping {}: krak2 is unavailable -- install it with scripts/fetch-krak2.sh \
-                 or configure BASCAL_KRAK2",
-                module_path!()
-            );
-            return None;
-        }
         panic!(
-            "bcc failed to compile/assemble {} under --target jvm:\nstdout:\n{}\nstderr:\n{stderr}",
+            "bcc failed to compile/assemble {} under --target jvm:\nstdout:\n{}\nstderr:\n{}",
             source_path.display(),
             String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
         );
     }
 
@@ -764,7 +754,7 @@ fn scoped_goto_runs_when_available() {
 /// variable/array/label/`global` only ever appearing inside a `case` clause
 /// silently failed to register -- surfaced by `examples/card_catalog/
 /// card_catalog.bcl`'s own menu dispatch, where every branch is a `case`.
-/// Needs no `java`/`krak2` -- transpiling (not running) already exercises
+/// Needs no `java` -- transpiling (not running) already exercises
 /// the fix.
 #[test]
 fn jvm_select_case_registers_variables_declared_only_inside_a_case_clause() {
@@ -809,7 +799,7 @@ fn jvm_select_case_registers_variables_declared_only_inside_a_case_clause() {
 /// `SelectCase` but not `TryCatch`, so a `FIELD`/`OPEN`/`INPUT`/label/array/
 /// `global` inside a `try`/`catch`-wrapped `file ... = open(...)` (the
 /// pattern `tutorial/inventory.bcl` uses to trap a real "can't open this
-/// file" error) was invisible to every one of them. Needs no `java`/`krak2`
+/// file" error) was invisible to every one of them. Needs no `java`
 /// -- transpiling already exercises the fix.
 #[test]
 fn jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch() {
@@ -853,7 +843,7 @@ fn jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch() {
 
 /// `INSTR(s$, needle$)` (2-argument form) and `STOP`/`SYSTEM` (both compile
 /// to `System.exit(0)`, usable from anywhere, unlike a plain `return` which
-/// would only unwind one call frame). Needs no `java`/`krak2` -- transpiling
+/// would only unwind one call frame). Needs no `java` -- transpiling
 /// already exercises both.
 #[test]
 fn jvm_instr_and_stop_and_system_compile() {
@@ -900,7 +890,7 @@ fn jvm_instr_and_stop_and_system_compile() {
 #[test]
 fn jvm_inkey_polls_without_crashing_under_piped_input_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM INKEY$ test directory");
@@ -983,12 +973,12 @@ fn jvm_inkey_polls_without_crashing_under_piped_input_when_available() {
 /// under `--target jvm`: adds one entry through the interactive menu, then
 /// lists it back, proving the random-access write (`addItem`/`PUT`) and
 /// read (`listAll`/`GET`) round-trip through the real file, not just
-/// in-memory state. Skipped (not failed) when `java`/`krak2` aren't
+/// in-memory state. Skipped (not failed) when `java` isn't
 /// available, matching this file's other end-to-end tests.
 #[test]
 fn card_catalog_example_runs_under_jvm_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-card-catalog");
@@ -1076,7 +1066,7 @@ fn card_catalog_example_runs_under_jvm_when_available() {
 #[test]
 fn jvm_byref_scalar_parameters_write_back_to_the_caller_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM byref test directory");
@@ -1144,7 +1134,7 @@ fn jvm_byref_scalar_parameters_write_back_to_the_caller_when_available() {
 #[test]
 fn jvm_function_call_as_bare_statement_discards_its_result_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM bare-call test directory");
@@ -1196,7 +1186,7 @@ fn jvm_function_call_as_bare_statement_discards_its_result_when_available() {
 #[test]
 fn jvm_get_on_a_fresh_empty_file_does_not_throw_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-get-on-fresh-file");
@@ -1257,7 +1247,7 @@ fn jvm_get_on_a_fresh_empty_file_does_not_throw_when_available() {
 #[test]
 fn jvm_input_after_inkey_reads_the_typed_value_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM input-after-inkey test directory");
@@ -1355,7 +1345,7 @@ fn jvm_input_after_inkey_reads_the_typed_value_when_available() {
 #[test]
 fn jvm_double_to_string_rounds_to_six_significant_digits_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let dir = tempfile::tempdir().expect("failed to create JVM double-formatting test directory");
@@ -1404,7 +1394,7 @@ fn jvm_double_to_string_rounds_to_six_significant_digits_when_available() {
 /// at a time, when it was actually never returning to column 1 at all.
 /// `-icanon -echo` (the fix) disables line-buffering and echo -- the two
 /// properties `INKEY$` actually needs -- without touching `opost`. Needs no
-/// `java`/`krak2`/pty: this pins the exact `stty` arguments in the
+/// `java`/pty: this pins the exact `stty` arguments in the
 /// generated assembly text directly, which is both sufficient (the bug was
 /// entirely in which flags get passed to `stty`) and the only way to catch
 /// a regression back to the `raw` mode without a real pseudo-terminal (a
@@ -1457,7 +1447,7 @@ fn jvm_inkey_setup_does_not_disable_output_postprocessing() {
 /// keystroke was read blind, with whatever printed next arriving all at
 /// once right alongside it. `emit_print_tokens`/`emit_input` now flush
 /// `System.out` explicitly right after a non-newline-terminated `print`/an
-/// `INPUT` prompt. Needs no `java`/`krak2`: this pins the flush call in the
+/// `INPUT` prompt. Needs no `java`: this pins the flush call in the
 /// generated assembly text directly, which is sufficient (the bug was
 /// entirely about whether the flush call is emitted at all).
 #[test]
@@ -1509,7 +1499,7 @@ fn jvm_print_without_trailing_newline_flushes_stdout() {
 #[test]
 fn jvm_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available() {
     if !jvm_runtime_available() {
-        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        eprintln!("skipping {}: java is unavailable", module_path!());
         return;
     }
     let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-inventory-list-all");

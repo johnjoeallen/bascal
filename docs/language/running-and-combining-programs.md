@@ -20,9 +20,10 @@ bcc hello.bcl --target jvm --run    # emit JVM assembly, assemble, and run it
 back to whatever `BASCAL_TARGET` or a config file says, or `basic` failing all
 of that.
 
-`--binary` additionally builds the generated output with the target’s own
-toolchain (`fbc` for BASIC, `gcc` for C, or `krak2` for JVM assembly); `--run`
-implies `--binary` and then runs it, with the program’s own stdin/stdout/stderr
+`--binary` additionally builds the generated output into something runnable
+(`fbc` for BASIC, `gcc` for C; the JVM target's assembler is built directly
+into `bcc`, so no external toolchain is needed there); `--run` implies
+`--binary` and then runs it, with the program’s own stdin/stdout/stderr
 connected directly to your terminal.
 
 `bcc` skips redoing work that’s already up to date — pass `--clean` to force a full retranspile.
