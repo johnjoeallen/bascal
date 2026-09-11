@@ -547,6 +547,10 @@ struct BuiltinUsage {
     /// calls the `bcc_inkey` helper (see `INKEY_PROTO`/`INKEY_BODY`),
     /// which uses a POSIX raw-mode read or the Windows console API.
     needs_inkey_helper: bool,
+    /// Set by bare `DATE$` (an `Expr::Ident`, not a call -- same shape as
+    /// `INKEY$`), whose C translation calls the `bcc_date` helper (see
+    /// `DATE_PROTO`/`DATE_BODY`), which needs `<time.h>`.
+    needs_date_helper: bool,
 }
 
 fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
@@ -559,12 +563,16 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
         needs_sgn_helper: false,
         needs_rnd_helper: false,
         needs_inkey_helper: false,
+        needs_date_helper: false,
     };
     let mut visit = |expr: &Expr| {
         if let Expr::Ident(ident) = expr {
             if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("inkey")
             {
                 usage.needs_inkey_helper = true;
+            }
+            if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("date") {
+                usage.needs_date_helper = true;
             }
         }
         if let Expr::Call { name, .. } | Expr::ArrayRef { name, .. } = expr {
@@ -785,6 +793,17 @@ const RND_BODY: &str = "static double bcc_rnd_last = 0.0;\n\nstatic double bcc_r
 /// `PeekNamedPipe`/`ReadFile`, and redirected files use `_read`.
 const INKEY_PROTO: &str = "static const char* bcc_inkey(void);\n";
 const INKEY_BODY: &str = "static const char* bcc_inkey(void) {\n    static char buf[2];\n#if defined(_WIN32)\n    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);\n    DWORD input_type = GetFileType(input);\n    if (input_type == FILE_TYPE_PIPE) {\n        DWORD available = 0;\n        if (PeekNamedPipe(input, NULL, 0, NULL, &available, NULL) && available > 0) {\n            DWORD read_count = 0;\n            ReadFile(input, buf, 1, &read_count, NULL);\n            buf[read_count == 1 ? 1 : 0] = 0;\n        } else {\n            buf[0] = 0;\n        }\n    } else if (input_type == FILE_TYPE_DISK) {\n        int c = _read(_fileno(stdin), buf, 1);\n        buf[c == 1 ? 1 : 0] = 0;\n    } else if (_kbhit()) {\n        buf[0] = (char)_getch();\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n#else\n    struct termios orig, raw;\n    tcgetattr(STDIN_FILENO, &orig);\n    raw = orig;\n    raw.c_lflag &= ~(ICANON | ECHO);\n    raw.c_cc[VMIN] = 0;\n    raw.c_cc[VTIME] = 0;\n    tcsetattr(STDIN_FILENO, TCSANOW, &raw);\n\n    unsigned char c;\n    ssize_t n = read(STDIN_FILENO, &c, 1);\n    if (n == 1) {\n        buf[0] = (char)c;\n        buf[1] = 0;\n    } else {\n        buf[0] = 0;\n    }\n\n    tcsetattr(STDIN_FILENO, TCSANOW, &orig);\n#endif\n    return buf;\n}\n\n";
+
+/// `DATE$` -- real MBASIC/BASCOM's fixed `"MM-DD-YYYY"` format (10
+/// characters, zero-padded), read from the host clock via `<time.h>`'s
+/// `time()`/`localtime()`. Its own static buffer (not the shared
+/// `bcc_mid`/`bcc_chr` ring buffer -- see `MID_BODY`'s own doc comment on
+/// that convention): `DATE$` is typically read once per report/log line,
+/// not chained through several calls the way `MID$`/`LEFT$` results often
+/// are, so there's no risk of one call's result going stale before it's
+/// used, and no need to share `BCC_STRBUF_COUNT` slots with those.
+const DATE_PROTO: &str = "static const char* bcc_date(void);\n";
+const DATE_BODY: &str = "static const char* bcc_date(void) {\n    static char buf[11];\n    time_t t = time(NULL);\n    struct tm* tm_info = localtime(&t);\n    snprintf(buf, sizeof(buf), \"%02d-%02d-%04d\", tm_info->tm_mon + 1, tm_info->tm_mday, tm_info->tm_year + 1900);\n    return buf;\n}\n\n";
 
 /// `ON ERROR GOTO`/`RESUME`/`ERROR`/`ERR`/`ERL`'s runtime state -- see
 /// `emit_raise_block`'s own doc comment for how these are used.
@@ -2989,7 +3008,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         // own doc comment).
         includes.push_str("#include <stdlib.h>\n");
     }
-    if needs_randomize_time {
+    if needs_randomize_time || builtin_usage.needs_date_helper {
         includes.push_str("#include <time.h>\n");
     }
     if builtin_usage.needs_inkey_helper {
@@ -3091,6 +3110,10 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     if builtin_usage.needs_inkey_helper {
         runtime_protos.push_str(INKEY_PROTO);
         runtime_body.push_str(INKEY_BODY);
+    }
+    if builtin_usage.needs_date_helper {
+        runtime_protos.push_str(DATE_PROTO);
+        runtime_body.push_str(DATE_BODY);
     }
     if gosub_count > 0 {
         runtime_state.push_str(GOSUB_HELPER);
@@ -4085,6 +4108,12 @@ fn register_var(
     if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("inkey") {
         return;
     }
+    // `DATE$` -- same reasoning as `INKEY$` just above: a real function call
+    // in disguise (see `render_string_expr`'s own `Expr::Ident` arm), not an
+    // ordinary variable to shadow with an always-empty declaration.
+    if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("date") {
+        return;
+    }
     match ident.suffix {
         Some(TypeSuffix::String) => {
             string_out.insert(c_var_name(ident, TypeSuffix::String));
@@ -4150,6 +4179,22 @@ fn emit_statement(
             }
             call.push(')');
             out.push_str(&format!("    {call};\n"));
+            if !needs_newline {
+                // A trailing `;`/`,` suppresses the newline glibc's stdio
+                // would otherwise flush stdout on (it's line-buffered
+                // against a real terminal, fully buffered otherwise) --
+                // without an explicit flush here, a prompt like `INPUT`'s
+                // own `"...? "` (see `Statement::Input`'s own arm) or
+                // `waitAnyKey()`'s `"Press the AnyKey..."`
+                // (`tutorial/inventory.bcl`) stays invisible in the
+                // buffer until something else flushes it, which can be
+                // arbitrarily later: `bcc_inkey`/`bcc_read_line` don't
+                // flush either, so a real run showed the prompt appearing
+                // only *after* a keystroke was read blind, with whatever
+                // printed next arriving all at once -- a real bug, not
+                // print-ordering in the BCL source.
+                out.push_str("    fflush(stdout);\n");
+            }
             Ok(())
         }
         Statement::End => {
@@ -4201,6 +4246,13 @@ fn emit_statement(
                 None => "? ".to_string(),
             };
             out.push_str(&format!("    printf(\"{prompt_text}\");\n"));
+            // No trailing `\n` in `prompt_text` -- glibc's line-buffered
+            // stdout (against a real terminal) wouldn't otherwise flush
+            // this prompt before `bcc_read_line`'s blocking `fgets` reads
+            // a line, leaving it invisible until something else flushed
+            // the buffer (see `Statement::Print`'s own `fflush` for the
+            // identical gap/fix on a bare `print ...;`/`print ...,`).
+            out.push_str("    fflush(stdout);\n");
             out.push_str("    bcc_read_line();\n");
             if ident.suffix == Some(TypeSuffix::String) {
                 let c_name = c_var_name(ident, TypeSuffix::String);
@@ -7647,6 +7699,17 @@ fn render_string_expr(
         {
             Ok((Vec::new(), "bcc_inkey()".to_string()))
         }
+        // `DATE$` -- real MBASIC/BASCOM's `"MM-DD-YYYY"` (see `bcc_date`'s
+        // own doc comment). Same shape as `INKEY$` above: checked before the
+        // generic `Expr::Ident` arm below, which would otherwise treat it as
+        // an ordinary (always-empty) string variable -- see `register_var`'s
+        // matching skip.
+        Expr::Ident(ident)
+            if ident.suffix == Some(TypeSuffix::String)
+                && ident.name.eq_ignore_ascii_case("date") =>
+        {
+            Ok((Vec::new(), "bcc_date()".to_string()))
+        }
         Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
             Ok((Vec::new(), c_var_name(ident, TypeSuffix::String)))
         }
@@ -8665,6 +8728,23 @@ fn render_prelude_free_string_arg(
 ) -> Result<String, String> {
     match expr {
         Expr::String(s) => Ok(format!("\"{}\"", escape_c_string_literal(s))),
+        // `INKEY$`/`DATE$` -- same real-function-call-in-disguise shapes
+        // `render_string_expr`'s own `Expr::Ident` arm special-cases;
+        // checked before the generic `Expr::Ident` arm below for the same
+        // reason: it would otherwise treat either as an ordinary
+        // (always-empty) string variable.
+        Expr::Ident(ident)
+            if ident.suffix == Some(TypeSuffix::String)
+                && ident.name.eq_ignore_ascii_case("inkey") =>
+        {
+            Ok("bcc_inkey()".to_string())
+        }
+        Expr::Ident(ident)
+            if ident.suffix == Some(TypeSuffix::String)
+                && ident.name.eq_ignore_ascii_case("date") =>
+        {
+            Ok("bcc_date()".to_string())
+        }
         Expr::Ident(ident) if ident.suffix == Some(TypeSuffix::String) => {
             Ok(c_var_name(ident, TypeSuffix::String))
         }

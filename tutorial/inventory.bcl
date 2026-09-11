@@ -208,13 +208,19 @@ procedure showPartStatus(partNum%, desc$, qty%, reorder%, price!)
     print tab(TAB_COL) "      Unit price:  " + str$(price!)
 end procedure
 
+// BASCAL-ism: no `VIEW PRINT` (see the header note above), so this
+// deliberately does NOT pin a "press any key" line to a fixed row the way
+// fhb's original does -- a bare `LOCATE 25, ...` sitting under content
+// that keeps printing past it (listAll()'s own items) collides with
+// whatever's later written there, since nothing here scrolls a bounded
+// region: waitAnyKey() is the only thing that ever touches row 25, and
+// only right when it actually blocks (see listAll()'s own redraw-per-page
+// structure below).
 procedure printListHeader()
     cls
     print tab(25) "I N V E N T O R Y   L I S T I N G"; tab(65); str$(PART_COUNT) + "items"
     print "                                          Quantity       Reorder"
     print " Partno           Description             on hand         level"
-    locate 25, 1
-    print "Press the AnyKey to scroll listing...";
 end procedure
 
 procedure printInventoryLine(partNum%, desc$, qty%, reorder%)
@@ -373,6 +379,12 @@ procedure listAll()
         if scrollCount% = 20 then
             waitAnyKey()
             scrollCount% = 0
+            // Redraw for the next page rather than let it keep scrolling
+            // past row 25 -- see printListHeader()'s own note on why a
+            // fixed-row prompt can't coexist with unbounded scrolling.
+            if i% < PART_COUNT then
+                printListHeader()
+            end if
         end if
     end for
 end procedure
@@ -473,6 +485,13 @@ procedure reorderReport()
             if reportLineCount% > 15 then
                 waitAnyKey()
                 reportLineCount% = 0
+                // Redraw for the next page rather than let it keep
+                // scrolling past row 25 -- see printListHeader()'s own
+                // note (same underlying issue, same fix) on why a
+                // fixed-row prompt can't coexist with unbounded scrolling.
+                if i% < PART_COUNT then
+                    printReorderHeader()
+                end if
             end if
         end if
     end for

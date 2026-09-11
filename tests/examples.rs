@@ -372,6 +372,131 @@ fn gcc_runs_inventory_tutorial_under_c_target_when_available() {
     );
 }
 
+/// Regression test for a real, source-level bug in `tutorial/inventory.bcl`
+/// itself (present identically under every target -- `--target basic`,
+/// `--target C`, `--target jvm` -- since it's a print/`LOCATE` sequencing
+/// bug, not a codegen one): `printListHeader()` used to `LOCATE 25, 1` and
+/// print "Press the AnyKey to scroll listing..." immediately, before any
+/// item had been listed -- nothing actually paused there, so the very next
+/// statement (`listAll()`'s first item) kept printing from that same
+/// cursor position, gluing item 1 onto the end of that line. Every 20
+/// items, `waitAnyKey()` then did `LOCATE 25, 10` -- rewinding the cursor
+/// back to that *same* row -- and overwrote from column 10 onward with
+/// "Press the AnyKey to continue...". Since the first prompt started at
+/// column 1, columns 1-9 ("Press the") survived underneath the second
+/// message, producing `"Press thePress the AnyKey to continue..."` on any
+/// terminal tall enough that the collision isn't scrolled away by
+/// accident before it's ever visible (BASCAL has no `VIEW PRINT`
+/// scroll-region support -- see the tutorial's own header note -- so
+/// nothing bounds where a fixed-row prompt can collide with unbounded
+/// scrolling content). Fixed by dropping the premature prompt from
+/// `printListHeader()`/`printReorderHeader()` and redrawing the header on
+/// each new page after `waitAnyKey()`, so `waitAnyKey()`'s own row-25
+/// write always lands on a freshly-cleared row. This test needs no pty
+/// (the bug is pure print/CLS ordering, not terminal-size-dependent
+/// timing): pipes are sufficient to catch a regression back to the
+/// glued/doubled text.
+#[test]
+fn gcc_runs_inventory_list_all_without_a_garbled_press_any_key_prompt_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    // A distinct filename stem from `gcc_runs_inventory_tutorial_under_c_
+    // target_when_available`'s own `tutorial/inventory.bcl` compile --
+    // `bcc --binary`'s output always lands at `tmp/<stem>` regardless of
+    // `-o` (see `native_binary_path_from_stem` in main.rs), a fixed,
+    // repo-relative path shared across the whole test binary; two tests
+    // compiling the same stem in parallel race on that one file.
+    let source_path = dir.path().join("inventory_list_all.bcl");
+    fs::copy(repo_root.join("tutorial/inventory.bcl"), &source_path)
+        .expect("failed to copy tutorial/inventory.bcl");
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/inventory_list_all");
+    // "3" selects "List all" (100 parts, 20 per page -- 5 pages, 5
+    // `waitAnyKey()` calls); one "x" per page to dismiss its prompt, then
+    // "7" to exit back at the main menu.
+    let mut child = Command::new(&executable_path)
+        .current_dir(dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn compiled inventory binary");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"3xxxxx7")
+        .expect("failed to write keystrokes to inventory binary");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll inventory binary")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("compiled inventory binary timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect inventory binary output");
+    assert!(
+        run.status.success(),
+        "compiled inventory binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.contains("Press thePress the"),
+        "the initial header prompt and waitAnyKey()'s own prompt collided \
+         on the same row:\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("I N V E N T O R Y   L I S T I N G").count(),
+        5,
+        "expected one freshly-redrawn header per page (5 pages of 20 for \
+         100 parts):\n{stdout}"
+    );
+    assert_eq!(
+        stdout.matches("Press the AnyKey to continue").count(),
+        5,
+        "expected exactly one wait prompt per page, each on its own \
+         freshly-cleared row:\n{stdout}"
+    );
+}
+
 /// GitHub issue #29's own acceptance criterion: `LINE INPUT #` into a
 /// `dim`'d string array element (`rawLine$(lineCount%)` in
 /// `examples/remline/com/bascal/examples/remline/transform.bcl`) now
@@ -530,6 +655,74 @@ fn gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available() {
         normalize_newlines(&expected),
         "MID$ assignment under --target c should match the real-BASCOM-verified expectation"
     );
+}
+
+/// `"MM-DD-YYYY"`, zero-padded, real MBASIC/BASCOM's own fixed `DATE$`
+/// format -- shared by the C and JVM `DATE$` regression tests (`bcc_date`
+/// in codegen_c.rs; `java.time.LocalDate`/`DateTimeFormatter` in
+/// codegen_jvm.rs). Can't check an exact value (today's actual date), so
+/// this just checks the shape: two digits, a dash, two digits, a dash, four
+/// digits, all numeric.
+fn assert_looks_like_date_dollar(value: &str) {
+    let parts: Vec<&str> = value.trim().split('-').collect();
+    assert_eq!(parts.len(), 3, "expected MM-DD-YYYY, got {value:?}");
+    assert_eq!(parts[0].len(), 2, "expected 2-digit month, got {value:?}");
+    assert_eq!(parts[1].len(), 2, "expected 2-digit day, got {value:?}");
+    assert_eq!(parts[2].len(), 4, "expected 4-digit year, got {value:?}");
+    assert!(
+        parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())),
+        "expected only digits and dashes, got {value:?}"
+    );
+}
+
+/// `DATE$` under `--target C`. `codegen_c.rs`'s own `bcc_date` used to not
+/// exist at all -- `date$` silently fell through to an ordinary, always-
+/// empty auto-declared string variable (see `register_var`'s matching
+/// skip for why that's excluded now). Skipped (not failed) when `gcc` isn't
+/// available, matching this file's other C-target tests.
+#[test]
+fn gcc_runs_date_dollar_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let source_path = dir.path().join("date_dollar.bcl");
+    fs::write(&source_path, "program dateDollar\nprint date$\nend\n").unwrap();
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/date_dollar");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled date_dollar binary");
+    assert!(
+        run.status.success(),
+        "compiled date_dollar binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_looks_like_date_dollar(&String::from_utf8_lossy(&run.stdout));
 }
 
 #[test]
@@ -869,4 +1062,60 @@ fn line_payload_is_comment(line: &str) -> bool {
 
 fn normalize_newlines(text: &str) -> String {
     text.replace("\r\n", "\n")
+}
+
+/// Regression test for a real bug: glibc's stdout is line-buffered against
+/// a real terminal (fully buffered otherwise), flushing only on a `\n`
+/// byte -- so a `print "...";`/`print "...",` (no trailing newline --
+/// `tutorial/inventory.bcl`'s `waitAnyKey()` own `"Press the AnyKey..."`)
+/// or `INPUT`'s own `"...? "` prompt sat invisible in the buffer until
+/// something else happened to flush it (neither `bcc_inkey`'s `read()` nor
+/// `bcc_read_line`'s `fgets` flushes stdout first). Observed on a real
+/// terminal as the prompt appearing only *after* a keystroke was read
+/// blind, with whatever printed next arriving all at once right alongside
+/// it. `Statement::Print`'s and `Statement::Input`'s C codegen now emit an
+/// explicit `fflush(stdout);` right after any printf with no trailing
+/// `\n`. Needs no `gcc`: this pins the exact generated C text, which is
+/// sufficient (the bug was entirely about whether the `fflush` call gets
+/// emitted at all).
+#[test]
+fn c_print_without_trailing_newline_flushes_stdout() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().expect("failed to create print-flush fixture directory");
+    let source_path = dir.path().join("print_flush.bcl");
+    fs::write(
+        &source_path,
+        "program printFlush\nprint \"prompt\";\ninput \"n\"; x%\nprint \"done\"\nend\n",
+    )
+    .expect("failed to write print-flush fixture");
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile {source_path:?} under --target C"
+    );
+
+    let generated = fs::read_to_string(output_dir.join("print_flush.c"))
+        .expect("failed to read generated print_flush.c");
+    let flush_count = generated.matches("fflush(stdout);").count();
+    assert_eq!(
+        flush_count, 2,
+        "expected a flush after both the bare `print \"prompt\";` and the \
+         INPUT prompt (but not after `print \"done\"`, which already ends \
+         in a newline):\n{generated}"
+    );
 }
