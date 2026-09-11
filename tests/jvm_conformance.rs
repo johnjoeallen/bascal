@@ -736,6 +736,97 @@ fn jvm_instr_and_stop_and_system_compile() {
     );
 }
 
+/// `INKEY$` under piped (non-tty) input -- the best this suite can automate
+/// without a pty (the project takes no crate dependencies beyond `clap`, so
+/// no pty crate either): `stty` legitimately fails against a pipe (see
+/// `emit_run_command_inheriting_io`'s own doc comment in codegen_jvm.rs),
+/// but the program must still not crash, and a byte written to the pipe
+/// must still eventually become visible to `INKEY$`'s own `available()`
+/// check. True raw-mode behavior (no Enter needed, no local echo) was
+/// verified by hand against a real pseudo-terminal: a single byte with no
+/// trailing newline was picked up immediately, with no echo -- not
+/// reproducible here without a pty dependency this project doesn't take.
+#[test]
+fn jvm_inkey_polls_without_crashing_under_piped_input_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM INKEY$ test directory");
+    let source_path = dir.path().join("inkey_poll.bcl");
+    fs::write(
+        &source_path,
+        "program inkeyPoll\n\
+         k$ = \"\"\n\
+         do while k$ = \"\"\n\
+         \x20   k$ = inkey$\n\
+         loop\n\
+         print \"got: \" + k$\n\
+         end\n",
+    )
+    .expect("failed to write INKEY$ fixture");
+    let mut output_dir = dir.path().join("out").into_os_string();
+    output_dir.push("/");
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--binary")
+        .arg("-o")
+        .arg(&output_dir)
+        .current_dir(repo_root())
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/assemble the INKEY$ fixture"
+    );
+
+    let mut child = Command::new("java")
+        .arg("-cp")
+        .arg(repo_root().join("tmp"))
+        .arg("InkeyPoll")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn InkeyPoll");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"Q")
+        .expect("failed to write keystroke to InkeyPoll");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll InkeyPoll")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("InkeyPoll timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect InkeyPoll output");
+    assert!(
+        run.status.success(),
+        "InkeyPoll exited non-zero:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "got: Q\n");
+}
+
 /// End-to-end confirmation that `examples/card_catalog/card_catalog.bcl` --
 /// the flagship record/file DSL + procedures example -- runs correctly
 /// under `--target jvm`: adds one entry through the interactive menu, then

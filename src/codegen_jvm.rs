@@ -62,6 +62,17 @@
 //! `OUTPUT`/`APPEND`) and `MID$(...) = ...` statement-form assignment still
 //! aren't implemented at all.
 //!
+//! Bare `INKEY$` is implemented via `stty` (see `emit_run_command_
+//! inheriting_io`'s own doc comment for why a real `ProcessBuilder`,
+//! `inheritIO()`'d, rather than JNI/a native helper): `emit_inkey_setup`
+//! puts the terminal into raw/no-echo/non-blocking mode once at program
+//! start, left in effect until `emit_inkey_restore` undoes it at every exit
+//! point; each `INKEY$` read is then just a `System.in.available()` check
+//! plus an optional single-byte `read()` (see `emit_string_expr`'s own
+//! `"inkey"` arm). Verified by hand against a real pseudo-terminal: a
+//! single byte with no trailing newline was picked up immediately, with no
+//! local echo.
+//!
 //! Interactive `INPUT ["prompt";] var` is implemented (one plain-identifier
 //! target only -- no comma-separated multi-variable form): a shared
 //! `bccStdin: BufferedReader` (see `emit_input_initializer`, same
@@ -104,6 +115,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
     emit_file_io_initializers(&context, &mut body);
     emit_input_initializer(&context, &mut body);
+    emit_inkey_setup(&context, &mut body);
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -123,6 +135,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     // instructions back to back (harmless to the JVM, but not what a real
     // `end` vs. no `end` should look like in the generated text).
     if !ends_with_end(&program.statements) {
+        emit_inkey_restore(&context, &mut body);
         body.push_str("    return\n");
     }
     let handlers = emitter
@@ -312,6 +325,74 @@ fn emit_input(
     }
     emit_store(variable, out, context);
     Ok(())
+}
+
+/// Runs an external command with its own stdin/stdout/stderr wired straight
+/// to this process's (`ProcessBuilder.inheritIO()`) -- essential for `stty`,
+/// which reads/writes *its own* terminal's settings, not a value passed as
+/// an argument: only `inheritIO()` connects it to the actual controlling
+/// terminal `System.in` is reading from, the same way a shell's `stty raw
+/// -echo < /dev/tty` does. The exit code is discarded (`waitFor()`, then
+/// `pop`) -- `stty` legitimately fails when stdin isn't a real terminal
+/// (piped/redirected input under a test harness, say), and that's not a
+/// program error: `INKEY$` still works via a plain, blocking-free
+/// `available()` check either way, just without the "no Enter needed, no
+/// echo" behavior a real terminal gives it.
+fn emit_run_command_inheriting_io(args: &[&str], out: &mut String) {
+    out.push_str("    new java/lang/ProcessBuilder\n    dup\n");
+    out.push_str(&format!(
+        "    ldc {}\n    anewarray java/lang/String\n",
+        args.len()
+    ));
+    for (index, arg) in args.iter().enumerate() {
+        out.push_str(&format!(
+            "    dup\n    ldc {index}\n    ldc \"{}\"\n    aastore\n",
+            escape_jvm_string(arg)
+        ));
+    }
+    out.push_str(
+        "    invokespecial java/lang/ProcessBuilder/<init> ([Ljava/lang/String;)V\n    \
+         invokevirtual java/lang/ProcessBuilder/inheritIO ()Ljava/lang/ProcessBuilder;\n    \
+         invokevirtual java/lang/ProcessBuilder/start ()Ljava/lang/Process;\n    \
+         invokevirtual java/lang/Process/waitFor ()I\n    pop\n",
+    );
+}
+
+/// Puts the terminal into raw/no-echo/non-blocking mode once, at the very
+/// top of `main` (see `emit_input_initializer`'s own doc comment on the
+/// "initialize once in `main`, no real `<clinit>`" convention this backend
+/// uses everywhere) -- `min 0 time 0` is what makes a read return
+/// immediately with zero bytes when no key is waiting, instead of blocking
+/// until one arrives, which is what makes `INKEY$`'s own `available()`
+/// check (see `emit_string_expr`'s own `"inkey"` arm) meaningful at all.
+/// Left in effect for the rest of the run (unlike `codegen_c.rs`'s
+/// `bcc_inkey`, which toggles raw mode on *every single call* and restores
+/// it immediately after -- fine for a `read()` syscall, but spawning a whole
+/// `stty` process per keystroke poll here would be prohibitively slow) --
+/// see `emit_inkey_restore` for where it gets undone.
+fn emit_inkey_setup(context: &JvmContext, out: &mut String) {
+    if !context.needs_inkey {
+        return;
+    }
+    emit_run_command_inheriting_io(&["stty", "raw", "-echo", "min", "0", "time", "0"], out);
+}
+
+/// Restores normal terminal behavior -- the counterpart to
+/// `emit_inkey_setup`, run at every place the program can actually exit:
+/// `Statement::End`'s own `return`, `Statement::Stop`/`Statement::System`'s
+/// `System.exit(0)`, and `generate()`'s own implicit fallthrough `return`
+/// when the program has no explicit `end`. Not run on an uncaught exception
+/// -- a real gap (the terminal is left raw if the program crashes instead
+/// of exiting normally), accepted for the same reason this backend accepts
+/// `codegen_c.rs`'s narrower gaps elsewhere: nothing exercising `INKEY$` yet
+/// needs it, and a real fix (a JVM shutdown hook) needs either a lambda/
+/// `invokedynamic` or a whole second helper class overriding `Thread.run`,
+/// both a materially bigger lift than hand-written straight-line bytecode.
+fn emit_inkey_restore(context: &JvmContext, out: &mut String) {
+    if !context.needs_inkey {
+        return;
+    }
+    emit_run_command_inheriting_io(&["stty", "sane"], out);
 }
 
 /// Deep-clones a nested integer array.  BASCAL permits at most eight axes;
@@ -561,6 +642,24 @@ fn program_uses_input(statements: &[Stmt]) -> bool {
         }
         _ => false,
     })
+}
+
+/// Whether `statements` (recursing into every expression, via
+/// `codegen_basic::visit_body_exprs`) contains bare `INKEY$` anywhere --
+/// decides whether `generate()` puts the terminal into raw mode at program
+/// start and restores it at every exit point (see `JvmContext::needs_inkey`'s
+/// own doc comment).
+fn program_uses_inkey(statements: &[Stmt]) -> bool {
+    let mut found = false;
+    crate::codegen_basic::visit_body_exprs(statements, &mut |expr| {
+        if let Expr::Ident(ident) = expr {
+            if ident.suffix == Some(TypeSuffix::String) && ident.name.eq_ignore_ascii_case("inkey")
+            {
+                found = true;
+            }
+        }
+    });
+    found
 }
 
 fn function_key(name: &BasicIdent) -> String {
@@ -834,6 +933,7 @@ impl JvmEmitter<'_> {
             // halt (resumable with CONT in an interpreter); meaningless for
             // a compiled program, so indistinguishable from SYSTEM here.
             Statement::Stop | Statement::System => {
+                emit_inkey_restore(self.context, out);
                 out.push_str("    iconst_0\n    invokestatic java/lang/System/exit (I)V\n");
                 Ok(())
             }
@@ -1115,6 +1215,7 @@ impl JvmEmitter<'_> {
             ),
             Statement::GlobalDecl(_) => Ok(()),
             Statement::End => {
+                emit_inkey_restore(self.context, out);
                 out.push_str("    return\n");
                 Ok(())
             }
@@ -1882,6 +1983,11 @@ struct JvmContext {
     /// Whether the program uses interactive `INPUT` anywhere -- gates
     /// declaring/initializing the shared `bccStdin` reader at all.
     needs_input: bool,
+    /// Whether the program uses bare `INKEY$` anywhere -- gates putting the
+    /// terminal into raw/no-echo/non-blocking mode at program start (via
+    /// `stty`, see `emit_inkey_setup`'s own doc comment) and restoring it at
+    /// every exit point (see `emit_inkey_restore`).
+    needs_inkey: bool,
 }
 
 #[derive(Clone)]
@@ -2013,6 +2119,11 @@ impl JvmContext {
                 .functions
                 .iter()
                 .any(|f| program_uses_input(&f.body));
+        let needs_inkey = program_uses_inkey(&program.statements)
+            || program
+                .functions
+                .iter()
+                .any(|f| program_uses_inkey(&f.body));
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -2042,6 +2153,7 @@ impl JvmContext {
             field_vars,
             needs_file_io,
             needs_input,
+            needs_inkey,
         })
     }
 
@@ -2126,6 +2238,7 @@ impl JvmContext {
             field_vars: parent.field_vars.clone(),
             needs_file_io: parent.needs_file_io,
             needs_input: parent.needs_input,
+            needs_inkey: parent.needs_inkey,
         }
     }
 
@@ -2167,6 +2280,8 @@ impl JvmContext {
             Expr::String(_) => true,
             Expr::Ident(name) => {
                 self.field_vars.contains_key(&variable_key(name))
+                    || (name.suffix == Some(TypeSuffix::String)
+                        && name.name.eq_ignore_ascii_case("inkey"))
                     || self
                         .constant(name)
                         .is_some_and(|value| self.is_string_expr(value))
@@ -2655,6 +2770,32 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
         Expr::Ident(name) if context.field_vars.contains_key(&variable_key(name)) => {
             let field = context.field_vars[&variable_key(name)];
             emit_field_var_load(field, out, context);
+            Ok(())
+        }
+        // Bare `INKEY$` -- a one-shot, non-blocking check for a pending
+        // keystroke: `System.in.available()` is safe to call without ever
+        // blocking (unlike attempting a `read()` outright), and correctly
+        // reflects "a keystroke is ready right now" once `emit_inkey_setup`
+        // has put the terminal into raw/no-echo/non-blocking mode --
+        // canonical (line-buffered) mode would otherwise report nothing
+        // available until Enter flushes a whole line. Returns "" when
+        // nothing is pending, or the one pending byte as a single-character
+        // string (`i2c` + `String.valueOf(char)` -- the same idiom `CHR$`
+        // already uses; values 0-255 map onto the same UTF-16 code units).
+        Expr::Ident(name)
+            if name.suffix == Some(TypeSuffix::String) && name.name.eq_ignore_ascii_case("inkey") =>
+        {
+            let empty = next_condition_label(context);
+            let done = next_condition_label(context);
+            out.push_str(&format!(
+                "    getstatic java/lang/System/in Ljava/io/InputStream;\n    \
+                 invokevirtual java/io/InputStream/available ()I\n    \
+                 ifle {empty}\n    \
+                 getstatic java/lang/System/in Ljava/io/InputStream;\n    \
+                 invokevirtual java/io/InputStream/read ()I\n    \
+                 i2c\n    invokestatic java/lang/String/valueOf (C)Ljava/lang/String;\n    \
+                 goto {done}\n{empty}:\n    ldc \"\"\n{done}:\n"
+            ));
             Ok(())
         }
         Expr::Ident(name) if context.constant(name).is_some() => {
