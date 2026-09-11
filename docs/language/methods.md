@@ -157,7 +157,7 @@ Built-in scalar methods such as `left`, `len`, `abs`, and `sin` are syntax for t
 
 Every method — scalar or record, inline or external — is fully resolved before any backend runs: by the time BASIC, C, or JVM codegen sees the program, a method is indistinguishable from a hand-written ordinary function. A record method's `self` becomes one ordinary parameter per record field (`byref`, so mutations propagate back to the caller); a call site becomes an ordinary call, the receiver's own fields passed as its leading arguments.
 
-The JVM backend in particular never needs `invokevirtual`, a Java interface, a vtable, or any other object-oriented dispatch mechanism to implement this: `card.display()` lowers to loading `card`'s own fields and an ordinary `invokestatic`, the same as any other function call. Conceptually:
+The JVM backend in particular never needs `invokevirtual`, a Java interface, a vtable, or any other object-oriented dispatch mechanism to implement this: `card.display()` lowers to loading `card`'s own fields and an ordinary `invokestatic`, the same as any other function call. (Receiver-mutation write-back through the JVM backend specifically depends on its own `byref` scalar parameter support, which landed after this feature and may not yet be present in every build — check `bump()`-style output if in doubt; the read-only case, like `display()` above, is unaffected either way.) Conceptually:
 
 ```text
 method display[Card](): $

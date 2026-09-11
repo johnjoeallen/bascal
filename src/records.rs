@@ -33,6 +33,18 @@
 //! indistinguishable from a hand-written ordinary function taking `byref`
 //! scalar/string parameters -- no `invokevirtual`, no vtable, no runtime
 //! dispatch, because there never was one.
+//!
+//! Correctness here still depends on each backend's own `byref` scalar
+//! parameter support being complete: `codegen_basic.rs`/`codegen_c.rs`
+//! already had it before this feature existed, but `codegen_jvm.rs`'s own
+//! `byref` scalar parameter emulation (array-wrapper + scratch-slot writeback)
+//! is, as of this writing, still sitting in an open, unmerged PR (#137,
+//! `jvm-random-access-file-io`) -- until that lands on `main`, a record
+//! method's mutation of `self` compiles and runs without error under
+//! `--target jvm`, but silently doesn't propagate back to the caller (the
+//! generated JVM call passes `self`'s fields by value instead of by
+//! reference). This is a backend-completeness gap in that one target, not a
+//! bug in this desugaring; no change here is needed once #137 merges.
 
 use std::collections::{HashMap, HashSet};
 

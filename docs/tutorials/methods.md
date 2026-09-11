@@ -48,19 +48,26 @@ Methods are not limited to scalars. A record type is a valid method receiver, de
 
 ```bascal
 record Card
-    title: string(40)
+    title:  string(40)
     author: string(40)
+    copies: int
 
     method display(): $
         return self.title + " by " + self.author
     end method
 end record
 
-let card = { title: "Dune", author: "Frank Herbert" }
+method restock[Card](amount%)
+    self.copies = self.copies + amount%
+end method
+
+let card = { title: "Dune", author: "Frank Herbert", copies: 2 }
 print card.display()
+card.restock(3)
+print "copies on hand = "; card.copies
 ```
 
-`self.field` inside a record method is ordinary field access against the receiver, and mutating `self.field` is visible to the caller once the call returns — the receiver is passed the same way a C-level receiver naturally would be, by reference rather than by copy. See the [Methods](../language/methods.md) chapter for the full external-vs-inline grammar, the `: ReturnType`/suffix-shorthand mapping, and how two unrelated record types can each declare a same-named method with no ambiguity (BASCAL has no record inheritance, so there is no dynamic dispatch to resolve). Record methods do not yet extend to nested record fields, record parameters, or arrays of records — the existing random-access `file`/record DSL remains the separate mechanism for on-disk records.
+`display` is declared inline, `restock` externally — both are the same kind of callable, resolved the same way. `self.field` inside a record method is ordinary field access against the receiver, and mutating `self.field` (as `restock` does) is visible to the caller once the call returns: `card.copies` reads `5`, not `2`, after `card.restock(3)`. The receiver is passed the same way a C-level receiver naturally would be, by reference rather than by copy. See the [Methods](../language/methods.md) chapter for the full external-vs-inline grammar, the `: ReturnType`/suffix-shorthand mapping, and how two unrelated record types can each declare a same-named method with no ambiguity (BASCAL has no record inheritance, so there is no dynamic dispatch to resolve). Record methods do not yet extend to nested record fields, record parameters, or arrays of records — the existing random-access `file`/record DSL remains the separate mechanism for on-disk records.
 
 </div>
 
@@ -84,11 +91,11 @@ The same checking applies to user methods, methods from `require`d libraries, an
 
 ### Methods transpile to ordinary typed calls
 
-Methods are syntax for an implicit first parameter. The BASIC backend emits its normal typed parameter/result variables and `GOSUB`; the C backend emits typed calls and temporaries. The source-level method syntax and type checks are shared by both targets.
+Methods are syntax for an implicit first parameter. The BASIC backend emits its normal typed parameter/result variables and `GOSUB`; the C backend emits typed calls and temporaries; the JVM backend emits an ordinary `invokestatic` call, the receiver passed as explicit leading arguments — never `invokevirtual`, an interface, or any other object-dispatch mechanism, since a record method's `self` is fully resolved away (into ordinary parameters) before any backend runs. The source-level method syntax and type checks are shared by all three targets.
 
 </div>
 
-Full, real, transpiling source: [`methods.bcl`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bcl), [`methods.bas`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bas), and [`methods.c`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.c).
+Full, real, transpiling source: [`methods.bcl`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bcl), [`methods.bas`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bas), [`methods.c`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.c), and [`methods.j`](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.j).
 
 [← Functions](functions.md)[Tutorials →](./)
 
@@ -103,12 +110,23 @@ Full, real, transpiling source: [`methods.bcl`](https://github.com/johnjoeallen/
 
 ```bascal
 
-// Tutorial — Scalar methods
+// Tutorial — Methods
 //
-// A method declares its scalar receiver type in brackets after its name.
-// Omitting a result type makes it return its self%/self!/self$ receiver.
-// Dot calls can chain when each result has the next receiver's
-// type. Methods transpile to ordinary typed calls for both backends.
+// A method is a statically resolved callable with an implicit receiver,
+// written in brackets after the method name: `method shout[string]()`
+// receives a string. The return type follows the parameter list after
+// `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+// makes the method return the receiver's own type, falling through to an
+// implicit `return self`. Dot calls chain when each result has the next
+// receiver's type. Methods transpile to ordinary typed calls for every
+// backend -- there is no runtime method object, virtual dispatch, or
+// vtable of any kind.
+//
+// A record type is a valid receiver too, declared either externally (in
+// brackets, same as a scalar receiver) or inline, directly inside the
+// record itself. `self.field` is then ordinary field access against the
+// receiver, and mutating it is visible to the caller once the call
+// returns -- the receiver is passed by reference, not by copy.
 program methods
 
 require com.bascal.stdlib.ucase
@@ -150,6 +168,34 @@ print "discount amount = "; price!.percent(15)
 firstThree$ = name$.left(3).ucase()
 print "first three = "; firstThree$
 
+// -------------------- Record methods --------------------
+
+// Declared inline: the enclosing record supplies the receiver type, so
+// there is no `[Card]` bracket here at all.
+record Card
+    title:  string(40)
+    author: string(40)
+    copies: int
+
+    method display(): $
+        return self.title + " by " + self.author
+    end method
+end record
+
+// Declared externally: same receiver, same callable identity as an
+// inline method -- an external method just lets behavior be attached to
+// a record without editing its own declaration.
+method restock[Card](amount%)
+    self.copies = self.copies + amount%
+end method
+
+let card = { title: "Dune", author: "Frank Herbert", copies: 2 }
+print card.display()
+print "copies on hand = "; card.copies
+
+card.restock(3)
+print "copies after restock = "; card.copies
+
 end
 
 ```
@@ -175,90 +221,153 @@ end
 60 ' ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
 70 ' via ordinary-call syntax resolving to this same declaration.
 
-80 ' Tutorial — Scalar methods
+80 ' Tutorial — Methods
 90 '
-100 ' A method declares its scalar receiver and result types in brackets after
-110 ' its name. The receiver is available as self%/self!/self$
-120 ' in the body. Dot calls can chain when each result has the next receiver's
-130 ' type. Methods transpile to ordinary typed calls for both backends.
+100 ' A method is a statically resolved callable with an implicit receiver,
+110 ' written in brackets after the method name: `method shout[string]()`
+120 ' receives a string. The return type follows the parameter list after
+130 ' `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+140 ' makes the method return the receiver's own type, falling through to an
+150 ' implicit `return self`. Dot calls chain when each result has the next
+160 ' receiver's type. Methods transpile to ordinary typed calls for every
+170 ' backend -- there is no runtime method object, virtual dispatch, or
+180 ' vtable of any kind.
+190 '
+200 ' A record type is a valid receiver too, declared either externally (in
+210 ' brackets, same as a scalar receiver) or inline, directly inside the
+220 ' record itself. `self.field` is then ordinary field access against the
+230 ' receiver, and mutating it is visible to the caller once the call
+240 ' returns -- the receiver is passed by reference, not by copy.
 
-140 name$ = "bascal"
-150 surroundSelf0$ = name$
-160 surroundLeft0$ = "["
-170 surroundRight0$ = "]"
-180 GOSUB 620
-190 result$ = surroundResult0$
-200 PRINT result$
-210 shoutSelf0$ = name$
-220 GOSUB 560
-230 shoutresult$ = shoutResult0$
-240 length% = LEN(LEFT$(name$, 5))
-250 PRINT "length = "; length%
+250 name$ = "bascal"
+260 surroundSelf0$ = name$
+270 surroundLeft0$ = "["
+280 surroundRight0$ = "]"
+290 GOSUB 1040
+300 result$ = surroundResult0$
+310 PRINT result$
+320 shoutSelf0$ = name$
+330 GOSUB 960
+340 shoutresult$ = shoutResult0$
+350 length% = LEN(LEFT$(name$, 5))
+360 PRINT "length = "; length%
 
-260 score% = 125
-270 clampSelf0% = score%
-280 clampLow0% = 0
-290 clampHigh0% = 100
-300 GOSUB 660
-310 PRINT "clamped score = "; clampResult0%
+370 score% = 125
+380 clampSelf0% = score%
+390 clampLow0% = 0
+400 clampHigh0% = 100
+410 GOSUB 1100
+420 PRINT "clamped score = "; clampResult0%
 
-320 price! = 80
-330 percentSelf0! = price!
-340 percentRate0! = 15
-350 GOSUB 790
-360 PRINT "discount amount = "; percentResult0!
+430 price! = 80
+440 percentSelf0! = price!
+450 percentRate0! = 15
+460 GOSUB 1250
+470 PRINT "discount amount = "; percentResult0!
 
-370 ucaseSelf0$ = LEFT$(name$, 3)
-380 GOSUB 430
-390 firstthree$ = ucaseResult0$
-400 PRINT "first three = "; firstthree$
+480 ucaseSelf0$ = LEFT$(name$, 3)
+490 GOSUB 810
+500 firstthree$ = ucaseResult0$
+510 PRINT "first three = "; firstthree$
 
-410 END
+520 ' -------------------- Record methods --------------------
 
-420 ' function ucase$()
-430     ucaseOut0$ = ""
-440     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
-450         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
-460         IF (ucaseC0% >= 97) = 0 THEN GOTO 490
-470         IF (ucaseC0% <= 122) = 0 THEN GOTO 490
-480             ucaseC0% = ucaseC0% - 32
-490         REM END IF
-500         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
-510     NEXT ucaseI0%
-520     ucaseResult0$ = ucaseOut0$
-530     RETURN
-540 ' end function ucase$
+530 ' Declared inline: the enclosing record supplies the receiver type, so
+540 ' there is no `[Card]` bracket here at all.
 
-550 ' function shout$()
-560     ucaseSelf0$ = shoutSelf0$
-570     GOSUB 430
-580     shoutResult0$ = ucaseResult0$ + "!"
-590     RETURN
-600 ' end function shout$
+550 ' Declared externally: same receiver, same callable identity as an
+560 ' inline method -- an external method just lets behavior be attached to
+570 ' a record without editing its own declaration.
 
-610 ' function surround$(left$, right$)
-620     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
-630     RETURN
-640 ' end function surround$
+580 cardtitle$ = "Dune"
+590 cardauthor$ = "Frank Herbert"
+600 cardcopies& = 2
+610 carddisplaySelfTitle0$ = cardtitle$
+620 carddisplaySelfAuthor0$ = cardauthor$
+630 carddisplaySelfCopies0& = cardcopies&
+640 GOSUB 1350
+650 cardtitle$ = carddisplaySelfTitle0$
+660 cardauthor$ = carddisplaySelfAuthor0$
+670 cardcopies& = carddisplaySelfCopies0&
+680 PRINT carddisplayResult0$
+690 PRINT "copies on hand = "; cardcopies&
 
-650 ' function clamp%(low%, high%)
-660     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 700
-670         clampResult0% = clampLow0%
-680         RETURN
-690         GOTO 740
-700         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 730
-710             clampResult0% = clampHigh0%
-720             RETURN
-730         REM END IF
-740     REM END IF
-750     clampResult0% = clampSelf0%
-760     RETURN
-770 ' end function clamp%
+700 cardrestockSelfTitle0$ = cardtitle$
+710 cardrestockSelfAuthor0$ = cardauthor$
+720 cardrestockSelfCopies0& = cardcopies&
+730 cardrestockAmount0% = 3
+740 GOSUB 1310
+750 cardtitle$ = cardrestockSelfTitle0$
+760 cardauthor$ = cardrestockSelfAuthor0$
+770 cardcopies& = cardrestockSelfCopies0&
+780 PRINT "copies after restock = "; cardcopies&
 
-780 ' function percent!(rate!)
-790     percentResult0! = (percentSelf0! * percentRate0!) / 100
-800     RETURN
-810 ' end function percent!
+790 END
+
+800 ' function ucase$()
+810     ucaseOut0$ = ""
+820     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
+830         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
+840         IF (ucaseC0% >= 97) = 0 THEN GOTO 870
+850         IF (ucaseC0% <= 122) = 0 THEN GOTO 870
+860             ucaseC0% = ucaseC0% - 32
+870         REM END IF
+880         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
+890     NEXT ucaseI0%
+900     ucaseResult0$ = ucaseOut0$
+910     RETURN
+920     ucaseResult0$ = ucaseSelf0$
+930     RETURN
+940 ' end function ucase$
+
+950 ' function shout$()
+960     ucaseSelf0$ = shoutSelf0$
+970     GOSUB 810
+980     shoutResult0$ = ucaseResult0$ + "!"
+990     RETURN
+1000     shoutResult0$ = shoutSelf0$
+1010     RETURN
+1020 ' end function shout$
+
+1030 ' function surround$(left$, right$)
+1040     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
+1050     RETURN
+1060     surroundResult0$ = surroundSelf0$
+1070     RETURN
+1080 ' end function surround$
+
+1090 ' function clamp%(low%, high%)
+1100     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 1140
+1110         clampResult0% = clampLow0%
+1120         RETURN
+1130         GOTO 1180
+1140         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 1170
+1150             clampResult0% = clampHigh0%
+1160             RETURN
+1170         REM END IF
+1180     REM END IF
+1190     clampResult0% = clampSelf0%
+1200     RETURN
+1210     clampResult0% = clampSelf0%
+1220     RETURN
+1230 ' end function clamp%
+
+1240 ' function percent!(rate!)
+1250     percentResult0! = (percentSelf0! * percentRate0!) / 100
+1260     RETURN
+1270     percentResult0! = percentSelf0!
+1280     RETURN
+1290 ' end function percent!
+
+1300 ' procedure cardrestock(selftitle$, selfauthor$, selfcopies&, amount%)
+1310     cardrestockSelfCopies0& = cardrestockSelfCopies0& + cardrestockAmount0%
+1320     RETURN
+1330 ' end procedure cardrestock
+
+1340 ' function carddisplay$(selftitle$, selfauthor$, selfcopies&)
+1350     carddisplayResult0$ = (carddisplaySelfTitle0$ + " by ") + carddisplaySelfAuthor0$
+1360     RETURN
+1370 ' end function carddisplay$
 
 ```
 
@@ -291,6 +400,9 @@ static const char* bcc_strd(double value);
 static float bv_f_price = 0;
 static int bv_i_length = 0;
 static int bv_i_score = 0;
+static int bv_l_cardcopies = 0;
+static char bv_s_cardauthor[256] = {0};
+static char bv_s_cardtitle[256] = {0};
 static char bv_s_firstthree[256] = {0};
 static char bv_s_name[256] = {0};
 static char bv_s_result[256] = {0};
@@ -301,6 +413,8 @@ void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const char* bv_s_right_in, char* bcc_out);
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high);
 float bf_f_percent_f(float bv_f_self, float bv_f_rate);
+void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount);
+void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out);
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_self[256];
@@ -376,6 +490,40 @@ float bf_f_percent_f(float bv_f_self, float bv_f_rate) {
     return bv_f_self;
 }
 
+void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+
+    bv_l_selfcopies = (bv_l_selfcopies + bv_i_amount);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
+void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+
+    char bt_s_6[256];
+    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bv_s_selftitle, " by ");
+    char bt_s_7[256];
+    snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", bt_s_6, bv_s_selfauthor);
+    snprintf(bcc_out, 256, "%s", bt_s_7);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    return;
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
 int main(void) {
     // Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     // against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
@@ -383,12 +531,23 @@ int main(void) {
     // ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     // via ordinary-call syntax resolving to this same declaration.
 
-    // Tutorial — Scalar methods
+    // Tutorial — Methods
     //
-    // A method declares its scalar receiver type in brackets after its name.
-    // Omitting a result type makes it return its self%/self!/self$ receiver.
-    // Dot calls can chain when each result has the next receiver's
-    // type. Methods transpile to ordinary typed calls for both backends.
+    // A method is a statically resolved callable with an implicit receiver,
+    // written in brackets after the method name: `method shout[string]()`
+    // receives a string. The return type follows the parameter list after
+    // `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+    // makes the method return the receiver's own type, falling through to an
+    // implicit `return self`. Dot calls chain when each result has the next
+    // receiver's type. Methods transpile to ordinary typed calls for every
+    // backend -- there is no runtime method object, virtual dispatch, or
+    // vtable of any kind.
+    //
+    // A record type is a valid receiver too, declared either externally (in
+    // brackets, same as a scalar receiver) or inline, directly inside the
+    // record itself. `self.field` is then ordinary field access against the
+    // receiver, and mutating it is visible to the caller once the call
+    // returns -- the receiver is passed by reference, not by copy.
 
 
 
@@ -396,13 +555,13 @@ int main(void) {
 
 
     snprintf(bv_s_name, sizeof(bv_s_name), "%s", "bascal");
-    char bt_s_6[256];
-    bf_s_surround_s(bv_s_name, "[", "]", bt_s_6);
-    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_6);
+    char bt_s_8[256];
+    bf_s_surround_s(bv_s_name, "[", "]", bt_s_8);
+    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_8);
     printf("%s\n", bv_s_result);
-    char bt_s_7[256];
-    bf_s_shout_s(bv_s_name, bt_s_7);
-    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_7);
+    char bt_s_9[256];
+    bf_s_shout_s(bv_s_name, bt_s_9);
+    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_9);
     bv_i_length = ((int)strlen(bcc_mid(bv_s_name, 1, 5)));
     printf("length = %d\n", bv_i_length);
 
@@ -412,10 +571,30 @@ int main(void) {
     bv_f_price = 80;
     printf("discount amount = %g\n", bf_f_percent_f(bv_f_price, 15));
 
-    char bt_s_8[256];
-    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_8);
-    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_8);
+    char bt_s_10[256];
+    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_10);
+    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_10);
     printf("first three = %s\n", bv_s_firstthree);
+
+    // -------------------- Record methods --------------------
+
+    // Declared inline: the enclosing record supplies the receiver type, so
+    // there is no `[Card]` bracket here at all.
+
+    // Declared externally: same receiver, same callable identity as an
+    // inline method -- an external method just lets behavior be attached to
+    // a record without editing its own declaration.
+
+    snprintf(bv_s_cardtitle, sizeof(bv_s_cardtitle), "%s", "Dune");
+    snprintf(bv_s_cardauthor, sizeof(bv_s_cardauthor), "%s", "Frank Herbert");
+    bv_l_cardcopies = 2;
+    char bt_s_11[256];
+    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_11);
+    printf("%s\n", bt_s_11);
+    printf("copies on hand = %d\n", bv_l_cardcopies);
+
+    bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
+    printf("copies after restock = %d\n", bv_l_cardcopies);
 
     return 0;
 }
@@ -477,12 +656,15 @@ static const char* bcc_strd(double value) {
 .super java/lang/Object
 
 .field public static g1 Ljava/lang/String;
-.field public static g2 I
-.field public static g3 Ljava/lang/String;
-.field public static g4 D
-.field public static g6 Ljava/lang/String;
-.field public static g7 I
-.field public static g8 Ljava/lang/String;
+.field public static g2 J
+.field public static g4 Ljava/lang/String;
+.field public static g5 Ljava/lang/String;
+.field public static g6 I
+.field public static g7 Ljava/lang/String;
+.field public static g8 D
+.field public static g10 Ljava/lang/String;
+.field public static g11 I
+.field public static g12 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
     .limit locals 4
@@ -656,36 +838,89 @@ L_if_0_end:
     dreturn
 .end method
 
+.method public static cardRestock : (Ljava/lang/String;Ljava/lang/String;JI)V
+    .limit stack 16
+    .limit locals 5
+
+    lload 2
+    iload 4
+    i2l
+    ladd
+    lstore 2
+    return
+.end method
+
+.method public static cardDisplay : (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 4
+
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    aload 0
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc " by "
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    aload 1
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    areturn
+    ldc ""
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 9
+    .limit locals 13
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;
-    iconst_0
-    putstatic Methods/g2 I
+    lconst_0
+    putstatic Methods/g2 J
     ldc ""
-    putstatic Methods/g3 Ljava/lang/String;
+    putstatic Methods/g4 Ljava/lang/String;
+    ldc ""
+    putstatic Methods/g5 Ljava/lang/String;
+    iconst_0
+    putstatic Methods/g6 I
+    ldc ""
+    putstatic Methods/g7 Ljava/lang/String;
     dconst_0
-    putstatic Methods/g4 D
+    putstatic Methods/g8 D
     ldc ""
-    putstatic Methods/g6 Ljava/lang/String;
+    putstatic Methods/g10 Ljava/lang/String;
     iconst_0
-    putstatic Methods/g7 I
+    putstatic Methods/g11 I
     ldc ""
-    putstatic Methods/g8 Ljava/lang/String;
+    putstatic Methods/g12 Ljava/lang/String;
     ; Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
     ; ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     ; via ordinary-call syntax resolving to this same declaration.
 
-    ; Tutorial — Scalar methods
+    ; Tutorial — Methods
     ;
-    ; A method declares its scalar receiver type in brackets after its name.
-    ; Omitting a result type makes it return its self%/self!/self$ receiver.
-    ; Dot calls can chain when each result has the next receiver's
-    ; type. Methods transpile to ordinary typed calls for both backends.
+    ; A method is a statically resolved callable with an implicit receiver,
+    ; written in brackets after the method name: `method shout[string]()`
+    ; receives a string. The return type follows the parameter list after
+    ; `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+    ; makes the method return the receiver's own type, falling through to an
+    ; implicit `return self`. Dot calls chain when each result has the next
+    ; receiver's type. Methods transpile to ordinary typed calls for every
+    ; backend -- there is no runtime method object, virtual dispatch, or
+    ; vtable of any kind.
+    ;
+    ; A record type is a valid receiver too, declared either externally (in
+    ; brackets, same as a scalar receiver) or inline, directly inside the
+    ; record itself. `self.field` is then ordinary field access against the
+    ; receiver, and mutating it is visible to the caller once the call
+    ; returns -- the receiver is passed by reference, not by copy.
 
 
 
@@ -693,38 +928,38 @@ L_if_0_end:
 
 
     ldc "bascal"
-    putstatic Methods/g3 Ljava/lang/String;
-    getstatic Methods/g3 Ljava/lang/String;
+    putstatic Methods/g7 Ljava/lang/String;
+    getstatic Methods/g7 Ljava/lang/String;
     ldc "["
     ldc "]"
     invokestatic Methods/surround (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
-    putstatic Methods/g6 Ljava/lang/String;
+    putstatic Methods/g10 Ljava/lang/String;
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic Methods/g6 Ljava/lang/String;
+    getstatic Methods/g10 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    getstatic Methods/g3 Ljava/lang/String;
+    getstatic Methods/g7 Ljava/lang/String;
     invokestatic Methods/shout (Ljava/lang/String;)Ljava/lang/String;
-    putstatic Methods/g8 Ljava/lang/String;
-    getstatic Methods/g3 Ljava/lang/String;
+    putstatic Methods/g12 Ljava/lang/String;
+    getstatic Methods/g7 Ljava/lang/String;
     iconst_0
     ldc 5
     invokevirtual java/lang/String/substring (II)Ljava/lang/String;
     invokevirtual java/lang/String/length ()I
-    putstatic Methods/g2 I
+    putstatic Methods/g6 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "length = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic Methods/g2 I
+    getstatic Methods/g6 I
     invokevirtual java/io/PrintStream/println (I)V
 
     ldc 125
-    putstatic Methods/g7 I
+    putstatic Methods/g11 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "clamped score = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic Methods/g7 I
+    getstatic Methods/g11 I
     ldc 0
     ldc 100
     invokestatic Methods/clamp (III)I
@@ -732,29 +967,70 @@ L_if_0_end:
 
     ldc 80
     i2d
-    putstatic Methods/g4 D
+    putstatic Methods/g8 D
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "discount amount = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic Methods/g4 D
+    getstatic Methods/g8 D
     ldc 15
     i2d
     invokestatic Methods/percent (DD)D
     invokevirtual java/io/PrintStream/println (D)V
 
-    getstatic Methods/g3 Ljava/lang/String;
+    getstatic Methods/g7 Ljava/lang/String;
     iconst_0
     ldc 3
     invokevirtual java/lang/String/substring (II)Ljava/lang/String;
     invokestatic Methods/ucase (Ljava/lang/String;)Ljava/lang/String;
-    putstatic Methods/g1 Ljava/lang/String;
+    putstatic Methods/g5 Ljava/lang/String;
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "first three = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic Methods/g1 Ljava/lang/String;
+    getstatic Methods/g5 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+
+    ; -------------------- Record methods --------------------
+
+    ; Declared inline: the enclosing record supplies the receiver type, so
+    ; there is no `[Card]` bracket here at all.
+
+    ; Declared externally: same receiver, same callable identity as an
+    ; inline method -- an external method just lets behavior be attached to
+    ; a record without editing its own declaration.
+
+    ldc "Dune"
+    putstatic Methods/g4 Ljava/lang/String;
+    ldc "Frank Herbert"
+    putstatic Methods/g1 Ljava/lang/String;
+    ldc 2
+    i2l
+    putstatic Methods/g2 J
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    getstatic Methods/g4 Ljava/lang/String;
+    getstatic Methods/g1 Ljava/lang/String;
+    getstatic Methods/g2 J
+    invokestatic Methods/cardDisplay (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    ldc "copies on hand = "
+    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    getstatic Methods/g2 J
+    invokevirtual java/io/PrintStream/println (J)V
+
+    getstatic Methods/g4 Ljava/lang/String;
+    getstatic Methods/g1 Ljava/lang/String;
+    getstatic Methods/g2 J
+    ldc 3
+    invokestatic Methods/cardRestock (Ljava/lang/String;Ljava/lang/String;JI)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    ldc "copies after restock = "
+    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    getstatic Methods/g2 J
+    invokevirtual java/io/PrintStream/println (J)V
 
     return
 .end method
