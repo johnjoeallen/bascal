@@ -64,6 +64,24 @@ L_while_0_end:
     areturn
 .end method
 
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 19
@@ -670,7 +688,8 @@ L_for_0_top:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     getstatic RandomAndRecordFiles/bccBufs [[B
     ldc 0
     aaload
@@ -751,7 +770,7 @@ L_for_0_top:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     getstatic RandomAndRecordFiles/g10 D
-    invokestatic java/lang/String/valueOf (D)Ljava/lang/String;
+    invokestatic RandomAndRecordFiles/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -823,7 +842,8 @@ L_for_0_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     ldc 8
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
@@ -945,7 +965,8 @@ L_for_0_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     ldc "Alice Smith"
     ldc 20
     newarray char
@@ -1087,7 +1108,8 @@ L_for_0_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     ldc "Carol Jones"
     ldc 20
     newarray char
@@ -1235,7 +1257,8 @@ L_for_1_top:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
@@ -1282,7 +1305,7 @@ L_for_1_top:
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
     invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;
     invokevirtual java/nio/ByteBuffer/getDouble ()D
-    invokestatic java/lang/String/valueOf (D)Ljava/lang/String;
+    invokestatic RandomAndRecordFiles/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -1870,7 +1893,8 @@ L_for_2_top:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     getstatic RandomAndRecordFiles/bccBufs [[B
     ldc 0
     aaload
@@ -2063,7 +2087,7 @@ L_while_4_end:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     getstatic RandomAndRecordFiles/g17 D
-    invokestatic java/lang/String/valueOf (D)Ljava/lang/String;
+    invokestatic RandomAndRecordFiles/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -2102,7 +2126,8 @@ L_for_2_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     ldc 8
     invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;
     getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;
@@ -2195,7 +2220,8 @@ L_for_2_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     ldc "Alice Smith"
     ldc 20
     newarray char
@@ -2307,7 +2333,8 @@ L_for_2_end:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     getstatic RandomAndRecordFiles/bccBufs [[B
     ldc 0
     aaload
@@ -2645,7 +2672,8 @@ L_for_7_top:
     iconst_1
     isub
     aaload
-    invokevirtual java/io/RandomAccessFile/readFully ([B)V
+    invokevirtual java/io/RandomAccessFile/read ([B)I
+    pop
     getstatic RandomAndRecordFiles/bccBufs [[B
     ldc 0
     aaload
@@ -2823,7 +2851,7 @@ L_while_9_end:
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     getstatic RandomAndRecordFiles/g17 D
-    invokestatic java/lang/String/valueOf (D)Ljava/lang/String;
+    invokestatic RandomAndRecordFiles/bccStr (D)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V

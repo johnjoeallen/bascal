@@ -2,24 +2,31 @@
 .class public Conditions
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
+.field public static g6 I
+.field public static g7 I
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 8
 
     iconst_0
-    istore 1
+    putstatic Conditions/g1 I
     ldc ""
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic Conditions/g3 I
     iconst_0
-    istore 4
+    putstatic Conditions/g4 I
     iconst_0
-    istore 5
+    putstatic Conditions/g5 I
     iconst_0
-    istore 6
+    putstatic Conditions/g6 I
     iconst_0
-    istore 7
+    putstatic Conditions/g7 I
     ; Tutorial — Conditions: IF / ELSEIF / ELSE / END IF
     ; 
     ; BASCAL supports multi-line block IF statements.  The compiler transpiles
@@ -40,8 +47,8 @@
 
     ; Simple IF
     ldc 23
-    istore 6
-    iload 6
+    putstatic Conditions/g6 I
+    getstatic Conditions/g6 I
     ldc 30
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -55,8 +62,8 @@ L_if_0_else:
 
     ; IF / ELSE
     ldc 72
-    istore 5
-    iload 5
+    putstatic Conditions/g5 I
+    getstatic Conditions/g5 I
     ldc 60
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -69,7 +76,7 @@ L_if_0_else:
     ldc "Pass ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 5
+    getstatic Conditions/g5 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc ")"
@@ -80,7 +87,7 @@ L_if_1_else:
     ldc "Fail ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 5
+    getstatic Conditions/g5 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc ")"
@@ -89,9 +96,9 @@ L_if_1_end:
 
     ; IF / ELSEIF / ELSE — grade classification
     ldc 85
-    istore 4
+    putstatic Conditions/g4 I
 
-    iload 4
+    getstatic Conditions/g4 I
     ldc 90
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -101,10 +108,10 @@ L_if_1_end:
     ishr
     ifeq L_if_2_else
     ldc "A"
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     goto L_if_2_end
 L_if_2_else:
-    iload 4
+    getstatic Conditions/g4 I
     ldc 80
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -114,10 +121,10 @@ L_if_2_else:
     ishr
     ifeq L_if_3_else
     ldc "B"
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     goto L_if_3_end
 L_if_3_else:
-    iload 4
+    getstatic Conditions/g4 I
     ldc 70
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -127,10 +134,10 @@ L_if_3_else:
     ishr
     ifeq L_if_4_else
     ldc "C"
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     goto L_if_4_end
 L_if_4_else:
-    iload 4
+    getstatic Conditions/g4 I
     ldc 60
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -140,11 +147,11 @@ L_if_4_else:
     ishr
     ifeq L_if_5_else
     ldc "D"
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
     goto L_if_5_end
 L_if_5_else:
     ldc "F"
-    astore 2
+    putstatic Conditions/g2 Ljava/lang/String;
 L_if_5_end:
 L_if_4_end:
 L_if_3_end:
@@ -156,22 +163,22 @@ L_if_2_end:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Grade: "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 2
+    getstatic Conditions/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     ; Nested IF
     ldc 15
-    istore 7
-    iload 7
+    putstatic Conditions/g7 I
+    getstatic Conditions/g7 I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
     ifeq L_if_6_else
-    iload 7
+    getstatic Conditions/g7 I
     ldc 10
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -179,7 +186,7 @@ L_if_2_end:
     ishr
     ifeq L_if_7_else
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is large and positive"
@@ -187,7 +194,7 @@ L_if_2_end:
     goto L_if_7_end
 L_if_7_else:
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is small and positive"
@@ -196,7 +203,7 @@ L_if_7_end:
     goto L_if_6_end
 L_if_6_else:
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 7
+    getstatic Conditions/g7 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is not positive"
@@ -205,8 +212,8 @@ L_if_6_end:
 
     ; Single-line IF -- no end if needed
     ldc 23
-    istore 6
-    iload 6
+    putstatic Conditions/g6 I
+    getstatic Conditions/g6 I
     ldc 30
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -217,7 +224,7 @@ L_if_6_end:
     ldc "Hot day (single-line)"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 L_if_8_else:
-    iload 6
+    getstatic Conditions/g6 I
     ldc 100
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -236,10 +243,10 @@ L_if_9_end:
 
     ; Compound conditions
     ldc 25
-    istore 1
+    putstatic Conditions/g1 I
     ldc 45000
-    istore 3
-    iload 1
+    putstatic Conditions/g3 I
+    getstatic Conditions/g1 I
     ldc 18
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -255,7 +262,7 @@ L_if_9_end:
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 3
+    getstatic Conditions/g3 I
     ldc 30000
     invokestatic java/lang/Integer/compare (II)I
     ineg

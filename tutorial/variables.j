@@ -2,18 +2,40 @@
 .class public Variables
 .super java/lang/Object
 
+.field public static g1 Ljava/lang/String;
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 D
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 6
 
     ldc ""
-    astore 1
+    putstatic Variables/g1 Ljava/lang/String;
     ldc ""
-    astore 2
+    putstatic Variables/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic Variables/g3 I
     dconst_0
-    dstore 4
+    putstatic Variables/g4 D
     ; Tutorial — Variables and Constants
     ; 
     ; Every name in BASCAL ends with a type suffix that tells the runtime
@@ -36,11 +58,11 @@
 
     ; Variable assignment uses =
     ldc "Alice"
-    astore 2
+    putstatic Variables/g2 Ljava/lang/String;
     ldc 87
-    istore 3
+    putstatic Variables/g3 I
     ldc2_w 36.6
-    dstore 4
+    putstatic Variables/g4 D
 
     ; print mixes strings and numbers directly with ; (no str$() needed)
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -50,13 +72,13 @@
     ldc "Player:      "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    aload 2
+    getstatic Variables/g2 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Score:       "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Variables/g3 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "/ "
@@ -74,14 +96,16 @@
     ldc "Temperature: "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    dload 4
-    invokevirtual java/io/PrintStream/println (D)V
+    getstatic Variables/g4 D
+    invokestatic Variables/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Tax rate:    "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc2_w 0.2
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Variables/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     ; str$() is still available when you need to build a string value
     new java/lang/StringBuilder
@@ -89,13 +113,13 @@
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Score is "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    iload 3
+    getstatic Variables/g3 I
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
-    astore 1
+    putstatic Variables/g1 Ljava/lang/String;
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    aload 1
+    getstatic Variables/g1 Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     return

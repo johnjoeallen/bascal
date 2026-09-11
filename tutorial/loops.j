@@ -2,20 +2,25 @@
 .class public Loops
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 I
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 6
 
     iconst_0
-    istore 1
+    putstatic Loops/g1 I
     iconst_0
-    istore 2
+    putstatic Loops/g2 I
     iconst_0
-    istore 3
+    putstatic Loops/g3 I
     iconst_0
-    istore 4
+    putstatic Loops/g4 I
     iconst_0
-    istore 5
+    putstatic Loops/g5 I
     ; Tutorial — Loops: for, WHILE, DO
     ; 
     ; BASCAL provides three loop constructs:
@@ -41,29 +46,29 @@
     ldc "Squares 1..5:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 1
+    putstatic Loops/g1 I
 L_for_0_top:
-    iload 1
+    getstatic Loops/g1 I
     ldc 5
     if_icmpgt L_for_0_end
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Loops/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "^2 = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 1
+    getstatic Loops/g1 I
+    getstatic Loops/g1 I
     imul
     invokevirtual java/io/PrintStream/println (I)V
-    iload 1
+    getstatic Loops/g1 I
     ldc 1
     iadd
-    istore 1
+    putstatic Loops/g1 I
     goto L_for_0_top
 L_for_0_end:
 
@@ -72,22 +77,22 @@ L_for_0_end:
     ldc "Countdown:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 3
-    istore 3
+    putstatic Loops/g3 I
 L_for_1_top:
-    iload 3
+    getstatic Loops/g3 I
     ldc 1
     if_icmplt L_for_1_end
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Loops/g3 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 3
+    getstatic Loops/g3 I
     ldc 1
     ineg
     iadd
-    istore 3
+    putstatic Loops/g3 I
     goto L_for_1_top
 L_for_1_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -99,12 +104,12 @@ L_for_1_end:
     ldc "First even > 4:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 1
+    putstatic Loops/g1 I
 L_for_2_top:
-    iload 1
+    getstatic Loops/g1 I
     ldc 20
     if_icmpgt L_for_2_end
-    iload 1
+    getstatic Loops/g1 I
     ldc 4
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -118,7 +123,7 @@ L_for_2_top:
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 1
+    getstatic Loops/g1 I
     i2d
     ldc 2
     i2d
@@ -126,7 +131,7 @@ L_for_2_top:
     ldc 2
     i2d
     dmul
-    iload 1
+    getstatic Loops/g1 I
     i2d
     invokestatic java/lang/Double/compare (DD)I
     dup
@@ -153,14 +158,14 @@ L_for_2_top:
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Loops/g1 I
     invokevirtual java/io/PrintStream/println (I)V
     goto L_for_2_end
 L_if_3_else:
-    iload 1
+    getstatic Loops/g1 I
     ldc 1
     iadd
-    istore 1
+    putstatic Loops/g1 I
     goto L_for_2_top
 L_for_2_end:
 
@@ -169,9 +174,9 @@ L_for_2_end:
     ldc "Powers of 2 under 100:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 4
+    putstatic Loops/g4 I
 L_while_4_top:
-    iload 4
+    getstatic Loops/g4 I
     ldc 100
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
@@ -181,12 +186,12 @@ L_while_4_top:
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic Loops/g4 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 4
+    getstatic Loops/g4 I
     ldc 2
     imul
-    istore 4
+    putstatic Loops/g4 I
     goto L_while_4_top
 L_while_4_end:
 
@@ -195,11 +200,11 @@ L_while_4_end:
     ldc "Collatz from 27 (first 8 steps):"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 27
-    istore 3
+    putstatic Loops/g3 I
     ldc 0
-    istore 5
+    putstatic Loops/g5 I
 L_while_5_top:
-    iload 3
+    getstatic Loops/g3 I
     ldc 1
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -209,7 +214,7 @@ L_while_5_top:
     iushr
     ineg
     ifeq L_while_5_end
-    iload 5
+    getstatic Loops/g5 I
     ldc 8
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -226,7 +231,7 @@ L_while_5_top:
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     goto L_while_5_end
 L_if_6_else:
-    iload 3
+    getstatic Loops/g3 I
     i2d
     ldc 2
     i2d
@@ -234,7 +239,7 @@ L_if_6_else:
     ldc 2
     i2d
     dmul
-    iload 3
+    getstatic Loops/g3 I
     i2d
     invokestatic java/lang/Double/compare (DD)I
     dup
@@ -246,7 +251,7 @@ L_if_6_else:
     ixor
     ineg
     ifeq L_if_7_else
-    iload 3
+    getstatic Loops/g3 I
     i2d
     ldc 2
     i2d
@@ -259,25 +264,25 @@ L_if_6_else:
     dadd
     d2l
     l2i
-    istore 3
+    putstatic Loops/g3 I
     goto L_if_7_end
 L_if_7_else:
-    iload 3
+    getstatic Loops/g3 I
     ldc 3
     imul
     ldc 1
     iadd
-    istore 3
+    putstatic Loops/g3 I
 L_if_7_end:
-    iload 5
+    getstatic Loops/g5 I
     ldc 1
     iadd
-    istore 5
+    putstatic Loops/g5 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Loops/g3 I
     invokevirtual java/io/PrintStream/println (I)V
     goto L_while_5_top
 L_while_5_end:
@@ -289,9 +294,9 @@ L_while_5_end:
     ldc "DO WHILE:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 2
+    putstatic Loops/g2 I
 L_do_8_top:
-    iload 2
+    getstatic Loops/g2 I
     ldc 3
     invokestatic java/lang/Integer/compare (II)I
     iconst_1
@@ -303,12 +308,12 @@ L_do_8_top:
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Loops/g2 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 2
+    getstatic Loops/g2 I
     ldc 1
     iadd
-    istore 2
+    putstatic Loops/g2 I
     goto L_do_8_top
 L_do_8_end:
 
@@ -317,9 +322,9 @@ L_do_8_end:
     ldc "DO UNTIL:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 2
+    putstatic Loops/g2 I
 L_do_9_top:
-    iload 2
+    getstatic Loops/g2 I
     ldc 3
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -330,12 +335,12 @@ L_do_9_top:
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Loops/g2 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 2
+    getstatic Loops/g2 I
     ldc 1
     iadd
-    istore 2
+    putstatic Loops/g2 I
     goto L_do_9_top
 L_do_9_end:
 
@@ -344,19 +349,19 @@ L_do_9_end:
     ldc "DO...LOOP UNTIL (body runs once even though already false):"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 99
-    istore 2
+    putstatic Loops/g2 I
 L_do_10_top:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Loops/g2 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 2
+    getstatic Loops/g2 I
     ldc 1
     iadd
-    istore 2
-    iload 2
+    putstatic Loops/g2 I
+    getstatic Loops/g2 I
     ldc 3
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -371,9 +376,9 @@ L_do_10_end:
     ldc "exit at k% = 3:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     ldc 1
-    istore 2
+    putstatic Loops/g2 I
 L_do_11_top:
-    iload 2
+    getstatic Loops/g2 I
     ldc 3
     invokestatic java/lang/Integer/compare (II)I
     dup
@@ -391,12 +396,12 @@ L_if_12_else:
     ldc "  "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Loops/g2 I
     invokevirtual java/io/PrintStream/println (I)V
-    iload 2
+    getstatic Loops/g2 I
     ldc 1
     iadd
-    istore 2
+    putstatic Loops/g2 I
     goto L_do_11_top
 L_do_11_end:
 
