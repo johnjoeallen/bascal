@@ -88,11 +88,11 @@
 770 cardcopies& = cardrestockSelfCopies0&
 780 PRINT "copies after restock = "; cardcopies&
 
-790 ' `mixin` is structural field composition only, not inheritance:
+790 ' `combines` is structural field composition only, not inheritance:
 800 ' SignedCard's own field list is Card's fields (title, author, copies)
 810 ' followed by its own (signature), so its record literal accepts all
-820 ' four -- but Card's methods aren't mixed in. SignedCard needs its own
-830 ' display() (below); calling signed.restock(...) without declaring
+820 ' four -- but Card's methods aren't combined in. SignedCard needs its
+830 ' own display() (below); calling signed.restock(...) without declaring
 840 ' SignedCard's own restock() would be a compile error, since a method
 850 ' is only ever visible for the exact record type it was declared for.
 

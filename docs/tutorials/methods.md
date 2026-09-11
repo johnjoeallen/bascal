@@ -73,12 +73,12 @@ print "copies on hand = "; card.copies
 
 <div class="snippet" markdown="1">
 
-### Structural composition with `mixin`
+### Structural composition with `combines`
 
-`record SignedCard mixin Card` makes `SignedCard` composed of `Card`'s fields — structurally, not as subtype polymorphism:
+`record SignedCard combines Card` makes `SignedCard` composed of `Card`'s fields — structurally, not as subtype polymorphism:
 
 ```bascal
-record SignedCard mixin Card
+record SignedCard combines Card
     signature: string(40)
 
     method display(): $
@@ -96,7 +96,7 @@ signed.restock(2)
 print "signed copies after restock = "; signed.copies
 ```
 
-`SignedCard`'s effective field list is `Card`'s fields (`title`, `author`, `copies`) followed by its own (`signature`), so its record literal accepts all four. `SignedCard` declares its own `display()`, since `mixin` never mixes in methods — `Card`'s own `display()`/`restock()` only ever apply to a `Card` receiver, so `SignedCard` needs its own `restock()` too (shown here as an external method, just to demonstrate both forms still work the same way once mixed-in fields are involved). `mixin` never makes `SignedCard` assignable to or from `Card`: each remains its own exact record type. See the [Methods](../language/methods.md) chapter for the full grammar, including multiple/transitive mixins and the compile errors an undeclared source, a mixin cycle, or a duplicate field name produce.
+`SignedCard`'s effective field list is `Card`'s fields (`title`, `author`, `copies`) followed by its own (`signature`), so its record literal accepts all four. `SignedCard` declares its own `display()`, since `combines` never combines methods — `Card`'s own `display()`/`restock()` only ever apply to a `Card` receiver, so `SignedCard` needs its own `restock()` too (shown here as an external method, just to demonstrate both forms still work the same way once combined fields are involved). `combines` never makes `SignedCard` assignable to or from `Card`: each remains its own exact record type. See the [Methods](../language/methods.md) chapter for the full grammar, including multiple/transitive combination and the compile errors an undeclared source, a combines cycle, or a duplicate field name produce.
 
 </div>
 
@@ -225,14 +225,14 @@ print "copies on hand = "; card.copies
 card.restock(3)
 print "copies after restock = "; card.copies
 
-// `mixin` is structural field composition only, not inheritance:
+// `combines` is structural field composition only, not inheritance:
 // SignedCard's own field list is Card's fields (title, author, copies)
 // followed by its own (signature), so its record literal accepts all
-// four -- but Card's methods aren't mixed in. SignedCard needs its own
-// display() (below); calling signed.restock(...) without declaring
+// four -- but Card's methods aren't combined in. SignedCard needs its
+// own display() (below); calling signed.restock(...) without declaring
 // SignedCard's own restock() would be a compile error, since a method
 // is only ever visible for the exact record type it was declared for.
-record SignedCard mixin Card
+record SignedCard combines Card
     signature: string(40)
 
     method display(): $
@@ -355,11 +355,11 @@ end
 770 cardcopies& = cardrestockSelfCopies0&
 780 PRINT "copies after restock = "; cardcopies&
 
-790 ' `mixin` is structural field composition only, not inheritance:
+790 ' `combines` is structural field composition only, not inheritance:
 800 ' SignedCard's own field list is Card's fields (title, author, copies)
 810 ' followed by its own (signature), so its record literal accepts all
-820 ' four -- but Card's methods aren't mixed in. SignedCard needs its own
-830 ' display() (below); calling signed.restock(...) without declaring
+820 ' four -- but Card's methods aren't combined in. SignedCard needs its
+830 ' own display() (below); calling signed.restock(...) without declaring
 840 ' SignedCard's own restock() would be a compile error, since a method
 850 ' is only ever visible for the exact record type it was declared for.
 
@@ -744,11 +744,11 @@ int main(void) {
     bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
     printf("copies after restock = %d\n", bv_l_cardcopies);
 
-    // `mixin` is structural field composition only, not inheritance:
+    // `combines` is structural field composition only, not inheritance:
     // SignedCard's own field list is Card's fields (title, author, copies)
     // followed by its own (signature), so its record literal accepts all
-    // four -- but Card's methods aren't mixed in. SignedCard needs its own
-    // display() (below); calling signed.restock(...) without declaring
+    // four -- but Card's methods aren't combined in. SignedCard needs its
+    // own display() (below); calling signed.restock(...) without declaring
     // SignedCard's own restock() would be a compile error, since a method
     // is only ever visible for the exact record type it was declared for.
 
@@ -1486,11 +1486,11 @@ L_if_0_end:
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
 
-    ; `mixin` is structural field composition only, not inheritance:
+    ; `combines` is structural field composition only, not inheritance:
     ; SignedCard's own field list is Card's fields (title, author, copies)
     ; followed by its own (signature), so its record literal accepts all
-    ; four -- but Card's methods aren't mixed in. SignedCard needs its own
-    ; display() (below); calling signed.restock(...) without declaring
+    ; four -- but Card's methods aren't combined in. SignedCard needs its
+    ; own display() (below); calling signed.restock(...) without declaring
     ; SignedCard's own restock() would be a compile error, since a method
     ; is only ever visible for the exact record type it was declared for.
 

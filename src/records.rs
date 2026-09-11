@@ -287,17 +287,17 @@ impl Lowerer {
         }
     }
 
-    /// `record Dog mixin Animal, Pet` is structural field composition only
-    /// -- `Dog`'s effective field list is `Animal`'s effective fields, then
-    /// `Pet`'s, then `Dog`'s own declared fields, in that order. This is
-    /// NOT inheritance, subtyping, or polymorphism of any kind: `Dog`,
+    /// `record Dog combines Animal, Pet` is structural field composition
+    /// only -- `Dog`'s effective field list is `Animal`'s effective fields,
+    /// then `Pet`'s, then `Dog`'s own declared fields, in that order. This
+    /// is NOT inheritance, subtyping, or polymorphism of any kind: `Dog`,
     /// `Animal`, and `Pet` remain three entirely distinct record types
     /// afterward (`self.records` holds separate, unrelated entries) --
     /// nothing here makes a `Dog` value assignable to/from an `Animal` or
     /// `Pet` variable (see `lower_record_copy`/`record_type_for_literal`'s
     /// own exact-type checks, untouched by this) -- and methods are never
-    /// mixed in at all: a method declared for `Animal` never applies to a
-    /// `Dog` receiver, even though `Dog` mixes in `Animal`'s fields (see
+    /// combined at all: a method declared for `Animal` never applies to a
+    /// `Dog` receiver, even though `Dog` combines `Animal`'s fields (see
     /// `rewrite_record_method_call`, which only ever looks up a method
     /// under the receiver's own exact type -- there is no ancestor-walking
     /// fallback of any kind here, unlike this feature's field composition).
@@ -368,30 +368,30 @@ impl Lowerer {
     }
 
     /// Computes `key`'s complete effective field set -- each listed
-    /// `mixin` source's own effective fields (already resolved, memoized
-    /// in `resolved` so a source mixed into several records is only ever
-    /// walked once), in declaration order, followed by `key`'s own
-    /// directly-declared fields -- checking for a duplicate field name
+    /// `combines` source's own effective fields (already resolved,
+    /// memoized in `resolved` so a source combined into several records is
+    /// only ever walked once), in declaration order, followed by `key`'s
+    /// own directly-declared fields -- checking for a duplicate field name
     /// across the *entire* combined set as it goes, regardless of how deep
-    /// a transitive `mixin` chain contributed it (see the module doc
-    /// comment's `D mixin B, C` example, where `value` reaching `D` through
-    /// two different transitive paths must still be caught). Each field is
-    /// paired with a source label purely for the duplicate diagnostic
-    /// (`"Animal"`/`"Pet"`/`"declared directly in Dog"`) -- a field
-    /// re-flattened through an intermediate mixin is re-labeled with that
-    /// intermediate's own name here, not traced back to its ultimate
-    /// origin, which keeps the diagnostic simple and always names something
-    /// the record's own source directly lists.
+    /// a transitive `combines` chain contributed it (see the module doc
+    /// comment's `D combines B, C` example, where `value` reaching `D`
+    /// through two different transitive paths must still be caught). Each
+    /// field is paired with a source label purely for the duplicate
+    /// diagnostic (`"Animal"`/`"Pet"`/`"declared directly in Dog"`) -- a
+    /// field re-flattened through an intermediate combined source is
+    /// re-labeled with that intermediate's own name here, not traced back
+    /// to its ultimate origin, which keeps the diagnostic simple and
+    /// always names something the record's own source directly lists.
     ///
-    /// `visiting` detects a mixin cycle (`A mixin B` + `B mixin A`, or a
-    /// longer one); an already-diagnosed record (an unresolvable `mixin`
-    /// target, met earlier while resolving a different record first) or a
-    /// self-referential lookup miss short-circuits to an empty field list
-    /// rather than cascading more errors. A `mixin` naming an undeclared
-    /// record is diagnosed here (not in `build_record_table`'s own loop)
-    /// since the target might be a record declared later in iteration
-    /// order, not yet known to be missing until every raw entry has been
-    /// collected.
+    /// `visiting` detects a combines cycle (`A combines B` + `B combines
+    /// A`, or a longer one); an already-diagnosed record (an unresolvable
+    /// `combines` target, met earlier while resolving a different record
+    /// first) or a self-referential lookup miss short-circuits to an empty
+    /// field list rather than cascading more errors. A `combines` naming
+    /// an undeclared record is diagnosed here (not in `build_record_table`'s
+    /// own loop) since the target might be a record declared later in
+    /// iteration order, not yet known to be missing until every raw entry
+    /// has been collected.
     fn resolve_effective_fields(
         &mut self,
         key: &str,
@@ -409,7 +409,7 @@ impl Lowerer {
             self.diagnostics.push(Diagnostic::error(
                 generated_pos(),
                 format!(
-                    "record `{}` mixes in itself, directly or indirectly",
+                    "record `{}` combines itself, directly or indirectly",
                     rec.name
                 ),
             ));
@@ -419,33 +419,33 @@ impl Lowerer {
         visiting.push(key.to_string());
         let mut fields: Vec<(FieldSpec, String)> = Vec::new();
         let mut seen: HashMap<String, String> = HashMap::new();
-        for mixin in &rec.mixins {
-            let mixin_key = mixin.to_ascii_lowercase();
-            if !raw.contains_key(&mixin_key) {
+        for source in &rec.combines {
+            let source_key = source.to_ascii_lowercase();
+            if !raw.contains_key(&source_key) {
                 self.diagnostics.push(Diagnostic::error(
                     generated_pos(),
                     format!(
-                        "record `{}` mixes in `{mixin}`, which is not a declared record type",
+                        "record `{}` combines `{source}`, which is not a declared record type",
                         rec.name
                     ),
                 ));
                 continue;
             }
-            let source_fields = self.resolve_effective_fields(&mixin_key, raw, resolved, visiting);
+            let source_fields = self.resolve_effective_fields(&source_key, raw, resolved, visiting);
             for (field, _) in &source_fields {
                 let field_key = field.name.to_ascii_lowercase();
                 if let Some(existing_source) = seen.get(&field_key) {
                     self.diagnostics.push(Diagnostic::error(
                         generated_pos(),
                         format!(
-                            "duplicate field `{}` in record `{}`: field contributed by both `{existing_source}` and `{mixin}`",
+                            "duplicate field `{}` in record `{}`: field contributed by both `{existing_source}` and `{source}`",
                             field.name, rec.name
                         ),
                     ));
                     continue;
                 }
-                seen.insert(field_key, mixin.clone());
-                fields.push((field.clone(), mixin.clone()));
+                seen.insert(field_key, source.clone());
+                fields.push((field.clone(), source.clone()));
             }
         }
         for field in own_fields {
@@ -2130,11 +2130,11 @@ impl Lowerer {
     /// exactly like any other BASCAL `byref` parameter.
     ///
     /// Only ever looks up `record_type`'s own exact methods -- never a
-    /// mixed-in source's. Methods are not mixed in: `record Dog mixin
-    /// Animal` gives `Dog` `Animal`'s *fields*, but a method declared for
-    /// an `Animal` receiver still only ever applies to an `Animal`
-    /// receiver. `Dog` needs its own `method describe[Dog](): $` if it
-    /// wants one.
+    /// combined source's. Methods are not combined: `record Dog combines
+    /// Animal` makes `Dog` composed of `Animal`'s *fields*, but a method
+    /// declared for an `Animal` receiver still only ever applies to an
+    /// `Animal` receiver. `Dog` needs its own `method describe[Dog](): $`
+    /// if it wants one.
     fn rewrite_record_method_call(
         &mut self,
         var: BasicIdent,

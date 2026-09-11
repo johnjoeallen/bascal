@@ -84,17 +84,17 @@ pub struct TypedArrayRef {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RecordDef {
     pub name: String,
-    /// `record Name mixin Source1, Source2, ...` -- structural field
+    /// `record Name combines Source1, Source2, ...` -- structural field
     /// composition only (see `records::Lowerer::build_record_table`'s own
     /// doc comment): `Name`'s effective field list is each listed source's
     /// own effective fields, in order, followed by `Name`'s own declared
     /// fields. This is NOT inheritance, subtyping, or polymorphism of any
-    /// kind -- a `Name` value is never assignable to/from a mixed-in
-    /// record's own variable, and methods are never mixed in: a method
+    /// kind -- a `Name` value is never assignable to/from a combined
+    /// record's own variable, and methods are never combined: a method
     /// declared for `Source1` never applies to a `Name` receiver, even
-    /// though `Name` mixes in `Source1`'s fields. Empty when the record
-    /// declares no `mixin` clause at all.
-    pub mixins: Vec<String>,
+    /// though `Name` combines `Source1`'s fields. Empty when the record
+    /// declares no `combines` clause at all.
+    pub combines: Vec<String>,
     pub fields: Vec<RecordFieldDef>,
     /// Methods declared directly inside the `record ... end record` body
     /// (`method name(args): ReturnType ... end method`) -- the enclosing
