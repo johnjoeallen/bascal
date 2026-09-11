@@ -721,6 +721,24 @@ const INPUT_BODY: &str = "static void bcc_read_line(void) {\n    if (fgets(bcc_i
 const INSTR_PROTO: &str = "static int bcc_instr(const char* s, const char* needle);\n";
 const INSTR_BODY: &str = "static int bcc_instr(const char* s, const char* needle) {\n    const char* found = strstr(s, needle);\n    return found ? (int)(found - s) + 1 : 0;\n}\n\n";
 
+/// `MID$(target$, start%[, len%]) = value$` -- the C translation of
+/// BASCAL's MID$ statement-form assignment (see `Statement::MidAssign`'s
+/// own doc comment in `ast.rs`). Mirrors `com/bascal/stdlib/midAssign.bcl`
+/// exactly -- `t$ = LEFT$(value$, len%)` (clamped to `len%`, or to
+/// `LEN(value$)` when `len%` was omitted -- see `emit_mid_assign`), then
+/// `LEFT$(target$, start%-1) + t$ + MID$(target$, start%+LEN(t$))` -- rather
+/// than calling a transpiled BASCAL helper *function* the way the BASIC
+/// backend does (`lib::inject_mid_assign_helper_if_used`'s GOSUB-based
+/// call): this backend has no GOSUB-against-shared-globals convention to
+/// reuse, and the splice itself is only a handful of `strlen`/`snprintf`
+/// calls, so it's a small hand-written helper instead, following the same
+/// "returns a `const char*` from the shared ring buffer" convention as
+/// `bcc_mid`/`bcc_chr` (see `MID_BODY`'s own doc comment) -- so `generate()`
+/// pulls in `MID_STATE`/`MID_PROTOS`/`MID_BODY` (for `bcc_strbuf_take`)
+/// whenever this is used, same as a direct `MID$`/`LEFT$`/`CHR$` call would.
+const MID_ASSIGN_PROTO: &str = "static const char* bcc_mid_assign(const char* target, int start, int len, const char* value);\n";
+const MID_ASSIGN_BODY: &str = "static const char* bcc_mid_assign(const char* target, int start, int len, const char* value) {\n    char* out = bcc_strbuf_take();\n    int tlen = (int)strlen(target);\n    int vlen = (int)strlen(value);\n    if (len < 0) len = 0;\n    if (vlen > len) vlen = len;\n    int left = start - 1;\n    if (left < 0) left = 0;\n    if (left > tlen) left = tlen;\n    int tail_from = left + vlen;\n    if (tail_from > tlen) tail_from = tlen;\n    snprintf(out, 256, \"%.*s%.*s%s\", left, target, vlen, value, target + tail_from);\n    return out;\n}\n\n";
+
 /// `SGN(x)` -- -1/0/1 by the sign of `x`. No single C library function
 /// does this (unlike `SQR`/`ABS`/`INT`/`FIX`, which map straight onto
 /// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
@@ -1495,6 +1513,19 @@ fn collect_called_callables(
                 collect_calls_in_expr(target, functions, out);
                 collect_calls_in_expr(value, functions, out);
             }
+            Statement::MidAssign {
+                target,
+                start,
+                len,
+                value,
+            } => {
+                collect_calls_in_expr(target, functions, out);
+                collect_calls_in_expr(start, functions, out);
+                if let Some(len) = len {
+                    collect_calls_in_expr(len, functions, out);
+                }
+                collect_calls_in_expr(value, functions, out);
+            }
             Statement::Print { tokens } => {
                 for token in tokens {
                     if let PrintToken::Expr(expr) = token {
@@ -2207,6 +2238,15 @@ fn program_uses_input(program: &Program) -> bool {
     program_has_statement(program, &|s| matches!(&**s, Statement::Input { .. }))
 }
 
+/// Whether `program` uses `MID$(...) = ...` statement-form assignment
+/// anywhere -- decides whether `generate()` splices in
+/// `MID_ASSIGN_PROTO`/`MID_ASSIGN_BODY` (and, transitively, the ring-buffer
+/// helpers `bcc_mid_assign` itself needs -- see that constant's own doc
+/// comment).
+fn program_uses_mid_assign(program: &Program) -> bool {
+    program_has_statement(program, &|s| matches!(&**s, Statement::MidAssign { .. }))
+}
+
 /// Whether `program` has any `RANDOMIZE` at all -- decides whether
 /// `generate()` needs `<stdlib.h>` for `srand()` (independent of whether
 /// `RND` itself is ever called -- see `scan_builtin_usage`'s own
@@ -2878,6 +2918,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let builtin_usage = scan_builtin_usage(program);
     let needs_color = program_uses_color(program);
     let needs_input = program_uses_input(program);
+    let needs_mid_assign = program_uses_mid_assign(program);
     let needs_stop_or_system = program_has_statement(program, &|s| {
         matches!(&**s, Statement::Stop | Statement::System)
     });
@@ -3022,10 +3063,18 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     let mut runtime_state = String::new();
     let mut runtime_protos = String::new();
     let mut runtime_body = String::new();
-    if builtin_usage.needs_ring_buffer_helpers {
+    // `bcc_mid_assign` (see its own doc comment) needs `bcc_strbuf_take`
+    // just like a direct `MID$`/`LEFT$`/`CHR$` call does, so a program that
+    // uses MID$ statement-form assignment but no other string builtin still
+    // pulls in the ring-buffer helpers.
+    if builtin_usage.needs_ring_buffer_helpers || needs_mid_assign {
         runtime_state.push_str(MID_STATE);
         runtime_protos.push_str(MID_PROTOS);
         runtime_body.push_str(MID_BODY);
+    }
+    if needs_mid_assign {
+        runtime_protos.push_str(MID_ASSIGN_PROTO);
+        runtime_body.push_str(MID_ASSIGN_BODY);
     }
     if builtin_usage.needs_instr_helper {
         runtime_protos.push_str(INSTR_PROTO);
@@ -3760,6 +3809,21 @@ fn collect_vars_in_statement(
             register_var(name, numeric_out, string_out);
             collect_vars_in_expr(value, numeric_out, string_out);
         }
+        Statement::MidAssign {
+            target,
+            start,
+            len,
+            value,
+        } => {
+            if let Expr::Ident(name) = &**target {
+                register_var(name, numeric_out, string_out);
+            }
+            collect_vars_in_expr(start, numeric_out, string_out);
+            if let Some(len) = len {
+                collect_vars_in_expr(len, numeric_out, string_out);
+            }
+            collect_vars_in_expr(value, numeric_out, string_out);
+        }
         Statement::Print { tokens } => {
             for token in tokens {
                 if let PrintToken::Expr(expr) = token {
@@ -4376,6 +4440,76 @@ fn emit_statement(
                 ctx,
             )?;
             emit_assignment(name, &value, out, needs_math, temp_counter, functions)
+        }
+        // `MID$(target$, start%[, len%]) = value$` -- see `MID_ASSIGN_BODY`'s
+        // own doc comment for the splice this compiles to. Left-to-right
+        // evaluation order (target, then start, then len if written, then
+        // value last), matching how the statement reads and matching the
+        // BASIC backend's own `Statement::MidAssign` arm -- `target` is
+        // hoisted like any other operand even though (unlike the BASIC
+        // backend) its *rendered text* is never reused as an rvalue before
+        // the final write: `bcc_mid_assign` reads the target buffer's
+        // current bytes into a fresh ring-buffer slot before this arm's own
+        // `snprintf` overwrites that buffer, so there's no aliasing hazard
+        // in evaluating and writing through the same C expression twice.
+        Statement::MidAssign {
+            target,
+            start,
+            len,
+            value,
+        } => {
+            let target = hoist_try_result_calls(
+                target,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            let start = hoist_try_result_calls(
+                start,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            let len = len
+                .as_ref()
+                .map(|len| {
+                    hoist_try_result_calls(
+                        len,
+                        out,
+                        needs_math,
+                        temp_counter,
+                        functions,
+                        current_function,
+                        ctx,
+                    )
+                })
+                .transpose()?;
+            let value = hoist_try_result_calls(
+                value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+                current_function,
+                ctx,
+            )?;
+            *needs_string = true;
+            emit_mid_assign(
+                &target,
+                &start,
+                len.as_ref(),
+                &value,
+                out,
+                needs_math,
+                temp_counter,
+                functions,
+            )
         }
         // Unlike the BASIC backend, which has to transpile `if`/`elseif`/
         // `else` into a GOTO/label chain (real MBASIC/BASCOM has no block
@@ -6924,6 +7058,70 @@ fn emit_assignment(
              explicit type suffix (%, &, !, #, $)"
         )),
     }
+}
+
+/// Writes the result of a `MID$(target$, start%[, len%]) = value$`
+/// statement back into `target` via `bcc_mid_assign` (see its own doc
+/// comment for the splice formula). `target` is a plain string variable or
+/// string array element -- the only two shapes the parser accepts (see
+/// `Parser::try_mid_assign_call`) -- rendered once as a C expression usable
+/// both as `bcc_mid_assign`'s own read of the current value and as this
+/// call's write destination (safe: `bcc_mid_assign` fully computes its
+/// result into a fresh ring-buffer slot -- reading `target`'s old bytes in
+/// the process -- before the `snprintf` around it ever writes to `target`).
+///
+/// `len` is `None` for the two-argument form, which real MBASIC/BASCOM (and
+/// `com/bascal/stdlib/midAssign.bcl`) both treat as if `len` were
+/// `LEN(value$)`; passing `(int)strlen(value_text)` as the cap reproduces
+/// that exactly, since `bcc_mid_assign` never lets its replacement text
+/// exceed `value`'s own length anyway.
+fn emit_mid_assign(
+    target: &Expr,
+    start: &Expr,
+    len: Option<&Expr>,
+    value: &Expr,
+    out: &mut String,
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    functions: &FunctionTable,
+) -> Result<(), String> {
+    let (target_expr, capacity) = match target {
+        Expr::Ident(name) => {
+            let c_name = c_var_name(name, TypeSuffix::String);
+            let capacity = format!("sizeof({c_name})");
+            (c_name, capacity)
+        }
+        Expr::ArrayRef { name, indices } if functions.arrays.contains_key(&array_c_name(name)) => {
+            let c_expr = render_array_index_expr(name, indices, needs_math, functions)?;
+            let info = &functions.arrays[&array_c_name(name)];
+            let capacity = if info.dynamic {
+                STRING_BUFFER_SIZE.to_string()
+            } else {
+                format!("sizeof({c_expr})")
+            };
+            (c_expr, capacity)
+        }
+        other => {
+            return Err(format!(
+                "MID$ assignment target `{other:?}` isn't supported by the minimal C backend yet \
+                 -- it must be a plain string variable or string array element"
+            ))
+        }
+    };
+    let (start_text, _) = render_numeric_expr(start, needs_math, functions)?;
+    let (value_prelude, value_text) =
+        render_string_expr(value, needs_math, temp_counter, functions)?;
+    for line in value_prelude {
+        out.push_str(&line);
+    }
+    let len_text = match len {
+        Some(len) => render_numeric_expr(len, needs_math, functions)?.0,
+        None => format!("(int)strlen({value_text})"),
+    };
+    out.push_str(&format!(
+        "    snprintf({target_expr}, {capacity}, \"%s\", bcc_mid_assign({target_expr}, ({start_text}), ({len_text}), {value_text}));\n"
+    ));
+    Ok(())
 }
 
 /// One `do`/`loop` guard line -- `if (!(cond)) break;` for a `while`
