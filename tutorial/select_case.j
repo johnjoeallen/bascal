@@ -2,18 +2,22 @@
 .class public SelectCase
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 5
 
     iconst_0
-    istore 1
+    putstatic SelectCase/g1 I
     ldc ""
-    astore 2
+    putstatic SelectCase/g2 Ljava/lang/String;
     iconst_0
-    istore 3
+    putstatic SelectCase/g3 I
     iconst_0
-    istore 4
+    putstatic SelectCase/g4 I
     ; Tutorial — SELECT CASE
     ; 
     ; SELECT CASE tests one expression against multiple patterns.  The
@@ -29,9 +33,9 @@
 
     ; Integer select: convert numeric score to letter grade
     ldc 85
-    istore 3
+    putstatic SelectCase/g3 I
 
-    iload 3
+    getstatic SelectCase/g3 I
     dup
     ldc 100
     isub
@@ -124,9 +128,9 @@ L_select_0_end:
 
     ; String select: day-of-week classification
     ldc "Saturday"
-    astore 2
+    putstatic SelectCase/g2 Ljava/lang/String;
 
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     dup
     ldc "Monday"
     invokevirtual java/lang/String/equals (Ljava/lang/Object;)Z
@@ -166,7 +170,7 @@ L_select_1_next_1:
     invokespecial java/lang/StringBuilder/<init> ()V
     ldc "Unknown day: "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -177,7 +181,7 @@ L_select_1_case_0:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " is a weekday"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -190,7 +194,7 @@ L_select_1_case_1:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 2
+    getstatic SelectCase/g2 Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " is a weekend"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -202,9 +206,9 @@ L_select_1_end:
     ; IS comparisons on temperature
     ldc 3
     ineg
-    istore 4
+    putstatic SelectCase/g4 I
 
-    iload 4
+    getstatic SelectCase/g4 I
     dup
     ldc 0
     if_icmplt L_select_2_case_0
@@ -230,7 +234,7 @@ L_select_2_next_3:
     ldc "Hot ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -242,7 +246,7 @@ L_select_2_case_0:
     ldc "Below freezing ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -254,7 +258,7 @@ L_select_2_case_1:
     ldc "Cold ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -266,7 +270,7 @@ L_select_2_case_2:
     ldc "Cool ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -278,7 +282,7 @@ L_select_2_case_3:
     ldc "Warm ("
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic SelectCase/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "°)"
@@ -288,9 +292,9 @@ L_select_2_end:
 
     ; Multi-value list on a menu choice
     ldc 2
-    istore 1
+    putstatic SelectCase/g1 I
 
-    iload 1
+    getstatic SelectCase/g1 I
     dup
     ldc 1
     isub

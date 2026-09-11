@@ -44,6 +44,8 @@ L_while_0_end:
     isub
     invokevirtual java/lang/String/substring (I)Ljava/lang/String;
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -87,6 +89,8 @@ L_while_0_end:
     iconst_0
     iload 1
     invokevirtual java/lang/String/substring (II)Ljava/lang/String;
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -163,6 +167,8 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -237,6 +243,8 @@ L_if_1_else:
     goto L_for_0_top
 L_for_0_end:
     aload 3
+    areturn
+    aload 0
     areturn
     ldc ""
     areturn
@@ -664,12 +672,12 @@ L_select_0_end:
     ; and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     ; returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
     ; ships a working implementation.
-    ;
+    ; 
     ; The named constants below are the complete common subset supported by
     ; ERROR$: use them in THROW and filtered CATCH clauses instead of magic
     ; numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
     ; BASCOM subset still fall through to ERROR$'s generic message.
-    ;
+    ; 
     ; Deliberately NOT a scalar method (see GitHub issue #41, which asked for
     ; this decision to be recorded either way): code% is an opaque lookup key,
     ; not a value the call is naturally "operating on" the way ltrim$/rtrim$/
@@ -679,7 +687,7 @@ L_select_0_end:
 
 
     ; Tutorial — Standard library functions
-    ;
+    ; 
     ; com.bascal.stdlib is an ordinary require-able library, resolved the same
     ; way as com.bascal.sort in tutorial 12 -- but bcc always adds its home
     ; directory to the search path automatically, so no -L flag is needed to
@@ -689,18 +697,18 @@ L_select_0_end:
     ; dosbox-x) -- see the manual's "String and error-message functions"
     ; section (https://johnjoeallen.github.io/bascal/manual/) for the full
     ; story.
-    ;
-    ; ltrim$/rtrim$/ucase$/lcase$ are declared as scalar methods (method$ ...
-    ; end method), using self$ in place of an explicit s$ parameter -- see
+    ; 
+    ; ltrim$/rtrim$/ucase$/lcase$ are scalar methods with a bracketed string
+    ; receiver type, using self$ in place of an explicit s$ parameter -- see
     ; the "Declare and call a method" chapter. A method's receiver is really
-    ; just an implicit first parameter, so the ordinary call form below
+    ; just an implicit first parameter, so the ordinary call form
     ; (ltrim$("...")) keeps working exactly as before: it resolves straight to
     ; the same method declaration, with the first argument filling self$. The
-    ; method-call form (below, chained) is the same declaration too -- just
-    ; written as "...".ltrim() instead. error$ stays an ordinary function: an
+    ; examples below prefer the method-call form, written as "...".ltrim().
+    ; error$ stays an ordinary function: an
     ; error code is a lookup key, not a value the call is naturally "operating
     ; on" the way the others operate on their string.
-    ;
+    ; 
     ; Run with:
     ; bcc tutorial/stdlib.bcl
 

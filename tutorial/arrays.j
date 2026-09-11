@@ -9,36 +9,35 @@
 .field public static g5 I
 .field public static a0 [I
 .field public static a1 [[I
-.method public static insertionSort : ()I
+.method public static insertionSort : ([I)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 4
 
-    iconst_0
-    istore 0
     iconst_0
     istore 1
     iconst_0
     istore 2
+    iconst_0
+    istore 3
     ldc 1
-    istore 0
+    istore 1
 L_for_0_top:
-    iload 0
-    ldc 6
-    iconst_1
-    iadd
+    iload 1
+    aload 0
+    arraylength
     ldc 1
     isub
     if_icmpgt L_for_0_end
-    getstatic Arrays/a0 [I
-    iload 0
+    aload 0
+    iload 1
     iaload
-    istore 2
-    iload 0
+    istore 3
+    iload 1
     ldc 1
     isub
-    istore 1
+    istore 2
 L_while_1_top:
-    iload 1
+    iload 2
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -47,39 +46,39 @@ L_while_1_top:
     bipush 31
     ishr
     ifeq L_while_1_end
-    getstatic Arrays/a0 [I
-    iload 1
-    iaload
+    aload 0
     iload 2
+    iaload
+    iload 3
     invokestatic java/lang/Integer/compare (II)I
     ineg
     bipush 31
     ishr
     ifeq L_while_1_end
-    getstatic Arrays/a0 [I
-    iload 1
+    aload 0
+    iload 2
     ldc 1
     iadd
-    getstatic Arrays/a0 [I
-    iload 1
+    aload 0
+    iload 2
     iaload
     iastore
-    iload 1
+    iload 2
     ldc 1
     isub
-    istore 1
+    istore 2
     goto L_while_1_top
 L_while_1_end:
-    getstatic Arrays/a0 [I
+    aload 0
+    iload 2
+    ldc 1
+    iadd
+    iload 3
+    iastore
     iload 1
     ldc 1
     iadd
-    iload 2
-    iastore
-    iload 0
-    ldc 1
-    iadd
-    istore 0
+    istore 1
     goto L_for_0_top
 L_for_0_end:
     ldc 0
@@ -88,26 +87,31 @@ L_for_0_end:
     ireturn
 .end method
 
-.method public static indexOf : (I)I
+.method public static indexOf : ([II)I
     .limit stack 16
-    .limit locals 2
+    .limit locals 3
 
     iconst_0
-    istore 1
+    istore 2
+    aload 0
+    bipush 1
+    bipush 0
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    checkcast [I
+    astore 0
     ldc 0
-    istore 1
+    istore 2
 L_for_0_top:
-    iload 1
-    ldc 6
-    iconst_1
-    iadd
+    iload 2
+    aload 0
+    arraylength
     ldc 1
     isub
     if_icmpgt L_for_0_end
-    getstatic Arrays/a0 [I
-    iload 1
+    aload 0
+    iload 2
     iaload
-    iload 0
+    iload 1
     invokestatic java/lang/Integer/compare (II)I
     dup
     ineg
@@ -118,13 +122,13 @@ L_for_0_top:
     ixor
     ineg
     ifeq L_if_1_else
-    iload 1
+    iload 2
     ireturn
 L_if_1_else:
-    iload 1
+    iload 2
     ldc 1
     iadd
-    istore 1
+    istore 2
     goto L_for_0_top
 L_for_0_end:
     ldc 1
@@ -134,23 +138,28 @@ L_for_0_end:
     ireturn
 .end method
 
-.method public static printArray : ()I
+.method public static printArray : ([I)I
     .limit stack 16
-    .limit locals 2
+    .limit locals 3
 
     iconst_0
-    istore 0
+    istore 1
     ldc ""
-    astore 1
+    astore 2
+    aload 0
+    bipush 1
+    bipush 0
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    checkcast [I
+    astore 0
     ldc "["
-    astore 1
+    astore 2
     ldc 0
-    istore 0
+    istore 1
 L_for_0_top:
-    iload 0
-    ldc 6
-    iconst_1
-    iadd
+    iload 1
+    aload 0
+    arraylength
     ldc 1
     isub
     if_icmpgt L_for_0_end
@@ -160,30 +169,30 @@ L_for_0_top:
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 1
+    aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    getstatic Arrays/a0 [I
-    iload 0
+    aload 0
+    iload 1
     iaload
     invokestatic java/lang/String/valueOf (I)Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
-    astore 1
-    iload 0
+    astore 2
+    iload 1
     ldc 1
     iadd
-    istore 0
+    istore 1
     goto L_for_0_top
 L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     new java/lang/StringBuilder
     dup
     invokespecial java/lang/StringBuilder/<init> ()V
-    aload 1
+    aload 2
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " ]"
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
@@ -193,6 +202,70 @@ L_for_0_end:
     ireturn
     iconst_0
     ireturn
+.end method
+
+.method private static bccCopyArray : (Ljava/lang/Object;II)Ljava/lang/Object;
+    .limit stack 5
+    .limit locals 5
+
+    iload 1
+    iconst_1
+    if_icmpne L_copy_nested
+    iload 2
+    tableswitch 0
+        L_copy_int
+        L_copy_long
+        L_copy_double
+        L_copy_object
+L_copy_int:
+    aload 0
+    checkcast [I
+    invokevirtual [I/clone ()Ljava/lang/Object;
+    areturn
+L_copy_long:
+    aload 0
+    checkcast [J
+    invokevirtual [J/clone ()Ljava/lang/Object;
+    areturn
+L_copy_double:
+    aload 0
+    checkcast [D
+    invokevirtual [D/clone ()Ljava/lang/Object;
+    areturn
+L_copy_object:
+    aload 0
+    checkcast [Ljava/lang/Object;
+    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
+    areturn
+L_copy_nested:
+    aload 0
+    checkcast [Ljava/lang/Object;
+    invokevirtual [Ljava/lang/Object;/clone ()Ljava/lang/Object;
+    checkcast [Ljava/lang/Object;
+    astore 3
+    iconst_0
+    istore 4
+L_copy_loop:
+    iload 4
+    aload 3
+    arraylength
+    if_icmpge L_copy_done
+    aload 3
+    iload 4
+    aload 3
+    iload 4
+    aaload
+    iload 1
+    iconst_1
+    isub
+    iload 2
+    invokestatic Arrays/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;
+    aastore
+    iinc 4 1
+    goto L_copy_loop
+L_copy_done:
+    aload 3
+    areturn
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
@@ -281,23 +354,27 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Before: "
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    invokestatic Arrays/printArray ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/printArray ([I)I
     putstatic Arrays/g2 I
 
     ; Sort and show
-    invokestatic Arrays/insertionSort ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/insertionSort ([I)I
     putstatic Arrays/g2 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "After:  "
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-    invokestatic Arrays/printArray ()I
+    getstatic Arrays/a0 [I
+    invokestatic Arrays/printArray ([I)I
     putstatic Arrays/g2 I
 
     ; Search
     ldc 22
     putstatic Arrays/g5 I
+    getstatic Arrays/a0 [I
     getstatic Arrays/g5 I
-    invokestatic Arrays/indexOf (I)I
+    invokestatic Arrays/indexOf ([II)I
     putstatic Arrays/g3 I
     getstatic Arrays/g3 I
     ldc 0

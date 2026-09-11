@@ -2,18 +2,40 @@
 .class public Arithmetic
 .super java/lang/Object
 
+.field public static g1 I
+.field public static g2 I
+.field public static g3 I
+.field public static g4 I
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
+    areturn
+.end method
+
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
     .limit locals 5
 
     iconst_0
-    istore 1
+    putstatic Arithmetic/g1 I
     iconst_0
-    istore 2
+    putstatic Arithmetic/g2 I
     iconst_0
-    istore 3
+    putstatic Arithmetic/g3 I
     iconst_0
-    istore 4
+    putstatic Arithmetic/g4 I
     ; Tutorial — Operators and Expressions
     ; 
     ; Arithmetic:   +  -  *  /  \  MOD  ^
@@ -39,95 +61,96 @@
 
     ; Arithmetic — mix labels and numbers with ;
     ldc 17
-    istore 1
+    putstatic Arithmetic/g1 I
     ldc 5
-    istore 2
+    putstatic Arithmetic/g2 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "+ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     iadd
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "- "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     isub
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "* "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
-    iload 2
+    getstatic Arithmetic/g1 I
+    getstatic Arithmetic/g2 I
     imul
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "/ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     ddiv
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     ; Integer division and MOD
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "\\ "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
     dup2
     ldc2_w 0.5
@@ -136,7 +159,7 @@
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     dup2
     ldc2_w 0.5
@@ -148,19 +171,19 @@
     ldiv
     invokevirtual java/io/PrintStream/println (J)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "MOD "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 2
+    getstatic Arithmetic/g2 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 1
+    getstatic Arithmetic/g1 I
     i2d
     dup2
     ldc2_w 0.5
@@ -169,7 +192,7 @@
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 2
+    getstatic Arithmetic/g2 I
     i2d
     dup2
     ldc2_w 0.5
@@ -191,7 +214,8 @@
     ldc 8
     i2d
     invokestatic java/lang/Math/pow (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "2 ^ 3 ^ 2 ="
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
@@ -204,7 +228,8 @@
     i2d
     invokestatic java/lang/Math/pow (DD)D
     invokestatic java/lang/Math/pow (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Arithmetic/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     ; Precedence
     getstatic java/lang/System/out Ljava/io/PrintStream;
@@ -283,8 +308,8 @@
 
     ; Logical — AND, OR, XOR are bitwise but work correctly with 0/-1 values
     ldc 7
-    istore 4
-    iload 4
+    putstatic Arithmetic/g4 I
+    getstatic Arithmetic/g4 I
     ldc 0
     invokestatic java/lang/Integer/compare (II)I
     ineg
@@ -298,7 +323,7 @@
     invokestatic java/lang/Math/copySign (DD)D
     dadd
     d2l
-    iload 4
+    getstatic Arithmetic/g4 I
     ldc 10
     invokestatic java/lang/Integer/compare (II)I
     bipush 31
@@ -316,7 +341,7 @@
     lcmp
     ifeq L_if_0_else
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 4
+    getstatic Arithmetic/g4 I
     invokevirtual java/io/PrintStream/print (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "is in 1..9"
@@ -375,9 +400,9 @@ L_if_0_else:
 
     ; Unary negation
     ldc 42
-    istore 3
+    putstatic Arithmetic/g3 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    iload 3
+    getstatic Arithmetic/g3 I
     ineg
     invokevirtual java/io/PrintStream/println (I)V
 

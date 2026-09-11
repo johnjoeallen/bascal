@@ -78,6 +78,8 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -153,6 +155,8 @@ L_if_1_else:
 L_for_0_end:
     aload 3
     areturn
+    aload 0
+    areturn
     ldc ""
     areturn
 .end method
@@ -208,8 +212,8 @@ L_if_0_end:
     iload 1
     iload 0
     iload 2
-    invokestatic Functions/min (II)I
-    invokestatic Functions/max (II)I
+    invokestatic java/lang/Math/min (II)I
+    invokestatic java/lang/Math/max (II)I
     ireturn
     iconst_0
     ireturn
@@ -406,19 +410,19 @@ L_for_0_end:
     ; via ordinary-call syntax resolving to this same declaration.
 
     ; Tutorial — Functions
-    ;
+    ; 
     ; A BASCAL function is declared with FUNCTION ... END FUNCTION.
     ; The function name carries the return type suffix.  Parameters
     ; also carry type suffixes.  Every function must reach a RETURN.
-    ;
+    ; 
     ; Variables declared inside a function are local by default: the compiler
     ; prefixes them with the function name.  To access a global variable from
     ; inside a function, declare it with:  global varname
-    ;
+    ; 
     ; Functions cannot recurse, directly or indirectly (parameters would be
     ; overwritten) -- the compiler checks the whole call graph and rejects
     ; any cycle.  Use an explicit stack array for recursive algorithms.
-    ;
+    ; 
     ; Scalar methods are typed functions with an implicit receiver.  Calls use
     ; dot syntax and can chain: word$.left(1).ucase().  The existing titleCase$
     ; function below demonstrates this form; methods transpile to ordinary
@@ -462,7 +466,7 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 4
     ldc 9
-    invokestatic Functions/max (II)I
+    invokestatic java/lang/Math/max (II)I
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "min(4, 9) = "
@@ -470,7 +474,7 @@ L_for_0_end:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc 4
     ldc 9
-    invokestatic Functions/min (II)I
+    invokestatic java/lang/Math/min (II)I
     invokevirtual java/io/PrintStream/println (I)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "clamp(15,1,10) = "
@@ -515,9 +519,9 @@ L_for_0_end:
     ldc 0
     ldc 5
     ineg
-    invokestatic Functions/max (II)I
+    invokestatic java/lang/Math/max (II)I
     ldc 100
-    invokestatic Functions/min (II)I
+    invokestatic java/lang/Math/min (II)I
     putstatic Functions/g4 I
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "lo = "
