@@ -4,7 +4,7 @@
 
 Generated sources: [BCL](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bcl), [BASIC](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.bas), [C](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.c), and [JVM assembly](https://github.com/johnjoeallen/bascal/blob/main/tutorial/methods.j).
 
-A method is a typed operation attached to a receiver. Scalar receivers are supported today; record receivers are the planned extension described below. The bracket after a scalar method's name declares its receiver type: `method shout[string]()` receives a string. If no result type is supplied, the method returns the receiver's scalar type. A result suffix is accepted as shorthand, and `method name[receiver, result](...)` explicitly names a differing scalar result. The receiver is available as the matching implicit `self` variable; falling through an omitted-result method returns `self`.
+A method is a typed operation attached to a receiver. Both scalar and record receivers are supported (record receivers are covered in the [Methods](../language/methods.md) chapter). The bracket after a method's name declares its receiver type: `method shout[string]()` receives a string. The return type, if any, follows the parameter list after `:` (`method shout[string](): string`, or its suffix shorthand `method shout[string](): $`). If no return type is supplied, a scalar method returns the receiver's own scalar type, falling through to an implicit `return self`. The receiver is available in the body as the matching implicit `self` variable.
 
 </div>
 
@@ -42,25 +42,25 @@ print score%.clamp(0, 100)
 
 <div class="snippet" markdown="1">
 
-### Record methods (planned)
+### Record methods
 
-Methods are not fundamentally limited to scalars. Once general-purpose record values are implemented, a record type will be a valid method receiver and `self` will expose its fields. The intended shape is:
+Methods are not limited to scalars. A record type is a valid method receiver, declared either externally (in brackets, same as a scalar receiver) or inline, directly inside the `record` declaration itself:
 
 ```bascal
 record Card
     title: string(40)
     author: string(40)
+
+    method display(): $
+        return self.title + " by " + self.author
+    end method
 end record
 
-' Planned syntax — not accepted by the current parser yet.
-method display[Card, string]()
-    return self.title + " by " + self.author
-end method
-
+let card = { title: "Dune", author: "Frank Herbert" }
 print card.display()
 ```
 
-Record methods are intended to support record parameters, record results, record arrays, and method chains while preserving compile-time field and type checks. Their `byval`/`byref` copy behavior will be defined together with general-purpose records; the existing random-access `file`/record DSL is separate. This section documents the design direction only—record method receivers and results are not implemented yet. See [issue #128](https://github.com/johnjoeallen/bascal/issues/128).
+`self.field` inside a record method is ordinary field access against the receiver, and mutating `self.field` is visible to the caller once the call returns — the receiver is passed the same way a C-level receiver naturally would be, by reference rather than by copy. See the [Methods](../language/methods.md) chapter for the full external-vs-inline grammar, the `: ReturnType`/suffix-shorthand mapping, and how two unrelated record types can each declare a same-named method with no ambiguity (BASCAL has no record inheritance, so there is no dynamic dispatch to resolve). Record methods do not yet extend to nested record fields, record parameters, or arrays of records — the existing random-access `file`/record DSL remains the separate mechanism for on-disk records.
 
 </div>
 

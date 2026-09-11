@@ -4,6 +4,35 @@
 //! runs between parsing and `resolver::validate`; by the time codegen sees a
 //! `Program`, no `RecordDef`, `Statement::FileDecl`, or DSL `Expr` variant
 //! (`FileIndex`, `FieldAccess`, `MethodCall`, `RecordLit`) remains.
+//!
+//! Record methods (`method name[RecordType](args): result`, or the same
+//! thing declared inline inside `record ... end record` -- see
+//! `FunctionDef::record_receiver`'s own doc comment) are desugared here too,
+//! completely, before resolver or any backend ever runs: `desugar_record_
+//! methods` turns each one into an ordinary top-level function, its `self`
+//! receiver flattened into one `byref` parameter per record field (the same
+//! per-field naming `build_record_table`'s in-memory-record support already
+//! uses elsewhere in this file), given a record-type-qualified real name
+//! (`camel_join(&[record_type, method_name])`, so `Animal.speak` and
+//! `Dog.speak` never collide) so two different record types can each
+//! declare a same-named method with no ambiguity -- there is no BASCAL
+//! record inheritance to make that ambiguous in the first place. A call
+//! site (`card.display()`) is rewritten the same way (`rewrite_expr`'s
+//! `Expr::MethodCall` arm) into an ordinary call to that real function, the
+//! receiver's own fields passed as its leading `byref` arguments (so a
+//! record method's mutations of `self` are visible to the caller, matching
+//! this pass's own C backend hint in the language docs: a receiver lowers
+//! to a pointer, not a copy). Both declaration forms funnel through the
+//! exact same code path, so an inline and an external method colliding on
+//! the same record type and name become two ordinary functions with the
+//! identical synthesized name -- resolver's own, pre-existing duplicate-
+//! function check (`reject_duplicate_functions`) catches that for free,
+//! with no separate "duplicate method" rule needed here. None of this
+//! requires the 3 backends to know a record-receiver method system exists
+//! at all: by the time they see the program, a record method is
+//! indistinguishable from a hand-written ordinary function taking `byref`
+//! scalar/string parameters -- no `invokevirtual`, no vtable, no runtime
+//! dispatch, because there never was one.
 
 use std::collections::{HashMap, HashSet};
 
@@ -22,11 +51,33 @@ pub fn lower(
 ) -> Result<(Program, std::collections::HashSet<String>), Vec<Diagnostic>> {
     let mut lowerer = Lowerer::new();
     lowerer.build_record_table(&program.records);
-    lowerer.build_user_method_table(&program.functions);
+
+    // Record methods (external -- `record_receiver: Some(_)` -- and inline,
+    // still attached to their `RecordDef`) are pulled out and desugared
+    // separately from ordinary functions/scalar methods -- see this
+    // module's own doc comment. Keeping them out of `ordinary_functions`
+    // here matters: `build_user_method_table` treats every `receiver: None`
+    // function as a plain ordinary callable name, which a record method
+    // (also `receiver: None`, distinguished only by `record_receiver`)
+    // isn't yet at this point in the pass.
+    let mut record_methods_to_desugar = Vec::new();
+    let mut ordinary_functions = Vec::new();
+    for f in program.functions {
+        if f.record_receiver.is_some() {
+            record_methods_to_desugar.push(f);
+        } else {
+            ordinary_functions.push(f);
+        }
+    }
+    for rec in &program.records {
+        record_methods_to_desugar.extend(rec.methods.iter().cloned());
+    }
+
+    lowerer.build_record_method_table(&record_methods_to_desugar);
+    lowerer.build_user_method_table(&ordinary_functions);
 
     let statements = lowerer.lower_statements(program.statements);
-    let functions = program
-        .functions
+    let mut functions: Vec<FunctionDef> = ordinary_functions
         .into_iter()
         .map(|mut f| {
             lowerer.enter_function(&f);
@@ -35,6 +86,7 @@ pub fn lower(
             f
         })
         .collect();
+    functions.extend(lowerer.desugar_record_methods(record_methods_to_desugar));
 
     if !lowerer.diagnostics.is_empty() {
         return Err(lowerer.diagnostics);
@@ -68,6 +120,26 @@ struct RecordType {
     fields: Vec<FieldSpec>,
     width: u32,
     variable_width: bool,
+}
+
+/// One record method's desugared identity, built once (`build_record_method_
+/// table`) before any call site or method body is lowered -- a call site
+/// needs to resolve the method's real name before its own containing
+/// function/statement has necessarily been reached yet, and a method body
+/// may itself call another record method declared later in the source.
+#[derive(Clone)]
+struct RecordMethodInfo {
+    /// The ordinary top-level function this method desugars to --
+    /// `camel_join(&[record_type, method_name])`, carrying the method's own
+    /// declared result suffix (`None` for a procedure-style method with no
+    /// `: ReturnType`).
+    real_name: BasicIdent,
+    /// The receiver's own fields, in declaration order -- both the real
+    /// function's leading `byref` self parameters (`desugar_record_
+    /// methods`) and a call site's own leading arguments (`rewrite_expr`'s
+    /// `Expr::MethodCall` arm) are built from this same list, so the two
+    /// always agree on order and count.
+    fields: Vec<FieldSpec>,
 }
 
 #[derive(Clone)]
@@ -105,8 +177,22 @@ struct Lowerer {
     /// Declared `file` variables, keyed by lowercase variable name.
     files: HashMap<String, FileInfo>,
     /// `let <name> = <file>[<idx>]` bindings, keyed by lowercase variable
-    /// name, mapping to the record type name they materialize.
+    /// name, mapping to the record type name they materialize. Also
+    /// carries a transient `"self"` entry, scoped to exactly one record
+    /// method's own body-lowering call, inserted and removed around it by
+    /// `desugar_record_methods` -- unlike every other entry here, `self`
+    /// means a genuinely different record type in each method that uses
+    /// it, so it can never be left registered afterward the way an
+    /// ordinary record variable name safely can be (this pass's `record_
+    /// vars`/`records` tables are otherwise whole-program state, matching
+    /// BASIC's own flat scoping -- see `enter_function`'s own doc comment).
     record_vars: HashMap<String, String>,
+    /// Every declared record method's desugared identity, keyed by
+    /// `(record type, method name)`, both lowercase -- built once, up
+    /// front, by `build_record_method_table` (mirroring `user_method_
+    /// results`'s own reasoning: a call site or another method's body may
+    /// need this before the method's own declaration has been reached).
+    record_methods: HashMap<(String, String), RecordMethodInfo>,
     next_channel: i64,
     diagnostics: Vec<Diagnostic>,
     /// Lowercase BASIC names of every buffer variable this pass invented
@@ -156,6 +242,7 @@ impl Lowerer {
             records: HashMap::new(),
             files: HashMap::new(),
             record_vars: HashMap::new(),
+            record_methods: HashMap::new(),
             next_channel: 1,
             diagnostics: Vec::new(),
             synthesized_buffer_names: std::collections::HashSet::new(),
@@ -240,6 +327,108 @@ impl Lowerer {
                 },
             );
         }
+    }
+
+    /// Resolves every record method's declared receiver against
+    /// `self.records` and records its desugared identity in `self.
+    /// record_methods`, before any method body or call site is lowered
+    /// (see `record_methods`'s own doc comment on why this has to happen
+    /// up front). `method.record_receiver` was accepted by the parser
+    /// without knowing yet whether it names a real record type (a record
+    /// can be declared anywhere in the file, or a different `require`d
+    /// one) -- this is where that finally gets checked.
+    fn build_record_method_table(&mut self, methods: &[FunctionDef]) {
+        for method in methods {
+            let Some(record_type) = &method.record_receiver else {
+                continue;
+            };
+            let record_key = record_type.to_ascii_lowercase();
+            let Some(rec) = self.records.get(&record_key).cloned() else {
+                self.diagnostics.push(Diagnostic::error(
+                    method.pos.clone(),
+                    format!(
+                        "`{record_type}` in `method {}[{record_type}]` is neither a scalar type \
+                         nor a declared record type",
+                        method.name.name
+                    ),
+                ));
+                continue;
+            };
+            let real_name = BasicIdent {
+                name: camel_join(&[record_type, &method.name.name]),
+                suffix: method.name.suffix,
+            };
+            self.record_methods.insert(
+                (record_key, method.name.name.to_ascii_lowercase()),
+                RecordMethodInfo {
+                    real_name,
+                    fields: rec.fields,
+                },
+            );
+        }
+    }
+
+    /// Desugars every record method (already resolved by `build_record_
+    /// method_table`) into an ordinary top-level function: `self` becomes
+    /// one `byref` parameter per record field, prepended to the method's
+    /// own declared parameters, and every `self.field` access in its body
+    /// resolves through the exact same `record_vars`/`resolve_field_access`
+    /// machinery an ordinary `let p = ...` record variable already uses --
+    /// achieved simply by registering the literal name `"self"` as a record
+    /// variable of the receiver's type for the duration of lowering this
+    /// one method's body (see `record_vars`'s own doc comment on why that
+    /// registration must be removed again immediately after, unlike every
+    /// other entry in that table).
+    fn desugar_record_methods(&mut self, methods: Vec<FunctionDef>) -> Vec<FunctionDef> {
+        let mut out = Vec::with_capacity(methods.len());
+        for method in methods {
+            let Some(record_type) = method.record_receiver.clone() else {
+                continue;
+            };
+            let record_key = record_type.to_ascii_lowercase();
+            let method_key = method.name.name.to_ascii_lowercase();
+            // Already diagnosed by `build_record_method_table` when absent
+            // (an unresolvable receiver type) -- nothing left to desugar.
+            let Some(info) = self
+                .record_methods
+                .get(&(record_key.clone(), method_key))
+                .cloned()
+            else {
+                continue;
+            };
+            let mut params: Vec<Param> = info
+                .fields
+                .iter()
+                .map(|field| Param {
+                    name: BasicIdent {
+                        name: camel_join(&["self", &field.name]),
+                        suffix: Some(field_suffix(&field.ty)),
+                    },
+                    mode: ParamMode::ByRef,
+                    default: None,
+                    axes: None,
+                })
+                .collect();
+            params.extend(method.params);
+
+            self.record_vars.insert("self".to_string(), record_key);
+            self.current_function = Some(method.name.name.to_ascii_lowercase());
+            self.current_file_globals = collect_global_names(&method.body);
+            let body = self.lower_statements(method.body);
+            self.leave_function();
+            self.record_vars.remove("self");
+
+            out.push(FunctionDef {
+                name: info.real_name,
+                params,
+                body,
+                is_procedure: method.is_procedure,
+                receiver: None,
+                record_receiver: None,
+                pos: method.pos,
+            });
+        }
+        out
     }
 
     // ── statement lowering ──────────────────────────────────────────────
@@ -1731,6 +1920,20 @@ impl Lowerer {
                 (Expr::Integer(0), None)
             }
             Expr::MethodCall { base, method, args } => {
+                if let Expr::Ident(var) = base.as_ref() {
+                    if let Some(record_type) = self
+                        .record_vars
+                        .get(&var.name.to_ascii_lowercase())
+                        .cloned()
+                    {
+                        return self.rewrite_record_method_call(
+                            var.clone(),
+                            record_type,
+                            method,
+                            args,
+                        );
+                    }
+                }
                 if method.eq_ignore_ascii_case("eof") && args.is_empty() {
                     if let Expr::Ident(var) = base.as_ref() {
                         let var = var.clone();
@@ -1777,6 +1980,72 @@ impl Lowerer {
                 (self.rewrite_scalar_method_call(base, method, args), None)
             }
         }
+    }
+
+    /// Rewrites `recordVar.method(args)` into an ordinary call to that
+    /// method's desugared real function (`build_record_method_table`/
+    /// `desugar_record_methods`), passing `recordVar`'s own fields as the
+    /// real function's leading `byref` arguments -- the receiver's
+    /// mutations (a record method's own `self.field = ...` assignments)
+    /// come back out through those same arguments once the call returns,
+    /// exactly like any other BASCAL `byref` parameter.
+    fn rewrite_record_method_call(
+        &mut self,
+        var: BasicIdent,
+        record_type: String,
+        method: String,
+        args: Vec<Expr>,
+    ) -> (Expr, Option<FieldKind>) {
+        let args: Vec<Expr> = args.into_iter().map(|a| self.rewrite_expr(a).0).collect();
+        let Some(info) = self
+            .record_methods
+            .get(&(record_type.clone(), method.to_ascii_lowercase()))
+            .cloned()
+        else {
+            self.diagnostics.push(Diagnostic::error(
+                generated_pos(),
+                format!("record `{record_type}` has no method `.{method}()`"),
+            ));
+            return (Expr::Integer(0), None);
+        };
+        let mut call_args: Vec<Expr> = info
+            .fields
+            .iter()
+            .map(|field| {
+                Expr::Ident(BasicIdent {
+                    name: camel_join(&[&var.name, &field.name]),
+                    suffix: Some(field_suffix(&field.ty)),
+                })
+            })
+            .collect();
+        call_args.extend(args);
+        let kind = info.real_name.suffix.map(|suffix| {
+            if suffix == TypeSuffix::String {
+                FieldKind::Stringy
+            } else {
+                FieldKind::Numeric
+            }
+        });
+        // Exactly `make_paren_ident_expr`'s own disambiguation rule
+        // (parser.rs), which `rewrite_scalar_method_call` also mirrors: a
+        // call with a type suffix and exactly one argument parses as
+        // `ArrayRef` in real source (and an empty-argument call always
+        // does), so a synthesized one must match -- a record method with
+        // exactly one field and zero of its own declared arguments hits
+        // this exactly (e.g. a one-field record's `method display(): $`).
+        let expr =
+            if call_args.is_empty() || (info.real_name.suffix.is_some() && call_args.len() == 1) {
+                Expr::ArrayRef {
+                    name: info.real_name,
+                    indices: call_args,
+                }
+            } else {
+                Expr::Call {
+                    name: info.real_name,
+                    args: call_args,
+                }
+            };
+        (expr, kind)
     }
 
     /// Rewrites `base.method(args)` into the equivalent ordinary call

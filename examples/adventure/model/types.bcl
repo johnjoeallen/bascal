@@ -31,7 +31,7 @@ end record
  * @param direction% one of NORTH, SOUTH, WEST, or EAST.
  * @return the destination room ID, or NO_EXIT when there is no exit.
  */
-method[Room] exit(direction%) returns int
+method exit[Room](direction%): integer
     select case direction%
         case NORTH
             return self.exits.north
@@ -45,12 +45,17 @@ method[Room] exit(direction%) returns int
     return NO_EXIT
 end method
 /**
- * Changes one directional exit and returns this room for fluent map setup.
+ * Changes one directional exit in place.
  * @param direction% one of NORTH, SOUTH, WEST, or EAST.
  * @param destination% the destination room ID, or NO_EXIT.
- * @return self, with the selected exit changed.
+ * @effects updates self's own exit table -- the receiver is passed byref,
+ *   so this is visible to the caller's own room variable, matching a
+ *   record method's own receiver-mutation semantics (see the language
+ *   docs' "Methods" chapter) -- BASCAL has no method chaining on a record
+ *   receiver (nothing here returns a whole record value), so this is
+ *   always called as its own statement, never chained.
  */
-fluent method[Room] setExit(direction%, destination%)
+method setExit[Room](direction%, destination%)
     select case direction%
         case NORTH
             self.exits.north = destination%
@@ -67,7 +72,7 @@ end method
  * Prints the room name and its long description.
  * @effects writes two lines to the console.
  */
-method[Room] describe()
+method describe[Room]()
     print self.name
     print self.description
 end method
@@ -77,6 +82,6 @@ end method
  * @param room% the destination room ID.
  * @effects updates self.room.
  */
-method[Actor] moveTo(room%)
+method moveTo[Actor](room%)
     self.room = room%
 end method
