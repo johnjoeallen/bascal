@@ -32,6 +32,12 @@ and C runtime-support functions included in those binaries are not subject to
 the GPLv3 solely because BASCAL produced them. You may license them as you see
 fit.
 
+## Acknowledgments
+
+The JVM backend's assembler is [Krakatau](https://github.com/Storyyeller/Krakatau)'s
+`v2` (Rust) branch, linked directly into `bcc` as a library. Thanks to
+Storyyeller and the Krakatau project.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building, testing, and
