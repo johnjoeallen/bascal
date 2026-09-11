@@ -23,15 +23,10 @@ fn compile(source: &str, target: Target) -> Result<String, Vec<Diagnostic>> {
     if target == Target::Basic {
         return compile_source("test.bcl", source);
     }
-    let dir = std::env::temp_dir().join("bascal-record-methods-tests");
-    fs::create_dir_all(&dir).expect("create scratch dir");
-    let path = dir.join(format!(
-        "case_{}.bcl",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // A distinct tempdir per call -- see `run_c`'s own note on why a
+    // shared, timestamp-named scratch file risks a parallel-test race.
+    let dir = tempfile::tempdir().expect("create scratch dir");
+    let path = dir.path().join("case.bcl");
     fs::write(&path, source).expect("write scratch source");
     let options = CompileOptions {
         target,
@@ -259,9 +254,10 @@ fn builtin_scalar_method_syntax_is_unaffected() {
 // ── exact-type resolution / no dynamic dispatch ─────────────────────────
 
 /// Two unrelated record types each declaring a same-named method resolve
-/// statically from the receiver's own exact declared type -- there is no
-/// BASCAL record inheritance (no `extends`) to make this ambiguous, and no
-/// dynamic dispatch mechanism exists to begin with.
+/// statically from the receiver's own exact declared type -- see the
+/// `mixin`-specific tests below for the same guarantee when one record
+/// mixes in the other's fields (methods still aren't shared); no dynamic
+/// dispatch mechanism exists either way.
 #[test]
 fn same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type() {
     let source = "program p\n\
@@ -280,11 +276,9 @@ fn same_named_methods_on_unrelated_records_resolve_by_exact_receiver_type() {
     assert_eq!(lines[1].trim(), "Rex barks");
 }
 
-/// Assigning between two structurally different record types is rejected
-/// outright -- a BASCAL record variable has one exact declared type, with
-/// no implicit conversion between unrelated record types (BASCAL has no
-/// `extends`/inheritance at all, so there is no upcast/downcast question
-/// to even raise).
+/// Assigning between two structurally different, unrelated record types is
+/// rejected outright -- a BASCAL record variable has one exact declared
+/// type, with no implicit conversion between unrelated record types.
 #[test]
 fn assigning_between_unrelated_record_types_is_rejected() {
     let source = "program p\n\
@@ -301,6 +295,258 @@ fn assigning_between_unrelated_record_types_is_rejected() {
         message.contains("dog") && message.contains("animal"),
         "{err:?}"
     );
+}
+
+// ── `record ... mixin ...` (structural field composition) ──────────────
+//
+// A record mixin contributes the fields of one or more existing record
+// types to a new record type. Mixins provide structural composition
+// only: they do not imply inheritance, subtype compatibility,
+// polymorphism, or method inheritance. All effective field names must be
+// unique; duplicate field names are compile-time errors.
+
+/// A single mixin contributes its source's fields to the new record,
+/// accessed directly alongside the new record's own fields.
+#[test]
+fn mixin_single_source_contributes_its_fields() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\nend record\n\
+         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         let d = { species: \"Canis\", breed: \"Labrador\" }\n\
+         print d.species\nprint d.breed\nend\n";
+    let out = run_basic_via_bas(source);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0].trim(), "Canis");
+    assert_eq!(lines[1].trim(), "Labrador");
+}
+
+/// Multiple, comma-separated mixin sources all contribute their fields,
+/// combined with the record's own -- `species` (from `Animal`), `called`
+/// (from `Pet`), and `breed` (`Dog`'s own) are all accessed directly.
+#[test]
+fn mixin_multiple_sources_all_contribute_fields() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\nend record\n\
+         record Pet\n    called: string(20)\nend record\n\
+         record Dog mixin Animal, Pet\n    breed: string(20)\nend record\n\
+         let d = { species: \"Canis\", called: \"Rex\", breed: \"Labrador\" }\n\
+         print d.species\nprint d.called\nprint d.breed\nend\n";
+    let out = run_basic_via_bas(source);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0].trim(), "Canis");
+    assert_eq!(lines[1].trim(), "Rex");
+    assert_eq!(lines[2].trim(), "Labrador");
+}
+
+/// Transitive mixins: `Dog mixin Animal`, `Animal mixin Named` -- `Dog`'s
+/// effective fields include `Named`'s (`name`), `Animal`'s (`species`),
+/// and `Dog`'s own (`breed`), computed before any duplicate checking.
+#[test]
+fn mixin_resolves_transitively_through_multiple_levels() {
+    let source = "program p\n\
+         record Named\n    name: string(20)\nend record\n\
+         record Animal mixin Named\n    species: string(20)\nend record\n\
+         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         let d = { name: \"Rex\", species: \"Canis\", breed: \"Labrador\" }\n\
+         print d.name\nprint d.species\nprint d.breed\nend\n";
+    let out = run_basic_via_bas(source);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0].trim(), "Rex");
+    assert_eq!(lines[1].trim(), "Canis");
+    assert_eq!(lines[2].trim(), "Labrador");
+}
+
+/// A `mixin` never implies assignability: a `Dog` value is still not
+/// assignable to/from an `Animal` variable, even though `Dog` mixes in
+/// every one of `Animal`'s fields -- each remains its own exact type.
+#[test]
+fn mixin_does_not_imply_assignability() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\nend record\n\
+         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         let a = { species: \"Canis\" }\n\
+         let d = { species: \"Canis\", breed: \"Labrador\" }\n\
+         a = d\n\
+         end\n";
+    let err = compile(source, Target::Basic)
+        .expect_err("Dog should not be assignable to Animal despite mixin");
+    let message = first_message(&err).to_ascii_lowercase();
+    assert!(
+        message.contains("dog") && message.contains("animal"),
+        "{err:?}"
+    );
+}
+
+/// Methods are not mixed in: `Dog mixin Animal` gives `Dog` `Animal`'s
+/// fields, but a method declared for an `Animal` receiver never applies
+/// to a `Dog` receiver -- `Dog` needs its own declaration.
+#[test]
+fn mixin_does_not_mix_in_methods() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\n\n    \
+         method describe(): $\n        return \"a \" + self.species\n    end method\n\
+         end record\n\
+         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         let d = { species: \"Canis\", breed: \"Labrador\" }\n\
+         print d.describe()\nend\n";
+    let err = compile(source, Target::Basic)
+        .expect_err("Animal's method should not be visible on a Dog receiver");
+    assert!(first_message(&err).contains("no method"), "{err:?}");
+}
+
+/// A separate, explicitly-declared method for the mixing record's own
+/// exact type works normally -- mixins reuse structure only, so behavior
+/// still has to be declared per record, exactly as the docs specify.
+#[test]
+fn mixin_with_its_own_explicitly_declared_method_works() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\n\n    \
+         method describe(): $\n        return \"a \" + self.species\n    end method\n\
+         end record\n\
+         record Dog mixin Animal\n    breed: string(20)\nend record\n\
+         method describe[Dog](): $\n    return self.breed + \" (\" + self.species + \")\"\nend method\n\
+         let a = { species: \"Canis\" }\n\
+         let d = { species: \"Canis\", breed: \"Labrador\" }\n\
+         print a.describe()\nprint d.describe()\nend\n";
+    let out = run_basic_via_bas(source);
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0].trim(), "a Canis");
+    assert_eq!(lines[1].trim(), "Labrador (Canis)");
+}
+
+/// An inline method stays associated with the record it's declared
+/// inside, even when that record is also the source of a mixin --
+/// mixing `Dog`'s fields into `Puppy` doesn't move or duplicate `Dog`'s
+/// own inline method onto `Puppy`.
+#[test]
+fn mixin_inline_method_stays_with_its_own_declaring_record() {
+    let source = "program p\n\
+         record Dog\n    breed: string(20)\n\n    \
+         method bark(): $\n        return self.breed + \" says woof\"\n    end method\n\
+         end record\n\
+         record Puppy mixin Dog\n    age: int\nend record\n\
+         let d = { breed: \"Labrador\" }\n\
+         let p = { breed: \"Labrador\", age: 1 }\n\
+         print d.bark()\nend\n";
+    // Dog's own inline method still works normally on a Dog receiver...
+    let out = run_basic_via_bas(source);
+    assert_eq!(out.trim_end(), "Labrador says woof");
+
+    // ...but is not visible on Puppy, which only mixed in Dog's fields.
+    let calls_on_puppy = "program p\n\
+         record Dog\n    breed: string(20)\n\n    \
+         method bark(): $\n        return self.breed + \" says woof\"\n    end method\n\
+         end record\n\
+         record Puppy mixin Dog\n    age: int\nend record\n\
+         let p = { breed: \"Labrador\", age: 1 }\n\
+         print p.bark()\nend\n";
+    let err = compile(calls_on_puppy, Target::Basic)
+        .expect_err("Dog's inline method should not be visible on a Puppy receiver");
+    assert!(first_message(&err).contains("no method"), "{err:?}");
+}
+
+/// Two mixed-in sources contributing the same field name is a
+/// compile-time error naming the field and both contributing sources --
+/// no aliasing, qualification, or "last one wins".
+#[test]
+fn mixin_duplicate_field_between_two_sources_is_rejected() {
+    let source = "program p\n\
+         record Animal\n    name: string(20)\nend record\n\
+         record Pet\n    name: string(20)\nend record\n\
+         record Dog mixin Animal, Pet\nend record\nend\n";
+    let err = compile(source, Target::Basic)
+        .expect_err("a field duplicated across two mixin sources should be rejected");
+    let message = first_message(&err);
+    assert!(message.contains("name"), "{message}");
+    assert!(message.contains("Animal"), "{message}");
+    assert!(message.contains("Pet"), "{message}");
+}
+
+/// A field declared directly on the mixing record that collides with a
+/// mixed-in field is also a compile-time error.
+#[test]
+fn mixin_duplicate_field_between_source_and_local_declaration_is_rejected() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\nend record\n\
+         record Dog mixin Animal\n    species: string(20)\nend record\nend\n";
+    let err = compile(source, Target::Basic)
+        .expect_err("a field colliding with a mixed-in one should be rejected");
+    let message = first_message(&err);
+    assert!(
+        message.contains("species") && message.contains("Animal"),
+        "{message}"
+    );
+}
+
+/// A duplicate field reaching a record through two different transitive
+/// mixin paths (`D mixin B, C`, where `B` transitively mixes in `A`,
+/// and `A`/`C` both declare `value`) must still be caught.
+#[test]
+fn mixin_duplicate_field_through_transitive_paths_is_rejected() {
+    let source = "program p\n\
+         record A\n    value: int\nend record\n\
+         record B mixin A\nend record\n\
+         record C\n    value: int\nend record\n\
+         record D mixin B, C\nend record\nend\n";
+    let err = compile(source, Target::Basic)
+        .expect_err("a field duplicated through transitive mixins should be rejected");
+    assert!(first_message(&err).contains("value"), "{:?}", err);
+}
+
+/// Mixing in an undeclared record is a clear compile error, not a panic
+/// or a silently-ignored `mixin` clause.
+#[test]
+fn mixin_of_an_undeclared_record_is_rejected() {
+    let source = "program p\nrecord Dog mixin Cat\n    breed: string(20)\nend record\nend\n";
+    let err =
+        compile(source, Target::Basic).expect_err("mixing in an unknown record should be rejected");
+    assert!(first_message(&err).contains("Cat"), "{err:?}");
+}
+
+/// A cyclic mixin graph (`A mixin B` + `B mixin A`, or a longer cycle) is
+/// rejected rather than looping forever.
+#[test]
+fn mixin_cycle_is_rejected() {
+    let source = "program p\n\
+         record A mixin B\n    x: int\nend record\n\
+         record B mixin A\n    y: int\nend record\nend\n";
+    let err = compile(source, Target::Basic).expect_err("a mixin cycle should be rejected");
+    assert!(first_message(&err).contains("mixes in itself"), "{err:?}");
+}
+
+/// The same multi-mixin example, verified on the C and (when
+/// `java`/`krak2` are available) JVM backends too -- mixins are resolved
+/// entirely in `records.rs`, before any backend runs, so all three must
+/// produce an identical effective record layout and identical output.
+#[test]
+fn mixin_runs_identically_on_c_and_jvm_when_available() {
+    let source = "program p\n\
+         record Animal\n    species: string(20)\nend record\n\
+         record Pet\n    called: string(20)\nend record\n\
+         record Dog mixin Animal, Pet\n    breed: string(20)\nend record\n\
+         let d = { species: \"Canis\", called: \"Rex\", breed: \"Labrador\" }\n\
+         print d.species\nprint d.called\nprint d.breed\nend\n";
+
+    if Command::new("gcc").arg("--version").output().is_ok() {
+        let generated_c = compile(source, Target::C).expect("should compile under C");
+        let out = run_c(&generated_c);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0].trim(), "Canis");
+        assert_eq!(lines[1].trim(), "Rex");
+        assert_eq!(lines[2].trim(), "Labrador");
+    } else {
+        eprintln!("skipping C check: gcc unavailable");
+    }
+
+    if java_and_krak2_available() {
+        let out = run_jvm_source(source, "P");
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0].trim(), "Canis");
+        assert_eq!(lines[1].trim(), "Rex");
+        assert_eq!(lines[2].trim(), "Labrador");
+    } else {
+        eprintln!("skipping JVM check: java or krak2 unavailable");
+    }
 }
 
 // ── error cases ──────────────────────────────────────────────────────────
@@ -461,15 +707,12 @@ fn run_basic_via_bas(source: &str) -> String {
 }
 
 fn run_c(generated_c: &str) -> String {
-    let dir = std::env::temp_dir().join("bascal-record-methods-c-run");
-    fs::create_dir_all(&dir).expect("create scratch dir");
-    let c_path = dir.join(format!(
-        "prog_{}.c",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // A distinct tempdir per call (not a shared, timestamp-named file in one
+    // fixed directory): parallel test threads compiling around the same
+    // moment could otherwise collide on a coarse-resolution clock and
+    // corrupt each other's .c file mid-write.
+    let dir = tempfile::tempdir().expect("create scratch dir");
+    let c_path = dir.path().join("prog.c");
     fs::write(&c_path, generated_c).expect("write generated C");
     let bin_path = c_path.with_extension("");
     let status = Command::new("gcc")
@@ -497,9 +740,14 @@ fn java_and_krak2_available() -> bool {
 }
 
 fn run_jvm_source(source: &str, class_name: &str) -> String {
-    let dir = std::env::temp_dir().join("bascal-record-methods-jvm-run");
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).expect("create scratch dir");
+    // A distinct tempdir per call -- see `run_c`'s own note. This one
+    // matters even more: `bcc --binary`'s JVM output always lands at a
+    // fixed `tmp/<ClassName>.class` relative to the working directory
+    // (see codegen_jvm.rs's own native_binary_path_from_stem), so two
+    // parallel calls sharing both a directory and a class name would
+    // race on the exact same .class file.
+    let dir = tempfile::tempdir().expect("create scratch dir");
+    let dir = dir.path();
     let bcl_path = dir.join("prog.bcl");
     fs::write(&bcl_path, source).expect("write source");
     let mut out_dir = dir.join("out").into_os_string();
@@ -512,7 +760,7 @@ fn run_jvm_source(source: &str, class_name: &str) -> String {
         .arg("--binary")
         .arg("-o")
         .arg(&out_dir)
-        .current_dir(&dir)
+        .current_dir(dir)
         .status()
         .expect("failed to invoke bcc");
     assert!(status.success(), "bcc failed to compile/assemble under jvm");
@@ -521,7 +769,7 @@ fn run_jvm_source(source: &str, class_name: &str) -> String {
         .arg("-cp")
         .arg(dir.join("tmp"))
         .arg(class_name)
-        .current_dir(&dir)
+        .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

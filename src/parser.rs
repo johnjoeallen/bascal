@@ -579,6 +579,14 @@ impl Parser {
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
         self.expect_keyword("record")?;
         let name = self.expect_ident("expected record name")?;
+        let mut mixins = Vec::new();
+        if self.check_keyword("mixin") {
+            self.advance();
+            mixins.push(self.expect_ident("expected record type after `mixin`")?);
+            while self.eat(TokenKind::Comma) {
+                mixins.push(self.expect_ident("expected record type after `,` in `mixin` clause")?);
+            }
+        }
         self.consume_line_end()?;
         self.skip_newlines();
         let mut fields = Vec::new();
@@ -604,6 +612,7 @@ impl Parser {
         self.consume_line_end()?;
         Ok(RecordDef {
             name,
+            mixins,
             fields,
             methods,
         })

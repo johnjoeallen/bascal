@@ -67,7 +67,36 @@ card.restock(3)
 print "copies on hand = "; card.copies
 ```
 
-`display` is declared inline, `restock` externally — both are the same kind of callable, resolved the same way. `self.field` inside a record method is ordinary field access against the receiver, and mutating `self.field` (as `restock` does) is visible to the caller once the call returns: `card.copies` reads `5`, not `2`, after `card.restock(3)`. The receiver is passed the same way a C-level receiver naturally would be, by reference rather than by copy. See the [Methods](../language/methods.md) chapter for the full external-vs-inline grammar, the `: ReturnType`/suffix-shorthand mapping, and how two unrelated record types can each declare a same-named method with no ambiguity (BASCAL has no record inheritance, so there is no dynamic dispatch to resolve). Record methods do not yet extend to nested record fields, record parameters, or arrays of records — the existing random-access `file`/record DSL remains the separate mechanism for on-disk records.
+`display` is declared inline, `restock` externally — both are the same kind of callable, resolved the same way. `self.field` inside a record method is ordinary field access against the receiver, and mutating `self.field` (as `restock` does) is visible to the caller once the call returns: `card.copies` reads `5`, not `2`, after `card.restock(3)`. The receiver is passed the same way a C-level receiver naturally would be, by reference rather than by copy. Record methods do not yet extend to nested record fields, record parameters, or arrays of records — the existing random-access `file`/record DSL remains the separate mechanism for on-disk records.
+
+</div>
+
+<div class="snippet" markdown="1">
+
+### Structural composition with `mixin`
+
+`record SignedCard mixin Card` makes `SignedCard` composed of `Card`'s fields — structurally, not as subtype polymorphism:
+
+```bascal
+record SignedCard mixin Card
+    signature: string(40)
+
+    method display(): $
+        return self.title + " by " + self.author + ", signed " + self.signature
+    end method
+end record
+
+method restock[SignedCard](amount%)
+    self.copies = self.copies + amount%
+end method
+
+let signed = { title: "Dune", author: "Frank Herbert", copies: 1, signature: "F.H." }
+print signed.display()
+signed.restock(2)
+print "signed copies after restock = "; signed.copies
+```
+
+`SignedCard`'s effective field list is `Card`'s fields (`title`, `author`, `copies`) followed by its own (`signature`), so its record literal accepts all four. `SignedCard` declares its own `display()`, since `mixin` never mixes in methods — `Card`'s own `display()`/`restock()` only ever apply to a `Card` receiver, so `SignedCard` needs its own `restock()` too (shown here as an external method, just to demonstrate both forms still work the same way once mixed-in fields are involved). `mixin` never makes `SignedCard` assignable to or from `Card`: each remains its own exact record type. See the [Methods](../language/methods.md) chapter for the full grammar, including multiple/transitive mixins and the compile errors an undeclared source, a mixin cycle, or a duplicate field name produce.
 
 </div>
 
@@ -196,6 +225,30 @@ print "copies on hand = "; card.copies
 card.restock(3)
 print "copies after restock = "; card.copies
 
+// `mixin` is structural field composition only, not inheritance:
+// SignedCard's own field list is Card's fields (title, author, copies)
+// followed by its own (signature), so its record literal accepts all
+// four -- but Card's methods aren't mixed in. SignedCard needs its own
+// display() (below); calling signed.restock(...) without declaring
+// SignedCard's own restock() would be a compile error, since a method
+// is only ever visible for the exact record type it was declared for.
+record SignedCard mixin Card
+    signature: string(40)
+
+    method display(): $
+        return self.title + " by " + self.author + ", signed " + self.signature
+    end method
+end record
+
+method restock[SignedCard](amount%)
+    self.copies = self.copies + amount%
+end method
+
+let signed = { title: "Dune", author: "Frank Herbert", copies: 1, signature: "F.H." }
+print signed.display()
+signed.restock(2)
+print "signed copies after restock = "; signed.copies
+
 end
 
 ```
@@ -243,11 +296,11 @@ end
 260 surroundSelf0$ = name$
 270 surroundLeft0$ = "["
 280 surroundRight0$ = "]"
-290 GOSUB 1040
+290 GOSUB 1360
 300 result$ = surroundResult0$
 310 PRINT result$
 320 shoutSelf0$ = name$
-330 GOSUB 960
+330 GOSUB 1280
 340 shoutresult$ = shoutResult0$
 350 length% = LEN(LEFT$(name$, 5))
 360 PRINT "length = "; length%
@@ -256,17 +309,17 @@ end
 380 clampSelf0% = score%
 390 clampLow0% = 0
 400 clampHigh0% = 100
-410 GOSUB 1100
+410 GOSUB 1420
 420 PRINT "clamped score = "; clampResult0%
 
 430 price! = 80
 440 percentSelf0! = price!
 450 percentRate0! = 15
-460 GOSUB 1250
+460 GOSUB 1570
 470 PRINT "discount amount = "; percentResult0!
 
 480 ucaseSelf0$ = LEFT$(name$, 3)
-490 GOSUB 810
+490 GOSUB 1130
 500 firstthree$ = ucaseResult0$
 510 PRINT "first three = "; firstthree$
 
@@ -285,7 +338,7 @@ end
 610 carddisplaySelfTitle0$ = cardtitle$
 620 carddisplaySelfAuthor0$ = cardauthor$
 630 carddisplaySelfCopies0& = cardcopies&
-640 GOSUB 1350
+640 GOSUB 1710
 650 cardtitle$ = carddisplaySelfTitle0$
 660 cardauthor$ = carddisplaySelfAuthor0$
 670 cardcopies& = carddisplaySelfCopies0&
@@ -296,78 +349,122 @@ end
 710 cardrestockSelfAuthor0$ = cardauthor$
 720 cardrestockSelfCopies0& = cardcopies&
 730 cardrestockAmount0% = 3
-740 GOSUB 1310
+740 GOSUB 1630
 750 cardtitle$ = cardrestockSelfTitle0$
 760 cardauthor$ = cardrestockSelfAuthor0$
 770 cardcopies& = cardrestockSelfCopies0&
 780 PRINT "copies after restock = "; cardcopies&
 
-790 END
+790 ' `mixin` is structural field composition only, not inheritance:
+800 ' SignedCard's own field list is Card's fields (title, author, copies)
+810 ' followed by its own (signature), so its record literal accepts all
+820 ' four -- but Card's methods aren't mixed in. SignedCard needs its own
+830 ' display() (below); calling signed.restock(...) without declaring
+840 ' SignedCard's own restock() would be a compile error, since a method
+850 ' is only ever visible for the exact record type it was declared for.
 
-800 ' function ucase$()
-810     ucaseOut0$ = ""
-820     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
-830         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
-840         IF (ucaseC0% >= 97) = 0 THEN GOTO 870
-850         IF (ucaseC0% <= 122) = 0 THEN GOTO 870
-860             ucaseC0% = ucaseC0% - 32
-870         REM END IF
-880         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
-890     NEXT ucaseI0%
-900     ucaseResult0$ = ucaseOut0$
-910     RETURN
-920     ucaseResult0$ = ucaseSelf0$
-930     RETURN
-940 ' end function ucase$
+860 signedtitle$ = "Dune"
+870 signedauthor$ = "Frank Herbert"
+880 signedcopies& = 1
+890 signedsignature$ = "F.H."
+900 signedcarddisplaySelfTitle0$ = signedtitle$
+910 signedcarddisplaySelfAuthor0$ = signedauthor$
+920 signedcarddisplaySelfCopies0& = signedcopies&
+930 signedcarddisplaySelfSignature0$ = signedsignature$
+940 GOSUB 1750
+950 signedtitle$ = signedcarddisplaySelfTitle0$
+960 signedauthor$ = signedcarddisplaySelfAuthor0$
+970 signedcopies& = signedcarddisplaySelfCopies0&
+980 signedsignature$ = signedcarddisplaySelfSignature0$
+990 PRINT signedcarddisplayResult0$
+1000 signedcardrestockSelfTitle0$ = signedtitle$
+1010 signedcardrestockSelfAuthor0$ = signedauthor$
+1020 signedcardrestockSelfCopies0& = signedcopies&
+1030 signedcardrestockSelfSignature0$ = signedsignature$
+1040 signedcardrestockAmount0% = 2
+1050 GOSUB 1670
+1060 signedtitle$ = signedcardrestockSelfTitle0$
+1070 signedauthor$ = signedcardrestockSelfAuthor0$
+1080 signedcopies& = signedcardrestockSelfCopies0&
+1090 signedsignature$ = signedcardrestockSelfSignature0$
+1100 PRINT "signed copies after restock = "; signedcopies&
 
-950 ' function shout$()
-960     ucaseSelf0$ = shoutSelf0$
-970     GOSUB 810
-980     shoutResult0$ = ucaseResult0$ + "!"
-990     RETURN
-1000     shoutResult0$ = shoutSelf0$
-1010     RETURN
-1020 ' end function shout$
+1110 END
 
-1030 ' function surround$(left$, right$)
-1040     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
-1050     RETURN
-1060     surroundResult0$ = surroundSelf0$
-1070     RETURN
-1080 ' end function surround$
+1120 ' function ucase$()
+1130     ucaseOut0$ = ""
+1140     FOR ucaseI0% = 1 TO LEN(ucaseSelf0$)
+1150         ucaseC0% = ASC(MID$(ucaseSelf0$, ucaseI0%, 1))
+1160         IF (ucaseC0% >= 97) = 0 THEN GOTO 1190
+1170         IF (ucaseC0% <= 122) = 0 THEN GOTO 1190
+1180             ucaseC0% = ucaseC0% - 32
+1190         REM END IF
+1200         ucaseOut0$ = ucaseOut0$ + CHR$(ucaseC0%)
+1210     NEXT ucaseI0%
+1220     ucaseResult0$ = ucaseOut0$
+1230     RETURN
+1240     ucaseResult0$ = ucaseSelf0$
+1250     RETURN
+1260 ' end function ucase$
 
-1090 ' function clamp%(low%, high%)
-1100     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 1140
-1110         clampResult0% = clampLow0%
-1120         RETURN
-1130         GOTO 1180
-1140         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 1170
-1150             clampResult0% = clampHigh0%
-1160             RETURN
-1170         REM END IF
-1180     REM END IF
-1190     clampResult0% = clampSelf0%
-1200     RETURN
-1210     clampResult0% = clampSelf0%
-1220     RETURN
-1230 ' end function clamp%
+1270 ' function shout$()
+1280     ucaseSelf0$ = shoutSelf0$
+1290     GOSUB 1130
+1300     shoutResult0$ = ucaseResult0$ + "!"
+1310     RETURN
+1320     shoutResult0$ = shoutSelf0$
+1330     RETURN
+1340 ' end function shout$
 
-1240 ' function percent!(rate!)
-1250     percentResult0! = (percentSelf0! * percentRate0!) / 100
-1260     RETURN
-1270     percentResult0! = percentSelf0!
-1280     RETURN
-1290 ' end function percent!
+1350 ' function surround$(left$, right$)
+1360     surroundResult0$ = (surroundLeft0$ + surroundSelf0$) + surroundRight0$
+1370     RETURN
+1380     surroundResult0$ = surroundSelf0$
+1390     RETURN
+1400 ' end function surround$
 
-1300 ' procedure cardrestock(selftitle$, selfauthor$, selfcopies&, amount%)
-1310     cardrestockSelfCopies0& = cardrestockSelfCopies0& + cardrestockAmount0%
-1320     RETURN
-1330 ' end procedure cardrestock
+1410 ' function clamp%(low%, high%)
+1420     IF (clampSelf0% < clampLow0%) = 0 THEN GOTO 1460
+1430         clampResult0% = clampLow0%
+1440         RETURN
+1450         GOTO 1500
+1460         IF (clampSelf0% > clampHigh0%) = 0 THEN GOTO 1490
+1470             clampResult0% = clampHigh0%
+1480             RETURN
+1490         REM END IF
+1500     REM END IF
+1510     clampResult0% = clampSelf0%
+1520     RETURN
+1530     clampResult0% = clampSelf0%
+1540     RETURN
+1550 ' end function clamp%
 
-1340 ' function carddisplay$(selftitle$, selfauthor$, selfcopies&)
-1350     carddisplayResult0$ = (carddisplaySelfTitle0$ + " by ") + carddisplaySelfAuthor0$
-1360     RETURN
-1370 ' end function carddisplay$
+1560 ' function percent!(rate!)
+1570     percentResult0! = (percentSelf0! * percentRate0!) / 100
+1580     RETURN
+1590     percentResult0! = percentSelf0!
+1600     RETURN
+1610 ' end function percent!
+
+1620 ' procedure cardrestock(selftitle$, selfauthor$, selfcopies&, amount%)
+1630     cardrestockSelfCopies0& = cardrestockSelfCopies0& + cardrestockAmount0%
+1640     RETURN
+1650 ' end procedure cardrestock
+
+1660 ' procedure signedcardrestock(selftitle$, selfauthor$, selfcopies&, selfsignature$, amount%)
+1670     signedcardrestockSelfCopies0& = signedcardrestockSelfCopies0& + signedcardrestockAmount0%
+1680     RETURN
+1690 ' end procedure signedcardrestock
+
+1700 ' function carddisplay$(selftitle$, selfauthor$, selfcopies&)
+1710     carddisplayResult0$ = (carddisplaySelfTitle0$ + " by ") + carddisplaySelfAuthor0$
+1720     RETURN
+1730 ' end function carddisplay$
+
+1740 ' function signedcarddisplay$(selftitle$, selfauthor$, selfcopies&, selfsignature$)
+1750     signedcarddisplayResult0$ = (((signedcarddisplaySelfTitle0$ + " by ") + signedcarddisplaySelfAuthor0$) + ", signed ") + signedcarddisplaySelfSignature0$
+1760     RETURN
+1770 ' end function signedcarddisplay$
 
 ```
 
@@ -401,12 +498,16 @@ static float bv_f_price = 0;
 static int bv_i_length = 0;
 static int bv_i_score = 0;
 static int bv_l_cardcopies = 0;
+static int bv_l_signedcopies = 0;
 static char bv_s_cardauthor[256] = {0};
 static char bv_s_cardtitle[256] = {0};
 static char bv_s_firstthree[256] = {0};
 static char bv_s_name[256] = {0};
 static char bv_s_result[256] = {0};
 static char bv_s_shoutresult[256] = {0};
+static char bv_s_signedauthor[256] = {0};
+static char bv_s_signedsignature[256] = {0};
+static char bv_s_signedtitle[256] = {0};
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out);
@@ -414,7 +515,9 @@ void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const c
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high);
 float bf_f_percent_f(float bv_f_self, float bv_f_rate);
 void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount);
+void bf_i_signedcardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, int bv_i_amount);
 void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out);
+void bf_s_signedcarddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, char* bcc_out);
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_self[256];
@@ -503,6 +606,22 @@ void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv
     *bv_l_selfcopies_in = bv_l_selfcopies;
 }
 
+void bf_i_signedcardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, int bv_i_amount) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+    char bv_s_selfsignature[256];
+    snprintf(bv_s_selfsignature, sizeof(bv_s_selfsignature), "%s", bv_s_selfsignature_in);
+
+    bv_l_selfcopies = (bv_l_selfcopies + bv_i_amount);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
+}
+
 void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out) {
     char bv_s_selftitle[256];
     snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
@@ -522,6 +641,35 @@ void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv
     snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
     snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
     *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
+void bf_s_signedcarddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, char* bcc_out) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+    char bv_s_selfsignature[256];
+    snprintf(bv_s_selfsignature, sizeof(bv_s_selfsignature), "%s", bv_s_selfsignature_in);
+
+    char bt_s_8[256];
+    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bv_s_selftitle, " by ");
+    char bt_s_9[256];
+    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", bt_s_8, bv_s_selfauthor);
+    char bt_s_10[256];
+    snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", bt_s_9, ", signed ");
+    char bt_s_11[256];
+    snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", bt_s_10, bv_s_selfsignature);
+    snprintf(bcc_out, 256, "%s", bt_s_11);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
+    return;
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
 }
 
 int main(void) {
@@ -555,13 +703,13 @@ int main(void) {
 
 
     snprintf(bv_s_name, sizeof(bv_s_name), "%s", "bascal");
-    char bt_s_8[256];
-    bf_s_surround_s(bv_s_name, "[", "]", bt_s_8);
-    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_8);
+    char bt_s_12[256];
+    bf_s_surround_s(bv_s_name, "[", "]", bt_s_12);
+    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_12);
     printf("%s\n", bv_s_result);
-    char bt_s_9[256];
-    bf_s_shout_s(bv_s_name, bt_s_9);
-    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_9);
+    char bt_s_13[256];
+    bf_s_shout_s(bv_s_name, bt_s_13);
+    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_13);
     bv_i_length = ((int)strlen(bcc_mid(bv_s_name, 1, 5)));
     printf("length = %d\n", bv_i_length);
 
@@ -571,9 +719,9 @@ int main(void) {
     bv_f_price = 80;
     printf("discount amount = %g\n", bf_f_percent_f(bv_f_price, 15));
 
-    char bt_s_10[256];
-    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_10);
-    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_10);
+    char bt_s_14[256];
+    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_14);
+    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_14);
     printf("first three = %s\n", bv_s_firstthree);
 
     // -------------------- Record methods --------------------
@@ -588,13 +736,32 @@ int main(void) {
     snprintf(bv_s_cardtitle, sizeof(bv_s_cardtitle), "%s", "Dune");
     snprintf(bv_s_cardauthor, sizeof(bv_s_cardauthor), "%s", "Frank Herbert");
     bv_l_cardcopies = 2;
-    char bt_s_11[256];
-    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_11);
-    printf("%s\n", bt_s_11);
+    char bt_s_15[256];
+    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_15);
+    printf("%s\n", bt_s_15);
     printf("copies on hand = %d\n", bv_l_cardcopies);
 
     bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
     printf("copies after restock = %d\n", bv_l_cardcopies);
+
+    // `mixin` is structural field composition only, not inheritance:
+    // SignedCard's own field list is Card's fields (title, author, copies)
+    // followed by its own (signature), so its record literal accepts all
+    // four -- but Card's methods aren't mixed in. SignedCard needs its own
+    // display() (below); calling signed.restock(...) without declaring
+    // SignedCard's own restock() would be a compile error, since a method
+    // is only ever visible for the exact record type it was declared for.
+
+
+    snprintf(bv_s_signedtitle, sizeof(bv_s_signedtitle), "%s", "Dune");
+    snprintf(bv_s_signedauthor, sizeof(bv_s_signedauthor), "%s", "Frank Herbert");
+    bv_l_signedcopies = 1;
+    snprintf(bv_s_signedsignature, sizeof(bv_s_signedsignature), "%s", "F.H.");
+    char bt_s_16[256];
+    bf_s_signedcarddisplay(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, bt_s_16);
+    printf("%s\n", bt_s_16);
+    bf_i_signedcardrestock(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, 2);
+    printf("signed copies after restock = %d\n", bv_l_signedcopies);
 
     return 0;
 }
@@ -665,9 +832,13 @@ static const char* bcc_strd(double value) {
 .field public static g10 Ljava/lang/String;
 .field public static g11 I
 .field public static g12 Ljava/lang/String;
+.field public static g13 Ljava/lang/String;
+.field public static g14 J
+.field public static g16 Ljava/lang/String;
+.field public static g17 Ljava/lang/String;
 .method public static ucase : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 4
+    .limit locals 8
 
     iconst_0
     istore 1
@@ -744,7 +915,7 @@ L_for_0_end:
 
 .method public static shout : (Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 1
+    .limit locals 5
 
     new java/lang/StringBuilder
     dup
@@ -764,7 +935,7 @@ L_for_0_end:
 
 .method public static surround : (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
     .limit stack 16
-    .limit locals 3
+    .limit locals 7
 
     new java/lang/StringBuilder
     dup
@@ -790,7 +961,7 @@ L_for_0_end:
 
 .method public static clamp : (III)I
     .limit stack 16
-    .limit locals 3
+    .limit locals 7
 
     iload 0
     iload 1
@@ -823,7 +994,7 @@ L_if_0_end:
 
 .method public static percent : (DD)D
     .limit stack 16
-    .limit locals 4
+    .limit locals 8
 
     dload 0
     dload 2
@@ -838,45 +1009,253 @@ L_if_0_end:
     dreturn
 .end method
 
-.method public static cardRestock : (Ljava/lang/String;Ljava/lang/String;JI)V
+.method public static cardRestock : ([Ljava/lang/String;[Ljava/lang/String;[JI)V
     .limit stack 16
-    .limit locals 5
+    .limit locals 12
 
-    lload 2
-    iload 4
+    aload 0
+    iconst_0
+    aaload
+    astore 4
+    aload 1
+    iconst_0
+    aaload
+    astore 5
+    aload 2
+    iconst_0
+    laload
+    lstore 6
+    lload 6
+    iload 3
     i2l
     ladd
-    lstore 2
+    lstore 6
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
     return
 .end method
 
-.method public static cardDisplay : (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+.method public static signedcardRestock : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
     .limit stack 16
-    .limit locals 4
+    .limit locals 14
 
-    new java/lang/StringBuilder
-    dup
-    invokespecial java/lang/StringBuilder/<init> ()V
-    new java/lang/StringBuilder
-    dup
-    invokespecial java/lang/StringBuilder/<init> ()V
     aload 0
+    iconst_0
+    aaload
+    astore 5
+    aload 1
+    iconst_0
+    aaload
+    astore 6
+    aload 2
+    iconst_0
+    laload
+    lstore 7
+    aload 3
+    iconst_0
+    aaload
+    astore 9
+    lload 7
+    iload 4
+    i2l
+    ladd
+    lstore 7
+    aload 0
+    iconst_0
+    aload 5
+    aastore
+    aload 1
+    iconst_0
+    aload 6
+    aastore
+    aload 2
+    iconst_0
+    lload 7
+    lastore
+    aload 3
+    iconst_0
+    aload 9
+    aastore
+    return
+.end method
+
+.method public static cardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 11
+
+    aload 0
+    iconst_0
+    aaload
+    astore 3
+    aload 1
+    iconst_0
+    aaload
+    astore 4
+    aload 2
+    iconst_0
+    laload
+    lstore 5
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    aload 3
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     ldc " by "
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
-    aload 1
+    aload 4
     invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
     invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    aload 0
+    iconst_0
+    aload 3
+    aastore
+    aload 1
+    iconst_0
+    aload 4
+    aastore
+    aload 2
+    iconst_0
+    lload 5
+    lastore
     areturn
+    aload 0
+    iconst_0
+    aload 3
+    aastore
+    aload 1
+    iconst_0
+    aload 4
+    aastore
+    aload 2
+    iconst_0
+    lload 5
+    lastore
     ldc ""
+    areturn
+.end method
+
+.method public static signedcardDisplay : ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
+    .limit stack 16
+    .limit locals 13
+
+    aload 0
+    iconst_0
+    aaload
+    astore 4
+    aload 1
+    iconst_0
+    aaload
+    astore 5
+    aload 2
+    iconst_0
+    laload
+    lstore 6
+    aload 3
+    iconst_0
+    aaload
+    astore 8
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    aload 4
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc " by "
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    aload 5
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc ", signed "
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    aload 8
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
+    aload 3
+    iconst_0
+    aload 8
+    aastore
+    areturn
+    aload 0
+    iconst_0
+    aload 4
+    aastore
+    aload 1
+    iconst_0
+    aload 5
+    aastore
+    aload 2
+    iconst_0
+    lload 6
+    lastore
+    aload 3
+    iconst_0
+    aload 8
+    aastore
+    ldc ""
+    areturn
+.end method
+
+.method public static bccStr : (D)Ljava/lang/String;
+    .limit stack 6
+    .limit locals 2
+
+    new java/math/BigDecimal
+    dup
+    dload 0
+    invokespecial java/math/BigDecimal/<init> (D)V
+    new java/math/MathContext
+    dup
+    bipush 6
+    invokespecial java/math/MathContext/<init> (I)V
+    invokevirtual java/math/BigDecimal/round (Ljava/math/MathContext;)Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/stripTrailingZeros ()Ljava/math/BigDecimal;
+    invokevirtual java/math/BigDecimal/toPlainString ()Ljava/lang/String;
     areturn
 .end method
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 13
+    .limit locals 22
 
     ldc ""
     putstatic Methods/g1 Ljava/lang/String;
@@ -898,6 +1277,14 @@ L_if_0_end:
     putstatic Methods/g11 I
     ldc ""
     putstatic Methods/g12 Ljava/lang/String;
+    ldc ""
+    putstatic Methods/g13 Ljava/lang/String;
+    lconst_0
+    putstatic Methods/g14 J
+    ldc ""
+    putstatic Methods/g16 Ljava/lang/String;
+    ldc ""
+    putstatic Methods/g17 Ljava/lang/String;
     ; Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     ; against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
     ; its own. Declared as a scalar method (see GitHub issue #41 and
@@ -976,7 +1363,8 @@ L_if_0_end:
     ldc 15
     i2d
     invokestatic Methods/percent (DD)D
-    invokevirtual java/io/PrintStream/println (D)V
+    invokestatic Methods/bccStr (D)Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
 
     getstatic Methods/g7 Ljava/lang/String;
     iconst_0
@@ -1008,10 +1396,43 @@ L_if_0_end:
     i2l
     putstatic Methods/g2 J
     getstatic java/lang/System/out Ljava/io/PrintStream;
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g4 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g1 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
     getstatic Methods/g2 J
-    invokestatic Methods/cardDisplay (Ljava/lang/String;Ljava/lang/String;J)Ljava/lang/String;
+    lastore
+    astore 20
+    aload 20
+    invokestatic Methods/cardDisplay ([Ljava/lang/String;[Ljava/lang/String;[J)Ljava/lang/String;
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g4 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g1 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "copies on hand = "
@@ -1020,16 +1441,175 @@ L_if_0_end:
     getstatic Methods/g2 J
     invokevirtual java/io/PrintStream/println (J)V
 
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g4 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
     getstatic Methods/g1 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
     getstatic Methods/g2 J
+    lastore
+    astore 20
+    aload 20
     ldc 3
-    invokestatic Methods/cardRestock (Ljava/lang/String;Ljava/lang/String;JI)V
+    invokestatic Methods/cardRestock ([Ljava/lang/String;[Ljava/lang/String;[JI)V
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g4 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g1 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g2 J
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "copies after restock = "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     getstatic Methods/g2 J
+    invokevirtual java/io/PrintStream/println (J)V
+
+    ; `mixin` is structural field composition only, not inheritance:
+    ; SignedCard's own field list is Card's fields (title, author, copies)
+    ; followed by its own (signature), so its record literal accepts all
+    ; four -- but Card's methods aren't mixed in. SignedCard needs its own
+    ; display() (below); calling signed.restock(...) without declaring
+    ; SignedCard's own restock() would be a compile error, since a method
+    ; is only ever visible for the exact record type it was declared for.
+
+
+    ldc "Dune"
+    putstatic Methods/g17 Ljava/lang/String;
+    ldc "Frank Herbert"
+    putstatic Methods/g13 Ljava/lang/String;
+    ldc 1
+    i2l
+    putstatic Methods/g14 J
+    ldc "F.H."
+    putstatic Methods/g16 Ljava/lang/String;
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g17 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g13 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
+    getstatic Methods/g14 J
+    lastore
+    astore 20
+    aload 20
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g16 Ljava/lang/String;
+    aastore
+    astore 21
+    aload 21
+    invokestatic Methods/signedcardDisplay ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;)Ljava/lang/String;
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g17 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g13 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g14 J
+    aload 21
+    iconst_0
+    aaload
+    putstatic Methods/g16 Ljava/lang/String;
+    invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g17 Ljava/lang/String;
+    aastore
+    astore 18
+    aload 18
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g13 Ljava/lang/String;
+    aastore
+    astore 19
+    aload 19
+    iconst_1
+    newarray long
+    dup
+    iconst_0
+    getstatic Methods/g14 J
+    lastore
+    astore 20
+    aload 20
+    iconst_1
+    anewarray java/lang/String
+    dup
+    iconst_0
+    getstatic Methods/g16 Ljava/lang/String;
+    aastore
+    astore 21
+    aload 21
+    ldc 2
+    invokestatic Methods/signedcardRestock ([Ljava/lang/String;[Ljava/lang/String;[J[Ljava/lang/String;I)V
+    aload 18
+    iconst_0
+    aaload
+    putstatic Methods/g17 Ljava/lang/String;
+    aload 19
+    iconst_0
+    aaload
+    putstatic Methods/g13 Ljava/lang/String;
+    aload 20
+    iconst_0
+    laload
+    putstatic Methods/g14 J
+    aload 21
+    iconst_0
+    aaload
+    putstatic Methods/g16 Ljava/lang/String;
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    ldc "signed copies after restock = "
+    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
+    getstatic java/lang/System/out Ljava/io/PrintStream;
+    getstatic Methods/g14 J
     invokevirtual java/io/PrintStream/println (J)V
 
     return

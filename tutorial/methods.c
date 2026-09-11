@@ -16,12 +16,16 @@ static float bv_f_price = 0;
 static int bv_i_length = 0;
 static int bv_i_score = 0;
 static int bv_l_cardcopies = 0;
+static int bv_l_signedcopies = 0;
 static char bv_s_cardauthor[256] = {0};
 static char bv_s_cardtitle[256] = {0};
 static char bv_s_firstthree[256] = {0};
 static char bv_s_name[256] = {0};
 static char bv_s_result[256] = {0};
 static char bv_s_shoutresult[256] = {0};
+static char bv_s_signedauthor[256] = {0};
+static char bv_s_signedsignature[256] = {0};
+static char bv_s_signedtitle[256] = {0};
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out);
@@ -29,7 +33,9 @@ void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const c
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high);
 float bf_f_percent_f(float bv_f_self, float bv_f_rate);
 void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount);
+void bf_i_signedcardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, int bv_i_amount);
 void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out);
+void bf_s_signedcarddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, char* bcc_out);
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_self[256];
@@ -118,6 +124,22 @@ void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv
     *bv_l_selfcopies_in = bv_l_selfcopies;
 }
 
+void bf_i_signedcardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, int bv_i_amount) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+    char bv_s_selfsignature[256];
+    snprintf(bv_s_selfsignature, sizeof(bv_s_selfsignature), "%s", bv_s_selfsignature_in);
+
+    bv_l_selfcopies = (bv_l_selfcopies + bv_i_amount);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
+}
+
 void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out) {
     char bv_s_selftitle[256];
     snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
@@ -137,6 +159,35 @@ void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv
     snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
     snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
     *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
+void bf_s_signedcarddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bv_s_selfsignature_in, char* bcc_out) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+    char bv_s_selfsignature[256];
+    snprintf(bv_s_selfsignature, sizeof(bv_s_selfsignature), "%s", bv_s_selfsignature_in);
+
+    char bt_s_8[256];
+    snprintf(bt_s_8, sizeof(bt_s_8), "%s%s", bv_s_selftitle, " by ");
+    char bt_s_9[256];
+    snprintf(bt_s_9, sizeof(bt_s_9), "%s%s", bt_s_8, bv_s_selfauthor);
+    char bt_s_10[256];
+    snprintf(bt_s_10, sizeof(bt_s_10), "%s%s", bt_s_9, ", signed ");
+    char bt_s_11[256];
+    snprintf(bt_s_11, sizeof(bt_s_11), "%s%s", bt_s_10, bv_s_selfsignature);
+    snprintf(bcc_out, 256, "%s", bt_s_11);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
+    return;
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    snprintf(bv_s_selfsignature_in, 256, "%s", bv_s_selfsignature);
 }
 
 int main(void) {
@@ -170,13 +221,13 @@ int main(void) {
 
 
     snprintf(bv_s_name, sizeof(bv_s_name), "%s", "bascal");
-    char bt_s_8[256];
-    bf_s_surround_s(bv_s_name, "[", "]", bt_s_8);
-    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_8);
+    char bt_s_12[256];
+    bf_s_surround_s(bv_s_name, "[", "]", bt_s_12);
+    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_12);
     printf("%s\n", bv_s_result);
-    char bt_s_9[256];
-    bf_s_shout_s(bv_s_name, bt_s_9);
-    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_9);
+    char bt_s_13[256];
+    bf_s_shout_s(bv_s_name, bt_s_13);
+    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_13);
     bv_i_length = ((int)strlen(bcc_mid(bv_s_name, 1, 5)));
     printf("length = %d\n", bv_i_length);
 
@@ -186,9 +237,9 @@ int main(void) {
     bv_f_price = 80;
     printf("discount amount = %g\n", bf_f_percent_f(bv_f_price, 15));
 
-    char bt_s_10[256];
-    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_10);
-    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_10);
+    char bt_s_14[256];
+    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_14);
+    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_14);
     printf("first three = %s\n", bv_s_firstthree);
 
     // -------------------- Record methods --------------------
@@ -203,13 +254,32 @@ int main(void) {
     snprintf(bv_s_cardtitle, sizeof(bv_s_cardtitle), "%s", "Dune");
     snprintf(bv_s_cardauthor, sizeof(bv_s_cardauthor), "%s", "Frank Herbert");
     bv_l_cardcopies = 2;
-    char bt_s_11[256];
-    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_11);
-    printf("%s\n", bt_s_11);
+    char bt_s_15[256];
+    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_15);
+    printf("%s\n", bt_s_15);
     printf("copies on hand = %d\n", bv_l_cardcopies);
 
     bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
     printf("copies after restock = %d\n", bv_l_cardcopies);
+
+    // `mixin` is structural field composition only, not inheritance:
+    // SignedCard's own field list is Card's fields (title, author, copies)
+    // followed by its own (signature), so its record literal accepts all
+    // four -- but Card's methods aren't mixed in. SignedCard needs its own
+    // display() (below); calling signed.restock(...) without declaring
+    // SignedCard's own restock() would be a compile error, since a method
+    // is only ever visible for the exact record type it was declared for.
+
+
+    snprintf(bv_s_signedtitle, sizeof(bv_s_signedtitle), "%s", "Dune");
+    snprintf(bv_s_signedauthor, sizeof(bv_s_signedauthor), "%s", "Frank Herbert");
+    bv_l_signedcopies = 1;
+    snprintf(bv_s_signedsignature, sizeof(bv_s_signedsignature), "%s", "F.H.");
+    char bt_s_16[256];
+    bf_s_signedcarddisplay(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, bt_s_16);
+    printf("%s\n", bt_s_16);
+    bf_i_signedcardrestock(bv_s_signedtitle, bv_s_signedauthor, &bv_l_signedcopies, bv_s_signedsignature, 2);
+    printf("signed copies after restock = %d\n", bv_l_signedcopies);
 
     return 0;
 }
