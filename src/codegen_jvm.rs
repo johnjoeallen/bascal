@@ -2347,7 +2347,8 @@ impl JvmContext {
             Expr::Ident(name) => {
                 self.field_vars.contains_key(&variable_key(name))
                     || (name.suffix == Some(TypeSuffix::String)
-                        && name.name.eq_ignore_ascii_case("inkey"))
+                        && (name.name.eq_ignore_ascii_case("inkey")
+                            || name.name.eq_ignore_ascii_case("date")))
                     || self
                         .constant(name)
                         .is_some_and(|value| self.is_string_expr(value))
@@ -2862,6 +2863,22 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
                  i2c\n    invokestatic java/lang/String/valueOf (C)Ljava/lang/String;\n    \
                  goto {done}\n{empty}:\n    ldc \"\"\n{done}:\n"
             ));
+            Ok(())
+        }
+        // Bare `DATE$` -- real MBASIC/BASCOM's fixed `"MM-DD-YYYY"` format,
+        // read from the host clock via `java.time` -- the exact same
+        // format `codegen_c.rs`'s own `bcc_date` (`<time.h>`) produces.
+        Expr::Ident(name)
+            if name.suffix == Some(TypeSuffix::String) && name.name.eq_ignore_ascii_case("date") =>
+        {
+            out.push_str(
+                "    invokestatic java/time/LocalDate/now ()Ljava/time/LocalDate;\n    \
+                 ldc \"MM-dd-yyyy\"\n    \
+                 invokestatic java/time/format/DateTimeFormatter/ofPattern \
+                 (Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;\n    \
+                 invokevirtual java/time/LocalDate/format \
+                 (Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;\n",
+            );
             Ok(())
         }
         Expr::Ident(name) if context.constant(name).is_some() => {

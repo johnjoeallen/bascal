@@ -297,6 +297,52 @@ fn jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available() {
     );
 }
 
+/// `DATE$` under `--target jvm`: `"MM-DD-YYYY"`, real MBASIC/BASCOM's own
+/// fixed format, the exact same shape `codegen_c.rs`'s own `bcc_date`
+/// produces. Can't check an exact value (today's actual date), so this just
+/// checks the shape: two digits, a dash, two digits, a dash, four digits,
+/// all numeric.
+#[test]
+fn jvm_date_dollar_matches_mm_dd_yyyy_format_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create DATE$ fixture directory");
+    let source_path = dir.path().join("date_dollar.bcl");
+    fs::write(&source_path, "program dateDollar\nprint date$\nend\n")
+        .expect("failed to write DATE$ fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "DATE$ fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let value = stdout
+        .lines()
+        .next_back()
+        .expect("expected at least one line of output");
+    let parts: Vec<&str> = value.split('-').collect();
+    assert_eq!(parts.len(), 3, "expected MM-DD-YYYY, got {value:?}");
+    assert_eq!(parts[0].len(), 2, "expected 2-digit month, got {value:?}");
+    assert_eq!(parts[1].len(), 2, "expected 2-digit day, got {value:?}");
+    assert_eq!(parts[2].len(), 4, "expected 4-digit year, got {value:?}");
+    assert!(
+        parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())),
+        "expected only digits and dashes, got {value:?}"
+    );
+}
+
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
     if !jvm_runtime_available() {

@@ -532,6 +532,74 @@ fn gcc_runs_mid_assign_conformance_fixture_under_c_target_when_available() {
     );
 }
 
+/// `"MM-DD-YYYY"`, zero-padded, real MBASIC/BASCOM's own fixed `DATE$`
+/// format -- shared by the C and JVM `DATE$` regression tests (`bcc_date`
+/// in codegen_c.rs; `java.time.LocalDate`/`DateTimeFormatter` in
+/// codegen_jvm.rs). Can't check an exact value (today's actual date), so
+/// this just checks the shape: two digits, a dash, two digits, a dash, four
+/// digits, all numeric.
+fn assert_looks_like_date_dollar(value: &str) {
+    let parts: Vec<&str> = value.trim().split('-').collect();
+    assert_eq!(parts.len(), 3, "expected MM-DD-YYYY, got {value:?}");
+    assert_eq!(parts[0].len(), 2, "expected 2-digit month, got {value:?}");
+    assert_eq!(parts[1].len(), 2, "expected 2-digit day, got {value:?}");
+    assert_eq!(parts[2].len(), 4, "expected 4-digit year, got {value:?}");
+    assert!(
+        parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())),
+        "expected only digits and dashes, got {value:?}"
+    );
+}
+
+/// `DATE$` under `--target C`. `codegen_c.rs`'s own `bcc_date` used to not
+/// exist at all -- `date$` silently fell through to an ordinary, always-
+/// empty auto-declared string variable (see `register_var`'s matching
+/// skip for why that's excluded now). Skipped (not failed) when `gcc` isn't
+/// available, matching this file's other C-target tests.
+#[test]
+fn gcc_runs_date_dollar_under_c_target_when_available() {
+    if Command::new("gcc").arg("--version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = tempfile::tempdir().unwrap();
+    let source_path = dir.path().join("date_dollar.bcl");
+    fs::write(&source_path, "program dateDollar\nprint date$\nend\n").unwrap();
+    let output_dir = dir.path().join("out");
+    fs::create_dir_all(&output_dir)
+        .unwrap_or_else(|err| panic!("failed to create {}: {err}", output_dir.display()));
+    let mut dir_arg = output_dir.as_os_str().to_owned();
+    dir_arg.push("/");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("-o")
+        .arg(&dir_arg)
+        .arg("--target")
+        .arg("C")
+        .arg("--clean")
+        .arg("--binary")
+        .current_dir(repo_root)
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/build {source_path:?} under --target C"
+    );
+
+    let executable_path = repo_root.join("tmp/date_dollar");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled date_dollar binary");
+    assert!(
+        run.status.success(),
+        "compiled date_dollar binary failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_looks_like_date_dollar(&String::from_utf8_lossy(&run.stdout));
+}
+
 #[test]
 fn freebasic_runs_self_referential_string_concatenation_when_available() {
     if Command::new("fbc").arg("-version").output().is_err() {
