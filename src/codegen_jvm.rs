@@ -493,6 +493,17 @@ fn collect_labels(statements: &[Stmt]) -> HashSet<String> {
                     }
                     visit(else_body, labels);
                 }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    visit(try_body, labels);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, labels);
+                    }
+                    visit(finally_body, labels);
+                }
                 _ => {}
             }
         }
@@ -584,6 +595,17 @@ fn collect_field_vars(
                 }
                 collect_field_vars(else_body, out)?;
             }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_field_vars(try_body, out)?;
+                if let Some(catch) = catch {
+                    collect_field_vars(&catch.body, out)?;
+                }
+                collect_field_vars(finally_body, out)?;
+            }
             _ => {}
         }
     }
@@ -617,6 +639,17 @@ fn program_uses_random_open(statements: &[Stmt]) -> bool {
                 .any(|case| program_uses_random_open(&case.body))
                 || program_uses_random_open(else_body)
         }
+        Statement::TryCatch {
+            try_body,
+            catch,
+            finally_body,
+        } => {
+            program_uses_random_open(try_body)
+                || catch
+                    .as_ref()
+                    .is_some_and(|catch| program_uses_random_open(&catch.body))
+                || program_uses_random_open(finally_body)
+        }
         _ => false,
     })
 }
@@ -639,6 +672,17 @@ fn program_uses_input(statements: &[Stmt]) -> bool {
             cases, else_body, ..
         } => {
             cases.iter().any(|case| program_uses_input(&case.body)) || program_uses_input(else_body)
+        }
+        Statement::TryCatch {
+            try_body,
+            catch,
+            finally_body,
+        } => {
+            program_uses_input(try_body)
+                || catch
+                    .as_ref()
+                    .is_some_and(|catch| program_uses_input(&catch.body))
+                || program_uses_input(finally_body)
         }
         _ => false,
     })
@@ -2570,6 +2614,17 @@ fn collect_array_declarations(statements: &[Stmt], arrays: &mut BTreeMap<String,
                 }
                 collect_array_declarations(else_body, arrays);
             }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_array_declarations(try_body, arrays);
+                if let Some(catch) = catch {
+                    collect_array_declarations(&catch.body, arrays);
+                }
+                collect_array_declarations(finally_body, arrays);
+            }
             _ => {}
         }
     }
@@ -2599,6 +2654,17 @@ fn collect_global_names(statements: &[Stmt]) -> Vec<BasicIdent> {
                         visit(&case.body, names);
                     }
                     visit(else_body, names);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    visit(try_body, names);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, names);
+                    }
+                    visit(finally_body, names);
                 }
                 _ => {}
             }

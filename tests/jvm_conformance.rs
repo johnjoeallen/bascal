@@ -801,6 +801,56 @@ fn jvm_select_case_registers_variables_declared_only_inside_a_case_clause() {
     );
 }
 
+/// Regression test for a real, pre-existing bug shared with `codegen_basic.
+/// rs` (see `record_field_buffers_stay_global_when_the_file_open_is_wrapped_
+/// in_try_catch` in lib.rs): `collect_field_vars`/`program_uses_random_open`/
+/// `program_uses_input`/`collect_labels`/`collect_array_declarations`/
+/// `collect_global_names` all recursed into `If`/`For`/`While`/`Do`/
+/// `SelectCase` but not `TryCatch`, so a `FIELD`/`OPEN`/`INPUT`/label/array/
+/// `global` inside a `try`/`catch`-wrapped `file ... = open(...)` (the
+/// pattern `tutorial/inventory.bcl` uses to trap a real "can't open this
+/// file" error) was invisible to every one of them. Needs no `java`/`krak2`
+/// -- transpiling already exercises the fix.
+#[test]
+fn jvm_field_buffer_registers_when_the_file_open_is_wrapped_in_try_catch() {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create try/catch FIELD fixture");
+    fs::write(
+        file.path(),
+        "program tryCatchField\n\
+         record Item\n\
+         \x20   name: string(10)\n\
+         \x20   qty:  int16\n\
+         end record\n\
+         try\n\
+         \x20   file items as Item = open(\"probe.dat\")\n\
+         catch err%, erl%\n\
+         \x20   print \"could not open\"\n\
+         end try\n\
+         items[1] = { name: \"widget\", qty: 5 }\n\
+         let s = items[1]\n\
+         print s.name + \" \" + str$(s.qty)\n\
+         items.close()\n\
+         end\n",
+    )
+    .expect("failed to write try/catch FIELD fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "a FIELD declared via a try/catch-wrapped file open should compile under --target \
+         jvm:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// `INSTR(s$, needle$)` (2-argument form) and `STOP`/`SYSTEM` (both compile
 /// to `System.exit(0)`, usable from anywhere, unlike a plain `return` which
 /// would only unwind one call frame). Needs no `java`/`krak2` -- transpiling

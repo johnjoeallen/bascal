@@ -2897,6 +2897,17 @@ fn collect_dim_ranks(body: &[Stmt], out: &mut HashMap<String, usize>) {
                 }
                 collect_dim_ranks(else_body, out);
             }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_dim_ranks(try_body, out);
+                if let Some(catch) = catch {
+                    collect_dim_ranks(&catch.body, out);
+                }
+                collect_dim_ranks(finally_body, out);
+            }
             _ => {}
         }
     }
@@ -2997,6 +3008,17 @@ pub(crate) fn collect_consts(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>
                 }
                 collect_consts(else_body, out);
             }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_consts(try_body, out);
+                if let Some(catch) = catch {
+                    collect_consts(&catch.body, out);
+                }
+                collect_consts(finally_body, out);
+            }
             _ => {}
         }
     }
@@ -3036,6 +3058,17 @@ fn collect_dim_sizes(body: &[Stmt], out: &mut HashMap<String, Vec<Expr>>) {
                     collect_dim_sizes(&case.body, out);
                 }
                 collect_dim_sizes(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_dim_sizes(try_body, out);
+                if let Some(catch) = catch {
+                    collect_dim_sizes(&catch.body, out);
+                }
+                collect_dim_sizes(finally_body, out);
             }
             _ => {}
         }
@@ -3374,6 +3407,17 @@ fn collect_globals(body: &[Stmt]) -> HashSet<String> {
                 }
                 globals.extend(collect_globals(else_body));
             }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                globals.extend(collect_globals(try_body));
+                if let Some(catch) = catch {
+                    globals.extend(collect_globals(&catch.body));
+                }
+                globals.extend(collect_globals(finally_body));
+            }
             _ => {}
         }
     }
@@ -3423,6 +3467,17 @@ fn collect_record_buffer_names_in(stmts: &[Stmt], names: &mut HashSet<String>) {
                     collect_record_buffer_names_in(&case.body, names);
                 }
                 collect_record_buffer_names_in(else_body, names);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_record_buffer_names_in(try_body, names);
+                if let Some(catch) = catch {
+                    collect_record_buffer_names_in(&catch.body, names);
+                }
+                collect_record_buffer_names_in(finally_body, names);
             }
             _ => {}
         }
@@ -3892,6 +3947,17 @@ fn collect_global_decl_names(body: &[Stmt], names: &mut HashSet<String>) {
                     collect_global_decl_names(&case.body, names);
                 }
                 collect_global_decl_names(else_body, names);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_global_decl_names(try_body, names);
+                if let Some(catch) = catch {
+                    collect_global_decl_names(&catch.body, names);
+                }
+                collect_global_decl_names(finally_body, names);
             }
             _ => {}
         }

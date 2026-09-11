@@ -1385,6 +1385,63 @@ end
     }
 
     #[test]
+    fn record_field_buffers_stay_global_when_the_file_open_is_wrapped_in_try_catch() {
+        // Regression test: collect_record_buffer_names_in (and every sibling
+        // collector with the same shape -- collect_dim_ranks/collect_consts/
+        // collect_dim_sizes/collect_globals/collect_global_decl_names) used
+        // to recurse into If/For/While/Do/SelectCase but not TryCatch, so a
+        // `file ... = open(...)` declaration wrapped in `try`/`catch` (the
+        // pattern tutorial/inventory.bcl actually uses, to trap a real
+        // "can't open this file" error) produced a FIELD statement that
+        // never registered as a global buffer at all -- every later
+        // procedure referencing it got its own, never-actually-bound,
+        // per-procedure local instead (silently always-empty on the BASIC/C
+        // backends; a hard "must be assigned or declared" error on the
+        // stricter JVM backend, which is how this was actually found).
+        let source = r#"record Item
+    name: string(10)
+    qty:  int16
+end record
+
+try
+    file items as Item = open("probe.dat")
+catch err%, erl%
+    print "could not open"
+end try
+
+procedure addItem(n$, q%)
+    global items
+    items[1] = { name: n$, qty: q% }
+end procedure
+
+procedure showItem()
+    global items
+    let s = items[1]
+    print s.name + " " + str$(s.qty)
+end procedure
+
+addItem("widget", 5)
+showItem()
+items.close()
+end
+"#;
+        let output = compile_source("probe_try.bcl", source).expect("should compile");
+        assert!(
+            output.contains("LSET itemsNameBuf$ = "),
+            "addItem should LSET the top-level FIELD buffer, not a per-procedure local:\n{output}"
+        );
+        assert!(
+            output.contains("LEN(itemsNameBuf$)") && output.contains("CVI(itemsQtyBuf$)"),
+            "showItem should read back from the same top-level FIELD buffers:\n{output}"
+        );
+        assert!(
+            !output.contains("additemItemsNameBuf") && !output.contains("showitemItemsNameBuf"),
+            "FIELD buffer names must never be re-namespaced per procedure, even when the \
+             `file ... = open(...)` declaration is wrapped in try/catch:\n{output}"
+        );
+    }
+
+    #[test]
     fn top_level_file_requires_global_inside_procedure() {
         let source = r#"record Item
     name: string(10)

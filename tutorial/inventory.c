@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 #if defined(_WIN32)
 #include <conio.h>
 #include <windows.h>
@@ -36,6 +37,7 @@ static const char* bcc_stri(int value);
 static const char* bcc_strd(double value);
 static int bcc_instr(const char* s, const char* needle);
 static const char* bcc_inkey(void);
+static const char* bcc_date(void);
 static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);
 static void bcc_mki(char* out, int value);
 static void bcc_mkl(char* out, int value);
@@ -533,11 +535,9 @@ void bf_i_printinventoryline(int bv_i_partnum, const char* bv_s_desc_in, int bv_
 }
 
 void bf_i_printreorderheader(void) {
-    char bv_s_date[256] = {0};
-
     printf("\x1b[2J\x1b[H");
     printf("\x1b[%d;%dH", 1, bv_i_tab_col);
-    printf("Reorder Report\x1b[%dG%s\n", 55, bv_s_date);
+    printf("Reorder Report\x1b[%dG%s\n", 55, bcc_date());
     printf("\n");
     printf("                                             Quantity       Reorder\n");
     printf("    Partno           Description             on hand         level\n");
@@ -1592,6 +1592,14 @@ static const char* bcc_inkey(void) {
 
     tcsetattr(STDIN_FILENO, TCSANOW, &orig);
 #endif
+    return buf;
+}
+
+static const char* bcc_date(void) {
+    static char buf[11];
+    time_t t = time(NULL);
+    struct tm* tm_info = localtime(&t);
+    snprintf(buf, sizeof(buf), "%02d-%02d-%04d", tm_info->tm_mon + 1, tm_info->tm_mday, tm_info->tm_year + 1900);
     return buf;
 }
 

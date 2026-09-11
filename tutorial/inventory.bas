@@ -135,7 +135,7 @@
 1290 BCC_TRY_0001_PENDING% = 0
 1300     ' file inv as Part = open(...)  [39 bytes/record]
 1310     OPEN "inven.dat" FOR RANDOM AS #1 LEN = 39
-1320     FIELD #1, 1 AS invflagbuf$, 30 AS invdescbuf$, 2 AS invqtybuf$, 2 AS invreorderbuf$, 4 AS invpricebuf$
+1320     FIELD #1, 1 AS invFlagBuf$, 30 AS invDescBuf$, 2 AS invQtyBuf$, 2 AS invReorderBuf$, 4 AS invPriceBuf$
 1330 ON ERROR GOTO 0
 1340 GOTO 1490
 1350     BCC_TRY_0001_PENDING% = ERR
@@ -662,23 +662,23 @@
 6220     ' same sugar for PUT plus the LSET/MKx$ packing it replaces.
 6230     ' let p = inv[...]  (whole-record read)
 6240     GET #1, checkpartPart0%
-6250     checkpartPFlagTrimI0% = LEN(checkpartInvFlagBuf0$)
+6250     checkpartPFlagTrimI0% = LEN(invFlagBuf$)
 6260     IF (checkpartPFlagTrimI0% > 0) = 0 THEN GOTO 6300
-6270     IF (MID$(checkpartInvFlagBuf0$, checkpartPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6300
+6270     IF (MID$(invFlagBuf$, checkpartPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6300
 6280         checkpartPFlagTrimI0% = checkpartPFlagTrimI0% - 1
 6290         GOTO 6260
 6300     REM END WHILE
-6310     checkpartPFlag0$ = LEFT$(checkpartInvFlagBuf0$, checkpartPFlagTrimI0%)
-6320     checkpartPDescTrimI0% = LEN(checkpartInvDescBuf0$)
+6310     checkpartPFlag0$ = LEFT$(invFlagBuf$, checkpartPFlagTrimI0%)
+6320     checkpartPDescTrimI0% = LEN(invDescBuf$)
 6330     IF (checkpartPDescTrimI0% > 0) = 0 THEN GOTO 6370
-6340     IF (MID$(checkpartInvDescBuf0$, checkpartPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6370
+6340     IF (MID$(invDescBuf$, checkpartPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6370
 6350         checkpartPDescTrimI0% = checkpartPDescTrimI0% - 1
 6360         GOTO 6330
 6370     REM END WHILE
-6380     checkpartPDesc0$ = LEFT$(checkpartInvDescBuf0$, checkpartPDescTrimI0%)
-6390     checkpartPQty0% = CVI(checkpartInvQtyBuf0$)
-6400     checkpartPReorder0% = CVI(checkpartInvReorderBuf0$)
-6410     checkpartPPrice0! = CVS(checkpartInvPriceBuf0$)
+6380     checkpartPDesc0$ = LEFT$(invDescBuf$, checkpartPDescTrimI0%)
+6390     checkpartPQty0% = CVI(invQtyBuf$)
+6400     checkpartPReorder0% = CVI(invReorderBuf$)
+6410     checkpartPPrice0! = CVS(invPriceBuf$)
 6420     isemptyFlag0$ = checkpartPFlag0$
 6430     GOSUB 4200
 6440     IF (isemptyResult0%) = 0 THEN GOTO 6500
@@ -714,23 +714,23 @@
 6730     REM END IF
 6740     ' let p = inv[...]  (whole-record read)
 6750     GET #1, editrecordPart0%
-6760     editrecordPFlagTrimI0% = LEN(editrecordInvFlagBuf0$)
+6760     editrecordPFlagTrimI0% = LEN(invFlagBuf$)
 6770     IF (editrecordPFlagTrimI0% > 0) = 0 THEN GOTO 6810
-6780     IF (MID$(editrecordInvFlagBuf0$, editrecordPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6810
+6780     IF (MID$(invFlagBuf$, editrecordPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 6810
 6790         editrecordPFlagTrimI0% = editrecordPFlagTrimI0% - 1
 6800         GOTO 6770
 6810     REM END WHILE
-6820     editrecordPFlag0$ = LEFT$(editrecordInvFlagBuf0$, editrecordPFlagTrimI0%)
-6830     editrecordPDescTrimI0% = LEN(editrecordInvDescBuf0$)
+6820     editrecordPFlag0$ = LEFT$(invFlagBuf$, editrecordPFlagTrimI0%)
+6830     editrecordPDescTrimI0% = LEN(invDescBuf$)
 6840     IF (editrecordPDescTrimI0% > 0) = 0 THEN GOTO 6880
-6850     IF (MID$(editrecordInvDescBuf0$, editrecordPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6880
+6850     IF (MID$(invDescBuf$, editrecordPDescTrimI0%, 1) = " ") = 0 THEN GOTO 6880
 6860         editrecordPDescTrimI0% = editrecordPDescTrimI0% - 1
 6870         GOTO 6840
 6880     REM END WHILE
-6890     editrecordPDesc0$ = LEFT$(editrecordInvDescBuf0$, editrecordPDescTrimI0%)
-6900     editrecordPQty0% = CVI(editrecordInvQtyBuf0$)
-6910     editrecordPReorder0% = CVI(editrecordInvReorderBuf0$)
-6920     editrecordPPrice0! = CVS(editrecordInvPriceBuf0$)
+6890     editrecordPDesc0$ = LEFT$(invDescBuf$, editrecordPDescTrimI0%)
+6900     editrecordPQty0% = CVI(invQtyBuf$)
+6910     editrecordPReorder0% = CVI(invReorderBuf$)
+6920     editrecordPPrice0! = CVS(invPriceBuf$)
 6930     isemptyFlag0$ = editrecordPFlag0$
 6940     GOSUB 4200
 6950     IF (isemptyResult0% = 0) = 0 THEN GOTO 7040
@@ -761,11 +761,11 @@
 7190         GOTO 7050
 7200     REM END DO
 7210     ' inv[...] = { ... }  (whole-record write)
-7220     LSET editrecordInvFlagBuf0$ = "1"
-7230     LSET editrecordInvDescBuf0$ = editrecordEditDesc0$
-7240     LSET editrecordInvQtyBuf0$ = MKI$(editrecordEditQty0%)
-7250     LSET editrecordInvReorderBuf0$ = MKI$(editrecordEditReorder0%)
-7260     LSET editrecordInvPriceBuf0$ = MKS$(editrecordEditPrice0!)
+7220     LSET invFlagBuf$ = "1"
+7230     LSET invDescBuf$ = editrecordEditDesc0$
+7240     LSET invQtyBuf$ = MKI$(editrecordEditQty0%)
+7250     LSET invReorderBuf$ = MKI$(editrecordEditReorder0%)
+7260     LSET invPriceBuf$ = MKS$(editrecordEditPrice0!)
 7270     PUT #1, editrecordPart0%
 7280     RETURN
 7290 ' end procedure editrecord
@@ -777,23 +777,23 @@
 7340     FOR listallI0% = 1 TO partCOUNT%
 7350         ' let p = inv[...]  (whole-record read)
 7360         GET #1, listallI0%
-7370         listallPFlagTrimI0% = LEN(listallInvFlagBuf0$)
+7370         listallPFlagTrimI0% = LEN(invFlagBuf$)
 7380         IF (listallPFlagTrimI0% > 0) = 0 THEN GOTO 7420
-7390         IF (MID$(listallInvFlagBuf0$, listallPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7420
+7390         IF (MID$(invFlagBuf$, listallPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7420
 7400             listallPFlagTrimI0% = listallPFlagTrimI0% - 1
 7410             GOTO 7380
 7420         REM END WHILE
-7430         listallPFlag0$ = LEFT$(listallInvFlagBuf0$, listallPFlagTrimI0%)
-7440         listallPDescTrimI0% = LEN(listallInvDescBuf0$)
+7430         listallPFlag0$ = LEFT$(invFlagBuf$, listallPFlagTrimI0%)
+7440         listallPDescTrimI0% = LEN(invDescBuf$)
 7450         IF (listallPDescTrimI0% > 0) = 0 THEN GOTO 7490
-7460         IF (MID$(listallInvDescBuf0$, listallPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7490
+7460         IF (MID$(invDescBuf$, listallPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7490
 7470             listallPDescTrimI0% = listallPDescTrimI0% - 1
 7480             GOTO 7450
 7490         REM END WHILE
-7500         listallPDesc0$ = LEFT$(listallInvDescBuf0$, listallPDescTrimI0%)
-7510         listallPQty0% = CVI(listallInvQtyBuf0$)
-7520         listallPReorder0% = CVI(listallInvReorderBuf0$)
-7530         listallPPrice0! = CVS(listallInvPriceBuf0$)
+7500         listallPDesc0$ = LEFT$(invDescBuf$, listallPDescTrimI0%)
+7510         listallPQty0% = CVI(invQtyBuf$)
+7520         listallPReorder0% = CVI(invReorderBuf$)
+7530         listallPPrice0! = CVS(invPriceBuf$)
 7540         printinventorylinePartNum0% = listallI0%
 7550         printinventorylineDesc0$ = listallPDesc0$
 7560         printinventorylineQty0% = listallPQty0%
@@ -830,23 +830,23 @@
 
 7850     ' let p = inv[...]  (whole-record read)
 7860     GET #1, addstockPart0%
-7870     addstockPFlagTrimI0% = LEN(addstockInvFlagBuf0$)
+7870     addstockPFlagTrimI0% = LEN(invFlagBuf$)
 7880     IF (addstockPFlagTrimI0% > 0) = 0 THEN GOTO 7920
-7890     IF (MID$(addstockInvFlagBuf0$, addstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7920
+7890     IF (MID$(invFlagBuf$, addstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 7920
 7900         addstockPFlagTrimI0% = addstockPFlagTrimI0% - 1
 7910         GOTO 7880
 7920     REM END WHILE
-7930     addstockPFlag0$ = LEFT$(addstockInvFlagBuf0$, addstockPFlagTrimI0%)
-7940     addstockPDescTrimI0% = LEN(addstockInvDescBuf0$)
+7930     addstockPFlag0$ = LEFT$(invFlagBuf$, addstockPFlagTrimI0%)
+7940     addstockPDescTrimI0% = LEN(invDescBuf$)
 7950     IF (addstockPDescTrimI0% > 0) = 0 THEN GOTO 7990
-7960     IF (MID$(addstockInvDescBuf0$, addstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7990
+7960     IF (MID$(invDescBuf$, addstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 7990
 7970         addstockPDescTrimI0% = addstockPDescTrimI0% - 1
 7980         GOTO 7950
 7990     REM END WHILE
-8000     addstockPDesc0$ = LEFT$(addstockInvDescBuf0$, addstockPDescTrimI0%)
-8010     addstockPQty0% = CVI(addstockInvQtyBuf0$)
-8020     addstockPReorder0% = CVI(addstockInvReorderBuf0$)
-8030     addstockPPrice0! = CVS(addstockInvPriceBuf0$)
+8000     addstockPDesc0$ = LEFT$(invDescBuf$, addstockPDescTrimI0%)
+8010     addstockPQty0% = CVI(invQtyBuf$)
+8020     addstockPReorder0% = CVI(invReorderBuf$)
+8030     addstockPPrice0! = CVS(invPriceBuf$)
 8040     isemptyFlag0$ = addstockPFlag0$
 8050     GOSUB 4200
 8060     IF (isemptyResult0%) = 0 THEN GOTO 8110
@@ -873,11 +873,11 @@
 
 8260     addstockPQty0% = addstockPQty0% + addstockAddAmt0%
 8270     ' inv[...] = p  (write back a let-bound record)
-8280     LSET addstockInvFlagBuf0$ = addstockPFlag0$
-8290     LSET addstockInvDescBuf0$ = addstockPDesc0$
-8300     LSET addstockInvQtyBuf0$ = MKI$(addstockPQty0%)
-8310     LSET addstockInvReorderBuf0$ = MKI$(addstockPReorder0%)
-8320     LSET addstockInvPriceBuf0$ = MKS$(addstockPPrice0!)
+8280     LSET invFlagBuf$ = addstockPFlag0$
+8290     LSET invDescBuf$ = addstockPDesc0$
+8300     LSET invQtyBuf$ = MKI$(addstockPQty0%)
+8310     LSET invReorderBuf$ = MKI$(addstockPReorder0%)
+8320     LSET invPriceBuf$ = MKS$(addstockPPrice0!)
 8330     PUT #1, addstockPart0%
 8340     RETURN
 8350 ' end procedure addstock
@@ -904,23 +904,23 @@
 
 8540     ' let p = inv[...]  (whole-record read)
 8550     GET #1, subtractstockPart0%
-8560     subtractstockPFlagTrimI0% = LEN(subtractstockInvFlagBuf0$)
+8560     subtractstockPFlagTrimI0% = LEN(invFlagBuf$)
 8570     IF (subtractstockPFlagTrimI0% > 0) = 0 THEN GOTO 8610
-8580     IF (MID$(subtractstockInvFlagBuf0$, subtractstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 8610
+8580     IF (MID$(invFlagBuf$, subtractstockPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 8610
 8590         subtractstockPFlagTrimI0% = subtractstockPFlagTrimI0% - 1
 8600         GOTO 8570
 8610     REM END WHILE
-8620     subtractstockPFlag0$ = LEFT$(subtractstockInvFlagBuf0$, subtractstockPFlagTrimI0%)
-8630     subtractstockPDescTrimI0% = LEN(subtractstockInvDescBuf0$)
+8620     subtractstockPFlag0$ = LEFT$(invFlagBuf$, subtractstockPFlagTrimI0%)
+8630     subtractstockPDescTrimI0% = LEN(invDescBuf$)
 8640     IF (subtractstockPDescTrimI0% > 0) = 0 THEN GOTO 8680
-8650     IF (MID$(subtractstockInvDescBuf0$, subtractstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 8680
+8650     IF (MID$(invDescBuf$, subtractstockPDescTrimI0%, 1) = " ") = 0 THEN GOTO 8680
 8660         subtractstockPDescTrimI0% = subtractstockPDescTrimI0% - 1
 8670         GOTO 8640
 8680     REM END WHILE
-8690     subtractstockPDesc0$ = LEFT$(subtractstockInvDescBuf0$, subtractstockPDescTrimI0%)
-8700     subtractstockPQty0% = CVI(subtractstockInvQtyBuf0$)
-8710     subtractstockPReorder0% = CVI(subtractstockInvReorderBuf0$)
-8720     subtractstockPPrice0! = CVS(subtractstockInvPriceBuf0$)
+8690     subtractstockPDesc0$ = LEFT$(invDescBuf$, subtractstockPDescTrimI0%)
+8700     subtractstockPQty0% = CVI(invQtyBuf$)
+8710     subtractstockPReorder0% = CVI(invReorderBuf$)
+8720     subtractstockPPrice0! = CVS(invPriceBuf$)
 8730     isemptyFlag0$ = subtractstockPFlag0$
 8740     GOSUB 4200
 8750     IF (isemptyResult0%) = 0 THEN GOTO 8800
@@ -956,11 +956,11 @@
 9030     REM END IF
 9040     PRINT (("quantity now" + STR$(subtractstockPQty0%)) + " reorder level") + STR$(subtractstockPReorder0%)
 9050     ' inv[...] = p  (write back a let-bound record)
-9060     LSET subtractstockInvFlagBuf0$ = subtractstockPFlag0$
-9070     LSET subtractstockInvDescBuf0$ = subtractstockPDesc0$
-9080     LSET subtractstockInvQtyBuf0$ = MKI$(subtractstockPQty0%)
-9090     LSET subtractstockInvReorderBuf0$ = MKI$(subtractstockPReorder0%)
-9100     LSET subtractstockInvPriceBuf0$ = MKS$(subtractstockPPrice0!)
+9060     LSET invFlagBuf$ = subtractstockPFlag0$
+9070     LSET invDescBuf$ = subtractstockPDesc0$
+9080     LSET invQtyBuf$ = MKI$(subtractstockPQty0%)
+9090     LSET invReorderBuf$ = MKI$(subtractstockPReorder0%)
+9100     LSET invPriceBuf$ = MKS$(subtractstockPPrice0!)
 9110     PUT #1, subtractstockPart0%
 9120     RETURN
 9130 ' end procedure subtractstock
@@ -972,23 +972,23 @@
 9180     FOR reorderreportI0% = 1 TO partCOUNT%
 9190         ' let p = inv[...]  (whole-record read)
 9200         GET #1, reorderreportI0%
-9210         reorderreportPFlagTrimI0% = LEN(reorderreportInvFlagBuf0$)
+9210         reorderreportPFlagTrimI0% = LEN(invFlagBuf$)
 9220         IF (reorderreportPFlagTrimI0% > 0) = 0 THEN GOTO 9260
-9230         IF (MID$(reorderreportInvFlagBuf0$, reorderreportPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 9260
+9230         IF (MID$(invFlagBuf$, reorderreportPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 9260
 9240             reorderreportPFlagTrimI0% = reorderreportPFlagTrimI0% - 1
 9250             GOTO 9220
 9260         REM END WHILE
-9270         reorderreportPFlag0$ = LEFT$(reorderreportInvFlagBuf0$, reorderreportPFlagTrimI0%)
-9280         reorderreportPDescTrimI0% = LEN(reorderreportInvDescBuf0$)
+9270         reorderreportPFlag0$ = LEFT$(invFlagBuf$, reorderreportPFlagTrimI0%)
+9280         reorderreportPDescTrimI0% = LEN(invDescBuf$)
 9290         IF (reorderreportPDescTrimI0% > 0) = 0 THEN GOTO 9330
-9300         IF (MID$(reorderreportInvDescBuf0$, reorderreportPDescTrimI0%, 1) = " ") = 0 THEN GOTO 9330
+9300         IF (MID$(invDescBuf$, reorderreportPDescTrimI0%, 1) = " ") = 0 THEN GOTO 9330
 9310             reorderreportPDescTrimI0% = reorderreportPDescTrimI0% - 1
 9320             GOTO 9290
 9330         REM END WHILE
-9340         reorderreportPDesc0$ = LEFT$(reorderreportInvDescBuf0$, reorderreportPDescTrimI0%)
-9350         reorderreportPQty0% = CVI(reorderreportInvQtyBuf0$)
-9360         reorderreportPReorder0% = CVI(reorderreportInvReorderBuf0$)
-9370         reorderreportPPrice0! = CVS(reorderreportInvPriceBuf0$)
+9340         reorderreportPDesc0$ = LEFT$(invDescBuf$, reorderreportPDescTrimI0%)
+9350         reorderreportPQty0% = CVI(invQtyBuf$)
+9360         reorderreportPReorder0% = CVI(invReorderBuf$)
+9370         reorderreportPPrice0! = CVS(invPriceBuf$)
 9380         IF (reorderreportPQty0% < reorderreportPReorder0%) = 0 THEN GOTO 9490
 9390             printreorderlinePartNum0% = reorderreportI0%
 9400             printreorderlineDesc0$ = reorderreportPDesc0$
@@ -1010,31 +1010,31 @@
 9550     ' global inv
 9560     ' let p = inv[...]  (whole-record read)
 9570     GET #1, 1
-9580     initializeinventoryfileifnewPFlagTrimI0% = LEN(initializeinventoryfileifnewInvFlagBuf0$)
+9580     initializeinventoryfileifnewPFlagTrimI0% = LEN(invFlagBuf$)
 9590     IF (initializeinventoryfileifnewPFlagTrimI0% > 0) = 0 THEN GOTO 9630
-9600     IF (MID$(initializeinventoryfileifnewInvFlagBuf0$, initializeinventoryfileifnewPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 9630
+9600     IF (MID$(invFlagBuf$, initializeinventoryfileifnewPFlagTrimI0%, 1) = " ") = 0 THEN GOTO 9630
 9610         initializeinventoryfileifnewPFlagTrimI0% = initializeinventoryfileifnewPFlagTrimI0% - 1
 9620         GOTO 9590
 9630     REM END WHILE
-9640     initializeinventoryfileifnewPFlag0$ = LEFT$(initializeinventoryfileifnewInvFlagBuf0$, initializeinventoryfileifnewPFlagTrimI0%)
-9650     initializeinventoryfileifnewPDescTrimI0% = LEN(initializeinventoryfileifnewInvDescBuf0$)
+9640     initializeinventoryfileifnewPFlag0$ = LEFT$(invFlagBuf$, initializeinventoryfileifnewPFlagTrimI0%)
+9650     initializeinventoryfileifnewPDescTrimI0% = LEN(invDescBuf$)
 9660     IF (initializeinventoryfileifnewPDescTrimI0% > 0) = 0 THEN GOTO 9700
-9670     IF (MID$(initializeinventoryfileifnewInvDescBuf0$, initializeinventoryfileifnewPDescTrimI0%, 1) = " ") = 0 THEN GOTO 9700
+9670     IF (MID$(invDescBuf$, initializeinventoryfileifnewPDescTrimI0%, 1) = " ") = 0 THEN GOTO 9700
 9680         initializeinventoryfileifnewPDescTrimI0% = initializeinventoryfileifnewPDescTrimI0% - 1
 9690         GOTO 9660
 9700     REM END WHILE
-9710     initializeinventoryfileifnewPDesc0$ = LEFT$(initializeinventoryfileifnewInvDescBuf0$, initializeinventoryfileifnewPDescTrimI0%)
-9720     initializeinventoryfileifnewPQty0% = CVI(initializeinventoryfileifnewInvQtyBuf0$)
-9730     initializeinventoryfileifnewPReorder0% = CVI(initializeinventoryfileifnewInvReorderBuf0$)
-9740     initializeinventoryfileifnewPPrice0! = CVS(initializeinventoryfileifnewInvPriceBuf0$)
+9710     initializeinventoryfileifnewPDesc0$ = LEFT$(invDescBuf$, initializeinventoryfileifnewPDescTrimI0%)
+9720     initializeinventoryfileifnewPQty0% = CVI(invQtyBuf$)
+9730     initializeinventoryfileifnewPReorder0% = CVI(invReorderBuf$)
+9740     initializeinventoryfileifnewPPrice0! = CVS(invPriceBuf$)
 9750     IF (ASC(initializeinventoryfileifnewPFlag0$) = 0) = 0 THEN GOTO 9850
 9760         FOR initializeinventoryfileifnewI0% = 1 TO partCOUNT%
 9770             ' inv[...] = { ... }  (whole-record write)
-9780             LSET initializeinventoryfileifnewInvFlagBuf0$ = CHR$(255)
-9790             LSET initializeinventoryfileifnewInvDescBuf0$ = ""
-9800             LSET initializeinventoryfileifnewInvQtyBuf0$ = MKI$(0)
-9810             LSET initializeinventoryfileifnewInvReorderBuf0$ = MKI$(0)
-9820             LSET initializeinventoryfileifnewInvPriceBuf0$ = MKS$(0)
+9780             LSET invFlagBuf$ = CHR$(255)
+9790             LSET invDescBuf$ = ""
+9800             LSET invQtyBuf$ = MKI$(0)
+9810             LSET invReorderBuf$ = MKI$(0)
+9820             LSET invPriceBuf$ = MKS$(0)
 9830             PUT #1, initializeinventoryfileifnewI0%
 9840         NEXT initializeinventoryfileifnewI0%
 9850     REM END IF
