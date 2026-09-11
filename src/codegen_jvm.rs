@@ -65,13 +65,17 @@
 //! Bare `INKEY$` is implemented via `stty` (see `emit_run_command_
 //! inheriting_io`'s own doc comment for why a real `ProcessBuilder`,
 //! `inheritIO()`'d, rather than JNI/a native helper): `emit_inkey_setup`
-//! puts the terminal into raw/no-echo/non-blocking mode once at program
-//! start, left in effect until `emit_inkey_restore` undoes it at every exit
-//! point; each `INKEY$` read is then just a `System.in.available()` check
-//! plus an optional single-byte `read()` (see `emit_string_expr`'s own
-//! `"inkey"` arm). Verified by hand against a real pseudo-terminal: a
-//! single byte with no trailing newline was picked up immediately, with no
-//! local echo.
+//! puts the terminal into no-canonical/no-echo/non-blocking mode once at
+//! program start, left in effect until `emit_inkey_restore` undoes it at
+//! every exit point; each `INKEY$` read is then just a
+//! `System.in.available()` check plus an optional single-byte `read()`
+//! (see `emit_string_expr`'s own `"inkey"` arm). Deliberately `stty
+//! -icanon -echo`, not the `raw` canned mode (which also clears `opost`,
+//! breaking every later `PRINT`'s `\n`->`\r\n` translation for the rest of
+//! the run -- see `emit_inkey_setup`'s own doc comment for the real bug
+//! this caused). Verified by hand against a real pseudo-terminal: a single
+//! byte with no trailing newline was picked up immediately, with no local
+//! echo.
 //!
 //! Interactive `INPUT ["prompt";] var` is implemented (one plain-identifier
 //! target only -- no comma-separated multi-variable form): a shared
@@ -440,10 +444,10 @@ fn emit_run_command_inheriting_io(args: &[&str], out: &mut String) {
     );
 }
 
-/// Puts the terminal into raw/no-echo/non-blocking mode once, at the very
-/// top of `main` (see `emit_input_initializer`'s own doc comment on the
-/// "initialize once in `main`, no real `<clinit>`" convention this backend
-/// uses everywhere) -- `min 0 time 0` is what makes a read return
+/// Puts the terminal into no-canonical/no-echo/non-blocking mode once, at
+/// the very top of `main` (see `emit_input_initializer`'s own doc comment
+/// on the "initialize once in `main`, no real `<clinit>`" convention this
+/// backend uses everywhere) -- `min 0 time 0` is what makes a read return
 /// immediately with zero bytes when no key is waiting, instead of blocking
 /// until one arrives, which is what makes `INKEY$`'s own `available()`
 /// check (see `emit_string_expr`'s own `"inkey"` arm) meaningful at all.
@@ -452,11 +456,22 @@ fn emit_run_command_inheriting_io(args: &[&str], out: &mut String) {
 /// it immediately after -- fine for a `read()` syscall, but spawning a whole
 /// `stty` process per keystroke poll here would be prohibitively slow) --
 /// see `emit_inkey_restore` for where it gets undone.
+///
+/// Deliberately `-icanon -echo`, not the `raw` canned mode this used to
+/// use: `stty raw` also clears `opost` (output post-processing), which is
+/// what a POSIX tty driver uses to translate a bare `\n` into `\r\n` on the
+/// wire. With `opost` off for the rest of the run, every later `PRINT`'s
+/// `\n` stops returning the cursor to column 1, so each subsequent line
+/// starts wherever the previous one left off -- a real, previously
+/// misdiagnosed bug (`tutorial/inventory.bcl`'s `listAll` looked like it
+/// was drifting rightward down the page; it was actually never returning
+/// to column 1 at all). `-icanon -echo` disables line-buffering and echo,
+/// the two properties `INKEY$` actually needs, without touching `opost`.
 fn emit_inkey_setup(context: &JvmContext, out: &mut String) {
     if !context.needs_inkey {
         return;
     }
-    emit_run_command_inheriting_io(&["stty", "raw", "-echo", "min", "0", "time", "0"], out);
+    emit_run_command_inheriting_io(&["stty", "-icanon", "-echo", "min", "0", "time", "0"], out);
 }
 
 /// Restores normal terminal behavior -- the counterpart to

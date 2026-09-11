@@ -1392,3 +1392,58 @@ fn jvm_double_to_string_rounds_to_six_significant_digits_when_available() {
         "expected rounded, trailing-zero-free formatting:\n{stdout}"
     );
 }
+
+/// Regression test for a real bug: `emit_inkey_setup` used to run the `stty
+/// raw` canned mode, which also clears `opost` (output post-processing) --
+/// the tty driver flag that translates a bare `\n` into `\r\n` on the wire.
+/// With `opost` off for the rest of the run (raw mode is left in effect
+/// until program exit, not toggled per keystroke -- see `emit_inkey_setup`'s
+/// own doc comment), every later `PRINT`'s `\n` stopped returning the
+/// cursor to column 1: on a real terminal, `tutorial/inventory.bcl`'s
+/// `listAll` looked like it was drifting rightward down the page, one line
+/// at a time, when it was actually never returning to column 1 at all.
+/// `-icanon -echo` (the fix) disables line-buffering and echo -- the two
+/// properties `INKEY$` actually needs -- without touching `opost`. Needs no
+/// `java`/`krak2`/pty: this pins the exact `stty` arguments in the
+/// generated assembly text directly, which is both sufficient (the bug was
+/// entirely in which flags get passed to `stty`) and the only way to catch
+/// a regression back to the `raw` mode without a real pseudo-terminal (a
+/// piped/non-tty test, like this file's other `INKEY$` coverage, can't
+/// observe `opost`/`\r\n` translation at all -- there's no line discipline
+/// on a pipe to misconfigure).
+#[test]
+fn jvm_inkey_setup_does_not_disable_output_postprocessing() {
+    let file = tempfile::Builder::new()
+        .suffix(".bcl")
+        .tempfile()
+        .expect("failed to create INKEY$ stty-flags fixture");
+    fs::write(
+        file.path(),
+        "program inkeyStty\nk$ = inkey$\nprint k$\nend\n",
+    )
+    .expect("failed to write INKEY$ stty-flags fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(file.path())
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "INKEY$ stty-flags fixture failed to compile under --target jvm:\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let j_path = file.path().with_extension("j");
+    let generated = fs::read_to_string(&j_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", j_path.display()));
+    assert!(
+        generated.contains("\"-icanon\""),
+        "expected the non-canonical-mode stty flag:\n{generated}"
+    );
+    assert!(
+        !generated.contains("\"raw\""),
+        "stty's `raw` canned mode also clears opost, breaking \\n -> \\r\\n \
+         translation for the rest of the run:\n{generated}"
+    );
+}
