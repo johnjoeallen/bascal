@@ -233,6 +233,23 @@ impl<'a> Lexer<'a> {
                     });
                 }
                 'A'..='Z' | 'a'..='z' | '_' => tokens.push(self.ident()),
+                // A bare type-suffix character, standing alone rather than
+                // glued onto a preceding identifier -- BASCAL suffix
+                // shorthand for a method's return type, e.g. `(): $` for
+                // `string` (see `Parser::parse_method_return_type`). `ident()`
+                // already handles this correctly with zero changes: its
+                // alnum/underscore/dot loop simply consumes nothing before
+                // its own trailing-suffix check fires, producing
+                // `Ident("$")`, whose `BasicIdent::parse` splits into an
+                // empty name plus the right `TypeSuffix` -- the same
+                // existing suffix/type mapping used everywhere else, not a
+                // separate one. `#` is deliberately not included here: it
+                // already has its own dedicated `TokenKind::Hash` (`#1`
+                // channel references), so `Parser::parse_method_return_type`
+                // recognizes `Hash` as `TypeSuffix::Double` directly instead
+                // of rerouting `#` through `ident()`, which would break
+                // every existing `Hash`-based channel-number parse site.
+                '$' | '%' | '!' => tokens.push(self.ident()),
                 '(' => tokens.push(self.single(TokenKind::LParen)),
                 ')' => tokens.push(self.single(TokenKind::RParen)),
                 '[' => tokens.push(self.single(TokenKind::LBracket)),

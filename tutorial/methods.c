@@ -15,6 +15,9 @@ static const char* bcc_strd(double value);
 static float bv_f_price = 0;
 static int bv_i_length = 0;
 static int bv_i_score = 0;
+static int bv_l_cardcopies = 0;
+static char bv_s_cardauthor[256] = {0};
+static char bv_s_cardtitle[256] = {0};
 static char bv_s_firstthree[256] = {0};
 static char bv_s_name[256] = {0};
 static char bv_s_result[256] = {0};
@@ -25,6 +28,8 @@ void bf_s_shout_s(const char* bv_s_self_in, char* bcc_out);
 void bf_s_surround_s(const char* bv_s_self_in, const char* bv_s_left_in, const char* bv_s_right_in, char* bcc_out);
 int bf_i_clamp_i(int bv_i_self, int bv_i_low, int bv_i_high);
 float bf_f_percent_f(float bv_f_self, float bv_f_rate);
+void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount);
+void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out);
 
 void bf_s_ucase_s(const char* bv_s_self_in, char* bcc_out) {
     char bv_s_self[256];
@@ -100,6 +105,40 @@ float bf_f_percent_f(float bv_f_self, float bv_f_rate) {
     return bv_f_self;
 }
 
+void bf_i_cardrestock(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, int bv_i_amount) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+
+    bv_l_selfcopies = (bv_l_selfcopies + bv_i_amount);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
+void bf_s_carddisplay(char* bv_s_selftitle_in, char* bv_s_selfauthor_in, int* bv_l_selfcopies_in, char* bcc_out) {
+    char bv_s_selftitle[256];
+    snprintf(bv_s_selftitle, sizeof(bv_s_selftitle), "%s", bv_s_selftitle_in);
+    char bv_s_selfauthor[256];
+    snprintf(bv_s_selfauthor, sizeof(bv_s_selfauthor), "%s", bv_s_selfauthor_in);
+    int bv_l_selfcopies = *bv_l_selfcopies_in;
+
+    char bt_s_6[256];
+    snprintf(bt_s_6, sizeof(bt_s_6), "%s%s", bv_s_selftitle, " by ");
+    char bt_s_7[256];
+    snprintf(bt_s_7, sizeof(bt_s_7), "%s%s", bt_s_6, bv_s_selfauthor);
+    snprintf(bcc_out, 256, "%s", bt_s_7);
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+    return;
+    snprintf(bv_s_selftitle_in, 256, "%s", bv_s_selftitle);
+    snprintf(bv_s_selfauthor_in, 256, "%s", bv_s_selfauthor);
+    *bv_l_selfcopies_in = bv_l_selfcopies;
+}
+
 int main(void) {
     // Upper-cases self$. Not a real MBASIC/BASCOM 2.00 builtin -- verified
     // against a real IBM BASIC Compiler 2.00 under dosbox-x -- so BASCAL ships
@@ -107,12 +146,23 @@ int main(void) {
     // ltrim.bcl's own doc comment for the reasoning) -- ucase$(s$) still works
     // via ordinary-call syntax resolving to this same declaration.
 
-    // Tutorial — Scalar methods
+    // Tutorial — Methods
     //
-    // A method declares its scalar receiver type in brackets after its name.
-    // Omitting a result type makes it return its self%/self!/self$ receiver.
-    // Dot calls can chain when each result has the next receiver's
-    // type. Methods transpile to ordinary typed calls for both backends.
+    // A method is a statically resolved callable with an implicit receiver,
+    // written in brackets after the method name: `method shout[string]()`
+    // receives a string. The return type follows the parameter list after
+    // `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+    // makes the method return the receiver's own type, falling through to an
+    // implicit `return self`. Dot calls chain when each result has the next
+    // receiver's type. Methods transpile to ordinary typed calls for every
+    // backend -- there is no runtime method object, virtual dispatch, or
+    // vtable of any kind.
+    //
+    // A record type is a valid receiver too, declared either externally (in
+    // brackets, same as a scalar receiver) or inline, directly inside the
+    // record itself. `self.field` is then ordinary field access against the
+    // receiver, and mutating it is visible to the caller once the call
+    // returns -- the receiver is passed by reference, not by copy.
 
 
 
@@ -120,13 +170,13 @@ int main(void) {
 
 
     snprintf(bv_s_name, sizeof(bv_s_name), "%s", "bascal");
-    char bt_s_6[256];
-    bf_s_surround_s(bv_s_name, "[", "]", bt_s_6);
-    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_6);
+    char bt_s_8[256];
+    bf_s_surround_s(bv_s_name, "[", "]", bt_s_8);
+    snprintf(bv_s_result, sizeof(bv_s_result), "%s", bt_s_8);
     printf("%s\n", bv_s_result);
-    char bt_s_7[256];
-    bf_s_shout_s(bv_s_name, bt_s_7);
-    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_7);
+    char bt_s_9[256];
+    bf_s_shout_s(bv_s_name, bt_s_9);
+    snprintf(bv_s_shoutresult, sizeof(bv_s_shoutresult), "%s", bt_s_9);
     bv_i_length = ((int)strlen(bcc_mid(bv_s_name, 1, 5)));
     printf("length = %d\n", bv_i_length);
 
@@ -136,10 +186,30 @@ int main(void) {
     bv_f_price = 80;
     printf("discount amount = %g\n", bf_f_percent_f(bv_f_price, 15));
 
-    char bt_s_8[256];
-    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_8);
-    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_8);
+    char bt_s_10[256];
+    bf_s_ucase_s(bcc_mid(bv_s_name, 1, 3), bt_s_10);
+    snprintf(bv_s_firstthree, sizeof(bv_s_firstthree), "%s", bt_s_10);
     printf("first three = %s\n", bv_s_firstthree);
+
+    // -------------------- Record methods --------------------
+
+    // Declared inline: the enclosing record supplies the receiver type, so
+    // there is no `[Card]` bracket here at all.
+
+    // Declared externally: same receiver, same callable identity as an
+    // inline method -- an external method just lets behavior be attached to
+    // a record without editing its own declaration.
+
+    snprintf(bv_s_cardtitle, sizeof(bv_s_cardtitle), "%s", "Dune");
+    snprintf(bv_s_cardauthor, sizeof(bv_s_cardauthor), "%s", "Frank Herbert");
+    bv_l_cardcopies = 2;
+    char bt_s_11[256];
+    bf_s_carddisplay(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, bt_s_11);
+    printf("%s\n", bt_s_11);
+    printf("copies on hand = %d\n", bv_l_cardcopies);
+
+    bf_i_cardrestock(bv_s_cardtitle, bv_s_cardauthor, &bv_l_cardcopies, 3);
+    printf("copies after restock = %d\n", bv_l_cardcopies);
 
     return 0;
 }

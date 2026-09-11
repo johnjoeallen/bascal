@@ -309,6 +309,7 @@ impl Parser {
             body,
             is_procedure: false,
             receiver: None,
+            record_receiver: None,
             pos: fn_pos,
         })
     }
@@ -336,6 +337,7 @@ impl Parser {
             body,
             is_procedure: true,
             receiver: None,
+            record_receiver: None,
             pos: fn_pos,
         })
     }
@@ -352,6 +354,21 @@ impl Parser {
         matches!(&self.current().kind, TokenKind::Ident(raw) if BasicIdent::parse(raw).name.eq_ignore_ascii_case("method"))
     }
 
+    /// `method name[ReceiverType](args...): ReturnType` -- an external
+    /// method, its receiver named explicitly in brackets. `ReceiverType` is
+    /// either one of BASCAL's scalar type names (`integer`/`long`/`single`/
+    /// `double`/`string`) or a declared record type name; which one it is
+    /// can't always be told here (a record could be declared later in the
+    /// same file, or in a different `require`d file entirely), so an
+    /// unrecognized bracket identifier is provisionally treated as a record
+    /// type name and only actually validated once `records::lower` has
+    /// every record declaration collected (see `FunctionDef::
+    /// record_receiver`'s own doc comment). The old `method
+    /// name[receiver, result](...)` shape (both types crammed into one
+    /// bracket pair) is gone outright -- brackets name the receiver only
+    /// now, and the return type -- a plain type name or its suffix
+    /// shorthand (`$`/`%`/`!`/`#`), the same mapping used everywhere else in
+    /// BASCAL -- follows the parameter list after `:`.
     fn parse_method(&mut self) -> ParseResult<FunctionDef> {
         let fn_pos = self.current_pos();
         let keyword = BasicIdent::parse(&self.expect_ident("expected `method`")?);
@@ -363,70 +380,68 @@ impl Parser {
                 "method receiver types belong in brackets after the method name -- e.g. `method capitalize[string]()`",
             ));
         }
-        // Planned general-purpose records use `method[Room] name()` while
-        // scalar extension methods retain `method name[integer]()`.
-        if self.eat(TokenKind::LBracket) {
-            self.expect_ident("expected record type after `method[`")?;
-            self.expect(TokenKind::RBracket, "expected `]` after record type")?;
-            let name = BasicIdent::parse(&self.expect_ident("expected method name")?);
-            self.expect(TokenKind::LParen, "expected `(` after method name")?;
-            let params = self.parse_param_list()?;
-            self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
-            if self.check_keyword("returns") {
-                self.advance();
-                self.expect_ident("expected result type after `returns`")?;
-            }
-            self.consume_line_end()?;
-            let body = self.parse_block(&[BlockEnd::EndMethod])?;
-            self.expect_keyword("end")?;
-            self.expect_keyword("method")?;
-            self.consume_line_end()?;
-            return Ok(FunctionDef {
-                name,
-                params,
-                body,
-                is_procedure: false,
-                // Type-scoped record dispatch is deliberately parser-only
-                // until the typed record IR is implemented.
-                receiver: None,
-                pos: fn_pos,
-            });
-        }
-
         let raw_name = self.expect_ident("expected method name")?;
-        let mut name = BasicIdent::parse(&raw_name);
+        let name = BasicIdent::parse(&raw_name);
         self.expect(
             TokenKind::LBracket,
             "expected `[` and receiver type after method name",
         )?;
-        let receiver = self.parse_method_scalar_type("expected scalar method receiver type")?;
-        let explicit_result = if matches!(self.current().kind, TokenKind::Comma) {
-            self.advance();
-            Some(self.parse_method_scalar_type("expected scalar method result type")?)
-        } else {
-            None
-        };
-        self.expect(TokenKind::RBracket, "expected `]` after method types")?;
+        let receiver_raw = self.expect_ident("expected receiver type after `[`")?;
+        self.expect(TokenKind::RBracket, "expected `]` after receiver type")?;
+        self.expect(TokenKind::LParen, "expected `(` after method receiver")?;
+        let params = self.parse_param_list()?;
+        self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
+        let explicit_result = self.parse_method_return_type()?;
+        self.consume_line_end()?;
+        let body = self.parse_block(&[BlockEnd::EndMethod])?;
+        self.expect_keyword("end")?;
+        self.expect_keyword("method")?;
+        self.consume_line_end()?;
+        match scalar_type_name(&receiver_raw) {
+            Some(receiver) => Ok(self.finish_scalar_method(
+                name,
+                receiver,
+                params,
+                body,
+                explicit_result,
+                fn_pos,
+            )?),
+            None => Ok(self.finish_record_method(
+                name,
+                receiver_raw,
+                params,
+                body,
+                explicit_result,
+                fn_pos,
+            )?),
+        }
+    }
+
+    /// The scalar-receiver half of `parse_method`, unchanged in spirit from
+    /// before the bracket/colon syntax split: a method whose result type is
+    /// omitted (neither a suffix on its own name nor an explicit `: Type`)
+    /// has the receiver's own type, and falling through its body therefore
+    /// returns `self` (an explicit `return` still supplies a
+    /// method-specific result) -- e.g. `method ucase[string]()`'s only
+    /// declared type is its receiver, `string`, which is also its result.
+    fn finish_scalar_method(
+        &mut self,
+        mut name: BasicIdent,
+        receiver: TypeSuffix,
+        params: Vec<Param>,
+        mut body: Vec<Stmt>,
+        explicit_result: Option<TypeSuffix>,
+        fn_pos: SourcePos,
+    ) -> ParseResult<FunctionDef> {
         if let (Some(suffix), Some(explicit)) = (name.suffix, explicit_result) {
             if suffix != explicit {
                 return Err(
-                    self.error("method result suffix disagrees with its bracketed result type")
+                    self.error("method result suffix disagrees with its declared return type")
                 );
             }
         }
         let implicit_self_result = explicit_result.is_none() && name.suffix.is_none();
         name.suffix = explicit_result.or(name.suffix).or(Some(receiver));
-        self.expect(TokenKind::LParen, "expected `(` after method name")?;
-        let params = self.parse_param_list()?;
-        self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
-        self.consume_line_end()?;
-        let mut body = self.parse_block(&[BlockEnd::EndMethod])?;
-        self.expect_keyword("end")?;
-        self.expect_keyword("method")?;
-        self.consume_line_end()?;
-        // A method whose result type is omitted has the receiver's type.
-        // Falling through its body therefore returns `self`, while an
-        // explicit `return` still supplies a method-specific result.
         if implicit_self_result {
             body.push(Stmt::new(
                 Statement::Return {
@@ -444,22 +459,121 @@ impl Parser {
             body,
             is_procedure: false,
             receiver: Some(receiver),
+            record_receiver: None,
             pos: fn_pos,
         })
     }
 
-    fn parse_method_scalar_type(&mut self, message: &str) -> ParseResult<TypeSuffix> {
-        let raw = self.expect_ident(message)?;
-        match raw.to_ascii_lowercase().as_str() {
-            "integer" => Ok(TypeSuffix::Integer),
-            "long" => Ok(TypeSuffix::Long),
-            "single" => Ok(TypeSuffix::Single),
-            "double" => Ok(TypeSuffix::Double),
-            "string" => Ok(TypeSuffix::String),
-            _ => Err(self.error(
-                "method types currently support only integer, long, single, double, or string",
-            )),
+    /// The record-receiver half of `parse_method`: `self` is left as an
+    /// ordinary implicit receiver for `records::lower` to flatten into one
+    /// `byref` parameter per record field (see `FunctionDef::
+    /// record_receiver`'s own doc comment) -- unlike a scalar receiver,
+    /// there is no single BASIC return type a whole record value could
+    /// implicitly become, so a record method with no explicit `: ReturnType`
+    /// is a procedure (no result at all) rather than one that implicitly
+    /// returns `self`.
+    fn finish_record_method(
+        &mut self,
+        mut name: BasicIdent,
+        record_type: String,
+        params: Vec<Param>,
+        body: Vec<Stmt>,
+        explicit_result: Option<TypeSuffix>,
+        fn_pos: SourcePos,
+    ) -> ParseResult<FunctionDef> {
+        if let (Some(suffix), Some(explicit)) = (name.suffix, explicit_result) {
+            if suffix != explicit {
+                return Err(
+                    self.error("method result suffix disagrees with its declared return type")
+                );
+            }
         }
+        let result = explicit_result.or(name.suffix);
+        name.suffix = result;
+        Ok(FunctionDef {
+            name,
+            params,
+            body,
+            is_procedure: result.is_none(),
+            receiver: None,
+            record_receiver: Some(record_type),
+            pos: fn_pos,
+        })
+    }
+
+    /// `method name(args...): ReturnType` declared directly inside a
+    /// `record ... end record` body -- the enclosing record supplies the
+    /// receiver type implicitly, so there is no `[ReceiverType]` bracket at
+    /// all here (see `parse_record_def`). Otherwise identical to an
+    /// external record method (`finish_record_method`); both are normalized
+    /// into the exact same `FunctionDef` shape (`record_receiver: Some(..)`)
+    /// so `records::lower` treats them identically from here on.
+    fn parse_inline_record_method(&mut self, record_type: &str) -> ParseResult<FunctionDef> {
+        let fn_pos = self.current_pos();
+        let keyword = BasicIdent::parse(&self.expect_ident("expected `method`")?);
+        if !keyword.name.eq_ignore_ascii_case("method") {
+            return Err(self.error("expected `method`"));
+        }
+        if keyword.suffix.is_some() {
+            return Err(self.error(
+                "method result suffixes belong after the parameter list -- e.g. `method display(): $`",
+            ));
+        }
+        let raw_name = self.expect_ident("expected method name")?;
+        let name = BasicIdent::parse(&raw_name);
+        self.expect(TokenKind::LParen, "expected `(` after method name")?;
+        let params = self.parse_param_list()?;
+        self.expect(TokenKind::RParen, "expected `)` after method parameters")?;
+        let explicit_result = self.parse_method_return_type()?;
+        self.consume_line_end()?;
+        let body = self.parse_block(&[BlockEnd::EndMethod])?;
+        self.expect_keyword("end")?;
+        self.expect_keyword("method")?;
+        self.consume_line_end()?;
+        self.finish_record_method(
+            name,
+            record_type.to_string(),
+            params,
+            body,
+            explicit_result,
+            fn_pos,
+        )
+    }
+
+    /// `: ReturnType` after a method's parameter list, or nothing (`None`)
+    /// when the method has no explicit return type clause at all. Accepts
+    /// either a full BASCAL scalar type name (`integer`/`long`/`single`/
+    /// `double`/`string`) or its suffix shorthand (`%`/`&`/`!`/`#`/`$`,
+    /// through the same `TypeSuffix`/`BasicIdent::parse` mapping every other
+    /// suffixed identifier in BASCAL already uses -- not a separate,
+    /// method-specific mapping). A record type name is deliberately not
+    /// accepted here: nothing in the language asks a method to return a
+    /// whole record value.
+    fn parse_method_return_type(&mut self) -> ParseResult<Option<TypeSuffix>> {
+        if !self.eat(TokenKind::Colon) {
+            return Ok(None);
+        }
+        // `#` already has its own dedicated token (`TokenKind::Hash`, for
+        // `#1`-style channel references) rather than lexing through
+        // `ident()` the way `$`/`%`/`!` do bare -- see lexer.rs's own note
+        // on why `#` isn't in that lexer match arm.
+        if self.eat(TokenKind::Hash) {
+            return Ok(Some(TypeSuffix::Double));
+        }
+        let raw = self.expect_ident("expected a return type after `:`")?;
+        if let Some(suffix) = scalar_type_name(&raw) {
+            return Ok(Some(suffix));
+        }
+        let parsed = BasicIdent::parse(&raw);
+        if parsed.name.is_empty() {
+            if let Some(suffix) = parsed.suffix {
+                return Ok(Some(suffix));
+            }
+        }
+        Err(self.error(
+            "method return types currently support only integer, long, single, double, or string \
+             (or their suffix shorthand: %, &, !, #, $)",
+        ))
     }
 
     fn parse_record_def(&mut self) -> ParseResult<RecordDef> {
@@ -468,7 +582,13 @@ impl Parser {
         self.consume_line_end()?;
         self.skip_newlines();
         let mut fields = Vec::new();
+        let mut methods = Vec::new();
         while !self.is_eof() && !(self.check_keyword("end") && self.check_next_keyword("record")) {
+            if self.check_method_keyword() {
+                methods.push(self.parse_inline_record_method(&name)?);
+                self.skip_newlines();
+                continue;
+            }
             let field_name = self.expect_ident("expected record field name")?;
             self.expect(TokenKind::Colon, "expected `:` after record field name")?;
             let ty = self.parse_record_field_type()?;
@@ -482,7 +602,11 @@ impl Parser {
         self.expect_keyword("end")?;
         self.expect_keyword("record")?;
         self.consume_line_end()?;
-        Ok(RecordDef { name, fields })
+        Ok(RecordDef {
+            name,
+            fields,
+            methods,
+        })
     }
 
     fn parse_record_field_type(&mut self) -> ParseResult<RecordFieldType> {
@@ -2529,6 +2653,22 @@ impl Parser {
             .get(self.pos)
             .map(|token| token.pos.clone())
             .unwrap_or_else(|| SourcePos::new(self.filename.clone(), 1, 1))
+    }
+}
+
+/// Maps a raw bracketed `method name[X](...)` identifier to a scalar
+/// `TypeSuffix` when `X` names one of BASCAL's scalar types, or `None` when
+/// it doesn't -- in which case the caller treats `X` as a (not yet
+/// necessarily declared) record type name instead. The same full-name
+/// mapping `parse_method_return_type` uses for return types.
+fn scalar_type_name(raw: &str) -> Option<TypeSuffix> {
+    match raw.to_ascii_lowercase().as_str() {
+        "integer" => Some(TypeSuffix::Integer),
+        "long" => Some(TypeSuffix::Long),
+        "single" => Some(TypeSuffix::Single),
+        "double" => Some(TypeSuffix::Double),
+        "string" => Some(TypeSuffix::String),
+        _ => None,
     }
 }
 

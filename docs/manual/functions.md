@@ -17,7 +17,7 @@ The function name carries the return type suffix. Parameter names also carry typ
 
 ### Methods (front-end)
 
-BASCAL also accepts method declarations. Scalar receiver types are supported today; record receiver types are planned. The bracketed type after the method name selects the receiver type. If no result is supplied, it is the same scalar type as the receiver; a suffix on the name is accepted as shorthand for an explicit scalar result. If execution reaches the end of an omitted-result method, it returns `self`. The receiver is available in the body as the matching implicit `self` variable. See the book's full [Methods](../language/methods.md) chapter for chaining, built-ins, and planned record methods:
+BASCAL also accepts method declarations, with either a scalar or a record receiver type. The bracketed type after the method name selects the receiver type; the return type, if any, follows the parameter list after `:` (`method name[Type](args): ReturnType`, or its suffix shorthand `: $`). For a scalar receiver, omitting the return type clause makes it the same type as the receiver, and execution reaching the end of the method returns `self`. The receiver is available in the body as the matching implicit `self` variable — for a record receiver, `self.field` is ordinary field access against it. See the book's full [Methods](../language/methods.md) chapter for record receivers, chaining, and built-ins:
 
 ```bascal
 method capitalize[string]()

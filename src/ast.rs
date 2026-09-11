@@ -85,6 +85,14 @@ pub struct TypedArrayRef {
 pub struct RecordDef {
     pub name: String,
     pub fields: Vec<RecordFieldDef>,
+    /// Methods declared directly inside the `record ... end record` body
+    /// (`method name(args): ReturnType ... end method`) -- the enclosing
+    /// record supplies the receiver type implicitly. Normalized by
+    /// `records::lower` into the same internal shape an external
+    /// `method name[RecordType](args): ReturnType` declaration produces
+    /// (see `FunctionDef::record_receiver`); both forms are the same
+    /// callable identity from semantic analysis onward.
+    pub methods: Vec<FunctionDef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -147,9 +155,22 @@ pub struct FunctionDef {
     pub params: Vec<Param>,
     pub body: Vec<Stmt>,
     pub is_procedure: bool,
-    /// The scalar receiver type for a bracketed `method name[type]` declaration.
-    /// Methods otherwise share function bodies and return syntax.
+    /// The scalar receiver type for a bracketed `method name[type](): result`
+    /// declaration. Methods otherwise share function bodies and return
+    /// syntax. Mutually exclusive with `record_receiver` -- a method has
+    /// exactly one receiver, either scalar or record.
     pub receiver: Option<TypeSuffix>,
+    /// The record receiver type name for a `method name[RecordType](): result`
+    /// declaration, or an inline `method name(): result` declared directly
+    /// inside that record's own body (see `RecordDef::methods`). Always
+    /// `None` by the time `records::lower` finishes: every record method is
+    /// fully desugared into an ordinary function (its `self` receiver
+    /// flattened into one `byref` parameter per record field, matching
+    /// `records::lower`'s existing in-memory-record field flattening) before
+    /// the resolver or any backend ever sees it -- see `records.rs`'s own
+    /// module doc comment. Resolver and codegen therefore never need to
+    /// know a record-receiver method system exists at all.
+    pub record_receiver: Option<String>,
     /// Source position of the `function`/`procedure` keyword that starts
     /// this declaration -- lets resolver diagnostics about the function as
     /// a whole (duplicate name, shadowing a builtin, missing return,

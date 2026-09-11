@@ -34,7 +34,7 @@ The planned facilities exercised by the port are:
 - typed arrays of records and typed record parameters, including `byref`;
 - nested record fields and nested field access;
 - record literals, value assignment, and mutable fields;
-- type-scoped `method[Type]` declarations and `self`;
+- record-receiver methods (`method name[Type](args): result`) and `self`;
 - typed record method results;
 - fluent record mutation; and
 - record method calls on record values and array elements.
@@ -122,11 +122,16 @@ This is AWKWARD, not MISSING.
 
 No additional language feature is required to express the `game02` behaviour
 under the assumed general-purpose record model. The front end accepts the
-planned syntax under `--check`, but current code-generation backends do not
-yet implement general records, record arrays, nested records, record methods,
-typed record parameters, record literals/value semantics, or fluent record
-mutation. These are implementation gaps, not missing language-design
-capabilities under this case study's stated assumptions.
+planned syntax under `--check`. Record-receiver methods themselves are now a
+real, implemented language feature (see [Methods](../language/methods.md)) --
+`Room.exit`, `Room.setExit`, `Room.describe`, and `Actor.moveTo` all use
+ordinary record methods today, and a simple non-nested record's own methods
+already compile and run correctly on every backend. What current
+code-generation backends do not yet implement is nested record fields
+(`Room.exits: Exits`) and arrays of records (`rooms%(ROOM_5)`) -- both this
+port relies on -- along with typed record parameters/returns more generally.
+These remain implementation gaps, not missing language-design capabilities
+under this case study's stated assumptions.
 
 ## Delphi facilities that were not necessary
 

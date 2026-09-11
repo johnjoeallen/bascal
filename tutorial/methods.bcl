@@ -1,9 +1,20 @@
-// Tutorial — Scalar methods
+// Tutorial — Methods
 //
-// A method declares its scalar receiver type in brackets after its name.
-// Omitting a result type makes it return its self%/self!/self$ receiver.
-// Dot calls can chain when each result has the next receiver's
-// type. Methods transpile to ordinary typed calls for both backends.
+// A method is a statically resolved callable with an implicit receiver,
+// written in brackets after the method name: `method shout[string]()`
+// receives a string. The return type follows the parameter list after
+// `:` (or its suffix shorthand, `: $`); omitting it for a scalar receiver
+// makes the method return the receiver's own type, falling through to an
+// implicit `return self`. Dot calls chain when each result has the next
+// receiver's type. Methods transpile to ordinary typed calls for every
+// backend -- there is no runtime method object, virtual dispatch, or
+// vtable of any kind.
+//
+// A record type is a valid receiver too, declared either externally (in
+// brackets, same as a scalar receiver) or inline, directly inside the
+// record itself. `self.field` is then ordinary field access against the
+// receiver, and mutating it is visible to the caller once the call
+// returns -- the receiver is passed by reference, not by copy.
 program methods
 
 require com.bascal.stdlib.ucase
@@ -44,5 +55,33 @@ print "discount amount = "; price!.percent(15)
 
 firstThree$ = name$.left(3).ucase()
 print "first three = "; firstThree$
+
+// -------------------- Record methods --------------------
+
+// Declared inline: the enclosing record supplies the receiver type, so
+// there is no `[Card]` bracket here at all.
+record Card
+    title:  string(40)
+    author: string(40)
+    copies: int
+
+    method display(): $
+        return self.title + " by " + self.author
+    end method
+end record
+
+// Declared externally: same receiver, same callable identity as an
+// inline method -- an external method just lets behavior be attached to
+// a record without editing its own declaration.
+method restock[Card](amount%)
+    self.copies = self.copies + amount%
+end method
+
+let card = { title: "Dune", author: "Frank Herbert", copies: 2 }
+print card.display()
+print "copies on hand = "; card.copies
+
+card.restock(3)
+print "copies after restock = "; card.copies
 
 end
