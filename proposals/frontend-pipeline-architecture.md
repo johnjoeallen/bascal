@@ -1,8 +1,8 @@
 # Analysis: `bcc` front-end & pipeline architecture
 
-Status: **analysis + refactor proposal**. Suggestions 1, 3, 5, and 6 are
+Status: **analysis + refactor proposal**. Suggestions 1, 3, 5, 6, and 7 are
 implemented, and suggestion 2 is partly implemented (see "Refactor suggestions"
-below); suggestions 4, 7, and 8 are unimplemented. Describes
+below); suggestions 4 and 8 are unimplemented. Describes
 the pipeline as it stands at the time of writing and argues for a cleaner
 lexer → parser → AST → lowering → resolve → emit separation, motivated by two
 already-shipped bug classes (FIELD-buffer re-namespacing, label substitution in
@@ -336,6 +336,28 @@ Ordered by payoff for isolating the bug classes above.
    per statement. A `Keyword(Kw)` token (soft keywords still possible via "was
    this `Ident` or `Keyword` in this position") makes dispatch a `match` and
    removes a class of "forgot to handle this keyword here" gaps.
+
+   **Implemented (the "at least intern them" half), Sept 2026.** The lexer
+   and token stream are unchanged — no `Keyword` token, no soft-keyword
+   ambiguity risk to a variable/field/parameter named the same as a keyword
+   anywhere outside statement-leading position. Instead
+   `parse_statement_kind`'s if-chain became a single `match` on
+   `classify_keyword`'s result: one case-insensitive lowercase + jump-table
+   `match` per statement, in place of up to ~55 sequential `check_keyword`
+   string compares. `Kw` has one variant per statement *shape*, not per
+   spelling (`Kw::Dim` covers both `dim` and `declare`), which is what
+   surfaced the predicted "forgot to handle this keyword here" gap: the
+   if-chain's separate `check_keyword("declare") => self.parse_declare()`
+   arm was **unreachable dead code** — `check_dim_keyword()` (`dim` OR
+   `declare`) already matched first and sent `declare` to `parse_dim`, whose
+   `parse_dim_one` already silently consumes a trailing `as <type>`. Deleted
+   `parse_declare` and added a regression test
+   (`declare_with_a_type_annotation_still_parses_as_plain_dim`) pinning that
+   `declare x as Integer` keeps parsing as a plain `Dim` (dropping the type,
+   same as it silently did before). The ~140 other `check_keyword` call sites
+   (mid-statement keywords like `then`/`as`/`step`, block-end matching, etc.)
+   are untouched — out of scope for this pass, and none of them had the
+   if-chain's redundant-comparison shape.
 
 8. **Minor:** handle `""` in string literals in the lexer, and stop consuming `.`
    inside `ident()` — lex `.` always as `Dot` and let the parser build
