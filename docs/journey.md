@@ -151,11 +151,46 @@ Windows and DOSBox guidance, a chaptered homepage, an accessible conformance
 tab, and a concise account of Ramtech BASIC—the 1985 preprocessor that
 inspired BASCAL (`a609efd`, `41dcf28`, `18d55be`, `aab2638`).
 
+## Early September: methods, record composition, and an embedded assembler
+
+The compiler's internals were reorganized before new language surface was
+added on top of them: the driver moved out of `lib.rs` into its own module,
+resolution became a proper `resolver::resolve` pass returning a typed
+`ResolvedProgram`, every post-parse AST transform was unified into one
+lowering phase, and user-label references started resolving structurally
+instead of by text match (`ecf3284`–`6ddfcf2`). The `c` target also picked up
+`MID$` statement-form assignment (`2ba0875`), and the JVM target reached a
+real milestone: the inventory case study and `card_catalog.bcl` began
+compiling, assembling, and running end to end there, not just transpiling
+(`f9f2137`).
+
+BASCAL's method story was then unified into a single system: record-receiver
+methods, inline methods declared inside a record body, and the
+`[Type]():Return` bracket-receiver syntax all became one coherent feature
+rather than three overlapping ones (`a1d84e2`). Records gained structural
+composition alongside it — a record can declare that it `combines` one or
+more existing record types, pulling in their fields with no inheritance, no
+shared methods, and no assignability implied (the feature went through an
+`extends`, then `mixin` naming before settling on `combines`, which best
+matched what it actually does) (`6199a7c`–`d08b1f2`). Records without a
+backing file also became first-class values in their own right: complete-
+literal initialization, copying, and member reads/writes, verified across
+the BASIC, C, and JVM backends (`39749b2`–`ecb995c`).
+
+The JVM target's biggest remaining external dependency was then removed.
+Rather than shelling out to a separately installed `krak2` binary located
+via `PATH`, an environment variable, or a config file, `bcc` now links
+Krakatau's `v2` assembler in directly as a Rust library — via a small,
+upstream-proposed fork that exposes it as a reusable crate — so assembling
+JVM output needs no extra install step at all (`ee976d0`).
+
 Today BASCAL is a Rust compiler for a structured BASIC-derived language with
 classic BASIC, C, and JVM targets. Its development has moved from making BASIC
 source more readable, through making its runtime translation trustworthy, to
 making the same resolved language meaning available to three very different
-backends—and publishing the resulting compatibility evidence alongside it.
+backends — complete with methods, structural record composition, and a
+self-contained toolchain — and publishing the resulting compatibility
+evidence alongside it.
 
 </div>
 
