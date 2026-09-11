@@ -60,28 +60,69 @@ fn jvm_expected_failure_sequential_file_io_is_non_blocking() {
 
 #[test]
 fn jvm_expected_failure_random_record_io_is_non_blocking() {
+    // A dynamic FIELD channel number is the one shape `--target jvm`'s
+    // random-access record I/O still rejects (`FIELD`'s channel and every
+    // field width must be literals -- see `JvmFieldVar`'s own doc comment
+    // in codegen_jvm.rs); random-access I/O itself is supported, see
+    // `jvm_random_access_file_round_trips_when_available` below.
     assert_jvm_expected_failure(
-        "program jvmRandomFile\nopen \"records.dat\" for random as #1 len = 12\nend\n",
-        "not supported by the minimal JVM backend yet",
+        "program jvmRandomFile\nch% = 1\nopen \"records.dat\" for random as #ch% len = 12\nfield #ch%, 12 as buf$\nend\n",
+        "FIELD's channel number must be a literal under --target jvm",
     );
 }
 
-/// The JVM backend does not implement random-access record I/O yet. Keep the
-/// BASCOM-to-target compatibility direction visible in the conformance report
-/// so its expected failure is tracked independently from C.
+/// `tests/fixtures/conformance/cross_write.bcl` / `cross_read.bcl` (a
+/// 2-byte `MKI$`-packed int field plus a 10-byte right-justified string
+/// field) are the same fixture pair `dosbox_conformance.rs`'s
+/// `c_target_random_access_file_is_binary_compatible_with_real_bascom_*`
+/// checks against real BASCOM. No dosbox/real-BASCOM dependency here --
+/// this just checks the JVM backend's own random-access I/O round-trips
+/// (write, then read back in a *separate* process/class, proving the
+/// on-disk bytes -- not just in-memory state -- carry the record) --
+/// against a JVM-specific expectation, not `cross_read.expected.txt`
+/// itself: real BASCOM/the C backend's `STR$` includes a leading sign
+/// placeholder space for a non-negative number (`" 42"`); this backend's
+/// `STR$` is a bare `String.valueOf(int)` with no such space (`"42"`), an
+/// existing, unrelated gap this test deliberately doesn't paper over.
 #[test]
-fn jvm_target_random_access_file_is_binary_compatible_with_real_bascom_bascom_writes() {
-    assert_jvm_expected_failure(
-        "program jvmRandomRead\nrecord R\n value: int16\nend record\nfile db as R = open(\"records.dat\")\nend\n",
-        "not supported by the minimal JVM backend yet",
-    );
-}
+fn jvm_random_access_file_round_trips_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-cross");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
 
-#[test]
-fn jvm_target_random_access_file_is_binary_compatible_with_real_bascom_jvm_writes() {
-    assert_jvm_expected_failure(
-        "program jvmRandomWrite\nrecord R\n value: int16\nend record\nfile db as R = open(\"records.dat\")\nend\n",
-        "not supported by the minimal JVM backend yet",
+    let run = |fixture: &str| {
+        let source_path = repo_root()
+            .join("tests/fixtures/conformance")
+            .join(format!("{fixture}.bcl"));
+        let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+            .arg(&source_path)
+            .arg("--target")
+            .arg("jvm")
+            .arg("--clean")
+            .arg("--run")
+            .arg("-o")
+            .arg(work_dir.join("out/"))
+            .current_dir(&work_dir)
+            .output()
+            .expect("failed to invoke bcc");
+        assert!(
+            output.status.success(),
+            "{fixture} failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n")
+    };
+
+    run("cross_write");
+    let actual = run("cross_read");
+    assert!(
+        actual.ends_with("42\n CrossTest\n"),
+        "the JVM target's own random-access record read/write round-trip doesn't match:\n{actual}"
     );
 }
 

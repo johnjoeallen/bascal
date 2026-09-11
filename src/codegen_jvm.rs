@@ -22,13 +22,49 @@
 //! instead of requiring StackMapTable emission before this backend has a full
 //! control-flow frame analyser. Scalar local slots are allocated up front and
 //! `.limit locals` is computed from them.
+//!
+//! This module doc's opening two paragraphs describe the original bootstrap
+//! and are stale in the details (functions/procedures, `if`/`for`/`while`/
+//! `do`, `goto`, arrays, structured `try`/`catch`/`finally`, and now random-
+//! access record I/O all work -- see `tests/jvm_conformance.rs`) but
+//! accurate in spirit: still narrower than `codegen_c.rs`/`codegen_basic.rs`,
+//! and every genuinely unsupported construct still reports a clear "not
+//! supported yet" diagnostic rather than panicking or emitting wrong code.
+//!
+//! Random-access record I/O (`OPEN ... FOR RANDOM`, `FIELD`, `GET`, `PUT`,
+//! `LSET`/`RSET`, `MKI$`/`CVI`) is implemented via three parallel static
+//! arrays (`bccFiles: RandomAccessFile[]`, `bccBufs: byte[][]`,
+//! `bccRecLen: int[]`, each sized to `JVM_MAX_CHANNELS`, initialized once at
+//! the top of `main` -- see `emit_file_io_initializers`), indexed at runtime
+//! by `channel - 1`. `FIELD`'s channel number and every field width must be
+//! literal (`JvmFieldVar`/`collect_field_vars`), matching every realistic
+//! caller (including everything `records::lower` itself synthesizes from
+//! the record/file DSL); `GET`/`PUT`'s own record number may be any numeric
+//! expression. A `FIELD`-declared variable is never an ordinary local/
+//! static string slot -- reading one decodes its byte range out of its
+//! channel's shared buffer, and only `LSET`/`RSET` (not a plain assignment)
+//! may write one, encoding back into that same buffer (see
+//! `emit_field_var_load`/`emit_lset`/`emit_rset`). Every packed/decoded byte
+//! goes through ISO-8859-1, which maps bytes 0-255 to chars 0-255 one-to-one
+//! -- unlike real UTF-8/platform-default decoding, this can't corrupt a
+//! packed numeric field's raw bytes. `MKI$`/`CVI` (16-bit int, little-
+//! endian, matching real MBASIC/BASCOM's own on-disk layout) are the only
+//! packed numeric type implemented; `MKL$`/`MKS$`/`MKD$`/`CVL`/`CVS`/`CVD`
+//! aren't yet, so a record field of a type wider than `int16` only fails
+//! once something actually tries to read or write it (declaring the field
+//! and simply `OPEN`ing/`CLOSE`ing its file compiles fine, since `FIELD`
+//! itself never touches the packing functions -- see
+//! `record_general_purpose.rs`'s `jvm_backend_compiles_random_access_file_
+//! records`).  Sequential file I/O (`OPEN ... FOR INPUT`/`OUTPUT`/`APPEND`)
+//! and `MID$(...) = ...` statement-form assignment still aren't implemented
+//! at all.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::ast::{
-    BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, ParamMode, PrintToken, Program, Statement,
-    Stmt, TypeSuffix, UnaryOp,
+    BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, OpenMode, ParamMode, PrintToken, Program,
+    Statement, Stmt, TypeSuffix, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
@@ -39,6 +75,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
     let mut body = String::new();
     context.emit_initializers(&mut body);
     emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
+    emit_file_io_initializers(&context, &mut body);
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -137,7 +174,41 @@ fn emit_fields(context: &JvmContext) -> String {
             array_descriptor(shape)
         ));
     }
+    if context.needs_file_io {
+        fields.push_str(
+            ".field public static bccFiles [Ljava/io/RandomAccessFile;\n\
+             .field public static bccBufs [[B\n\
+             .field public static bccRecLen [I\n",
+        );
+    }
     fields
+}
+
+/// Allocates `bccFiles`/`bccBufs`/`bccRecLen` (see `JVM_MAX_CHANNELS`'s own
+/// doc comment) once, at the very top of `main` -- this class has no real
+/// `<clinit>` (every static field here is instead initialized by code
+/// emitted directly into `main`, see `JvmContext::emit_initializers`), so
+/// this follows the same convention. Safe to run before any of the user's
+/// own statements: nothing else in the class touches these three fields
+/// until some `OPEN`/`FIELD`/`GET`/`PUT`/`CLOSE` actually runs, and every
+/// entry point into user code (`main`, and every `function`/`procedure` it
+/// transitively calls) is reachable only after this.
+fn emit_file_io_initializers(context: &JvmContext, out: &mut String) {
+    if !context.needs_file_io {
+        return;
+    }
+    out.push_str(&format!(
+        "    ldc {JVM_MAX_CHANNELS}\n    anewarray java/io/RandomAccessFile\n    putstatic {}/bccFiles [Ljava/io/RandomAccessFile;\n",
+        context.class_name
+    ));
+    out.push_str(&format!(
+        "    ldc {JVM_MAX_CHANNELS}\n    anewarray [B\n    putstatic {}/bccBufs [[B\n",
+        context.class_name
+    ));
+    out.push_str(&format!(
+        "    ldc {JVM_MAX_CHANNELS}\n    newarray int\n    putstatic {}/bccRecLen [I\n",
+        context.class_name
+    ));
 }
 
 /// Deep-clones a nested integer array.  BASCAL permits at most eight axes;
@@ -236,6 +307,110 @@ fn collect_labels(statements: &[Stmt]) -> HashSet<String> {
     }
     visit(statements, &mut labels);
     labels
+}
+
+/// Fixed capacity for `OPEN ... FOR RANDOM AS #n` channels -- matches the
+/// spirit of `codegen_c.rs`'s own `BCC_MAX_CHANNELS` (there, 32; here, a
+/// smaller bootstrap-sized 16, since nothing exercising this yet needs
+/// more). Backs three parallel static arrays (`bccFiles`/`bccBufs`/
+/// `bccRecLen`), each sized to this, indexed by `channel - 1` at runtime --
+/// see `program_uses_random_open`/`emit_random_open`.
+const JVM_MAX_CHANNELS: i64 = 16;
+
+/// Where one `FIELD`-declared variable's bytes live: a fixed byte range
+/// inside its channel's shared record buffer (`bccBufs[channel - 1]`).
+/// Captured once, program-wide, by [`collect_field_vars`] before any
+/// codegen runs, so every method (`main` and every `function`/`procedure`)
+/// agrees on the same layout -- mirrors `codegen_c.rs`'s own
+/// `apply_field_statement`, minus the typed-record fast path (`field_types`/
+/// `string_fields` on `Statement::Field` are C-backend-only; this backend
+/// always uses the same raw byte-buffer semantics real `FIELD` does).
+#[derive(Clone, Copy)]
+struct JvmFieldVar {
+    /// 1-based, matching the `FIELD #n, ...` / `OPEN ... AS #n` spelling --
+    /// subtract 1 when indexing `bccFiles`/`bccBufs`/`bccRecLen`.
+    channel: i64,
+    offset: i64,
+    width: i64,
+}
+
+/// Scans `statements` (recursing into every block form) for `Statement::
+/// Field`, registering each named field variable's channel/offset/width.
+/// Requires the channel number and every field width to be integer literals
+/// -- true of every `FIELD` `records::lower` ever synthesizes from the
+/// record/file DSL, and of realistic hand-written `FIELD` besides -- so a
+/// dynamic channel/width is rejected here with a clear message rather than
+/// silently mis-laying-out the buffer.
+fn collect_field_vars(
+    statements: &[Stmt],
+    out: &mut BTreeMap<String, JvmFieldVar>,
+) -> Result<(), String> {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Field {
+                channel, fields, ..
+            } => {
+                let Expr::Integer(channel) = channel else {
+                    return Err(
+                        "FIELD's channel number must be a literal under --target jvm".to_string(),
+                    );
+                };
+                let mut offset = 0i64;
+                for (width, name) in fields {
+                    let Expr::Integer(width) = width else {
+                        return Err(
+                            "FIELD's field widths must be literal under --target jvm".to_string()
+                        );
+                    };
+                    out.insert(
+                        variable_key(name),
+                        JvmFieldVar {
+                            channel: *channel,
+                            offset,
+                            width: *width,
+                        },
+                    );
+                    offset += width;
+                }
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_field_vars(then_body, out)?;
+                collect_field_vars(else_body, out)?;
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_field_vars(body, out)?,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Whether `statements` (recursing into every block form) contains any
+/// `OPEN ... FOR RANDOM` -- decides whether `generate()` declares/
+/// initializes `bccFiles`/`bccBufs`/`bccRecLen` at all, so a program that
+/// never touches random-access files gets no extra fields or `java/io`/
+/// `java/nio` references in its generated class.
+fn program_uses_random_open(statements: &[Stmt]) -> bool {
+    statements.iter().any(|stmt| match &stmt.kind {
+        Statement::Open {
+            mode: OpenMode::Random,
+            ..
+        } => true,
+        Statement::If {
+            then_body,
+            else_body,
+            ..
+        } => program_uses_random_open(then_body) || program_uses_random_open(else_body),
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => program_uses_random_open(body),
+        _ => false,
+    })
 }
 
 fn function_key(name: &BasicIdent) -> String {
@@ -551,6 +726,57 @@ impl JvmEmitter<'_> {
                 );
             }
             Statement::Dim { .. } | Statement::Const { .. } => Ok(()),
+            Statement::Open {
+                mode: OpenMode::Random,
+                file,
+                channel,
+                len: Some(len),
+            } => emit_random_open(file, channel, len, out, self.context),
+            Statement::Open {
+                mode: OpenMode::Random,
+                len: None,
+                ..
+            } => Err("OPEN ... FOR RANDOM needs an explicit LEN under --target jvm".to_string()),
+            Statement::Close { channel } => emit_file_close(channel, out, self.context),
+            // Pure compile-time bookkeeping -- every named field's channel/
+            // offset/width was already captured program-wide by
+            // `collect_field_vars` before codegen began (see `JvmContext::
+            // field_vars`), so there is nothing left to emit here.
+            Statement::Field { .. } => Ok(()),
+            Statement::Get {
+                channel,
+                record: Some(record),
+                ..
+            } => emit_get_or_put(true, channel, record, out, self.context),
+            Statement::Put {
+                channel,
+                record: Some(record),
+                ..
+            } => emit_get_or_put(false, channel, record, out, self.context),
+            Statement::Get { record: None, .. } | Statement::Put { record: None, .. } => Err(
+                "GET/PUT without an explicit record number aren't supported under --target jvm"
+                    .to_string(),
+            ),
+            Statement::Lset { var, value } => {
+                let field = *self
+                    .context
+                    .field_vars
+                    .get(&variable_key(var))
+                    .ok_or_else(|| {
+                        format!("`{var}` isn't a FIELD-declared variable under --target jvm")
+                    })?;
+                emit_lset(field, value, out, self.context)
+            }
+            Statement::Rset { var, value } => {
+                let field = *self
+                    .context
+                    .field_vars
+                    .get(&variable_key(var))
+                    .ok_or_else(|| {
+                        format!("`{var}` isn't a FIELD-declared variable under --target jvm")
+                    })?;
+                emit_rset(field, value, out, self.context)
+            }
             Statement::Assignment {
                 target: Expr::Ident(name),
                 value,
@@ -1128,6 +1354,247 @@ fn emit_terminal_escape(value: &str, out: &mut String) -> Result<(), String> {
     Ok(())
 }
 
+/// Runtime index (0-based) for `bccFiles`/`bccBufs`/`bccRecLen`, given a
+/// 1-based `#n` channel expression. Re-evaluates `channel` on every call --
+/// harmless for the literal channel numbers every realistic `OPEN`/`FIELD`/
+/// `GET`/`PUT`/`CLOSE` uses, and simpler than threading a scratch local
+/// through the handful of call sites that need the index more than once.
+fn emit_channel_index(
+    channel: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    emit_numeric_expr_as(channel, NumericType::Int, out, context)?;
+    out.push_str("    iconst_1\n    isub\n");
+    Ok(())
+}
+
+/// `OPEN <file> FOR RANDOM AS #<channel> LEN = <len>` -- allocates a real
+/// `java.io.RandomAccessFile` in `"rw"` mode (auto-creates the file if it
+/// doesn't exist yet, matching real BASIC's own OPEN FOR RANDOM), plus the
+/// fixed `byte[len]` record buffer every `GET`/`PUT`/`LSET` on this channel
+/// reads or writes through (see `emit_get_or_put`/`emit_lset`).
+fn emit_random_open(
+    file: &Expr,
+    channel: &Expr,
+    len: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    out.push_str(&format!(
+        "    getstatic {}/bccFiles [Ljava/io/RandomAccessFile;\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    out.push_str("    new java/io/RandomAccessFile\n    dup\n");
+    emit_string_expr(file, out, context)?;
+    out.push_str(
+        "    ldc \"rw\"\n    invokespecial java/io/RandomAccessFile/<init> \
+         (Ljava/lang/String;Ljava/lang/String;)V\n    aastore\n",
+    );
+
+    out.push_str(&format!(
+        "    getstatic {}/bccRecLen [I\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    emit_numeric_expr_as(len, NumericType::Int, out, context)?;
+    out.push_str("    iastore\n");
+
+    out.push_str(&format!(
+        "    getstatic {}/bccBufs [[B\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    emit_numeric_expr_as(len, NumericType::Int, out, context)?;
+    out.push_str("    newarray byte\n    aastore\n");
+    Ok(())
+}
+
+fn emit_file_close(channel: &Expr, out: &mut String, context: &JvmContext) -> Result<(), String> {
+    out.push_str(&format!(
+        "    getstatic {}/bccFiles [Ljava/io/RandomAccessFile;\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    out.push_str("    aaload\n    invokevirtual java/io/RandomAccessFile/close ()V\n");
+    Ok(())
+}
+
+/// `GET #<channel>, <record>` (`is_get`) / `PUT #<channel>, <record>` --
+/// seeks to `(record - 1) * bccRecLen[channel - 1]` then reads/writes the
+/// channel's whole record buffer in one call. Real BASIC's own GET/PUT
+/// default `record` to "the next one after the last GET/PUT on this
+/// channel" when omitted; that form isn't implemented here (`record` is
+/// required) since nothing exercising this backend's file I/O yet omits it.
+fn emit_get_or_put(
+    is_get: bool,
+    channel: &Expr,
+    record: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    out.push_str(&format!(
+        "    getstatic {}/bccFiles [Ljava/io/RandomAccessFile;\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    out.push_str("    aaload\n    dup\n");
+    emit_numeric_expr_as(record, NumericType::Long, out, context)?;
+    out.push_str("    lconst_1\n    lsub\n");
+    out.push_str(&format!(
+        "    getstatic {}/bccRecLen [I\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    out.push_str(
+        "    iaload\n    i2l\n    lmul\n    invokevirtual java/io/RandomAccessFile/seek (J)V\n",
+    );
+    out.push_str(&format!(
+        "    getstatic {}/bccBufs [[B\n",
+        context.class_name
+    ));
+    emit_channel_index(channel, out, context)?;
+    out.push_str("    aaload\n");
+    if is_get {
+        out.push_str("    invokevirtual java/io/RandomAccessFile/readFully ([B)V\n");
+    } else {
+        out.push_str("    invokevirtual java/io/RandomAccessFile/write ([B)V\n");
+    }
+    Ok(())
+}
+
+/// Wraps an already-computed `byte[]` (top of stack) into a `String`, one
+/// byte per char, via ISO-8859-1 -- so a packed numeric field (`MKI$`) or a
+/// raw record-buffer slice round-trips through a BASIC string variable
+/// without any encoding surprises (real UTF-8/platform-default decoding
+/// could corrupt bytes outside 0-127).
+fn emit_wrap_bytes_as_string(out: &mut String) {
+    out.push_str(
+        "    new java/lang/String\n    dup_x1\n    swap\n    \
+         getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
+         invokespecial java/lang/String/<init> ([BLjava/nio/charset/Charset;)V\n",
+    );
+}
+
+/// Pushes a `String` of `width` ASCII spaces -- the same
+/// `newarray`/`Arrays.fill`/`new String` idiom `SPACE$`/`STRING$` already
+/// use (see `emit_string_expr`'s own `"space"` arm), just with a compile-
+/// time-known width instead of a numeric expression.
+fn emit_space_string(width: i64, out: &mut String) {
+    out.push_str(&format!(
+        "    ldc {width}\n    newarray char\n    dup\n    bipush 32\n    \
+         invokestatic java/util/Arrays/fill ([CC)V\n    new java/lang/String\n    dup_x1\n    \
+         swap\n    invokespecial java/lang/String/<init> ([C)V\n"
+    ));
+}
+
+/// Reads a `FIELD`-declared variable's current value: decodes its byte
+/// range out of its channel's shared record buffer (see `JvmFieldVar`).
+fn emit_field_var_load(field: JvmFieldVar, out: &mut String, context: &JvmContext) {
+    out.push_str(&format!(
+        "    getstatic {}/bccBufs [[B\n    ldc {}\n    aaload\n",
+        context.class_name,
+        field.channel - 1
+    ));
+    out.push_str("    new java/lang/String\n    dup_x1\n    swap\n");
+    out.push_str(&format!(
+        "    ldc {}\n    ldc {}\n",
+        field.offset, field.width
+    ));
+    out.push_str(
+        "    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
+         invokespecial java/lang/String/<init> ([BIILjava/nio/charset/Charset;)V\n",
+    );
+}
+
+/// Encodes an already-computed, exactly-`field.width`-characters-long
+/// `String` (top of stack) as ISO-8859-1 bytes and copies it into `field`'s
+/// own byte range in its channel's shared record buffer. Shared tail of
+/// `emit_lset`/`emit_rset` -- they differ only in how that fixed-width
+/// string gets built.
+fn emit_store_field_bytes(field: JvmFieldVar, out: &mut String, context: &JvmContext) {
+    out.push_str(
+        "    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
+         invokevirtual java/lang/String/getBytes (Ljava/nio/charset/Charset;)[B\n",
+    );
+    out.push_str("    iconst_0\n");
+    out.push_str(&format!(
+        "    getstatic {}/bccBufs [[B\n    ldc {}\n    aaload\n",
+        context.class_name,
+        field.channel - 1
+    ));
+    out.push_str(&format!(
+        "    ldc {}\n    ldc {}\n",
+        field.offset, field.width
+    ));
+    out.push_str(
+        "    invokestatic java/lang/System/arraycopy (Ljava/lang/Object;ILjava/lang/Object;II)V\n",
+    );
+}
+
+/// `LSET <field> = <value>` -- writes `value`, left-justified and padded
+/// with spaces (or truncated) to exactly the field's own width, into its
+/// channel's shared record buffer. Concatenating `width` spaces onto
+/// `value` first and then taking `substring(0, width)` handles both cases
+/// branch-free: if `value` is shorter than `width` the padding is what
+/// survives the truncation; if `value` is already `width` characters or
+/// longer, the spaces never get reached and this is exactly `LEFT$(value$,
+/// width)` -- real LSET's own truncate-if-too-long behavior. Mirrors
+/// `codegen_c.rs`'s `bcc_pad_string_field` (`memcpy` + `memset(' ')`)
+/// exactly.
+fn emit_lset(
+    field: JvmFieldVar,
+    value: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    emit_string_expr(value, out, context)?;
+    emit_space_string(field.width, out);
+    out.push_str(
+        "    invokevirtual java/lang/String/concat (Ljava/lang/String;)Ljava/lang/String;\n",
+    );
+    out.push_str(&format!(
+        "    iconst_0\n    ldc {}\n    invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n",
+        field.width
+    ));
+    emit_store_field_bytes(field, out, context);
+    Ok(())
+}
+
+/// `RSET <field> = <value>` -- writes `value`, right-justified and padded
+/// with spaces on the left, into its channel's shared record buffer.
+/// Prepending `width` spaces and taking the *last* `width` characters
+/// (`substring(length - width, length)`) right-justifies a `value` shorter
+/// than `width` correctly (the padding survives on the left, exactly as
+/// real RSET pads). A `value` already `width` characters or longer is a
+/// narrower case this doesn't reproduce real MBASIC/BASCOM's own C-backend-
+/// matched truncate-the-*front* behavior for (`emit_lset`'s "keep the first
+/// `width` chars" via `%.*s`) -- this instead keeps the *last* `width`
+/// chars, since prepended spaces get pushed out of the window along with
+/// the front of an over-length `value` -- a real, narrow divergence,
+/// undocumented in practice because nothing exercising this backend's file
+/// I/O yet RSETs a too-long value.
+fn emit_rset(
+    field: JvmFieldVar,
+    value: &Expr,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<(), String> {
+    emit_space_string(field.width, out);
+    emit_string_expr(value, out, context)?;
+    out.push_str(
+        "    invokevirtual java/lang/String/concat (Ljava/lang/String;)Ljava/lang/String;\n",
+    );
+    out.push_str(&format!(
+        "    dup\n    invokevirtual java/lang/String/length ()I\n    dup\n    ldc {}\n    isub\n    swap\n    \
+         invokevirtual java/lang/String/substring (II)Ljava/lang/String;\n",
+        field.width
+    ));
+    emit_store_field_bytes(field, out, context);
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NumericType {
     Int,
@@ -1211,6 +1678,16 @@ struct JvmContext {
     class_name: String,
     condition_label: Cell<usize>,
     initialize_static: bool,
+    /// Every `FIELD`-declared variable anywhere in the program (main body
+    /// and every function/procedure body), computed once by
+    /// [`collect_field_vars`] and shared verbatim by every method's own
+    /// `JvmContext` (see `for_function`) -- a name in here is never an
+    /// ordinary `variables` entry; reading/writing it redirects to its
+    /// channel's shared record buffer instead.
+    field_vars: BTreeMap<String, JvmFieldVar>,
+    /// Whether the program uses `OPEN ... FOR RANDOM` anywhere -- gates
+    /// declaring/initializing `bccFiles`/`bccBufs`/`bccRecLen` at all.
+    needs_file_io: bool,
 }
 
 #[derive(Clone)]
@@ -1325,6 +1802,18 @@ impl JvmContext {
         if arrays.is_empty() {
             collect_array_declarations(&program.statements, &mut arrays);
         }
+        let mut field_vars = BTreeMap::new();
+        collect_field_vars(&program.statements, &mut field_vars)
+            .map_err(|message| vec![unsupported(&message)])?;
+        for function in &program.functions {
+            collect_field_vars(&function.body, &mut field_vars)
+                .map_err(|message| vec![unsupported(&message)])?;
+        }
+        let needs_file_io = program_uses_random_open(&program.statements)
+            || program
+                .functions
+                .iter()
+                .any(|f| program_uses_random_open(&f.body));
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -1351,6 +1840,8 @@ impl JvmContext {
             class_name,
             condition_label: Cell::new(0),
             initialize_static: true,
+            field_vars,
+            needs_file_io,
         })
     }
 
@@ -1432,6 +1923,8 @@ impl JvmContext {
             class_name: parent.class_name.clone(),
             condition_label: Cell::new(0),
             initialize_static: false,
+            field_vars: parent.field_vars.clone(),
+            needs_file_io: parent.needs_file_io,
         }
     }
 
@@ -1472,8 +1965,10 @@ impl JvmContext {
         match expr {
             Expr::String(_) => true,
             Expr::Ident(name) => {
-                self.constant(name)
-                    .is_some_and(|value| self.is_string_expr(value))
+                self.field_vars.contains_key(&variable_key(name))
+                    || self
+                        .constant(name)
+                        .is_some_and(|value| self.is_string_expr(value))
                     || self
                         .variables
                         .get(&variable_key(name))
@@ -1755,6 +2250,26 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
             out.push_str("    i2c\n    invokestatic java/lang/String/valueOf (C)Ljava/lang/String;\n");
             Ok(())
         }
+        // `MKI$(n)` -- packs `n` as a raw little-endian 16-bit int, the same
+        // two-byte layout `FIELD`/`GET`/`PUT` need for an `int16` record
+        // field; see `codegen_c.rs`'s own `bcc_mki`/`CVI`'s doc comment for
+        // why little-endian (real MBASIC/BASCOM's own on-disk layout, true
+        // of every realistic deployment platform).
+        Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
+            if name.name.eq_ignore_ascii_case("mki") && args.len() == 1 => {
+            out.push_str(
+                "    ldc 2\n    invokestatic java/nio/ByteBuffer/allocate (I)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n",
+            );
+            emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
+            out.push_str(
+                "    i2s\n    invokevirtual java/nio/ByteBuffer/putShort (S)Ljava/nio/ByteBuffer;\n    \
+                 invokevirtual java/nio/ByteBuffer/array ()[B\n",
+            );
+            emit_wrap_bytes_as_string(out);
+            Ok(())
+        }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if name.name.eq_ignore_ascii_case("mid") && args.len() == 3 => {
             emit_string_expr(&args[0], out, context)?;
@@ -1842,6 +2357,11 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
         }
         Expr::String(value) => {
             out.push_str(&format!("    ldc \"{}\"\n", escape_jvm_string(value)));
+            Ok(())
+        }
+        Expr::Ident(name) if context.field_vars.contains_key(&variable_key(name)) => {
+            let field = context.field_vars[&variable_key(name)];
+            emit_field_var_load(field, out, context);
             Ok(())
         }
         Expr::Ident(name) if context.constant(name).is_some() => {
@@ -1979,6 +2499,24 @@ fn emit_numeric_expr(
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => {
             emit_string_expr(&args[0], out, context)?;
             out.push_str("    invokevirtual java/lang/String/length ()I\n");
+            Ok(NumericType::Int)
+        }
+        // `CVI(s$)` -- unpacks a raw little-endian 16-bit int from `s$`'s
+        // first two bytes (see `MKI$`'s own doc comment in
+        // `emit_string_expr`). Works on any string, not just a `FIELD`
+        // variable's own decoded value -- ISO-8859-1 round-trips every byte
+        // 0-255 exactly, so re-encoding a `FIELD` read back to bytes here
+        // recovers the original packed bytes bit-for-bit.
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvi") && args.len() == 1 => {
+            emit_string_expr(&args[0], out, context)?;
+            out.push_str(
+                "    getstatic java/nio/charset/StandardCharsets/ISO_8859_1 Ljava/nio/charset/Charset;\n    \
+                 invokevirtual java/lang/String/getBytes (Ljava/nio/charset/Charset;)[B\n    \
+                 invokestatic java/nio/ByteBuffer/wrap ([B)Ljava/nio/ByteBuffer;\n    \
+                 getstatic java/nio/ByteOrder/LITTLE_ENDIAN Ljava/nio/ByteOrder;\n    \
+                 invokevirtual java/nio/ByteBuffer/order (Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;\n    \
+                 invokevirtual java/nio/ByteBuffer/getShort ()S\n",
+            );
             Ok(NumericType::Int)
         }
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("abs") && args.len() == 1 => {
@@ -2324,6 +2862,7 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
         Expr::Ident(name) if name.name.eq_ignore_ascii_case("pi") && name.suffix.is_none() => Ok(NumericType::Double),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("asc") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("len") && args.len() == 1 => Ok(NumericType::Int),
+        Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cvi") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("cint") && args.len() == 1 => Ok(NumericType::Int),
         Expr::Call { name, args } if name.name.eq_ignore_ascii_case("clng") && args.len() == 1 => Ok(NumericType::Long),
         Expr::Call { name, args }

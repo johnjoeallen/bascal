@@ -320,11 +320,17 @@ end
     }
 }
 
-/// Documents (does not assert a regression on) the JVM backend's existing,
-/// unrelated limitation: it rejects random-access file records outright,
-/// independent of the general-purpose-record question.
+/// Random-access file records now compile under `--target jvm` (see
+/// `codegen_jvm.rs`'s `JvmFieldVar`/`emit_random_open`/`emit_get_or_put`/
+/// `emit_lset` -- OPEN FOR RANDOM, FIELD, GET, PUT, LSET, RSET, MKI$/CVI),
+/// independent of the general-purpose-record question this file otherwise
+/// investigates. This program never actually reads or writes `score`
+/// (`float64`), so it compiles even though `MKD$`/`CVD` aren't implemented
+/// yet for this target -- see `jvm_random_access_file_round_trips_when_
+/// available` in tests/jvm_conformance.rs for an int16 + string field that
+/// actually round-trips through a real file.
 #[test]
-fn jvm_backend_does_not_yet_support_random_access_file_records() {
+fn jvm_backend_compiles_random_access_file_records() {
     let source = r#"program studentFileTest
 
 record Student
@@ -340,9 +346,8 @@ end
 "#;
     let result = try_compile("jvm_file_record_usage", source, Target::Jvm);
     assert!(
-        result.is_err(),
-        "JVM backend now compiles random-access file records -- this pre-existing \
-         limitation may have been lifted; update this test's expectation. Output: {:?}",
-        result
+        result.is_ok(),
+        "JVM backend should compile this random-access file record. Output: {:?}",
+        result.err()
     );
 }
