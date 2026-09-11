@@ -96,6 +96,47 @@
 //! `--target jvm` as of this paragraph, verified interactively (add an
 //! item, list it back, confirming the random-access write/read round-trip)
 //! with real `java` and `krak2`.
+//!
+//! Scalar `byref` parameters are emulated (the JVM has no scalar reference
+//! semantics the way C has pointers): each `byref` scalar argument is
+//! wrapped in a fresh single-element array at the call site (see
+//! `emit_call_arguments`), passed as that array (`FunctionSig::
+//! byref_scalar_positions`/`descriptor_params` widen its descriptor slot to
+//! `[<type>` accordingly), unwrapped into an ordinary "working" local at
+//! function entry, written back into the array at every exit point
+//! (`JvmContext::emit_byref_writebacks`, called from both the procedure/
+//! function fallthrough and every explicit `return`), and unwrapped again
+//! at the call site once the call returns (`emit_byref_call_writebacks`).
+//! The synthetic "working" locals and per-function scratch-array slots are
+//! allocated strictly *after* every real parameter slot (`for_function`'s
+//! two-pass allocation) -- interleaving them with the true parameter slots
+//! corrupts the JVM's own parameter numbering for every parameter after the
+//! first `byref` one and fails verification (`VerifyError: Bad local
+//! variable type`), the bug this two-pass split fixes.
+//!
+//! `tutorial/inventory.bcl` -- the most feature-complete tutorial, using
+//! random-access record I/O, `INKEY$`, `INPUT`, `byref` scalars, and
+//! `try`/`catch` together -- compiles and runs correctly end to end under
+//! `--target jvm`, verified interactively against a real pseudo-terminal
+//! (menu navigation via `INKEY$`, a part lookup via `INPUT`, and the full
+//! record listing, all against a freshly-initialized data file). Getting
+//! there surfaced two more real, narrow bugs beyond the ones above: `GET`
+//! on a freshly-created (empty) random-access file used to throw
+//! `EOFException` (`RandomAccessFile.readFully()` requires a full read;
+//! `emit_get_or_put` now uses plain `read()` and discards the count,
+//! matching C's `fread`-based leniency -- see
+//! `jvm_get_on_a_fresh_empty_file_does_not_throw_when_available`), and
+//! calling a non-`void` function as a bare statement (discarding its
+//! result, the way `inventory.bcl`'s `readKey$()` consumes a keystroke)
+//! used to be rejected outright -- the statement-call path now accepts any
+//! function, popping the unwanted result (see
+//! `jvm_function_call_as_bare_statement_discards_its_result_when_available`).
+//! A third, more fundamental bug also surfaced here: once `INKEY$` has put
+//! the terminal into raw, non-blocking (`min 0 time 0`) mode, a later
+//! blocking `INPUT` needs an ordinary blocking terminal to read from --
+//! `emit_input` now brackets its `readLine()` with `stty sane` /
+//! `emit_inkey_setup`'s raw mode again (see `emit_input`'s own doc comment
+//! and `jvm_input_after_inkey_reads_the_typed_value_when_available`).
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -281,6 +322,18 @@ fn emit_input_initializer(context: &JvmContext, out: &mut String) {
 /// numeric one. Only a single plain-identifier target is supported --
 /// real BASIC's comma-separated multi-variable `INPUT` isn't implemented,
 /// since nothing exercising this backend's INPUT yet uses it.
+///
+/// When the program also uses `INKEY$`, the terminal is sitting in
+/// `emit_inkey_setup`'s raw, non-blocking (`min 0 time 0`) mode for the
+/// entire run. A blocking `BufferedReader.readLine()` under that mode
+/// doesn't block for a line the way it would on a normal terminal --
+/// empirically, Java's stream decoder treats the immediate zero-byte reads
+/// `min 0 time 0` produces as EOF and `readLine()` returns `null` (crashing
+/// the `.trim()`/`parseInt` call that follows) even though the user is
+/// mid-keystroke. So `INPUT` brackets its read with `stty sane` /
+/// `emit_inkey_setup`'s raw mode again, giving `readLine()` an ordinary
+/// blocking, canonical-mode terminal to read from and leaving INKEY$'s
+/// polling mode restored afterward.
 fn emit_input(
     prompt: Option<&str>,
     vars: &[Expr],
@@ -301,11 +354,13 @@ fn emit_input(
             escape_jvm_string(prompt)
         ));
     }
+    emit_inkey_restore(context, out);
     out.push_str(&format!(
         "    getstatic {}/bccStdin Ljava/io/BufferedReader;\n    \
          invokevirtual java/io/BufferedReader/readLine ()Ljava/lang/String;\n",
         context.class_name
     ));
+    emit_inkey_setup(context, out);
     match variable.ty {
         JvmType::String => {}
         JvmType::Numeric(ty) => {
@@ -742,6 +797,113 @@ fn array_store_opcode(ty: JvmType) -> &'static str {
     }
 }
 
+/// The `newarray`/`anewarray` instruction (length already on the stack) for
+/// a fresh single-element array of `ty` -- used only to build a `byref`
+/// scalar argument's wrapper array at its call site (see
+/// `emit_call_arguments`).
+fn new_scalar_array_instruction(ty: JvmType) -> &'static str {
+    match ty {
+        JvmType::String => "anewarray java/lang/String",
+        JvmType::Numeric(NumericType::Int) => "newarray int",
+        JvmType::Numeric(NumericType::Long) => "newarray long",
+        JvmType::Numeric(NumericType::Double) => "newarray double",
+    }
+}
+
+/// Renders one call's actual arguments in order: a byval scalar (plain
+/// value), a byval/byref array (already a reference type in Java, so passed
+/// straight through with no wrapping either way -- see `JvmArrayParam::
+/// by_ref`'s own call-site handling), or a `byref` scalar -- wrapped in a
+/// fresh single-element array seeded with the argument's current value,
+/// built into one of this *caller* function's own reserved scratch slots
+/// (see `JvmContext::byref_scratch_base`'s own doc comment; slots are
+/// reused across separate calls in the same function, safe because one
+/// call's own write-back always completes before the next call's argument-
+/// building starts). Returns the `(scratch_slot, target_variable)` pairs to
+/// write back into the caller's own variables once the call returns (see
+/// `emit_byref_call_writebacks`) -- `target_variable` must be a plain
+/// identifier, the only shape a `byref` argument can be resolved against.
+fn emit_call_arguments(
+    name: &BasicIdent,
+    args: &[Expr],
+    signature: &FunctionSig,
+    out: &mut String,
+    context: &JvmContext,
+) -> Result<Vec<(usize, Variable)>, String> {
+    let mut scalars = signature.params.iter();
+    let mut writebacks = Vec::new();
+    let mut next_scratch = context.byref_scratch_base;
+    for (position, arg) in args.iter().enumerate() {
+        if let Some(array) = signature
+            .array_params
+            .iter()
+            .find(|array| array.position == position)
+        {
+            let Expr::Ident(array_name) = arg else {
+                return Err(format!(
+                    "array parameter {position} of `{name}` needs a plain array argument"
+                ));
+            };
+            let shape = context
+                .arrays
+                .get(&variable_key(array_name))
+                .ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
+            if shape.dimensions.len() != array.rank || shape.element != array.element {
+                return Err(format!(
+                    "array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"
+                ));
+            }
+            context.emit_array_load(array_name, out);
+        } else {
+            let ty = *scalars.next().expect("scalar source parameter");
+            if signature.byref_scalar_positions.contains(&position) {
+                let Expr::Ident(target) = arg else {
+                    return Err(format!(
+                        "byref parameter {position} of `{name}` needs a plain variable argument"
+                    ));
+                };
+                let variable = context.variable(target)?;
+                let scratch = next_scratch;
+                next_scratch += 1;
+                out.push_str("    iconst_1\n");
+                out.push_str(&format!("    {}\n", new_scalar_array_instruction(ty)));
+                out.push_str("    dup\n    iconst_0\n");
+                match ty {
+                    JvmType::String => emit_string_expr(arg, out, context)?,
+                    JvmType::Numeric(nt) => emit_numeric_expr_as(arg, nt, out, context)?,
+                }
+                out.push_str(&format!("    {}\n", array_store_opcode(ty)));
+                out.push_str(&format!("    astore {scratch}\n"));
+                out.push_str(&format!("    aload {scratch}\n"));
+                writebacks.push((scratch, variable));
+            } else {
+                match ty {
+                    JvmType::String => emit_string_expr(arg, out, context)?,
+                    JvmType::Numeric(nt) => emit_numeric_expr_as(arg, nt, out, context)?,
+                }
+            }
+        }
+    }
+    Ok(writebacks)
+}
+
+/// The counterpart to `emit_call_arguments`: once a call returns, unwraps
+/// each `byref` scalar argument's scratch array and stores the (possibly
+/// mutated) value back into the caller's own variable.
+fn emit_byref_call_writebacks(
+    writebacks: &[(usize, Variable)],
+    out: &mut String,
+    context: &JvmContext,
+) {
+    for (scratch, variable) in writebacks {
+        out.push_str(&format!(
+            "    aload {scratch}\n    iconst_0\n    {}\n",
+            array_load_opcode(variable.ty)
+        ));
+        emit_store(*variable, out, context);
+    }
+}
+
 fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
     functions
         .iter()
@@ -778,6 +940,13 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                                 by_ref: param.mode == ParamMode::ByRef,
                             })
                         })
+                        .collect(),
+                    byref_scalar_positions: function
+                        .params
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, param)| param.axes.is_none() && param.mode == ParamMode::ByRef)
+                        .map(|(position, _)| position)
                         .collect(),
                     source_param_count: function.params.len(),
                     has_receiver: function.receiver.is_some(),
@@ -825,6 +994,20 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         };
         body.push_str(&format!("    aload {slot}\n    bipush {rank}\n    bipush {kind}\n    invokestatic {}/bccCopyArray (Ljava/lang/Object;II)Ljava/lang/Object;\n    checkcast {desc}\n    astore {slot}\n", context.class_name));
     }
+    // Unwrap every `byref` scalar parameter's incoming single-element array
+    // into its own ordinary working local -- see `JvmContext::
+    // byref_scalar_params`'s own doc comment. The reverse (write the
+    // working local's final value back into the array) happens at every
+    // exit point instead: `Statement::Return`/`ReturnVoid`'s own arms, and
+    // this function's fallthrough default-return below.
+    for (array_slot, working) in &context.byref_scalar_params {
+        body.push_str(&format!(
+            "    aload {array_slot}\n    iconst_0\n    {}\n    {} {}\n",
+            array_load_opcode(working.ty),
+            working.store_opcode(),
+            working.slot
+        ));
+    }
     let mut emitter = JvmEmitter {
         context: &context,
         next_label: 0,
@@ -839,8 +1022,10 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
     // Resolver guarantees a return on every reachable path. This fallback
     // keeps the JVM verifier satisfied if an unsupported analysis edge leaks through.
     if function.is_procedure {
+        context.emit_byref_writebacks(&mut body);
         body.push_str("    return\n");
     } else {
+        context.emit_byref_writebacks(&mut body);
         match type_for_ident(&function.name) {
             JvmType::String => body.push_str("    ldc \"\"\n    areturn\n"),
             JvmType::Numeric(NumericType::Int) => body.push_str("    iconst_0\n    ireturn\n"),
@@ -1157,43 +1342,34 @@ impl JvmEmitter<'_> {
                     .context
                     .function(name)
                     .ok_or_else(|| format!("unknown JVM procedure `{name}`"))?;
-                if !signature.returns_void || signature.source_param_count != args.len() {
+                if signature.source_param_count != args.len() {
                     return Err(format!("invalid JVM procedure call `{name}`"));
                 }
-                let mut scalars = signature.params.iter();
-                for (position, arg) in args.iter().enumerate() {
-                    if let Some(array) = signature
-                        .array_params
-                        .iter()
-                        .find(|array| array.position == position)
-                    {
-                        let Expr::Ident(array_name) = arg else {
-                            return Err(format!("array parameter {position} of `{name}` needs a plain array argument"));
-                        };
-                        let shape = self
-                            .context
-                            .arrays
-                            .get(&variable_key(array_name))
-                            .ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
-                        if shape.dimensions.len() != array.rank || shape.element != array.element {
-                            return Err(format!("array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"));
-                        }
-                        self.context.emit_array_load(array_name, out);
-                    } else {
-                        let ty = scalars.next().expect("scalar source parameter");
-                        match ty {
-                            JvmType::String => emit_string_expr(arg, out, self.context)?,
-                            JvmType::Numeric(ty) => {
-                                emit_numeric_expr_as(arg, *ty, out, self.context)?
-                            }
-                        }
-                    }
-                }
+                let writebacks = emit_call_arguments(name, args, &signature, out, self.context)?;
                 let args_descriptor = signature.descriptor_params().join("");
+                let result_descriptor = if signature.returns_void {
+                    "V".to_string()
+                } else {
+                    descriptor(signature.result).to_string()
+                };
                 out.push_str(&format!(
-                    "    invokestatic {}/{} ({args_descriptor})V\n",
+                    "    invokestatic {}/{} ({args_descriptor}){result_descriptor}\n",
                     self.context.class_name, name.name
                 ));
+                // A function called as a bare statement discards its
+                // result -- real BASIC's own `readKey$()`/`waitAnyKey()`-
+                // style "call for the side effect only" pattern (see
+                // `tutorial/inventory.bcl`'s own `readKey$()` used this way
+                // to pause for a keypress without caring what key it was).
+                if !signature.returns_void {
+                    out.push_str(match signature.result {
+                        JvmType::String => "    pop\n",
+                        JvmType::Numeric(NumericType::Long)
+                        | JvmType::Numeric(NumericType::Double) => "    pop2\n",
+                        JvmType::Numeric(NumericType::Int) => "    pop\n",
+                    });
+                }
+                emit_byref_call_writebacks(&writebacks, out, self.context);
                 Ok(())
             }
             Statement::If {
@@ -1229,11 +1405,13 @@ impl JvmEmitter<'_> {
             Statement::Return { value } => match self.return_type {
                 Some(JvmType::String) => {
                     emit_string_expr(value, out, self.context)?;
+                    self.context.emit_byref_writebacks(out);
                     out.push_str("    areturn\n");
                     Ok(())
                 }
                 Some(JvmType::Numeric(ty)) => {
                     emit_numeric_expr_as(value, ty, out, self.context)?;
+                    self.context.emit_byref_writebacks(out);
                     out.push_str(match ty {
                         NumericType::Int => "    ireturn\n",
                         NumericType::Long => "    lreturn\n",
@@ -1247,6 +1425,7 @@ impl JvmEmitter<'_> {
                 if self.return_type.is_some() {
                     Err("bare RETURN is only supported inside a JVM procedure".to_string())
                 } else {
+                    self.context.emit_byref_writebacks(out);
                     out.push_str("    return\n");
                     Ok(())
                 }
@@ -1844,7 +2023,19 @@ fn emit_get_or_put(
     emit_channel_index(channel, out, context)?;
     out.push_str("    aaload\n");
     if is_get {
-        out.push_str("    invokevirtual java/io/RandomAccessFile/readFully ([B)V\n");
+        // `read([B)`, not `readFully([B)` -- `readFully` throws
+        // `EOFException` on a short/empty read (a GET past the current end
+        // of a freshly `OPEN`ed, still-empty file, e.g. `tutorial/
+        // inventory.bcl`'s own `let p = inv[1]` right after creating a new
+        // file), where `codegen_c.rs`'s own `bcc_read_record` (`fread`)
+        // just returns a short count and leaves the buffer as it was --
+        // already all zero bytes for a freshly allocated one, which is
+        // exactly the "flag byte 0 means never-initialized" signal
+        // `initializeInventoryFileIfNew` depends on. `read` matches that:
+        // it returns -1/a short count instead of throwing, so the buffer
+        // silently keeps whatever it already had for the bytes that
+        // weren't actually there to read.
+        out.push_str("    invokevirtual java/io/RandomAccessFile/read ([B)I\n    pop\n");
     } else {
         out.push_str("    invokevirtual java/io/RandomAccessFile/write ([B)V\n");
     }
@@ -2098,12 +2289,43 @@ struct JvmContext {
     /// `stty`, see `emit_inkey_setup`'s own doc comment) and restoring it at
     /// every exit point (see `emit_inkey_restore`).
     needs_inkey: bool,
+    /// This function/procedure's own `byref` scalar parameters:
+    /// `(array_slot, working)` pairs, in source-declaration order.
+    /// `array_slot` is the incoming single-element-array parameter slot;
+    /// `working` is an ordinary local (already registered in `variables`,
+    /// so every existing read/write of the parameter name just works
+    /// unchanged) unwrapped from it at function entry and written back into
+    /// it at every exit point -- see `emit_function`'s prologue and
+    /// `JvmContext::emit_byref_writebacks`. Empty for `main`'s own context
+    /// (top-level code has no parameters).
+    byref_scalar_params: Vec<(usize, Variable)>,
+    /// Base local slot for this function's own fixed pool of scratch slots,
+    /// used to build `byref` scalar-argument wrapper arrays at its call
+    /// sites (see `emit_call_arguments`). Sized once, in `for_function`, to
+    /// the largest `byref` scalar parameter count of any function/procedure
+    /// in the whole program -- so it's always big enough regardless of
+    /// which one this function actually calls, without having to scan this
+    /// function's own call sites to find the true minimum. A real Java
+    /// array is already a reference type, so a `byref` *array* parameter
+    /// needs no such wrapping or scratch slot at all (see
+    /// `JvmArrayParam::by_ref`).
+    byref_scratch_base: usize,
 }
 
 #[derive(Clone)]
 struct FunctionSig {
     params: Vec<JvmType>,
     array_params: Vec<JvmArrayParam>,
+    /// Source positions (like `JvmArrayParam::position`) of every plain
+    /// `byref` *scalar* parameter -- a `byref` array parameter needs no
+    /// entry here, since a real Java array is already a reference type and
+    /// needs no extra wrapping (see `JvmArrayParam::by_ref`'s own call-site
+    /// handling). A scalar has no such reference semantics, so `byref` on
+    /// one is emulated by wrapping the argument in a fresh single-element
+    /// array at the call site and unwrapping/writing back around it -- see
+    /// `emit_call_arguments`/`JvmContext::byref_scalar_params`'s own doc
+    /// comments for the full mechanism.
+    byref_scalar_positions: Vec<usize>,
     source_param_count: usize,
     has_receiver: bool,
     result: JvmType,
@@ -2142,7 +2364,12 @@ impl FunctionSig {
                     descriptor(array.element)
                 ));
             } else {
-                out.push(descriptor(*scalars.next().expect("scalar source parameter")).to_string());
+                let ty = *scalars.next().expect("scalar source parameter");
+                if self.byref_scalar_positions.contains(&position) {
+                    out.push(format!("[{}", descriptor(ty)));
+                } else {
+                    out.push(descriptor(ty).to_string());
+                }
             }
         }
         out
@@ -2199,7 +2426,12 @@ impl JvmContext {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
         let mut arrays = BTreeMap::new();
-        collect_scalar_declarations(&program.statements, &mut declarations, &mut constants);
+        collect_scalar_declarations(
+            &program.statements,
+            &mut declarations,
+            &mut constants,
+            &functions,
+        );
         for array in &program.typed_arrays {
             arrays.insert(
                 variable_key(&array.name),
@@ -2247,6 +2479,12 @@ impl JvmContext {
                 (key, variable)
             })
             .collect();
+        let byref_scratch_base = next_slot;
+        next_slot += functions
+            .values()
+            .map(|sig| sig.byref_scalar_positions.len())
+            .max()
+            .unwrap_or(0);
         Ok(Self {
             variables,
             arrays,
@@ -2264,6 +2502,8 @@ impl JvmContext {
             needs_file_io,
             needs_input,
             needs_inkey,
+            byref_scalar_params: Vec::new(),
+            byref_scratch_base,
         })
     }
 
@@ -2284,9 +2524,23 @@ impl JvmContext {
             variables.insert(variable_key(&self_ident), variable);
         }
         let mut parameter_array_slots = BTreeMap::new();
+        // (name, incoming array slot) for every byref scalar parameter --
+        // its own "working" local (see below) can't be allocated in this
+        // same pass: every *real* JVM parameter slot -- self, then each
+        // source parameter in order -- must be assigned strictly by its own
+        // descriptor width first (one slot for any array reference,
+        // including a byref scalar's own wrapper array, regardless of the
+        // wrapped element's width), exactly matching the actual JVM calling
+        // convention. Interleaving an extra "working" slot per byref scalar
+        // *inside* this loop (an earlier version of this code did) shifts
+        // every later real parameter to the wrong slot entirely.
+        let mut byref_scalar_param_names = Vec::new();
         for param in &function.params {
             if param.axes.is_some() {
                 parameter_array_slots.insert(variable_key(&param.name), next_slot);
+                next_slot += 1;
+            } else if param.mode == ParamMode::ByRef {
+                byref_scalar_param_names.push((param.name.clone(), next_slot));
                 next_slot += 1;
             } else {
                 let variable = Variable {
@@ -2298,10 +2552,34 @@ impl JvmContext {
                 variables.insert(variable_key(&param.name), variable);
             }
         }
+        // Now that every real parameter has its correct slot, append each
+        // byref scalar's own "working" local right after them -- an
+        // ordinary local (registered in `variables` like any other
+        // parameter, so every existing read/write of the parameter name
+        // needs no special-casing at all), unwrapped from its incoming
+        // array at function entry and written back into it at every exit
+        // point (see `emit_function`'s prologue and `JvmContext::
+        // emit_byref_writebacks`).
+        let mut byref_scalar_params = Vec::new();
+        for (name, array_slot) in byref_scalar_param_names {
+            let working = Variable {
+                slot: next_slot,
+                ty: type_for_ident(&name),
+                is_static: false,
+            };
+            next_slot += working.width();
+            variables.insert(variable_key(&name), working);
+            byref_scalar_params.push((array_slot, working));
+        }
         let initializer_start = next_slot;
         let mut declarations = BTreeMap::new();
         let mut constants = parent.constants.clone();
-        collect_scalar_declarations(&function.body, &mut declarations, &mut constants);
+        collect_scalar_declarations(
+            &function.body,
+            &mut declarations,
+            &mut constants,
+            &parent.functions,
+        );
         for name in collect_global_names(&function.body) {
             if let Some(variable) = parent.variables.get(&variable_key(&name)) {
                 variables.insert(variable_key(&name), *variable);
@@ -2332,6 +2610,13 @@ impl JvmContext {
                 },
             );
         }
+        let byref_scratch_base = next_slot;
+        next_slot += parent
+            .functions
+            .values()
+            .map(|sig| sig.byref_scalar_positions.len())
+            .max()
+            .unwrap_or(0);
         Self {
             variables,
             arrays,
@@ -2349,11 +2634,30 @@ impl JvmContext {
             needs_file_io: parent.needs_file_io,
             needs_input: parent.needs_input,
             needs_inkey: parent.needs_inkey,
+            byref_scalar_params,
+            byref_scratch_base,
         }
     }
 
     fn local_count(&self) -> usize {
         self.local_count
+    }
+
+    /// Writes every `byref` scalar parameter's current working-local value
+    /// back into its incoming single-element array -- the counterpart to
+    /// `emit_function`'s own unwrap prologue. Must run at *every* exit
+    /// point of a function/procedure with `byref` scalar parameters, not
+    /// just the end: `checkPart`/`editRecord`-shaped early `return`s are
+    /// exactly why (see `Statement::Return`/`ReturnVoid`'s own arms).
+    fn emit_byref_writebacks(&self, out: &mut String) {
+        for (array_slot, working) in &self.byref_scalar_params {
+            out.push_str(&format!(
+                "    aload {array_slot}\n    iconst_0\n    {} {}\n    {}\n",
+                working.load_opcode(),
+                working.slot,
+                array_store_opcode(working.ty)
+            ));
+        }
     }
 
     fn variable(&self, ident: &BasicIdent) -> Result<Variable, String> {
@@ -2509,6 +2813,7 @@ fn collect_scalar_declarations(
     statements: &[Stmt],
     declarations: &mut BTreeMap<String, JvmType>,
     constants: &mut HashMap<String, Expr>,
+    functions: &HashMap<String, FunctionSig>,
 ) {
     for statement in statements {
         match &statement.kind {
@@ -2530,6 +2835,26 @@ fn collect_scalar_declarations(
                     }
                 }
             }
+            // A `byref` scalar call argument is an output parameter: real
+            // BASIC (and every other backend here) lets the callee's own
+            // write be its first "declaration", with no `dim`/plain
+            // assignment of its own needed first -- see
+            // `gatherPartDetails(part%, editDesc$, editQty%, ...)` in
+            // `tutorial/inventory.bcl`, where none of the `byref` arguments
+            // are ever assigned any other way.
+            Statement::ExprStmt(Expr::Call { name, args })
+            | Statement::ExprStmt(Expr::ArrayRef {
+                name,
+                indices: args,
+            }) => {
+                if let Some(signature) = functions.get(&function_key(name)) {
+                    for &position in &signature.byref_scalar_positions {
+                        if let Some(Expr::Ident(arg_name)) = args.get(position) {
+                            declarations.insert(variable_key(arg_name), type_for_ident(arg_name));
+                        }
+                    }
+                }
+            }
             Statement::Const { name, value } => {
                 constants.insert(variable_key(name), value.clone());
             }
@@ -2538,22 +2863,22 @@ fn collect_scalar_declarations(
                 else_body,
                 ..
             } => {
-                collect_scalar_declarations(then_body, declarations, constants);
-                collect_scalar_declarations(else_body, declarations, constants);
+                collect_scalar_declarations(then_body, declarations, constants, functions);
+                collect_scalar_declarations(else_body, declarations, constants, functions);
             }
             Statement::For { var, body, .. } => {
                 declarations.insert(variable_key(var), type_for_ident(var));
-                collect_scalar_declarations(body, declarations, constants);
+                collect_scalar_declarations(body, declarations, constants, functions);
             }
             Statement::While { body, .. } | Statement::Do { body, .. } => {
-                collect_scalar_declarations(body, declarations, constants);
+                collect_scalar_declarations(body, declarations, constants, functions);
             }
             Statement::TryCatch {
                 try_body,
                 catch,
                 finally_body,
             } => {
-                collect_scalar_declarations(try_body, declarations, constants);
+                collect_scalar_declarations(try_body, declarations, constants, functions);
                 if let Some(catch) = catch {
                     declarations
                         .insert(variable_key(&catch.err_var), type_for_ident(&catch.err_var));
@@ -2562,17 +2887,17 @@ fn collect_scalar_declarations(
                     if let Some(source_var) = &catch.source_var {
                         declarations.insert(variable_key(source_var), JvmType::String);
                     }
-                    collect_scalar_declarations(&catch.body, declarations, constants);
+                    collect_scalar_declarations(&catch.body, declarations, constants, functions);
                 }
-                collect_scalar_declarations(finally_body, declarations, constants);
+                collect_scalar_declarations(finally_body, declarations, constants, functions);
             }
             Statement::SelectCase {
                 cases, else_body, ..
             } => {
                 for case in cases {
-                    collect_scalar_declarations(&case.body, declarations, constants);
+                    collect_scalar_declarations(&case.body, declarations, constants, functions);
                 }
-                collect_scalar_declarations(else_body, declarations, constants);
+                collect_scalar_declarations(else_body, declarations, constants, functions);
             }
             _ => {}
         }
@@ -3004,43 +3329,19 @@ fn emit_function_call(
     {
         return Err(format!("invalid JVM function call `{name}`"));
     }
-    let mut scalars = signature.params.iter();
-    for (position, arg) in args.iter().enumerate() {
-        if let Some(array) = signature
-            .array_params
-            .iter()
-            .find(|array| array.position == position)
-        {
-            let Expr::Ident(array_name) = arg else {
-                return Err(format!(
-                    "array parameter {position} of `{name}` needs a plain array argument"
-                ));
-            };
-            let shape = context
-                .arrays
-                .get(&variable_key(array_name))
-                .ok_or_else(|| format!("unknown JVM array `{array_name}`"))?;
-            if shape.dimensions.len() != array.rank || shape.element != array.element {
-                return Err(format!(
-                    "array argument `{array_name}` doesn't match `{name}`'s parameter rank/type"
-                ));
-            }
-            context.emit_array_load(array_name, out);
-        } else {
-            let ty = scalars.next().expect("scalar source parameter");
-            match ty {
-                JvmType::String => emit_string_expr(arg, out, context)?,
-                JvmType::Numeric(ty) => emit_numeric_expr_as(arg, *ty, out, context)?,
-            }
-        }
-    }
-    let args = signature.descriptor_params().join("");
+    let writebacks = emit_call_arguments(name, args, &signature, out, context)?;
+    let args_descriptor = signature.descriptor_params().join("");
     out.push_str(&format!(
-        "    invokestatic {}/{} ({args}){}\n",
+        "    invokestatic {}/{} ({args_descriptor}){}\n",
         context.class_name,
         name.name,
         descriptor(signature.result)
     ));
+    // Safe to write back after the return value is already on top of stack:
+    // each write-back's own net stack effect only ever touches what's above
+    // the return value, never it (see `emit_byref_call_writebacks`'s own doc
+    // comment).
+    emit_byref_call_writebacks(&writebacks, out, context);
     Ok(())
 }
 

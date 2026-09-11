@@ -1061,3 +1061,282 @@ fn card_catalog_example_runs_under_jvm_when_available() {
         "expected the newly added entry to be listed back:\n{stdout}"
     );
 }
+
+/// Regression test for JVM scalar `byref` parameters (no native scalar
+/// reference semantics on the JVM, unlike C's pointers -- see the
+/// `byref_scalar_params`/scratch-slot machinery in codegen_jvm.rs):
+/// mutations a callee makes to a `byref` scalar must be visible to the
+/// caller after the call returns. Exercises several things at once that a
+/// narrower test wouldn't: four simultaneous `byref` scalars of mixed
+/// types (String/int/int/double) in one call, an early `return` from
+/// inside a conditional (which must still write back before returning,
+/// not just at the procedure's final fallthrough), and a second call
+/// reusing the same scratch slots to prove they're safe to reuse
+/// sequentially rather than colliding.
+#[test]
+fn jvm_byref_scalar_parameters_write_back_to_the_caller_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM byref test directory");
+    let source_path = dir.path().join("byref_scalars.bcl");
+    fs::write(
+        &source_path,
+        "program byrefScalars\n\
+         procedure gather(which%, byref name$, byref count%, byref limit%, byref price!)\n\
+         \x20   if which% = 1 then\n\
+         \x20       name$ = \"first\"\n\
+         \x20       count% = 1\n\
+         \x20       limit% = 10\n\
+         \x20       price! = 1.5\n\
+         \x20       return\n\
+         \x20   end if\n\
+         \x20   name$ = \"second\"\n\
+         \x20   count% = 2\n\
+         \x20   limit% = 20\n\
+         \x20   price! = 2.5\n\
+         end procedure\n\
+         n1$ = \"\"\n\
+         c1% = 0\n\
+         l1% = 0\n\
+         p1! = 0\n\
+         n2$ = \"\"\n\
+         c2% = 0\n\
+         l2% = 0\n\
+         p2! = 0\n\
+         gather(1, n1$, c1%, l1%, p1!)\n\
+         gather(2, n2$, c2%, l2%, p2!)\n\
+         print n1$ + \" \" + str$(c1%) + \" \" + str$(l1%) + \" \" + str$(p1!)\n\
+         print n2$ + \" \" + str$(c2%) + \" \" + str$(l2%) + \" \" + str$(p2!)\n\
+         end\n",
+    )
+    .expect("failed to write byref scalars fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "byref scalars fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout).replace("\r\n", "\n");
+    assert!(
+        stdout.contains("first 1 10 1.5") && stdout.contains("second 2 20 2.5"),
+        "expected both calls' byref writes to reach the caller:\n{stdout}"
+    );
+}
+
+/// Regression test: calling a non-`void` function as a bare statement
+/// (discarding its return value) must compile and run, not just when its
+/// result is used in an expression. `readKey$()` in `tutorial/inventory.bcl`
+/// is called exactly this way (`readKey$()` on its own line, just to
+/// consume a keystroke) -- the statement-call codegen path previously
+/// required `signature.returns_void` and rejected this with "invalid JVM
+/// procedure call".
+#[test]
+fn jvm_function_call_as_bare_statement_discards_its_result_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM bare-call test directory");
+    let source_path = dir.path().join("bare_call.bcl");
+    fs::write(
+        &source_path,
+        "program bareCall\n\
+         function bump%()\n\
+         \x20   global n%\n\
+         \x20   n% = n% + 1\n\
+         \x20   return n%\n\
+         end function\n\
+         n% = 0\n\
+         bump%()\n\
+         bump%()\n\
+         print \"n=\" + str$(n%)\n\
+         end\n",
+    )
+    .expect("failed to write bare-call fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "bare function-call-as-statement fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("n=2"),
+        "expected two discarded calls to still run their side effects:\n{stdout}"
+    );
+}
+
+/// Regression test: `GET` on a freshly-created, empty random-access file
+/// must not crash. Java's `RandomAccessFile.readFully()` throws
+/// `EOFException` on a short/empty read; C's `fread`-based approach
+/// silently returns a short count and leaves the (already zero-initialized)
+/// buffer as-is -- `emit_get_or_put` must match that lenient behavior
+/// (plain `read()`, discarding the count) rather than `readFully()`, or
+/// `GET`-ing record 1 of a brand-new file crashes instead of reading zeros.
+#[test]
+fn jvm_get_on_a_fresh_empty_file_does_not_throw_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let work_dir = std::env::temp_dir().join("bascal-jvm-conformance-get-on-fresh-file");
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir).expect("failed to create work directory");
+    let source_path = work_dir.join("get_fresh.bcl");
+    fs::write(
+        &source_path,
+        "program getFresh\n\
+         open \"fresh.dat\" for random as #1 len = 4\n\
+         field #1, 4 as buf$\n\
+         get #1, 1\n\
+         print \"len=\" + str$(buf$.len())\n\
+         close #1\n\
+         end\n",
+    )
+    .expect("failed to write GET-on-fresh-file fixture");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(work_dir.join("out/"))
+        .current_dir(&work_dir)
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "GET-on-fresh-file fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("len=4"),
+        "expected GET on an empty file to leave the zero-initialized buffer intact:\n{stdout}"
+    );
+}
+
+/// Regression test for a real bug: after `INKEY$` puts the terminal into
+/// raw, non-blocking (`min 0 time 0`) mode, a later blocking `INPUT` must
+/// still work. On a real terminal this required `emit_input` to bracket its
+/// `readLine()` with `stty sane` / `emit_inkey_setup`'s raw mode again (see
+/// `emit_input`'s own doc comment) -- without that, `readLine()` returned
+/// `null` instead of blocking, crashing the `.trim()`/`parseInt` that
+/// follows. `stty` legitimately no-ops against a pipe (see
+/// `jvm_inkey_polls_without_crashing_under_piped_input_when_available`'s own
+/// doc comment), so this can't reproduce the raw-mode hang itself without a
+/// pty this project doesn't take a dependency on -- but it does confirm the
+/// combination compiles, runs, and reads the right value under piped input,
+/// which is what actually regressed when this fix first landed (a
+/// `NumberFormatException` from `--target jvm`'s TRY/CATCH treating the
+/// resulting `NullPointerException`'s message as an error code -- see
+/// `emit_try_catch`'s `getMessage`/`parseInt` handling in codegen_jvm.rs).
+/// True raw-mode behavior was verified by hand against a real pseudo-tty.
+#[test]
+fn jvm_input_after_inkey_reads_the_typed_value_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM input-after-inkey test directory");
+    let source_path = dir.path().join("input_after_inkey.bcl");
+    fs::write(
+        &source_path,
+        "program inputAfterInkey\n\
+         k$ = \"\"\n\
+         do while k$ = \"\"\n\
+         \x20   k$ = inkey$\n\
+         loop\n\
+         print \"got: \" + k$\n\
+         input \"number\"; n%\n\
+         print \"you typed:\" + str$(n%)\n\
+         end\n",
+    )
+    .expect("failed to write input-after-inkey fixture");
+    let mut output_dir = dir.path().join("out").into_os_string();
+    output_dir.push("/");
+    let status = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--binary")
+        .arg("-o")
+        .arg(&output_dir)
+        .current_dir(repo_root())
+        .status()
+        .expect("failed to invoke bcc");
+    assert!(
+        status.success(),
+        "bcc failed to compile/assemble the input-after-inkey fixture"
+    );
+
+    let mut child = Command::new("java")
+        .arg("-cp")
+        .arg(repo_root().join("tmp"))
+        .arg("InputAfterInkey")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn InputAfterInkey");
+    child
+        .stdin
+        .take()
+        .expect("child stdin should be piped")
+        .write_all(b"X42\n")
+        .expect("failed to write keystrokes to InputAfterInkey");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if child
+            .try_wait()
+            .expect("failed to poll InputAfterInkey")
+            .is_some()
+        {
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("InputAfterInkey timed out after 30 seconds");
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    let run = child
+        .wait_with_output()
+        .expect("failed to collect InputAfterInkey output");
+    assert!(
+        run.status.success(),
+        "InputAfterInkey exited non-zero:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        stdout.contains("got: X") && stdout.contains("you typed:42"),
+        "expected INKEY$ then INPUT to both read correctly:\n{stdout}"
+    );
+}
