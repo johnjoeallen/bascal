@@ -242,6 +242,61 @@ fn jvm_color_uses_the_correct_cga_to_ansi_mapping_when_available() {
     );
 }
 
+/// `TAB(n)`/`SPC(n)` (print-position directives) and a dynamic (non-
+/// literal) `LOCATE row%, col%` -- checked against the exact output
+/// `codegen_c.rs`'s already-correct implementation produces for the same
+/// statements.
+#[test]
+fn jvm_tab_spc_and_dynamic_locate_match_c_backend_when_available() {
+    if !jvm_runtime_available() {
+        eprintln!("skipping {}: java or krak2 is unavailable", module_path!());
+        return;
+    }
+    let dir = tempfile::tempdir().expect("failed to create JVM TAB/SPC/LOCATE test directory");
+    let source_path = dir.path().join("tab_spc_locate.bcl");
+    fs::write(
+        &source_path,
+        "program tabSpcLocate\n\
+         r% = 3\n\
+         c% = 10\n\
+         print \"Name\"; tab(20); \"Score\"\n\
+         print spc(3); \"indented\"\n\
+         locate r%, c%\n\
+         print \"here\"\n\
+         end\n",
+    )
+    .expect("failed to write TAB/SPC/LOCATE fixture");
+    let mut output_dir = dir.path().join("out").into_os_string();
+    output_dir.push("/");
+    let output = Command::new(env!("CARGO_BIN_EXE_bcc"))
+        .arg(&source_path)
+        .arg("--target")
+        .arg("jvm")
+        .arg("--clean")
+        .arg("--run")
+        .arg("-o")
+        .arg(&output_dir)
+        .current_dir(repo_root())
+        .output()
+        .expect("failed to invoke bcc");
+    assert!(
+        output.status.success(),
+        "TAB/SPC/LOCATE fixture failed under --target jvm:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Name\u{1b}[20GScore"),
+        "expected TAB:\n{stdout}"
+    );
+    assert!(stdout.contains("   indented"), "expected SPC:\n{stdout}");
+    assert!(
+        stdout.contains("\u{1b}[3;10Hhere"),
+        "expected dynamic LOCATE:\n{stdout}"
+    );
+}
+
 #[test]
 fn jvm_try_catch_finally_runs_when_available() {
     if !jvm_runtime_available() {

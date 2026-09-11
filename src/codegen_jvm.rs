@@ -955,13 +955,28 @@ impl JvmEmitter<'_> {
                 };
                 emit_terminal_escape(&code, out)
             }
+            // ANSI's own cursor-position escape is already `row;col`,
+            // 1-based, exactly matching BASIC's own `LOCATE row, col` -- no
+            // reordering or offset needed, unlike `COLOR`'s palette
+            // remapping. `row`/`col` may be any numeric expression (not
+            // just a literal), same as `codegen_c.rs`'s own `Statement::
+            // Locate` -- built with `StringBuilder` since both interleave
+            // with literal escape-sequence text, same as `emit_tab_escape`.
             Statement::Locate { row, col } => {
-                let (Expr::Integer(row), Expr::Integer(col)) = (row, col) else {
-                    return Err(
-                        "JVM LOCATE currently requires literal row and column values".to_string(),
-                    );
-                };
-                emit_terminal_escape(&format!("\u{1b}[{};{}H", row, col), out)
+                out.push_str("    getstatic java/lang/System/out Ljava/io/PrintStream;\n");
+                out.push_str("    new java/lang/StringBuilder\n    dup\n    invokespecial java/lang/StringBuilder/<init> ()V\n");
+                out.push_str("    ldc \"\u{1b}[\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+                emit_numeric_expr_as(row, NumericType::Int, out, self.context)?;
+                out.push_str("    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;\n");
+                out.push_str("    ldc \";\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+                emit_numeric_expr_as(col, NumericType::Int, out, self.context)?;
+                out.push_str("    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;\n");
+                out.push_str("    ldc \"H\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+                out.push_str(
+                    "    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;\n",
+                );
+                out.push_str("    invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V\n");
+                Ok(())
             }
             Statement::TryCatch {
                 try_body,
@@ -1592,7 +1607,28 @@ fn emit_print_tokens(
             continue;
         };
         out.push_str("    getstatic java/lang/System/out Ljava/io/PrintStream;\n");
-        let descriptor = if context.is_string_expr(expr) {
+        // `TAB(n)`/`SPC(n)` -- print-position directives, not real values
+        // (see codegen_c.rs's own `render_print_tokens` doc comment: only
+        // legal as a bare, adjacent `PRINT` token, so they're intercepted
+        // here before the general string/numeric rendering below, which has
+        // no notion of either). `tab`/`spc` are suffixless, so a single-arg
+        // call to either always parses as `Expr::Call`, never
+        // `Expr::ArrayRef` (see `make_paren_ident_expr` in parser.rs).
+        let descriptor = if let Expr::Call { name, args } = expr {
+            if args.len() == 1 && name.name.eq_ignore_ascii_case("tab") {
+                emit_tab_escape(&args[0], out, context)?;
+                "(Ljava/lang/String;)V"
+            } else if args.len() == 1 && name.name.eq_ignore_ascii_case("spc") {
+                emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
+                emit_space_string_runtime(out);
+                "(Ljava/lang/String;)V"
+            } else if context.is_string_expr(expr) {
+                emit_string_expr(expr, out, context)?;
+                "(Ljava/lang/String;)V"
+            } else {
+                emit_numeric_expr(expr, out, context)?.print_descriptor()
+            }
+        } else if context.is_string_expr(expr) {
             emit_string_expr(expr, out, context)?;
             "(Ljava/lang/String;)V"
         } else {
@@ -1608,6 +1644,36 @@ fn emit_print_tokens(
         ));
     }
     Ok(())
+}
+
+/// `TAB(n)` -- moves the cursor to column `n` on the current line, via the
+/// same ANSI cursor-column-absolute escape family `LOCATE`/`COLOR` already
+/// use (`\x1b[<n>G`) -- consistent with `LOCATE`'s own row/col passing
+/// straight through to ANSI's identical 1-based column numbering, no
+/// reordering or offset needed. Mirrors `codegen_c.rs`'s own `TAB(n)`
+/// handling in `render_print_tokens` (there, a `printf` format string; here,
+/// built with `StringBuilder` since `n` is only known at runtime and
+/// interleaves with literal escape-sequence text).
+fn emit_tab_escape(n: &Expr, out: &mut String, context: &JvmContext) -> Result<(), String> {
+    out.push_str("    new java/lang/StringBuilder\n    dup\n    invokespecial java/lang/StringBuilder/<init> ()V\n");
+    out.push_str("    ldc \"\u{1b}[\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+    emit_numeric_expr_as(n, NumericType::Int, out, context)?;
+    out.push_str("    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;\n");
+    out.push_str("    ldc \"G\"\n    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;\n");
+    out.push_str("    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;\n");
+    Ok(())
+}
+
+/// Pushes a `String` of as many ASCII spaces as the already-computed `int`
+/// on top of the stack -- the same `newarray`/`Arrays.fill`/`new String`
+/// idiom `SPACE$`/`STRING$`/`SPC` all share (see `emit_string_expr`'s own
+/// `"space"` arm), just factored out so `SPC` (a print-token directive, not
+/// a general expression) can reuse it directly.
+fn emit_space_string_runtime(out: &mut String) {
+    out.push_str(
+        "    newarray char\n    dup\n    bipush 32\n    invokestatic java/util/Arrays/fill ([CC)V\n    \
+         new java/lang/String\n    dup_x1\n    swap\n    invokespecial java/lang/String/<init> ([C)V\n",
+    );
 }
 
 /// `COLOR fg[, bg]`'s CGA-to-ANSI-SGR color index table -- CGA's 0-15
@@ -2726,7 +2792,7 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }
             if name.name.eq_ignore_ascii_case("space") && args.len() == 1 => {
             emit_numeric_expr_as(&args[0], NumericType::Int, out, context)?;
-            out.push_str("    newarray char\n    dup\n    bipush 32\n    invokestatic java/util/Arrays/fill ([CC)V\n    new java/lang/String\n    dup_x1\n    swap\n    invokespecial java/lang/String/<init> ([C)V\n");
+            emit_space_string_runtime(out);
             Ok(())
         }
         Expr::Call { name, args } | Expr::ArrayRef { name, indices: args }

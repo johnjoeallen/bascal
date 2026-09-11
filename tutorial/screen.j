@@ -32,7 +32,20 @@
     ldc "[93;44m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[1;30H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 30
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  BASCAL DEMO  "
@@ -42,7 +55,20 @@
     ldc "[37;40m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[3;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 3
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Screen I/O tutorial"
@@ -50,7 +76,20 @@
 
     ; Move to specific positions
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[5;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 5
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[92m"
@@ -59,7 +98,20 @@
     ldc "Green text"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[6;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 6
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[91m"
@@ -68,7 +120,20 @@
     ldc "Red text"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[7;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 7
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[96m"
@@ -77,7 +142,20 @@
     ldc "Cyan text"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[8;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 8
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "[37m"
@@ -105,7 +183,20 @@
     ldc "[37;40m"
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    ldc "[25;1H"
+    new java/lang/StringBuilder
+    dup
+    invokespecial java/lang/StringBuilder/<init> ()V
+    ldc "["
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 25
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc ";"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    ldc 1
+    invokevirtual java/lang/StringBuilder/append (I)Ljava/lang/StringBuilder;
+    ldc "H"
+    invokevirtual java/lang/StringBuilder/append (Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invokevirtual java/lang/StringBuilder/toString ()Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "Demo complete."
