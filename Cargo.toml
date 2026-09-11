@@ -40,7 +40,7 @@ clap = { version = "4", features = ["derive"] }
 # upstream at https://github.com/Storyyeller/Krakatau/pull/216; once
 # merged, switch this back to `https://github.com/Storyyeller/Krakatau`
 # directly and drop the fork.
-krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9028b6b7cdb2c5bef267e12c3e74ab42" }
+krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "73376757ffc9c445636103e49bf2a21c8e6a41a5" }
 
 [dev-dependencies]
 tempfile = "3"
