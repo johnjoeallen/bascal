@@ -24,7 +24,7 @@
   {% endif %}
   <nav class="subnav"><div class="wrap"><a href="{{ nav.homepage.url | url }}">Home</a><a href="{{ 'language/' | url }}">Language Book</a><a href="{{ 'manual/' | url }}">Manual</a><a href="{{ 'tutorials/' | url }}">Tutorials</a><a href="{{ 'examples/sort-driver/' | url }}">Examples</a><a href="{{ 'conformance/' | url }}">Conformance</a><a href="{{ 'journey/' | url }}">Development Journey</a><a href="{{ config.repo_url }}">GitHub</a><button id="theme-toggle" class="theme-toggle" aria-label="Toggle color theme"></button></div></nav>
   <main class="wrap"><div class="prose">{{ page.content }}</div></main>
-  <footer><div class="wrap">BASCAL is licensed under the <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>.</div></footer>
+  <footer><div class="wrap">BASCAL is licensed under the <a href="https://github.com/johnjoeallen/bascal/blob/main/LICENSE">GNU GPLv3</a>. Its JVM backend is built on <a href="https://github.com/Storyyeller/Krakatau">Krakatau</a>, embedded directly as a library — thanks to Storyyeller and the Krakatau project.</div></footer>
   {% endif %}
   {% for path in config.extra_javascript %}<script src="{{ path | url }}"></script>{% endfor %}
 </body>
