@@ -26,9 +26,11 @@ source from scratch.
   `GOSUB` spaghetti, single-letter globals, and the `DATA`/`READ` tables
   are untouched. What *did* have to change, because BASCAL genuinely has
   no equivalent, turned out to be more than expected:
-  - Every numbered line becomes an `L<num>:` label -- BASCAL manages its
-    own line numbers and requires named `goto`/`gosub`/`restore`/`then`/
-    `else` targets, never raw line numbers.
+  - Every numbered line that's an actual `goto`/`gosub`/`restore`/
+    `then`/`else`/`on ... goto`/`on ... gosub` target keeps an
+    `L<num>:` label matching its original line number -- BASCAL manages
+    its own line numbers and requires named targets, never raw line
+    numbers -- and lines nothing jumps to don't carry one.
   - `REM` isn't a BASCAL comment keyword at all (only `'`, `//`, `/* */`
     are) -- every `REM` became `'`.
   - BASCAL's `for` loop has no raw `NEXT`-terminated form -- it's always
