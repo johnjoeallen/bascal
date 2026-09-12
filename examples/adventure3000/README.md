@@ -17,7 +17,7 @@ lines, four sequential data files, hundreds of rooms/items/keywords), used
 as a case study in **porting existing BASIC**, not in designing new BASCAL
 source from scratch.
 
-## The four stages
+## The five stages
 
 - **`stage1-original-basic/`** -- the original program, completely
   unmodified, checked in verbatim for reference and provenance.
@@ -223,6 +223,27 @@ source from scratch.
   moved into either procedure), just to keep them visibly close to the
   rest of the game's `DATA` tables.
 
+- **`stage5-refactored-bascal/`** -- picks up exactly where stage 4 left
+  off, on the two things its own README section flagged as untouched.
+  Started as an exact copy of stage 4 (verified identical `bcc --check`,
+  `fbc` build, and smoke-test behavior before any further change), not
+  diverged from it yet:
+  - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of the
+    40 verb handlers `GOTO`s back into once it's done -- ~106 of `bcc`'s
+    ~150 hand-wired-loop warnings on this file are sites jumping back
+    into it, not loops of their own. Converting this means restructuring
+    the whole file's top-level control flow, not a per-handler change.
+  - The command-parsing/movement engine that runs before dispatch
+    (`L820` onward: keyword scanning, direction/exotic-word checks, then
+    a web of special-case room-movement checks) -- a genuinely
+    cross-jumping GOTO graph, not simple retry loops confined to one
+    verb.
+
+  Neither has been converted yet -- both need careful control-flow
+  tracing before any edit, to avoid a real behavioral bug in a program
+  this size. This stage exists to hold that work; see its own file
+  header for the exact same scope note.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
@@ -289,3 +310,8 @@ checked against BASCAL's other two backends, with mixed results:
   blocked on two already-tracked upstream bcc issues, not on anything
   about the port itself -- #61 is permanent by design, #100 is a real bug
   that could in principle be fixed.
+
+Stage 5 started as an exact copy of stage 4 and hasn't diverged from it
+yet, so everything above about stage 4 -- `--target basic`/`bascom`
+verified against real BASCOM, `--target fbc`/`--target c`/`--target jvm`
+each blocked the same way -- currently applies to it identically.

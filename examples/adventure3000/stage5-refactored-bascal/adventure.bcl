@@ -1,17 +1,25 @@
-// ADVENTURE/3000 -- Stage 4: the 40-way verb dispatch is SELECT CASE.
-// See ../README.md for the port's provenance, staging, and exactly how
-// far this refactor has gotten so far (it is NOT a complete rewrite).
+// ADVENTURE/3000 -- Stage 5: structuring the outer game loop and the
+// command-parsing/movement engine -- picks up exactly where stage 4
+// left off. See ../README.md for the port's provenance, staging, and
+// exactly how far this refactor has gotten so far (it is NOT a
+// complete rewrite).
 //
-// Picks up where stage 3 left off, on the command loop stage 3 stopped
-// short of: the main dispatch's `ON z1 GOTO <40 labels>` is now
-// `select case z1`, each of the 40 verb handlers kept as its own case
-// block -- their own internal GOTO-heavy logic untouched, since a GOTO
-// can jump out of a SELECT CASE branch to anywhere, same as it always
-// could out of a flat IF. All standalone GOSUB subroutines have also
-// become procedures/functions. What's still exactly stage 2's raw
-// label/GOTO structure: the outer game loop every verb handler jumps
-// back into, and the command-parsing/movement engine that runs before
-// dispatch -- both flagged as `stage 5`'s job, not attempted here.
+// Starting point: an exact copy of stage 4 (same SELECT CASE verb
+// dispatch, same procedures/functions) -- this stage hasn't diverged
+// from it yet. Two things remain, both hand-wired GOTO control flow
+// `bcc` itself flags as having a direct BASCAL equivalent:
+//   - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of
+//     the 40 verb handlers `GOTO`s back into once it's done -- ~106 of
+//     `bcc`'s ~150 warnings on this file are sites jumping back into
+//     it, not loops of their own.
+//   - The command-parsing/movement engine that runs before dispatch
+//     (`L820` onward: keyword scanning, direction/exotic-word checks,
+//     then a tangled web of special-case room-movement checks) -- a
+//     genuinely cross-jumping GOTO graph, not simple isolated retry
+//     loops confined to one verb.
+// Converting either safely, without introducing a behavioral bug in a
+// program this size, needs careful control-flow tracing before any
+// edit -- not yet done as of this stage's own creation.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
