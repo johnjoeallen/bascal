@@ -7203,17 +7203,20 @@ end try
 end
 "#;
         let basic = compile_source("catch_err_erl.bcl", source).expect("should compile");
-        // `err% = ERR`/`erl% = ERL` (the catch block's own real read of
-        // the pseudo-variables) is correct and expected -- the bug was
-        // specifically in copying err%/erl% *into report()'s own call-
-        // argument locals*, which must read `= err%`/`= erl%`, not the
-        // literal (wrong) `= ERR%`/`= ERL%`.
-        assert!(basic.contains("err% = ERR"), "{basic}");
-        assert!(basic.contains("erl% = ERL"), "{basic}");
+        // `BCCERR% = ERR`/`BCCERL% = ERL` (the catch block's own real read
+        // of the pseudo-variables, into its top-level `err%`/`erl%`
+        // bindings' generated safe name -- see `ident()`'s real-BASCOM-
+        // reserved-word rename) is correct and expected -- the bug this
+        // test guards against was specifically in copying err%/erl% *into
+        // report()'s own call-argument locals*, which must read
+        // `= BCCERR%`/`= BCCERL%`, not the literal (wrong) `= ERR%`/
+        // `= ERL%`.
+        assert!(basic.contains("BCCERR% = ERR"), "{basic}");
+        assert!(basic.contains("BCCERL% = ERL"), "{basic}");
         assert!(!basic.contains("= ERR%"), "{basic}");
         assert!(!basic.contains("= ERL%"), "{basic}");
-        assert!(basic.contains("= err%"), "{basic}");
-        assert!(basic.contains("= erl%"), "{basic}");
+        assert!(basic.contains("= BCCERR%"), "{basic}");
+        assert!(basic.contains("= BCCERL%"), "{basic}");
     }
 
     #[test]

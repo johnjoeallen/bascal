@@ -1930,6 +1930,25 @@ impl CodeGenerator {
                 return lowered_basic;
             }
         }
+        if ident.name.eq_ignore_ascii_case("err") || ident.name.eq_ignore_ascii_case("erl") {
+            // Real BASCOM reserves ERR/ERL outright -- confirmed under
+            // real BASCOM/dosbox-x that it rejects even a *suffixed*
+            // reference like `err%` (`catch`'s own conventional binding
+            // name, mirroring the real pseudo-variable it captures) as an
+            // assignment target, not just as an expression operand. A
+            // function-local of this name never hits this rename: it
+            // already gets a per-function-unique generated name above
+            // (e.g. `showErr0%`) that never collides with the bare literal
+            // in the first place. Only a top-level (or explicit `global`)
+            // one reaches here, so BASCAL source keeps writing `err%`/
+            // `erl%` -- the natural, conventional choice -- while the
+            // generated BASIC uses this fixed rename instead.
+            return BasicIdent {
+                name: format!("BCC{}", ident.name.to_ascii_uppercase()),
+                suffix: ident.suffix,
+            }
+            .as_basic();
+        }
         BasicIdent {
             name: ident.name.to_ascii_lowercase(),
             suffix: ident.suffix,
