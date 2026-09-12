@@ -39,6 +39,24 @@ source from scratch.
     `X = A : L: if X > B then goto Lend ... X = X + step : goto L : Lend:`
     loops instead, verified individually to actually be jumped out of
     before converting them (see the stage's own source comments).
+    **A related, initially-missed bug**: several loops (both the
+    structured and the manual-while kind) also contain an internal
+    `GOTO` to their own `NEXT` line as a plain "skip the rest of this
+    iteration" continue -- a universal classic-BASIC idiom, since a
+    `NEXT` line's own machinery is exactly "increment, then loop back if
+    not done." A naive conversion placed the loop's exit label *after*
+    `end for` (or after the increment+loop-back, for the manual-while
+    form) to serve external "skip past the whole loop" references,
+    which silently turned every such continue into a full early
+    `break` instead -- e.g. the inventory listing (`FOR X=1 TO T2`
+    around line 3490) would stop at the *first* uncarried item and
+    never show anything carried after it. Fixed by inverting the guard
+    condition into a real `if`/`end if` wrapping the skipped statements
+    (for structured loops), or adding a separate `LCONT<n>:` label right
+    at the increment step that continues jump to instead of the true
+    exit (for the manual-while loops) -- 15 loops across both stages
+    needed one of these two fixes; see the commit history for the
+    full list.
   - The original's `FSEEK`-based random access into `ADESCRIP`/`AITEMS`/
     `AMESSAGE` (plus a hand-rolled `AMESSAGE.IDX` byte-offset cache) has
     no BASCAL or classic-BASIC equivalent at all -- neither supports
@@ -89,6 +107,14 @@ source from scratch.
     provably a no-op by the time `LOOK` is typeable (the room's already
     been entered and marked visited by then), so it now just calls
     `longDescription()` in full -- documented at that call site.
+  - The dwarf and pirate encounter checks (`GOSUB`ed once per room from
+    the item-listing code) are now `checkDwarf()` and `checkPirate()`.
+    `checkDwarf()` keeps its original internal labels and `GOTO`s almost
+    verbatim (just `return` in place of the old shared exit label);
+    `checkPirate()`'s two small item-scanning loops turned out to have
+    the continue/break bug described in stage 2's own entry above, so
+    restructuring them into real `for`/`if` blocks fixed that as a
+    side effect.
 
   Everything else -- the actual game loop, the rest of room/command
   dispatch, combat, and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`

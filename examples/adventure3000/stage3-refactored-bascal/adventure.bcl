@@ -200,6 +200,84 @@ procedure longDescription()
     end if
 end procedure
 
+' Checks whether the dwarf gives away his axe (first time in a deep
+' room), attacks with his knife, or appears for the first time.
+' Structurally identical to stage 2's L8560 GOSUB target -- same
+' internal labels, `goto L8790` (the old shared exit) just became
+' `return`, and the final label+return collapsed into the implicit
+' return at the end of the procedure body.
+procedure checkDwarf()
+    global l1
+    global s
+    global d3
+    global t
+    global dead
+    global KC
+    if d3 <> 0 then goto L8640
+    ' SHOULD DWARF GIVE AWAY AXE?
+    if l1 < 13 then return
+    if RND(1) > 0.05 then return
+    ' GIVE AWAY AXE
+    printMessage(80)
+    s(27) = l1 : d3 = 1
+    return
+    L8640: ' SHOULD DWARF ATTACK?
+    if L1 >= 13 then goto L8660
+    s(35) = 0 : return
+    L8660: if s(35) <> L1 then goto L8770
+    if (l1 <> 60 and l1 <> 61) or t <> 1 then goto L8670
+    printMessage(299)
+    s(35) = 0 : return
+    L8670: if RND(1) > 0.5 then return
+    ' YES!
+    printMessage(32)
+    ' DOES THE KNIFE KILL THE PLAYER?
+    KC = KC - 0.02
+    IF KC >= 0.75 THEN goto L8710
+    KC = 0.75
+    L8710: if RND(1) <= KC then goto L8750
+    ' YES
+    PRINT "It gets you!"
+    dead = 1
+    return
+    L8750: PRINT "It misses!"
+    return
+    L8770: ' SHOULD WE PUT A DWARF HERE?
+    if RND(1) >= 0.05 then return
+    if (l1 = 60 or l1 = 61) and t = 1 then return
+    s(35) = l1
+    printMessage(31)
+end procedure
+
+' Checks whether the pirate steals the player's valuables (only in
+' rooms l1 >= 13). Structurally identical to stage 2's L8800 GOSUB
+' target, with `goto L8960` (the old shared exit) replaced by `return`.
+procedure checkPirate()
+    global l1
+    global s
+    dim z3, x
+    ' FIRST, DOES HE HAVE ANYTHING WORTH STEALING?
+    z3 = 0
+    if l1 < 13 then return
+    for x = 1 to 15
+        if s(x) = -1 then
+            z3 = z3 + 1
+        end if
+    end for
+    if z3 < int(RND(1) * 4) + 1 then return
+    ' SHOULD WE RIP OFF HIS VALUABLES?
+    if RND(1) < 0.05 then
+        printMessage(33)
+        for x = 1 to 15
+            if s(x) = -1 then
+                s(x) = 100
+            end if
+        end for
+    else
+        printMessage(34)
+    end if
+end procedure
+
 ' On entering a room: the forest and maze-like rooms always get their
 ' long description (it's short enough not to be worth abbreviating);
 ' every other room gets the long description only the first time it's
@@ -328,8 +406,9 @@ L430: c$ = ucase$(c$)
 L449: '    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,   
 L450: for x = 1 to len(c$)
 L460: z5 = asc(mid$(c$,x,1))
-L470: if (z5 > 64 and z5 < 91) or (z5 > 47 and z5 < 58) or z5 = 44 then goto L480 else goto L471
+L470: if not ((z5 > 64 and z5 < 91) or (z5 > 47 and z5 < 58) or z5 = 44) then
 L471: c$ = mid$(c$,1,x-1)+" "+mid$(c$,x+1)
+end if
 end for
 L480:
 L490: if mid$(c$,len(c$),1) = "," then goto L500
@@ -384,11 +463,11 @@ L890: ' EXOTIC WORDS
 L900: z0 = 36
 L910: x = z0
 LW910: if x > 46 then goto L960
-L920: if k(x) = 0 then goto L960
+L920: if k(x) = 0 then goto LCONT910
 L930: gosub L8390
 L940: print "What do you want to do with the ";d$;"?"
 L950: goto L410
-x = x + (1)
+LCONT910: x = x + (1)
 goto LW910
 L960:
 L970: x = 110
@@ -469,11 +548,11 @@ L1690: if not (l1 = 57 or l1 = 58) then goto L1780
 L1691: IF K(102)=0 AND K(106)=0 THEN goto L1780
 L1700: z3 = 1
 LW1700: if z3 > t2 then goto L1750
-L1710:  if z3 = 10 then goto L1750
-L1720:  if s(z3) <> -1 then goto L1750
+L1710:  if z3 = 10 then goto LCONT1700
+L1720:  if s(z3) <> -1 then goto LCONT1700
 L1730:  printMessage(53)
 L1740:  goto L400
-z3 = z3 + (1)
+LCONT1700: z3 = z3 + (1)
 goto LW1700
 L1750:
 L1760: goto L1180
@@ -668,10 +747,11 @@ L3450: ' *** INVENTORY ***
 L3470: Z0=0
 L3480: PRINT "You are carrying:";
 L3490: FOR X=1 TO T2
-L3510:  IF S(X)<>-1 THEN goto L3540
-L3511:  b$ = itemname$(x)
-L3520:  PRINT B$
-L3530:  Z0 = Z0 + 1
+L3510:  IF S(X)=-1 THEN
+L3511:   b$ = itemname$(x)
+L3520:   PRINT B$
+L3530:   Z0 = Z0 + 1
+end if
 end for
 L3540:
 L3550: IF Z0=0 THEN goto L3551 else goto L3560
@@ -687,17 +767,18 @@ L3670: goto L2040
 L3680: z3 = 1
 LW3680: if z3 > t2 then goto L3900
 L3710: if k(47) = 1 then goto L3730
-L3720: if k(z3) = 0 then goto L3900
+L3720: if k(z3) = 0 then goto LCONT3680
 L3730: if s(z3) <> l1 then goto L3750
 L3740: if s(z3) = l1 then goto L3790
-L3750: if k(47) = 1 then goto L3900
+L3750: if k(47) = 1 then goto LCONT3680
 L3760: a$ = itemname$(z3):PRINT a$;" not here."
-L3770: goto L3900
+L3770: goto LCONT3680
 L3780: ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
 L3790: z8 = 0
 L3800: for x = 1 to t2
-L3810: if s(x) <> -1 then goto L3820
+L3810: if s(x) = -1 then
 L3811: z8 = z8+1
+end if
 end for
 L3820:
 L3830: if z8 < 7 then goto L3870
@@ -707,7 +788,7 @@ L3860: goto L410
 L3870: goto L6880
 L3880: s(z3) = -1
 L3890: a$ = itemname$(z3):PRINT a$;":taken."
-z3 = z3 + (1)
+LCONT3680: z3 = z3 + (1)
 goto LW3680
 L3900:
 L3910: goto L400
@@ -720,17 +801,17 @@ L3980: GOTO L2040
 L4000: Z3 = 1
 LW4000: if Z3 > T2 then goto L4140
 L4030:  IF K(47)=1 THEN goto L4060
-L4040:  IF K(Z3)<>1 THEN goto L4140
-L4050:  IF S(Z3)=0 THEN goto L4140
+L4040:  IF K(Z3)<>1 THEN goto LCONT4000
+L4050:  IF S(Z3)=0 THEN goto LCONT4000
 L4060:  IF S(Z3)=-1 THEN goto L4100
-L4070:  IF K(47)=1 THEN goto L4140
+L4070:  IF K(47)=1 THEN goto LCONT4000
 L4080:  b$ = itemname$(z3):PRINT "You don't have the ";B$
-L4090:  GOTO L4140
+L4090:  GOTO LCONT4000
 L4100:  ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
 L4110:  GOTO L7380
 L4120:  b$ = itemname$(z3):PRINT B$;":dropped."
 L4130:  S(Z3)=L1
-Z3 = Z3 + (1)
+LCONT4000: Z3 = Z3 + (1)
 goto LW4000
 L4140:
 L4150: GOTO L400
@@ -968,18 +1049,22 @@ L6520: RESTORE L230
 L6530: Z9=0:S0=0
 L6540: FOR Z0=1 TO 15
 L6550:  READ Z1
-L6560:  IF Z1=0 THEN goto L6590
-L6570:  IF V(Z1)<>1 THEN goto L6580
-L6575:  S0=S0+4*O(Z0)
-L6580:  IF S(Z0)<>7 THEN goto L6590
-L6585:  S0=S0+4*O(Z0)
+L6560:  IF Z1<>0 THEN
+L6570:   IF V(Z1)=1 THEN
+L6575:    S0=S0+4*O(Z0)
+end if
+L6580:   IF S(Z0)=7 THEN
+L6585:    S0=S0+4*O(Z0)
+end if
+end if
 end for
 L6590:
 L6600: S0=(G=1)*10 + S0:S0=(SN=0)*20 + S0:S0=(D1=0)*30 + S0:S0=(T=0)*30 + S0:S0=(B1=2)*20 + S0
 L6605: S0=(B2=1)*20 + S0:S0=(P1=2)*20 + S0:S0=(D2=1)*20 + S0:S0=(C=1)*20 + S0
 L6610: FOR Z0 = 1 TO T1
-L6620:  IF V(Z0)<>1 THEN goto L6630
-L6621:  S0=S0+1:Z9=Z9+1
+L6620:  IF V(Z0)=1 THEN
+L6621:   S0=S0+1:Z9=Z9+1
+end if
 end for
 L6630:
 L6640: RETURN
@@ -1106,11 +1191,13 @@ L8260: '   z8=total # of items found in list
 L8270: '   z3=item code first found
 L8280: z8 = 0 : z3 = 0: d$ = ""
 L8300: for z5 = 1 to 45
-L8320: if k(z5) = 0 then goto L8360
-L8330: z8 = z8+1
-L8340: b$ = itemname$(z5):d$ = b$
-L8350: if k(z5)=1 and z8 = 1 then goto L8352 else goto L8360
-L8352: z3 = z5
+L8320: if k(z5) <> 0 then
+L8330:  z8 = z8+1
+L8340:  b$ = itemname$(z5):d$ = b$
+L8350:  if k(z5)=1 and z8 = 1 then
+L8352:   z3 = z5
+end if
+end if
 end for
 L8360:
 L8370: b$ = d$
@@ -1118,9 +1205,11 @@ L8380: return
 L8390: ' FIND FIRST ITEM AT ROOM
 L8400: x1 = 0
 L8410: FOR Z1=1 TO 47
-L8415:  if x1=1 then goto L8440
-L8430:  IF K(Z1) = 1 THEN goto L8431 else goto L8440
-L8431:  d$ = itemname$(z1):x1=1
+L8415:  if x1<>1 then
+L8430:   IF K(Z1) = 1 THEN
+L8431:    d$ = itemname$(z1):x1=1
+end if
+end if
 end for
 L8440:
 L8450: RETURN
@@ -1277,8 +1366,9 @@ L9640: printMessage(76)
 L9650: ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
 L9660: S(18)=7:L=0:DEAD=0:KC=1.03
 L9670: FOR X=1 TO T2
-L9680:  IF S(X)<>-1 THEN goto L9690
-L9685:  S(X)=L1
+L9680:  IF S(X)=-1 THEN
+L9685:   S(X)=L1
+end if
 end for
 L9690:
 L9700: ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
