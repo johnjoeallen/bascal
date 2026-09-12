@@ -356,7 +356,7 @@ dim s(99)
 dim v(100)
 dim k(200)
 dim o(15)
-PRINT:PRINT "Initializing.";
+PRINT: PRINT "Initializing.";
 ' initialize
 ' total rooms, items,and keywords
 l1 = int(RND(1)*4)+1 : l2 = l1
@@ -364,17 +364,17 @@ g = 0 : b0 = 1 : sn = 1 : d1 = 1 : d2 = 0 : t = 1 : b1 = 0 : b2 = 0 : p1 = 0: de
 l = 0 : c = 0 : d3 = 0 : b3 = 0 : d0 = 2 : t1 = 100 : t2 = 35 : t3 = 149 : r0 = 0 : c0 = 0: c$=""
 KC = 1.02
 for ii = 1 to 99
- s(ii) = 0 : v(ii) = 0
+    s(ii) = 0 : v(ii) = 0
 end for
 
 PRINT ".";:v(100) = 0
 indx(1) = -1:indx(2)=-1
 '   read in possible movement direction array
 for z2 = 1 to 100
- INPUT #4,dx1,dx2,dx3,dx4,dx5,dx6,dx7,dx8,dx9,dx0
- dirs(z2,1)=dx1:dirs(z2,2)=dx2:dirs(z2,3)=dx3:dirs(z2,4)=dx4:dirs(z2,5)=dx5
- dirs(z2,6)=dx6:dirs(z2,7)=dx7:dirs(z2,8)=dx8:dirs(z2,9)=dx9:dirs(z2,10)=dx0
- PRINT ".";
+    INPUT #4,dx1,dx2,dx3,dx4,dx5,dx6,dx7,dx8,dx9,dx0
+    dirs(z2,1)=dx1:dirs(z2,2)=dx2:dirs(z2,3)=dx3:dirs(z2,4)=dx4:dirs(z2,5)=dx5
+    dirs(z2,6)=dx6:dirs(z2,7)=dx7:dirs(z2,8)=dx8:dirs(z2,9)=dx9:dirs(z2,10)=dx0
+    PRINT ".";
 end for
 
 close #4
@@ -390,8 +390,8 @@ PRINT
 restore L230
 '    read in locations of items
 for z2 = 1 to T2 step 5
-read dx1,dx2,dx3,dx4,dx5:s(z2)=dx1:s(z2+1)=dx2:s(z2+2)=dx3:s(z2+3)=dx4:s(z2+4)=dx5
-PRINT ".";
+    read dx1,dx2,dx3,dx4,dx5:s(z2)=dx1:s(z2+1)=dx2:s(z2+2)=dx3:s(z2+3)=dx4:s(z2+4)=dx5
+    PRINT ".";
 end for
 
 L230: data 18,25,23,24,21
@@ -401,9 +401,9 @@ data 7,49,7,7,7
 data 7,12,13,40,38
 data 69,0,46,0,0
 data 15,60,82,22,250
-for ii = 1 to 15 step 5 
-read dx1,dx2,dx3,dx4,dx5:o(ii)=dx1:o(ii+1)=dx2:o(ii+2)=dx3:o(ii+3)=dx4:o(ii+4)=dx5
-PRINT ".";
+for ii = 1 to 15 step 5
+    read dx1,dx2,dx3,dx4,dx5:o(ii)=dx1:o(ii+1)=dx2:o(ii+2)=dx3:o(ii+3)=dx4:o(ii+4)=dx5
+    PRINT ".";
 end for
 
 data 1,2,2,2,2
@@ -422,13 +422,13 @@ if l = 1 and (s(18) = l1 or s(18) = -1) then goto L350
 printMessage(45)
 goto L400
 L350: select case d0
-        case 0
-            shortDescription()
-        case 1
-            longDescription()
-        case else
-            describeRoomOnEntry()
-      end select
+    case 0
+        shortDescription()
+    case 1
+        longDescription()
+    case else
+        describeRoomOnEntry()
+end select
 v(l1) = 1
 describeRoomContents()
 if dead = 1 then goto L9540
@@ -437,14 +437,14 @@ gosub L7800
 L400: if len(c$) > 0 then goto L500
 L410: INPUT ">";c$:c$=ucase$(c$)
 if c$ = "" then goto L410
-PRINT:PRINT
+PRINT: PRINT
 c$ = ucase$(c$)
-'    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,   
+'    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,
 for x = 1 to len(c$)
-z5 = asc(mid$(c$,x,1))
-if not ((z5 > 64 and z5 < 91) or (z5 > 47 and z5 < 58) or z5 = 44) then
-c$ = mid$(c$,1,x-1)+" "+mid$(c$,x+1)
-end if
+    z5 = asc(mid$(c$,x,1))
+    if not ((z5 > 64 and z5 < 91) or (z5 > 47 and z5 < 58) or z5 = 44) then
+        c$ = mid$(c$,1,x-1)+" "+mid$(c$,x+1)
+    end if
 end for
 
 if mid$(c$,len(c$),1) = "," then goto L500
@@ -482,7 +482,7 @@ data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
 data 148,"YES",148,"Y",149,"BUG",150,"*"
 restore L580
 for i = 1 to 200
-k(i) = 0
+    k(i) = 0
 end for
 
 z1 = 0 : z3 = 0
@@ -565,7 +565,7 @@ L1510: restore L1530
 ' ROOMS TO JU
 L1530: data 33,37,45,92,76
 for z3 = 1 to int(RND(1)*5)+1
- read z2
+    read z2
 end for
 
 goto L1180
@@ -584,10 +584,10 @@ L1690: if not (l1 = 57 or l1 = 58) then goto L1780
 IF K(102)=0 AND K(106)=0 THEN goto L1780
 z3 = 1
 LW1700: if z3 > t2 then goto L1750
- if z3 = 10 then goto LCONT1700
- if s(z3) <> -1 then goto LCONT1700
- printMessage(53)
- goto L400
+if z3 = 10 then goto LCONT1700
+if s(z3) <> -1 then goto LCONT1700
+printMessage(53)
+goto L400
 LCONT1700: z3 = z3 + (1)
 goto LW1700
 L1750:
@@ -621,14 +621,14 @@ L1970:
 ' (was: restore L9961 -- item names now come from itemname$())
 x = 1
 LW2000: if x > 35 then goto L2030
- d$ = itemname$(x)
- if k(x) = 1 then goto L940
+d$ = itemname$(x)
+if k(x) = 1 then goto L940
 x = x + (1)
 goto LW2000
 L2030:
 L2040: restore L2070
 for x = 1 to int(RND(1)*4)+1
- read b$
+    read b$
 end for
 
 PRINT b$
@@ -756,8 +756,8 @@ D=3
 GOTO L1070
 L3240: D = 10
 LW3240: if D < 1 then goto L3270
- Z2 = DIRS(L1,D)
- IF Z2>0 AND Z2<101 THEN goto L1150
+Z2 = DIRS(L1,D)
+IF Z2>0 AND Z2<101 THEN goto L1150
 D = D + (-1)
 goto LW3240
 L3270:
@@ -773,8 +773,8 @@ D = 7
 GOTO L1070
 L3400: D = 1
 LW3400: if D > 10 then goto L3430
- Z2 = DIRS(L1,D)
- IF Z2>0 AND Z2<101 THEN goto L1150
+Z2 = DIRS(L1,D)
+IF Z2>0 AND Z2<101 THEN goto L1150
 D = D + (1)
 goto LW3400
 L3430:
@@ -783,11 +783,11 @@ L3450: ' *** INVENTORY ***
 Z0=0
 PRINT "You are carrying:";
 FOR X=1 TO T2
- IF S(X)=-1 THEN
-  b$ = itemname$(x)
-  PRINT B$
-  Z0 = Z0 + 1
-end if
+    IF S(X)=-1 THEN
+        b$ = itemname$(x)
+        PRINT B$
+        Z0 = Z0 + 1
+    end if
 end for
 
 IF Z0=0 THEN goto L3551 else goto L3560
@@ -812,9 +812,9 @@ goto LCONT3680
 ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
 L3790: z8 = 0
 for x = 1 to t2
-if s(x) = -1 then
-z8 = z8+1
-end if
+    if s(x) = -1 then
+        z8 = z8+1
+    end if
 end for
 
 if z8 < 7 then goto L3870
@@ -836,17 +836,17 @@ PRINT "Drop what?"
 GOTO L2040
 L4000: Z3 = 1
 LW4000: if Z3 > T2 then goto L4140
- IF K(47)=1 THEN goto L4060
- IF K(Z3)<>1 THEN goto LCONT4000
- IF S(Z3)=0 THEN goto LCONT4000
-L4060:  IF S(Z3)=-1 THEN goto L4100
- IF K(47)=1 THEN goto LCONT4000
- b$ = itemname$(z3):PRINT "You don't have the ";B$
- GOTO LCONT4000
-L4100:  ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
- GOTO L7380
-L4120:  b$ = itemname$(z3):PRINT B$;":dropped."
- S(Z3)=L1
+IF K(47)=1 THEN goto L4060
+IF K(Z3)<>1 THEN goto LCONT4000
+IF S(Z3)=0 THEN goto LCONT4000
+L4060: IF S(Z3)=-1 THEN goto L4100
+IF K(47)=1 THEN goto LCONT4000
+b$ = itemname$(z3):PRINT "You don't have the ";B$
+GOTO LCONT4000
+L4100: ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
+GOTO L7380
+L4120: b$ = itemname$(z3):PRINT B$;":dropped."
+S(Z3)=L1
 LCONT4000: Z3 = Z3 + (1)
 goto LW4000
 L4140:
@@ -1080,7 +1080,7 @@ Z9 = INT((S0-1)/100)
 IF Z9 <= 4 THEN goto L6483
 Z9=4
 L6483: FOR Z0=0 TO Z9
- READ D$
+    READ D$
 end for
 
 PRINT "That makes you a ";D$;" adventurer."
@@ -1089,23 +1089,23 @@ L6510: ' COMPUTE CURRENT SCORE
 RESTORE L230
 Z9=0:S0=0
 FOR Z0=1 TO 15
- READ Z1
- IF Z1<>0 THEN
-  IF V(Z1)=1 THEN
-   S0=S0+4*O(Z0)
-end if
-  IF S(Z0)=7 THEN
-   S0=S0+4*O(Z0)
-end if
-end if
+    READ Z1
+    IF Z1<>0 THEN
+        IF V(Z1)=1 THEN
+            S0=S0+4*O(Z0)
+        end if
+        IF S(Z0)=7 THEN
+            S0=S0+4*O(Z0)
+        end if
+    end if
 end for
 
 S0=(G=1)*10 + S0:S0=(SN=0)*20 + S0:S0=(D1=0)*30 + S0:S0=(T=0)*30 + S0:S0=(B1=2)*20 + S0
 S0=(B2=1)*20 + S0:S0=(P1=2)*20 + S0:S0=(D2=1)*20 + S0:S0=(C=1)*20 + S0
 FOR Z0 = 1 TO T1
- IF V(Z0)=1 THEN
-  S0=S0+1:Z9=Z9+1
-end if
+    IF V(Z0)=1 THEN
+        S0=S0+1:Z9=Z9+1
+    end if
 end for
 
 RETURN
@@ -1222,13 +1222,13 @@ L7980: return
 '   z3=item code first found
 L8280: z8 = 0 : z3 = 0: d$ = ""
 for z5 = 1 to 45
-if k(z5) <> 0 then
- z8 = z8+1
- b$ = itemname$(z5):d$ = b$
- if k(z5)=1 and z8 = 1 then
-  z3 = z5
-end if
-end if
+    if k(z5) <> 0 then
+        z8 = z8+1
+        b$ = itemname$(z5):d$ = b$
+        if k(z5)=1 and z8 = 1 then
+            z3 = z5
+        end if
+    end if
 end for
 
 b$ = d$
@@ -1236,15 +1236,15 @@ return
 L8390: ' FIND FIRST ITEM AT ROOM
 x1 = 0
 FOR Z1=1 TO 47
- if x1<>1 then
-  IF K(Z1) = 1 THEN
-   d$ = itemname$(z1):x1=1
-end if
-end if
+    if x1<>1 then
+        IF K(Z1) = 1 THEN
+            d$ = itemname$(z1):x1=1
+        end if
+    end if
 end for
 
 RETURN
-' 
+'
 ' MAKE SURE HE'S CARRYING ITEM * Z3
 '
 L8490: IF S(Z3)=-1 THEN goto L8530
@@ -1265,7 +1265,7 @@ L9010: PRINT "File ";a$;" not created"
 GOTO L410
 L9030: PRINT #5,T1;",";T2;",";T3;",";L1;",";L2;",";G;",";B0;",";SN;",";D1;",";D2;",";D0;",";T;",";B1;",";B2;",";P1;",";L;",";C;",";D3;",";B3;",";R0;",";KC
 FOR X=1 TO 99
- PRINT #5,S(X);",";V(X)
+    PRINT #5,S(X);",";V(X)
 end for
 
 PRINT #5,V(100)
@@ -1288,7 +1288,7 @@ GOTO L410
 L9170: INPUT #5,T1,T2,T3,L1,L2,G,B0,SN,D1,D2,D0,T,B1,B2,P1,L,C,D3,B3,R0,KCX$
 kc = val(kcx$)
 FOR X=1 TO 99
- INPUT #5,SX,VX:s(x)=sx:v(x)=vx
+    INPUT #5,SX,VX:s(x)=sx:v(x)=vx
 end for
 
 INPUT #5,vx:v(100)=vx
@@ -1317,10 +1317,10 @@ PRINT #5,A$
 PRINT "Enter your gripe in up to five lines (hit return to quit):"
 Z0 = 1
 LW9430: if Z0 > 5 then goto L9480
- PRINT Z0;
- INPUT A$
- IF A$="" THEN goto L9490
- PRINT #5,A$
+PRINT Z0;
+INPUT A$
+IF A$="" THEN goto L9490
+PRINT #5,A$
 Z0 = Z0 + (1)
 goto LW9430
 L9480:
@@ -1343,9 +1343,9 @@ printMessage(76)
 ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
 S(18)=7:L=0:DEAD=0:KC=1.03
 FOR X=1 TO T2
- IF S(X)=-1 THEN
-  S(X)=L1
-end if
+    IF S(X)=-1 THEN
+        S(X)=L1
+    end if
 end for
 
 ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
