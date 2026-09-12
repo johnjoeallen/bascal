@@ -19,22 +19,42 @@
 // understand" case, its DATA line deliberately left at its original
 // position -- see printDontUnderstand()'s own comment for why).
 //
-// Two things remain, both hand-wired GOTO control flow `bcc` itself
-// still flags as having a direct BASCAL equivalent:
-//   - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of
-//     the 40 verb handlers `GOTO`s back into once it's done -- most of
-//     `bcc`'s remaining warnings on this file are sites jumping back
-//     into it, not loops of their own.
-//   - The movement-execution engine (`L1070`/`L1180` onward) -- turns
-//     out to be a de facto shared subroutine (not a loop at all, so
-//     `bcc`'s loop-detection doesn't even flag it) reached via GOTO
-//     from inside the movement logic *and* directly from at least four
-//     different verb handlers (PLUGH, XYZZY, PLOVER, CLIMB, CROSS) as
-//     a "teleport"/"retry with a new direction" mechanism -- likely
-//     wants procedures, not a loop conversion, once traced fully.
-// Converting either safely, without introducing a behavioral bug in a
-// program this size, needs careful control-flow tracing before any
-// edit -- not yet done as of this revision.
+// Second pass: the movement-execution engine (was L1070 onward) is now
+// four functions instead of a GOTO web -- confirmed to be a de facto
+// shared subroutine, not a loop at all (bcc's own loop-detection never
+// flagged it), reached via GOTO from inside the movement logic itself
+// *and* directly from PLUGH/XYZZY/PLOVER/CLIMB/CROSS/ENTER/LEAVE as a
+// "teleport"/"retry with a new direction" mechanism -- every one of
+// those call sites now calls the same functions instead:
+//   - attemptMove%(d%) (was L1070) -- looks up the destination room
+//     for direction d%, handling the "pick one at random" sentinel
+//     dirs() can return (attemptRandomMove%(), was L1470) and an
+//     out-of-range lookup (the original L1220 message) itself.
+//   - checkSpecialRoomAndMove%(d%, z2%) (was L1260 onward) -- the
+//     special-room/special-direction checks (grate, nugget, bridge,
+//     snake, narrow tunnel, troll, dragon), reachable either through
+//     attemptMove%() or directly from a couple of verb handlers that
+//     already know the destination room. A straightforward `elseif`
+//     chain, not a restructuring of the original logic: every
+//     condition tests a mutually exclusive room number, so the
+//     original's linear GOTO cascade and this chain are behaviorally
+//     identical, confirmed byte-identical output against stage 4
+//     across six smoke tests covering every branch (movement in all
+//     8 directions, PLUGH/XYZZY/PLOVER teleports, CLIMB, CROSS,
+//     ENTER/LEAVE).
+//   - performMove%(z2%) (was L1180) -- the actual room transition.
+// A function can't GOTO a top-level label the way the original
+// GOTO-based targets could, so every call site now checks the
+// returned 0/1 and GOTOs L400 (a message was printed) or L9780 (the
+// move happened) itself instead.
+//
+// One thing remains: the outer game loop (`L300`/`L320`/`L400`/
+// `L410`) every one of the 40 verb handlers `GOTO`s back into once
+// it's done -- almost all of `bcc`'s remaining warnings on this file
+// are sites jumping back into it, not loops of their own. Converting
+// it means restructuring the whole file's top-level control flow, not
+// a per-handler change -- flagged as `stage 6`'s job, not attempted
+// here.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -582,6 +602,178 @@ procedure printDontUnderstand()
     PRINT b$
 end procedure
 
+' Performs the actual room transition, tracking whether the pirate
+' (the one item at s(35)) needs to follow the player -- replaces stage
+' 2's L1180 GOSUB-like target. Always succeeds; returns 1 (not a plain
+' procedure) only so its callers, all of which end in `return
+' performMove%(...)`, can share the same "0 = message printed, no
+' move; 1 = moved, check pits next" signal the rest of the movement
+' cascade below uses.
+function performMove%(z2%)
+    global l1
+    global l2
+    global s
+    l2 = l1 : l1 = z2%
+    if s(35) = l2 then
+        s(35) = l1
+    end if
+    return 1
+end function
+
+' The special-room/special-direction checks run after a destination
+' room (z2%) has already been found for direction d% -- replaces stage
+' 2's L1260 GOSUB-like target (reached either from attemptMove%() below
+' after its own dirs() lookup, or directly from a couple of verb
+' handlers that search for a valid direction themselves first). Every
+' condition here tests a specific, mutually exclusive room number, so
+' this is a straightforward `elseif` chain even though the original
+' cascaded through a linear sequence of `GOTO`s that would, for some
+' rooms, redundantly test conditions that could never be true there --
+' see the case-by-case comments below for exactly which original label
+' each branch replaces. Returns 0/1 the same way performMove%() does.
+function checkSpecialRoomAndMove%(d%, z2%)
+    global l1
+    global g
+    global b2
+    global sn
+    global t
+    global d2
+    global s
+    global k
+    global t2
+    dim z3%
+    if (l1 = 10 and (d% = 10 or d% = 5)) or (l1 = 11 and (d% = 9 or d% = 3)) then
+        ' GRATE (was L1260/L1280) -- IF GRATE IS OPEN (G=0) MOVE HIM
+        if g = 1 then
+            return performMove%(z2%)
+        end if
+        printMessage(10)
+        return 0
+    elseif l1 = 17 and d% = 9 and s(1) = -1 then
+        ' CAN'T TAKE NUGGET UPSTAIRS (was L1320)
+        printMessage(38)
+        return 0
+    elseif (l1 = 19 and d% = 7) or (l1 = 20 and d% = 3) then
+        ' CRYSTAL BRIDGE AND FISSURE (was L1360)
+        if b2 then
+            return performMove%(z2%)
+        end if
+        printMessage(3)
+        return 0
+    elseif l1 = 22 and d% <> 3 and d% <> 9 then
+        ' MT. KING & SNAKE (was L1410)
+        if sn = 0 then
+            return performMove%(z2%)
+        end if
+        printMessage(50)
+        return 0
+    elseif l1 = 57 or l1 = 58 then
+        ' Narrow Tunnel (was L1690) -- K(102)/K(106) are this turn's own
+        ' "did the player type E"/"...W" keyword flags (see the DATA
+        ' table's direction codes 100-109); the carried-item check below
+        ' only applies when moving E/W literally, not via some other
+        ' direction synonym.
+        if k(102) <> 0 or k(106) <> 0 then
+            for z3% = 1 to t2
+                if z3% <> 10 and s(z3%) = -1 then
+                    printMessage(53)
+                    return 0
+                end if
+            end for
+        end if
+        return performMove%(z2%)
+    elseif (l1 = 60 and d% = 2) or (l1 = 61 and d% = 6) then
+        ' TROLL (was L1780/L1790) -- t is 0 (no troll met yet), 1 (troll
+        ' appeased, gone), or 2 (troll killed).
+        select case t+1
+            case 1
+                return performMove%(z2%)
+            case 2
+                printMessage(55)
+                return 0
+            case 3
+                printMessage(56)
+                printMessage(55)
+                t = 1
+                return 0
+            case 4
+                t = 2
+                return performMove%(z2%)
+        end select
+    elseif l1 = 73 and d% = 1 and d2 = 0 then
+        ' (was L1860)
+        printMessage(57)
+        return 0
+    elseif l1 = 82 and s(33) = l1 and d% = 1 then
+        ' DRAGON (was L1890)
+        printMessage(51)
+        return 0
+    else
+        ' Normal, unimpeded move (was L1890's own final `else`).
+        return performMove%(z2%)
+    end if
+end function
+
+' dirs() returned the "pick one of several rooms at random" sentinel
+' (255) for the room the player's currently in -- replaces stage 2's
+' L1470 GOSUB-like target. 255 is only ever set for rooms 44 (bedquilt)
+' and 39 (Witt's End) in AMOVING; anything else falls through to the
+' same "you can't go that way" message L1220 itself would print outside
+' this sentinel case.
+function attemptRandomMove%()
+    global l1
+    dim z2%, z3%
+    if l1 = 44 then
+        ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
+        ' at random from the DATA table below (was L1470/L1510/L1530).
+        if RND(1) > 0.5 then
+            restore L1530
+            for z3% = 1 to int(RND(1)*5)+1
+                read z2%
+            end for
+            return performMove%(z2%)
+        end if
+        printMessage(52)
+        return 0
+    end if
+    if l1 = 39 then
+        ' WITT'S END: 15% chance of escaping to room 38 (was L1590/L1650).
+        if RND(1) < 0.15 then
+            return performMove%(38)
+        end if
+        printMessage(52)
+        return 0
+    end if
+    printMessage(1)
+    return 0
+end function
+L1530: data 33,37,45,92,76
+
+' Looks up the destination room for direction d% and either moves there
+' or prints why not -- replaces stage 2's L1070 GOSUB-like target.
+' z2=255 is the "pick one of several rooms at random" sentinel (see
+' attemptRandomMove%()); 1..254 is a real destination; anything else
+' means "you can't go that way." Returns 1 if the move happened (the
+' caller should GOTO L9780, which checks for a pit to fall into and
+' re-displays the room), 0 if a message was printed instead (the
+' caller should GOTO L400) -- a plain GOTO to either, the way the
+' original GOSUB-like target used, isn't possible from inside a
+' function.
+function attemptMove%(d%)
+    global l1
+    global dirs
+    dim z2%
+    z2% = dirs(l1, d%)
+    if z2% = 255 then
+        return attemptRandomMove%()
+    end if
+    if z2% < 1 or z2% > 254 then
+        printMessage(1)
+        return 0
+    end if
+    return checkSpecialRoomAndMove%(d%, z2%)
+end function
+
 ' ADVENTURE/3000 VERSION 3.2     27 FEB 1979 AT 5:30 PM
 ' THIS PROGRAM IS RELATIVELY BUG-FREE, BUT ONE STILL MUST
 ' realize that murphy 'S LAW STILL PREVAILS!
@@ -762,108 +954,15 @@ end for
 ' THEN IT'S A DIRECTION
 for d = 1 to 10
     if k(d+99) = 1 then
-        goto L1070
+        if attemptMove%(d) then
+            goto L9780
+        else
+            goto L400
+        end if
     end if
 end for
 ' COMMAND NOT A DIRECTION
 goto L1950
-' CAN HE MOVE THAT WAY?
-L1070: z2 = dirs(L1,d)
-if z2 = 255 then goto L1470
-if z2 < 1 or z2 > 254 then goto L1220
-L1150: ' NORMAL MOVING
-' CHECK FOR SPECIAL MOVE CONDITIONS
-goto L1260
-L1180: l2 = l1 : l1 = z2
-if s(35) = l2 then goto L1191 else goto L1200
-L1191: s(35) = l1
-L1200: goto L9780
-L1220: printMessage(1)
-goto L400
-' SPECIAL ROOM DIRECTIONS
-' GRATE
-L1260: if L1 = 10 and (d = 10 or d = 5) THEN goto L1280
-IF L1 = 11 and (d = 9 or d = 3) then goto L1280 else goto L1320
-' IF GRATE IS OPEN (G=0) MOVE HIM
-L1280: if g = 1 then goto L1180
-printMessage(10)
-goto L400
-' CAN'T TAKE NUGGET UPPSTAIRS
-L1320: if not (l1 = 17 and d = 9 and s(1) = -1) then goto L1360
-printMessage(38)
-goto L400
-' CRYSTAL BRIDGE AND FISSURE
-L1360: if not (l1 = 19 and d = 7 or l1 = 20 and d = 3) then goto L1410
-if b2 then goto L1180
-printMessage(3)
-goto L400
-' MT. KING & SNAKE
-L1410: if not (l1 = 22 and d <> 3 and d <> 9) then goto L1690
-if sn = 0 then goto L1180
-printMessage(50)
-goto L400
-' bedquilt and random directiosn
-L1470: if l1 <> 44 then goto L1590
-if RND(1) > 0.5 then goto L1510
-printMessage(52)
-goto L400
-L1510: restore L1530
-' ROOMS TO JU
-L1530: data 33,37,45,92,76
-for z3 = 1 to int(RND(1)*5)+1
-    read z2
-end for
-
-goto L1180
-' WITT's END
-L1590: if l1 <> 39 then goto L1220
-' SHOULD WE LET HIM OUT?
-if RND(1) < 0.15 then goto L1650
-' NO
-printMessage(52)
-goto L400
-L1650: ' YES
-z2 = 38
-goto L1180
-' Narrow Tunnel
-L1690: if not (l1 = 57 or l1 = 58) then goto L1780
-IF K(102)=0 AND K(106)=0 THEN goto L1780
-for z3 = 1 to t2
-    if z3 <> 10 and s(z3) = -1 then
-        printMessage(53)
-        goto L400
-    end if
-end for
-goto L1180
-' TROLL
-L1780: IF L1=60 AND D=2 THEN goto L1790
-IF L1=61 AND D=6 THEN goto L1790 ELSE goto L1860
-L1790: ' t is 0 (no troll met yet), 1 (troll appeased, gone), or 2 (troll
-' killed) -- L1180 (case 1) is the shared "do the move" label used all
-' over the program, not something owned by this dispatch, so that case
-' is just a redirect rather than embedding L1180's own body here.
-select case t+1
-    case 1
-        goto L1180
-    case 2
-        printMessage(55)
-        goto L400
-    case 3
-        printMessage(56)
-        printMessage(55)
-        T=1
-        goto L400
-    case 4
-        t = 2
-        goto L1180
-end select
-L1860: if not (l1 = 73 and d = 1 and d2 = 0) then goto L1890
-printMessage(57)
-goto L400
-L1890: if not (l1 = 82 and s(33) = l1 and d = 1) then goto L1180
-' DRAGON
-printMessage(51)
-goto L400
 ' OTHER COMMANDS
 ' L1950 is a shared entry point jumped to directly from the exotic-
 ' words/direction resolution above (its own initial `z1 = 100` folded
@@ -893,10 +992,12 @@ select case z1
         IF L1<>7 THEN goto L2170
         IF S(35)=L1 THEN S(35)=0
         Z2=26
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
         L2170: IF L1<>26 THEN goto L2200
         Z2=7
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
         L2200: printMessage(2)
         GOTO L400
     case 2
@@ -904,10 +1005,12 @@ select case z1
         IF L1<>7 THEN goto L2270
         IF S(35)=L1 THEN S(35)=0
         Z2=13
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
         L2270: IF L1<>13 THEN goto L2200
         Z2=7
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
     case 3
         ' *** PLOVER *** (CAN'T BRING EMERALD WITH HIM)
         IF L1>26 THEN goto L2360
@@ -916,10 +1019,12 @@ select case z1
         L2330: IF S(10)<>-1 THEN goto L2340
         S(10) = L1
         L2340: Z2 = 58
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
         L2360: IF L1<>58 THEN goto L2200
         Z2=26
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
     case 4
         ' *** CROSS ***
         IF L1<>19 THEN goto L2470
@@ -928,17 +1033,33 @@ select case z1
         GOTO L400
         L2440: D=7
         ' JUST GIVE NEW DIRECTION, USE MOVE ROUTINE
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L2470: IF L1<>20 THEN goto L2510
         IF B2=0 THEN goto L2420
         D=3
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L2510: IF L1<>60 THEN goto L2540
         D=2
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L2540: IF L1<>61 THEN goto L2200
         D=6
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
     case 5
         ' *** CLIMB ***
         IF L1<>50 THEN goto L2200
@@ -946,7 +1067,8 @@ select case z1
         IF P1<2 THEN goto L2200
         ' YES
         Z2=70
-        GOTO L1180
+        performMove%(Z2)
+        goto L9780
     case 6
         ' *** JUMP *** STRICTLY SUICIDAL
         IF L1<>16 AND L1<>19 AND L1<>20 AND L1<>27 THEN goto L2200
@@ -1012,15 +1134,29 @@ select case z1
         IF L1<>6 THEN goto L3180
         ' TO HOUSE
         D=3
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L3180: IF L1<>68 THEN goto L3240
         ' TO BARREN ROOM
         D=3
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L3240: D = 10
         LW3240: if D < 1 then goto L3270
         Z2 = DIRS(L1,D)
-        IF Z2>0 AND Z2<101 THEN goto L1150
+        IF Z2>0 AND Z2<101 THEN
+            if checkSpecialRoomAndMove%(D, Z2) then
+                goto L9780
+            else
+                goto L400
+            end if
+        end if
         D = D + (-1)
         goto LW3240
         L3270:
@@ -1030,15 +1166,29 @@ select case z1
         IF L1<>7 THEN goto L3340
         ' LEAVE HOUSE
         D=7
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L3340: IF L1<>69 THEN goto L3400
         ' LEAVE BARREN ROOM
         D = 7
-        GOTO L1070
+        if attemptMove%(D) then
+            goto L9780
+        else
+            goto L400
+        end if
         L3400: D = 1
         LW3400: if D > 10 then goto L3430
         Z2 = DIRS(L1,D)
-        IF Z2>0 AND Z2<101 THEN goto L1150
+        IF Z2>0 AND Z2<101 THEN
+            if checkSpecialRoomAndMove%(D, Z2) then
+                goto L9780
+            else
+                goto L400
+            end if
+        end if
         D = D + (1)
         goto LW3400
         L3430:

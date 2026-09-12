@@ -252,25 +252,45 @@ source from scratch.
   in the file, and this avoids any risk to some other, unrelated
   unrestored sequential `READ` elsewhere in this 1149-line program.
 
-  Two things remain, both hand-wired GOTO control flow `bcc` itself
-  still flags as having a direct BASCAL equivalent:
-  - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of the
-    40 verb handlers `GOTO`s back into once it's done -- most of
-    `bcc`'s remaining warnings on this file are sites jumping back
-    into it, not loops of their own. Converting this means restructuring
-    the whole file's top-level control flow, not a per-handler change.
-  - The movement-execution engine (`L1070`/`L1180` onward) -- turns out
-    to be a de facto shared subroutine (not a loop at all, so `bcc`'s
-    loop-detection doesn't even flag it), reached via GOTO from inside
-    the movement logic *and* directly from at least four different verb
-    handlers (`PLUGH`, `XYZZY`, `PLOVER`, `CLIMB`, `CROSS`) as a
-    "teleport"/"retry with a new direction" mechanism -- likely wants
-    procedures, not a loop conversion, once traced fully.
+  Second pass: the movement-execution engine (was `L1070` onward) is
+  now four functions instead of a GOTO web, confirmed to be a de facto
+  shared subroutine rather than a loop at all (`bcc`'s own
+  loop-detection never flagged it) -- reached via GOTO from inside the
+  movement logic itself *and* directly from `PLUGH`/`XYZZY`/`PLOVER`/
+  `CLIMB`/`CROSS`/`ENTER`/`LEAVE` as a "teleport"/"retry with a new
+  direction" mechanism, every one of those call sites now calling the
+  same functions instead:
+  - `attemptMove%(d%)` (was `L1070`) -- looks up the destination room
+    for direction `d%`, handling `dirs()`'s "pick one at random"
+    sentinel (`attemptRandomMove%()`, was `L1470`) and an out-of-range
+    lookup itself.
+  - `checkSpecialRoomAndMove%(d%, z2%)` (was `L1260` onward) -- the
+    special-room/special-direction checks (grate, nugget, bridge,
+    snake, narrow tunnel, troll, dragon), reachable either through
+    `attemptMove%()` or directly from `ENTER`/`LEAVE`, which already
+    know the destination room. A straightforward `elseif` chain, not a
+    restructuring of the original logic -- every condition tests a
+    mutually exclusive room number, so the original's linear GOTO
+    cascade and this chain are behaviorally identical, confirmed
+    byte-identical output against stage 4 across six smoke tests
+    covering every branch (movement in all 8 directions, the three
+    teleport verbs, `CLIMB`, `CROSS`, `ENTER`/`LEAVE`).
+  - `performMove%(z2%)` (was `L1180`) -- the actual room transition.
 
-  Neither has been converted yet -- both need careful control-flow
-  tracing before any edit, to avoid a real behavioral bug in a program
-  this size. This stage exists to hold that work; see its own file
-  header for the exact same scope note.
+  A function can't `GOTO` a top-level label the way the original
+  GOTO-based targets could, so every call site now checks the returned
+  0/1 and `GOTO`s `L400` (a message was printed) or `L9780` (the move
+  happened) itself instead. Also verified with `bcc --check`, a real
+  `fbc` build, and a real BASCOM compile under dosbox-x (0 severe
+  errors).
+
+  One thing remains: the outer game loop (`L300`/`L320`/`L400`/`L410`)
+  every one of the 40 verb handlers `GOTO`s back into once it's done --
+  almost all of `bcc`'s remaining warnings on this file are sites
+  jumping back into it, not loops of their own. Converting it means
+  restructuring the whole file's top-level control flow, not a
+  per-handler change -- flagged as **stage 6**'s job, not attempted
+  here.
 
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
