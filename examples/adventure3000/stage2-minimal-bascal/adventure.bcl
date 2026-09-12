@@ -72,7 +72,11 @@ open "ADESCRIP" for INPUT as #1
 dcount = 0
 LA101: if EOF(1) then goto LA102
 dcount = dcount + 1
-input #1, descrip$(dcount)
+' INPUT # into an array element directly isn't supported by the minimal
+' C backend yet (GitHub issue #151) -- only a bare scalar variable is --
+' so read into one first, then assign it into the array.
+input #1, line$
+descrip$(dcount) = line$
 PRINT ".";
 goto LA101
 LA102: close #1
@@ -82,7 +86,8 @@ open "AITEMS" for INPUT as #2
 icount = 0
 LA111: if EOF(2) then goto LA112
 icount = icount + 1
-input #2, items$(icount)
+input #2, line$
+items$(icount) = line$
 PRINT ".";
 goto LA111
 LA112: close #2
@@ -92,7 +97,8 @@ open "AMESSAGE" for INPUT as #3
 mcount = 0
 LA121: if EOF(3) then goto LA122
 mcount = mcount + 1
-input #3, msg$(mcount)
+input #3, line$
+msg$(mcount) = line$
 goto LA121
 LA122: close #3
 gosub L12500
@@ -1064,6 +1070,10 @@ end for
 L8960: return
 L8970: ' *** SAVE GAME ***
 INPUT "What do you want to call the save file? ";A$
+' `on error goto` (not `try`/`catch`) here on purpose -- see the
+' README's own note on why, and GitHub issues #61 (on error goto
+' is permanently unsupported under --target c, by design) & #100
+' (try/catch's RESUME output isn't accepted by real fbc).
 on error goto L9010
 OPEN A$ FOR OUTPUT AS #5
 on error goto 0

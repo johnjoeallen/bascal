@@ -238,3 +238,54 @@ subroutines), it has not been exhaustively played through end to end, and
 (like the other case studies under `examples/`, as opposed to `tutorial/`)
 isn't part of the automated test suite -- treat it as "starts and responds
 correctly to basic commands," not "every path verified."
+
+All three stages (2, 3, and 4) are re-verified the same way -- `bcc --check`,
+an `fbc` build, and the same smoke test -- after every refactoring pass, and
+all three currently build and run correctly.
+
+### `--target C` and `--target jvm`
+
+Besides the `fbc`/BASIC-target verification above, each stage was also
+checked against BASCAL's other two backends, with mixed results:
+
+- **`--target jvm` cannot run any stage.** Every stage `OPEN`s its data
+  files (`AMOVING`, then `ADESCRIP`/`AITEMS`/`AMESSAGE`), and the JVM
+  backend has no file I/O support at all yet -- `bcc` reports `Open { .. }
+  is not supported by the minimal JVM backend yet` at the first `OPEN`.
+  This isn't fixable from the example side; it's a capability the JVM
+  backend simply doesn't have yet.
+
+- **`--target c` cannot currently build any stage either, but for a more
+  interesting reason.** All three stages use classic `on error goto` at
+  three call sites (SAVE GAME, LOAD OLD GAME, and BUG report, which share
+  a handler), and the C backend permanently rejects `on error goto`/
+  `resume`/`error` by design (see GitHub issue #61) -- its GOSUB/return-
+  address-stack model can't safely cross real C function boundaries, so
+  there's no near-term fix planned there. BASCAL's documented portable
+  alternative is `try`/`catch`/`finally`, and converting those three sites
+  to it does make every stage build and run under `--target c` (stage 4
+  was verified compiling and playing correctly this way). It was reverted
+  in all three stages, though: `try`/`catch`'s generated BASIC output uses
+  `RESUME <linenum>`, which real `fbc` rejects outright (`error 3:
+  Expected End-of-Line`) -- a genuine, pre-existing bcc bug, already
+  tracked as GitHub issue #100, and confirmed (by testing the project's
+  own `tutorial/portable_error_handling.bcl` under real `fbc`) to predate
+  this port entirely. Until #100 is fixed, there is no way to make a
+  BASCAL program use `try`/`catch` for error handling *and* build cleanly
+  under real `fbc`, so all three stages keep `on error goto` -- preserving
+  the `fbc`-verified BASIC target, at the cost of `--target c` support --
+  with a comment at each site pointing at #61 and #100.
+
+  Stage 2 and stage 3 have an independent, additional `--target c`
+  blocker even setting the above aside: their still-`ON ... GOTO`/
+  `ON ... GOSUB` legacy dispatch forms aren't supported by the C backend
+  (`OnBranch { .. } is not supported by the minimal C backend yet`) --
+  only stage 4's `SELECT CASE` conversion (see above) avoids this, so
+  `--target c` support, if #100 is ever fixed, would land as a stage-4-
+  only milestone rather than something retrofittable to stage 2/3 without
+  their own `SELECT CASE` conversion.
+
+  In short: `--target c` compatibility for this case study is currently
+  blocked on two already-tracked upstream bcc issues, not on anything
+  about the port itself -- #61 is permanent by design, #100 is a real bug
+  that could in principle be fixed.

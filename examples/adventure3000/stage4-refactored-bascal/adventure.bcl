@@ -32,11 +32,15 @@ dim itemname$(47)
 ' by file line order. Replaces stage 2's inline LA100-LA102 loading code.
 procedure loadAdescrip()
     global descrip$
-    dim dcount
+    dim dcount, line$
     open "ADESCRIP" for INPUT as #1
     while not(EOF(1))
         dcount = dcount + 1
-        input #1, descrip$(dcount)
+        ' INPUT # into an array element directly isn't supported by the
+        ' minimal C backend yet -- only a bare scalar variable is -- so
+        ' read into one first, then assign it into the array.
+        input #1, line$
+        descrip$(dcount) = line$
         print ".";
     end while
     close #1
@@ -46,11 +50,12 @@ end procedure
 ' stage 2's inline LA110-LA112 loading code.
 procedure loadAitems()
     global items$
-    dim icount
+    dim icount, line$
     open "AITEMS" for INPUT as #2
     while not(EOF(2))
         icount = icount + 1
-        input #2, items$(icount)
+        input #2, line$
+        items$(icount) = line$
         print ".";
     end while
     close #2
@@ -61,11 +66,13 @@ end procedure
 procedure loadAmessage()
     global msg$
     global mcount
+    dim line$
     mcount = 0
     open "AMESSAGE" for INPUT as #3
     while not(EOF(3))
         mcount = mcount + 1
-        input #3, msg$(mcount)
+        input #3, line$
+        msg$(mcount) = line$
     end while
     close #3
 end procedure
@@ -137,6 +144,11 @@ function askYesNo%()
         end if
         print "Yes or No-";
     end while
+    return 0 ' unreachable -- every path through the loop above already
+    ' returns; the minimal C backend requires a function's literal last
+    ' top-level statement to be `return`, though, since it doesn't try
+    ' to prove a loop always returns the way the basic target's own
+    ' fallthrough-is-fine model doesn't need to
 end function
 
 ' Prints the numbered message from AMESSAGE (msg$()/indx()/fraindx(),
@@ -144,21 +156,21 @@ end function
 ' 7620` convention -- every call site is now `printMessage(N)`, passing
 ' the message number as a real argument instead of setting the global
 ' z59 first.
-procedure printMessage(msgNum)
+procedure printMessage(msgNum%)
     global indx
     global fraindx
     global msg$
     dim xtmp, mpos, b1$
-    xtmp = indx(msgNum)
-    if msgNum = 2 or msgNum = 61 then
+    xtmp = indx(msgNum%)
+    if msgNum% = 2 or msgNum% = 61 then
         ' Messages 2 and 61 have several interchangeable variants
         ' (see AMESSAGE's "#2.1".."#2.5" entries); pick one at random.
         xtmp = fraindx(xtmp + int(RND(1) * 5))
     end if
     mpos = xtmp
     b1$ = msg$(mpos)
-    if mid$(b1$, 1, 1) <> "#" or int(val(mid$(b1$, 2))) <> msgNum then
-        print "NO DESC. # "; msgNum; " IN FILE AMESSAGE"
+    if mid$(b1$, 1, 1) <> "#" or int(val(mid$(b1$, 2))) <> msgNum% then
+        print "NO DESC. # "; msgNum%; " IN FILE AMESSAGE"
         return
     end if
     while true
@@ -1401,6 +1413,10 @@ select case z1
     case 36
         L8970: ' *** SAVE GAME ***
         INPUT "What do you want to call the save file? ";A$
+        ' `on error goto` (not `try`/`catch`) here on purpose -- see the
+        ' README's own note on why, and GitHub issues #61 (on error goto
+        ' is permanently unsupported under --target c, by design) & #100
+        ' (try/catch's RESUME output isn't accepted by real fbc).
         on error goto L9010
         OPEN A$ FOR OUTPUT AS #5
         on error goto 0
