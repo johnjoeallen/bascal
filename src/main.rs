@@ -86,8 +86,8 @@ struct Cli {
     #[arg(long)]
     strict_vars_warn: bool,
 
-    /// --target jvm only: stack size in bytes for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
-    #[arg(long, value_name = "BYTES")]
+    /// --target jvm only: stack size for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Plain bytes, or suffixed with k/kb, m/mb, g/gb (case-insensitive, powers of 1024 -- e.g. `64mb`, `256M`, `1gb`). Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
+    #[arg(long, value_name = "SIZE", value_parser = parse_byte_count_value)]
     krak_stack_size: Option<usize>,
 }
 
@@ -101,7 +101,7 @@ Default target (used when --target isn't given), first match wins:
 KRAK_STACK_SIZE (used when --krak-stack-size isn't given, --target jvm only),
 same first-match-wins order as DEFAULT TARGET above:
   1. BASCAL_KRAK_STACK_SIZE environment variable
-  2. ~/.config/bascal/config (\"krak_stack_size=1048576\", bytes)
+  2. ~/.config/bascal/config (\"krak_stack_size=64mb\", or a plain byte count)
   3. /etc/default/bascal (same format, system-wide)
   4. 33554432 (32 MiB), if none of the above are set";
 
@@ -157,6 +157,49 @@ fn parse_target_value(value: &str) -> Result<Target, String> {
     parse_target_str(value).ok_or_else(|| {
         format!(
             "expected `basic` (alias `bascom`), `fbc`, `c`, or `jvm` (case-insensitive), got `{value}`"
+        )
+    })
+}
+
+/// Parses a byte-count value: plain digits (bytes), or digits followed by
+/// a case-insensitive `b`/`k`/`kb`/`m`/`mb`/`g`/`gb` unit (powers of 1024,
+/// not 1000 -- matching every other Unix disk/memory size convention this
+/// gets compared against) -- e.g. `"67108864"`, `"64mb"`, `"64M"`,
+/// `"1gb"`. Optional whitespace between the digits and the unit. Shared
+/// by the `--krak-stack-size` CLI flag's own `value_parser`
+/// (`parse_byte_count_value` below) and `BASCAL_KRAK_STACK_SIZE`/the
+/// config-file value (`resolve_default_krak_stack_size`), so all three
+/// accept exactly the same formats. `None` for anything else, including
+/// empty input, a bare unit with no digits, or a value that overflows
+/// `usize` once the unit's multiplied in.
+fn parse_byte_count(value: &str) -> Option<usize> {
+    let value = value.trim();
+    let split_at = value
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(value.len());
+    let (digits, unit) = value.split_at(split_at);
+    if digits.is_empty() {
+        return None;
+    }
+    let number: usize = digits.parse().ok()?;
+    let multiplier: usize = match unit.trim().to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "k" | "kb" => 1024,
+        "m" | "mb" => 1024 * 1024,
+        "g" | "gb" => 1024 * 1024 * 1024,
+        _ => return None,
+    };
+    number.checked_mul(multiplier)
+}
+
+/// `clap`'s own `value_parser` for `--krak-stack-size` -- thin wrapper
+/// around `parse_byte_count` matching the `Fn(&str) -> Result<usize,
+/// String>` shape `clap` expects.
+fn parse_byte_count_value(value: &str) -> Result<usize, String> {
+    parse_byte_count(value).ok_or_else(|| {
+        format!(
+            "expected a byte count, optionally suffixed with b/k/kb/m/mb/g/gb (case-insensitive, \
+             e.g. `64mb`), got `{value}`"
         )
     })
 }
@@ -241,15 +284,14 @@ fn resolve_default_target() -> Target {
 /// with an explicit stack size at all. Same precedence order as
 /// `resolve_default_target` (`BASCAL_KRAK_STACK_SIZE` env var, user
 /// config, system config), via `resolve_config_value`. Falls back to
-/// 32 MiB if none of those are set, or set to something that doesn't
-/// parse as a plain byte count -- confirmed empirically: even a trivial
+/// 32 MiB if none of those are set, or set to something `parse_byte_
+/// count` doesn't accept -- confirmed empirically: even a trivial
 /// generated program can overflow a stack as small as 64 KiB (krak2's
 /// recursive stack-map-frame/control-flow analysis needs real headroom),
 /// so this default deliberately isn't a token/minimal value.
 fn resolve_default_krak_stack_size() -> usize {
     const DEFAULT_KRAK_STACK_SIZE: usize = 32 * 1024 * 1024;
-    resolve_config_value("krak_stack_size", |value| value.trim().parse().ok())
-        .unwrap_or(DEFAULT_KRAK_STACK_SIZE)
+    resolve_config_value("krak_stack_size", parse_byte_count).unwrap_or(DEFAULT_KRAK_STACK_SIZE)
 }
 
 /// The `-o` value's *effective* output path. `-o` only ever names a
@@ -879,6 +921,31 @@ mod tests {
         assert_eq!(parse_target_str("BASCOM"), Some(Target::Basic));
         assert_eq!(parse_target_str("fbc"), Some(Target::Fbc));
         assert_eq!(parse_target_str("FBC"), Some(Target::Fbc));
+    }
+
+    #[test]
+    fn parse_byte_count_accepts_plain_bytes_and_suffixed_sizes() {
+        assert_eq!(parse_byte_count("67108864"), Some(67108864));
+        assert_eq!(parse_byte_count("64mb"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("64MB"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("64M"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("256mb"), Some(256 * 1024 * 1024));
+        assert_eq!(parse_byte_count("1gb"), Some(1024 * 1024 * 1024));
+        assert_eq!(parse_byte_count("1g"), Some(1024 * 1024 * 1024));
+        assert_eq!(parse_byte_count("32kb"), Some(32 * 1024));
+        assert_eq!(parse_byte_count("32k"), Some(32 * 1024));
+        assert_eq!(parse_byte_count("100b"), Some(100));
+        assert_eq!(parse_byte_count("64 mb"), Some(64 * 1024 * 1024));
+        assert_eq!(parse_byte_count("  64mb  "), Some(64 * 1024 * 1024));
+    }
+
+    #[test]
+    fn parse_byte_count_rejects_garbage() {
+        assert_eq!(parse_byte_count(""), None);
+        assert_eq!(parse_byte_count("mb"), None);
+        assert_eq!(parse_byte_count("64tb"), None);
+        assert_eq!(parse_byte_count("sixty-four mb"), None);
+        assert_eq!(parse_byte_count("64.5mb"), None);
     }
 
     #[test]
