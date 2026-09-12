@@ -66,15 +66,15 @@ struct Cli {
     #[arg(long)]
     check: bool,
 
-    /// Compile the generated output to a binary in tmp/: fbc for --target fbc's .bas (requires --target fbc -- --target basic/bascom's .bas is verified against real BASCOM instead, whose own .EXE fbc can't produce), gcc for --target c's .c, krak2 for --target jvm's .j
+    /// Compile the generated output to a binary in tmp/: for --target basic/bascom, real BASCOM under dosbox-x (needs dosbox-x on PATH plus a local BASCOM fixture -- see CONTRIBUTING.md), producing a DOS .EXE; fbc for --target fbc's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
     binary: bool,
 
-    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For BASIC output this always means fbc's binary (so requires --target fbc), run directly -- not real BASCOM, whose own .EXE needs a DOS environment/emulator like dosbox-x to run at all
+    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For --target basic/bascom this means launching the built .EXE in dosbox-x's own window (needs a display; won't work fully headless) since a DOS binary can't be exec'd directly; for --target fbc, fbc's native binary is run directly instead
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM), `fbc` (the same BASIC, but for FreeBASIC specifically -- required for --binary/--run, and rejects the handful of constructs real BASCOM accepts that fbc does not, e.g. try/catch), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and rejects the handful of constructs real BASCOM accepts that fbc does not, e.g. try/catch), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -345,6 +345,13 @@ fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("class") {
         return run_java_class(binary_path);
     }
+    // A `--target basic` "binary" (`invoke_bascom`) is a DOS `.EXE`,
+    // likewise not something this process's OS can exec directly -- see
+    // `run_dos_exe`'s own doc comment for why it needs dosbox-x's own
+    // window rather than an inherited-stdio child process.
+    if binary_path.extension().and_then(|ext| ext.to_str()) == Some("EXE") {
+        return run_dos_exe(binary_path);
+    }
     let status = Command::new(binary_path)
         .status()
         .map_err(|err| format!("error: failed to run {}: {err}", binary_path.display()))?;
@@ -393,27 +400,19 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
     out_mtime >= in_mtime
 }
 
-/// Compiles the transpiler's generated output down to a native binary with
+/// Compiles the transpiler's generated output down to a binary with
 /// whatever third-party compiler actually understands that target's
 /// output, and returns the binary's path on success (used by `--run` to
 /// find what to execute next). `Target::Fbc`'s `.bas` goes through `fbc`
-/// (FreeBASIC), producing a binary the host can run directly, the same way
-/// `gcc` does for `Target::C`'s `.c`. `Target::Basic`'s `.bas` has no
-/// binary here at all: it's verified against real BASCOM instead (used
-/// only by the opt-in `tests/dosbox_conformance.rs` conformance suite, see
-/// CONTRIBUTING.md), which produces a DOS `.EXE` runnable only under a DOS
-/// environment/emulator like dosbox-x, not directly by this process --
-/// pick `--target fbc` explicitly for `--binary`/`--run` (see GitHub issue
-/// #152: the two are no longer treated as interchangeable, since e.g.
-/// `try`/`catch` compiles under one and not the other, #153).
+/// (FreeBASIC), producing a native binary the host can run directly, the
+/// same way `gcc` does for `Target::C`'s `.c`. `Target::Basic`'s `.bas`
+/// instead goes through real BASCOM under dosbox-x (see `invoke_bascom`),
+/// producing a DOS `.EXE` -- `run_binary` special-cases that extension the
+/// same way it already does JVM's `.class`, launching dosbox-x itself
+/// rather than exec'ing the file directly.
 fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
     match target {
-        Target::Basic => Err(
-            "error: --binary/--run needs --target fbc for BASIC output -- --target basic \
-             (aka bascom) is verified against real BASCOM instead, which produces a DOS \
-             .EXE this process can't run directly (see GitHub issue #152)"
-                .to_string(),
-        ),
+        Target::Basic => invoke_bascom(output_path),
         Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
         Target::Jvm => invoke_krak2(output_path),
@@ -446,6 +445,205 @@ fn invoke_fbc(bas_path: &PathBuf) -> Result<PathBuf, String> {
     Ok(binary_path)
 }
 
+/// Where a local, non-redistributed real-BASCOM install lives -- the exact
+/// same directory `tests/dosbox_conformance.rs`'s opt-in conformance suite
+/// uses (see CONTRIBUTING.md/`scripts/fetch-ibm-basic-compiler.sh`), reused
+/// here rather than adding a separate, user-facing config knob: BASCOM is
+/// copyrighted and can't ship with `bcc`, so both the test suite and
+/// `--target basic`'s own `--binary`/`--run` need the same one-time setup
+/// either way. Relative to the current directory, same as `tmp/` below.
+fn bascom_fixture_dir() -> PathBuf {
+    PathBuf::from("test-fixtures/ibm-basic-compiler/c_drive")
+}
+
+fn bascom_available() -> bool {
+    bascom_fixture_dir().join("BASCOM.EXE").is_file()
+}
+
+fn dosbox_x_available() -> bool {
+    // dosbox-x exits non-zero for `--version` (it treats the flag as an
+    // early-exit trigger rather than a clean "print and succeed" query),
+    // matching `tests/dosbox_conformance.rs`'s own `dosbox_x_available`.
+    Command::new("dosbox-x").arg("--version").output().is_ok()
+}
+
+/// A DOS text file needs CRLF line endings and a trailing Ctrl-Z (0x1A) EOF
+/// marker to be read correctly by real DOS-era tools -- identical to
+/// `tests/dosbox_conformance.rs`'s own `to_dos_text`.
+fn to_dos_text(text: &str) -> Vec<u8> {
+    let mut dos = text.replace('\n', "\r\n");
+    if !dos.ends_with("\r\n") {
+        dos.push_str("\r\n");
+    }
+    let mut bytes = dos.into_bytes();
+    bytes.push(0x1A);
+    bytes
+}
+
+fn write_dos_file(path: &Path, contents: &str) -> Result<(), String> {
+    fs::write(path, to_dos_text(contents))
+        .map_err(|err| format!("error: failed to write {}: {err}", path.display()))
+}
+
+/// Every real-BASCOM work directory this process ever builds lives at
+/// `tmp/<stem>_bascom/`, one per compiled program, holding a staged copy of
+/// the whole BASCOM fixture (compiler + linker + libs) plus that program's
+/// own `PROG.BAS`/`PROG.EXE` -- a fixed 8.3-safe DOS name, side-stepping
+/// any concern about a `.bcl` stem too long or containing characters DOS
+/// filenames can't, the same way `tests/dosbox_conformance.rs`'s `TEST`
+/// stem does.
+fn bascom_work_dir(stem: &std::ffi::OsStr) -> PathBuf {
+    let mut dir_name = stem.to_os_string();
+    dir_name.push("_bascom");
+    PathBuf::from("tmp").join(dir_name)
+}
+
+/// Runs `dosbox-x` headlessly against `work_dir` (mounted as `C:`),
+/// executing `batch_file` (a filename inside `work_dir`) and exiting
+/// immediately after -- identical arrangement to
+/// `tests/dosbox_conformance.rs`'s own `run_dosbox_batch`, since this is
+/// exactly the same "compile with a real DOS tool under emulation" step,
+/// just invoked from `bcc` itself instead of a test.
+fn run_dosbox_batch_headless(work_dir: &Path, batch_file: &str) -> Result<(), String> {
+    let mount_arg = format!("MOUNT C: {}", work_dir.display());
+    let status = Command::new("dosbox-x")
+        .env("SDL_AUDIODRIVER", "dummy")
+        .arg("-nogui")
+        .arg("-c")
+        .arg(&mount_arg)
+        .arg("-c")
+        .arg("C:")
+        .arg("-c")
+        .arg(batch_file)
+        .arg("-fastlaunch")
+        .arg("-exit")
+        .status()
+        .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    if !status.success() {
+        return Err(format!("error: dosbox-x exited with {status}"));
+    }
+    Ok(())
+}
+
+fn missing_bascom_setup_error() -> String {
+    if !dosbox_x_available() {
+        return "error: dosbox-x not found on PATH -- install it to build/run --target \
+                basic/bascom output via real BASCOM (see CONTRIBUTING.md), or use \
+                --target fbc instead"
+            .to_string();
+    }
+    format!(
+        "error: {} not found -- run scripts/fetch-ibm-basic-compiler.sh to populate a \
+         local BASCOM fixture (see test-fixtures/README.md), or use --target fbc instead",
+        bascom_fixture_dir().join("BASCOM.EXE").display()
+    )
+}
+
+/// Compiles `bas_path` with real BASCOM under `dosbox-x`, staged into
+/// `bascom_work_dir`, and returns the resulting DOS `.EXE`'s path.
+/// `/E` (BASCOM's own switch for `ON ERROR`/`RESUME` support) is always
+/// passed: confirmed harmless for a program that doesn't use it, and
+/// required for one that does (real BASCOM otherwise still "compiles" the
+/// program -- nonzero severe-error count, but still produces an EXE -- yet
+/// silently never installs the error trap at runtime).
+fn invoke_bascom(bas_path: &PathBuf) -> Result<PathBuf, String> {
+    if !dosbox_x_available() || !bascom_available() {
+        return Err(missing_bascom_setup_error());
+    }
+
+    let stem = bas_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid BASIC output path {}", bas_path.display()))?;
+    let work_dir = bascom_work_dir(stem);
+    let _ = fs::remove_dir_all(&work_dir);
+    fs::create_dir_all(&work_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", work_dir.display()))?;
+
+    let fixture_dir = bascom_fixture_dir();
+    for entry in fs::read_dir(&fixture_dir)
+        .map_err(|err| format!("error: failed to read {}: {err}", fixture_dir.display()))?
+    {
+        let entry = entry
+            .map_err(|err| format!("error: failed to read compiler fixture entry: {err}"))?;
+        let dest = work_dir.join(entry.file_name());
+        fs::copy(entry.path(), &dest)
+            .map_err(|err| format!("error: failed to stage {}: {err}", dest.display()))?;
+    }
+
+    let basic_source = fs::read_to_string(bas_path)
+        .map_err(|err| format!("error: failed to read {}: {err}", bas_path.display()))?;
+    write_dos_file(&work_dir.join("PROG.BAS"), &basic_source)?;
+    write_dos_file(
+        &work_dir.join("RUNIT.BAT"),
+        "BASCOM PROG.BAS,,;/E\nLINK PROG.OBJ;\nEXIT\n",
+    )?;
+
+    run_dosbox_batch_headless(&work_dir, "RUNIT.BAT")?;
+
+    let lst_path = work_dir.join("PROG.LST");
+    let lst = fs::read_to_string(&lst_path).map_err(|err| {
+        format!(
+            "error: expected BASCOM to produce {} (BASCOM failed to run at all?): {err}",
+            lst_path.display()
+        )
+    })?;
+    if !lst.contains("0 Severe  Error(s)") {
+        return Err(format!(
+            "error: real BASCOM rejected the generated BASIC for {}:\n{lst}",
+            bas_path.display()
+        ));
+    }
+
+    let exe_path = work_dir.join("PROG.EXE");
+    if !exe_path.is_file() {
+        return Err(format!(
+            "error: expected BASCOM+LINK to produce {} -- compile succeeded but link must \
+             have failed",
+            exe_path.display()
+        ));
+    }
+    println!("binary: {}", exe_path.display());
+    Ok(exe_path)
+}
+
+/// Runs a real-BASCOM `.EXE` (built by `invoke_bascom`) under `dosbox-x`,
+/// this time non-headlessly: unlike `fbc`'s native binary, a DOS `.EXE`
+/// can't be `exec`'d directly by this process at all, and dosbox-x itself
+/// doesn't forward a host terminal's live stdin/stdout the way a normal
+/// child process does -- an interactive program (`INPUT`, `INKEY$`, ...)
+/// needs dosbox-x's own window, so this opens one rather than trying (and
+/// failing) to run headlessly the way `invoke_bascom`'s own build step
+/// does. Needs a display; won't work over a plain SSH session or other
+/// fully headless environment.
+fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
+    let work_dir = exe_path
+        .parent()
+        .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
+    let exe_name = exe_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
+    write_dos_file(
+        &work_dir.join("RUN.BAT"),
+        &format!("{exe_name}\nEXIT\n"),
+    )?;
+    let mount_arg = format!("MOUNT C: {}", work_dir.display());
+    let status = Command::new("dosbox-x")
+        .arg("-c")
+        .arg(&mount_arg)
+        .arg("-c")
+        .arg("C:")
+        .arg("-c")
+        .arg("RUN.BAT")
+        .arg("-fastlaunch")
+        .status()
+        .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
+    if !status.success() {
+        return Err(format!("error: dosbox-x exited with {status}"));
+    }
+    Ok(())
+}
+
 fn native_binary_path(output_path: &Path) -> Result<PathBuf, String> {
     let stem = output_path.file_stem().ok_or_else(|| {
         format!(
@@ -465,6 +663,15 @@ fn expected_binary_path(target: Target, output_path: &Path) -> Result<PathBuf, S
             )
         })?;
         return Ok(PathBuf::from("tmp").join(stem).with_extension("class"));
+    }
+    if target == Target::Basic {
+        let stem = output_path.file_stem().ok_or_else(|| {
+            format!(
+                "error: invalid generated output path {}",
+                output_path.display()
+            )
+        })?;
+        return Ok(bascom_work_dir(stem).join("PROG.EXE"));
     }
     native_binary_path(output_path)
 }
