@@ -365,7 +365,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "krakatau2"
 version = "2.0.0-alpha"
-source = "git+https://github.com/johnjoeallen/Krakatau?rev=4342f95f9028b6b7cdb2c5bef267e12c3e74ab42#4342f95f9028b6b7cdb2c5bef267e12c3e74ab42"
+source = "git+https://github.com/Storyyeller/Krakatau?rev=22e6c78b4d462745a0ff78369ab15c4f061e6356#22e6c78b4d462745a0ff78369ab15c4f061e6356"
 dependencies = [
  "anyhow",
  "clap 3.2.25",
