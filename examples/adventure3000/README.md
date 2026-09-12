@@ -76,11 +76,14 @@ source from scratch.
   - The "seek a yes or no" `GOSUB` is now a real function,
     `askYesNo%()`, called as `z0 = askYesNo%()` at its 3 call sites,
     replacing the implicit-global-`z0`-as-return-value convention.
+  - The message-printing convention -- `z59 = N : gosub 7620`, at 91
+    call sites -- is now a real procedure, `printMessage(N)`, taking the
+    message number as an argument instead of a global set just before
+    the call. The `z59` global is gone from the program entirely.
 
   Everything else -- the actual game loop, room/command dispatch, combat,
-  and puzzles, including the ~70-site `z59 = N : gosub 7620`
-  message-printing convention -- is still exactly stage 2's
-  label/`GOTO`/`GOSUB` structure, not yet refactored. Verified the same
+  and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`
+  structure, not yet refactored. Verified the same
   way as stage 2 (`bcc --check`, `fbc` build and manual smoke test) after
   each change, to confirm the refactor stayed behavior-preserving.
 
