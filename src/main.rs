@@ -493,14 +493,22 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     Ok(binary_path)
 }
 
+/// `assemble()`/`disassemble()`'s parser is deeply recursive over nested
+/// class structure and can overflow a default-sized thread stack on a real
+/// `.j` file; `krakatau2::assemble_with_stack` runs it on a freshly spawned
+/// worker thread with an explicit stack size instead, mirroring what
+/// `krak2`'s own CLI does internally (see `Cargo.toml`'s own comment on the
+/// pinned fork/upstream PR).
+const KRAK2_WORKER_STACK_SIZE: usize = 256 * 1024 * 1024;
+
 /// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` via
-/// `krakatau2::assemble` -- linked directly into `bcc` as a library (see
-/// `Cargo.toml`'s own comment on the pinned fork/upstream PR), not shelled
-/// out to a separate `krak2` binary/subprocess the way this used to work.
-/// Unlike `invoke_fbc`/`invoke_gcc`, the output's file name can't just be
-/// the input's stem: `java`'s launcher requires the `.class` file on disk
-/// to match the class's own simple name, so this reads that name back out
-/// of the `.j` text's `.class public <name>` line -- the same name
+/// `krakatau2::assemble_with_stack` -- linked directly into `bcc` as a
+/// library (see `Cargo.toml`'s own comment on the pinned fork/upstream PR),
+/// not shelled out to a separate `krak2` binary/subprocess the way this used
+/// to work. Unlike `invoke_fbc`/`invoke_gcc`, the output's file name can't
+/// just be the input's stem: `java`'s launcher requires the `.class` file on
+/// disk to match the class's own simple name, so this reads that name back
+/// out of the `.j` text's `.class public <name>` line -- the same name
 /// `codegen_jvm::class_name_for` chose -- rather than assuming anything
 /// about the input path.
 fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
@@ -530,7 +538,12 @@ fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
         return Ok(class_path);
     }
 
-    let classes = krakatau2::assemble(&source, krakatau2::AssemblerOptions {}).map_err(|err| {
+    let classes = krakatau2::assemble_with_stack(
+        &source,
+        krakatau2::AssemblerOptions {},
+        KRAK2_WORKER_STACK_SIZE,
+    )
+    .map_err(|err| {
         // `Error::display` is krakatau2's own pretty, source-excerpt-aware
         // printer (writes straight to stderr) -- matches what the old
         // subprocess's own inherited stdio would have shown; the `Result`

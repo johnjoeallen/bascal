@@ -33,14 +33,17 @@ assets = [
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 # The `--target jvm` backend's assembler (Krakatau's `v2`, itself GPL-3.0,
-# same as this project): pinned to a commit on our own fork's `bascal-lib`
-# branch, which adds a `[lib]` target exposing `assemble()` -- upstream
-# (https://github.com/Storyyeller/Krakatau) has no `[lib]` target at all
-# today, so it can't be depended on directly yet. That patch is proposed
-# upstream at https://github.com/Storyyeller/Krakatau/pull/216; once
-# merged, switch this back to `https://github.com/Storyyeller/Krakatau`
-# directly and drop the fork.
-krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "73376757ffc9c445636103e49bf2a21c8e6a41a5" }
+# same as this project). Upstream (https://github.com/Storyyeller/Krakatau)
+# merged the `[lib]` target exposing `assemble()`/`disassemble()` itself
+# (https://github.com/Storyyeller/Krakatau/pull/216), but this still pins a
+# commit on our own fork's `lib-stack-helpers` branch, which additionally
+# adds `assemble_with_stack`/`disassemble_with_stack` -- needed so a real
+# `.j` file's deeply recursive parse can't blow the calling thread's stack
+# (see `invoke_krak2` in `main.rs`). That patch is proposed upstream at
+# https://github.com/Storyyeller/Krakatau/pull/218; once merged, switch this
+# back to `https://github.com/Storyyeller/Krakatau` directly and drop the
+# fork.
+krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4a98921f53ada8583cd679427e8b3fdef384992e" }
 
 [dev-dependencies]
 tempfile = "3"
