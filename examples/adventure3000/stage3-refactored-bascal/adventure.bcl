@@ -171,6 +171,52 @@ procedure printMessage(msgNum)
     end while
 end procedure
 
+' Prints the room's short (one-line) description and marks it visited.
+' Replaces stage 2's L6780 GOSUB target.
+procedure shortDescription()
+    global l1
+    global v
+    global descrip$
+    dim a$
+    a$ = descrip$(l1)
+    v(l1) = 1
+    print a$
+end procedure
+
+' Prints the room's long (multi-paragraph, AMESSAGE-driven) description
+' and marks it visited. Message number is normally l1+200, except a
+' shared message for the forest (any l1 <= 4) and one for the maze-like
+' rooms near the end. Replaces stage 2's L7990 GOSUB target.
+procedure longDescription()
+    global l1
+    global v
+    v(l1) = 1
+    if l1 <= 4 then
+        printMessage(200)
+    elseif (l1 > 88 and l1 < 98) or l1 = 99 then
+        printMessage(288)
+    else
+        printMessage(200 + l1)
+    end if
+end procedure
+
+' On entering a room: the forest and maze-like rooms always get their
+' long description (it's short enough not to be worth abbreviating);
+' every other room gets the long description only the first time it's
+' visited, and the short one on repeat visits. Replaces stage 2's L8180
+' GOSUB target, itself called from the `on d0+1 gosub` dispatch below.
+procedure describeRoomOnEntry()
+    global l1
+    global v
+    if l1 < 5 or (l1 > 88 and l1 < 98) or l1 = 99 then
+        longDescription()
+    elseif v(l1) = 1 then
+        shortDescription()
+    else
+        longDescription()
+    end if
+end procedure
+
 L10: ' ADVENTURE/3000 VERSION 3.2     27 FEB 1979 AT 5:30 PM
 L11: ' THIS PROGRAM IS RELATIVELY BUG-FREE, BUT ONE STILL MUST
 L12: ' realize that murphy 'S LAW STILL PREVAILS!
@@ -261,7 +307,14 @@ L320: if l1 < 13 or l1 = 58 then goto L350
 L321: if l = 1 and (s(18) = l1 or s(18) = -1) then goto L350
 L330: printMessage(45)
 L340: goto L400
-L350: on d0+1 gosub L6780,L7990,L8180
+L350: select case d0
+        case 0
+            shortDescription()
+        case 1
+            longDescription()
+        case else
+            describeRoomOnEntry()
+      end select
 L360: v(l1) = 1
 L370: gosub L6680
 L375: if dead = 1 then goto L9540
@@ -557,7 +610,11 @@ L2940: if l1 < 13 or l1 = 58 then goto L2970
 L2941: if l = 1 and (s(18) = l1 or s(18) = -1) then goto L2970
 L2950: printMessage(45)
 L2960: goto L400
-L2970: gosub L8050
+L2970: longDescription() ' (was: gosub 8050 -- jumped past the old
+' subroutine's own `v(l1)=1` to avoid redundantly re-marking the room
+' visited; by the time LOOK is typeable the room's already been entered
+' via describeRoomOnEntry(), which already sets v(l1)=1, so calling the
+' full longDescription() here just re-does that no-op assignment)
 L2980: gosub L6680
 L2990: goto L400
 L3000: ' *** LIGHT ***
@@ -940,11 +997,7 @@ L6750: gosub L8800
 L6760: PRINT
 L6770: return
 L6775: ' Print Short room description
-L6780: ' (was: fseek #1,0 + read l1 lines forward)
-a$ = descrip$(l1)
-L6850: v(l1) = 1
-L6860: PRINT a$
-L6870: return
+L6780: ' short room description is now the shortDescription() procedure above.
 L6880: ' SPECIAL GETS
 L6890: if not (z3 = 24 or z3 = 30 or z3 > 31) then goto L6930
 L6900: ' CAN'T GET THESE FOR SOME REASON
@@ -1044,30 +1097,9 @@ L7960: ' PLANT IN PIT
 L7970: if l1 = 48 or l1 = 50 then goto L7971 else goto L7980
 L7971: printMessage(47+p1)
 L7980: return
-L7990: '
-L8000: '   PRINT long room description from "amessage" file
-L8010: '   description is noormally l1+200 except for
-L8020: '   maze or forest
-L8030: ' set v(l1)=1 so as not to repeat long desc(brief mode
-L8040: v(l1) = 1
-L8050: if l1 > 4 then goto L8080
-L8060: printMessage(200)
-L8070: goto L8130
-L8080: if not (l1 > 88 and l1 < 98 or l1 = 99) then goto L8110
-L8090: printMessage(288)
-L8100: goto L8130
-L8110: ' normal description
-L8120: printMessage(200+l1)
-L8130: return
-L8180: ' always give long description for forest and maze
-L8190: if l1 < 5 or (l1 > 88 and l1 < 98) or l1 = 99 then goto L8220
-L8200: if v(l1)=1 then goto L8201 else goto L8220
-L8201: gosub L6780
-L8202: goto L8235
-L8210: ' he hassn't seen this room, so give a long desc.
-L8220: v(l1) = 1
-L8230: gosub L7990
-L8235: return
+L7990: ' long room description is now the longDescription() procedure above.
+L8180: ' the short-vs-long-on-entry decision is now the describeRoomOnEntry()
+' procedure above.
 L8240: '
 L8250: '   fetch first item code in k(1 to t2)
 L8260: '   z8=total # of items found in list

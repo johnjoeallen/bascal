@@ -80,9 +80,18 @@ source from scratch.
     call sites -- is now a real procedure, `printMessage(N)`, taking the
     message number as an argument instead of a global set just before
     the call. The `z59` global is gone from the program entirely.
+  - The room-description dispatch (`on d0+1 gosub` across three GOSUB
+    targets) is now `select case d0` calling three named procedures --
+    `shortDescription()`, `longDescription()`, and
+    `describeRoomOnEntry()` (which itself calls the first two). One call
+    site (`LOOK`) used to jump directly into the *middle* of the old
+    long-description subroutine to skip its `v(l1) = 1` line; that's
+    provably a no-op by the time `LOOK` is typeable (the room's already
+    been entered and marked visited by then), so it now just calls
+    `longDescription()` in full -- documented at that call site.
 
-  Everything else -- the actual game loop, room/command dispatch, combat,
-  and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`
+  Everything else -- the actual game loop, the rest of room/command
+  dispatch, combat, and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`
   structure, not yet refactored. Verified the same
   way as stage 2 (`bcc --check`, `fbc` build and manual smoke test) after
   each change, to confirm the refactor stayed behavior-preserving.
