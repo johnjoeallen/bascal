@@ -17,7 +17,7 @@ lines, four sequential data files, hundreds of rooms/items/keywords), used
 as a case study in **porting existing BASIC**, not in designing new BASCAL
 source from scratch.
 
-## The three stages
+## The four stages
 
 - **`stage1-original-basic/`** -- the original program, completely
   unmodified, checked in verbatim for reference and provenance.
@@ -143,6 +143,47 @@ source from scratch.
   Verified the same way as stage 2 (`bcc --check`, `fbc` build and
   manual smoke test) after each change, to confirm the refactor stayed
   behavior-preserving.
+- **`stage4-refactored-bascal/`** -- picks up where stage 3 left off, on
+  exactly the command loop it stopped short of. The insight that made
+  this tractable: the loop's main dispatch is a single 40-way
+  `ON z1 GOTO <40 labels>` (the exact anti-pattern `bcc` itself warns
+  about, recommending `SELECT CASE`) -- and a `GOTO` can jump out of a
+  `SELECT CASE` branch to anywhere, same as it always could out of a
+  flat `IF`. So each of the 40 verb handlers' own internal `GOTO`-heavy
+  logic could stay **completely untouched**, just given its own `case N`
+  boundary, without the multi-exit-point problem stage 3 stopped at --
+  no handler needed to become a separate procedure at all.
+
+  It wasn't purely mechanical, though: `SELECT CASE` requires each
+  case's code to be a genuinely separate block, and auditing all 40
+  targets turned up two places where this 1979 codebase's original
+  authors reused code between what are dispatched as two different
+  verbs:
+  - Case 39 (`YES`, meaningful only in the dragon's lair) was a small
+    handler physically embedded *inside* case 18's (`ATTACK`) body --
+    reachable only via the dispatch table, never by `ATTACK`'s own
+    fall-through -- so it was relocated next to case 40, its neighbor in
+    dispatch order, with a comment explaining the move.
+  - Cases 25 and 26 (`OPEN`/`CLOSE`) literally shared one line: the
+    dispatch table points `CLOSE`'s entry at `OPEN`'s own final
+    `GOTO L400`, rather than at `CLOSE`'s real logic sitting right
+    below it -- which is consequently dead code, unreachable from
+    anywhere. This is a genuine bug in the original game (`CLOSE`
+    silently does nothing), not something any stage of this port
+    introduced. In keeping with every other stage's rule of preserving
+    *behavior*, not "fixing" gameplay, `CLOSE` still does nothing here
+    too -- just via its own copy of that line instead of overlapping
+    `OPEN`'s, so each verb has a proper case block.
+
+  The rest of the file is untouched: `select case z1` now replaces the
+  `on z1 goto ...` line and the `goto L2040` it used to fall through to
+  on an out-of-range `z1` (now `case else`), and nothing inside any of
+  the 40 handlers changed. Verified with `bcc --check`, an `fbc` build,
+  and smoke tests exercising several different verbs across the
+  dispatch range (`LOOK`, `GET`, `PLUGH`, `XYZZY`, `INVENTORY`, `SCORE`).
+
+  A second, smaller `ON t+1 GOTO` (4-way, troll-related) remains
+  elsewhere in the file -- not yet converted.
 
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
