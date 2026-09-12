@@ -107,14 +107,19 @@ source from scratch.
     provably a no-op by the time `LOOK` is typeable (the room's already
     been entered and marked visited by then), so it now just calls
     `longDescription()` in full -- documented at that call site.
-  - The dwarf and pirate encounter checks (`GOSUB`ed once per room from
-    the item-listing code) are now `checkDwarf()` and `checkPirate()`.
+  - The item-listing, dwarf-check, and pirate-check `GOSUB`s are now
+    `describeRoomContents()`, `checkDwarf()`, and `checkPirate()`.
     `checkDwarf()` keeps its original internal labels and `GOTO`s almost
     verbatim (just `return` in place of the old shared exit label);
     `checkPirate()`'s two small item-scanning loops turned out to have
     the continue/break bug described in stage 2's own entry above, so
-    restructuring them into real `for`/`if` blocks fixed that as a
-    side effect.
+    restructuring them into real `for`/`if` blocks fixed that as a side
+    effect. One more mid-subroutine jump turned up here too: a
+    `WAVE`-command call site (`GOSUB 8650`) enters only the "should the
+    dwarf attack" half of the original dwarf subroutine, deliberately
+    skipping the axe-giving check -- so that half is its own procedure,
+    `checkDwarfAttack()`, called both by that site directly and by
+    `checkDwarf()` internally.
 
   Everything else -- the actual game loop, the rest of room/command
   dispatch, combat, and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`

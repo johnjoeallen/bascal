@@ -200,6 +200,31 @@ procedure longDescription()
     end if
 end procedure
 
+' Lists the items sitting in the current room, checks whether the golden
+' bird's message should play, and then checks the dwarf and pirate
+' encounters. Replaces stage 2's L6680 GOSUB target.
+procedure describeRoomContents()
+    global l1
+    global t2
+    global s
+    global dead
+    global items$
+    for z1 = 1 to t2
+        if s(z1) = l1 then
+            print items$(z1)
+        end if
+    end for
+    if s(26) = -1 then
+        printMessage(67)
+    end if
+    ' CHECK FOR DWARF, PIRATE
+    checkDwarf()
+    if dead <> 1 then
+        checkPirate()
+        print
+    end if
+end procedure
+
 ' Checks whether the dwarf gives away his axe (first time in a deep
 ' room), attacks with his knife, or appears for the first time.
 ' Structurally identical to stage 2's L8560 GOSUB target -- same
@@ -207,21 +232,32 @@ end procedure
 ' `return`, and the final label+return collapsed into the implicit
 ' return at the end of the procedure body.
 procedure checkDwarf()
+    global d3
     global l1
     global s
-    global d3
-    global t
-    global dead
-    global KC
-    if d3 <> 0 then goto L8640
+    if d3 <> 0 then
+        checkDwarfAttack()
+        return
+    end if
     ' SHOULD DWARF GIVE AWAY AXE?
     if l1 < 13 then return
     if RND(1) > 0.05 then return
     ' GIVE AWAY AXE
     printMessage(80)
     s(27) = l1 : d3 = 1
-    return
-    L8640: ' SHOULD DWARF ATTACK?
+end procedure
+
+' Just the "should the dwarf attack" half of checkDwarf() -- one call
+' site (stage 2's L4340, `GOSUB 8650`) jumps directly into the middle of
+' the original subroutine to run only this part, deliberately skipping
+' the axe-giving check above. Structurally identical to stage 2's
+' L8640-L8790 span.
+procedure checkDwarfAttack()
+    global l1
+    global s
+    global t
+    global dead
+    global KC
     if L1 >= 13 then goto L8660
     s(35) = 0 : return
     L8660: if s(35) <> L1 then goto L8770
@@ -394,7 +430,7 @@ L350: select case d0
             describeRoomOnEntry()
       end select
 L360: v(l1) = 1
-L370: gosub L6680
+L370: describeRoomContents()
 L375: if dead = 1 then goto L9540
 L380: gosub L7800
 L390: ' INPUT LOOP --- MULTIPLE COMMAANDS, REMOVE JUNK CHARACTERS
@@ -694,7 +730,7 @@ L2970: longDescription() ' (was: gosub 8050 -- jumped past the old
 ' visited; by the time LOOK is typeable the room's already been entered
 ' via describeRoomOnEntry(), which already sets v(l1)=1, so calling the
 ' full longDescription() here just re-does that no-op assignment)
-L2980: gosub L6680
+L2980: describeRoomContents()
 L2990: goto L400
 L3000: ' *** LIGHT ***
 L3010: if s(18) = -1 then goto L3040
@@ -833,7 +869,9 @@ L4300: IF NOT (Z3=27 AND S(35)=L1) THEN goto L4380
 L4310: ' TRYING TO KILL DWARF
 L4320: IF RND(1)>0.5 THEN goto L4360
 L4330: printMessage(29)
-L4340: GOSUB L8650
+L4340: checkDwarfAttack() ' (was: GOSUB 8650 -- jumped straight into the
+' attack-check half of the original dwarf subroutine, deliberately
+' skipping the axe-giving check; see checkDwarfAttack()'s own comment)
 L4350: GOTO L4410
 L4360: printMessage(30)
 L4361: S(35)=0:GOTO L4410
@@ -1069,18 +1107,8 @@ end for
 L6630:
 L6640: RETURN
 L6660: ' list items at location l1
-L6680: ' (was: fseek #2,0)
-for z1 = 1 to t2
- if s(z1) = l1 then PRINT items$(z1)
-end for
-L6721: IF S(26)<>-1 THEN goto L6730
-L6722: printMessage(67)
-L6730: ' CHECK FOR DWARF,PIRATE
-L6740: gosub L8560
-L6745: if dead = 1 then goto L6770
-L6750: gosub L8800
-L6760: PRINT
-L6770: return
+L6680: ' room-contents listing + dwarf/pirate checks are now the
+' describeRoomContents() procedure above.
 L6775: ' Print Short room description
 L6780: ' short room description is now the shortDescription() procedure above.
 L6880: ' SPECIAL GETS
@@ -1222,62 +1250,8 @@ L8510: Z5=0
 L8520: RETURN
 L8530: Z5=1
 L8540: RETURN
-L8550:  '  *** DWARF ***
-L8560: if d3 <> 0 then goto L8640
-L8570: ' SHOULD DWARF GIVE AWAY AXE?
-L8580: if l1 < 13 then goto L8790
-L8590: if RND(1) > 0.05 then goto L8790
-L8600: ' GIVE AWAY AXE
-L8610: printMessage(80)
-L8620: s(27) = l1 : d3 = 1
-L8630: goto L8790
-L8640: ' SHOULD DWARF ATTACK?
-L8650: if L1 >= 13 then goto L8660
-L8652: s(35) = 0:goto L8790
-L8660: if s(35) <> L1 then goto L8770
-L8661: if (l1 <> 60 and l1 <> 61) or t <> 1 then goto L8670
-L8662: printMessage(299)
-L8663: s(35) = 0: goto L8790
-L8670: if RND(1) > 0.5 then goto L8790
-L8680: ' YES!
-L8690: printMessage(32)
-L8700: ' DOES THE KNIFE KILL THE PLAYER?
-L8705: KC = KC - 0.02
-L8706: IF KC >= 0.75 THEN goto L8710
-L8707: KC = 0.75
-L8710: if RND(1) <= KC then goto L8750
-L8720: ' YES
-L8730: PRINT "It gets you!"
-L8740: dead = 1 : goto L8790
-L8750: PRINT "It misses!"
-L8760: goto L8790
-L8770: ' SHOULD WE PUT A DWARF HERE?
-L8780: if RND(1) >= 0.05 then goto L8790
-L8781: if (l1 = 60 or l1 = 61) and t = 1 then goto L8790
-L8785: s(35) = l1
-L8786: printMessage(31)
-L8790: return
-L8800: ' *** PIRATE ***
-L8810: ' FIRST, DOES HE HAVE ANYTHING WORTH STEALING?
-L8820: z3 = 0
-L8830: if l1 < 13 then goto L8960
-L8840: for x = 1 to 15
-L8850:  if s(x) <> -1 then goto L8860
-L8855:  z3 = z3+1
-end for
-L8860:
-L8870: if z3 < int(RND(1)*4)+1 then goto L8960
-L8880: ' SHOULD WE RIP OFF HIS VALUABLES?
-L8890: if RND(1) < 0.05 then goto L8920
-L8900: printMessage(34)
-L8910: goto L8960
-L8920: printMessage(33)
-L8930: for x = 1 to 15
-L8940:  if s(x) <> -1 then goto L8950
-L8945:  s(x) = 100
-end for
-L8950:
-L8960: return
+L8550: ' dwarf/pirate checks are now checkDwarf()/checkDwarfAttack()/
+' checkPirate() above.
 L8970: ' *** SAVE GAME ***
 L8980: INPUT "What do you want to call the save file? ";A$
 L8990: on error goto L9010
