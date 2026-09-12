@@ -53,13 +53,17 @@ pub struct CodeGenerator {
     // ident() must never allocate a per-function local for one, regardless
     // of which scope the LSET/GET/PUT referencing it appears in.
     record_buffer_names: HashSet<String>,
-    // Lowercase BASIC names of every top-level `const` declaration. `const`
-    // values are compile-time literals, never reassignable, so unlike an
-    // ordinary global variable there's no scoping/shadowing concern that
-    // would justify requiring an explicit `global` declaration to see one
-    // from inside a function/procedure body -- they should always resolve
-    // to the real top-level name, the same way record_buffer_names does.
-    const_names: HashSet<String>,
+    // Every `const`'s generated BASIC variable name (see `const_var_name`),
+    // keyed by lowercase base name (never a suffix -- see
+    // `resolver::ConstInfo`'s own doc comment for why a reference never
+    // carries one either). `ident()` returns this instead of a camelCased
+    // rendering of the source name: real BASCOM rejects any identifier
+    // containing an underscore outright, even used only as an assignment
+    // target (confirmed under real BASCOM/dosbox-x), so a source name like
+    // `HELLO_MSG` can't just have its case/underscores lightly touched up
+    // the way an ordinary variable's can -- `const_var_name` builds an
+    // entirely fresh, underscore-free name instead.
+    const_var_names: HashMap<String, String>,
     // Lowercase BASIC names of the *subset* of `record_buffer_names` that
     // `records::lower` invented itself (via `buffer_ident`), as opposed to
     // a `FIELD` buffer name the author typed directly in raw-BASIC-
@@ -171,7 +175,7 @@ impl CodeGenerator {
             loop_exit_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
-            const_names: HashSet::new(),
+            const_var_names: HashMap::new(),
             synthesized_buffer_names: HashSet::new(),
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
@@ -228,7 +232,15 @@ impl CodeGenerator {
         self.error_handler_procedures = resolved.error_handler_procedures.clone();
         self.top_level_array_ranks = resolved.top_level_array_ranks.clone();
         self.record_buffer_names = resolved.record_buffer_names.clone();
-        self.const_names = resolved.const_names.clone();
+        for (name, info) in &resolved.const_info {
+            let generated = BasicIdent {
+                name: const_var_name(name),
+                suffix: Some(info.suffix),
+            }
+            .as_basic();
+            taken.insert(generated.to_ascii_lowercase());
+            self.const_var_names.insert(name.clone(), generated);
+        }
         *self.taken_names.borrow_mut() = taken;
 
         self.known_callables = self
@@ -869,11 +881,12 @@ impl CodeGenerator {
             }
             Statement::Const { name, value } => {
                 // Real MBASIC/BASCOM has no CONST statement at all (a
-                // QuickBASIC-era addition) -- a plain assignment is the
-                // only thing that compiles there. `const` in .bcl source
-                // is purely a naming/intent signal to the reader; nothing
-                // in generated BASIC needs to express "this shouldn't be
-                // reassigned" for it to behave correctly.
+                // QuickBASIC-era addition) -- a plain assignment to the
+                // const's generated name (see `const_var_name`/`ident()`)
+                // is the only thing that compiles there. `const` in .bcl
+                // source is purely a naming/intent signal to the reader;
+                // nothing in generated BASIC needs to express "this
+                // shouldn't be reassigned" for it to behave correctly.
                 let (prelude, value) = self.expr(value, current_function);
                 self.lines(prelude);
                 self.line(&format!("{} = {value}", self.ident(name, current_function)));
@@ -1289,7 +1302,7 @@ impl CodeGenerator {
         let rethrow_label = format!("TRY_{id:04}_RETHROW");
         let finally_label = format!("TRY_{id:04}_FINALLY");
         let end_label = format!("TRY_{id:04}_END");
-        let pending_name = format!("BCC_TRY_{id:04}_PENDING%");
+        let pending_name = format!("BCCTRY{id:04}PENDING%");
         let outer_handler = self.try_handler_stack.last().cloned();
         let restore_outer = |this: &mut Self| match &outer_handler {
             Some(label) => this.line(&format!("ON ERROR GOTO {label}")),
@@ -1341,7 +1354,7 @@ impl CodeGenerator {
             if let Some(source_var) = &catch.source_var {
                 let source_name = self.ident(source_var, current_function);
                 self.line("GOSUB BCC_RESOLVE_SOURCE_FILE");
-                self.line(&format!("{source_name} = BCC_SOURCE_FILE$"));
+                self.line(&format!("{source_name} = BCCSOURCEFILE$"));
             }
             // RESUME clears BASIC's active-handler state before the user
             // catch runs, so a throw from it can be caught and unwound.
@@ -1872,16 +1885,17 @@ impl CodeGenerator {
                 .as_basic()
             };
         }
-        if self.const_names.contains(&source_key) {
+        if let Some(generated) = self.const_var_names.get(&ident.name.to_ascii_lowercase()) {
             // `const` values always resolve globally, with or without an
-            // explicit `global` declaration -- see the field comment on
-            // const_names for why. Checked before the current_function
-            // branch below, same as record_buffer_names above.
-            return BasicIdent {
-                name: camel_join(&ident.name.split('_').collect::<Vec<_>>()),
-                suffix: ident.suffix,
-            }
-            .as_basic();
+            // explicit `global` declaration, to the one fixed name
+            // `const_var_name` generated for this const -- keyed by bare
+            // name only (never `source_key`, which includes a suffix): a
+            // const's type suffix isn't part of its identity, and a
+            // reference is never written with one anyway (see
+            // `resolver::ConstInfo`'s own doc comment). Checked before the
+            // current_function branch below, same as record_buffer_names
+            // above.
+            return generated.clone();
         }
         if let Some(info) = current_function {
             // Params have already-allocated lowered names.
@@ -2260,16 +2274,16 @@ impl CodeGenerator {
             Some((last, rest)) => {
                 for (bound, file) in rest {
                     self.line(&format!(
-                        "IF ERL <= {bound} THEN BCC_SOURCE_FILE$ = \"{}\" : RETURN",
+                        "IF ERL <= {bound} THEN BCCSOURCEFILE$ = \"{}\" : RETURN",
                         escape_string(file)
                     ));
                 }
                 self.line(&format!(
-                    "BCC_SOURCE_FILE$ = \"{}\"",
+                    "BCCSOURCEFILE$ = \"{}\"",
                     escape_string(&last.1)
                 ));
             }
-            None => self.line("BCC_SOURCE_FILE$ = \"\""),
+            None => self.line("BCCSOURCEFILE$ = \"\""),
         }
         self.line("RETURN");
         self.indent -= 1;
@@ -4040,6 +4054,27 @@ pub(crate) fn sanitize_symbol(value: &str) -> String {
 /// only. Collision-freedom is still guaranteed the same way it always was
 /// -- by `allocate_unique` checking the result against `taken`, not by
 /// this function.
+/// The generated BASIC variable name for the const named `base_name`
+/// (lowercase, no suffix -- see `resolver::ConstInfo`'s own doc comment):
+/// `CONST` followed by every underscore-separated word of the const's own
+/// name, uppercased and run together -- so `HELLO_MSG` becomes
+/// `CONSTHELLOMSG`, with no underscore anywhere in the result. Real BASCOM
+/// rejects any identifier containing an underscore outright, confirmed
+/// under real BASCOM/dosbox-x -- even used only as an assignment target,
+/// which ruled out the simpler fix of just keeping the source spelling's
+/// case/word-breaks (the previous, buggy `camel_join`-based scheme this
+/// replaces). The `CONST` prefix keeps this scheme's own output
+/// unmistakable in a `--target basic` listing and collision-free against
+/// an ordinarily-cased user variable that happens to share the same
+/// letters.
+pub(crate) fn const_var_name(base_name: &str) -> String {
+    let mut out = String::from("CONST");
+    for part in base_name.split('_') {
+        out.push_str(&part.to_ascii_uppercase());
+    }
+    out
+}
+
 pub(crate) fn camel_join(parts: &[&str]) -> String {
     let mut out = String::new();
     for part in parts {

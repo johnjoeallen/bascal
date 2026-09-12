@@ -29,9 +29,9 @@ mod tests {
 
     #[test]
     fn trailing_fixed_parameter_defaults_are_inserted_at_call_sites() {
-        let source = r#"const punctuation$ = "!"
+        let source = r#"const punctuation = "!"
 
-function decorate$(text$, suffix$ = punctuation$)
+function decorate$(text$, suffix$ = punctuation)
     return text$ + suffix$
 end function
 
@@ -45,7 +45,8 @@ print result$
 end
 "#;
         let basic = compile_source("defaults.bcl", source).expect("defaults should compile");
-        assert!(basic.contains("decorateSuffix0$ = punctuation$"), "{basic}");
+        assert!(basic.contains("CONSTPUNCTUATION$ = \"!\""), "{basic}");
+        assert!(basic.contains("decorateSuffix0$ = CONSTPUNCTUATION$"), "{basic}");
         assert!(basic.contains("announceSuffix0$ = \"!\""), "{basic}");
 
         let c = compile_source_via_c_target(source);
@@ -498,17 +499,20 @@ end
     }
 
     #[test]
-    fn function_local_const_declares_and_reads_the_same_lowered_name() {
-        // A `const` declared inside a function/procedure body must be
-        // renamed to its local BASIC name (like `dim`/assignment already
-        // are) so the assignment and every later read of it agree --
-        // otherwise the declaration binds one name while reads resolve to a
-        // fresh, never-assigned local of a different name. Real MBASIC/
-        // BASCOM has no CONST statement at all, so `const` always lowers to
-        // a plain assignment, never a CONST line.
+    fn const_declares_and_reads_a_fixed_underscore_free_generated_name() {
+        // A `const`'s generated BASIC name is always `CONST` followed by
+        // its own name's words uppercased and run together (see
+        // `const_var_name`) -- never a camelCased rendering of the source
+        // spelling, which real BASCOM rejects outright whenever the
+        // source name contains an underscore (confirmed under real
+        // BASCOM/dosbox-x, even used only as an assignment target). This
+        // holds the same way whether the const is declared inside a
+        // function/procedure body or at the top level: `const` values
+        // always resolve globally either way (see `resolver::ConstInfo`'s
+        // own doc comment) -- there's no per-function local, ever.
         let source = r#"procedure show()
-    const n% = 5
-    print n%
+    const GREETING_WORD = 5
+    print GREETING_WORD
 end procedure
 
 show()
@@ -516,29 +520,25 @@ end
 "#;
         let output = compile_source("const_local.bcl", source).expect("should compile");
         assert!(
-            !output.contains("CONST "),
-            "CONST isn't valid on real MBASIC/BASCOM:\n{output}"
+            output.contains("CONSTGREETINGWORD% = 5"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            output.contains("showN0% = 5"),
-            "unexpected const line:\n{output}"
-        );
-        assert!(
-            output.contains("PRINT showN0%"),
-            "PRINT should read back the same local name the const line declared:\n{output}"
+            output.contains("PRINT CONSTGREETINGWORD%"),
+            "PRINT should read back the const's generated name:\n{output}"
         );
     }
 
     #[test]
-    fn top_level_const_resolves_globally_inside_procedure() {
+    fn top_level_const_resolves_globally_inside_a_procedure() {
         // A top-level `const` referenced inside a `procedure` body must
-        // resolve to the real top-level name, not a fresh per-function
-        // local -- otherwise the reference reads an unassigned local
-        // instead of the actual constant.
-        let source = r#"const col% = 20
+        // resolve to the same generated name as everywhere else, not a
+        // fresh per-function local -- otherwise the reference reads an
+        // unassigned local instead of the actual constant.
+        let source = r#"const MAX_COL = 20
 
 procedure show()
-    locate 1, col%
+    locate 1, MAX_COL
 end procedure
 
 show()
@@ -546,11 +546,15 @@ end
 "#;
         let output = compile_source("const_global_proc.bcl", source).expect("should compile");
         assert!(
-            output.contains("LOCATE 1, col%"),
-            "reference inside the procedure should resolve to the real top-level const, not a synthesized showCol-style local:\n{output}"
+            output.contains("CONSTMAXCOL% = 20"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            !output.contains("showCol"),
+            output.contains("LOCATE 1, CONSTMAXCOL%"),
+            "reference inside the procedure should resolve to the const's generated name, not a synthesized showMaxCol-style local:\n{output}"
+        );
+        assert!(
+            !output.contains("showMaxCol"),
             "no per-function local should be synthesized for a top-level const:\n{output}"
         );
     }
@@ -651,10 +655,10 @@ end
         // both callable kinds -- ident() resolution doesn't distinguish
         // between them, but the regression this guards against was only
         // ever demonstrated against `procedure`.
-        let source = r#"const factor% = 3
+        let source = r#"const factor = 3
 
 function scale%(n%)
-    return n% * factor%
+    return n% * factor
 end function
 
 print scale%(5)
@@ -662,7 +666,7 @@ end
 "#;
         let output = compile_source("const_global_func.bcl", source).expect("should compile");
         assert!(
-            output.contains("factor%"),
+            output.contains("CONSTFACTOR%"),
             "reference inside the function should resolve to the real top-level const:\n{output}"
         );
         assert!(
@@ -678,12 +682,12 @@ end
         // interfere with each other -- the const resolves globally
         // without a `global` declaration, and the explicit global keeps
         // working exactly as before.
-        let source = r#"const limit% = 10
+        let source = r#"const limit = 10
 dim total%
 
 procedure accumulate()
     global total%
-    total% = total% + limit%
+    total% = total% + limit
 end procedure
 
 accumulate()
@@ -692,11 +696,11 @@ end
 "#;
         let output = compile_source("const_and_global.bcl", source).expect("should compile");
         assert!(
-            output.contains("limit%"),
+            output.contains("CONSTLIMIT%"),
             "the const should still resolve to the real top-level name:\n{output}"
         );
         assert!(
-            output.contains("total% = total% + limit%"),
+            output.contains("total% = total% + CONSTLIMIT%"),
             "the explicit global and the const should resolve together correctly:\n{output}"
         );
     }
@@ -707,26 +711,26 @@ end
         // different procedures in the same program must resolve to the
         // same real name everywhere -- no per-function duplication or
         // divergence.
-        let source = r#"const rate% = 7
+        let source = r#"const rate = 7
 
 procedure showA()
-    print rate%
+    print rate
 end procedure
 
 procedure showB()
-    print rate% * 2
+    print rate * 2
 end procedure
 
-print rate%
+print rate
 showA()
 showB()
 end
 "#;
         let output = compile_source("const_multi_proc.bcl", source).expect("should compile");
-        let occurrences = output.matches("rate%").count();
+        let occurrences = output.matches("CONSTRATE%").count();
         assert!(
             occurrences >= 4,
-            "every reference (top level + both procedures) should use the same real `rate%` name:\n{output}"
+            "every reference (top level + both procedures) should use the same real `CONSTRATE%` name:\n{output}"
         );
         assert!(
             !output.contains("showARate") && !output.contains("showBRate"),
@@ -986,10 +990,10 @@ end
             "program clean\n\
              declare score%, y%(20)\n\
              dim total%\n\
-             const bonus% = 5\n\
+             const bonus = 5\n\
              score% = 10\n\
              y%(1) = 5\n\
-             total% = score% + y%(1) + bonus%\n\
+             total% = score% + y%(1) + bonus\n\
              for i% = 1 to 5\n\
              \x20   print i%\n\
              end for\n\
@@ -3436,8 +3440,8 @@ function sumArr%(arr%(?))
   return total%
 end function
 
-const n% = 6
-dim data%(n%)
+const n = 6
+dim data%(n)
 dummy% = sumArr%(data%)
 end
 "#;
@@ -4541,9 +4545,9 @@ end
 
     #[test]
     fn c_target_supports_string_variables_const_and_assignment() {
-        let source = r#"const appName$ = "Grade Checker"
+        let source = r#"const appName = "Grade Checker"
 playerName$ = "Alice"
-print appName$
+print appName
 print "Player: "; playerName$
 end
 "#;
@@ -4701,11 +4705,11 @@ end
         // codegens exactly like an ordinary assignment, same as the BASIC
         // backend's own treatment of it (BASCAL's resolver, not codegen,
         // is what enforces a const is never reassigned).
-        let source = r#"const maxScore% = 100
-const rate! = 0.15
+        let source = r#"const maxScore = 100
+const rate = 0.15
 score% = 85
-print "Score: "; score%; " / "; maxScore%
-print "Bonus: "; score% * rate!
+print "Score: "; score%; " / "; maxScore
+print "Bonus: "; score% * rate
 end
 "#;
         let output = compile_source_via_c_target(source);
@@ -5840,7 +5844,7 @@ end
         // `dim country$(numCapitals%)` -- a real C array needs a literal
         // size, so the const's own integer value must be recovered at
         // compile time, not treated as a runtime-only variable read.
-        let source = "const n% = 5\ndim arr%(n%)\narr%(0) = 1\nprint arr%(0)\nend\n";
+        let source = "const n = 5\ndim arr%(n)\narr%(0) = 1\nprint arr%(0)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("static int bv_i_arr[6] = {0};"),
@@ -6963,7 +6967,7 @@ end
         let basic = compile_source("no_source_binding.bcl", source)
             .expect("try/catch without source$ should compile");
         assert!(!basic.contains("BCC_RESOLVE_SOURCE_FILE"), "{basic}");
-        assert!(!basic.contains("BCC_SOURCE_FILE$"), "{basic}");
+        assert!(!basic.contains("BCCSOURCEFILE$"), "{basic}");
     }
 
     #[test]
@@ -6983,11 +6987,11 @@ end
         let basic = compile_source("issue_74.bcl", source)
             .expect("catch's optional source$ binding should compile");
         assert!(basic.contains("GOSUB"), "{basic}");
-        assert!(basic.contains("s$ = BCC_SOURCE_FILE$"), "{basic}");
+        assert!(basic.contains("s$ = BCCSOURCEFILE$"), "{basic}");
         // A single-file program collapses to one unconditional assignment,
         // no `IF ERL <= ...` boundary chain needed.
         assert!(
-            basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""),
+            basic.contains("BCCSOURCEFILE$ = \"issue_74.bcl\""),
             "{basic}"
         );
         assert!(!basic.contains("IF ERL <="), "{basic}");
@@ -7085,7 +7089,7 @@ end
         assert!(basic.contains("IF (ERR = 53) THEN GOTO"), "{basic}");
         assert!(basic.contains("PRINT \"cleanup\""), "{basic}");
         assert!(
-            basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"),
+            basic.contains("IF BCCTRY0001PENDING% <> 0 THEN ERROR BCCTRY0001PENDING%"),
             "{basic}"
         );
     }
@@ -7154,11 +7158,11 @@ end
         let basic = compile_source("try_finally_only.bcl", source)
             .expect("try/finally without catch should compile");
         assert!(
-            basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"),
+            basic.contains("BCCTRY") && basic.contains("PENDING% = ERR"),
             "{basic}"
         );
         assert!(
-            basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"),
+            basic.contains("THEN ERROR BCCTRY") && basic.contains("PENDING%"),
             "{basic}"
         );
 
@@ -7639,7 +7643,7 @@ end
         let basic =
             compile_file(&path, &CompileOptions::new()).expect("nested try/catch should compile");
         assert!(basic.contains("ON ERROR GOTO 60"), "{basic}");
-        assert!(basic.contains("BCC_TRY_0002_PENDING%"), "{basic}");
+        assert!(basic.contains("BCCTRY0002PENDING%"), "{basic}");
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a
