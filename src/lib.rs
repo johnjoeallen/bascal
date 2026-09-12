@@ -1922,7 +1922,39 @@ end
             .expect_err("a gosub reaching into a different procedure's label should be rejected");
         assert!(
             err.iter()
-                .any(|d| d.message.contains("`gosub btarget`") && d.message.contains("`a`")),
+                .any(|d| d.message.contains("`gosub btarget`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_the_same_procedures_own_body_is_also_rejected() {
+        // A raw GOSUB into a function/procedure body is rejected even when
+        // it targets a label inside that very same function/procedure --
+        // that body is meant to be entered only through the compiler's own
+        // generated call sequence, not a second, uncontrolled way in.
+        let source = "procedure demo()\n    gosub inner\n    return\n    inner:\n    print \"inner\"\n    return\nend procedure\ndemo()\nend\n";
+        let err = compile_source("gosub_same_procedure.bcl", source)
+            .expect_err("a gosub into the same procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub inner`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_out_of_a_procedure_to_top_level_is_rejected() {
+        let source =
+            "procedure demo()\n    goto outside\nend procedure\ndemo()\noutside: print \"outside\"\nend\n";
+        let err = compile_source("goto_out_of_proc.bcl", source).expect_err(
+            "a goto from inside a procedure out to a top-level label should be rejected",
+        );
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto outside`") && d.message.contains("`demo`")),
             "unexpected diagnostics: {err:?}"
         );
     }
@@ -1942,6 +1974,30 @@ again: print "again"
 end
 "#;
         compile_source("goto_same_scope.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn gosub_to_a_top_level_label_is_accepted_from_top_level_and_from_inside_a_procedure() {
+        // A raw GOSUB to a top-level label is the one case the cross-scope
+        // check still allows regardless of where the GOSUB itself is
+        // written -- the classic BASIC "flat GOSUB subroutine" pattern,
+        // callable from anywhere, top-level code and procedure bodies
+        // alike, since the target was never inside a function/procedure
+        // body to begin with.
+        let source = r#"
+gosub topSub
+procedure demo()
+    gosub topSub
+end procedure
+demo()
+goto skip
+topSub:
+    print "in top-level subroutine"
+    return
+skip:
+end
+"#;
+        compile_source("gosub_top_level_target.bcl", source).expect("should compile");
     }
 
     #[test]

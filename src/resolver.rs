@@ -335,19 +335,28 @@ fn reject_option_base(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-/// Every `goto`/`gosub`/`on ... goto`/`on ... gosub`/`resume <label>`
-/// target must be a label declared in the *same* scope as the statement
-/// doing the jump -- the top-level program body, or the one
-/// function/procedure body it's written inside. (`on error goto` is
-/// deliberately not covered here -- see the exclusion at its match arm
-/// below.) A label reference crosses that boundary just as easily
-/// syntactically as a same-scope one (it's just an identifier), but
-/// transpiling one produces a real, silently broken program: a plain
-/// `GOTO` landing inside a function/procedure body lands on code whose
-/// block ends in a bare `RETURN` with no matching `GOSUB` call frame, and
-/// the reverse -- a `GOSUB` into a *different* function/procedure's body --
-/// lands partway through a body that was never set up to be entered that
-/// way. See GitHub issue #149.
+/// Two related rules, both from GitHub issue #149, on where a `goto`/
+/// `gosub`/`on ... goto`/`on ... gosub`/`resume <label>` target may live
+/// (`on error goto` is deliberately exempt from both -- see the exclusion
+/// at its match arm below):
+///
+/// - `goto`/`on ... goto`/`resume <label>` must target a label declared in
+///   the *same* scope as the statement itself -- the top-level program
+///   body, or the one function/procedure body it's written inside -- in
+///   both directions: a top-level `goto` can't reach into a
+///   function/procedure, and a `goto` inside one can't reach out to
+///   top-level or into a *different* function/procedure. Transpiling a
+///   violation produces a real, silently broken program: a plain `GOTO`
+///   landing inside a function/procedure body lands on code whose block
+///   ends in a bare `RETURN` with no matching `GOSUB` call frame.
+/// - `gosub`/`on ... gosub` must target a label declared in the top-level
+///   program body -- *never* one inside a function/procedure body, even
+///   the very one the `gosub` itself is written inside. A function/
+///   procedure body is meant to be entered exactly one way: the compiler's
+///   own generated call sequence (assign params, `GOSUB` its one true
+///   entry label, assign the result). A raw user `GOSUB` reaching any
+///   *other* label inside that body enters it a second, uncontrolled way,
+///   with none of the parameter/local setup the real call path performs.
 fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     fn collect_labels(body: &[Stmt], out: &mut HashSet<String>) {
         for stmt in body {
@@ -477,21 +486,50 @@ fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Di
         }
     }
 
-    fn check(body: &[Stmt], scope: &str, diagnostics: &mut Vec<Diagnostic>) {
-        let mut labels = HashSet::new();
-        collect_labels(body, &mut labels);
+    fn is_gosub_family(keyword: &str) -> bool {
+        matches!(keyword, "gosub" | "on ... gosub")
+    }
+
+    // `gosub`/`on ... gosub` may only ever reach a top-level label,
+    // regardless of where the statement itself lives -- computed once,
+    // rather than per scope, since the rule doesn't depend on the caller's
+    // own scope at all.
+    let mut top_labels = HashSet::new();
+    collect_labels(&program.statements, &mut top_labels);
+
+    fn check(
+        body: &[Stmt],
+        scope: &str,
+        own_labels: &HashSet<String>,
+        top_labels: &HashSet<String>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
         let mut targets = Vec::new();
         collect_targets(body, &mut targets);
         for (pos, keyword, name) in targets {
-            if !labels.contains(&name) {
+            if is_gosub_family(keyword) {
+                if !top_labels.contains(&name) {
+                    diagnostics.push(Diagnostic::error(
+                        pos,
+                        format!(
+                            "`{keyword} {name}` doesn't name a top-level label -- a `gosub`/\
+                             `on ... gosub` target must be a label declared in the top-level \
+                             program body; it can never reach a label declared inside a \
+                             function/procedure body (even the one the `{keyword}` itself is \
+                             written inside), since that body is meant to be entered only \
+                             through the compiler's own generated call sequence"
+                        ),
+                    ));
+                }
+            } else if !own_labels.contains(&name) {
                 diagnostics.push(Diagnostic::error(
                     pos,
                     format!(
                         "`{keyword} {name}` doesn't name a label in {scope} -- a `goto`/\
-                         `gosub`/`on ... goto`/`on ... gosub`/`resume` target must be a label \
-                         declared in the same procedure/function (or, from top-level code, in \
-                         the top-level program body); it can never reach a label declared \
-                         inside a different procedure or function"
+                         `on ... goto`/`resume` target must be a label declared in the same \
+                         procedure/function (or, from top-level code, in the top-level program \
+                         body); it can never reach a label declared inside a different \
+                         procedure or function"
                     ),
                 ));
             }
@@ -501,10 +539,20 @@ fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Di
     check(
         &program.statements,
         "the top-level program body",
+        &top_labels,
+        &top_labels,
         diagnostics,
     );
     for function in &program.functions {
-        check(&function.body, &format!("`{}`", function.name), diagnostics);
+        let mut own_labels = HashSet::new();
+        collect_labels(&function.body, &mut own_labels);
+        check(
+            &function.body,
+            &format!("`{}`", function.name),
+            &own_labels,
+            &top_labels,
+            diagnostics,
+        );
     }
 }
 
