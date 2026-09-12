@@ -331,6 +331,186 @@ procedure describeRoomOnEntry()
     end if
 end procedure
 
+' Checks a handful of situational, room-dependent one-off messages (the
+' grate, crystal bridge, plugh noise, iron door, troll, bear, and plant
+' in the pit) after a room's normal description prints. Each check is
+' independent, not a mutually-exclusive chain, matching the original's
+' own if/then/else-fallthrough-to-the-next-check structure exactly.
+' Replaces stage 2's L7800 GOSUB target.
+procedure situationDescriptions()
+    global l1
+    global g
+    global b2
+    global d2
+    global t
+    global b1
+    global p1
+    ' GRATE
+    if l1 = 10 or l1 = 11 then
+        printMessage(g + 10)
+    end if
+    ' CRYSTAL BRIDGE
+    if (l1 = 19 or l1 = 20) and b2 = 1 then
+        printMessage(14)
+    end if
+    ' PLUGH NOISE
+    if l1 = 26 and RND(1) > 0.3 then
+        printMessage(41)
+    end if
+    ' IRON DOOR
+    if l1 = 73 and d2 = 0 then
+        printMessage(57)
+    end if
+    ' TROLL
+    if (l1 = 60 or l1 = 61) and t = 1 then
+        printMessage(63)
+    end if
+    ' BEAR
+    if l1 = 69 and b1 = 0 then
+        printMessage(64)
+    end if
+    if l1 = 69 and b1 = 1 then
+        printMessage(66)
+    end if
+    ' PLANT IN PIT
+    if l1 = 48 or l1 = 50 then
+        printMessage(47 + p1)
+    end if
+end procedure
+
+' Scans the parsed keyword codes k(1..45) for item names the player
+' typed: z8 counts how many matched, z3 remembers the first exact-item
+' match's own code, and d$/b$ end up holding the last match's display
+' name (itemname$'s own text). Replaces stage 2's L8280 GOSUB target --
+' by far the most-called of the remaining GOSUB subroutines (8 call
+' sites), used by GET/DROP/EAT/DRINK/ATTACK/FEED and others to work out
+' which item, if any, the player's command actually named.
+procedure findMatchedItems()
+    global k
+    global z8
+    global z3
+    global d$
+    global b$
+    global itemname$
+    z8 = 0 : z3 = 0 : d$ = ""
+    for z5 = 1 to 45
+        if k(z5) <> 0 then
+            z8 = z8 + 1
+            b$ = itemname$(z5) : d$ = b$
+            if k(z5) = 1 and z8 = 1 then
+                z3 = z5
+            end if
+        end if
+    end for
+    b$ = d$
+end procedure
+
+' Finds the first object code (1-47, the same range itemname$() covers)
+' the player's command mentioned, and sets d$ to its display name --
+' used for messages like "What do you want to do with the LAMP?" where
+' the exact item doesn't matter, just naming *something* the player
+' typed. Replaces stage 2's L8390 GOSUB target.
+procedure findFirstNamedItem()
+    global k
+    global d$
+    global itemname$
+    dim x1
+    x1 = 0
+    for z1 = 1 to 47
+        if x1 <> 1 then
+            if k(z1) = 1 then
+                d$ = itemname$(z1) : x1 = 1
+            end if
+        end if
+    end for
+end procedure
+
+' Checks whether the player is carrying item z3 (s(z3) = -1 marks an
+' item as carried); sets z5 to 1 if so, 0 (and prints "You don't have
+' the <a$>") if not -- a$ is whatever the player's command last named,
+' set well before this runs, back in the command-parsing code. Replaces
+' stage 2's L8490 GOSUB target.
+procedure checkCarryingItem()
+    global z3
+    global s
+    global a$
+    global z5
+    if s(z3) = -1 then
+        z5 = 1
+    else
+        print "You don't have the "; a$
+        z5 = 0
+    end if
+end procedure
+
+' Recomputes the current score from scratch (treasures deposited/found,
+' game milestones reached, rooms visited) into s0, and the rooms-visited
+' count into z9. Replaces stage 2's L6510 GOSUB target, called only from
+' printScore() below.
+procedure computeScore()
+    global s0
+    global z9
+    global g
+    global sn
+    global d1
+    global t
+    global b1
+    global b2
+    global p1
+    global d2
+    global c
+    global v
+    global t1
+    global o
+    global s
+    restore L230
+    z9 = 0 : s0 = 0
+    for z0 = 1 to 15
+        read z1
+        if z1 <> 0 then
+            if v(z1) = 1 then
+                s0 = s0 + 4 * o(z0)
+            end if
+            if s(z0) = 7 then
+                s0 = s0 + 4 * o(z0)
+            end if
+        end if
+    end for
+    s0 = (g = 1) * 10 + s0 : s0 = (sn = 0) * 20 + s0 : s0 = (d1 = 0) * 30 + s0
+    s0 = (t = 0) * 30 + s0 : s0 = (b1 = 2) * 20 + s0 : s0 = (b2 = 1) * 20 + s0
+    s0 = (p1 = 2) * 20 + s0 : s0 = (d2 = 1) * 20 + s0 : s0 = (c = 1) * 20 + s0
+    for z0 = 1 to t1
+        if v(z0) = 1 then
+            s0 = s0 + 1 : z9 = z9 + 1
+        end if
+    end for
+end procedure
+
+' Prints the player's current score, exploration percentage, and skill
+' title (looked up by score tier from the DATA table at L6470 -- z9's
+' own rooms-visited value is only needed for the percentage line above,
+' so the tier lookup uses its own local variable rather than reusing
+' z9 for a second, unrelated purpose the way stage 2 does). Replaces
+' stage 2's L6430 GOSUB target.
+procedure printScore()
+    global s0
+    global z9
+    global t1
+    dim tier, d$
+    computeScore()
+    print "Your score is now "; s0
+    print "You have explored "; (z9 / t1) * t1; "% of the cave."
+    restore L6470
+    tier = int((s0 - 1) / 100)
+    if tier > 4 then
+        tier = 4
+    end if
+    for z0 = 0 to tier
+        read d$
+    end for
+    print "That makes you a "; d$; " adventurer."
+end procedure
+
 ' ADVENTURE/3000 VERSION 3.2     27 FEB 1979 AT 5:30 PM
 ' THIS PROGRAM IS RELATIVELY BUG-FREE, BUT ONE STILL MUST
 ' realize that murphy 'S LAW STILL PREVAILS!
@@ -432,7 +612,7 @@ end select
 v(l1) = 1
 describeRoomContents()
 if dead = 1 then goto L9540
-gosub L7800
+situationDescriptions()
 ' INPUT LOOP --- MULTIPLE COMMAANDS, REMOVE JUNK CHARACTERS
 L400: if len(c$) > 0 then goto L500
 L410: INPUT ">";c$:c$=ucase$(c$)
@@ -500,7 +680,7 @@ L900: z0 = 36
 x = z0
 LW910: if x > 46 then goto L960
 if k(x) = 0 then goto LCONT910
-gosub L8390
+findFirstNamedItem()
 L940: print "What do you want to do with the ";d$;"?"
 goto L410
 LCONT910: x = x + (1)
@@ -821,7 +1001,7 @@ select case z1
     case 15
         ' *** GET ***
         if k(47) = 1 then goto L3680
-        gosub L8280
+        findMatchedItems()
         if z8 > 0 then goto L3680
         PRINT "Get what?"
         goto L2040
@@ -856,7 +1036,7 @@ select case z1
     case 16
         ' *** DROP ***
         if k(47) = 1 then goto L4000
-        gosub L8280
+        findMatchedItems()
         IF Z8>0 THEN goto L4000
         PRINT "Drop what?"
         GOTO L2040
@@ -879,7 +1059,7 @@ select case z1
         GOTO L400
     case 17
         ' *** THROW ***
-        GOSUB L8280
+        findMatchedItems()
         IF Z8>0 THEN goto L4210
         PRINT "Throw what?"
         GOTO L2040
@@ -914,7 +1094,7 @@ select case z1
         GOTO L400
     case 18
         ' *** ATTACK ***
-        GOSUB L8280
+        findMatchedItems()
         IF NOT (Z3=33 AND S(Z3)=L1 AND L1=82) THEN goto L4520
         ' HE CAN KILL DRAGON
         printMessage(68)
@@ -936,7 +1116,7 @@ select case z1
         GOTO L400
     case 19
         ' *** FEED ***
-        GOSUB L8280
+        findMatchedItems()
         IF Z3<>35 THEN goto L4690
         ' CAN'T FEED DWARF!
         printMessage(24)
@@ -1026,7 +1206,7 @@ select case z1
         B2=0:GOTO L400
     case 25
         ' *** OPEN ***
-        GOSUB L8280
+        findMatchedItems()
         IF Z3>0 THEN goto L5610
         PRINT "Open ";:goto L2040
         L5610: IF Z3=40 THEN goto L5070
@@ -1055,7 +1235,7 @@ select case z1
         ' each verb has its own case block below.
         GOTO L400
         ' *** CLOSE *** (dead code -- see the comment above)
-        GOSUB L8280
+        findMatchedItems()
         IF Z3=40 THEN goto L4960
         printMessage(18)
         GOTO L400
@@ -1074,7 +1254,7 @@ select case z1
         IF K(20) = 1 THEN goto L5950
         printMessage(20)
         GOTO L410
-        L5950: Z3=20:GOSUB L8490
+        L5950: Z3=20:checkCarryingItem()
         IF Z5=0 THEN goto L410
         printMessage(73)
         S(20)=0:B0=0:GOTO L400
@@ -1083,7 +1263,7 @@ select case z1
         IF K(16) =1 THEN goto L6040
         printMessage(21)
         GOTO L410
-        L6040: Z3=16:GOSUB L8490
+        L6040: Z3=16:checkCarryingItem()
         IF Z5=0 THEN goto L410
         printMessage(22)
         S(17)=0:B0=0:GOTO L400
@@ -1121,47 +1301,12 @@ select case z1
         GOTO L9750
         ' SCORE ***
     case 35
-        GOSUB L6430
+        printScore()
         GOTO L400
-        L6430: ' PRINT OUT SCORE DATA
-        GOSUB L6510
-        PRINT "Your score is now ";S0
-        PRINT "You have explored ";(Z9/T1)*T1;"% of the cave."
-        RESTORE L6470
+        L6430: ' score computation/printing are now computeScore()/
+        ' printScore() above -- the DATA line right below is still needed
+        ' here (RESTORE targets must be top-level, per issue #149/PR #150).
         L6470: DATA "beginner","novice","experienced","advanced","expert"
-        Z9 = INT((S0-1)/100)
-        IF Z9 <= 4 THEN goto L6483
-        Z9=4
-        L6483: FOR Z0=0 TO Z9
-            READ D$
-        end for
-
-        PRINT "That makes you a ";D$;" adventurer."
-        RETURN
-        L6510: ' COMPUTE CURRENT SCORE
-        RESTORE L230
-        Z9=0:S0=0
-        FOR Z0=1 TO 15
-            READ Z1
-            IF Z1<>0 THEN
-                IF V(Z1)=1 THEN
-                    S0=S0+4*O(Z0)
-                end if
-                IF S(Z0)=7 THEN
-                    S0=S0+4*O(Z0)
-                end if
-            end if
-        end for
-
-        S0=(G=1)*10 + S0:S0=(SN=0)*20 + S0:S0=(D1=0)*30 + S0:S0=(T=0)*30 + S0:S0=(B1=2)*20 + S0
-        S0=(B2=1)*20 + S0:S0=(P1=2)*20 + S0:S0=(D2=1)*20 + S0:S0=(C=1)*20 + S0
-        FOR Z0 = 1 TO T1
-            IF V(Z0)=1 THEN
-                S0=S0+1:Z9=Z9+1
-            end if
-        end for
-
-        RETURN
         ' list items at location l1
         ' room-contents listing + dwarf/pirate checks are now the
         ' describeRoomContents() procedure above.
@@ -1239,33 +1384,8 @@ select case z1
         GOTO L4120
         ' PRINT MESSAGE is now the printMessage() procedure above -- every
         ' `z59 = N : gosub 7620` call site became `printMessage(N)`.
-        L7800: '
-        ' SITUATION DESCRIPTIONS
-        '
-        ' GRATE
-        if l1 = 10 or l1 = 11 then goto L7842 else goto L7860
-        L7842: printMessage((g+10))
-        ' CRYSTAL BRIDGE
-        L7860: if (l1 = 19 or l1 = 20) and b2 = 1 then goto L7861 else goto L7880
-        L7861: printMessage(14)
-        ' PLUGH NOISE
-        L7880: if l1 = 26 and RND(1) > 0.3 then goto L7881 else goto L7900
-        L7881: printMessage(41)
-        ' IRON DOOR
-        L7900: if l1 = 73 and d2 = 0 then goto L7901 else goto L7920
-        L7901: printMessage(57)
-        ' TROLL
-        L7920: if (l1 = 60 or l1 = 61) and t = 1 then goto L7921 else goto L7940
-        L7921: printMessage(63)
-        ' BEAR
-        L7940: if l1 = 69 and b1 = 0 then goto L7941 else goto L7950
-        L7941: printMessage(64)
-        L7950: if l1 = 69 and b1 = 1 then goto L7951 else goto L7970
-        L7951: printMessage(66)
-        ' PLANT IN PIT
-        L7970: if l1 = 48 or l1 = 50 then goto L7971 else goto L7980
-        L7971: printMessage(47+p1)
-        L7980: return
+        L7800: ' situation descriptions are now the situationDescriptions()
+        ' procedure above.
         ' long room description is now the longDescription() procedure above.
         ' the short-vs-long-on-entry decision is now the describeRoomOnEntry()
         ' procedure above.
@@ -1273,39 +1393,9 @@ select case z1
         '   fetch first item code in k(1 to t2)
         '   z8=total # of items found in list
         '   z3=item code first found
-        L8280: z8 = 0 : z3 = 0: d$ = ""
-        for z5 = 1 to 45
-            if k(z5) <> 0 then
-                z8 = z8+1
-                b$ = itemname$(z5):d$ = b$
-                if k(z5)=1 and z8 = 1 then
-                    z3 = z5
-                end if
-            end if
-        end for
-
-        b$ = d$
-        return
-        L8390: ' FIND FIRST ITEM AT ROOM
-        x1 = 0
-        FOR Z1=1 TO 47
-            if x1<>1 then
-                IF K(Z1) = 1 THEN
-                    d$ = itemname$(z1):x1=1
-                end if
-            end if
-        end for
-
-        RETURN
-        '
-        ' MAKE SURE HE'S CARRYING ITEM * Z3
-        '
-        L8490: IF S(Z3)=-1 THEN goto L8530
-        PRINT "You don't have the ";A$
-        Z5=0
-        RETURN
-        L8530: Z5=1
-        RETURN
+        L8280: ' find-matched-items/find-first-named-item/check-carrying-item
+        ' are now findMatchedItems()/findFirstNamedItem()/checkCarryingItem()
+        ' above.
         ' dwarf/pirate checks are now checkDwarf()/checkDwarfAttack()/
         ' checkPirate() above.
     case 36
@@ -1352,7 +1442,7 @@ select case z1
         GOTO L300
     case 38
         ' *** READ THE MAGAZINE ***
-        GOSUB L8280
+        findMatchedItems()
         IF Z3=25 THEN goto L9270
         printMessage(74)
         GOTO L410
@@ -1424,7 +1514,7 @@ GOTO L320
 ' THIRD DEATH--END OF GAME
 L9740: printMessage(78)
 L9750: PRINT "Oh well..."
-GOSUB L6430
+printScore()
 ' (ADESCRIP/AITEMS/AMESSAGE are in-memory arrays now -- nothing to close)
 STOP
 L9780: ' *** PITS ***

@@ -196,7 +196,32 @@ source from scratch.
   fixed in both stage 3 and stage 4. All the labels left over from
   stage 2's original mechanical "every line gets a label" conversion
   that nothing actually jumps to were also stripped, across all three
-  `.bcl` stages, leaving only genuine branch targets labeled.
+  `.bcl` stages, leaving only genuine branch targets labeled. All three
+  stages were then re-indented (4 spaces per block-nesting level,
+  matching `tutorial/*.bcl`'s own convention) now that most of the
+  original's one-label-per-line noise was gone -- purely cosmetic,
+  confirmed by diffing the transpiled BASIC output before and after.
+
+  Five more clean `GOSUB` subroutines became procedures:
+  `situationDescriptions()` (the grate/bridge/plugh/troll/bear/pit
+  one-off messages checked after every room description),
+  `findMatchedItems()` (by far the most-called of the remaining
+  subroutines at 8 call sites -- works out which item, if any, the
+  player's command named), `findFirstNamedItem()` (names *something*
+  the player mentioned, for messages that don't care which), and
+  `checkCarryingItem()`/the `computeScore()`/`printScore()` pair
+  (the `SCORE` command and the two end-of-game summaries). The score
+  pair fixed one small wart along the way: stage 2 reused the global
+  `z9` (rooms-visited count) for an unrelated tier-lookup calculation
+  right after printing it, matching the original -- `printScore()` uses
+  its own local variable for that instead, since nothing was ever
+  reading `z9`'s clobbered value afterward anyway.
+
+  `RESTORE` isn't a control-flow statement, so it falls under neither
+  goto/gosub rule above -- but `computeScore()`/`printScore()` still
+  `restore` to two `DATA` lines kept at the top level (rather than
+  moved into either procedure), just to keep them visibly close to the
+  rest of the game's `DATA` tables.
 
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
