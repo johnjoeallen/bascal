@@ -121,11 +121,28 @@ source from scratch.
     `checkDwarfAttack()`, called both by that site directly and by
     `checkDwarf()` internally.
 
-  Everything else -- the actual game loop, the rest of room/command
-  dispatch, combat, and puzzles -- is still exactly stage 2's label/`GOTO`/`GOSUB`
-  structure, not yet refactored. Verified the same
-  way as stage 2 (`bcc --check`, `fbc` build and manual smoke test) after
-  each change, to confirm the refactor stayed behavior-preserving.
+  **Where this stops, deliberately, for now**: everything refactored
+  above shared one property that made it low-risk to extract -- each was
+  a genuine `GOSUB ... RETURN` subroutine, single-entry and (once
+  mid-subroutine jumps like the two above were accounted for)
+  effectively single-exit, which maps directly onto a BASCAL
+  `procedure`/`function` and a plain `return`. The bulk of what's left
+  -- the command loop itself, starting around `GET`/`DROP` and covering
+  combat and puzzles -- is a different shape: a ~700-line flat `GOTO`
+  chain entered from the keyword dispatcher, with handlers that exit to
+  *several different* downstream labels depending on the path taken
+  (`GOTO L400` normally, but `GOTO L410`, `GOTO L6880`, `GOTO L7380`,
+  ... on other branches). A plain procedure call can only `return` to
+  one place, so wrapping this properly means restructuring how the
+  whole command loop hands control to its handlers (e.g. each handler
+  returning a code or setting a flag the caller branches on) -- a much
+  larger, higher-risk change than anything done so far, closer in size
+  to everything above combined. Left as clearly-marked future work
+  rather than attempted partially.
+
+  Verified the same way as stage 2 (`bcc --check`, `fbc` build and
+  manual smoke test) after each change, to confirm the refactor stayed
+  behavior-preserving.
 
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
