@@ -4,22 +4,37 @@
 // exactly how far this refactor has gotten so far (it is NOT a
 // complete rewrite).
 //
-// Starting point: an exact copy of stage 4 (same SELECT CASE verb
-// dispatch, same procedures/functions) -- this stage hasn't diverged
-// from it yet. Two things remain, both hand-wired GOTO control flow
-// `bcc` itself flags as having a direct BASCAL equivalent:
+// Started as an exact copy of stage 4. Progress so far: the
+// command-parsing cascade between the keyword-matching DATA table and
+// the verb dispatch's own SELECT CASE -- eight genuinely self-contained
+// "scan until match" loops (keyword matching, exotic-word/direction-
+// word/direction-of-movement checks, the narrow-tunnel item check, and
+// the two "was it a keyword/an item" checks right before dispatch) --
+// are now WHILE/FOR loops, verified byte-identical output against
+// stage 4 for the same input. Two shared GOTO-reached mini-routines
+// uncovered along the way became procedures instead of loops, since
+// they were never loops to begin with -- askWhatToDoWithItem() (was
+// L940, reached from two different loops) and printDontUnderstand()
+// (was L2040, reached from six different verb handlers' own "didn't
+// understand" case, its DATA line deliberately left at its original
+// position -- see printDontUnderstand()'s own comment for why).
+//
+// Two things remain, both hand-wired GOTO control flow `bcc` itself
+// still flags as having a direct BASCAL equivalent:
 //   - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of
-//     the 40 verb handlers `GOTO`s back into once it's done -- ~106 of
-//     `bcc`'s ~150 warnings on this file are sites jumping back into
-//     it, not loops of their own.
-//   - The command-parsing/movement engine that runs before dispatch
-//     (`L820` onward: keyword scanning, direction/exotic-word checks,
-//     then a tangled web of special-case room-movement checks) -- a
-//     genuinely cross-jumping GOTO graph, not simple isolated retry
-//     loops confined to one verb.
+//     the 40 verb handlers `GOTO`s back into once it's done -- most of
+//     `bcc`'s remaining warnings on this file are sites jumping back
+//     into it, not loops of their own.
+//   - The movement-execution engine (`L1070`/`L1180` onward) -- turns
+//     out to be a de facto shared subroutine (not a loop at all, so
+//     `bcc`'s loop-detection doesn't even flag it) reached via GOTO
+//     from inside the movement logic *and* directly from at least four
+//     different verb handlers (PLUGH, XYZZY, PLOVER, CLIMB, CROSS) as
+//     a "teleport"/"retry with a new direction" mechanism -- likely
+//     wants procedures, not a loop conversion, once traced fully.
 // Converting either safely, without introducing a behavioral bug in a
 // program this size, needs careful control-flow tracing before any
-// edit -- not yet done as of this stage's own creation.
+// edit -- not yet done as of this revision.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -535,6 +550,38 @@ procedure printScore()
     print "That makes you a "; d$; " adventurer."
 end procedure
 
+' Asks what the player wants to do with the item named by d$ (already
+' set by the caller, e.g. via findFirstNamedItem()) -- replaces stage
+' 2's L940 GOSUB-like target, reached via GOTO from two different
+' places (the "exotic words" and "item but no verb" checks below) that
+' both then GOTO L410 themselves afterward, since a procedure can't
+' GOTO a top-level label the way the original shared code could.
+procedure askWhatToDoWithItem()
+    global d$
+    print "What do you want to do with the ";d$;"?"
+end procedure
+
+' Prints one of four random "I don't understand"-style messages --
+' replaces stage 2's L2040 GOSUB-like target (its DATA line, L2070,
+' deliberately stays at its original top-level position further down
+' rather than moving up here with the rest of this logic -- RESTORE
+' can target a label anywhere in the file, and leaving DATA statement
+' order completely undisturbed avoids any risk to some other, unrelated
+' unrestored sequential READ elsewhere in this 1149-line program).
+' Reached via GOTO from every verb handler that couldn't make sense of
+' the player's command (the fallback for an unrecognized word entirely,
+' and several verb handlers' own "you didn't say what" case). Every
+' call site GOTOs L400 right after, same reason as
+' askWhatToDoWithItem() above.
+procedure printDontUnderstand()
+    global b$
+    restore L2070
+    for x = 1 to int(RND(1)*4)+1
+        read b$
+    end for
+    PRINT b$
+end procedure
+
 ' ADVENTURE/3000 VERSION 3.2     27 FEB 1979 AT 5:30 PM
 ' THIS PROGRAM IS RELATIVELY BUG-FREE, BUT ONE STILL MUST
 ' realize that murphy 'S LAW STILL PREVAILS!
@@ -691,38 +738,33 @@ end for
 
 z1 = 0 : z3 = 0
 ' T3=TOTAL NUMBER OF KEYWORDS
-L820: if z1 > t3 then goto L900
-read z1,b$
-b$ = " "+b$+" "
-' IF KEYWORD WAS FOUND, NOTE THIS IN K(Z1)
-if instr(a$,b$) = 0 then goto L820
-k(z1) = 1
-' KEYWORDK #Z1 NOT FOUND
-goto L820
+while z1 <= t3
+    read z1,b$
+    b$ = " "+b$+" "
+    ' IF KEYWORD WAS FOUND, NOTE THIS IN K(Z1)
+    if instr(a$,b$) <> 0 then
+        k(z1) = 1
+    end if
+end while
 ' EXOTIC WORDS
-L900: z0 = 36
-x = z0
-LW910: if x > 46 then goto L960
-if k(x) = 0 then goto LCONT910
-findFirstNamedItem()
-L940: print "What do you want to do with the ";d$;"?"
-goto L410
-LCONT910: x = x + (1)
-goto LW910
-L960:
-x = 110
-LW970: if x > t3 then goto L990
-if k(x) = 1 then goto L1950
-x = x + (1)
-goto LW970
-L990:
+for x = 36 to 46
+    if k(x) = 1 then
+        findFirstNamedItem()
+        askWhatToDoWithItem()
+        goto L410
+    end if
+end for
+for x = 110 to t3
+    if k(x) = 1 then
+        goto L1950
+    end if
+end for
 ' THEN IT'S A DIRECTION
-d = 1
-LW1010: if d > 10 then goto L1030
-if k(d+99) = 1 then goto L1070
-d = d + (1)
-goto LW1010
-L1030:
+for d = 1 to 10
+    if k(d+99) = 1 then
+        goto L1070
+    end if
+end for
 ' COMMAND NOT A DIRECTION
 goto L1950
 ' CAN HE MOVE THAT WAY?
@@ -786,15 +828,12 @@ goto L1180
 ' Narrow Tunnel
 L1690: if not (l1 = 57 or l1 = 58) then goto L1780
 IF K(102)=0 AND K(106)=0 THEN goto L1780
-z3 = 1
-LW1700: if z3 > t2 then goto L1750
-if z3 = 10 then goto LCONT1700
-if s(z3) <> -1 then goto LCONT1700
-printMessage(53)
-goto L400
-LCONT1700: z3 = z3 + (1)
-goto LW1700
-L1750:
+for z3 = 1 to t2
+    if z3 <> 10 and s(z3) = -1 then
+        printMessage(53)
+        goto L400
+    end if
+end for
 goto L1180
 ' TROLL
 L1780: IF L1=60 AND D=2 THEN goto L1790
@@ -826,29 +865,27 @@ L1890: if not (l1 = 82 and s(33) = l1 and d = 1) then goto L1180
 printMessage(51)
 goto L400
 ' OTHER COMMANDS
-L1950: z1 = 100
-LW1950: if z1 > t3 then goto L1970
-if k(z1)=1 then goto L2090
-z1 = z1 + (1)
-goto LW1950
-L1970:
+' L1950 is a shared entry point jumped to directly from the exotic-
+' words/direction resolution above (its own initial `z1 = 100` folded
+' into the `for` below), so its label stays put even though the loop
+' body is now structured.
+L1950: for z1 = 100 to t3
+    if k(z1) = 1 then
+        goto L2090
+    end if
+end for
 ' ITEM BO NO VERB?
 ' (was: restore L9961 -- item names now come from itemname$())
-x = 1
-LW2000: if x > 35 then goto L2030
-d$ = itemname$(x)
-if k(x) = 1 then goto L940
-x = x + (1)
-goto LW2000
-L2030:
-L2040: restore L2070
-for x = 1 to int(RND(1)*4)+1
-    read b$
+for x = 1 to 35
+    d$ = itemname$(x)
+    if k(x) = 1 then
+        askWhatToDoWithItem()
+        goto L410
+    end if
 end for
-
-PRINT b$
-L2070: data "What?","I don't understand.","I can't understand that.","I don't know that word."
+printDontUnderstand()
 goto L400
+L2070: data "What?","I don't understand.","I can't understand that.","I don't know that word."
 L2090: z1 = z1-109
 select case z1
     case 1
@@ -1028,7 +1065,8 @@ select case z1
         findMatchedItems()
         if z8 > 0 then goto L3680
         PRINT "Get what?"
-        goto L2040
+        printDontUnderstand()
+        goto L400
         L3680: z3 = 1
         LW3680: if z3 > t2 then goto L3900
         if k(47) = 1 then goto L3730
@@ -1063,7 +1101,8 @@ select case z1
         findMatchedItems()
         IF Z8>0 THEN goto L4000
         PRINT "Drop what?"
-        GOTO L2040
+        printDontUnderstand()
+        goto L400
         L4000: Z3 = 1
         LW4000: if Z3 > T2 then goto L4140
         IF K(47)=1 THEN goto L4060
@@ -1086,7 +1125,8 @@ select case z1
         findMatchedItems()
         IF Z8>0 THEN goto L4210
         PRINT "Throw what?"
-        GOTO L2040
+        printDontUnderstand()
+        goto L400
         L4210: IF S(Z3)<>-1 THEN goto L2710
         IF NOT (Z3<16 AND S(32)=L1) THEN goto L4260
         ' THROW TREASURE TO TROLL
@@ -1232,7 +1272,9 @@ select case z1
         ' *** OPEN ***
         findMatchedItems()
         IF Z3>0 THEN goto L5610
-        PRINT "Open ";:goto L2040
+        PRINT "Open ";
+        printDontUnderstand()
+        goto L400
         L5610: IF Z3=40 THEN goto L5070
         IF S(Z3)=L1 THEN goto L5650
         L5630: PRINT "I see no ";b$;" here.":goto L400
@@ -1487,7 +1529,10 @@ select case z1
         ' between L4480 and L4520 -- reachable only via the dispatch table,
         ' never by ATTACK's own fall-through, so moving it doesn't change
         ' behavior) so its case can be its own block in the SELECT CASE below.
-        IF L1<>82 THEN goto L2040
+        if L1 <> 82 then
+            printDontUnderstand()
+            goto L400
+        end if
         printMessage(69)
         S(33)=0:D1=0:GOTO L400
     case 40
@@ -1513,7 +1558,8 @@ select case z1
         CLOSE #5
         GOTO L410
     case else
-        goto L2040
+        printDontUnderstand()
+        goto L400
 end select
 L9540: ' REINCARNATE HIM
 L9550: R0=R0+1

@@ -226,18 +226,46 @@ source from scratch.
 - **`stage5-refactored-bascal/`** -- picks up exactly where stage 4 left
   off, on the two things its own README section flagged as untouched.
   Started as an exact copy of stage 4 (verified identical `bcc --check`,
-  `fbc` build, and smoke-test behavior before any further change), not
-  diverged from it yet:
+  `fbc` build, and smoke-test behavior before any further change).
+
+  First pass: the command-parsing cascade between the keyword-matching
+  `DATA` table and the verb dispatch's own `SELECT CASE` turned out to
+  contain eight genuinely self-contained "scan until match" loops --
+  keyword matching, the exotic-word/direction-word/direction-of-movement
+  checks, the narrow-tunnel item check, and the two "was it a keyword/an
+  item" checks run right before dispatch -- none of them touching the
+  40 verb handlers' own internal logic or the movement engine below.
+  All eight are now `WHILE`/`FOR` loops, verified byte-identical output
+  against stage 4 for the same smoke-test input (movement, inventory,
+  save/quit, and specifically exercising the converted checks:
+  GET/DROP/THROW/OPEN with no match, `XYZZY`/`PLUGH`, an unrecognized
+  word, and multi-word direction names).
+
+  Two GOTO-reached mini-routines shared by multiple loops turned out
+  not to be loops at all, so they became procedures instead:
+  `askWhatToDoWithItem()` (was `L940`, reached from two different
+  loops) and `printDontUnderstand()` (was `L2040`, reached from six
+  different verb handlers' own "didn't understand" case). `printDont
+  Understand()`'s own `DATA` line (`L2070`) deliberately stays at its
+  original top-level position rather than moving into the procedure
+  with the rest of its logic -- `RESTORE` can target a label anywhere
+  in the file, and this avoids any risk to some other, unrelated
+  unrestored sequential `READ` elsewhere in this 1149-line program.
+
+  Two things remain, both hand-wired GOTO control flow `bcc` itself
+  still flags as having a direct BASCAL equivalent:
   - The outer game loop (`L300`/`L320`/`L400`/`L410`) every one of the
-    40 verb handlers `GOTO`s back into once it's done -- ~106 of `bcc`'s
-    ~150 hand-wired-loop warnings on this file are sites jumping back
+    40 verb handlers `GOTO`s back into once it's done -- most of
+    `bcc`'s remaining warnings on this file are sites jumping back
     into it, not loops of their own. Converting this means restructuring
     the whole file's top-level control flow, not a per-handler change.
-  - The command-parsing/movement engine that runs before dispatch
-    (`L820` onward: keyword scanning, direction/exotic-word checks, then
-    a web of special-case room-movement checks) -- a genuinely
-    cross-jumping GOTO graph, not simple retry loops confined to one
-    verb.
+  - The movement-execution engine (`L1070`/`L1180` onward) -- turns out
+    to be a de facto shared subroutine (not a loop at all, so `bcc`'s
+    loop-detection doesn't even flag it), reached via GOTO from inside
+    the movement logic *and* directly from at least four different verb
+    handlers (`PLUGH`, `XYZZY`, `PLOVER`, `CLIMB`, `CROSS`) as a
+    "teleport"/"retry with a new direction" mechanism -- likely wants
+    procedures, not a loop conversion, once traced fully.
 
   Neither has been converted yet -- both need careful control-flow
   tracing before any edit, to avoid a real behavioral bug in a program
