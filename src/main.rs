@@ -85,6 +85,10 @@ struct Cli {
     /// Same check as --strict-vars, but prints findings to stderr as warnings instead of failing the compile. Ignored if --strict-vars is also given
     #[arg(long)]
     strict_vars_warn: bool,
+
+    /// --target jvm only: stack size in bytes for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
+    #[arg(long, value_name = "BYTES")]
+    krak_stack_size: Option<usize>,
 }
 
 const DEFAULT_TARGET_HELP: &str = "\
@@ -92,7 +96,14 @@ Default target (used when --target isn't given), first match wins:
   1. BASCAL_TARGET environment variable
   2. ~/.config/bascal/config (\"target=c\", one setting per line)
   3. /etc/default/bascal (same format, system-wide)
-  4. basic, if none of the above are set";
+  4. basic, if none of the above are set
+
+KRAK_STACK_SIZE (used when --krak-stack-size isn't given, --target jvm only),
+same first-match-wins order as DEFAULT TARGET above:
+  1. BASCAL_KRAK_STACK_SIZE environment variable
+  2. ~/.config/bascal/config (\"krak_stack_size=1048576\", bytes)
+  3. /etc/default/bascal (same format, system-wide)
+  4. 33554432 (32 MiB), if none of the above are set";
 
 fn main() -> ExitCode {
     // -V/--version is intercepted here, ahead of clap, because clap 4's
@@ -171,42 +182,74 @@ fn parse_config_value(contents: &str, key: &str) -> Option<String> {
     None
 }
 
-/// The `--target` value to use when the CLI flag itself isn't given --
-/// lets a user or system set `c` as their working default without typing
-/// `--target c` on every invocation. Checked in order, first match wins:
-/// the `BASCAL_TARGET` environment variable (works the same on every
-/// platform, including Windows, where there's no real equivalent of
-/// `/etc/default/`); `~/.config/bascal/config`, a per-user default;
-/// `/etc/default/bascal`, a system-wide default (the standard Debian
-/// `/etc/default/<pkgname>` convention -- a plain file, not a directory).
-/// Falls back to `Target::Basic` (the original, complete backend) if none
-/// of those are set, or set to something unrecognized. An explicit
-/// `--target`/`-t` flag on the command line always overrides whatever
-/// this returns -- see `run`.
-fn resolve_default_target() -> Target {
-    if let Ok(value) = env::var("BASCAL_TARGET") {
-        if let Some(target) = parse_target_str(&value) {
-            return target;
+/// Looks up `key` (e.g. `"target"`, `"krak_stack_size"`) across the three
+/// places every `--<flag>`-with-a-config-fallback in this file shares,
+/// first match wins: the `BASCAL_<KEY>` environment variable (`key`
+/// upper-cased -- works the same on every platform, including Windows,
+/// where there's no real equivalent of `/etc/default/`); `~/.config/
+/// bascal/config`, a per-user default; `/etc/default/bascal`, a
+/// system-wide default (the standard Debian `/etc/default/<pkgname>`
+/// convention -- a plain file, not a directory). A source whose raw value
+/// doesn't `parse` (e.g. `BASCAL_TARGET=nonsense`) is treated as absent,
+/// not an error -- the next source in line still gets a chance, exactly
+/// as if that source hadn't set the key at all. `None` if no source
+/// yields a value `parse` accepts.
+fn resolve_config_value<T>(key: &str, parse: impl Fn(&str) -> Option<T>) -> Option<T> {
+    let env_key = format!("BASCAL_{}", key.to_ascii_uppercase());
+    if let Ok(value) = env::var(&env_key) {
+        if let Some(parsed) = parse(&value) {
+            return Some(parsed);
         }
     }
     if let Ok(home) = env::var("HOME") {
         let user_config = PathBuf::from(home).join(".config/bascal/config");
         if let Ok(contents) = fs::read_to_string(&user_config) {
-            if let Some(value) = parse_config_value(&contents, "target") {
-                if let Some(target) = parse_target_str(&value) {
-                    return target;
+            if let Some(value) = parse_config_value(&contents, key) {
+                if let Some(parsed) = parse(&value) {
+                    return Some(parsed);
                 }
             }
         }
     }
     if let Ok(contents) = fs::read_to_string("/etc/default/bascal") {
-        if let Some(value) = parse_config_value(&contents, "target") {
-            if let Some(target) = parse_target_str(&value) {
-                return target;
+        if let Some(value) = parse_config_value(&contents, key) {
+            if let Some(parsed) = parse(&value) {
+                return Some(parsed);
             }
         }
     }
-    Target::Basic
+    None
+}
+
+/// The `--target` value to use when the CLI flag itself isn't given --
+/// lets a user or system set `c` as their working default without typing
+/// `--target c` on every invocation. See `resolve_config_value`'s own doc
+/// comment for the precedence order (`BASCAL_TARGET` env var, user
+/// config, system config). Falls back to `Target::Basic` (the original,
+/// complete backend) if none of those are set, or set to something
+/// unrecognized. An explicit `--target`/`-t` flag on the command line
+/// always overrides whatever this returns -- see `run`.
+fn resolve_default_target() -> Target {
+    resolve_config_value("target", parse_target_str).unwrap_or(Target::Basic)
+}
+
+/// The Krakatau assembler's own worker-thread stack size (bytes,
+/// `invoke_krak2`'s thread -- not the JVM's own runtime stack, `java
+/// -Xss`, which this has no connection to at all) to use when
+/// `--krak-stack-size` itself isn't given -- see `invoke_krak2`'s own doc
+/// comment for why `bcc` runs `krakatau2::assemble` on a dedicated thread
+/// with an explicit stack size at all. Same precedence order as
+/// `resolve_default_target` (`BASCAL_KRAK_STACK_SIZE` env var, user
+/// config, system config), via `resolve_config_value`. Falls back to
+/// 32 MiB if none of those are set, or set to something that doesn't
+/// parse as a plain byte count -- confirmed empirically: even a trivial
+/// generated program can overflow a stack as small as 64 KiB (krak2's
+/// recursive stack-map-frame/control-flow analysis needs real headroom),
+/// so this default deliberately isn't a token/minimal value.
+fn resolve_default_krak_stack_size() -> usize {
+    const DEFAULT_KRAK_STACK_SIZE: usize = 32 * 1024 * 1024;
+    resolve_config_value("krak_stack_size", |value| value.trim().parse().ok())
+        .unwrap_or(DEFAULT_KRAK_STACK_SIZE)
 }
 
 /// The `-o` value's *effective* output path. `-o` only ever names a
@@ -248,6 +291,9 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
 
 fn run(cli: Cli) -> Result<(), String> {
     let target = cli.target.unwrap_or_else(resolve_default_target);
+    let krak_stack_size = cli
+        .krak_stack_size
+        .unwrap_or_else(resolve_default_krak_stack_size);
 
     if cli.check {
         if cli.binary || cli.run {
@@ -291,7 +337,7 @@ fn run(cli: Cli) -> Result<(), String> {
     if !cli.clean && is_up_to_date(&cli.input, &output_path) {
         let binary_path = expected_binary_path(target, &output_path)?;
         if want_binary && !is_up_to_date(&cli.input, &binary_path) {
-            let built = invoke_binary(target, &output_path)?;
+            let built = invoke_binary(target, &output_path, krak_stack_size)?;
             return if cli.run { run_binary(&built) } else { Ok(()) };
         }
         println!("up to date: {}", output_path.display());
@@ -322,7 +368,7 @@ fn run(cli: Cli) -> Result<(), String> {
         .map_err(|err| format!("error: failed to write {}: {err}", output_path.display()))?;
 
     if want_binary {
-        let built = invoke_binary(target, &output_path)?;
+        let built = invoke_binary(target, &output_path, krak_stack_size)?;
         if cli.run {
             return run_binary(&built);
         }
@@ -410,12 +456,16 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
 /// producing a DOS `.EXE` -- `run_binary` special-cases that extension the
 /// same way it already does JVM's `.class`, launching dosbox-x itself
 /// rather than exec'ing the file directly.
-fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
+fn invoke_binary(
+    target: Target,
+    output_path: &PathBuf,
+    krak_stack_size: usize,
+) -> Result<PathBuf, String> {
     match target {
         Target::Basic => invoke_bascom(output_path),
         Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
-        Target::Jvm => invoke_krak2(output_path),
+        Target::Jvm => invoke_krak2(output_path, krak_stack_size),
     }
 }
 
@@ -723,7 +773,7 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
 /// of the `.j` text's `.class public <name>` line -- the same name
 /// `codegen_jvm::class_name_for` chose -- rather than assuming anything
 /// about the input path.
-fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
+fn invoke_krak2(j_path: &PathBuf, krak_stack_size: usize) -> Result<PathBuf, String> {
     let source = fs::read_to_string(j_path)
         .map_err(|err| format!("error: failed to read {}: {err}", j_path.display()))?;
     let class_name = source
@@ -750,15 +800,52 @@ fn invoke_krak2(j_path: &PathBuf) -> Result<PathBuf, String> {
         return Ok(class_path);
     }
 
-    let classes = krakatau2::assemble(&source, krakatau2::AssemblerOptions {}).map_err(|err| {
-        // `Error::display` is krakatau2's own pretty, source-excerpt-aware
-        // printer (writes straight to stderr) -- matches what the old
-        // subprocess's own inherited stdio would have shown; the `Result`
-        // this function returns only ever needs a short top-level summary
-        // on top of that, the same way a nonzero `krak2` exit status used
-        // to.
-        err.display(&j_path.display().to_string(), &source);
-        format!("error: failed to assemble {}", j_path.display())
+    // `krakatau2::assemble` runs on its own worker thread with an
+    // explicit, configurable stack size (`--krak-stack-size`/
+    // `KRAK_STACK_SIZE`, default 32 MiB -- see
+    // `resolve_default_krak_stack_size`) rather than whatever this
+    // process's own thread happens to have: its recursive stack-map-
+    // frame/control-flow analysis needs real headroom for a sufficiently
+    // large generated program (confirmed empirically -- even a trivial
+    // one can overflow a stack as small as 64 KiB), and
+    // upstream Krakatau declined to make this the library's own
+    // responsibility (see Cargo.toml's own comment on the pinned fork;
+    // GitHub PRs #217/#218 against Storyyeller/Krakatau, both closed
+    // unmerged, proposed exactly this inside the library itself). A
+    // genuine stack overflow can't be caught after the fact the way an
+    // ordinary panic can (it aborts the process outright) -- sizing the
+    // thread adequately up front, not catching the overflow, is the
+    // actual fix; `spawn`'s own `io::Result` and `join`'s own panic
+    // result are still handled below for whatever else might go wrong.
+    let classes = std::thread::scope(|scope| -> Result<_, String> {
+        let handle = std::thread::Builder::new()
+            .stack_size(krak_stack_size)
+            .spawn_scoped(scope, || {
+                krakatau2::assemble(&source, krakatau2::AssemblerOptions {})
+            })
+            .map_err(|err| {
+                format!(
+                    "error: failed to spawn the assembler's worker thread (stack size \
+                     {krak_stack_size} bytes): {err}"
+                )
+            })?;
+        let result = handle.join().map_err(|_| {
+            format!(
+                "error: the assembler's worker thread panicked while assembling {} (stack \
+                 size {krak_stack_size} bytes) -- try a larger --krak-stack-size",
+                j_path.display()
+            )
+        })?;
+        result.map_err(|err| {
+            // `Error::display` is krakatau2's own pretty, source-excerpt-aware
+            // printer (writes straight to stderr) -- matches what the old
+            // subprocess's own inherited stdio would have shown; the `Result`
+            // this function returns only ever needs a short top-level summary
+            // on top of that, the same way a nonzero `krak2` exit status used
+            // to.
+            err.display(&j_path.display().to_string(), &source);
+            format!("error: failed to assemble {}", j_path.display())
+        })
     })?;
     let (_, bytes) = classes.into_iter().next().ok_or_else(|| {
         format!(
@@ -895,6 +982,7 @@ mod tests {
             target: None,
             strict_vars: false,
             strict_vars_warn: false,
+            krak_stack_size: None,
         }
     }
 
