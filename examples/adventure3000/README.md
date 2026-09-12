@@ -184,8 +184,19 @@ source from scratch.
   and smoke tests exercising several different verbs across the
   dispatch range (`LOOK`, `GET`, `PLUGH`, `XYZZY`, `INVENTORY`, `SCORE`).
 
-  A second, smaller `ON t+1 GOTO` (4-way, troll-related) remains
-  elsewhere in the file -- not yet converted.
+  A second, smaller `ON t+1 GOTO` (4-way, troll state) got the same
+  treatment. With both converted, `bcc` no longer warns about a
+  computed-branch dispatch anywhere in the file.
+
+  A pass verifying that no `GOTO` (in the new `SELECT CASE` blocks or
+  anywhere else) jumps into the middle of a procedure or a still-GOSUB-
+  based subroutine turned up one real, pre-existing bug: a `THROW`-at-
+  dwarf call site missed when `checkDwarf()`/`checkDwarfAttack()` were
+  split out, left calling a label that had become a dead comment --
+  fixed in both stage 3 and stage 4. All the labels left over from
+  stage 2's original mechanical "every line gets a label" conversion
+  that nothing actually jumps to were also stripped, across all three
+  `.bcl` stages, leaving only genuine branch targets labeled.
 
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
