@@ -7677,4 +7677,67 @@ end
         };
         compile_file(&path, &options).expect_err("should not compile")
     }
+
+    /// GitHub issue #152: `Target::Fbc` generates identical BASIC to
+    /// `Target::Basic` (`codegen_basic` doesn't distinguish them), except
+    /// that it rejects `try`/`catch` -- see `driver.rs`'s
+    /// `reject_fbc_incompatible_constructs` doc comment and issue #153 for
+    /// why (real `fbc` rejects the `RESUME <lineno>` its generated BASIC
+    /// relies on, even though that's valid, real-BASCOM-verified BASIC).
+    #[test]
+    fn fbc_target_rejects_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\ntry\n    print \"hi\"\ncatch e%, l%\nend try\nend\n",
+        )
+        .unwrap();
+        let options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("--target fbc") && d.message.contains("#153")),
+            "try/catch should be rejected for --target fbc, referencing issue #153: {diagnostics:?}"
+        );
+    }
+
+    /// Same source that `fbc_target_rejects_try_catch` rejects under
+    /// `Target::Fbc` still compiles under `Target::Basic` -- `try`/`catch`
+    /// remains fully supported there (verified against real BASCOM).
+    #[test]
+    fn basic_target_still_accepts_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\ntry\n    print \"hi\"\ncatch e%, l%\nend try\nend\n",
+        )
+        .unwrap();
+        let basic = compile_file(&path, &CompileOptions::new())
+            .expect("try/catch should compile under --target basic");
+        assert!(basic.contains("RESUME"), "{basic}");
+    }
+
+    /// `Target::Fbc` and `Target::Basic` produce identical output for a
+    /// program that doesn't use `try`/`catch` -- `codegen_basic` itself
+    /// doesn't distinguish the two targets at all; only `driver.rs`'s
+    /// pre-codegen check differs between them.
+    #[test]
+    fn fbc_target_matches_basic_target_output_without_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.bcl");
+        std::fs::write(&path, "program p\nprint \"hello\"\nend\n").unwrap();
+        let basic = compile_file(&path, &CompileOptions::new()).expect("should compile");
+        let fbc_options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let fbc = compile_file(&path, &fbc_options).expect("should compile");
+        assert_eq!(basic, fbc);
+    }
 }

@@ -9,9 +9,12 @@ use clap::Parser;
 mod jvm_classfile;
 
 /// Translates structured `.bcl` source into plain 1980s Microsoft BASIC
-/// (the `basic` target, complete), a mostly-complete native-C backend (the
-/// `c` target), or a brand-new, bootstrap-stage native-JVM backend (the
-/// `jvm` target -- just beginning, not yet ready for real programs).
+/// (the `basic`/`bascom` target, complete, verified against real BASCOM;
+/// or `fbc`, identical output but rejecting the handful of constructs real
+/// BASCOM accepts that `fbc` itself does not -- see `Target`'s own doc
+/// comment in codegen.rs), a mostly-complete native-C backend (the `c`
+/// target), or a brand-new, bootstrap-stage native-JVM backend (the `jvm`
+/// target -- just beginning, not yet ready for real programs).
 /// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
 /// --version`, `bash --version`) for what a copyright/license notice in
 /// `--version` output should look like; the GPL itself recommends exactly
@@ -63,15 +66,15 @@ struct Cli {
     #[arg(long)]
     check: bool,
 
-    /// Compile the generated output to a binary in tmp/: fbc for --target basic's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
+    /// Compile the generated output to a binary in tmp/: fbc for --target fbc's .bas (requires --target fbc -- --target basic/bascom's .bas is verified against real BASCOM instead, whose own .EXE fbc can't produce), gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
     binary: bool,
 
-    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For --target basic this always means fbc's binary, run directly -- not real BASCOM, whose own .EXE needs a DOS environment/emulator like dosbox-x to run at all
+    /// Also run the compiled binary (implies --binary), with stdin/stdout/stderr inherited. For BASIC output this always means fbc's binary (so requires --target fbc), run directly -- not real BASCOM, whose own .EXE needs a DOS environment/emulator like dosbox-x to run at all
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (the original, complete backend), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM), `fbc` (the same BASIC, but for FreeBASIC specifically -- required for --binary/--run, and rejects the handful of constructs real BASCOM accepts that fbc does not, e.g. try/catch), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -128,7 +131,8 @@ fn main() -> ExitCode {
 /// `c`/`C`).
 fn parse_target_str(value: &str) -> Option<Target> {
     match value.to_ascii_lowercase().as_str() {
-        "basic" => Some(Target::Basic),
+        "basic" | "bascom" => Some(Target::Basic),
+        "fbc" => Some(Target::Fbc),
         "c" => Some(Target::C),
         "jvm" => Some(Target::Jvm),
         _ => None,
@@ -139,8 +143,11 @@ fn parse_target_str(value: &str) -> Option<Target> {
 /// `parse_target_str` matching the `Fn(&str) -> Result<Target, String>`
 /// shape `clap` expects.
 fn parse_target_value(value: &str) -> Result<Target, String> {
-    parse_target_str(value)
-        .ok_or_else(|| format!("expected `basic`, `c`, or `jvm` (case-insensitive), got `{value}`"))
+    parse_target_str(value).ok_or_else(|| {
+        format!(
+            "expected `basic` (alias `bascom`), `fbc`, `c`, or `jvm` (case-insensitive), got `{value}`"
+        )
+    })
 }
 
 /// Finds `key`'s value in a simple `key=value` config file's contents --
@@ -389,19 +396,25 @@ fn is_up_to_date(input: &PathBuf, output: &PathBuf) -> bool {
 /// Compiles the transpiler's generated output down to a native binary with
 /// whatever third-party compiler actually understands that target's
 /// output, and returns the binary's path on success (used by `--run` to
-/// find what to execute next). `Target::Basic`'s `.bas` goes through
-/// `fbc` (FreeBASIC) specifically, not real BASCOM: `fbc` produces a
-/// binary the host can run directly, the same way `gcc` does for
-/// `Target::C`'s `.c` -- real BASCOM (used only by the opt-in
-/// `tests/dosbox_conformance.rs` conformance suite, see CONTRIBUTING.md)
-/// instead produces a DOS `.EXE`, runnable only under a DOS
-/// environment/emulator like dosbox-x, not directly by this process.
-/// That's also why `--run` always means `fbc` for the `basic` target,
-/// not a user-selectable choice between the two: `fbc`'s binary is the
-/// only one of the pair `--run` could actually execute itself.
+/// find what to execute next). `Target::Fbc`'s `.bas` goes through `fbc`
+/// (FreeBASIC), producing a binary the host can run directly, the same way
+/// `gcc` does for `Target::C`'s `.c`. `Target::Basic`'s `.bas` has no
+/// binary here at all: it's verified against real BASCOM instead (used
+/// only by the opt-in `tests/dosbox_conformance.rs` conformance suite, see
+/// CONTRIBUTING.md), which produces a DOS `.EXE` runnable only under a DOS
+/// environment/emulator like dosbox-x, not directly by this process --
+/// pick `--target fbc` explicitly for `--binary`/`--run` (see GitHub issue
+/// #152: the two are no longer treated as interchangeable, since e.g.
+/// `try`/`catch` compiles under one and not the other, #153).
 fn invoke_binary(target: Target, output_path: &PathBuf) -> Result<PathBuf, String> {
     match target {
-        Target::Basic => invoke_fbc(output_path),
+        Target::Basic => Err(
+            "error: --binary/--run needs --target fbc for BASIC output -- --target basic \
+             (aka bascom) is verified against real BASCOM instead, which produces a DOS \
+             .EXE this process can't run directly (see GitHub issue #152)"
+                .to_string(),
+        ),
+        Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
         Target::Jvm => invoke_krak2(output_path),
     }
@@ -564,6 +577,14 @@ mod tests {
         assert_eq!(parse_target_str("c"), Some(Target::C));
         assert_eq!(parse_target_str("C"), Some(Target::C));
         assert_eq!(parse_target_str("bogus"), None);
+    }
+
+    #[test]
+    fn parse_target_str_accepts_bascom_and_fbc() {
+        assert_eq!(parse_target_str("bascom"), Some(Target::Basic));
+        assert_eq!(parse_target_str("BASCOM"), Some(Target::Basic));
+        assert_eq!(parse_target_str("fbc"), Some(Target::Fbc));
+        assert_eq!(parse_target_str("FBC"), Some(Target::Fbc));
     }
 
     #[test]

@@ -977,16 +977,19 @@ fn compile_with_cli(source_path: &Path, output_path: &Path, extra_args: &[&str])
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_bcc"));
     // Every current caller of this helper runs the result through `fbc`,
-    // so it always needs BASIC output -- explicit rather than relying on
-    // `bcc`'s own ambient default-target resolution (BASCAL_TARGET / a
-    // dev's own ~/.config/bascal/config), which a machine set to `C` by
-    // default would otherwise silently break this against.
+    // so it needs `--target fbc` specifically (required for --binary/--run
+    // on BASIC output, see GitHub issue #152 -- `--target basic`/`bascom`
+    // is verified against real BASCOM instead, whose .EXE this process
+    // can't run) -- explicit rather than relying on `bcc`'s own ambient
+    // default-target resolution (BASCAL_TARGET / a dev's own
+    // ~/.config/bascal/config), which a machine set to `C` by default
+    // would otherwise silently break this against.
     command
         .arg(source_path)
         .arg("-o")
         .arg(&dir_arg)
         .arg("--target")
-        .arg("basic");
+        .arg("fbc");
     for arg in extra_args {
         command.arg(arg);
     }
