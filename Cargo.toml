@@ -33,15 +33,14 @@ assets = [
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 # The `--target jvm` backend's assembler (Krakatau's `v2` branch, itself
-# GPL-3.0, same as this project). Used to be pinned to a commit on our
-# own fork (`johnjoeallen/Krakatau`'s `bascal-lib` branch), which added a
-# `[lib]` target exposing `assemble()`/`disassemble()` -- upstream
-# (https://github.com/Storyyeller/Krakatau) had no `[lib]` target at all
-# before that. That patch was proposed upstream as PR #216 ("Expose the
-# assembler/disassembler as a reusable library crate") and merged into
-# `v2` there, so this now points at the real upstream repo directly; the
-# fork is no longer needed for this.
-krakatau2 = { git = "https://github.com/Storyyeller/Krakatau", rev = "22e6c78b4d462745a0ff78369ab15c4f061e6356" }
+# GPL-3.0, same as this project): pinned to a commit on our own fork's
+# `bascal-lib` branch, which adds a `[lib]` target exposing
+# `assemble()`/`disassemble()`. Upstream (https://github.com/Storyyeller/
+# Krakatau) merged the same `[lib]`-target patch as PR #216 ("Expose the
+# assembler/disassembler as a reusable library crate"), and this
+# dependency briefly pointed there directly -- switched back to our own
+# fork for now.
+krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9028b6b7cdb2c5bef267e12c3e74ab42" }
 
 [dev-dependencies]
 tempfile = "3"
