@@ -544,6 +544,30 @@ source from scratch.
   since code moved around (confirmed by diffing everything before that
   line, which matched exactly).
 
+- **`stage13-refactored-bascal/`** -- the nine leftover original-line-number
+  labels this port never had reason to touch before get descriptive names.
+  Started as an exact copy of stage 12.
+
+  `L580` -> `keywordTable`, `L2070` -> `dontUnderstandMessages`, `L1530` ->
+  `bedquiltRooms`, `L6470` -> `skillTitles`, `L9961` -> `itemNames`, `L230`
+  -> `itemLocationData` (its own `DATA` does double duty -- 35 item
+  starting-room numbers followed immediately by 15 treasure point values,
+  all one continuous stream `computeScore()` and the startup code each
+  restore and read their own way through). `L4960`, `L5070`, and `LA100`
+  were never `GOTO`/`RESTORE` targets at all -- dead labels left over from
+  the original listing, each already redundant with a comment right next
+  to it -- so those three are simply gone rather than renamed. Every
+  historical "was `Lnnnn`" comment documenting which *original*
+  PyBasic/HP BASIC line a function replaces is left untouched, since those
+  numbers describe the 1979 source, not any label still in this file.
+
+  Verified with `bcc --check`; `--target basic` still compiles with zero
+  warnings; and a `--target c` smoke test (movement, inventory, every verb,
+  every direction, exotic words, unrecognized commands) byte-identical
+  against stage 12 -- confirmed by diffing the two stages' generated `.c`
+  output directly, which differs only in the renamed label identifiers and
+  the embedded source path.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
