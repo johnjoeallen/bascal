@@ -1,4 +1,4 @@
-[Home](../../) / [Examples](sort-driver.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 4: The 40-Way Dispatch Becomes SELECT CASE
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 4: The 40-Way Dispatch Becomes SELECT CASE
 
 <div class="prose" markdown="1">
 

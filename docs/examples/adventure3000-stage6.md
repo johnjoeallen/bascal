@@ -1,4 +1,4 @@
-[Home](../../) / [Examples](sort-driver.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 6: The Outer Game Loop
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 6: The Outer Game Loop
 
 <div class="prose" markdown="1">
 
