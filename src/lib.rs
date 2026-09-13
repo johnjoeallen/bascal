@@ -2007,6 +2007,95 @@ end
     }
 
     #[test]
+    fn bare_continue_resolves_to_the_innermost_enclosing_loop_kind() {
+        // A `for` has no native "skip to the increment" the way it has
+        // `EXIT FOR`, so even there `continue` must become a GOTO to a
+        // label placed right before `NEXT` (not `EXIT FOR`, which would
+        // wrongly end the loop instead of just skipping to its next
+        // iteration).
+        let source = r#"for i% = 1 to 5
+    do
+        print i%
+        continue
+    end do
+    if i% = 3 then
+        continue
+    end if
+end for
+end
+"#;
+        let output = compile_source("nested_continue.bcl", source).expect("should compile");
+        assert!(
+            !output.contains("EXIT FOR"),
+            "continue is never EXIT FOR -- it doesn't end the loop:\n{output}"
+        );
+        // Labels get renumbered to plain line numbers by the time this
+        // text is final (same as WHILE_/DO_ TOP/END already do), so the
+        // structural shape -- both continues became a GOTO to a label
+        // placed right before that loop's own back-edge/NEXT, not a
+        // shared one -- is checked behaviorally instead, in
+        // tests/examples.rs's freebasic_runs_continue_when_available.
+        assert_eq!(
+            output.matches("GOTO").count(),
+            4,
+            "one GOTO for each continue (for's and do's), plus the do's own \
+             unconditional back-edge and the if's own jump around the second \
+             continue:\n{output}"
+        );
+    }
+
+    #[test]
+    fn continue_in_a_post_condition_do_loop_does_not_skip_the_post_check() {
+        // Regression test: a do-loop's post-condition check (`loop
+        // until`/`loop while`) must still run on every iteration, even
+        // one that hit `continue` -- jumping straight back to the loop's
+        // own top label instead would skip that check entirely, turning
+        // this into an infinite loop. Found via the C backend specifically
+        // (`Statement::Do` always compiles to `while (1) { ...; guard }`,
+        // never a native `do { } while (...)`, so a bare C `continue;`
+        // would have exactly this bug) while adding `continue` -- checked
+        // here for both targets since the BASIC backend's own `do`
+        // codegen has the same "guard runs after the body" shape.
+        let source = r#"i% = 0
+total% = 0
+do
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+loop until i% >= 10
+print total%
+end
+"#;
+        let basic = compile_source("continue_post_condition.bcl", source)
+            .expect("should compile under --target basic");
+        // The loop's own top label gets numbered first (lowest line
+        // number of the two), and only its own post-condition recheck
+        // should ever jump back to it -- if `continue` incorrectly
+        // targeted the same line, "GOTO <top's line>" would appear twice.
+        let top_line = basic
+            .lines()
+            .find(|line| line.contains("i% = i% + 1"))
+            .and_then(|line| line.split_whitespace().next())
+            .expect("expected to find the loop's own top line");
+        assert_eq!(
+            basic.matches(&format!("GOTO {top_line}")).count(),
+            1,
+            "exactly one GOTO to the loop's own top line should exist -- the post-condition \
+             check's own back-edge. If continue also targeted it directly, that would skip the \
+             post-condition check on every continue, turning this into an infinite loop:\n{basic}"
+        );
+
+        let c = compile_source_via_c_target(source);
+        assert!(
+            c.contains("goto bcc_continue_"),
+            "a do-loop with a post-condition must use goto, not a bare C `continue;`, or the \
+             post-condition guard gets skipped on every `continue`:\n{c}"
+        );
+    }
+
+    #[test]
     fn exit_outside_any_loop_is_a_soft_warning_not_a_hard_error() {
         let source = "print \"before\"\nexit\nprint \"after\"\nend\n";
         let output = compile_source("bad_exit.bcl", source).expect("should compile");
@@ -5051,6 +5140,55 @@ end
         assert!(
             output.contains("    break;\n"),
             "unexpected output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_continue_uses_native_continue_except_for_a_do_post_condition() {
+        // A real for/while/do-with-no-post-condition is correctly served
+        // by a bare native `continue;` -- but `Statement::Do` always
+        // compiles to `while (1) { ...; guard }`, never a native `do { }
+        // while (...)`, so its post-condition guard sits *after* the
+        // body: a bare `continue;` there would jump to the `while (1)`'s
+        // own top and skip the guard entirely, silently turning `do ...
+        // loop until done` into an infinite loop. Only that one case
+        // needs `goto`.
+        let source = r#"for i% = 1 to 5
+    if i% = 2 then
+        continue
+    end if
+    print i%
+end for
+
+k% = 0
+do while k% < 3
+    k% = k% + 1
+    if k% = 2 then
+        continue
+    end if
+    print k%
+end do
+
+j% = 0
+do
+    j% = j% + 1
+    if j% = 2 then
+        continue
+    end if
+    print j%
+loop until j% >= 3
+end
+"#;
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.matches("continue;").count() == 2,
+            "the for loop and the pre-condition-only do loop should both use a bare native \
+             `continue;`:\n{output}"
+        );
+        assert!(
+            output.contains("goto bcc_continue_"),
+            "the post-condition do loop must goto a label placed after the body, not fall \
+             through to a bare `continue;` that would skip its own post-condition guard:\n{output}"
         );
     }
 

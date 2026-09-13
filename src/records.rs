@@ -1053,6 +1053,7 @@ impl Lowerer {
             | Statement::Clear
             | Statement::System
             | Statement::Exit
+            | Statement::Continue
             | Statement::ReturnVoid
             | Statement::GlobalDecl(_)
             | Statement::Raw(_)

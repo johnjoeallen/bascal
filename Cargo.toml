@@ -1,6 +1,6 @@
 [package]
 name = "bcc"
-version = "0.99.59"
+version = "0.99.60"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Compiles structured .bcl source to BASIC, C, or JVM assembly"

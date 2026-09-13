@@ -43,6 +43,13 @@ pub struct CodeGenerator {
     known_callables: HashSet<String>,
     line_numbers: bool,
     loop_exit_stack: Vec<LoopExit>,
+    // The label a `continue` inside the current innermost loop should
+    // GOTO -- always a plain label, unlike `loop_exit_stack` (no native-FOR
+    // special case: BASIC has no native "skip to the increment" construct
+    // the way it has `EXIT FOR`, so even a `for` loop's own continue target
+    // is a GOTO to a label placed right before `NEXT`). Pushed/popped in
+    // lockstep with `loop_exit_stack` at the same three call sites.
+    loop_continue_stack: Vec<String>,
     // All BASIC names already claimed: global vars + every allocated param/result/local name.
     // RefCell because ident() must read and extend this set through a shared &self reference.
     taken_names: RefCell<HashSet<String>>,
@@ -169,6 +176,7 @@ impl CodeGenerator {
             known_callables: HashSet::new(),
             line_numbers: false,
             loop_exit_stack: Vec::new(),
+            loop_continue_stack: Vec::new(),
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
             const_names: HashSet::new(),
@@ -667,10 +675,22 @@ impl CodeGenerator {
                     self.ident(var, current_function)
                 ));
                 self.indent += 1;
+                // BASIC has no native "skip straight to the increment"
+                // construct the way it has `EXIT FOR`, so even a `for`
+                // loop's own `continue` target needs a real label -- placed
+                // right before `NEXT`, so jumping there runs the increment
+                // and loop condition exactly like falling off the end of
+                // the body normally would.
+                let continue_id = self.next_label;
+                self.next_label += 1;
+                let continue_label = format!("FOR_{continue_id:04}_CONTINUE");
                 self.loop_exit_stack.push(LoopExit::NativeFor);
+                self.loop_continue_stack.push(continue_label.clone());
                 self.statements(body, current_function);
+                self.loop_continue_stack.pop();
                 self.loop_exit_stack.pop();
                 self.indent -= 1;
+                self.line(&format!("{continue_label}:"));
                 self.line(&format!("NEXT {}", self.ident(var, current_function)));
             }
             Statement::While { condition, body } => {
@@ -682,7 +702,13 @@ impl CodeGenerator {
                 self.condition_jump(condition, &end_label, false, current_function);
                 self.indent += 1;
                 self.loop_exit_stack.push(LoopExit::Goto(end_label.clone()));
+                // A `while` loop's own per-iteration bookkeeping *is*
+                // re-checking the condition, which is exactly what
+                // `top_label` already does -- no separate continue label
+                // needed, unlike `for`/`do`.
+                self.loop_continue_stack.push(top_label.clone());
                 self.statements(body, current_function);
+                self.loop_continue_stack.pop();
                 self.loop_exit_stack.pop();
                 self.line(&format!("GOTO {top_label}"));
                 self.indent -= 1;
@@ -698,6 +724,7 @@ impl CodeGenerator {
                 self.next_label += 1;
                 let top_label = format!("DO_{id:04}_TOP");
                 let end_label = format!("DO_{id:04}_END");
+                let continue_label = format!("DO_{id:04}_CONTINUE");
                 self.line(&format!("{top_label}:"));
                 if let Some(cond) = condition {
                     // is_while -> exit when false (invert=false); is_until -> exit when true (invert=true).
@@ -705,8 +732,18 @@ impl CodeGenerator {
                 }
                 self.indent += 1;
                 self.loop_exit_stack.push(LoopExit::Goto(end_label.clone()));
+                // `continue_label` sits right after the body, before
+                // whatever decides to repeat -- the post-condition check
+                // below if there is one, or the unconditional GOTO back to
+                // `top_label` otherwise. Jumping straight to `top_label`
+                // instead would skip a post-condition check entirely,
+                // silently turning `do ... loop until done` into an
+                // infinite loop on `continue`.
+                self.loop_continue_stack.push(continue_label.clone());
                 self.statements(body, current_function);
+                self.loop_continue_stack.pop();
                 self.loop_exit_stack.pop();
+                self.line(&format!("{continue_label}:"));
                 if let Some(cond) = post_condition {
                     // is_while -> repeat when true (invert=true); is_until -> repeat when false (invert=false).
                     self.condition_jump(&cond.expr, &top_label, cond.is_while, current_function);
@@ -1008,6 +1045,13 @@ impl CodeGenerator {
                     self.line(&format!("GOTO {label}"));
                 }
                 None => self.line("' warning: EXIT outside of a loop"),
+            },
+            Statement::Continue => match self.loop_continue_stack.last() {
+                Some(label) => {
+                    let label = label.clone();
+                    self.line(&format!("GOTO {label}"));
+                }
+                None => self.line("' warning: CONTINUE outside of a loop"),
             },
             Statement::SelectCase {
                 expr,
@@ -2654,7 +2698,8 @@ fn visit_statement_exprs<'a>(stmt: &'a Stmt, f: &mut impl FnMut(&'a Expr)) {
         | Statement::BlockComment(_)
         | Statement::Label(_)
         | Statement::BlankLine
-        | Statement::Exit => {}
+        | Statement::Exit
+        | Statement::Continue => {}
     }
 }
 
@@ -3871,6 +3916,7 @@ fn collect_names_from_stmt(stmt: &Stmt, names: &mut HashSet<String>) {
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::Raw(_)
