@@ -1,104 +1,32 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 15: Integer-Typed Array Indices
-
-<div class="prose" markdown="1">
-
-# Stage 15: Integer-Typed Array Indices
-
-Every variable that's actually used to index an array gets an explicit
-`%` (integer) type.
-
-Converted (all safe, single-purpose or single-role): the room-exit
-loop/scratch pair `currentRoom`/`targetRoom` (already `targetRoom%` as a
-parameter in several functions -- now the bare global matches too) and
-`direction` (now `direction%`, matching the existing `direction%`
-parameter); `itemCode` (indexes `itemRoom`/`itemPoints`/`itemNames$`) and
-`bottleContents` (indexes `itemRoom(bottleContents%+15)` for FILL/EMPTY's
-water-or-oil slot); and every function-local scan/loop index that
-subscripts an array: `dcount`/`icount` (`loadAdescrip`/`loadAitems`),
-`ianame` (`loadItemNames`), `fpos`/`fracnt` (`buildMessageIndex`),
-`mpos`/`xtmp` (`printMessage`), `i` (`parseAndDispatchCommand%`'s
-keyword-flag reset), `keywordCode`/`scanIndex`/`directionIndex` (its
-keyword/exotic/verb/direction scans), `itemIndex` (`checkPirate`/
-`reincarnate`/`verbGet%`/`verbInventory%`/`describeRoomContents` -- the
-last of these had been left as a bare, un-renamed `z1` since stage 14,
-now caught and fixed alongside this stage's own change), `itemScanCode`
-(`findFirstNamedItem`), `treasureRoom`/`treasureIndex`/`roomIndex`
-(`computeScore`), and `recordIndex` (`verbSaveGame%`/`verbLoadOldGame%`'s
-99-record loop).
-
-Left alone, deliberately: `previousRoom` (never itself used to index
-anything, despite holding the same kind of value as `currentRoom%`);
-`fragmentNumber` (`buildMessageIndex` genuinely needs to hold a
-*fractional* value sometimes -- AMESSAGE's "#N.M" variant-message
-numbers -- so it can't become an integer without breaking the
-`int(fragmentNumber) = fragmentNumber` check that tells a whole message
-number from a fragment one); `commaPos`/`charCode` (string positions and
-character codes, not array subscripts); and every array itself
-(`itemRoom`, `roomVisited`, `keywordFound`, and the rest keep their
-existing element types -- this stage is about the index variables, not
-the arrays they index).
-
-`printDontUnderstand()`'s own loop counter -- also left as a bare,
-un-renamed `x` since stage 14 -- is renamed too (to `readCount`, not
-`readCount%`, since it's a read-count loop bound, not an array index).
-
-Verified with `bcc --check`; `--target basic` still compiles with zero
-warnings; and a `--target c` smoke test (the same command sequence as
-every prior stage, plus a SAVE GAME round trip) byte-identical against
-stage 14.
-
-</div>
-
-<details class="source-embed" markdown="1">
-
-<summary><code>stage15-refactored-bascal/adventure.bcl</code> -- Stage 15: Integer-Typed Array Indices</summary>
-
-```bascal
-
-// ADVENTURE/3000 -- Stage 15: every variable that's actually used to
-// index an array gets an explicit `%` (integer) type. Started as an
-// exact copy of stage 14; see ../README.md for the port's provenance
-// and staging.
+// ADVENTURE/3000 -- Stage 16: the last few cryptic scratch names that
+// slipped past stage 14's renaming pass (and stage 15's index-typing
+// pass) get real names too. Started as an exact copy of stage 15; see
+// ../README.md for the port's provenance and staging.
 //
-// Converted (all safe, single-purpose or single-role): the room-exit
-// loop/scratch pair currentRoom/targetRoom (already targetRoom% as a
-// parameter in several functions -- now the bare global matches too)
-// and direction (now direction%, matching the existing direction%
-// parameter); itemCode (indexes itemRoom/itemPoints/itemNames$) and
-// bottleContents (indexes itemRoom(bottleContents%+15) for FILL/EMPTY's
-// water-or-oil slot); and every function-local scan/loop index that
-// subscripts an array: dcount/icount (loadAdescrip/loadAitems),
-// ianame (loadItemNames), fpos/fracnt (buildMessageIndex),
-// mpos/xtmp (printMessage), i (parseAndDispatchCommand%'s keyword-flag
-// reset), keywordCode/scanIndex/directionIndex (its keyword/exotic/
-// verb/direction scans), itemIndex (checkPirate/reincarnate/verbGet%/
-// verbInventory%/describeRoomContents -- the last of these had been
-// left as a bare, un-renamed `z1` since stage 14, now caught and fixed
-// alongside this stage's own change), itemScanCode
-// (findFirstNamedItem), treasureRoom/treasureIndex/roomIndex
-// (computeScore), and recordIndex (verbSaveGame%/verbLoadOldGame%'s
-// 99-record loop).
+// Converted: `rc` (the main loop's dispatch-result holder, following
+// performMove%()'s own "0 = message printed, no move; 1 = moved, check
+// pits next" convention) -> `moved%`; `b1$` (printMessage()'s message-
+// fragment scratch string) -> `messageText$`; the top-level init
+// section's two `ii%` loop counters (already `%`-typed by stage 15,
+// but never given real names) -> `roomIndex%` (zeroing itemRoom/
+// roomVisited for rooms 1-99) and `itemPointsIndex%` (reading
+// itemPoints in groups of 5); and the `dx1`..`dx9`/`dx0` scratch fields
+// used three times over to read fixed-width records (a 10-wide
+// roomExits row, then twice more for 5-wide itemRoom/itemPoints rows)
+// -> a single deliberately generic `field1`..`field10` family, the
+// same treatment stage 14 gave `z0` (kept a generic name on purpose,
+// since it's genuinely reused for unrelated record shapes, not given
+// one bespoke name per call site).
 //
-// Left alone, deliberately: previousRoom (never itself used to index
-// anything, despite holding the same kind of value as currentRoom%);
-// fragmentNumber (buildMessageIndex genuinely needs to hold a
-// *fractional* value sometimes -- AMESSAGE's "#N.M" variant-message
-// numbers -- so it can't become an integer without breaking the
-// `int(fragmentNumber) = fragmentNumber` check that tells a whole
-// message number from a fragment one); commaPos/charCode (string
-// positions and character codes, not array subscripts); and every
-// array itself (itemRoom, roomVisited, keywordFound, and the rest keep
-// their existing element types -- this stage is about the index
-// variables, not the arrays they index).
-//
-// printDontUnderstand()'s own loop counter -- also left as a bare,
-// un-renamed `x` since stage 14 -- is renamed too (to readCount, not
-// readCount%, since it's a read-count loop bound, not an array index).
+// Left alone, deliberately: `i%` (parseAndDispatchCommand%()'s
+// keyword-flag reset loop) -- already named and typed by stage 15,
+// and "i" for a plain reset loop isn't the same kind of cryptic as
+// "dx"/"ii"/"rc"/"b1$".
 //
 // Verified with `bcc --check`; `--target basic` still compiles with
 // zero warnings; and a `--target c` smoke test (the same command
 // sequence as every prior stage, plus a SAVE GAME round trip) byte-
-// identical against stage 14.
+// identical against stage 15.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -251,7 +179,7 @@ procedure printMessage(msgNum%)
     global messageIndex
     global fragmentIndex
     global messages$
-    dim xtmp%, mpos%, b1$
+    dim xtmp%, mpos%, messageText$
     xtmp% = messageIndex(msgNum%)
     if msgNum% = 2 or msgNum% = 61 then
         ' Messages 2 and 61 have several interchangeable variants
@@ -259,18 +187,18 @@ procedure printMessage(msgNum%)
         xtmp% = fragmentIndex(xtmp% + int(RND(1) * 5))
     end if
     mpos% = xtmp%
-    b1$ = messages$(mpos%)
-    if mid$(b1$, 1, 1) <> "#" or int(val(mid$(b1$, 2))) <> msgNum% then
+    messageText$ = messages$(mpos%)
+    if mid$(messageText$, 1, 1) <> "#" or int(val(mid$(messageText$, 2))) <> msgNum% then
         print "NO DESC. # "; msgNum%; " IN FILE AMESSAGE"
         return
     end if
     while true
         mpos% = mpos% + 1
-        b1$ = messages$(mpos%)
-        if mid$(b1$, 1, 1) = "#" then
+        messageText$ = messages$(mpos%)
+        if mid$(messageText$, 1, 1) = "#" then
             return
         end if
-        print b1$
+        print messageText$
     end while
 end procedure
 
@@ -2340,17 +2268,17 @@ currentRoom% = int(RND(1)*4)+1 : previousRoom = currentRoom%
 grateOpen = 0 : bottleContents% = 1 : snakeAlive = 1 : dragonAlive = 1 : ironDoorOiled = 0 : trollState = 1 : bearFedState = 0 : crystalBridgeBuilt = 0 : pirateState = 0: isDead = 0
 lampOn = 0 : bearTamedScored = 0 : dwarfGaveAxe = 0 : birdInCage = 0 : descriptionMode = 2 : totalRooms = 100 : totalItems = 35 : totalKeywords = 149 : deathCount = 0 : gameLoaded = 0: commandLine$=""
 dwarfHitChance = 1.02
-for ii% = 1 to 99
-    itemRoom(ii%) = 0 : roomVisited(ii%) = 0
+for roomIndex% = 1 to 99
+    itemRoom(roomIndex%) = 0 : roomVisited(roomIndex%) = 0
 end for
 
 PRINT ".";:roomVisited(100) = 0
 messageIndex(1) = -1:messageIndex(2)=-1
 '   read in possible movement direction array
 for targetRoom% = 1 to 100
-    INPUT #4,dx1,dx2,dx3,dx4,dx5,dx6,dx7,dx8,dx9,dx0
-    roomExits(targetRoom%,1)=dx1:roomExits(targetRoom%,2)=dx2:roomExits(targetRoom%,3)=dx3:roomExits(targetRoom%,4)=dx4:roomExits(targetRoom%,5)=dx5
-    roomExits(targetRoom%,6)=dx6:roomExits(targetRoom%,7)=dx7:roomExits(targetRoom%,8)=dx8:roomExits(targetRoom%,9)=dx9:roomExits(targetRoom%,10)=dx0
+    INPUT #4,field1,field2,field3,field4,field5,field6,field7,field8,field9,field10
+    roomExits(targetRoom%,1)=field1:roomExits(targetRoom%,2)=field2:roomExits(targetRoom%,3)=field3:roomExits(targetRoom%,4)=field4:roomExits(targetRoom%,5)=field5
+    roomExits(targetRoom%,6)=field6:roomExits(targetRoom%,7)=field7:roomExits(targetRoom%,8)=field8:roomExits(targetRoom%,9)=field9:roomExits(targetRoom%,10)=field10
     PRINT ".";
 end for
 
@@ -2367,7 +2295,7 @@ PRINT
 restore itemLocationData
 '    read in locations of items
 for targetRoom% = 1 to totalItems step 5
-    read dx1,dx2,dx3,dx4,dx5:itemRoom(targetRoom%)=dx1:itemRoom(targetRoom%+1)=dx2:itemRoom(targetRoom%+2)=dx3:itemRoom(targetRoom%+3)=dx4:itemRoom(targetRoom%+4)=dx5
+    read field1,field2,field3,field4,field5:itemRoom(targetRoom%)=field1:itemRoom(targetRoom%+1)=field2:itemRoom(targetRoom%+2)=field3:itemRoom(targetRoom%+3)=field4:itemRoom(targetRoom%+4)=field5
     PRINT ".";
 end for
 
@@ -2378,8 +2306,8 @@ data 7,49,7,7,7
 data 7,12,13,40,38
 data 69,0,46,0,0
 data 15,60,82,22,250
-for ii% = 1 to 15 step 5
-    read dx1,dx2,dx3,dx4,dx5:itemPoints(ii%)=dx1:itemPoints(ii%+1)=dx2:itemPoints(ii%+2)=dx3:itemPoints(ii%+3)=dx4:itemPoints(ii%+4)=dx5
+for itemPointsIndex% = 1 to 15 step 5
+    read field1,field2,field3,field4,field5:itemPoints(itemPointsIndex%)=field1:itemPoints(itemPointsIndex%+1)=field2:itemPoints(itemPointsIndex%+2)=field3:itemPoints(itemPointsIndex%+3)=field4:itemPoints(itemPointsIndex%+4)=field5
     PRINT ".";
 end for
 
@@ -2419,8 +2347,8 @@ while true
     ' why neither this loop nor that function need a `GOTO`-reachable
     ' label anywhere anymore, unlike every earlier stage back to 6.
     while true
-        rc = parseAndDispatchCommand%()
-        if rc = 1 then exit
+        moved% = parseAndDispatchCommand%()
+        if moved% = 1 then exit
         continue
     end while
 end while
@@ -2483,8 +2411,3 @@ data "volcano"
 data "road"
 data "everything"
 ' INITIALIZE MESSAGE INDEX is now the buildMessageIndex() procedure above.
-```
-
-</details>
-
-[← Stage 14: Descriptive Variable Names](adventure3000-stage14.md) [Next: Stage 16: Real Scratch-Variable Names →](adventure3000-stage16.md)
