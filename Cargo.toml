@@ -34,13 +34,15 @@ assets = [
 clap = { version = "4", features = ["derive"] }
 # The `--target jvm` backend's assembler (Krakatau's `v2` branch, itself
 # GPL-3.0, same as this project): pinned to a commit on our own fork's
-# `bascal-lib` branch, which adds a `[lib]` target exposing
-# `assemble()`/`disassemble()`. Upstream (https://github.com/Storyyeller/
-# Krakatau) merged the same `[lib]`-target patch as PR #216 ("Expose the
-# assembler/disassembler as a reusable library crate"), and this
-# dependency briefly pointed there directly -- switched back to our own
-# fork for now.
-krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9028b6b7cdb2c5bef267e12c3e74ab42" }
+# `fix/issue-2-publish-crate` branch, which builds on the already-
+# upstreamed `[lib]` target (PR #216) by making the crate itself
+# publishable: `zip`/`anyhow` (previously only needed by the `krak2`
+# CLI, and previously pinned to a forked `zip` -- see PR #219/#220 on
+# Storyyeller/Krakatau) are now optional, gated behind a `cli` feature
+# that's on by default, and `zip` itself is the real crates.io crate,
+# not a fork -- `ZipReadOptions::ignore_crc32(true)` (upstream zip2 PR
+# #710) replaces what the fork used to hard-code unconditionally.
+krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "8e5fffaf2792a9b6f840c2d7e16402c089a7ecef" }
 
 [dev-dependencies]
 tempfile = "3"
