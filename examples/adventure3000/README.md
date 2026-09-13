@@ -480,6 +480,29 @@ source from scratch.
   LOAD/BUG all work correctly under the backend this stage exists to
   unblock, including the file-not-found `catch` path.
 
+- **`stage11-refactored-bascal/`** -- a small mop-up on stage 9's own goal:
+  modernizing `checkDwarfAttack()`, the one procedure stage 9 missed (it was
+  scoped to the 40 `verbXxx%()` functions only; this helper is called from
+  `checkDwarf()` and `verbThrow%()`, not a verb function itself). Started as
+  an exact copy of stage 10.
+
+  `checkDwarfAttack()`'s `GOTO`-chained branches became `IF`/`ELSEIF`/
+  `ELSE`, the same treatment stage 9 gave every verb function. A sweep of
+  every other procedure and function in the file turned up nothing else --
+  this genuinely was the one leftover. The remaining `GOTO`s in the file
+  are either the outer game loop's own intentional `L300`/`L400`/`L410`
+  labels (stage 6), or the command-parsing cascade's own shared re-entry
+  labels (`L500`/`L1950`/`L2090`, from stage 5) -- that cascade's internal
+  structure is its own, larger, not-yet-attempted piece of work.
+
+  Verified with `bcc --check` and the stage 10 smoke suite (run under
+  `--target c`, now that it's available, rather than `fbc`) against a
+  stage 10 baseline -- byte-identical throughout, including a scratch copy
+  with an axe and a dwarf forced into the starting room to exercise
+  `checkDwarfAttack()`'s own branches specifically, confirmed across
+  several different room-entry counts to vary which point in the
+  random-number sequence each run consumes.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
