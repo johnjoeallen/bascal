@@ -568,6 +568,49 @@ source from scratch.
   output directly, which differs only in the renamed label identifiers and
   the embedded source path.
 
+- **`stage14-refactored-bascal/`** -- every cryptic single/double-letter
+  scalar and array name gets a real one. Started as an exact copy of
+  stage 13.
+
+  The renamed globals fall into three groups: persistent game-state flags
+  saved/loaded by SAVE GAME/LOAD OLD GAME (`l1`->`currentRoom`,
+  `l2`->`previousRoom`, `l`->`lampOn`, `g`->`grateOpen`, `sn`->`snakeAlive`,
+  `d1`->`dragonAlive`, `t`->`trollState`, `b0`->`bottleContents`,
+  `b1`->`bearFedState`, `b2`->`crystalBridgeBuilt`, `b3`->`birdInCage`,
+  `c`->`bearTamedScored`, `d2`->`ironDoorOiled`, `d3`->`dwarfGaveAxe`,
+  `p1`->`pirateState`, `r0`->`deathCount`, `kc`->`dwarfHitChance`,
+  `dead`->`isDead`, `d0`->`descriptionMode`, `c0`->`gameLoaded`, plus
+  `t1`/`t2`/`t3`->`totalRooms`/`totalItems`/`totalKeywords` and
+  `s0`->`score`); shared string/array state (`s`->`itemRoom`,
+  `v`->`roomVisited`, `k`->`keywordFound`, `o`->`itemPoints`,
+  `dirs`->`roomExits`, `itemname$`->`itemNames$`,
+  `descrip$`->`roomDescriptions$`, `items$`->`itemDescriptions$`,
+  `msg$`->`messages$`, `indx`->`messageIndex`, `fraindx`->`fragmentIndex`,
+  `mcount`->`messageCount`, `c$`->`commandLine$`, `a$`->`paddedCommand$`,
+  `b$`->`responseText$`, `d$`->`selectedItemName$`,
+  `z9`->`roomsVisitedCount`); and a handful of true single-purpose scratch
+  globals reused across many call sites for one consistent role
+  (`z2`/`z2%`->`targetRoom`/`targetRoom%`, `z3`->`itemCode`,
+  `z5`->`isCarrying`, `z8`->`matchCount`, `d`/`d%`->`direction`/`direction%`)
+  -- except `z0`, which really is reused for three unrelated one-off
+  purposes across its own few call sites (a yes/no answer, an item count,
+  a line counter) and so keeps a deliberately generic name, `scratchValue`.
+
+  Several of these single letters were *also* used as ordinary,
+  function-local loop counters or temporaries in functions that never
+  declared them `global` -- BASCAL scopes those independently, so e.g.
+  `askYesNo%()`'s own local `a$` has nothing to do with the global
+  `paddedCommand$` despite once sharing its letter. Every such local got
+  its own distinct, context-specific name instead of inheriting its old
+  letter's global rename, specifically so it doesn't *look* like the same
+  variable.
+
+  Verified with `bcc --check`; `--target basic` still compiles with zero
+  warnings; and a `--target c` smoke test (movement, inventory, every
+  verb, every direction, exotic words, unrecognized commands, and a SAVE
+  GAME round trip exercising every renamed persistent flag in its exact
+  serialization order) byte-identical against stage 13.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
