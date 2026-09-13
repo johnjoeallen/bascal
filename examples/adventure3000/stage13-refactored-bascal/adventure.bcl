@@ -1,114 +1,36 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 12: Extracting the Command Parser
-
-<div class="prose" markdown="1">
-
-# Stage 12: Extracting the Command Parser
-
-`dispatchVerb%(z1%)` is the old 40-case `SELECT CASE` moved verbatim into
-its own function. `parseAndDispatchCommand%()` is everything from stage
-6's own `L400` onward: read a line, split it, match keywords, call
-`dispatchVerb%()`. Both return 0/1, the same convention every `verbXxx%()`
-function already uses. This eliminates every `GOTO` this stretch needed
-purely to escape two loop levels at once -- `L300`, `L400`/`L410`, and
-the scan loops' own `GOTO`s to them -- the same way extracting the verb
-handlers did for `GET`/`DROP`/`ENTER`/`LEAVE` in stage 8: a `return`
-unwinds a function regardless of loop nesting. `L1950`'s own redundant
-re-scan (the original verb-word check never kept its own matched index,
-so a second scan had to re-find it) is gone too -- the new `FOR` just
-captures its index directly.
-
-The keyword-table `DATA` originally couldn't move into these new functions
-with the code that reads it: `--target c` rejected `RESTORE` inside the new
-function outright, a genuine backend limitation `--target basic` didn't
-share (`codegen_c.rs`'s DATA/label collector only ever walked top-level
-statements, so a label declared inside a function body was invisible to it
-even when the `RESTORE` targeting it lived in that same function). Filed as
-issue #171 and fixed in the compiler itself, so both the keyword table and
-`printDontUnderstand()`'s own `DATA` now live right inside the functions
-that read them, like every other `RESTORE` target in this file.
-
-`bcc`'s own hand-wired-loop warnings are down to **zero** for the first
-time in this port's history -- every `GOTO` left in the file is inside a
-comment. Verified with `bcc --check`; the stage 11 smoke suite
-(`--target c`) against a stage 11 baseline -- byte-identical, covering
-every keyword class; and, since this touches the keyword parser itself,
-a real BASCOM run (headless, under `dosbox-x`) of both stages against a
-longer scripted session -- byte-identical except for BASCOM's own
-end-of-program `STOP in line N` diagnostic, which necessarily differs
-since code moved around (confirmed by diffing everything before that
-line, which matched exactly).
-
-</div>
-
-<details class="source-embed" markdown="1">
-
-<summary><code>stage12-refactored-bascal/adventure.bcl</code> -- Stage 12: Extracting the Command Parser</summary>
-
-```bascal
-
-// ADVENTURE/3000 -- Stage 12: the command-parsing cascade -- keyword
-// matching, then dispatch -- becomes two functions of its own, the last
-// piece of this port's GOTO-reduction work. Started as an exact copy of
-// stage 11. See ../README.md for the port's provenance and staging.
+// ADVENTURE/3000 -- Stage 13: every remaining raw-numbered `DATA` label
+// gets a descriptive name. Started as an exact copy of stage 12; see
+// ../README.md for the port's provenance and staging, and stage 12's
+// own header for the command-parsing cascade extraction this stage
+// otherwise leaves untouched.
 //
-// `dispatchVerb%(z1%)` is the old 40-case `SELECT CASE` (was directly
-// inline in the outer loop since stage 8), moved verbatim into its own
-// function. `parseAndDispatchCommand%()` is everything from stage 6's
-// own `L400` onward: read a line (unless a previous comma-separated one
-// still has commands buffered), split it, match it against the keyword
-// table, and call `dispatchVerb%()`. Both return 0 ("get another
-// command") or 1 ("redisplay the room"), the same convention every
-// `verbXxx%()` function already uses.
+// The nine leftover original-line-number labels this port never had
+// reason to touch before now read as what they hold, not where they
+// used to sit in 1979's listing: `L580` -> `keywordTable`, `L2070` ->
+// `dontUnderstandMessages`, `L1530` -> `bedquiltRooms`, `L6470` ->
+// `skillTitles`, `L9961` -> `itemNames`, `L230` -> `itemLocationData`
+// (its own DATA does double duty -- 35 item starting-room numbers
+// followed immediately by 15 treasure point values, all one
+// continuous stream computeScore() and the startup code each restore
+// and read their own way through). `L4960`/`L5070`/`LA100` were never
+// GOTO/RESTORE targets at all -- dead labels left over from the
+// original listing, each already redundant with a comment right next
+// to it (`' *** LOCK ***`, `' *** UNLOCK ***`, and the ADESCRIP-loading
+// comment respectively) -- so those three are simply gone rather than
+// renamed.
 //
-// This eliminates every `GOTO` this stretch of the program needed
-// purely to escape two loop levels at once -- `L300`, `L400`/`L410`
-// (stage 6's own labels, see its header), and the exotic-word/
-// direction/item-but-no-verb `FOR` loops' own `GOTO`s to them (stage 7)
-// -- the same way extracting the verb handlers into functions did for
-// `GET`/`DROP`/`ENTER`/`LEAVE` in stage 8: a `return` unwinds a function
-// regardless of loop nesting, so the two-loop-levels problem simply
-// doesn't arise once this code has a function of its own to unwind out
-// of. `L1950`'s own re-scan is gone too: it existed only because the
-// original `for x = 110 to t3` verb-word check (stage 5) never kept its
-// own `x` once it found a match, so a second scan (`for z1 = 100 to
-// t3`) had to re-find the same keyword code to dispatch on; the `FOR`
-// below just captures its own matched index directly instead, which is
-// entirely equivalent -- the original's redundant rescan across the
-// full 100..t3 range, reached only after both the verb and direction
-// checks had already failed, could only ever ALSO fail.
+// Every historical "was `Lnnnn`" comment elsewhere in this file (the
+// ones documenting which *original* PyBasic/HP BASIC line a function
+// replaces) is left exactly as it was: those numbers describe the
+// 1979 source, not any label still in this file, so renaming this
+// stage's own labels doesn't touch them.
 //
-// The keyword-table `DATA` (was `L580`) and `printDontUnderstand()`'s
-// own `L2070` originally had to stay at the top level: `--target c`
-// rejected `RESTORE L580` outright when both it and its `DATA` lived
-// inside `parseAndDispatchCommand%()`, a genuine backend limitation
-// `--target basic` didn't share (`collect_data_items_and_labels` in
-// `codegen_c.rs` only ever walked top-level statements, so a label
-// declared inside a function body -- even one targeted by a `RESTORE`
-// in that very same function -- was invisible to it). Issue #171 fixed
-// this in the compiler itself, so both tables now live right inside
-// the functions that read them, like every other `RESTORE` target in
-// this file.
-//
-// `bcc`'s own hand-wired-loop warnings are down to zero for the first
-// time in this port's history. Every `GOTO` in this file is now inside
-// a comment.
-//
-// Verified with `bcc --check`; the stage 11 smoke suite (`--target c`)
-// against a stage 11 baseline -- byte-identical throughout, covering
-// every keyword class (exotic words, verbs, directions, unrecognized
-// items, unrecognized commands); and, since this touches the keyword
-// parser itself, a real BASCOM run (headless, under `dosbox-x`) of both
-// this stage and stage 11 against a longer scripted session spanning
-// movement, teleports, item/room interactions, SAVE/LOAD, BUG, and
-// SCORE -- byte-identical except for BASCOM's own end-of-program `STOP
-// in line N` diagnostic, which necessarily differs since this stage
-// moved code around (confirmed by diffing everything before that one
-// line, which matched exactly).
-//
-// The `L580`/`L2070` `DATA` relocation (issue #171's follow-up) was
-// re-verified the same way: `bcc --check`, a fresh `--target c`
-// smoke-test diff against this same file's own pre-relocation output,
-// and `--target basic` unchanged.
+// Verified with `bcc --check`; `--target basic` still compiles with
+// zero warnings; and a `--target c` smoke test (movement, inventory,
+// every verb, every direction, exotic words, unrecognized commands)
+// byte-identical against stage 12 -- the generated C differs only in
+// the renamed label identifiers themselves and the embedded source
+// path, confirmed by diffing the two `.c` outputs directly.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -222,7 +144,7 @@ end procedure
 procedure loadItemNames()
     global itemname$
     dim ianame
-    restore L9961
+    restore itemNames
     for ianame = 1 to 47
         read itemname$(ianame)
     end for
@@ -604,7 +526,7 @@ procedure computeScore()
     global t1
     global o
     global s
-    restore L230
+    restore itemLocationData
     z9 = 0 : s0 = 0
     for z0 = 1 to 15
         read z1
@@ -641,7 +563,7 @@ procedure printScore()
     computeScore()
     print "Your score is now "; s0
     print "You have explored "; (z9 / t1) * t1; "% of the cave."
-    restore L6470
+    restore skillTitles
     tier = int((s0 - 1) / 100)
     if tier > 4 then
         tier = 4
@@ -673,8 +595,8 @@ end procedure
 ' L400 right after, same reason as askWhatToDoWithItem() above.
 procedure printDontUnderstand()
     global b$
-    L2070: data "What?","I don't understand.","I can't understand that.","I don't know that word."
-    restore L2070
+    dontUnderstandMessages: data "What?","I don't understand.","I can't understand that.","I don't know that word."
+    restore dontUnderstandMessages
     for x = 1 to int(RND(1)*4)+1
         read b$
     end for
@@ -890,7 +812,7 @@ function attemptRandomMove%()
         ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
         ' at random from the DATA table below (was L1470/L1510/L1530).
         if RND(1) > 0.5 then
-            restore L1530
+            restore bedquiltRooms
             for z3% = 1 to int(RND(1)*5)+1
                 read z2%
             end for
@@ -910,7 +832,7 @@ function attemptRandomMove%()
     printMessage(1)
     return 0
 end function
-L1530: data 33,37,45,92,76
+bedquiltRooms: data 33,37,45,92,76
 
 ' Looks up the destination room for direction d% and either moves there
 ' or prints why not -- replaces stage 2's L1070 GOSUB-like target.
@@ -1611,7 +1533,7 @@ function verbLock%()
     global b$
     global c$
     ' *** LOCK ***
-    L4960: if L1=10 or L1=11 then
+    if L1=10 or L1=11 then
         if S(19)=-1 then
             G=0:printMessage(10)
         else
@@ -1634,7 +1556,7 @@ function verbUnlock%()
     global b$
     global c$
     ' *** UNLOCK ***
-    L5070: if S(19) <> -1 then
+    if S(19) <> -1 then
         B$="keys"
         PRINT "You don't have the ";b$ : c$="" : return 0
     end if
@@ -2232,7 +2154,7 @@ function parseAndDispatchCommand%()
     ' issue #171 fixed the `--target c` bug that forced this DATA to stay
     ' top-level; it now lives right where it's read, like every other
     ' RESTORE target in this file.
-    L580: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
+    keywordTable: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
     data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
     data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
     data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
@@ -2258,7 +2180,7 @@ function parseAndDispatchCommand%()
     data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
     data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
     data 148,"YES",148,"Y",149,"BUG",150,"*"
-    restore L580
+    restore keywordTable
     for i = 1 to 200
         k(i) = 0
     end for
@@ -2361,7 +2283,7 @@ for z2 = 1 to 100
 end for
 
 close #4
-LA100: ' Load ADESCRIP, AITEMS, AMESSAGE (+ its index), and the short
+' Load ADESCRIP, AITEMS, AMESSAGE (+ its index), and the short
 ' item names -- see the procedure declarations near the top of this
 ' file for what each replaces.
 loadAdescrip()
@@ -2370,14 +2292,14 @@ loadAmessage()
 buildMessageIndex()
 loadItemNames()
 PRINT
-restore L230
+restore itemLocationData
 '    read in locations of items
 for z2 = 1 to T2 step 5
     read dx1,dx2,dx3,dx4,dx5:s(z2)=dx1:s(z2+1)=dx2:s(z2+2)=dx3:s(z2+3)=dx4:s(z2+4)=dx5
     PRINT ".";
 end for
 
-L230: data 18,25,23,24,21
+itemLocationData: data 18,25,23,24,21
 data 52,0,71,74,58
 data 59,69,66,82,100
 data 7,49,7,7,7
@@ -2435,13 +2357,13 @@ end while
 ' called from verbScore%() -- the DATA line right below is still needed
 ' here, at the top level (not inside verbScore%() itself), since RESTORE
 ' targets must be top-level per issue #149/PR #150.
-L6470: DATA "beginner","novice","experienced","advanced","expert"
+skillTitles: DATA "beginner","novice","experienced","advanced","expert"
 ' printDontUnderstand()'s own DATA (was L2070) and the keyword table
 ' (was L580, read by parseAndDispatchCommand%()) both moved back to
 ' their own functions once issue #171 fixed the `--target c` bug that
 ' had forced them to stay top-level -- see those functions above.
 ' ---- SHORT NAMES FOR STUFF ----
-L9961: data "large gold nugget"
+itemNames: data "large gold nugget"
 data "bars of silver"
 data "precious jewelry"
 data "many coins"
@@ -2489,8 +2411,3 @@ data "volcano"
 data "road"
 data "everything"
 ' INITIALIZE MESSAGE INDEX is now the buildMessageIndex() procedure above.
-```
-
-</details>
-
-[← Stage 11: The Last GOTO in checkDwarfAttack](adventure3000-stage11.md) [Next: Stage 13: Descriptive Label Names →](adventure3000-stage13.md)
