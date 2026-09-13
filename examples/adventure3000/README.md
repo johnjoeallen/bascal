@@ -374,6 +374,51 @@ source from scratch.
   A few more small GOTO targets also remain unconverted. Left as clearly-
   marked future work rather than attempted partially.
 
+- **`stage8-refactored-bascal/`** -- splitting the 40-case `SELECT CASE`
+  dispatch into its own procedure per verb, the piece of stage 7's own goal
+  that stage explicitly stopped short of. Started as an exact copy of
+  stage 7.
+
+  Every verb handler is now its own `function verbXxx%()`, returning 0
+  ("get another command") or 1 ("redisplay the room") for the `SELECT
+  CASE` -- now a lean one-line-per-case dispatch table -- to act on with
+  `continue`/`exit` itself, replacing the direct `continue`/`exit` every
+  handler used when it was inline. This turned out to simplify more than
+  it complicated: a `return` unwinds the whole function regardless of loop
+  nesting, so GET's, DROP's, ENTER's, and LEAVE's own scan loops no longer
+  need stage 6/7's two-loop-levels `GOTO L300`/`GOTO L400` workaround --
+  every one of those became a plain `return 0`/`return 1` instead.
+
+  A few handlers' own GOTOs crossed into what's now a different function
+  entirely (labels are function-scoped, so a GOTO can no longer reach
+  across): QUIT's "yes, save first" path and OPEN's/CLOSE's "it's actually
+  a lock" cases became direct calls to `verbSaveGame%()`/`verbUnlock%()`/
+  `verbLock%()` instead, using the same 0/1 convention. BUG's error
+  handler used to reuse LOAD's own error label the same way; since `on
+  error goto`'s target must live in the same function, it now has its own
+  copy of the same message. SCORE's own `DATA` line moved to the top
+  level, since `RESTORE` targets must stay top-level (issue #149/PR #150)
+  and can no longer live inside `verbScore%()` with the rest of that
+  case's logic.
+
+  Every verb function declares `global` for each shared variable it
+  touches; missing even one silently creates a fresh, always-zero local
+  instead of erroring, so this was checked both by an automated scan
+  (every scalar/array name known to be global anywhere in the program,
+  cross-referenced against each function's own `global` list) and by the
+  smoke tests -- two real omissions (`t2` in GET and DROP) were caught
+  this way before ever reaching a manual test.
+
+  Verified with `bcc --check`, a real `fbc` build, and the same smoke
+  tests as stage 7 against a stage 7 baseline -- byte-identical
+  throughout, including GET/DROP/FEED's special-case branches and the
+  pit-fall/reincarnation cascade, each exercised separately in a scratch
+  copy with the relevant items/rooms patched. `bcc`'s own hand-wired-loop
+  warnings on this file are down to 5, all the outer loop's own
+  intentional labels plus one small remaining leftover (CROSS's own
+  message) -- not attempted here, since this stage's own goal is
+  otherwise complete.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
