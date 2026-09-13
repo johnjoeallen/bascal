@@ -104,6 +104,7 @@ nav:
       - REMLINE: examples/remline.md
       - Card Catalog: examples/card-catalog.md
       - Adventure Game: examples/adventure.md
+      - "ADVENTURE/3000 Port": examples/adventure3000.md
   - Conformance results:
       - Core language: conformance.md
       - Tutorials: conformance/tutorials.md
