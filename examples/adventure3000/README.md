@@ -419,6 +419,35 @@ source from scratch.
   message) -- not attempted here, since this stage's own goal is
   otherwise complete.
 
+- **`stage9-refactored-bascal/`** -- modernizing the verb functions' own
+  internal style, now that stage 8 has given every verb its own function.
+  Started as an exact copy of stage 8.
+
+  Every verb function's own `GOTO`-chained branches (classic one-line `IF
+  cond THEN goto Label` chains, and the ALL-CAPS labels they jumped to,
+  read verbatim from stage 2) became structured, lowercase `IF`/`ELSEIF`/
+  `END IF` -- the same style the rest of this port has used since stage 3.
+  Several near-duplicate branches the original's labels converged on
+  folded into shared fall-through or a single `OR` condition instead --
+  PLUGH/XYZZY's two teleport-or-fail tails, ENTER/LEAVE's "house"/"barren
+  room" cases. `ON ERROR GOTO` (SAVE GAME, LOAD OLD GAME, BUG) stays
+  exactly as-is, with no structured equivalent; CLOSE's own dead-code
+  branch (a preserved upstream bug) was left alone too, since there's no
+  live code there to modernize.
+
+  A real bug turned up along the way: converting PLOVER's "was he
+  carrying the emerald" check to structured `IF` inverted the `S(10) =
+  -1` ("carrying") test the same way stage 7's LOCK/UNLOCK bug did --
+  caught by this stage's own smoke tests (a missing room-contents line
+  after teleporting via PLOVER), fixed, and reverified byte-identical.
+
+  Verified with `bcc --check`, a real `fbc` build, and the stage 8 smoke
+  suite against a stage 8 baseline -- byte-identical throughout. `bcc`'s
+  own hand-wired-loop warnings are down to 4 (all the outer loop's own
+  intentional labels); total GOTO count in the file down from 105 to 59,
+  nearly all of what's left being `ON ERROR GOTO` or comments documenting
+  the port's own history.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
