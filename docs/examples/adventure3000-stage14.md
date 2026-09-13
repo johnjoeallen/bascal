@@ -1,78 +1,111 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 13: Descriptive Label Names
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 14: Descriptive Variable Names
 
 <div class="prose" markdown="1">
 
-# Stage 13: Descriptive Label Names
+# Stage 14: Descriptive Variable Names
 
-The nine leftover original-line-number labels this port never had reason to
-touch before now read as what they hold, not where they used to sit in
-1979's listing: `L580` -> `keywordTable`, `L2070` -> `dontUnderstandMessages`,
-`L1530` -> `bedquiltRooms`, `L6470` -> `skillTitles`, `L9961` -> `itemNames`,
-`L230` -> `itemLocationData` (its own `DATA` does double duty -- 35 item
-starting-room numbers followed immediately by 15 treasure point values, all
-one continuous stream `computeScore()` and the startup code each restore and
-read their own way through).
+Every cryptic single/double-letter scalar and array name gets a real one.
+The renamed globals fall into three groups: persistent game-state flags
+saved/loaded by SAVE GAME/LOAD OLD GAME (`l1`->`currentRoom`,
+`l2`->`previousRoom`, `l`->`lampOn`, `g`->`grateOpen`, `sn`->`snakeAlive`,
+`d1`->`dragonAlive`, `t`->`trollState`, `b0`->`bottleContents`,
+`b1`->`bearFedState`, `b2`->`crystalBridgeBuilt`, `b3`->`birdInCage`,
+`c`->`bearTamedScored`, `d2`->`ironDoorOiled`, `d3`->`dwarfGaveAxe`,
+`p1`->`pirateState`, `r0`->`deathCount`, `kc`->`dwarfHitChance`,
+`dead`->`isDead`, `d0`->`descriptionMode`, `c0`->`gameLoaded`, plus
+`t1`/`t2`/`t3`->`totalRooms`/`totalItems`/`totalKeywords` and
+`s0`->`score`); shared string/array state (`s`->`itemRoom`,
+`v`->`roomVisited`, `k`->`keywordFound`, `o`->`itemPoints`,
+`dirs`->`roomExits`, `itemname$`->`itemNames$`,
+`descrip$`->`roomDescriptions$`, `items$`->`itemDescriptions$`,
+`msg$`->`messages$`, `indx`->`messageIndex`, `fraindx`->`fragmentIndex`,
+`mcount`->`messageCount`, `c$`->`commandLine$`, `a$`->`paddedCommand$`,
+`b$`->`responseText$`, `d$`->`selectedItemName$`,
+`z9`->`roomsVisitedCount`); and a handful of true single-purpose scratch
+globals reused across many call sites for one consistent role
+(`z2`/`z2%`->`targetRoom`/`targetRoom%`, `z3`->`itemCode`,
+`z5`->`isCarrying`, `z8`->`matchCount`, `d`/`d%`->`direction`/`direction%`)
+-- except `z0`, which really is reused for three unrelated one-off
+purposes across its own few call sites (a yes/no answer, an item count,
+a line counter) and so keeps a deliberately generic name, `scratchValue`.
 
-`L4960`, `L5070`, and `LA100` were never `GOTO`/`RESTORE` targets at all --
-dead labels left over from the original listing, each already redundant
-with a comment right next to it (`' *** LOCK ***`, `' *** UNLOCK ***`, and
-the ADESCRIP-loading comment respectively) -- so those three are simply
-gone rather than renamed.
-
-Every historical "was `Lnnnn`" comment elsewhere in this file (the ones
-documenting which *original* PyBasic/HP BASIC line a function replaces) is
-left exactly as it was: those numbers describe the 1979 source, not any
-label still in this file, so renaming this stage's own labels doesn't
-touch them.
+Several of these single letters were *also* used as ordinary,
+function-local loop counters or temporaries in functions that never
+declared them `global` -- BASCAL scopes those independently, so e.g.
+`askYesNo%()`'s own local `a$` has nothing to do with the global
+`paddedCommand$` despite once sharing its letter. Every such local got
+its own distinct, context-specific name instead of inheriting its old
+letter's global rename, specifically so it doesn't *look* like the same
+variable: `answer$`/`roomText$`/`messageLine$`/`skillTitle$`/
+`stealableCount`/`itemIndex`/`treasureRoom`/`treasureIndex`/`roomIndex`/
+`itemScanIndex`/`itemScanCode`/`foundFlag`/`fragmentNumber`/`commaPos`/
+`charCode`/`scanIndex`/`directionIndex`/`recordIndex`/
+`itemLocationValue`/`roomVisitedValue`/`pickCount%`, among others -- each
+scoped to just the one function that declares it.
 
 Verified with `bcc --check`; `--target basic` still compiles with zero
-warnings; and a `--target c` smoke test (movement, inventory, every verb,
-every direction, exotic words, unrecognized commands) byte-identical
-against stage 12 -- the generated C differs only in the renamed label
-identifiers themselves and the embedded source path, confirmed by diffing
-the two `.c` outputs directly.
+warnings; and a `--target c` smoke test (movement, inventory, every
+verb, every direction, exotic words, unrecognized commands, and a SAVE
+GAME round trip exercising every renamed persistent flag in its exact
+serialization order) byte-identical against stage 13.
 
 </div>
 
 <details class="source-embed" markdown="1">
 
-<summary><code>stage13-refactored-bascal/adventure.bcl</code> -- Stage 13: Descriptive Label Names</summary>
+<summary><code>stage14-refactored-bascal/adventure.bcl</code> -- Stage 14: Descriptive Variable Names</summary>
 
 ```bascal
 
-// ADVENTURE/3000 -- Stage 13: every remaining raw-numbered `DATA` label
-// gets a descriptive name. Started as an exact copy of stage 12; see
-// ../README.md for the port's provenance and staging, and stage 12's
-// own header for the command-parsing cascade extraction this stage
-// otherwise leaves untouched.
+// ADVENTURE/3000 -- Stage 14: every cryptic single/double-letter
+// scalar and array name gets a real one. Started as an exact copy of
+// stage 13; see ../README.md for the port's provenance and staging.
 //
-// The nine leftover original-line-number labels this port never had
-// reason to touch before now read as what they hold, not where they
-// used to sit in 1979's listing: `L580` -> `keywordTable`, `L2070` ->
-// `dontUnderstandMessages`, `L1530` -> `bedquiltRooms`, `L6470` ->
-// `skillTitles`, `L9961` -> `itemNames`, `L230` -> `itemLocationData`
-// (its own DATA does double duty -- 35 item starting-room numbers
-// followed immediately by 15 treasure point values, all one
-// continuous stream computeScore() and the startup code each restore
-// and read their own way through). `L4960`/`L5070`/`LA100` were never
-// GOTO/RESTORE targets at all -- dead labels left over from the
-// original listing, each already redundant with a comment right next
-// to it (`' *** LOCK ***`, `' *** UNLOCK ***`, and the ADESCRIP-loading
-// comment respectively) -- so those three are simply gone rather than
-// renamed.
+// The renamed globals fall into three groups: persistent game-state
+// flags saved/loaded by SAVE GAME/LOAD OLD GAME (l1->currentRoom,
+// l2->previousRoom, l->lampOn, g->grateOpen, sn->snakeAlive,
+// d1->dragonAlive, t->trollState, b0->bottleContents,
+// b1->bearFedState, b2->crystalBridgeBuilt, b3->birdInCage,
+// c->bearTamedScored, d2->ironDoorOiled, d3->dwarfGaveAxe,
+// p1->pirateState, r0->deathCount, kc->dwarfHitChance,
+// dead->isDead, d0->descriptionMode, c0->gameLoaded, plus
+// t1/t2/t3->totalRooms/totalItems/totalKeywords and s0->score);
+// shared string/array state (s->itemRoom, v->roomVisited,
+// k->keywordFound, o->itemPoints, dirs->roomExits,
+// itemname$->itemNames$, descrip$->roomDescriptions$,
+// items$->itemDescriptions$, msg$->messages$, indx->messageIndex,
+// fraindx->fragmentIndex, mcount->messageCount, c$->commandLine$,
+// a$->paddedCommand$, b$->responseText$, d$->selectedItemName$,
+// z9->roomsVisitedCount); and a handful of true single-purpose
+// scratch globals reused across many call sites for one consistent
+// role (z2/z2%->targetRoom/targetRoom%, z3->itemCode,
+// z5->isCarrying, z8->matchCount, d/d%->direction/direction%) --
+// except z0, which really is reused for three unrelated one-off
+// purposes across its own few call sites (a yes/no answer, an item
+// count, a line counter) and so keeps a deliberately generic name,
+// scratchValue.
 //
-// Every historical "was `Lnnnn`" comment elsewhere in this file (the
-// ones documenting which *original* PyBasic/HP BASIC line a function
-// replaces) is left exactly as it was: those numbers describe the
-// 1979 source, not any label still in this file, so renaming this
-// stage's own labels doesn't touch them.
+// Several of these single letters were *also* used as ordinary,
+// function-local loop counters or temporaries in functions that never
+// declared them `global` -- BASCAL scopes those independently (see
+// `docs/manual/variables-and-constants.md`'s Variable Scoping
+// section), so e.g. `askYesNo%()`'s own local `a$` has nothing to do
+// with the global `paddedCommand$` despite once sharing its letter.
+// Every such local got its own distinct, context-specific name instead
+// of inheriting its old letter's global rename, specifically so it
+// doesn't *look* like the same variable: `answer$`/`roomText$`/
+// `messageLine$`/`skillTitle$`/`stealableCount`/`itemIndex`/
+// `treasureRoom`/`treasureIndex`/`roomIndex`/`itemScanIndex`/
+// `itemScanCode`/`foundFlag`/`fragmentNumber`/`commaPos`/`charCode`/
+// `scanIndex`/`directionIndex`/`recordIndex`/`itemLocationValue`/
+// `roomVisitedValue`/`pickCount%`, among others -- each scoped to just
+// the one function that declares it.
 //
 // Verified with `bcc --check`; `--target basic` still compiles with
 // zero warnings; and a `--target c` smoke test (movement, inventory,
-// every verb, every direction, exotic words, unrecognized commands)
-// byte-identical against stage 12 -- the generated C differs only in
-// the renamed label identifiers themselves and the embedded source
-// path, confirmed by diffing the two `.c` outputs directly.
+// every verb, every direction, exotic words, unrecognized commands,
+// and a SAVE GAME round trip exercising every renamed persistent flag
+// in its exact serialization order) byte-identical against stage 13.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -86,17 +119,17 @@ require com.bascal.stdlib.lcase
 ' moved up from where stage 2 first `dim`s them inline, so every
 ' procedure that needs one can declare it `global` regardless of where
 ' in the file it's defined.
-dim descrip$(200)
-dim items$(200)
-dim msg$(2500)
-dim indx(303)
-dim fraindx(10)
-dim itemname$(47)
+dim roomDescriptions$(200)
+dim itemDescriptions$(200)
+dim messages$(2500)
+dim messageIndex(303)
+dim fragmentIndex(10)
+dim itemNames$(47)
 
 ' Loads ADESCRIP (room descriptions) into descrip$(), indexed 1..dcount
 ' by file line order. Replaces stage 2's inline LA100-LA102 loading code.
 procedure loadAdescrip()
-    global descrip$
+    global roomDescriptions$
     dim dcount, line$
     open "ADESCRIP" for INPUT as #1
     while not(EOF(1))
@@ -105,7 +138,7 @@ procedure loadAdescrip()
         ' minimal C backend yet -- only a bare scalar variable is -- so
         ' read into one first, then assign it into the array.
         input #1, line$
-        descrip$(dcount) = line$
+        roomDescriptions$(dcount) = line$
         print ".";
     end while
     close #1
@@ -114,13 +147,13 @@ end procedure
 ' Loads AITEMS (item-at-location messages) into items$(). Replaces
 ' stage 2's inline LA110-LA112 loading code.
 procedure loadAitems()
-    global items$
+    global itemDescriptions$
     dim icount, line$
     open "AITEMS" for INPUT as #2
     while not(EOF(2))
         icount = icount + 1
         input #2, line$
-        items$(icount) = line$
+        itemDescriptions$(icount) = line$
         print ".";
     end while
     close #2
@@ -129,15 +162,15 @@ end procedure
 ' Loads AMESSAGE (the numbered "#N" message table) into msg$(1..mcount).
 ' Replaces stage 2's inline LA120-LA122 loading code.
 procedure loadAmessage()
-    global msg$
-    global mcount
+    global messages$
+    global messageCount
     dim line$
-    mcount = 0
+    messageCount = 0
     open "AMESSAGE" for INPUT as #3
     while not(EOF(3))
-        mcount = mcount + 1
+        messageCount = messageCount + 1
         input #3, line$
-        msg$(mcount) = line$
+        messages$(messageCount) = line$
     end while
     close #3
 end procedure
@@ -148,32 +181,32 @@ end procedure
 ' the original AMESSAGE.IDX disk cache and this port's own stage-2
 ' in-memory equivalent (the old `gosub L12500` target).
 procedure buildMessageIndex()
-    global msg$
-    global mcount
-    global indx
-    global fraindx
-    dim fpos, fracnt, lastfra, b$, z4
+    global messages$
+    global messageCount
+    global messageIndex
+    global fragmentIndex
+    dim fpos, fracnt, lastfra, messageLine$, fragmentNumber
     fpos = 0 : fracnt = 0 : lastfra = -1
-    while fpos <= mcount
+    while fpos <= messageCount
         fpos = fpos + 1
-        if fpos > mcount then
+        if fpos > messageCount then
             return
         end if
-        b$ = msg$(fpos)
-        if b$ = "#" then
+        messageLine$ = messages$(fpos)
+        if messageLine$ = "#" then
             return
         end if
-        if instr(b$, "#") <> 0 then
-            z4 = val(mid$(b$, 2))
-            if int(z4) = z4 then
-                indx(int(z4)) = fpos
+        if instr(messageLine$, "#") <> 0 then
+            fragmentNumber = val(mid$(messageLine$, 2))
+            if int(fragmentNumber) = fragmentNumber then
+                messageIndex(int(fragmentNumber)) = fpos
             else
                 fracnt = fracnt + 1
-                if lastfra <> int(z4) then
-                    indx(int(z4)) = fracnt
-                    lastfra = int(z4)
+                if lastfra <> int(fragmentNumber) then
+                    messageIndex(int(fragmentNumber)) = fracnt
+                    lastfra = int(fragmentNumber)
                 end if
-                fraindx(fracnt) = fpos
+                fragmentIndex(fracnt) = fpos
             end if
         end if
     end while
@@ -184,27 +217,27 @@ end procedure
 ' `restore 9960+x` (BASCAL restore targets are fixed labels, not
 ' expressions).
 procedure loadItemNames()
-    global itemname$
+    global itemNames$
     dim ianame
     restore itemNames
     for ianame = 1 to 47
-        read itemname$(ianame)
+        read itemNames$(ianame)
     end for
 end procedure
 
 ' Reads a line and returns 1 for "yes", 0 for "no" -- reprompting until
-' it gets one. Replaces the original's `gosub 9860` + global z0.
+' it gets one. Replaces the original's `gosub 9860` + global scratchValue.
 function askYesNo%()
-    dim a$
+    dim answer$
     while true
-        input a$
-        if len(a$) = 0 then
-            a$ = " "
+        input answer$
+        if len(answer$) = 0 then
+            answer$ = " "
         end if
-        a$ = lcase$(mid$(a$, 1, 1))
-        if a$ = "y" then
+        answer$ = lcase$(mid$(answer$, 1, 1))
+        if answer$ = "y" then
             return 1
-        elseif a$ = "n" then
+        elseif answer$ = "n" then
             return 0
         end if
         print "Yes or No-";
@@ -222,25 +255,25 @@ end function
 ' the message number as a real argument instead of setting the global
 ' z59 first.
 procedure printMessage(msgNum%)
-    global indx
-    global fraindx
-    global msg$
+    global messageIndex
+    global fragmentIndex
+    global messages$
     dim xtmp, mpos, b1$
-    xtmp = indx(msgNum%)
+    xtmp = messageIndex(msgNum%)
     if msgNum% = 2 or msgNum% = 61 then
         ' Messages 2 and 61 have several interchangeable variants
         ' (see AMESSAGE's "#2.1".."#2.5" entries); pick one at random.
-        xtmp = fraindx(xtmp + int(RND(1) * 5))
+        xtmp = fragmentIndex(xtmp + int(RND(1) * 5))
     end if
     mpos = xtmp
-    b1$ = msg$(mpos)
+    b1$ = messages$(mpos)
     if mid$(b1$, 1, 1) <> "#" or int(val(mid$(b1$, 2))) <> msgNum% then
         print "NO DESC. # "; msgNum%; " IN FILE AMESSAGE"
         return
     end if
     while true
         mpos = mpos + 1
-        b1$ = msg$(mpos)
+        b1$ = messages$(mpos)
         if mid$(b1$, 1, 1) = "#" then
             return
         end if
@@ -251,29 +284,29 @@ end procedure
 ' Prints the room's short (one-line) description and marks it visited.
 ' Replaces stage 2's L6780 GOSUB target.
 procedure shortDescription()
-    global l1
-    global v
-    global descrip$
-    dim a$
-    a$ = descrip$(l1)
-    v(l1) = 1
-    print a$
+    global currentRoom
+    global roomVisited
+    global roomDescriptions$
+    dim roomText$
+    roomText$ = roomDescriptions$(currentRoom)
+    roomVisited(currentRoom) = 1
+    print roomText$
 end procedure
 
 ' Prints the room's long (multi-paragraph, AMESSAGE-driven) description
-' and marks it visited. Message number is normally l1+200, except a
-' shared message for the forest (any l1 <= 4) and one for the maze-like
+' and marks it visited. Message number is normally currentRoom+200, except a
+' shared message for the forest (any currentRoom <= 4) and one for the maze-like
 ' rooms near the end. Replaces stage 2's L7990 GOSUB target.
 procedure longDescription()
-    global l1
-    global v
-    v(l1) = 1
-    if l1 <= 4 then
+    global currentRoom
+    global roomVisited
+    roomVisited(currentRoom) = 1
+    if currentRoom <= 4 then
         printMessage(200)
-    elseif (l1 > 88 and l1 < 98) or l1 = 99 then
+    elseif (currentRoom > 88 and currentRoom < 98) or currentRoom = 99 then
         printMessage(288)
     else
-        printMessage(200 + l1)
+        printMessage(200 + currentRoom)
     end if
 end procedure
 
@@ -281,22 +314,22 @@ end procedure
 ' bird's message should play, and then checks the dwarf and pirate
 ' encounters. Replaces stage 2's L6680 GOSUB target.
 procedure describeRoomContents()
-    global l1
-    global t2
-    global s
-    global dead
-    global items$
-    for z1 = 1 to t2
-        if s(z1) = l1 then
-            print items$(z1)
+    global currentRoom
+    global totalItems
+    global itemRoom
+    global isDead
+    global itemDescriptions$
+    for z1 = 1 to totalItems
+        if itemRoom(z1) = currentRoom then
+            print itemDescriptions$(z1)
         end if
     end for
-    if s(26) = -1 then
+    if itemRoom(26) = -1 then
         printMessage(67)
     end if
     ' CHECK FOR DWARF, PIRATE
     checkDwarf()
-    if dead <> 1 then
+    if isDead <> 1 then
         checkPirate()
         print
     end if
@@ -309,19 +342,19 @@ end procedure
 ' `return`, and the final label+return collapsed into the implicit
 ' return at the end of the procedure body.
 procedure checkDwarf()
-    global d3
-    global l1
-    global s
-    if d3 <> 0 then
+    global dwarfGaveAxe
+    global currentRoom
+    global itemRoom
+    if dwarfGaveAxe <> 0 then
         checkDwarfAttack()
         return
     end if
     ' SHOULD DWARF GIVE AWAY AXE?
-    if l1 < 13 then return
+    if currentRoom < 13 then return
     if RND(1) > 0.05 then return
     ' GIVE AWAY AXE
     printMessage(80)
-    s(27) = l1 : d3 = 1
+    itemRoom(27) = currentRoom : dwarfGaveAxe = 1
 end procedure
 
 ' Just the "should the dwarf attack" half of checkDwarf() -- one call
@@ -330,66 +363,66 @@ end procedure
 ' the axe-giving check above. Structurally identical to stage 2's
 ' L8640-L8790 span.
 procedure checkDwarfAttack()
-    global l1
-    global s
-    global t
-    global dead
-    global KC
-    if l1 < 13 then
-        s(35) = 0
+    global currentRoom
+    global itemRoom
+    global trollState
+    global isDead
+    global dwarfHitChance
+    if currentRoom < 13 then
+        itemRoom(35) = 0
         return
     end if
-    if s(35) <> l1 then
+    if itemRoom(35) <> currentRoom then
         ' SHOULD WE PUT A DWARF HERE?
         if RND(1) >= 0.05 then return
-        if (l1 = 60 or l1 = 61) and t = 1 then return
-        s(35) = l1
+        if (currentRoom = 60 or currentRoom = 61) and trollState = 1 then return
+        itemRoom(35) = currentRoom
         printMessage(31)
         return
     end if
-    if (l1 <> 60 and l1 <> 61) or t <> 1 then
+    if (currentRoom <> 60 and currentRoom <> 61) or trollState <> 1 then
         if RND(1) > 0.5 then return
         ' YES!
         printMessage(32)
         ' DOES THE KNIFE KILL THE PLAYER?
-        KC = KC - 0.02
-        if KC < 0.75 then
-            KC = 0.75
+        dwarfHitChance = dwarfHitChance - 0.02
+        if dwarfHitChance < 0.75 then
+            dwarfHitChance = 0.75
         end if
-        if RND(1) <= KC then
+        if RND(1) <= dwarfHitChance then
             PRINT "It gets you!"
-            dead = 1
+            isDead = 1
         else
             PRINT "It misses!"
         end if
     else
         printMessage(299)
-        s(35) = 0
+        itemRoom(35) = 0
     end if
 end procedure
 
 ' Checks whether the pirate steals the player's valuables (only in
-' rooms l1 >= 13). Structurally identical to stage 2's L8800 GOSUB
+' rooms currentRoom >= 13). Structurally identical to stage 2's L8800 GOSUB
 ' target, with `goto L8960` (the old shared exit) replaced by `return`.
 procedure checkPirate()
-    global l1
-    global s
-    dim z3, x
+    global currentRoom
+    global itemRoom
+    dim stealableCount, itemIndex
     ' FIRST, DOES HE HAVE ANYTHING WORTH STEALING?
-    z3 = 0
-    if l1 < 13 then return
-    for x = 1 to 15
-        if s(x) = -1 then
-            z3 = z3 + 1
+    stealableCount = 0
+    if currentRoom < 13 then return
+    for itemIndex = 1 to 15
+        if itemRoom(itemIndex) = -1 then
+            stealableCount = stealableCount + 1
         end if
     end for
-    if z3 < int(RND(1) * 4) + 1 then return
+    if stealableCount < int(RND(1) * 4) + 1 then return
     ' SHOULD WE RIP OFF HIS VALUABLES?
     if RND(1) < 0.05 then
         printMessage(33)
-        for x = 1 to 15
-            if s(x) = -1 then
-                s(x) = 100
+        for itemIndex = 1 to 15
+            if itemRoom(itemIndex) = -1 then
+                itemRoom(itemIndex) = 100
             end if
         end for
     else
@@ -401,13 +434,13 @@ end procedure
 ' long description (it's short enough not to be worth abbreviating);
 ' every other room gets the long description only the first time it's
 ' visited, and the short one on repeat visits. Replaces stage 2's L8180
-' GOSUB target, itself called from the `on d0+1 gosub` dispatch below.
+' GOSUB target, itself called from the `on descriptionMode+1 gosub` dispatch below.
 procedure describeRoomOnEntry()
-    global l1
-    global v
-    if l1 < 5 or (l1 > 88 and l1 < 98) or l1 = 99 then
+    global currentRoom
+    global roomVisited
+    if currentRoom < 5 or (currentRoom > 88 and currentRoom < 98) or currentRoom = 99 then
         longDescription()
-    elseif v(l1) = 1 then
+    elseif roomVisited(currentRoom) = 1 then
         shortDescription()
     else
         longDescription()
@@ -420,15 +453,15 @@ end procedure
 ' itself and by LIGHT/OFF (both re-run this same check right after
 ' changing the lamp's state, since that can change whether it applies).
 procedure describeRoomForLook()
-    global l1
-    global l
-    global s
-    if l1 < 13 or l1 = 58 or (l = 1 and (s(18) = l1 or s(18) = -1)) then
+    global currentRoom
+    global lampOn
+    global itemRoom
+    if currentRoom < 13 or currentRoom = 58 or (lampOn = 1 and (itemRoom(18) = currentRoom or itemRoom(18) = -1)) then
         longDescription() ' (was: gosub 8050 -- jumped past the old
-        ' subroutine's own `v(l1)=1` to avoid redundantly re-marking the
+        ' subroutine's own `roomVisited(currentRoom)=1` to avoid redundantly re-marking the
         ' room visited; by the time LOOK is typeable the room's already
         ' been entered via describeRoomOnEntry(), which already sets
-        ' v(l1)=1, so calling the full longDescription() here just
+        ' roomVisited(currentRoom)=1, so calling the full longDescription() here just
         ' re-does that no-op assignment)
         describeRoomContents()
     else
@@ -443,177 +476,180 @@ end procedure
 ' own if/then/else-fallthrough-to-the-next-check structure exactly.
 ' Replaces stage 2's L7800 GOSUB target.
 procedure situationDescriptions()
-    global l1
-    global g
-    global b2
-    global d2
-    global t
-    global b1
-    global p1
+    global currentRoom
+    global grateOpen
+    global crystalBridgeBuilt
+    global ironDoorOiled
+    global trollState
+    global bearFedState
+    global pirateState
     ' GRATE
-    if l1 = 10 or l1 = 11 then
-        printMessage(g + 10)
+    if currentRoom = 10 or currentRoom = 11 then
+        printMessage(grateOpen + 10)
     end if
     ' CRYSTAL BRIDGE
-    if (l1 = 19 or l1 = 20) and b2 = 1 then
+    if (currentRoom = 19 or currentRoom = 20) and crystalBridgeBuilt = 1 then
         printMessage(14)
     end if
     ' PLUGH NOISE
-    if l1 = 26 and RND(1) > 0.3 then
+    if currentRoom = 26 and RND(1) > 0.3 then
         printMessage(41)
     end if
     ' IRON DOOR
-    if l1 = 73 and d2 = 0 then
+    if currentRoom = 73 and ironDoorOiled = 0 then
         printMessage(57)
     end if
     ' TROLL
-    if (l1 = 60 or l1 = 61) and t = 1 then
+    if (currentRoom = 60 or currentRoom = 61) and trollState = 1 then
         printMessage(63)
     end if
     ' BEAR
-    if l1 = 69 and b1 = 0 then
+    if currentRoom = 69 and bearFedState = 0 then
         printMessage(64)
     end if
-    if l1 = 69 and b1 = 1 then
+    if currentRoom = 69 and bearFedState = 1 then
         printMessage(66)
     end if
     ' PLANT IN PIT
-    if l1 = 48 or l1 = 50 then
-        printMessage(47 + p1)
+    if currentRoom = 48 or currentRoom = 50 then
+        printMessage(47 + pirateState)
     end if
 end procedure
 
-' Scans the parsed keyword codes k(1..45) for item names the player
-' typed: z8 counts how many matched, z3 remembers the first exact-item
-' match's own code, and d$/b$ end up holding the last match's display
-' name (itemname$'s own text). Replaces stage 2's L8280 GOSUB target --
+' Scans the parsed keyword codes keywordFound(1..45) for item names the
+' player typed: matchCount counts how many matched, itemCode remembers
+' the first exact-item match's own code, and selectedItemName$/
+' responseText$ end up holding the last match's display name
+' (itemNames$'s own text). Replaces stage 2's L8280 GOSUB target --
 ' by far the most-called of the remaining GOSUB subroutines (8 call
 ' sites), used by GET/DROP/EAT/DRINK/ATTACK/FEED and others to work out
 ' which item, if any, the player's command actually named.
 procedure findMatchedItems()
-    global k
-    global z8
-    global z3
-    global d$
-    global b$
-    global itemname$
-    z8 = 0 : z3 = 0 : d$ = ""
-    for z5 = 1 to 45
-        if k(z5) <> 0 then
-            z8 = z8 + 1
-            b$ = itemname$(z5) : d$ = b$
-            if k(z5) = 1 and z8 = 1 then
-                z3 = z5
+    global keywordFound
+    global matchCount
+    global itemCode
+    global selectedItemName$
+    global responseText$
+    global itemNames$
+    matchCount = 0 : itemCode = 0 : selectedItemName$ = ""
+    for itemScanIndex = 1 to 45
+        if keywordFound(itemScanIndex) <> 0 then
+            matchCount = matchCount + 1
+            responseText$ = itemNames$(itemScanIndex) : selectedItemName$ = responseText$
+            if keywordFound(itemScanIndex) = 1 and matchCount = 1 then
+                itemCode = itemScanIndex
             end if
         end if
     end for
-    b$ = d$
+    responseText$ = selectedItemName$
 end procedure
 
-' Finds the first object code (1-47, the same range itemname$() covers)
-' the player's command mentioned, and sets d$ to its display name --
+' Finds the first object code (1-47, the same range itemNames$() covers)
+' the player's command mentioned, and sets selectedItemName$ to its
+' display name --
 ' used for messages like "What do you want to do with the LAMP?" where
 ' the exact item doesn't matter, just naming *something* the player
 ' typed. Replaces stage 2's L8390 GOSUB target.
 procedure findFirstNamedItem()
-    global k
-    global d$
-    global itemname$
-    dim x1
-    x1 = 0
-    for z1 = 1 to 47
-        if x1 <> 1 then
-            if k(z1) = 1 then
-                d$ = itemname$(z1) : x1 = 1
+    global keywordFound
+    global selectedItemName$
+    global itemNames$
+    dim foundFlag
+    foundFlag = 0
+    for itemScanCode = 1 to 47
+        if foundFlag <> 1 then
+            if keywordFound(itemScanCode) = 1 then
+                selectedItemName$ = itemNames$(itemScanCode) : foundFlag = 1
             end if
         end if
     end for
 end procedure
 
-' Checks whether the player is carrying item z3 (s(z3) = -1 marks an
-' item as carried); sets z5 to 1 if so, 0 (and prints "You don't have
-' the <a$>") if not -- a$ is whatever the player's command last named,
-' set well before this runs, back in the command-parsing code. Replaces
-' stage 2's L8490 GOSUB target.
+' Checks whether the player is carrying item itemCode (itemRoom(itemCode)
+' = -1 marks an item as carried); sets isCarrying to 1 if so, 0 (and
+' prints "You don't have the <paddedCommand$>") if not -- paddedCommand$
+' is whatever the player's command last named, set well before this
+' runs, back in the command-parsing code. Replaces stage 2's L8490
+' GOSUB target.
 procedure checkCarryingItem()
-    global z3
-    global s
-    global a$
-    global z5
-    if s(z3) = -1 then
-        z5 = 1
+    global itemCode
+    global itemRoom
+    global paddedCommand$
+    global isCarrying
+    if itemRoom(itemCode) = -1 then
+        isCarrying = 1
     else
-        print "You don't have the "; a$
-        z5 = 0
+        print "You don't have the "; paddedCommand$
+        isCarrying = 0
     end if
 end procedure
 
 ' Recomputes the current score from scratch (treasures deposited/found,
-' game milestones reached, rooms visited) into s0, and the rooms-visited
-' count into z9. Replaces stage 2's L6510 GOSUB target, called only from
+' game milestones reached, rooms visited) into score, and the rooms-visited
+' count into roomsVisitedCount. Replaces stage 2's L6510 GOSUB target, called only from
 ' printScore() below.
 procedure computeScore()
-    global s0
-    global z9
-    global g
-    global sn
-    global d1
-    global t
-    global b1
-    global b2
-    global p1
-    global d2
-    global c
-    global v
-    global t1
-    global o
-    global s
+    global score
+    global roomsVisitedCount
+    global grateOpen
+    global snakeAlive
+    global dragonAlive
+    global trollState
+    global bearFedState
+    global crystalBridgeBuilt
+    global pirateState
+    global ironDoorOiled
+    global bearTamedScored
+    global roomVisited
+    global totalRooms
+    global itemPoints
+    global itemRoom
     restore itemLocationData
-    z9 = 0 : s0 = 0
-    for z0 = 1 to 15
-        read z1
-        if z1 <> 0 then
-            if v(z1) = 1 then
-                s0 = s0 + 4 * o(z0)
+    roomsVisitedCount = 0 : score = 0
+    for treasureIndex = 1 to 15
+        read treasureRoom
+        if treasureRoom <> 0 then
+            if roomVisited(treasureRoom) = 1 then
+                score = score + 4 * itemPoints(treasureIndex)
             end if
-            if s(z0) = 7 then
-                s0 = s0 + 4 * o(z0)
+            if itemRoom(treasureIndex) = 7 then
+                score = score + 4 * itemPoints(treasureIndex)
             end if
         end if
     end for
-    s0 = (g = 1) * 10 + s0 : s0 = (sn = 0) * 20 + s0 : s0 = (d1 = 0) * 30 + s0
-    s0 = (t = 0) * 30 + s0 : s0 = (b1 = 2) * 20 + s0 : s0 = (b2 = 1) * 20 + s0
-    s0 = (p1 = 2) * 20 + s0 : s0 = (d2 = 1) * 20 + s0 : s0 = (c = 1) * 20 + s0
-    for z0 = 1 to t1
-        if v(z0) = 1 then
-            s0 = s0 + 1 : z9 = z9 + 1
+    score = (grateOpen = 1) * 10 + score : score = (snakeAlive = 0) * 20 + score : score = (dragonAlive = 0) * 30 + score
+    score = (trollState = 0) * 30 + score : score = (bearFedState = 2) * 20 + score : score = (crystalBridgeBuilt = 1) * 20 + score
+    score = (pirateState = 2) * 20 + score : score = (ironDoorOiled = 1) * 20 + score : score = (bearTamedScored = 1) * 20 + score
+    for roomIndex = 1 to totalRooms
+        if roomVisited(roomIndex) = 1 then
+            score = score + 1 : roomsVisitedCount = roomsVisitedCount + 1
         end if
     end for
 end procedure
 
 ' Prints the player's current score, exploration percentage, and skill
-' title (looked up by score tier from the DATA table at L6470 -- z9's
+' title (looked up by score tier from the DATA table at skillTitles -- roomsVisitedCount's
 ' own rooms-visited value is only needed for the percentage line above,
 ' so the tier lookup uses its own local variable rather than reusing
-' z9 for a second, unrelated purpose the way stage 2 does). Replaces
+' roomsVisitedCount for a second, unrelated purpose the way stage 2 does). Replaces
 ' stage 2's L6430 GOSUB target.
 procedure printScore()
-    global s0
-    global z9
-    global t1
-    dim tier, d$
+    global score
+    global roomsVisitedCount
+    global totalRooms
+    dim tier, skillTitle$
     computeScore()
-    print "Your score is now "; s0
-    print "You have explored "; (z9 / t1) * t1; "% of the cave."
+    print "Your score is now "; score
+    print "You have explored "; (roomsVisitedCount / totalRooms) * totalRooms; "% of the cave."
     restore skillTitles
-    tier = int((s0 - 1) / 100)
+    tier = int((score - 1) / 100)
     if tier > 4 then
         tier = 4
     end if
-    for z0 = 0 to tier
-        read d$
+    for tierIndex = 0 to tier
+        read skillTitle$
     end for
-    print "That makes you a "; d$; " adventurer."
+    print "That makes you a "; skillTitle$; " adventurer."
 end procedure
 
 ' Asks what the player wants to do with the item named by d$ (already
@@ -623,8 +659,8 @@ end procedure
 ' both then GOTO L410 themselves afterward, since a procedure can't
 ' GOTO a top-level label the way the original shared code could.
 procedure askWhatToDoWithItem()
-    global d$
-    print "What do you want to do with the ";d$;"?"
+    global selectedItemName$
+    print "What do you want to do with the ";selectedItemName$;"?"
 end procedure
 
 ' Prints one of four random "I don't understand"-style messages --
@@ -636,13 +672,13 @@ end procedure
 ' handlers' own "you didn't say what" case). Every call site GOTOs
 ' L400 right after, same reason as askWhatToDoWithItem() above.
 procedure printDontUnderstand()
-    global b$
+    global responseText$
     dontUnderstandMessages: data "What?","I don't understand.","I can't understand that.","I don't know that word."
     restore dontUnderstandMessages
     for x = 1 to int(RND(1)*4)+1
-        read b$
+        read responseText$
     end for
-    PRINT b$
+    PRINT responseText$
 end procedure
 
 ' Ends the game right now -- replaces stage 2's L9750 GOSUB-like
@@ -662,45 +698,45 @@ end procedure
 ' cascade. Calls endGame() on the third death or a "no" answer to "do
 ' you want to be reincarnated"; otherwise resets state and respawns in
 ' a random forest room, exactly like the original -- including its own
-' apparent lack of a cap on r0 (a 4th, 5th, ... death asks the same as
+' apparent lack of a cap on deathCount (a 4th, 5th, ... death asks the same as
 ' the first, never reaching endGame() itself; only "answering no" or
 ' the literal 3rd death do).
 procedure reincarnate()
-    global r0
-    global z0
-    global s
-    global l
-    global dead
-    global kc
-    global t2
-    global l1
-    global l2
-    r0 = r0 + 1
-    if r0 = 3 then
+    global deathCount
+    global scratchValue
+    global itemRoom
+    global lampOn
+    global isDead
+    global dwarfHitChance
+    global totalItems
+    global currentRoom
+    global previousRoom
+    deathCount = deathCount + 1
+    if deathCount = 3 then
         printMessage(78)
         endGame()
     end if
-    if r0 = 2 then
+    if deathCount = 2 then
         printMessage(77)
     end if
-    ' r0 = 1 reaches here directly; r0 = 2 reaches here after its own
-    ' extra message above; r0 >= 4 also reaches here, same as r0 = 1 --
+    ' deathCount = 1 reaches here directly; deathCount = 2 reaches here after its own
+    ' extra message above; deathCount >= 4 also reaches here, same as deathCount = 1 --
     ' see this procedure's own doc comment.
     printMessage(75)
-    z0 = askYesNo%()
-    if z0 = 0 then
+    scratchValue = askYesNo%()
+    if scratchValue = 0 then
         endGame()
     end if
     printMessage(76)
     ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
-    s(18) = 7 : l = 0 : dead = 0 : kc = 1.03
-    for x = 1 to t2
-        if s(x) = -1 then
-            s(x) = l1
+    itemRoom(18) = 7 : lampOn = 0 : isDead = 0 : dwarfHitChance = 1.03
+    for itemIndex = 1 to totalItems
+        if itemRoom(itemIndex) = -1 then
+            itemRoom(itemIndex) = currentRoom
         end if
     end for
     ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
-    l1 = int(RND(1)*4)+1 : l2 = l1
+    currentRoom = int(RND(1)*4)+1 : previousRoom = currentRoom
 end procedure
 
 ' Checks whether the room just moved into is dark and has a pit to fall
@@ -710,14 +746,14 @@ end procedure
 ' safe room needs exactly the same "go redisplay" outcome as a
 ' fallen-into-and-recovered-from pit).
 procedure checkPitsAndReincarnateIfNeeded()
-    global l1
-    global l
-    global s
-    if l1 < 13 or (l = 1 and (s(18) = -1 or s(18) = l1)) then
+    global currentRoom
+    global lampOn
+    global itemRoom
+    if currentRoom < 13 or (lampOn = 1 and (itemRoom(18) = -1 or itemRoom(18) = currentRoom)) then
         return
     end if
     ' IS HE GOING TO FALL INTO A PIT?
-    if l1 = 16 or l1 = 17 or l1 = 19 or l1 = 20 or l1 = 25 or l1 = 47 or l1 = 48 or l1 = 59 or l1 = 60 or l1 = 61 or l1 = 75 or l1 = 76 or l1 = 98 then
+    if currentRoom = 16 or currentRoom = 17 or currentRoom = 19 or currentRoom = 20 or currentRoom = 25 or currentRoom = 47 or currentRoom = 48 or currentRoom = 59 or currentRoom = 60 or currentRoom = 61 or currentRoom = 75 or currentRoom = 76 or currentRoom = 98 then
         printMessage(44)
         reincarnate()
     end if
@@ -730,19 +766,19 @@ end procedure
 ' performMove%(...)`, can share the same "0 = message printed, no
 ' move; 1 = moved, check pits next" signal the rest of the movement
 ' cascade below uses.
-function performMove%(z2%)
-    global l1
-    global l2
-    global s
-    l2 = l1 : l1 = z2%
-    if s(35) = l2 then
-        s(35) = l1
+function performMove%(targetRoom%)
+    global currentRoom
+    global previousRoom
+    global itemRoom
+    previousRoom = currentRoom : currentRoom = targetRoom%
+    if itemRoom(35) = previousRoom then
+        itemRoom(35) = currentRoom
     end if
     return 1
 end function
 
 ' The special-room/special-direction checks run after a destination
-' room (z2%) has already been found for direction d% -- replaces stage
+' room (targetRoom%) has already been found for direction direction% -- replaces stage
 ' 2's L1260 GOSUB-like target (reached either from attemptMove%() below
 ' after its own dirs() lookup, or directly from a couple of verb
 ' handlers that search for a valid direction themselves first). Every
@@ -752,92 +788,92 @@ end function
 ' rooms, redundantly test conditions that could never be true there --
 ' see the case-by-case comments below for exactly which original label
 ' each branch replaces. Returns 0/1 the same way performMove%() does.
-function checkSpecialRoomAndMove%(d%, z2%)
-    global l1
-    global g
-    global b2
-    global sn
-    global t
-    global d2
-    global s
-    global k
-    global t2
-    dim z3%
-    if (l1 = 10 and (d% = 10 or d% = 5)) or (l1 = 11 and (d% = 9 or d% = 3)) then
+function checkSpecialRoomAndMove%(direction%, targetRoom%)
+    global currentRoom
+    global grateOpen
+    global crystalBridgeBuilt
+    global snakeAlive
+    global trollState
+    global ironDoorOiled
+    global itemRoom
+    global keywordFound
+    global totalItems
+    dim itemScanIndex%
+    if (currentRoom = 10 and (direction% = 10 or direction% = 5)) or (currentRoom = 11 and (direction% = 9 or direction% = 3)) then
         ' GRATE (was L1260/L1280) -- IF GRATE IS OPEN (G=0) MOVE HIM
-        if g = 1 then
-            return performMove%(z2%)
+        if grateOpen = 1 then
+            return performMove%(targetRoom%)
         end if
         printMessage(10)
         return 0
-    elseif l1 = 17 and d% = 9 and s(1) = -1 then
+    elseif currentRoom = 17 and direction% = 9 and itemRoom(1) = -1 then
         ' CAN'T TAKE NUGGET UPSTAIRS (was L1320)
         printMessage(38)
         return 0
-    elseif (l1 = 19 and d% = 7) or (l1 = 20 and d% = 3) then
+    elseif (currentRoom = 19 and direction% = 7) or (currentRoom = 20 and direction% = 3) then
         ' CRYSTAL BRIDGE AND FISSURE (was L1360)
-        if b2 then
-            return performMove%(z2%)
+        if crystalBridgeBuilt then
+            return performMove%(targetRoom%)
         end if
         printMessage(3)
         return 0
-    elseif l1 = 22 and d% <> 3 and d% <> 9 then
+    elseif currentRoom = 22 and direction% <> 3 and direction% <> 9 then
         ' MT. KING & SNAKE (was L1410)
-        if sn = 0 then
-            return performMove%(z2%)
+        if snakeAlive = 0 then
+            return performMove%(targetRoom%)
         end if
         printMessage(50)
         return 0
-    elseif l1 = 57 or l1 = 58 then
+    elseif currentRoom = 57 or currentRoom = 58 then
         ' Narrow Tunnel (was L1690) -- K(102)/K(106) are this turn's own
         ' "did the player type E"/"...W" keyword flags (see the DATA
         ' table's direction codes 100-109); the carried-item check below
         ' only applies when moving E/W literally, not via some other
         ' direction synonym.
-        if k(102) <> 0 or k(106) <> 0 then
-            for z3% = 1 to t2
-                if z3% <> 10 and s(z3%) = -1 then
+        if keywordFound(102) <> 0 or keywordFound(106) <> 0 then
+            for itemScanIndex% = 1 to totalItems
+                if itemScanIndex% <> 10 and itemRoom(itemScanIndex%) = -1 then
                     printMessage(53)
                     return 0
                 end if
             end for
         end if
-        return performMove%(z2%)
-    elseif (l1 = 60 and d% = 2) or (l1 = 61 and d% = 6) then
+        return performMove%(targetRoom%)
+    elseif (currentRoom = 60 and direction% = 2) or (currentRoom = 61 and direction% = 6) then
         ' TROLL (was L1780/L1790) -- t is 0 (no troll met yet), 1 (troll
         ' appeased, gone), or 2 (troll killed).
-        select case t+1
+        select case trollState+1
             case 1
-                return performMove%(z2%)
+                return performMove%(targetRoom%)
             case 2
                 printMessage(55)
                 return 0
             case 3
                 printMessage(56)
                 printMessage(55)
-                t = 1
+                trollState = 1
                 return 0
             case 4
-                t = 2
-                return performMove%(z2%)
+                trollState = 2
+                return performMove%(targetRoom%)
             case else
                 ' unreachable in practice (t is always 0, 1, or 2 --
                 ' see this function's own comment above) -- exists only
                 ' so every path through this SELECT CASE has an explicit
                 ' return, which the C backend requires.
-                return performMove%(z2%)
+                return performMove%(targetRoom%)
         end select
-    elseif l1 = 73 and d% = 1 and d2 = 0 then
+    elseif currentRoom = 73 and direction% = 1 and ironDoorOiled = 0 then
         ' (was L1860)
         printMessage(57)
         return 0
-    elseif l1 = 82 and s(33) = l1 and d% = 1 then
+    elseif currentRoom = 82 and itemRoom(33) = currentRoom and direction% = 1 then
         ' DRAGON (was L1890)
         printMessage(51)
         return 0
     else
         ' Normal, unimpeded move (was L1890's own final `else`).
-        return performMove%(z2%)
+        return performMove%(targetRoom%)
     end if
 end function
 
@@ -848,22 +884,22 @@ end function
 ' same "you can't go that way" message L1220 itself would print outside
 ' this sentinel case.
 function attemptRandomMove%()
-    global l1
-    dim z2%, z3%
-    if l1 = 44 then
+    global currentRoom
+    dim targetRoom%, pickCount%
+    if currentRoom = 44 then
         ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
         ' at random from the DATA table below (was L1470/L1510/L1530).
         if RND(1) > 0.5 then
             restore bedquiltRooms
-            for z3% = 1 to int(RND(1)*5)+1
-                read z2%
+            for pickCount% = 1 to int(RND(1)*5)+1
+                read targetRoom%
             end for
-            return performMove%(z2%)
+            return performMove%(targetRoom%)
         end if
         printMessage(52)
         return 0
     end if
-    if l1 = 39 then
+    if currentRoom = 39 then
         ' WITT'S END: 15% chance of escaping to room 38 (was L1590/L1650).
         if RND(1) < 0.15 then
             return performMove%(38)
@@ -876,9 +912,9 @@ function attemptRandomMove%()
 end function
 bedquiltRooms: data 33,37,45,92,76
 
-' Looks up the destination room for direction d% and either moves there
+' Looks up the destination room for direction% and either moves there
 ' or prints why not -- replaces stage 2's L1070 GOSUB-like target.
-' z2=255 is the "pick one of several rooms at random" sentinel (see
+' targetRoom%=255 is the "pick one of several rooms at random" sentinel (see
 ' attemptRandomMove%()); 1..254 is a real destination; anything else
 ' means "you can't go that way." Returns 1 if the move happened (the
 ' caller should GOTO L9780, which checks for a pit to fall into and
@@ -886,19 +922,19 @@ bedquiltRooms: data 33,37,45,92,76
 ' caller should GOTO L400) -- a plain GOTO to either, the way the
 ' original GOSUB-like target used, isn't possible from inside a
 ' function.
-function attemptMove%(d%)
-    global l1
-    global dirs
-    dim z2%
-    z2% = dirs(l1, d%)
-    if z2% = 255 then
+function attemptMove%(direction%)
+    global currentRoom
+    global roomExits
+    dim targetRoom%
+    targetRoom% = roomExits(currentRoom, direction%)
+    if targetRoom% = 255 then
         return attemptRandomMove%()
     end if
-    if z2% < 1 or z2% > 254 then
+    if targetRoom% < 1 or targetRoom% > 254 then
         printMessage(1)
         return 0
     end if
-    return checkSpecialRoomAndMove%(d%, z2%)
+    return checkSpecialRoomAndMove%(direction%, targetRoom%)
 end function
 
 ' ==========================================================================
@@ -920,103 +956,103 @@ end function
 ' ==========================================================================
 
 function verbPlugh%()
-    global l1
-    global s
-    global z2
+    global currentRoom
+    global itemRoom
+    global targetRoom
     ' *** PLUGH ***
-    if l1 = 7 then
-        if s(35) = l1 then
-            s(35) = 0
+    if currentRoom = 7 then
+        if itemRoom(35) = currentRoom then
+            itemRoom(35) = 0
         end if
-        z2 = 26
-    elseif l1 = 26 then
-        z2 = 7
+        targetRoom = 26
+    elseif currentRoom = 26 then
+        targetRoom = 7
     else
         printMessage(2)
         return 0
     end if
-    performMove%(z2)
+    performMove%(targetRoom)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
 
 function verbXyzzy%()
-    global l1
-    global s
-    global z2
+    global currentRoom
+    global itemRoom
+    global targetRoom
     ' *** XYZZY ***
-    if l1 = 7 then
-        if s(35) = l1 then
-            s(35) = 0
+    if currentRoom = 7 then
+        if itemRoom(35) = currentRoom then
+            itemRoom(35) = 0
         end if
-        z2 = 13
-    elseif l1 = 13 then
-        z2 = 7
+        targetRoom = 13
+    elseif currentRoom = 13 then
+        targetRoom = 7
     else
         printMessage(2)
         return 0
     end if
-    performMove%(z2)
+    performMove%(targetRoom)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
 
 function verbPlover%()
-    global l1
-    global s
-    global z2
+    global currentRoom
+    global itemRoom
+    global targetRoom
     ' *** PLOVER *** (CAN'T BRING EMERALD WITH HIM)
-    if l1 <= 26 then
-        if s(35) = l1 then
-            s(35) = 0
+    if currentRoom <= 26 then
+        if itemRoom(35) = currentRoom then
+            itemRoom(35) = 0
         end if
-        if s(10) = -1 then
-            s(10) = l1
+        if itemRoom(10) = -1 then
+            itemRoom(10) = currentRoom
         end if
-        z2 = 58
-    elseif l1 = 58 then
-        z2 = 26
+        targetRoom = 58
+    elseif currentRoom = 58 then
+        targetRoom = 26
     else
         printMessage(2)
         return 0
     end if
-    performMove%(z2)
+    performMove%(targetRoom)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
 
 function verbCross%()
-    global l1
-    global b2
-    global d
-    global z2
+    global currentRoom
+    global crystalBridgeBuilt
+    global direction
+    global targetRoom
     ' *** CROSS ***
-    if l1 = 19 and b2 = 0 then
+    if currentRoom = 19 and crystalBridgeBuilt = 0 then
         printMessage(3)
-    elseif l1 = 19 then
+    elseif currentRoom = 19 then
         ' JUST GIVE NEW DIRECTION, USE MOVE ROUTINE
-        d = 7
-        if attemptMove%(d) then
+        direction = 7
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
-    elseif l1 = 20 and b2 = 0 then
+    elseif currentRoom = 20 and crystalBridgeBuilt = 0 then
         printMessage(3)
-    elseif l1 = 20 then
-        d = 3
-        if attemptMove%(d) then
+    elseif currentRoom = 20 then
+        direction = 3
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
-    elseif l1 = 60 then
-        d = 2
-        if attemptMove%(d) then
+    elseif currentRoom = 60 then
+        direction = 2
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
-    elseif l1 = 61 then
-        d = 6
-        if attemptMove%(d) then
+    elseif currentRoom = 61 then
+        direction = 6
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
@@ -1027,54 +1063,54 @@ function verbCross%()
 end function
 
 function verbClimb%()
-    global l1
-    global p1
-    global z2
+    global currentRoom
+    global pirateState
+    global targetRoom
     ' *** CLIMB ***
-    IF L1<>50 THEN printMessage(2) : return 0
+    IF currentRoom<>50 THEN printMessage(2) : return 0
     ' CAN HE CLIMB BEANSTALK?
-    IF P1<2 THEN printMessage(2) : return 0
+    IF pirateState<2 THEN printMessage(2) : return 0
     ' YES
-    Z2=70
-    performMove%(Z2)
+    targetRoom=70
+    performMove%(targetRoom)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
 
 function verbJump%()
-    global l1
+    global currentRoom
     ' *** JUMP *** STRICTLY SUICIDAL
-    IF L1<>16 AND L1<>19 AND L1<>20 AND L1<>27 THEN printMessage(2) : return 0
+    IF currentRoom<>16 AND currentRoom<>19 AND currentRoom<>20 AND currentRoom<>27 THEN printMessage(2) : return 0
     printMessage(4)
     reincarnate()
     return 1
 end function
 
 function verbFill%()
-    global l1
-    global s
-    global b0
-    global b$
-    global c$
+    global currentRoom
+    global itemRoom
+    global bottleContents
+    global responseText$
+    global commandLine$
     ' FILL
-    if S(21) <> -1 then
-        B$="bottle"
-        PRINT "You don't have the ";b$
-        c$=""
+    if itemRoom(21) <> -1 then
+        responseText$="bottle"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
         return 0
     end if
-    if B0 <> 0 then
+    if bottleContents <> 0 then
         printMessage(5)
-        c$=""
+        commandLine$=""
         return 0
     end if
-    if L1=7 or L1=8 or L1=9 or L1=35 or L1=74 or L1=81 then
-        B0=1:S(16)=-1
-    elseif L1=49 then
-        B0=2:S(17)=-1
+    if currentRoom=7 or currentRoom=8 or currentRoom=9 or currentRoom=35 or currentRoom=74 or currentRoom=81 then
+        bottleContents=1:itemRoom(16)=-1
+    elseif currentRoom=49 then
+        bottleContents=2:itemRoom(17)=-1
     else
-        B$="oil"
-        PRINT "I see no ";B$;" here."
+        responseText$="oil"
+        PRINT "I see no ";responseText$;" here."
         return 0
     end if
     PRINT "The bottle is now filled."
@@ -1082,17 +1118,17 @@ function verbFill%()
 end function
 
 function verbEmpty%()
-    global s
-    global b0
-    global b$
-    global c$
+    global itemRoom
+    global bottleContents
+    global responseText$
+    global commandLine$
     ' *** EMPTY ***
-    if S(21)<>-1 then
-        B$="bottle" : PRINT "You don't have the ";b$ : c$=""
+    if itemRoom(21)<>-1 then
+        responseText$="bottle" : PRINT "You don't have the ";responseText$ : commandLine$=""
         return 0
     end if
     ' EMPTY BOTTLE (ASSUMED FULL)
-    S(B0+15)=0:B0=0
+    itemRoom(bottleContents+15)=0:bottleContents=0
     PRINT "Emptied"
     return 0
 end function
@@ -1104,54 +1140,54 @@ function verbLook%()
 end function
 
 function verbLight%()
-    global s
-    global l
-    global b$
-    global c$
+    global itemRoom
+    global lampOn
+    global responseText$
+    global commandLine$
     ' *** LIGHT ***
-    if s(18) = -1 then
-        l = 1
-        b$ = "on"
+    if itemRoom(18) = -1 then
+        lampOn = 1
+        responseText$ = "on"
     else
-        b$ = "lamp"
-        PRINT "You don't have the ";b$
-        c$=""
+        responseText$ = "lamp"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
         return 0
     end if
-    PRINT "The lamp is now ";b$
+    PRINT "The lamp is now ";responseText$
     describeRoomForLook()
     return 0
 end function
 
 function verbOff%()
-    global s
-    global l
-    global b$
-    global c$
+    global itemRoom
+    global lampOn
+    global responseText$
+    global commandLine$
     ' *** OFF (EXTINGUSIH) ***
-    if s(18) = -1 then
-        L=0:B$="off"
+    if itemRoom(18) = -1 then
+        lampOn=0:responseText$="off"
     else
-        b$ = "lamp"
-        PRINT "You don't have the ";b$
-        c$=""
+        responseText$ = "lamp"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
         return 0
     end if
-    PRINT "The lamp is now ";b$
+    PRINT "The lamp is now ";responseText$
     describeRoomForLook()
     return 0
 end function
 
 function verbEnter%()
-    global l1
-    global d
-    global z2
-    global dirs
+    global currentRoom
+    global direction
+    global targetRoom
+    global roomExits
     ' *** ENTER ***
-    if l1 = 6 or l1 = 68 then
+    if currentRoom = 6 or currentRoom = 68 then
         ' TO HOUSE / TO BARREN ROOM
-        D=3
-        if attemptMove%(D) then
+        direction=3
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
@@ -1161,10 +1197,10 @@ function verbEnter%()
     ' (D=10, "down") -- was a manual D=10 downto 1 GOTO loop (LW3240).
     ' `return` here, not `exit`/`continue` -- it unwinds this whole
     ' function regardless of the `for` loop it's inside.
-    for D = 10 to 1 step -1
-        Z2 = DIRS(L1,D)
-        IF Z2>0 AND Z2<101 THEN
-            if checkSpecialRoomAndMove%(D, Z2) then
+    for direction = 10 to 1 step -1
+        targetRoom = roomExits(currentRoom,direction)
+        IF targetRoom>0 AND targetRoom<101 THEN
+            if checkSpecialRoomAndMove%(direction, targetRoom) then
                 checkPitsAndReincarnateIfNeeded()
                 return 1
             else
@@ -1177,15 +1213,15 @@ function verbEnter%()
 end function
 
 function verbLeave%()
-    global l1
-    global d
-    global z2
-    global dirs
+    global currentRoom
+    global direction
+    global targetRoom
+    global roomExits
     ' ** LEAVE ***
-    if l1 = 7 or l1 = 69 then
+    if currentRoom = 7 or currentRoom = 69 then
         ' LEAVE HOUSE / LEAVE BARREN ROOM
-        D=7
-        if attemptMove%(D) then
+        direction=7
+        if attemptMove%(direction) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
@@ -1195,10 +1231,10 @@ function verbLeave%()
     ' (D=1, "north") -- was a manual D=1 to 10 GOTO loop (LW3400). See
     ' ENTER's own comment above for why this uses `return` instead of
     ' `exit`/`continue`.
-    for D = 1 to 10
-        Z2 = DIRS(L1,D)
-        IF Z2>0 AND Z2<101 THEN
-            if checkSpecialRoomAndMove%(D, Z2) then
+    for direction = 1 to 10
+        targetRoom = roomExits(currentRoom,direction)
+        IF targetRoom>0 AND targetRoom<101 THEN
+            if checkSpecialRoomAndMove%(direction, targetRoom) then
                 checkPitsAndReincarnateIfNeeded()
                 return 1
             else
@@ -1211,23 +1247,23 @@ function verbLeave%()
 end function
 
 function verbInventory%()
-    global z0
-    global s
-    global t2
-    global b$
-    global itemname$
+    global scratchValue
+    global itemRoom
+    global totalItems
+    global responseText$
+    global itemNames$
     ' *** INVENTORY ***
-    Z0=0
+    scratchValue=0
     PRINT "You are carrying:";
-    FOR X=1 TO T2
-        IF S(X)=-1 THEN
-            b$ = itemname$(x)
-            PRINT B$
-            Z0 = Z0 + 1
+    FOR itemIndex=1 TO totalItems
+        IF itemRoom(itemIndex)=-1 THEN
+            responseText$ = itemNames$(itemIndex)
+            PRINT responseText$
+            scratchValue = scratchValue + 1
         end if
     end for
 
-    if Z0=0 then
+    if scratchValue=0 then
         PRINT "nothing."
     end if
     PRINT
@@ -1235,32 +1271,33 @@ function verbInventory%()
 end function
 
 function verbGet%()
-    global k
-    global z8
-    global z3
-    global s
-    global l1
-    global c
-    global b1
-    global d1
-    global b3
-    global b0
-    global t2
-    global itemname$
-    global a$
-    global b$
-    global c$
+    global keywordFound
+    global matchCount
+    global itemCode
+    global itemRoom
+    global currentRoom
+    global bearTamedScored
+    global bearFedState
+    global dragonAlive
+    global birdInCage
+    global bottleContents
+    global totalItems
+    global itemNames$
+    global paddedCommand$
+    global responseText$
+    global commandLine$
     ' *** GET ***
-    if k(47) <> 1 then
+    if keywordFound(47) <> 1 then
         findMatchedItems()
-        if z8 = 0 then
+        if matchCount = 0 then
             PRINT "Get what?"
             printDontUnderstand()
             return 0
         end if
     end if
     ' Scan every item for one matching the player's command and present
-    ' in this room -- was a manual z3=1 to t2 GOTO loop (LW3680). `return`
+    ' in this room -- was a manual itemCode=1 to totalItems GOTO loop
+    ' (LW3680). `return`
     ' below, not `exit`/`continue`, wherever the *original* GOTO's
     ' ultimate target meant "abandon the scan and get another command"
     ' rather than "try the next item" -- `return` unwinds this whole
@@ -1269,178 +1306,178 @@ function verbGet%()
     ' site was the old loop's own LCONT3680 (or, for the special-gets
     ' checks folded in below, a genuine take that should keep scanning
     ' for more when GET ALL is in effect).
-    for z3 = 1 to t2
-        if k(47) <> 1 and k(z3) = 0 then continue
-        if s(z3) <> l1 then
-            if k(47) <> 1 then
-                a$ = itemname$(z3) : PRINT a$;" not here."
+    for itemCode = 1 to totalItems
+        if keywordFound(47) <> 1 and keywordFound(itemCode) = 0 then continue
+        if itemRoom(itemCode) <> currentRoom then
+            if keywordFound(47) <> 1 then
+                paddedCommand$ = itemNames$(itemCode) : PRINT paddedCommand$;" not here."
             end if
             continue
         end if
         ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
-        z8 = 0
-        for x = 1 to t2
-            if s(x) = -1 then
-                z8 = z8+1
+        matchCount = 0
+        for itemIndex = 1 to totalItems
+            if itemRoom(itemIndex) = -1 then
+                matchCount = matchCount+1
             end if
         end for
 
-        if z8 >= 7 then
+        if matchCount >= 7 then
             ' CARRYING TOO MUCH
             printMessage(54)
-            c$=""
+            commandLine$=""
             return 0
         end if
         ' SPECIAL GETS -- was L6880, a GOSUB-like target reached only from
         ' this scan.
-        if z3 = 24 or z3 = 30 or z3 > 31 then
+        if itemCode = 24 or itemCode = 30 or itemCode > 31 then
             ' CAN'T GET THESE FOR SOME REASON
             printMessage(61)
             return 0
-        elseif z3 = 12 and c = 0 then
+        elseif itemCode = 12 and bearTamedScored = 0 then
             ' CHAIN
             printMessage(58)
             return 0
-        elseif z3 = 26 and b1 <> 2 then
+        elseif itemCode = 26 and bearFedState <> 2 then
             ' BEAR IS HE FED? UNLOCKED?
             printMessage(61)
             return 0
-        elseif z3 = 14 and d1 = 1 then
+        elseif itemCode = 14 and dragonAlive = 1 then
             ' DRAGON AND RUG
             printMessage(59)
             return 0
-        elseif z3 = 16 or z3 = 17 then
+        elseif itemCode = 16 or itemCode = 17 then
             ' OIL AND WATER DO SAME AS FILL
             PRINT "Why not say 'fill'?"
             return 0
-        elseif z3 = 22 and b3 then
+        elseif itemCode = 22 and birdInCage then
             ' TAKE BIRD SINCE IT'S IN CAGE
-            s(31) = -1 : PRINT "Bird and ";
-        elseif z3 = 31 then
+            itemRoom(31) = -1 : PRINT "Bird and ";
+        elseif itemCode = 31 then
             ' GETTING BIRD
-            if b3 = 1 then
+            if birdInCage = 1 then
                 ' TAKE CAGE, SINCE BIRD IS IN IT
-                PRINT "Cage and "; : s(22) = -1
-            elseif s(22) <> -1 then
-                b$ = "cage" : PRINT "I see no ";b$;" here."
+                PRINT "Cage and "; : itemRoom(22) = -1
+            elseif itemRoom(22) <> -1 then
+                responseText$ = "cage" : PRINT "I see no ";responseText$;" here."
                 return 0
-            elseif s(23) = -1 then
+            elseif itemRoom(23) = -1 then
                 ' ROD SCARES BIRD
                 printMessage(37)
                 return 0
             else
                 ' OK TO TAKE BIRD
-                b3 = 1
+                birdInCage = 1
             end if
-        elseif z3 = 21 and b0 then
+        elseif itemCode = 21 and bottleContents then
             ' BOTTLE FULL? IF SO, GET CONTENTS
             PRINT "Contents and the ";
-            s(b0+15) = -1
+            itemRoom(bottleContents+15) = -1
         end if
-        s(z3) = -1
-        a$ = itemname$(z3):PRINT a$;":taken."
+        itemRoom(itemCode) = -1
+        paddedCommand$ = itemNames$(itemCode):PRINT paddedCommand$;":taken."
     end for
     return 0
 end function
 
 function verbDrop%()
-    global k
-    global z8
-    global z3
-    global s
-    global l1
-    global b3
-    global b0
-    global t
-    global t2
-    global b$
-    global itemname$
+    global keywordFound
+    global matchCount
+    global itemCode
+    global itemRoom
+    global currentRoom
+    global birdInCage
+    global bottleContents
+    global trollState
+    global totalItems
+    global responseText$
+    global itemNames$
     ' *** DROP ***
-    if k(47) <> 1 then
+    if keywordFound(47) <> 1 then
         findMatchedItems()
-        if Z8 = 0 then
+        if matchCount = 0 then
             PRINT "Drop what?"
             printDontUnderstand()
             return 0
         end if
     end if
     ' Scan every item the player is carrying that matches the command --
-    ' was a manual Z3=1 to T2 GOTO loop (LW4000). See GET's own comment
+    ' was a manual itemCode=1 to totalItems GOTO loop (LW4000). See GET's own comment
     ' above for why this uses `return` instead of `exit`/`continue`.
-    for Z3 = 1 to T2
-        if K(47) <> 1 then
-            if K(Z3) <> 1 or S(Z3) = 0 then continue
+    for itemCode = 1 to totalItems
+        if keywordFound(47) <> 1 then
+            if keywordFound(itemCode) <> 1 or itemRoom(itemCode) = 0 then continue
         end if
-        if S(Z3) <> -1 then
-            if K(47) <> 1 then
-                b$ = itemname$(z3):PRINT "You don't have the ";B$
+        if itemRoom(itemCode) <> -1 then
+            if keywordFound(47) <> 1 then
+                responseText$ = itemNames$(itemCode):PRINT "You don't have the ";responseText$
             end if
             continue
         end if
         ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE) -- was
         ' L7380 onward, a GOSUB-like target reached only from here.
-        if Z3 = 31 or (Z3 = 22 and B3 = 1) then
+        if itemCode = 31 or (itemCode = 22 and birdInCage = 1) then
             ' BIRD IN CAGE
-            S(31)=L1:S(22)=L1:B3=1
-            if Z3 = 31 then
+            itemRoom(31)=currentRoom:itemRoom(22)=currentRoom:birdInCage=1
+            if itemCode = 31 then
                 PRINT "Cage and ";
                 PRINT "Bird and ";
             end if
-        elseif Z3 = 21 and B0 <> 0 then
+        elseif itemCode = 21 and bottleContents <> 0 then
             ' BOTTLE IS FULL, DO DROP CONTENTS TOO
             PRINT "Contents and ";
-            S(15+B0)=L1
-        elseif Z3 = 16 or Z3 = 17 then
+            itemRoom(15+bottleContents)=currentRoom
+        elseif itemCode = 16 or itemCode = 17 then
             PRINT "Try saying 'empty'"
             return 0
-        elseif Z3 = 26 and T = 1 and (L1 = 60 or L1 = 61) then
+        elseif itemCode = 26 and trollState = 1 and (currentRoom = 60 or currentRoom = 61) then
             printMessage(28)
-            T=0:S(26)=L1:S(32)=0
+            trollState=0:itemRoom(26)=currentRoom:itemRoom(32)=0
             return 0
-        elseif Z3 = 6 and S(28) <> L1 then
+        elseif itemCode = 6 and itemRoom(28) <> currentRoom then
             ' GOODBYE, FRAGILE VASE!
             printMessage(43)
-            S(6)=0:S(29)=L1
+            itemRoom(6)=0:itemRoom(29)=currentRoom
             return 0
-        elseif Z3 = 6 then
+        elseif itemCode = 6 then
             printMessage(60)
         end if
-        b$ = itemname$(z3):PRINT B$;":dropped."
-        S(Z3)=L1
+        responseText$ = itemNames$(itemCode):PRINT responseText$;":dropped."
+        itemRoom(itemCode)=currentRoom
     end for
     return 0
 end function
 
 function verbThrow%()
-    global z8
-    global z3
-    global s
-    global b$
-    global c$
-    global l1
-    global t
-    global dead
+    global matchCount
+    global itemCode
+    global itemRoom
+    global responseText$
+    global commandLine$
+    global currentRoom
+    global trollState
+    global isDead
     ' *** THROW ***
     findMatchedItems()
-    if z8 = 0 then
+    if matchCount = 0 then
         PRINT "Throw what?"
         printDontUnderstand()
         return 0
     end if
-    if s(z3) <> -1 then
-        PRINT "You don't have the ";b$ : c$="" : return 0
+    if itemRoom(itemCode) <> -1 then
+        PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
-    if z3 < 16 and s(32) = l1 then
+    if itemCode < 16 and itemRoom(32) = currentRoom then
         ' THROW TREASURE TO TROLL
         printMessage(27)
-        s(z3) = 0 : t = 3
+        itemRoom(itemCode) = 0 : trollState = 3
         return 0
-    elseif z3 = 27 and s(32) = l1 then
+    elseif itemCode = 27 and itemRoom(32) = currentRoom then
         ' TRYING TO BUTCHER TROLL?
         printMessage(26)
-        s(27) = l1
+        itemRoom(27) = currentRoom
         return 0
-    elseif z3 = 27 and s(35) = l1 then
+    elseif itemCode = 27 and itemRoom(35) = currentRoom then
         ' TRYING TO KILL DWARF
         if rnd(1) <= 0.5 then
             printMessage(29)
@@ -1450,11 +1487,11 @@ function verbThrow%()
             ' checkDwarfAttack()'s own comment)
         else
             printMessage(30)
-            s(35) = 0
+            itemRoom(35) = 0
         end if
     else
         ' NOTHING SPECIAL, JUST DROP ITEM
-        if s(35) = l1 then
+        if itemRoom(35) = currentRoom then
             checkDwarf() ' (was: GOSUB L8550 -- L8550 was just a comment
             ' immediately before the real dwarf subroutine's first line,
             ' L8560, so this call wanted the full checkDwarf() behavior,
@@ -1463,8 +1500,8 @@ function verbThrow%()
         end if
         PRINT "Thrown."
     end if
-    s(z3) = l1
-    if dead = 1 then
+    itemRoom(itemCode) = currentRoom
+    if isDead = 1 then
         reincarnate()
         return 1
     end if
@@ -1472,17 +1509,17 @@ function verbThrow%()
 end function
 
 function verbAttack%()
-    global z3
-    global s
-    global l1
-    global c$
+    global itemCode
+    global itemRoom
+    global currentRoom
+    global commandLine$
     ' *** ATTACK ***
     findMatchedItems()
-    if z3 = 33 and s(z3) = l1 and l1 = 82 then
+    if itemCode = 33 and itemRoom(itemCode) = currentRoom and currentRoom = 82 then
         ' HE CAN KILL DRAGON
         printMessage(68)
-        c$=""
-    elseif s(32) = l1 then
+        commandLine$=""
+    elseif itemRoom(32) = currentRoom then
         ' TRYING TO MUNGE TROLL
         ' (was: Z9=FNA(25):GOTO 400 -- FNA is called with no matching DEF FN
         ' anywhere in the original source; this looks like leftover/broken
@@ -1490,7 +1527,7 @@ function verbAttack%()
         ' this port introduced. Z9's assignment here isn't read before it's
         ' next assigned elsewhere, so dropping the call changes nothing
         ' observable.)
-    elseif z3 = 26 or z3 > 30 then
+    elseif itemCode = 26 or itemCode > 30 then
         ' DANGEROUS TO ATTACK THESE
         printMessage(70)
     else
@@ -1501,86 +1538,86 @@ function verbAttack%()
 end function
 
 function verbFeed%()
-    global z3
-    global s
-    global l1
-    global b$
-    global c$
-    global b1
-    global itemname$
+    global itemCode
+    global itemRoom
+    global currentRoom
+    global responseText$
+    global commandLine$
+    global bearFedState
+    global itemNames$
     ' *** FEED ***
     findMatchedItems()
-    if z3 = 35 then
+    if itemCode = 35 then
         ' CAN'T FEED DWARF!
         printMessage(24)
         return 0
     end if
-    if s(20) <> -1 then
-        B$ = "FOOD" : PRINT "You don't have the ";b$ : c$="" : return 0
+    if itemRoom(20) <> -1 then
+        responseText$ = "FOOD" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
-    if l1 <> 69 then
+    if currentRoom <> 69 then
         PRINT "I can't feed it."
         printMessage(23)
         return 0
     end if
-    if S(20)=L1 then
+    if itemRoom(20)=currentRoom then
         ' was: `GOTO L7600`, itself `printMessage(60):GOTO L4120` -- L4120
         ' was DROP's own per-item "dropped" epilogue, reused here verbatim
         ' (feeding the bear food already here also "drops" it via the
-        ' exact same z3/S() update DROP's own scan loop does, now inlined
+        ' exact same itemCode/itemRoom() update DROP's own scan loop does, now inlined
         ' there instead of living at a shared label).
         printMessage(60)
-        b$ = itemname$(z3):PRINT b$;":dropped."
-        S(Z3)=L1
+        responseText$ = itemNames$(itemCode):PRINT responseText$;":dropped."
+        itemRoom(itemCode)=currentRoom
     else
-        B1=1:S(20)=0:printMessage(6)
+        bearFedState=1:itemRoom(20)=0:printMessage(6)
     end if
     return 0
 end function
 
 function verbWater%()
-    global s
-    global b$
-    global c$
-    global l1
-    global p1
-    global b0
+    global itemRoom
+    global responseText$
+    global commandLine$
+    global currentRoom
+    global pirateState
+    global bottleContents
     ' *** WATER ***
-    if s(16) <> -1 then
-        B$ = "water" : PRINT "You don't have the ";b$ : c$="" : return 0
+    if itemRoom(16) <> -1 then
+        responseText$ = "water" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
-    if l1 <> 50 then
+    if currentRoom <> 50 then
         printMessage(2)
         return 0
     end if
     ' GOTO P1+1 OF 4860,4890,4920
-    if p1 = 0 then
+    if pirateState = 0 then
         printMessage(7)
-        p1 = 1
-    elseif p1 = 1 then
+        pirateState = 1
+    elseif pirateState = 1 then
         printMessage(8)
-        p1 = 2
+        pirateState = 2
     else
         printMessage(9)
-        p1 = 0
+        pirateState = 0
     end if
-    S(16)=0:B0=0
+    itemRoom(16)=0:bottleContents=0
     return 0
 end function
 
 function verbLock%()
-    global l1
-    global s
-    global g
-    global b$
-    global c$
+    global currentRoom
+    global itemRoom
+    global grateOpen
+    global responseText$
+    global commandLine$
     ' *** LOCK ***
-    if L1=10 or L1=11 then
-        if S(19)=-1 then
-            G=0:printMessage(10)
+    if currentRoom=10 or currentRoom=11 then
+        if itemRoom(19)=-1 then
+            grateOpen=0:printMessage(10)
         else
-            B$="keys"
-            PRINT "You don't have the ";b$ : c$="" : return 0
+            responseText$="keys"
+            PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
         end if
     else
         ' NOTHING LOCKABLE
@@ -1590,24 +1627,24 @@ function verbLock%()
 end function
 
 function verbUnlock%()
-    global s
-    global l1
-    global g
-    global b1
-    global c
-    global b$
-    global c$
+    global itemRoom
+    global currentRoom
+    global grateOpen
+    global bearFedState
+    global bearTamedScored
+    global responseText$
+    global commandLine$
     ' *** UNLOCK ***
-    if S(19) <> -1 then
-        B$="keys"
-        PRINT "You don't have the ";b$ : c$="" : return 0
+    if itemRoom(19) <> -1 then
+        responseText$="keys"
+        PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
-    if L1=10 or L1=11 then
-        G=1:printMessage(11)
-    elseif L1=69 then
-        if B1>0 then
-            if C=0 then
-                C=1:B1=2
+    if currentRoom=10 or currentRoom=11 then
+        grateOpen=1:printMessage(11)
+    elseif currentRoom=69 then
+        if bearFedState>0 then
+            if bearTamedScored=0 then
+                bearTamedScored=1:bearFedState=2
             end if
             printMessage(13)
         else
@@ -1620,104 +1657,104 @@ function verbUnlock%()
 end function
 
 function verbFree%()
-    global k
-    global s
-    global l1
-    global b3
-    global sn
-    global b$
-    global c$
+    global keywordFound
+    global itemRoom
+    global currentRoom
+    global birdInCage
+    global snakeAlive
+    global responseText$
+    global commandLine$
     ' *** FREE ***
-    if K(31) <> 1 or S(31) <> -1 then
+    if keywordFound(31) <> 1 or itemRoom(31) <> -1 then
         ' CAN'T FREE ANYTHING BUT BIRD
         printMessage(2)
-        c$=""
+        commandLine$=""
         return 0
     end if
-    S(31) = L1:B3=0
+    itemRoom(31) = currentRoom:birdInCage=0
     PRINT "Freed."
-    if L1 = 22 and SN = 1 then
-        B$ = "snake"
-    elseif L1 = 82 then
-        B$ = "dragon"
+    if currentRoom = 22 and snakeAlive = 1 then
+        responseText$ = "snake"
+    elseif currentRoom = 82 then
+        responseText$ = "dragon"
     else
         return 0
     end if
-    PRINT "The little bird attacks the green ";B$;" and"
-    if L1 = 82 then
+    PRINT "The little bird attacks the green ";responseText$;" and"
+    if currentRoom = 82 then
         PRINT "gets burned to a crisp"
-        S(31)=0
+        itemRoom(31)=0
     else
         PRINT "drives it off"
-        SN=0:S(34)=0
+        snakeAlive=0:itemRoom(34)=0
     end if
     return 0
 end function
 
 function verbWave%()
-    global k
-    global s
-    global b$
-    global c$
-    global l1
-    global b2
+    global keywordFound
+    global itemRoom
+    global responseText$
+    global commandLine$
+    global currentRoom
+    global crystalBridgeBuilt
     ' *** WAVE ***
-    if K(23) <> 1 then
+    if keywordFound(23) <> 1 then
         printMessage(2)
-    elseif S(23) <> -1 then
-        B$="rod" : PRINT "You don't have the ";b$ : c$="" : return 0
-    elseif L1<>19 and L1<>20 then
+    elseif itemRoom(23) <> -1 then
+        responseText$="rod" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+    elseif currentRoom<>19 and currentRoom<>20 then
         ' NOT NEAR FISSURE
         printMessage(2)
-    elseif B2=0 then
+    elseif crystalBridgeBuilt=0 then
         printMessage(14)
-        B2=1
+        crystalBridgeBuilt=1
     else
         printMessage(15)
-        B2=0
+        crystalBridgeBuilt=0
     end if
     return 0
 end function
 
 function verbOpen%()
-    global z3
-    global s
-    global l1
-    global b$
-    global c$
+    global itemCode
+    global itemRoom
+    global currentRoom
+    global responseText$
+    global commandLine$
     ' *** OPEN ***
     findMatchedItems()
-    if Z3=0 then
+    if itemCode=0 then
         PRINT "Open ";
         printDontUnderstand()
         return 0
     end if
-    if Z3=40 then return verbUnlock%() ' OPEN a lock is the same as UNLOCK
-    if S(Z3)<>L1 then
-        PRINT "I see no ";b$;" here."
+    if itemCode=40 then return verbUnlock%() ' OPEN a lock is the same as UNLOCK
+    if itemRoom(itemCode)<>currentRoom then
+        PRINT "I see no ";responseText$;" here."
         return 0
     end if
-    if z3<>24 then
-        PRINT "I don't know how to open a ";B$
+    if itemCode<>24 then
+        PRINT "I don't know how to open a ";responseText$
         return 0
     end if
-    if S(9)=-1 then
+    if itemRoom(9)=-1 then
         printMessage(16)
         return 0
     end if
-    if S(Z3) = 0 then
+    if itemRoom(itemCode) = 0 then
         printMessage(2)
         return 0
     end if
     ' HE'S OPENED CLAM, SO PRINT DESCRIPTION OF THIS
     ' PUT PEARL IN CUL-DE-SAC
-    S(7)=43:S(24)=0:S(30)=L1:printMessage(17)
+    itemRoom(7)=43:itemRoom(24)=0:itemRoom(30)=currentRoom:printMessage(17)
     return 0
 end function
 
 function verbClose%()
-    global z3
-    global s
+    global itemCode
+    global itemRoom
     ' *** CLOSE *** -- an upstream bug (present already in stage 2/3, not
     ' introduced by this refactor): the dispatch table points CLOSE's
     ' entry at this exact "GOTO L400" line -- the same line OPEN's own
@@ -1730,95 +1767,95 @@ function verbClose%()
     return 0
     ' *** CLOSE *** (dead code -- see the comment above)
     findMatchedItems()
-    IF Z3=40 THEN return verbLock%()
+    IF itemCode=40 THEN return verbLock%()
     printMessage(18)
     return 0
 end function
 
 function verbOil%()
-    global k
-    global s
-    global l1
-    global d2
-    global b0
-    global b$
+    global keywordFound
+    global itemRoom
+    global currentRoom
+    global ironDoorOiled
+    global bottleContents
+    global responseText$
     ' OIL
-    if K(17)=0 then
+    if keywordFound(17)=0 then
         printMessage(2)
-    elseif S(17)<>-1 then
-        B$="oil" : PRINT "I see no ";b$;" here."
-    elseif L1<>73 then
+    elseif itemRoom(17)<>-1 then
+        responseText$="oil" : PRINT "I see no ";responseText$;" here."
+    elseif currentRoom<>73 then
         printMessage(2)
-    elseif D2=1 then
+    elseif ironDoorOiled=1 then
         ' IS DOOR STILL RUSTED
         printMessage(2)
     else
-        D2=1:S(17)=0:B0=0:printMessage(19)
+        ironDoorOiled=1:itemRoom(17)=0:bottleContents=0:printMessage(19)
     end if
     return 0
 end function
 
 function verbEat%()
-    global k
-    global z3
-    global z5
-    global s
-    global b0
-    global c$
+    global keywordFound
+    global itemCode
+    global isCarrying
+    global itemRoom
+    global bottleContents
+    global commandLine$
     ' *** EAT ***
-    if K(20) <> 1 then
+    if keywordFound(20) <> 1 then
         printMessage(20)
-        c$=""
+        commandLine$=""
         return 0
     end if
-    Z3=20:checkCarryingItem()
-    if Z5=0 then
-        c$=""
+    itemCode=20:checkCarryingItem()
+    if isCarrying=0 then
+        commandLine$=""
         return 0
     end if
     printMessage(73)
-    S(20)=0:B0=0
+    itemRoom(20)=0:bottleContents=0
     return 0
 end function
 
 function verbDrink%()
-    global k
-    global z3
-    global z5
-    global s
-    global b0
-    global c$
+    global keywordFound
+    global itemCode
+    global isCarrying
+    global itemRoom
+    global bottleContents
+    global commandLine$
     ' *** DRINK ***
-    if K(16) <> 1 then
+    if keywordFound(16) <> 1 then
         printMessage(21)
-        c$=""
+        commandLine$=""
         return 0
     end if
-    Z3=16:checkCarryingItem()
-    if Z5=0 then
-        c$=""
+    itemCode=16:checkCarryingItem()
+    if isCarrying=0 then
+        commandLine$=""
         return 0
     end if
     printMessage(22)
-    S(17)=0:B0=0
+    itemRoom(17)=0:bottleContents=0
     return 0
 end function
 
 function verbFeeFieFoeFoo%()
-    global l1
-    global s
-    global c$
+    global currentRoom
+    global itemRoom
+    global commandLine$
     ' *** FEE FIE FOE FOO ***
-    if l1 <> 71 then
+    if currentRoom <> 71 then
         printMessage(2)
-        c$=""
-    elseif s(8) = l1 then
+        commandLine$=""
+    elseif itemRoom(8) = currentRoom then
         ' MAKE NEST VANISH
         printMessage(79)
-        S(8)=0
+        itemRoom(8)=0
     else
         ' IF S(8)=0 THEN goto L6110
-        S(8)=L1
+        itemRoom(8)=currentRoom
         ' MAKE NEST RE-APPEAR
         printMessage(81)
     end if
@@ -1826,35 +1863,35 @@ function verbFeeFieFoeFoo%()
 end function
 
 function verbShort%()
-    global d0
+    global descriptionMode
     ' *** SHORT ***
     PRINT "Short descriptions"
-    D0=0
+    descriptionMode=0
     return 0
 end function
 
 function verbLong%()
-    global d0
+    global descriptionMode
     ' *** LONG ***
     PRINT "Long descriptions"
-    D0=1
+    descriptionMode=1
     return 0
 end function
 
 function verbBrief%()
-    global d0
+    global descriptionMode
     ' *** BRIEF ***
     PRINT "OK, I'll only describe the room in detail the first time."
-    D0=2
+    descriptionMode=2
     return 0
 end function
 
 function verbQuit%()
-    global z0
+    global scratchValue
     ' *** QUIT ***
     PRINT "Save game";
-    Z0 = askYesNo%()
-    IF Z0=1 THEN return verbSaveGame%()
+    scratchValue = askYesNo%()
+    IF scratchValue=1 THEN return verbSaveGame%()
     endGame()
     return 0
 end function
@@ -1865,124 +1902,124 @@ function verbScore%()
 end function
 
 function verbSaveGame%()
-    global a$
-    global t1
-    global t2
-    global t3
-    global l1
-    global l2
-    global g
-    global b0
-    global sn
-    global d1
-    global d2
-    global d0
-    global t
-    global b1
-    global b2
-    global p1
-    global l
-    global c
-    global d3
-    global b3
-    global r0
-    global kc
-    global s
-    global v
-    global c0
-    global c$
-    global k
+    global paddedCommand$
+    global totalRooms
+    global totalItems
+    global totalKeywords
+    global currentRoom
+    global previousRoom
+    global grateOpen
+    global bottleContents
+    global snakeAlive
+    global dragonAlive
+    global ironDoorOiled
+    global descriptionMode
+    global trollState
+    global bearFedState
+    global crystalBridgeBuilt
+    global pirateState
+    global lampOn
+    global bearTamedScored
+    global dwarfGaveAxe
+    global birdInCage
+    global deathCount
+    global dwarfHitChance
+    global itemRoom
+    global roomVisited
+    global gameLoaded
+    global commandLine$
+    global keywordFound
     ' *** SAVE GAME ***
-    INPUT "What do you want to call the save file? ";A$
+    INPUT "What do you want to call the save file? ";paddedCommand$
     try
-        OPEN A$ FOR OUTPUT AS #5
+        OPEN paddedCommand$ FOR OUTPUT AS #5
     catch err%, erl%
-        PRINT "File ";a$;" not created"
-        c$=""
+        PRINT "File ";paddedCommand$;" not created"
+        commandLine$=""
         return 0
     end try
-    PRINT #5,T1;",";T2;",";T3;",";L1;",";L2;",";G;",";B0;",";SN;",";D1;",";D2;",";D0;",";T;",";B1;",";B2;",";P1;",";L;",";C;",";D3;",";B3;",";R0;",";KC
-    FOR X=1 TO 99
-        PRINT #5,S(X);",";V(X)
+    PRINT #5,totalRooms;",";totalItems;",";totalKeywords;",";currentRoom;",";previousRoom;",";grateOpen;",";bottleContents;",";snakeAlive;",";dragonAlive;",";ironDoorOiled;",";descriptionMode;",";trollState;",";bearFedState;",";crystalBridgeBuilt;",";pirateState;",";lampOn;",";bearTamedScored;",";dwarfGaveAxe;",";birdInCage;",";deathCount;",";dwarfHitChance
+    FOR recordIndex=1 TO 99
+        PRINT #5,itemRoom(recordIndex);",";roomVisited(recordIndex)
     end for
 
-    PRINT #5,V(100)
+    PRINT #5,roomVisited(100)
     CLOSE #5
     PRINT "Game saved"
-    C0 = 0
-    if k(143) = 1 then
+    gameLoaded = 0
+    if keywordFound(143) = 1 then
         endGame()
     end if
-    c$=""
+    commandLine$=""
     return 0
 end function
 
 function verbLoadOldGame%()
-    global a$
-    global t1
-    global t2
-    global t3
-    global l1
-    global l2
-    global g
-    global b0
-    global sn
-    global d1
-    global d2
-    global d0
-    global t
-    global b1
-    global b2
-    global p1
-    global l
-    global c
-    global d3
-    global b3
-    global r0
-    global kc
-    global s
-    global v
-    global c0
-    global c$
+    global paddedCommand$
+    global totalRooms
+    global totalItems
+    global totalKeywords
+    global currentRoom
+    global previousRoom
+    global grateOpen
+    global bottleContents
+    global snakeAlive
+    global dragonAlive
+    global ironDoorOiled
+    global descriptionMode
+    global trollState
+    global bearFedState
+    global crystalBridgeBuilt
+    global pirateState
+    global lampOn
+    global bearTamedScored
+    global dwarfGaveAxe
+    global birdInCage
+    global deathCount
+    global dwarfHitChance
+    global itemRoom
+    global roomVisited
+    global gameLoaded
+    global commandLine$
     ' *** LOAD OLD GAME ***
-    if C0<>0 then
+    if gameLoaded<>0 then
         PRINT "You already have a loaded game!"
-        c$=""
+        commandLine$=""
         return 0
     end if
-    INPUT "Save file name? ";A$
+    INPUT "Save file name? ";paddedCommand$
     try
-        OPEN A$ FOR INPUT AS #5
+        OPEN paddedCommand$ FOR INPUT AS #5
     catch err%, erl%
-        PRINT "Unable to use file ";A$
-        c$=""
+        PRINT "Unable to use file ";paddedCommand$
+        commandLine$=""
         return 0
     end try
-    INPUT #5,T1,T2,T3,L1,L2,G,B0,SN,D1,D2,D0,T,B1,B2,P1,L,C,D3,B3,R0,KCX$
-    kc = val(kcx$)
-    FOR X=1 TO 99
-        INPUT #5,SX,VX:s(x)=sx:v(x)=vx
+    INPUT #5,totalRooms,totalItems,totalKeywords,currentRoom,previousRoom,grateOpen,bottleContents,snakeAlive,dragonAlive,ironDoorOiled,descriptionMode,trollState,bearFedState,crystalBridgeBuilt,pirateState,lampOn,bearTamedScored,dwarfGaveAxe,birdInCage,deathCount,KCX$
+    dwarfHitChance = val(kcx$)
+    FOR recordIndex=1 TO 99
+        INPUT #5,itemLocationValue,roomVisitedValue:itemRoom(recordIndex)=itemLocationValue:roomVisited(recordIndex)=roomVisitedValue
     end for
 
-    INPUT #5,vx:v(100)=vx
+    INPUT #5,roomVisitedValue:roomVisited(100)=roomVisitedValue
     CLOSE #5
-    C0=1
+    gameLoaded=1
     return 1
 end function
 
 function verbReadMagazine%()
-    global z3
-    global s
-    global b$
-    global c$
+    global itemCode
+    global itemRoom
+    global responseText$
+    global commandLine$
     ' *** READ THE MAGAZINE ***
     findMatchedItems()
-    if z3 <> 25 then
+    if itemCode <> 25 then
         printMessage(74)
-        c$=""
-    elseif s(25) <> -1 then
-        B$="magazine"
-        PRINT "You don't have the ";b$ : c$=""
+        commandLine$=""
+    elseif itemRoom(25) <> -1 then
+        responseText$="magazine"
+        PRINT "You don't have the ";responseText$ : commandLine$=""
     else
         ' OK, LET HIM READ IT
         printMessage(303)
@@ -1991,54 +2028,54 @@ function verbReadMagazine%()
 end function
 
 function verbYes%()
-    global l1
-    global s
-    global d1
+    global currentRoom
+    global itemRoom
+    global dragonAlive
     ' *** YES (only meaningful in the dragon's lair, room 82) *** --
     ' physically relocated here from inside the ATTACK handler's own body
     ' (stage 2/3 had it at its original numeric position, L4490, sitting
     ' between L4480 and L4520 -- reachable only via the dispatch table,
     ' never by ATTACK's own fall-through, so moving it doesn't change
     ' behavior) so its case can be its own block below.
-    if L1 <> 82 then
+    if currentRoom <> 82 then
         printDontUnderstand()
         return 0
     end if
     printMessage(69)
-    S(33)=0:D1=0
+    itemRoom(33)=0:dragonAlive=0
     return 0
 end function
 
 function verbBug%()
-    global a$
-    global z0
-    global c$
+    global paddedCommand$
+    global scratchValue
+    global commandLine$
     ' *** BUG ***
-    A$ = "ADVBUGS.TXT"
+    paddedCommand$ = "ADVBUGS.TXT"
     try
-        OPEN A$ FOR APPEND AS #5
+        OPEN paddedCommand$ FOR APPEND AS #5
     catch err%, erl%
-        PRINT "Unable to use file ";A$
-        c$=""
+        PRINT "Unable to use file ";paddedCommand$
+        commandLine$=""
         return 0
     end try
-    INPUT "Your name: ";A$
-    A$=A$+" "+DATE$
-    PRINT #5,A$
+    INPUT "Your name: ";paddedCommand$
+    paddedCommand$=paddedCommand$+" "+DATE$
+    PRINT #5,paddedCommand$
     PRINT "Enter your gripe in up to five lines (hit return to quit):"
-    Z0 = 1
-    while Z0 <= 5
-        PRINT Z0;
-        INPUT A$
-        if A$="" then
+    scratchValue = 1
+    while scratchValue <= 5
+        PRINT scratchValue;
+        INPUT paddedCommand$
+        if paddedCommand$="" then
             exit
         end if
-        PRINT #5,A$
-        Z0 = Z0 + (1)
+        PRINT #5,paddedCommand$
+        scratchValue = scratchValue + (1)
     end while
     PRINT "Message recorded. Thank you!"
     CLOSE #5
-    c$=""
+    commandLine$=""
     return 0
 end function
 
@@ -2054,14 +2091,14 @@ end function
 ' `L400`/`L410`, and the exotic-word/direction/item-but-no-verb `FOR`
 ' loops' own `GOTO`s to them) -- see stage 6's and stage 8's own
 ' comments for why those were needed before this extraction was
-' possible. `L1950`'s own re-scan (find which keyword in 100..t3
+' possible. `L1950`'s own re-scan (find which keyword in 100..totalKeywords
 ' matched, a second time, since the first scan that found one -- was
-' `for x = 110 to t3` -- never kept its own `x`) is gone too: the verb-
+' `for scanIndex = 110 to totalKeywords` -- never kept its own `scanIndex`) is gone too: the verb-
 ' word `FOR` below just keeps the matched index directly instead.
 ' ==========================================================================
 
-function dispatchVerb%(z1%)
-    select case z1%
+function dispatchVerb%(verbCode%)
+    select case verbCode%
         case 1
             return verbPlugh%()
         case 2
@@ -2159,38 +2196,38 @@ end function
 ' successful/failed move, an item named with no verb, or "I don't
 ' understand" -- that never reach a verbXxx%() function at all).
 function parseAndDispatchCommand%()
-    global c$
-    global a$
-    global b$
-    global d$
-    global k
-    global t3
-    global z3
-    global itemname$
-    if len(c$) = 0 then
-        INPUT ">";c$:c$=ucase$(c$)
-        if c$ = "" then
-            c$=""
+    global commandLine$
+    global paddedCommand$
+    global responseText$
+    global selectedItemName$
+    global keywordFound
+    global totalKeywords
+    global itemCode
+    global itemNames$
+    if len(commandLine$) = 0 then
+        INPUT ">";commandLine$:commandLine$=ucase$(commandLine$)
+        if commandLine$ = "" then
+            commandLine$=""
             return 0
         end if
         PRINT: PRINT
-        c$ = ucase$(c$)
+        commandLine$ = ucase$(commandLine$)
         '    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,
-        for x = 1 to len(c$)
-            z5 = asc(mid$(c$,x,1))
-            if not ((z5 > 64 and z5 < 91) or (z5 > 47 and z5 < 58) or z5 = 44) then
-                c$ = mid$(c$,1,x-1)+" "+mid$(c$,x+1)
+        for scanIndex = 1 to len(commandLine$)
+            charCode = asc(mid$(commandLine$,scanIndex,1))
+            if not ((charCode > 64 and charCode < 91) or (charCode > 47 and charCode < 58) or charCode = 44) then
+                commandLine$ = mid$(commandLine$,1,scanIndex-1)+" "+mid$(commandLine$,scanIndex+1)
             end if
         end for
 
-        if mid$(c$,len(c$),1) <> "," then
-            c$ = c$+","
+        if mid$(commandLine$,len(commandLine$),1) <> "," then
+            commandLine$ = commandLine$+","
         end if
     end if
-    z4 = instr(c$,",")
-    a$ = ucase$(mid$(c$,1,z4-1)) : c$ = mid$(c$,z4+1)
-    a$ = " "+a$+" "
-    ' search a$ for keywords,puut kwd code into k(x)
+    commaPos = instr(commandLine$,",")
+    paddedCommand$ = ucase$(mid$(commandLine$,1,commaPos-1)) : commandLine$ = mid$(commandLine$,commaPos+1)
+    paddedCommand$ = " "+paddedCommand$+" "
+    ' search paddedCommand$ for keywords, put keyword code into keywordFound()
     ' items
     ' keyword/item/direction/verb table (items, directions, then verbs) --
     ' issue #171 fixed the `--target c` bug that forced this DATA to stay
@@ -2224,39 +2261,39 @@ function parseAndDispatchCommand%()
     data 148,"YES",148,"Y",149,"BUG",150,"*"
     restore keywordTable
     for i = 1 to 200
-        k(i) = 0
+        keywordFound(i) = 0
     end for
 
-    z3 = 0
-    ' T3=TOTAL NUMBER OF KEYWORDS
-    z1 = 0
-    while z1 <= t3
-        read z1,b$
-        b$ = " "+b$+" "
-        ' IF KEYWORD WAS FOUND, NOTE THIS IN K(Z1)
-        if instr(a$,b$) <> 0 then
-            k(z1) = 1
+    itemCode = 0
+    ' totalKeywords=TOTAL NUMBER OF KEYWORDS
+    keywordCode = 0
+    while keywordCode <= totalKeywords
+        read keywordCode,responseText$
+        responseText$ = " "+responseText$+" "
+        ' IF KEYWORD WAS FOUND, NOTE THIS IN keywordFound(keywordCode)
+        if instr(paddedCommand$,responseText$) <> 0 then
+            keywordFound(keywordCode) = 1
         end if
     end while
     ' EXOTIC WORDS
-    for x = 36 to 46
-        if k(x) = 1 then
+    for scanIndex = 36 to 46
+        if keywordFound(scanIndex) = 1 then
             findFirstNamedItem()
             askWhatToDoWithItem()
-            c$=""
+            commandLine$=""
             return 0
         end if
     end for
     ' VERB WORD?
-    for x = 110 to t3
-        if k(x) = 1 then
-            return dispatchVerb%(x - 109)
+    for scanIndex = 110 to totalKeywords
+        if keywordFound(scanIndex) = 1 then
+            return dispatchVerb%(scanIndex - 109)
         end if
     end for
     ' THEN IT'S A DIRECTION
-    for d = 1 to 10
-        if k(d+99) = 1 then
-            if attemptMove%(d) then
+    for directionIndex = 1 to 10
+        if keywordFound(directionIndex+99) = 1 then
+            if attemptMove%(directionIndex) then
                 checkPitsAndReincarnateIfNeeded()
                 return 1
             else
@@ -2266,11 +2303,11 @@ function parseAndDispatchCommand%()
     end for
     ' COMMAND NOT A DIRECTION -- ITEM BUT NO VERB?
     ' (was: restore L9961 -- item names now come from itemname$())
-    for x = 1 to 35
-        d$ = itemname$(x)
-        if k(x) = 1 then
+    for scanIndex = 1 to 35
+        selectedItemName$ = itemNames$(scanIndex)
+        if keywordFound(scanIndex) = 1 then
             askWhatToDoWithItem()
-            c$=""
+            commandLine$=""
             return 0
         end if
     end for
@@ -2296,31 +2333,31 @@ open "AMOVING" for INPUT as #4
 ' fseek-based random access into them, which BASCAL (and classic
 ' Microsoft BASIC) has no equivalent for. See ../README.md.
 ' dirs is an array of possible room directions, it replaces file AMOVING
-dim dirs(100,10)
+dim roomExits(100,10)
 ' indx()/fraindx() are now dim'd near the top of the file (see the
 ' procedure declarations), alongside descrip$()/items$()/msg$()/itemname$().
-dim s(99)
-dim v(100)
-dim k(200)
-dim o(15)
+dim itemRoom(99)
+dim roomVisited(100)
+dim keywordFound(200)
+dim itemPoints(15)
 PRINT: PRINT "Initializing.";
 ' initialize
 ' total rooms, items,and keywords
-l1 = int(RND(1)*4)+1 : l2 = l1
-g = 0 : b0 = 1 : sn = 1 : d1 = 1 : d2 = 0 : t = 1 : b1 = 0 : b2 = 0 : p1 = 0: dead = 0
-l = 0 : c = 0 : d3 = 0 : b3 = 0 : d0 = 2 : t1 = 100 : t2 = 35 : t3 = 149 : r0 = 0 : c0 = 0: c$=""
-KC = 1.02
+currentRoom = int(RND(1)*4)+1 : previousRoom = currentRoom
+grateOpen = 0 : bottleContents = 1 : snakeAlive = 1 : dragonAlive = 1 : ironDoorOiled = 0 : trollState = 1 : bearFedState = 0 : crystalBridgeBuilt = 0 : pirateState = 0: isDead = 0
+lampOn = 0 : bearTamedScored = 0 : dwarfGaveAxe = 0 : birdInCage = 0 : descriptionMode = 2 : totalRooms = 100 : totalItems = 35 : totalKeywords = 149 : deathCount = 0 : gameLoaded = 0: commandLine$=""
+dwarfHitChance = 1.02
 for ii = 1 to 99
-    s(ii) = 0 : v(ii) = 0
+    itemRoom(ii) = 0 : roomVisited(ii) = 0
 end for
 
-PRINT ".";:v(100) = 0
-indx(1) = -1:indx(2)=-1
+PRINT ".";:roomVisited(100) = 0
+messageIndex(1) = -1:messageIndex(2)=-1
 '   read in possible movement direction array
-for z2 = 1 to 100
+for targetRoom = 1 to 100
     INPUT #4,dx1,dx2,dx3,dx4,dx5,dx6,dx7,dx8,dx9,dx0
-    dirs(z2,1)=dx1:dirs(z2,2)=dx2:dirs(z2,3)=dx3:dirs(z2,4)=dx4:dirs(z2,5)=dx5
-    dirs(z2,6)=dx6:dirs(z2,7)=dx7:dirs(z2,8)=dx8:dirs(z2,9)=dx9:dirs(z2,10)=dx0
+    roomExits(targetRoom,1)=dx1:roomExits(targetRoom,2)=dx2:roomExits(targetRoom,3)=dx3:roomExits(targetRoom,4)=dx4:roomExits(targetRoom,5)=dx5
+    roomExits(targetRoom,6)=dx6:roomExits(targetRoom,7)=dx7:roomExits(targetRoom,8)=dx8:roomExits(targetRoom,9)=dx9:roomExits(targetRoom,10)=dx0
     PRINT ".";
 end for
 
@@ -2336,8 +2373,8 @@ loadItemNames()
 PRINT
 restore itemLocationData
 '    read in locations of items
-for z2 = 1 to T2 step 5
-    read dx1,dx2,dx3,dx4,dx5:s(z2)=dx1:s(z2+1)=dx2:s(z2+2)=dx3:s(z2+3)=dx4:s(z2+4)=dx5
+for targetRoom = 1 to totalItems step 5
+    read dx1,dx2,dx3,dx4,dx5:itemRoom(targetRoom)=dx1:itemRoom(targetRoom+1)=dx2:itemRoom(targetRoom+2)=dx3:itemRoom(targetRoom+3)=dx4:itemRoom(targetRoom+4)=dx5
     PRINT ".";
 end for
 
@@ -2349,7 +2386,7 @@ data 7,12,13,40,38
 data 69,0,46,0,0
 data 15,60,82,22,250
 for ii = 1 to 15 step 5
-    read dx1,dx2,dx3,dx4,dx5:o(ii)=dx1:o(ii+1)=dx2:o(ii+2)=dx3:o(ii+3)=dx4:o(ii+4)=dx5
+    read dx1,dx2,dx3,dx4,dx5:itemPoints(ii)=dx1:itemPoints(ii+1)=dx2:itemPoints(ii+2)=dx3:itemPoints(ii+3)=dx4:itemPoints(ii+4)=dx5
     PRINT ".";
 end for
 
@@ -2358,8 +2395,8 @@ data 3,4,3,3,2
 data 5,3,2,3,3
 ' ASK IF HE WANTS DIRECTIONS
 printMessage(301)
-z0 = askYesNo%()
-if z0 then printMessage(302)
+scratchValue = askYesNo%()
+if scratchValue then printMessage(302)
 '    command INPUT routine
 ' outer loop: (re)display the room, then run the command loop below until
 ' something (a move, a pit, death) needs the room redisplayed -- replaces
@@ -2368,8 +2405,8 @@ if z0 then printMessage(302)
 while true
     ' PRINT room, items
     ' If it's dark don't let him see anything
-    if l1 < 13 or l1 = 58 or (l = 1 and (s(18) = l1 or s(18) = -1)) then
-        select case d0
+    if currentRoom < 13 or currentRoom = 58 or (lampOn = 1 and (itemRoom(18) = currentRoom or itemRoom(18) = -1)) then
+        select case descriptionMode
             case 0
                 shortDescription()
             case 1
@@ -2377,9 +2414,9 @@ while true
             case else
                 describeRoomOnEntry()
         end select
-        v(l1) = 1
+        roomVisited(currentRoom) = 1
         describeRoomContents()
-        if dead = 1 then reincarnate() : continue
+        if isDead = 1 then reincarnate() : continue
         situationDescriptions()
     else
         printMessage(45)
@@ -2457,4 +2494,4 @@ data "everything"
 
 </details>
 
-[← Stage 12: Extracting the Command Parser](adventure3000-stage12.md) [Next: Stage 14: Descriptive Variable Names →](adventure3000-stage14.md)
+[← Stage 13: Descriptive Label Names](adventure3000-stage13.md) [Next: Development Journey →](../journey.md)
