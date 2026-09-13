@@ -104,7 +104,14 @@ nav:
       - REMLINE: examples/remline.md
       - Card Catalog: examples/card-catalog.md
       - Adventure Game: examples/adventure.md
-      - "ADVENTURE/3000 Port": examples/adventure3000.md
+      - "ADVENTURE/3000 Port":
+          - Overview: examples/adventure3000.md
+          - "Stage 1: The Original, Untouched": examples/adventure3000-stage1.md
+          - "Stage 2: Minimal Valid BASCAL": examples/adventure3000-stage2.md
+          - "Stage 3: Clean GOSUBs Become Procedures": examples/adventure3000-stage3.md
+          - "Stage 4: SELECT CASE Dispatch": examples/adventure3000-stage4.md
+          - "Stage 5: Parsing and Movement": examples/adventure3000-stage5.md
+          - "Stage 6: The Outer Game Loop": examples/adventure3000-stage6.md
   - Conformance results:
       - Core language: conformance.md
       - Tutorials: conformance/tutorials.md
