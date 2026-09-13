@@ -611,6 +611,35 @@ source from scratch.
   GAME round trip exercising every renamed persistent flag in its exact
   serialization order) byte-identical against stage 13.
 
+- **`stage15-refactored-bascal/`** -- every variable that's actually used
+  to index an array gets an explicit `%` (integer) type. Started as an
+  exact copy of stage 14.
+
+  Converted: `currentRoom`/`targetRoom` and `direction` (matching the
+  existing `%`-typed parameters of the same names), `itemCode` and
+  `bottleContents` (both index arrays directly), and every function-local
+  scan/loop index that subscripts an array -- `dcount`/`icount`, `ianame`,
+  `fpos`/`fracnt`, `mpos`/`xtmp`, `i`, `keywordCode`/`scanIndex`/
+  `directionIndex`, `itemIndex`, `itemScanCode`,
+  `treasureRoom`/`treasureIndex`/`roomIndex`, and `recordIndex`.
+  `describeRoomContents()`'s own item-scan loop had been left as a bare,
+  un-renamed `z1` since stage 14 -- caught and fixed alongside this
+  stage's own change, along with `printDontUnderstand()`'s un-renamed
+  `x` (now `readCount`, not `%`-typed, since it bounds a read count, not
+  an array subscript).
+
+  Left alone, deliberately: `previousRoom` (never itself indexes
+  anything); `fragmentNumber` (`buildMessageIndex` genuinely needs it to
+  hold a *fractional* value sometimes, for AMESSAGE's "#N.M" variant
+  numbers); `commaPos`/`charCode` (string positions and character codes,
+  not subscripts); and the arrays themselves (this stage is about the
+  index variables, not the arrays they index).
+
+  Verified with `bcc --check`; `--target basic` still compiles with zero
+  warnings; and a `--target c` smoke test (the same command sequence as
+  every prior stage, plus a SAVE GAME round trip) byte-identical against
+  stage 14.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
