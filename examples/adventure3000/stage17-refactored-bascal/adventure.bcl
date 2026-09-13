@@ -1,86 +1,22 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 16: Real Scratch-Variable Names
+/*
+ * ADVENTURE/3000
+ *
+ * A text adventure originally written in 1979 by Benjamin Moser (James
+ * Madison High School, Vienna, Virginia) for the HP/3000, based on the
+ * map and gameplay of Crowther and Woods' original Adventure. Ported to
+ * Macintosh BASIC by Elizabeth and David Hunter (1998), then to PyBASIC
+ * for the Raspberry Pi Pico by richpl (https://github.com/richpl/PyBasic,
+ * 2021) -- whose examples/adventure.bas and companion data files
+ * (ADESCRIP, AITEMS, AMESSAGE, AMOVING) are the direct basis for this
+ * BASCAL port.
+ *
+ * This port is free software, licensed GPL-3.0, the same license as
+ * PyBASIC itself.
+ */
 
-<div class="prose" markdown="1">
-
-# Stage 16: Real Scratch-Variable Names
-
-A handful of cryptic scratch names slipped past stage 14's renaming pass
-and stage 15's index-typing pass -- caught and fixed here.
-
-Converted: `rc` (the main loop's dispatch-result holder, following
-`performMove%()`'s own "0 = message printed, no move; 1 = moved, check
-pits next" convention) -> `moved%`; `b1$` (`printMessage()`'s message-
-fragment scratch string) -> `messageText$`; the top-level init section's
-two `ii%` loop counters (already `%`-typed by stage 15, but never given
-real names) -> `roomIndex%` (zeroing `itemRoom`/`roomVisited` for rooms
-1-99) and `itemPointsIndex%` (reading `itemPoints` in groups of 5); and
-the `dx1`..`dx9`/`dx0` scratch fields used three times over to read
-fixed-width records (a 10-wide `roomExits` row, then twice more for
-5-wide `itemRoom`/`itemPoints` rows) -> a single deliberately generic
-`field1`..`field10` family, the same treatment stage 14 gave `z0` (kept
-a generic name on purpose, since it's genuinely reused for unrelated
-record shapes, not given one bespoke name per call site).
-
-Left alone, deliberately: `i%` (`parseAndDispatchCommand%()`'s
-keyword-flag reset loop) -- already named and typed by stage 15, and
-"i" for a plain reset loop isn't the same kind of cryptic as
-"dx"/"ii"/"rc"/"b1$".
-
-Verified with `bcc --check`; `--target basic` still compiles with zero
-warnings; and a `--target c` smoke test (the same command sequence as
-every prior stage, plus a SAVE GAME round trip) byte-identical against
-stage 15.
-
-</div>
-
-<details class="source-embed" markdown="1">
-
-<summary><code>stage16-refactored-bascal/adventure.bcl</code> -- Stage 16: Real Scratch-Variable Names</summary>
-
-```bascal
-
-// ADVENTURE/3000 -- Stage 16: the last few cryptic scratch names that
-// slipped past stage 14's renaming pass (and stage 15's index-typing
-// pass) get real names too. Started as an exact copy of stage 15; see
-// ../README.md for the port's provenance and staging.
-//
-// Converted: `rc` (the main loop's dispatch-result holder, following
-// performMove%()'s own "0 = message printed, no move; 1 = moved, check
-// pits next" convention) -> `moved%`; `b1$` (printMessage()'s message-
-// fragment scratch string) -> `messageText$`; the top-level init
-// section's two `ii%` loop counters (already `%`-typed by stage 15,
-// but never given real names) -> `roomIndex%` (zeroing itemRoom/
-// roomVisited for rooms 1-99) and `itemPointsIndex%` (reading
-// itemPoints in groups of 5); and the `dx1`..`dx9`/`dx0` scratch fields
-// used three times over to read fixed-width records (a 10-wide
-// roomExits row, then twice more for 5-wide itemRoom/itemPoints rows)
-// -> a single deliberately generic `field1`..`field10` family, the
-// same treatment stage 14 gave `z0` (kept a generic name on purpose,
-// since it's genuinely reused for unrelated record shapes, not given
-// one bespoke name per call site).
-//
-// Left alone, deliberately: `i%` (parseAndDispatchCommand%()'s
-// keyword-flag reset loop) -- already named and typed by stage 15,
-// and "i" for a plain reset loop isn't the same kind of cryptic as
-// "dx"/"ii"/"rc"/"b1$".
-//
-// Verified with `bcc --check`; `--target basic` still compiles with
-// zero warnings; and a `--target c` smoke test (the same command
-// sequence as every prior stage, plus a SAVE GAME round trip) byte-
-// identical against stage 15.
 program adventure3000
-
-' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
-' own basic-target output) doesn't have; BASCAL's stdlib UCASE$/LCASE$ are
-' the direct equivalent, so every UPPER$/LOWER$ call below was rewritten to
-' use them instead. See ../README.md.
 require com.bascal.stdlib.ucase
 require com.bascal.stdlib.lcase
-
-' Global arrays the new procedures below operate on via `global` --
-' moved up from where stage 2 first `dim`s them inline, so every
-' procedure that needs one can declare it `global` regardless of where
-' in the file it's defined.
 dim roomDescriptions$(200)
 dim itemDescriptions$(200)
 dim messages$(2500)
@@ -88,17 +24,16 @@ dim messageIndex(303)
 dim fragmentIndex(10)
 dim itemNames$(47)
 
-' Loads ADESCRIP (room descriptions) into descrip$(), indexed 1..dcount
-' by file line order. Replaces stage 2's inline LA100-LA102 loading code.
+/*
+ * Loads the room descriptions from ADESCRIP into roomDescriptions$(),
+ * one room per line, in file order.
+ */
 procedure loadAdescrip()
     global roomDescriptions$
     dim dcount%, line$
     open "ADESCRIP" for INPUT as #1
     while not(EOF(1))
         dcount% = dcount% + 1
-        ' INPUT # into an array element directly isn't supported by the
-        ' minimal C backend yet -- only a bare scalar variable is -- so
-        ' read into one first, then assign it into the array.
         input #1, line$
         roomDescriptions$(dcount%) = line$
         print ".";
@@ -106,8 +41,10 @@ procedure loadAdescrip()
     close #1
 end procedure
 
-' Loads AITEMS (item-at-location messages) into items$(). Replaces
-' stage 2's inline LA110-LA112 loading code.
+/*
+ * Loads the item-in-room messages from AITEMS into itemDescriptions$(),
+ * one item per line, in file order.
+ */
 procedure loadAitems()
     global itemDescriptions$
     dim icount%, line$
@@ -121,8 +58,10 @@ procedure loadAitems()
     close #2
 end procedure
 
-' Loads AMESSAGE (the numbered "#N" message table) into msg$(1..mcount).
-' Replaces stage 2's inline LA120-LA122 loading code.
+/*
+ * Loads every numbered message from AMESSAGE into messages$(), one
+ * line per array slot, ready for buildMessageIndex() to index.
+ */
 procedure loadAmessage()
     global messages$
     global messageCount
@@ -137,11 +76,12 @@ procedure loadAmessage()
     close #3
 end procedure
 
-' Scans the in-memory msg$() built by loadAmessage() and records where
-' each numbered message starts, so printMessage's `gosub L7620` can jump
-' straight there instead of scanning from the top every time. Replaces
-' the original AMESSAGE.IDX disk cache and this port's own stage-2
-' in-memory equivalent (the old `gosub L12500` target).
+/*
+ * Scans the messages$() lines loaded by loadAmessage() and records, in
+ * messageIndex()/fragmentIndex(), where each numbered message ("#N" or
+ * a fractional variant "#N.M") begins, so printMessage() can jump
+ * straight to it instead of scanning from the top every time.
+ */
 procedure buildMessageIndex()
     global messages$
     global messageCount
@@ -174,10 +114,10 @@ procedure buildMessageIndex()
     end while
 end procedure
 
-' Loads the short item/object names (DATA 9961 onward) into itemname$(),
-' addressed by object code 1-47 instead of the original's computed
-' `restore 9960+x` (BASCAL restore targets are fixed labels, not
-' expressions).
+/*
+ * Loads the short item/object display names into itemNames$(),
+ * indexed by object code 1-47.
+ */
 procedure loadItemNames()
     global itemNames$
     dim ianame%
@@ -187,8 +127,10 @@ procedure loadItemNames()
     end for
 end procedure
 
-' Reads a line and returns 1 for "yes", 0 for "no" -- reprompting until
-' it gets one. Replaces the original's `gosub 9860` + global scratchValue.
+/*
+ * Reads a line and returns 1 for "yes" or 0 for "no", reprompting
+ * until it gets a recognizable answer.
+ */
 function askYesNo%()
     dim answer$
     while true
@@ -204,18 +146,15 @@ function askYesNo%()
         end if
         print "Yes or No-";
     end while
-    return 0 ' unreachable -- every path through the loop above already
-    ' returns; the minimal C backend requires a function's literal last
-    ' top-level statement to be `return`, though, since it doesn't try
-    ' to prove a loop always returns the way the basic target's own
-    ' fallthrough-is-fine model doesn't need to
+    return 0
 end function
 
-' Prints the numbered message from AMESSAGE (msg$()/indx()/fraindx(),
-' built by buildMessageIndex()). Replaces the original `z59 = N : gosub
-' 7620` convention -- every call site is now `printMessage(N)`, passing
-' the message number as a real argument instead of setting the global
-' z59 first.
+/*
+ * Prints the numbered message (and any unnumbered continuation lines
+ * that follow it) from AMESSAGE, using the index built by
+ * buildMessageIndex(). Messages 2 and 61 each have several
+ * interchangeable variants; one is picked at random.
+ */
 procedure printMessage(msgNum%)
     global messageIndex
     global fragmentIndex
@@ -223,8 +162,6 @@ procedure printMessage(msgNum%)
     dim xtmp%, mpos%, messageText$
     xtmp% = messageIndex(msgNum%)
     if msgNum% = 2 or msgNum% = 61 then
-        ' Messages 2 and 61 have several interchangeable variants
-        ' (see AMESSAGE's "#2.1".."#2.5" entries); pick one at random.
         xtmp% = fragmentIndex(xtmp% + int(RND(1) * 5))
     end if
     mpos% = xtmp%
@@ -243,8 +180,9 @@ procedure printMessage(msgNum%)
     end while
 end procedure
 
-' Prints the room's short (one-line) description and marks it visited.
-' Replaces stage 2's L6780 GOSUB target.
+/*
+ * Prints the room's short, one-line description and marks it visited.
+ */
 procedure shortDescription()
     global currentRoom%
     global roomVisited
@@ -255,10 +193,12 @@ procedure shortDescription()
     print roomText$
 end procedure
 
-' Prints the room's long (multi-paragraph, AMESSAGE-driven) description
-' and marks it visited. Message number is normally currentRoom+200, except a
-' shared message for the forest (any currentRoom <= 4) and one for the maze-like
-' rooms near the end. Replaces stage 2's L7990 GOSUB target.
+/*
+ * Prints the room's long, AMESSAGE-driven description and marks it
+ * visited. The message number is normally currentRoom%+200, except a
+ * shared message for the forest (any room 1-4) and one for the
+ * maze-like rooms near the end.
+ */
 procedure longDescription()
     global currentRoom%
     global roomVisited
@@ -272,9 +212,11 @@ procedure longDescription()
     end if
 end procedure
 
-' Lists the items sitting in the current room, checks whether the golden
-' bird's message should play, and then checks the dwarf and pirate
-' encounters. Replaces stage 2's L6680 GOSUB target.
+/*
+ * Lists the items sitting in the current room, checks whether the
+ * golden bird's special message should play, and then checks for the
+ * dwarf and pirate encounters.
+ */
 procedure describeRoomContents()
     global currentRoom%
     global totalItems
@@ -289,7 +231,6 @@ procedure describeRoomContents()
     if itemRoom(26) = -1 then
         printMessage(67)
     end if
-    ' CHECK FOR DWARF, PIRATE
     checkDwarf()
     if isDead <> 1 then
         checkPirate()
@@ -297,12 +238,10 @@ procedure describeRoomContents()
     end if
 end procedure
 
-' Checks whether the dwarf gives away his axe (first time in a deep
-' room), attacks with his knife, or appears for the first time.
-' Structurally identical to stage 2's L8560 GOSUB target -- same
-' internal labels, `goto L8790` (the old shared exit) just became
-' `return`, and the final label+return collapsed into the implicit
-' return at the end of the procedure body.
+/*
+ * Checks whether the dwarf should give away his axe (the first time
+ * the player reaches a deep room) or attack with his knife.
+ */
 procedure checkDwarf()
     global dwarfGaveAxe
     global currentRoom%
@@ -311,19 +250,17 @@ procedure checkDwarf()
         checkDwarfAttack()
         return
     end if
-    ' SHOULD DWARF GIVE AWAY AXE?
     if currentRoom% < 13 then return
     if RND(1) > 0.05 then return
-    ' GIVE AWAY AXE
     printMessage(80)
     itemRoom(27) = currentRoom% : dwarfGaveAxe = 1
 end procedure
 
-' Just the "should the dwarf attack" half of checkDwarf() -- one call
-' site (stage 2's L4340, `GOSUB 8650`) jumps directly into the middle of
-' the original subroutine to run only this part, deliberately skipping
-' the axe-giving check above. Structurally identical to stage 2's
-' L8640-L8790 span.
+/*
+ * The "should the dwarf attack" half of checkDwarf(), also called
+ * directly by anything else that provokes the dwarf (e.g. throwing an
+ * axe at him).
+ */
 procedure checkDwarfAttack()
     global currentRoom%
     global itemRoom
@@ -335,7 +272,6 @@ procedure checkDwarfAttack()
         return
     end if
     if itemRoom(35) <> currentRoom% then
-        ' SHOULD WE PUT A DWARF HERE?
         if RND(1) >= 0.05 then return
         if (currentRoom% = 60 or currentRoom% = 61) and trollState = 1 then return
         itemRoom(35) = currentRoom%
@@ -344,9 +280,7 @@ procedure checkDwarfAttack()
     end if
     if (currentRoom% <> 60 and currentRoom% <> 61) or trollState <> 1 then
         if RND(1) > 0.5 then return
-        ' YES!
         printMessage(32)
-        ' DOES THE KNIFE KILL THE PLAYER?
         dwarfHitChance = dwarfHitChance - 0.02
         if dwarfHitChance < 0.75 then
             dwarfHitChance = 0.75
@@ -363,14 +297,14 @@ procedure checkDwarfAttack()
     end if
 end procedure
 
-' Checks whether the pirate steals the player's valuables (only in
-' rooms currentRoom >= 13). Structurally identical to stage 2's L8800 GOSUB
-' target, with `goto L8960` (the old shared exit) replaced by `return`.
+/*
+ * Checks whether the pirate steals any of the player's carried
+ * treasures.
+ */
 procedure checkPirate()
     global currentRoom%
     global itemRoom
     dim stealableCount, itemIndex%
-    ' FIRST, DOES HE HAVE ANYTHING WORTH STEALING?
     stealableCount = 0
     if currentRoom% < 13 then return
     for itemIndex% = 1 to 15
@@ -379,7 +313,6 @@ procedure checkPirate()
         end if
     end for
     if stealableCount < int(RND(1) * 4) + 1 then return
-    ' SHOULD WE RIP OFF HIS VALUABLES?
     if RND(1) < 0.05 then
         printMessage(33)
         for itemIndex% = 1 to 15
@@ -392,11 +325,10 @@ procedure checkPirate()
     end if
 end procedure
 
-' On entering a room: the forest and maze-like rooms always get their
-' long description (it's short enough not to be worth abbreviating);
-' every other room gets the long description only the first time it's
-' visited, and the short one on repeat visits. Replaces stage 2's L8180
-' GOSUB target, itself called from the `on descriptionMode+1 gosub` dispatch below.
+/*
+ * Prints the room's long description on first entry (always, for the
+ * forest and the maze-like rooms), the short one on repeat visits.
+ */
 procedure describeRoomOnEntry()
     global currentRoom%
     global roomVisited
@@ -409,34 +341,27 @@ procedure describeRoomOnEntry()
     end if
 end procedure
 
-' Shows the room as LOOK does: the full long description unless it's
-' dark and unlit, in which case just the "too dark to see" message --
-' replaces stage 2's L2940-L2970 GOSUB-like target, shared by LOOK
-' itself and by LIGHT/OFF (both re-run this same check right after
-' changing the lamp's state, since that can change whether it applies).
+/*
+ * Shows the room the way LOOK does: the full long description unless
+ * it's too dark to see anything, in which case just that message.
+ */
 procedure describeRoomForLook()
     global currentRoom%
     global lampOn
     global itemRoom
     if currentRoom% < 13 or currentRoom% = 58 or (lampOn = 1 and (itemRoom(18) = currentRoom% or itemRoom(18) = -1)) then
-        longDescription() ' (was: gosub 8050 -- jumped past the old
-        ' subroutine's own `roomVisited(currentRoom)=1` to avoid redundantly re-marking the
-        ' room visited; by the time LOOK is typeable the room's already
-        ' been entered via describeRoomOnEntry(), which already sets
-        ' roomVisited(currentRoom)=1, so calling the full longDescription() here just
-        ' re-does that no-op assignment)
+        longDescription()
         describeRoomContents()
     else
         printMessage(45)
     end if
 end procedure
 
-' Checks a handful of situational, room-dependent one-off messages (the
-' grate, crystal bridge, plugh noise, iron door, troll, bear, and plant
-' in the pit) after a room's normal description prints. Each check is
-' independent, not a mutually-exclusive chain, matching the original's
-' own if/then/else-fallthrough-to-the-next-check structure exactly.
-' Replaces stage 2's L7800 GOSUB target.
+/*
+ * Prints a handful of situational, room-dependent one-off messages
+ * (the grate, crystal bridge, plugh noise, iron door, troll, bear, and
+ * plant in the pit) after a room's normal description.
+ */
 procedure situationDescriptions()
     global currentRoom%
     global grateOpen
@@ -445,47 +370,38 @@ procedure situationDescriptions()
     global trollState
     global bearFedState
     global pirateState
-    ' GRATE
     if currentRoom% = 10 or currentRoom% = 11 then
         printMessage(grateOpen + 10)
     end if
-    ' CRYSTAL BRIDGE
     if (currentRoom% = 19 or currentRoom% = 20) and crystalBridgeBuilt = 1 then
         printMessage(14)
     end if
-    ' PLUGH NOISE
     if currentRoom% = 26 and RND(1) > 0.3 then
         printMessage(41)
     end if
-    ' IRON DOOR
     if currentRoom% = 73 and ironDoorOiled = 0 then
         printMessage(57)
     end if
-    ' TROLL
     if (currentRoom% = 60 or currentRoom% = 61) and trollState = 1 then
         printMessage(63)
     end if
-    ' BEAR
     if currentRoom% = 69 and bearFedState = 0 then
         printMessage(64)
     end if
     if currentRoom% = 69 and bearFedState = 1 then
         printMessage(66)
     end if
-    ' PLANT IN PIT
     if currentRoom% = 48 or currentRoom% = 50 then
         printMessage(47 + pirateState)
     end if
 end procedure
 
-' Scans the parsed keyword codes keywordFound(1..45) for item names the
-' player typed: matchCount counts how many matched, itemCode remembers
-' the first exact-item match's own code, and selectedItemName$/
-' responseText$ end up holding the last match's display name
-' (itemNames$'s own text). Replaces stage 2's L8280 GOSUB target --
-' by far the most-called of the remaining GOSUB subroutines (8 call
-' sites), used by GET/DROP/EAT/DRINK/ATTACK/FEED and others to work out
-' which item, if any, the player's command actually named.
+/*
+ * Scans the parsed keyword flags for item names the player typed:
+ * matchCount counts how many matched, itemCode% remembers the first
+ * exact-item match's own code, and selectedItemName$/responseText$ end
+ * up holding the last match's display name.
+ */
 procedure findMatchedItems()
     global keywordFound
     global matchCount
@@ -506,12 +422,12 @@ procedure findMatchedItems()
     responseText$ = selectedItemName$
 end procedure
 
-' Finds the first object code (1-47, the same range itemNames$() covers)
-' the player's command mentioned, and sets selectedItemName$ to its
-' display name --
-' used for messages like "What do you want to do with the LAMP?" where
-' the exact item doesn't matter, just naming *something* the player
-' typed. Replaces stage 2's L8390 GOSUB target.
+/*
+ * Finds the first object code the player's command mentioned and sets
+ * selectedItemName$ to its display name -- used for messages like
+ * "What do you want to do with the LAMP?" where the exact item doesn't
+ * matter, just naming *something* the player typed.
+ */
 procedure findFirstNamedItem()
     global keywordFound
     global selectedItemName$
@@ -527,12 +443,11 @@ procedure findFirstNamedItem()
     end for
 end procedure
 
-' Checks whether the player is carrying item itemCode (itemRoom(itemCode)
-' = -1 marks an item as carried); sets isCarrying to 1 if so, 0 (and
-' prints "You don't have the <paddedCommand$>") if not -- paddedCommand$
-' is whatever the player's command last named, set well before this
-' runs, back in the command-parsing code. Replaces stage 2's L8490
-' GOSUB target.
+/*
+ * Checks whether the player is carrying item itemCode%, setting
+ * isCarrying to 1 if so, 0 (and printing "You don't have the ...") if
+ * not.
+ */
 procedure checkCarryingItem()
     global itemCode%
     global itemRoom
@@ -546,10 +461,11 @@ procedure checkCarryingItem()
     end if
 end procedure
 
-' Recomputes the current score from scratch (treasures deposited/found,
-' game milestones reached, rooms visited) into score, and the rooms-visited
-' count into roomsVisitedCount. Replaces stage 2's L6510 GOSUB target, called only from
-' printScore() below.
+/*
+ * Recomputes the current score from scratch -- treasures deposited or
+ * found, game milestones reached, and rooms visited -- into score and
+ * roomsVisitedCount.
+ */
 procedure computeScore()
     global score
     global roomsVisitedCount
@@ -589,12 +505,10 @@ procedure computeScore()
     end for
 end procedure
 
-' Prints the player's current score, exploration percentage, and skill
-' title (looked up by score tier from the DATA table at skillTitles -- roomsVisitedCount's
-' own rooms-visited value is only needed for the percentage line above,
-' so the tier lookup uses its own local variable rather than reusing
-' roomsVisitedCount for a second, unrelated purpose the way stage 2 does). Replaces
-' stage 2's L6430 GOSUB target.
+/*
+ * Prints the player's current score, exploration percentage, and
+ * skill title (looked up by score tier).
+ */
 procedure printScore()
     global score
     global roomsVisitedCount
@@ -614,25 +528,18 @@ procedure printScore()
     print "That makes you a "; skillTitle$; " adventurer."
 end procedure
 
-' Asks what the player wants to do with the item named by d$ (already
-' set by the caller, e.g. via findFirstNamedItem()) -- replaces stage
-' 2's L940 GOSUB-like target, reached via GOTO from two different
-' places (the "exotic words" and "item but no verb" checks below) that
-' both then GOTO L410 themselves afterward, since a procedure can't
-' GOTO a top-level label the way the original shared code could.
+/*
+ * Asks what the player wants to do with the item named by
+ * selectedItemName$.
+ */
 procedure askWhatToDoWithItem()
     global selectedItemName$
     print "What do you want to do with the ";selectedItemName$;"?"
 end procedure
 
-' Prints one of four random "I don't understand"-style messages --
-' replaces stage 2's L2040 GOSUB-like target (its DATA line, L2070, now
-' lives right here -- issue #171 fixed the `--target c` bug that used
-' to force it to stay top-level). Reached via GOTO from every verb
-' handler that couldn't make sense of the player's command (the
-' fallback for an unrecognized word entirely, and several verb
-' handlers' own "you didn't say what" case). Every call site GOTOs
-' L400 right after, same reason as askWhatToDoWithItem() above.
+/*
+ * Prints one of four random "I don't understand"-style messages.
+ */
 procedure printDontUnderstand()
     global responseText$
     dontUnderstandMessages: data "What?","I don't understand.","I can't understand that.","I don't know that word."
@@ -643,26 +550,21 @@ procedure printDontUnderstand()
     PRINT responseText$
 end procedure
 
-' Ends the game right now -- replaces stage 2's L9750 GOSUB-like
-' target, shared by QUIT (with or without a save first), reincarnate()
-' below on the third death or a "no" answer, and originally reached by
-' plain fallthrough from L9740's own "THIRD DEATH" message besides.
+/*
+ * Ends the game: prints the final score, then stops.
+ */
 procedure endGame()
     print "Oh well..."
     printScore()
-    ' (ADESCRIP/AITEMS/AMESSAGE are in-memory arrays now -- nothing to close)
     stop
 end procedure
 
-' Handles a death, however it happened (falling into a pit, or set
-' directly elsewhere e.g. by the troll/dragon) -- replaces stage 2's
-' L9540/L9550 GOSUB-like target and its own L9580/L9610/L9630/L9740
-' cascade. Calls endGame() on the third death or a "no" answer to "do
-' you want to be reincarnated"; otherwise resets state and respawns in
-' a random forest room, exactly like the original -- including its own
-' apparent lack of a cap on deathCount (a 4th, 5th, ... death asks the same as
-' the first, never reaching endGame() itself; only "answering no" or
-' the literal 3rd death do).
+/*
+ * Handles a death, however it happened. Ends the game on the third
+ * death or a "no" answer to "do you want to be reincarnated?";
+ * otherwise resets carried-item locations and respawns the player in a
+ * random forest room.
+ */
 procedure reincarnate()
     global deathCount
     global scratchValue
@@ -681,32 +583,25 @@ procedure reincarnate()
     if deathCount = 2 then
         printMessage(77)
     end if
-    ' deathCount = 1 reaches here directly; deathCount = 2 reaches here after its own
-    ' extra message above; deathCount >= 4 also reaches here, same as deathCount = 1 --
-    ' see this procedure's own doc comment.
     printMessage(75)
     scratchValue = askYesNo%()
     if scratchValue = 0 then
         endGame()
     end if
     printMessage(76)
-    ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
     itemRoom(18) = 7 : lampOn = 0 : isDead = 0 : dwarfHitChance = 1.03
     for itemIndex% = 1 to totalItems
         if itemRoom(itemIndex%) = -1 then
             itemRoom(itemIndex%) = currentRoom%
         end if
     end for
-    ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
     currentRoom% = int(RND(1)*4)+1 : previousRoom = currentRoom%
 end procedure
 
-' Checks whether the room just moved into is dark and has a pit to fall
-' into -- replaces stage 2's L9780/L9840 GOSUB-like target. Every call
-' site follows this with `exit`, breaking back out to the outer game
-' loop's own redisplay, whether or not reincarnate() actually ran (a
-' safe room needs exactly the same "go redisplay" outcome as a
-' fallen-into-and-recovered-from pit).
+/*
+ * Checks whether the room just moved into is dark and has a pit to
+ * fall into, reincarnating the player if so.
+ */
 procedure checkPitsAndReincarnateIfNeeded()
     global currentRoom%
     global lampOn
@@ -714,20 +609,16 @@ procedure checkPitsAndReincarnateIfNeeded()
     if currentRoom% < 13 or (lampOn = 1 and (itemRoom(18) = -1 or itemRoom(18) = currentRoom%)) then
         return
     end if
-    ' IS HE GOING TO FALL INTO A PIT?
     if currentRoom% = 16 or currentRoom% = 17 or currentRoom% = 19 or currentRoom% = 20 or currentRoom% = 25 or currentRoom% = 47 or currentRoom% = 48 or currentRoom% = 59 or currentRoom% = 60 or currentRoom% = 61 or currentRoom% = 75 or currentRoom% = 76 or currentRoom% = 98 then
         printMessage(44)
         reincarnate()
     end if
 end procedure
 
-' Performs the actual room transition, tracking whether the pirate
-' (the one item at s(35)) needs to follow the player -- replaces stage
-' 2's L1180 GOSUB-like target. Always succeeds; returns 1 (not a plain
-' procedure) only so its callers, all of which end in `return
-' performMove%(...)`, can share the same "0 = message printed, no
-' move; 1 = moved, check pits next" signal the rest of the movement
-' cascade below uses.
+/*
+ * Performs the actual room transition, carrying the pirate along with
+ * the player if he was following.
+ */
 function performMove%(targetRoom%)
     global currentRoom%
     global previousRoom
@@ -739,17 +630,13 @@ function performMove%(targetRoom%)
     return 1
 end function
 
-' The special-room/special-direction checks run after a destination
-' room (targetRoom%) has already been found for direction direction% -- replaces stage
-' 2's L1260 GOSUB-like target (reached either from attemptMove%() below
-' after its own dirs() lookup, or directly from a couple of verb
-' handlers that search for a valid direction themselves first). Every
-' condition here tests a specific, mutually exclusive room number, so
-' this is a straightforward `elseif` chain even though the original
-' cascaded through a linear sequence of `GOTO`s that would, for some
-' rooms, redundantly test conditions that could never be true there --
-' see the case-by-case comments below for exactly which original label
-' each branch replaces. Returns 0/1 the same way performMove%() does.
+/*
+ * Runs the special-room/special-direction checks (the grate, the
+ * nugget on the stairs, the crystal bridge, the snake, the narrow
+ * tunnel, the troll, the iron door, the dragon) for a destination room
+ * already found for a given direction, then completes the move if
+ * nothing blocks it.
+ */
 function checkSpecialRoomAndMove%(direction%, targetRoom%)
     global currentRoom%
     global grateOpen
@@ -762,36 +649,27 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
     global totalItems
     dim itemScanIndex%
     if (currentRoom% = 10 and (direction% = 10 or direction% = 5)) or (currentRoom% = 11 and (direction% = 9 or direction% = 3)) then
-        ' GRATE (was L1260/L1280) -- IF GRATE IS OPEN (G=0) MOVE HIM
         if grateOpen = 1 then
             return performMove%(targetRoom%)
         end if
         printMessage(10)
         return 0
     elseif currentRoom% = 17 and direction% = 9 and itemRoom(1) = -1 then
-        ' CAN'T TAKE NUGGET UPSTAIRS (was L1320)
         printMessage(38)
         return 0
     elseif (currentRoom% = 19 and direction% = 7) or (currentRoom% = 20 and direction% = 3) then
-        ' CRYSTAL BRIDGE AND FISSURE (was L1360)
         if crystalBridgeBuilt then
             return performMove%(targetRoom%)
         end if
         printMessage(3)
         return 0
     elseif currentRoom% = 22 and direction% <> 3 and direction% <> 9 then
-        ' MT. KING & SNAKE (was L1410)
         if snakeAlive = 0 then
             return performMove%(targetRoom%)
         end if
         printMessage(50)
         return 0
     elseif currentRoom% = 57 or currentRoom% = 58 then
-        ' Narrow Tunnel (was L1690) -- K(102)/K(106) are this turn's own
-        ' "did the player type E"/"...W" keyword flags (see the DATA
-        ' table's direction codes 100-109); the carried-item check below
-        ' only applies when moving E/W literally, not via some other
-        ' direction synonym.
         if keywordFound(102) <> 0 or keywordFound(106) <> 0 then
             for itemScanIndex% = 1 to totalItems
                 if itemScanIndex% <> 10 and itemRoom(itemScanIndex%) = -1 then
@@ -802,8 +680,6 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
         end if
         return performMove%(targetRoom%)
     elseif (currentRoom% = 60 and direction% = 2) or (currentRoom% = 61 and direction% = 6) then
-        ' TROLL (was L1780/L1790) -- t is 0 (no troll met yet), 1 (troll
-        ' appeased, gone), or 2 (troll killed).
         select case trollState+1
             case 1
                 return performMove%(targetRoom%)
@@ -819,38 +695,28 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
                 trollState = 2
                 return performMove%(targetRoom%)
             case else
-                ' unreachable in practice (t is always 0, 1, or 2 --
-                ' see this function's own comment above) -- exists only
-                ' so every path through this SELECT CASE has an explicit
-                ' return, which the C backend requires.
                 return performMove%(targetRoom%)
         end select
     elseif currentRoom% = 73 and direction% = 1 and ironDoorOiled = 0 then
-        ' (was L1860)
         printMessage(57)
         return 0
     elseif currentRoom% = 82 and itemRoom(33) = currentRoom% and direction% = 1 then
-        ' DRAGON (was L1890)
         printMessage(51)
         return 0
     else
-        ' Normal, unimpeded move (was L1890's own final `else`).
         return performMove%(targetRoom%)
     end if
 end function
 
-' dirs() returned the "pick one of several rooms at random" sentinel
-' (255) for the room the player's currently in -- replaces stage 2's
-' L1470 GOSUB-like target. 255 is only ever set for rooms 44 (bedquilt)
-' and 39 (Witt's End) in AMOVING; anything else falls through to the
-' same "you can't go that way" message L1220 itself would print outside
-' this sentinel case.
+/*
+ * Handles the two rooms (Bedquilt and Witt's End) whose exits are
+ * "pick one of several rooms at random" rather than one fixed
+ * destination.
+ */
 function attemptRandomMove%()
     global currentRoom%
     dim targetRoom%, pickCount%
     if currentRoom% = 44 then
-        ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
-        ' at random from the DATA table below (was L1470/L1510/L1530).
         if RND(1) > 0.5 then
             restore bedquiltRooms
             for pickCount% = 1 to int(RND(1)*5)+1
@@ -862,7 +728,6 @@ function attemptRandomMove%()
         return 0
     end if
     if currentRoom% = 39 then
-        ' WITT'S END: 15% chance of escaping to room 38 (was L1590/L1650).
         if RND(1) < 0.15 then
             return performMove%(38)
         end if
@@ -874,16 +739,10 @@ function attemptRandomMove%()
 end function
 bedquiltRooms: data 33,37,45,92,76
 
-' Looks up the destination room for direction% and either moves there
-' or prints why not -- replaces stage 2's L1070 GOSUB-like target.
-' targetRoom%=255 is the "pick one of several rooms at random" sentinel (see
-' attemptRandomMove%()); 1..254 is a real destination; anything else
-' means "you can't go that way." Returns 1 if the move happened (the
-' caller should GOTO L9780, which checks for a pit to fall into and
-' re-displays the room), 0 if a message was printed instead (the
-' caller should GOTO L400) -- a plain GOTO to either, the way the
-' original GOSUB-like target used, isn't possible from inside a
-' function.
+/*
+ * Looks up the destination room for a direction and either moves
+ * there or prints why not.
+ */
 function attemptMove%(direction%)
     global currentRoom%
     global roomExits
@@ -899,29 +758,14 @@ function attemptMove%(direction%)
     return checkSpecialRoomAndMove%(direction%, targetRoom%)
 end function
 
-' ==========================================================================
-' Stage 8: each of the 40 verb handlers below is now its own function,
-' returning 0 ("get another command") or 1 ("redisplay the room") for the
-' dispatcher (the SELECT CASE further down) to act on with `continue`/
-' `exit` itself -- a procedure can only ever `return` to its own caller,
-' never `continue`/`exit` a loop in the *caller's* scope the way every
-' handler used to do directly when it was inline in that SELECT CASE, so
-' this return code is what replaces every one of those. Every internal
-' GOTO that used to escape all the way out to the outer command loop (was
-' `goto L400`/`goto L410`/`goto L300`) is now just `return 0`/`return 1`
-' instead -- a `return` unwinds the whole function regardless of loop
-' nesting, so GET's and DROP's and ENTER's and LEAVE's own scan loops no
-' longer need the two-loop-levels `goto` workaround stage 6/7 needed when
-' this logic still lived directly inside the SELECT CASE itself. A bare
-' `continue` inside one of those scan loops still means exactly what it
-' always did: try the next item/direction, not the outer command loop.
-' ==========================================================================
-
+/*
+ * Handles the magic word PLUGH: teleports between the Debris Room and
+ * the Y2 room; does nothing anywhere else.
+ */
 function verbPlugh%()
     global currentRoom%
     global itemRoom
     global targetRoom%
-    ' *** PLUGH ***
     if currentRoom% = 7 then
         if itemRoom(35) = currentRoom% then
             itemRoom(35) = 0
@@ -938,11 +782,14 @@ function verbPlugh%()
     return 1
 end function
 
+/*
+ * Handles the magic word XYZZY: teleports between the Debris Room and
+ * the Grate Room; does nothing anywhere else.
+ */
 function verbXyzzy%()
     global currentRoom%
     global itemRoom
     global targetRoom%
-    ' *** XYZZY ***
     if currentRoom% = 7 then
         if itemRoom(35) = currentRoom% then
             itemRoom(35) = 0
@@ -959,11 +806,15 @@ function verbXyzzy%()
     return 1
 end function
 
+/*
+ * Handles the magic word PLOVER: teleports between the Plover Room and
+ * the dark room beyond it, carrying the emerald along if it hasn't
+ * already been dropped there.
+ */
 function verbPlover%()
     global currentRoom%
     global itemRoom
     global targetRoom%
-    ' *** PLOVER *** (CAN'T BRING EMERALD WITH HIM)
     if currentRoom% <= 26 then
         if itemRoom(35) = currentRoom% then
             itemRoom(35) = 0
@@ -983,16 +834,18 @@ function verbPlover%()
     return 1
 end function
 
+/*
+ * Handles CROSS: crosses the crystal bridge or the troll's bridge,
+ * if standing at the right spot and the relevant condition is met.
+ */
 function verbCross%()
     global currentRoom%
     global crystalBridgeBuilt
     global direction%
     global targetRoom%
-    ' *** CROSS ***
     if currentRoom% = 19 and crystalBridgeBuilt = 0 then
         printMessage(3)
     elseif currentRoom% = 19 then
-        ' JUST GIVE NEW DIRECTION, USE MOVE ROUTINE
         direction% = 7
         if attemptMove%(direction%) then
             checkPitsAndReincarnateIfNeeded()
@@ -1024,37 +877,44 @@ function verbCross%()
     return 0
 end function
 
+/*
+ * Handles CLIMB: climbs the beanstalk from the Giant Room, once the
+ * pirate's stolen treasure has been reclaimed twice.
+ */
 function verbClimb%()
     global currentRoom%
     global pirateState
     global targetRoom%
-    ' *** CLIMB ***
     IF currentRoom%<>50 THEN printMessage(2) : return 0
-    ' CAN HE CLIMB BEANSTALK?
     IF pirateState<2 THEN printMessage(2) : return 0
-    ' YES
     targetRoom%=70
     performMove%(targetRoom%)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
 
+/*
+ * Handles JUMP: instant death, in the handful of rooms where jumping
+ * makes any sense at all.
+ */
 function verbJump%()
     global currentRoom%
-    ' *** JUMP *** STRICTLY SUICIDAL
     IF currentRoom%<>16 AND currentRoom%<>19 AND currentRoom%<>20 AND currentRoom%<>27 THEN printMessage(2) : return 0
     printMessage(4)
     reincarnate()
     return 1
 end function
 
+/*
+ * Handles FILL: fills the bottle with water or oil, depending on which
+ * room the player is standing in.
+ */
 function verbFill%()
     global currentRoom%
     global itemRoom
     global bottleContents%
     global responseText$
     global commandLine$
-    ' FILL
     if itemRoom(21) <> -1 then
         responseText$="bottle"
         PRINT "You don't have the ";responseText$
@@ -1079,34 +939,39 @@ function verbFill%()
     return 0
 end function
 
+/*
+ * Handles EMPTY: empties the bottle of whatever it currently holds.
+ */
 function verbEmpty%()
     global itemRoom
     global bottleContents%
     global responseText$
     global commandLine$
-    ' *** EMPTY ***
     if itemRoom(21)<>-1 then
         responseText$="bottle" : PRINT "You don't have the ";responseText$ : commandLine$=""
         return 0
     end if
-    ' EMPTY BOTTLE (ASSUMED FULL)
     itemRoom(bottleContents%+15)=0:bottleContents%=0
     PRINT "Emptied"
     return 0
 end function
 
+/*
+ * Handles LOOK: redisplays the room in full.
+ */
 function verbLook%()
-    ' *** LOOK ***
     describeRoomForLook()
     return 0
 end function
 
+/*
+ * Handles LIGHT (or ON): turns the carried lamp on.
+ */
 function verbLight%()
     global itemRoom
     global lampOn
     global responseText$
     global commandLine$
-    ' *** LIGHT ***
     if itemRoom(18) = -1 then
         lampOn = 1
         responseText$ = "on"
@@ -1121,12 +986,14 @@ function verbLight%()
     return 0
 end function
 
+/*
+ * Handles OFF (or EXTINGUISH): turns the carried lamp off.
+ */
 function verbOff%()
     global itemRoom
     global lampOn
     global responseText$
     global commandLine$
-    ' *** OFF (EXTINGUSIH) ***
     if itemRoom(18) = -1 then
         lampOn=0:responseText$="off"
     else
@@ -1140,14 +1007,17 @@ function verbOff%()
     return 0
 end function
 
+/*
+ * Handles ENTER: moves into the house or barren room directly from
+ * outside it, or otherwise tries every direction in turn (from Down
+ * back to North) looking for one that works.
+ */
 function verbEnter%()
     global currentRoom%
     global direction%
     global targetRoom%
     global roomExits
-    ' *** ENTER ***
     if currentRoom% = 6 or currentRoom% = 68 then
-        ' TO HOUSE / TO BARREN ROOM
         direction%=3
         if attemptMove%(direction%) then
             checkPitsAndReincarnateIfNeeded()
@@ -1155,10 +1025,6 @@ function verbEnter%()
         end if
         return 0
     end if
-    ' Scan every direction for one that works, starting from the last
-    ' (D=10, "down") -- was a manual D=10 downto 1 GOTO loop (LW3240).
-    ' `return` here, not `exit`/`continue` -- it unwinds this whole
-    ' function regardless of the `for` loop it's inside.
     for direction% = 10 to 1 step -1
         targetRoom% = roomExits(currentRoom%,direction%)
         IF targetRoom%>0 AND targetRoom%<101 THEN
@@ -1174,14 +1040,17 @@ function verbEnter%()
     return 0
 end function
 
+/*
+ * Handles LEAVE: moves out of the house or barren room directly, or
+ * otherwise tries every direction in turn (from North through Down)
+ * looking for one that works.
+ */
 function verbLeave%()
     global currentRoom%
     global direction%
     global targetRoom%
     global roomExits
-    ' ** LEAVE ***
     if currentRoom% = 7 or currentRoom% = 69 then
-        ' LEAVE HOUSE / LEAVE BARREN ROOM
         direction%=7
         if attemptMove%(direction%) then
             checkPitsAndReincarnateIfNeeded()
@@ -1189,10 +1058,6 @@ function verbLeave%()
         end if
         return 0
     end if
-    ' Scan every direction for one that works, starting from the first
-    ' (D=1, "north") -- was a manual D=1 to 10 GOTO loop (LW3400). See
-    ' ENTER's own comment above for why this uses `return` instead of
-    ' `exit`/`continue`.
     for direction% = 1 to 10
         targetRoom% = roomExits(currentRoom%,direction%)
         IF targetRoom%>0 AND targetRoom%<101 THEN
@@ -1208,13 +1073,15 @@ function verbLeave%()
     return 0
 end function
 
+/*
+ * Handles INVENTORY: lists everything the player is carrying.
+ */
 function verbInventory%()
     global scratchValue
     global itemRoom
     global totalItems
     global responseText$
     global itemNames$
-    ' *** INVENTORY ***
     scratchValue=0
     PRINT "You are carrying:";
     FOR itemIndex%=1 TO totalItems
@@ -1224,7 +1091,6 @@ function verbInventory%()
             scratchValue = scratchValue + 1
         end if
     end for
-
     if scratchValue=0 then
         PRINT "nothing."
     end if
@@ -1232,6 +1098,12 @@ function verbInventory%()
     return 0
 end function
 
+/*
+ * Handles GET: picks up one or more matching items present in the
+ * room, subject to the carry limit and a handful of item-specific
+ * special cases (the bird and its cage, the bottle's contents, and
+ * several items that can't be taken at all under certain conditions).
+ */
 function verbGet%()
     global keywordFound
     global matchCount
@@ -1248,7 +1120,6 @@ function verbGet%()
     global paddedCommand$
     global responseText$
     global commandLine$
-    ' *** GET ***
     if keywordFound(47) <> 1 then
         findMatchedItems()
         if matchCount = 0 then
@@ -1257,17 +1128,6 @@ function verbGet%()
             return 0
         end if
     end if
-    ' Scan every item for one matching the player's command and present
-    ' in this room -- was a manual itemCode=1 to totalItems GOTO loop
-    ' (LW3680). `return`
-    ' below, not `exit`/`continue`, wherever the *original* GOTO's
-    ' ultimate target meant "abandon the scan and get another command"
-    ' rather than "try the next item" -- `return` unwinds this whole
-    ' function regardless of the `for` loop it's inside. A bare
-    ' `continue` below really does mean "try the next item": every such
-    ' site was the old loop's own LCONT3680 (or, for the special-gets
-    ' checks folded in below, a genuine take that should keep scanning
-    ' for more when GET ALL is in effect).
     for itemCode% = 1 to totalItems
         if keywordFound(47) <> 1 and keywordFound(itemCode%) = 0 then continue
         if itemRoom(itemCode%) <> currentRoom% then
@@ -1276,63 +1136,47 @@ function verbGet%()
             end if
             continue
         end if
-        ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
         matchCount = 0
         for itemIndex% = 1 to totalItems
             if itemRoom(itemIndex%) = -1 then
                 matchCount = matchCount+1
             end if
         end for
-
         if matchCount >= 7 then
-            ' CARRYING TOO MUCH
             printMessage(54)
             commandLine$=""
             return 0
         end if
-        ' SPECIAL GETS -- was L6880, a GOSUB-like target reached only from
-        ' this scan.
         if itemCode% = 24 or itemCode% = 30 or itemCode% > 31 then
-            ' CAN'T GET THESE FOR SOME REASON
             printMessage(61)
             return 0
         elseif itemCode% = 12 and bearTamedScored = 0 then
-            ' CHAIN
             printMessage(58)
             return 0
         elseif itemCode% = 26 and bearFedState <> 2 then
-            ' BEAR IS HE FED? UNLOCKED?
             printMessage(61)
             return 0
         elseif itemCode% = 14 and dragonAlive = 1 then
-            ' DRAGON AND RUG
             printMessage(59)
             return 0
         elseif itemCode% = 16 or itemCode% = 17 then
-            ' OIL AND WATER DO SAME AS FILL
             PRINT "Why not say 'fill'?"
             return 0
         elseif itemCode% = 22 and birdInCage then
-            ' TAKE BIRD SINCE IT'S IN CAGE
             itemRoom(31) = -1 : PRINT "Bird and ";
         elseif itemCode% = 31 then
-            ' GETTING BIRD
             if birdInCage = 1 then
-                ' TAKE CAGE, SINCE BIRD IS IN IT
                 PRINT "Cage and "; : itemRoom(22) = -1
             elseif itemRoom(22) <> -1 then
                 responseText$ = "cage" : PRINT "I see no ";responseText$;" here."
                 return 0
             elseif itemRoom(23) = -1 then
-                ' ROD SCARES BIRD
                 printMessage(37)
                 return 0
             else
-                ' OK TO TAKE BIRD
                 birdInCage = 1
             end if
         elseif itemCode% = 21 and bottleContents% then
-            ' BOTTLE FULL? IF SO, GET CONTENTS
             PRINT "Contents and the ";
             itemRoom(bottleContents%+15) = -1
         end if
@@ -1342,6 +1186,10 @@ function verbGet%()
     return 0
 end function
 
+/*
+ * Handles DROP: drops one or more matching carried items, with the
+ * same item-specific special cases GET has to account for.
+ */
 function verbDrop%()
     global keywordFound
     global matchCount
@@ -1354,7 +1202,6 @@ function verbDrop%()
     global totalItems
     global responseText$
     global itemNames$
-    ' *** DROP ***
     if keywordFound(47) <> 1 then
         findMatchedItems()
         if matchCount = 0 then
@@ -1363,9 +1210,6 @@ function verbDrop%()
             return 0
         end if
     end if
-    ' Scan every item the player is carrying that matches the command --
-    ' was a manual itemCode=1 to totalItems GOTO loop (LW4000). See GET's own comment
-    ' above for why this uses `return` instead of `exit`/`continue`.
     for itemCode% = 1 to totalItems
         if keywordFound(47) <> 1 then
             if keywordFound(itemCode%) <> 1 or itemRoom(itemCode%) = 0 then continue
@@ -1376,17 +1220,13 @@ function verbDrop%()
             end if
             continue
         end if
-        ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE) -- was
-        ' L7380 onward, a GOSUB-like target reached only from here.
         if itemCode% = 31 or (itemCode% = 22 and birdInCage = 1) then
-            ' BIRD IN CAGE
             itemRoom(31)=currentRoom%:itemRoom(22)=currentRoom%:birdInCage=1
             if itemCode% = 31 then
                 PRINT "Cage and ";
                 PRINT "Bird and ";
             end if
         elseif itemCode% = 21 and bottleContents% <> 0 then
-            ' BOTTLE IS FULL, DO DROP CONTENTS TOO
             PRINT "Contents and ";
             itemRoom(15+bottleContents%)=currentRoom%
         elseif itemCode% = 16 or itemCode% = 17 then
@@ -1397,7 +1237,6 @@ function verbDrop%()
             trollState=0:itemRoom(26)=currentRoom%:itemRoom(32)=0
             return 0
         elseif itemCode% = 6 and itemRoom(28) <> currentRoom% then
-            ' GOODBYE, FRAGILE VASE!
             printMessage(43)
             itemRoom(6)=0:itemRoom(29)=currentRoom%
             return 0
@@ -1410,6 +1249,10 @@ function verbDrop%()
     return 0
 end function
 
+/*
+ * Handles THROW: throws a carried item, with special handling for a
+ * treasure thrown to the troll and an axe thrown at the dwarf.
+ */
 function verbThrow%()
     global matchCount
     global itemCode%
@@ -1419,7 +1262,6 @@ function verbThrow%()
     global currentRoom%
     global trollState
     global isDead
-    ' *** THROW ***
     findMatchedItems()
     if matchCount = 0 then
         PRINT "Throw what?"
@@ -1430,35 +1272,24 @@ function verbThrow%()
         PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
     if itemCode% < 16 and itemRoom(32) = currentRoom% then
-        ' THROW TREASURE TO TROLL
         printMessage(27)
         itemRoom(itemCode%) = 0 : trollState = 3
         return 0
     elseif itemCode% = 27 and itemRoom(32) = currentRoom% then
-        ' TRYING TO BUTCHER TROLL?
         printMessage(26)
         itemRoom(27) = currentRoom%
         return 0
     elseif itemCode% = 27 and itemRoom(35) = currentRoom% then
-        ' TRYING TO KILL DWARF
         if rnd(1) <= 0.5 then
             printMessage(29)
-            checkDwarfAttack() ' (was: GOSUB 8650 -- jumped straight into
-            ' the attack-check half of the original dwarf subroutine,
-            ' deliberately skipping the axe-giving check; see
-            ' checkDwarfAttack()'s own comment)
+            checkDwarfAttack()
         else
             printMessage(30)
             itemRoom(35) = 0
         end if
     else
-        ' NOTHING SPECIAL, JUST DROP ITEM
         if itemRoom(35) = currentRoom% then
-            checkDwarf() ' (was: GOSUB L8550 -- L8550 was just a comment
-            ' immediately before the real dwarf subroutine's first line,
-            ' L8560, so this call wanted the full checkDwarf() behavior,
-            ' axe-check included -- a call site missed when checkDwarf()/
-            ' checkDwarfAttack() were split out)
+            checkDwarf()
         end if
         PRINT "Thrown."
     end if
@@ -1470,35 +1301,33 @@ function verbThrow%()
     return 0
 end function
 
+/*
+ * Handles ATTACK (or KILL): mostly just prints a flavor message; the
+ * dragon is the one enemy actually killable this way (after a YES
+ * confirmation).
+ */
 function verbAttack%()
     global itemCode%
     global itemRoom
     global currentRoom%
     global commandLine$
-    ' *** ATTACK ***
     findMatchedItems()
     if itemCode% = 33 and itemRoom(itemCode%) = currentRoom% and currentRoom% = 82 then
-        ' HE CAN KILL DRAGON
         printMessage(68)
         commandLine$=""
     elseif itemRoom(32) = currentRoom% then
-        ' TRYING TO MUNGE TROLL
-        ' (was: Z9=FNA(25):GOTO 400 -- FNA is called with no matching DEF FN
-        ' anywhere in the original source; this looks like leftover/broken
-        ' code from an earlier version of the upstream port, not something
-        ' this port introduced. Z9's assignment here isn't read before it's
-        ' next assigned elsewhere, so dropping the call changes nothing
-        ' observable.)
     elseif itemCode% = 26 or itemCode% > 30 then
-        ' DANGEROUS TO ATTACK THESE
         printMessage(70)
     else
-        ' NOTHING TO ATTACK
         printMessage(71)
     end if
     return 0
 end function
 
+/*
+ * Handles FEED: feeds the bear, which only works with food, and only
+ * in the bear's own room.
+ */
 function verbFeed%()
     global itemCode%
     global itemRoom
@@ -1507,10 +1336,8 @@ function verbFeed%()
     global commandLine$
     global bearFedState
     global itemNames$
-    ' *** FEED ***
     findMatchedItems()
     if itemCode% = 35 then
-        ' CAN'T FEED DWARF!
         printMessage(24)
         return 0
     end if
@@ -1523,11 +1350,6 @@ function verbFeed%()
         return 0
     end if
     if itemRoom(20)=currentRoom% then
-        ' was: `GOTO L7600`, itself `printMessage(60):GOTO L4120` -- L4120
-        ' was DROP's own per-item "dropped" epilogue, reused here verbatim
-        ' (feeding the bear food already here also "drops" it via the
-        ' exact same itemCode/itemRoom() update DROP's own scan loop does, now inlined
-        ' there instead of living at a shared label).
         printMessage(60)
         responseText$ = itemNames$(itemCode%):PRINT responseText$;":dropped."
         itemRoom(itemCode%)=currentRoom%
@@ -1537,6 +1359,10 @@ function verbFeed%()
     return 0
 end function
 
+/*
+ * Handles WATER: pours water on the plant in the Giant Room, cycling
+ * it through its three growth stages.
+ */
 function verbWater%()
     global itemRoom
     global responseText$
@@ -1544,7 +1370,6 @@ function verbWater%()
     global currentRoom%
     global pirateState
     global bottleContents%
-    ' *** WATER ***
     if itemRoom(16) <> -1 then
         responseText$ = "water" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     end if
@@ -1552,7 +1377,6 @@ function verbWater%()
         printMessage(2)
         return 0
     end if
-    ' GOTO P1+1 OF 4860,4890,4920
     if pirateState = 0 then
         printMessage(7)
         pirateState = 1
@@ -1567,13 +1391,15 @@ function verbWater%()
     return 0
 end function
 
+/*
+ * Handles LOCK: locks the grate, if the player is carrying the keys.
+ */
 function verbLock%()
     global currentRoom%
     global itemRoom
     global grateOpen
     global responseText$
     global commandLine$
-    ' *** LOCK ***
     if currentRoom%=10 or currentRoom%=11 then
         if itemRoom(19)=-1 then
             grateOpen=0:printMessage(10)
@@ -1582,12 +1408,15 @@ function verbLock%()
             PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
         end if
     else
-        ' NOTHING LOCKABLE
         printMessage(2)
     end if
     return 0
 end function
 
+/*
+ * Handles UNLOCK: unlocks the grate, or -- in the bear's room --
+ * tames a fed bear.
+ */
 function verbUnlock%()
     global itemRoom
     global currentRoom%
@@ -1596,7 +1425,6 @@ function verbUnlock%()
     global bearTamedScored
     global responseText$
     global commandLine$
-    ' *** UNLOCK ***
     if itemRoom(19) <> -1 then
         responseText$="keys"
         PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
@@ -1618,6 +1446,10 @@ function verbUnlock%()
     return 0
 end function
 
+/*
+ * Handles FREE (or RELEASE): frees the bird from its cage, letting it
+ * drive off the snake or die attacking the dragon.
+ */
 function verbFree%()
     global keywordFound
     global itemRoom
@@ -1626,9 +1458,7 @@ function verbFree%()
     global snakeAlive
     global responseText$
     global commandLine$
-    ' *** FREE ***
     if keywordFound(31) <> 1 or itemRoom(31) <> -1 then
-        ' CAN'T FREE ANYTHING BUT BIRD
         printMessage(2)
         commandLine$=""
         return 0
@@ -1653,6 +1483,10 @@ function verbFree%()
     return 0
 end function
 
+/*
+ * Handles WAVE: waves the black rod at the fissure, building or
+ * collapsing the crystal bridge.
+ */
 function verbWave%()
     global keywordFound
     global itemRoom
@@ -1660,13 +1494,11 @@ function verbWave%()
     global commandLine$
     global currentRoom%
     global crystalBridgeBuilt
-    ' *** WAVE ***
     if keywordFound(23) <> 1 then
         printMessage(2)
     elseif itemRoom(23) <> -1 then
         responseText$="rod" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
     elseif currentRoom%<>19 and currentRoom%<>20 then
-        ' NOT NEAR FISSURE
         printMessage(2)
     elseif crystalBridgeBuilt=0 then
         printMessage(14)
@@ -1678,20 +1510,23 @@ function verbWave%()
     return 0
 end function
 
+/*
+ * Handles OPEN: opens the clam to reveal the pearl, or defers to
+ * verbUnlock%() when the grate is what's being opened.
+ */
 function verbOpen%()
     global itemCode%
     global itemRoom
     global currentRoom%
     global responseText$
     global commandLine$
-    ' *** OPEN ***
     findMatchedItems()
     if itemCode%=0 then
         PRINT "Open ";
         printDontUnderstand()
         return 0
     end if
-    if itemCode%=40 then return verbUnlock%() ' OPEN a lock is the same as UNLOCK
+    if itemCode%=40 then return verbUnlock%()
     if itemRoom(itemCode%)<>currentRoom% then
         PRINT "I see no ";responseText$;" here."
         return 0
@@ -1708,32 +1543,31 @@ function verbOpen%()
         printMessage(2)
         return 0
     end if
-    ' HE'S OPENED CLAM, SO PRINT DESCRIPTION OF THIS
-    ' PUT PEARL IN CUL-DE-SAC
     itemRoom(7)=43:itemRoom(24)=0:itemRoom(30)=currentRoom%:printMessage(17)
     return 0
 end function
 
+/*
+ * Handles CLOSE. An upstream bug in the original game (not introduced
+ * by this port) means the dispatcher never actually reaches this
+ * function's own logic below the initial return -- CLOSE has always
+ * silently done nothing, so that behavior is preserved here rather
+ * than "fixed."
+ */
 function verbClose%()
     global itemCode%
     global itemRoom
-    ' *** CLOSE *** -- an upstream bug (present already in stage 2/3, not
-    ' introduced by this refactor): the dispatch table points CLOSE's
-    ' entry at this exact "GOTO L400" line -- the same line OPEN's own
-    ' handler ends on above -- rather than at the real CLOSE logic just
-    ' below (L5760-L5800), which is consequently dead code, unreachable
-    ' from anywhere. Preserved exactly as-is (CLOSE silently does nothing,
-    ' matching the original's real behavior) rather than "fixed" to call
-    ' the logic that was clearly intended; this is a faithfulness
-    ' refactor, not a gameplay bugfix.
     return 0
-    ' *** CLOSE *** (dead code -- see the comment above)
     findMatchedItems()
     IF itemCode%=40 THEN return verbLock%()
     printMessage(18)
     return 0
 end function
 
+/*
+ * Handles OIL: oils the rusty iron door's hinges, using the bottle's
+ * oil.
+ */
 function verbOil%()
     global keywordFound
     global itemRoom
@@ -1741,7 +1575,6 @@ function verbOil%()
     global ironDoorOiled
     global bottleContents%
     global responseText$
-    ' OIL
     if keywordFound(17)=0 then
         printMessage(2)
     elseif itemRoom(17)<>-1 then
@@ -1749,7 +1582,6 @@ function verbOil%()
     elseif currentRoom%<>73 then
         printMessage(2)
     elseif ironDoorOiled=1 then
-        ' IS DOOR STILL RUSTED
         printMessage(2)
     else
         ironDoorOiled=1:itemRoom(17)=0:bottleContents%=0:printMessage(19)
@@ -1757,6 +1589,9 @@ function verbOil%()
     return 0
 end function
 
+/*
+ * Handles EAT: eats the food, if the player is carrying it.
+ */
 function verbEat%()
     global keywordFound
     global itemCode%
@@ -1764,7 +1599,6 @@ function verbEat%()
     global itemRoom
     global bottleContents%
     global commandLine$
-    ' *** EAT ***
     if keywordFound(20) <> 1 then
         printMessage(20)
         commandLine$=""
@@ -1780,6 +1614,9 @@ function verbEat%()
     return 0
 end function
 
+/*
+ * Handles DRINK: drinks the water, if the player is carrying it.
+ */
 function verbDrink%()
     global keywordFound
     global itemCode%
@@ -1787,7 +1624,6 @@ function verbDrink%()
     global itemRoom
     global bottleContents%
     global commandLine$
-    ' *** DRINK ***
     if keywordFound(16) <> 1 then
         printMessage(21)
         commandLine$=""
@@ -1803,54 +1639,63 @@ function verbDrink%()
     return 0
 end function
 
+/*
+ * Handles the magic phrase "FEE FIE FOE FOO": makes the golden eggs
+ * appear or disappear in the Giant Room.
+ */
 function verbFeeFieFoeFoo%()
     global currentRoom%
     global itemRoom
     global commandLine$
-    ' *** FEE FIE FOE FOO ***
     if currentRoom% <> 71 then
         printMessage(2)
         commandLine$=""
     elseif itemRoom(8) = currentRoom% then
-        ' MAKE NEST VANISH
         printMessage(79)
         itemRoom(8)=0
     else
-        ' IF S(8)=0 THEN goto L6110
         itemRoom(8)=currentRoom%
-        ' MAKE NEST RE-APPEAR
         printMessage(81)
     end if
     return 0
 end function
 
+/*
+ * Handles SHORT: switches to short room descriptions from now on.
+ */
 function verbShort%()
     global descriptionMode
-    ' *** SHORT ***
     PRINT "Short descriptions"
     descriptionMode=0
     return 0
 end function
 
+/*
+ * Handles LONG: switches to long room descriptions from now on.
+ */
 function verbLong%()
     global descriptionMode
-    ' *** LONG ***
     PRINT "Long descriptions"
     descriptionMode=1
     return 0
 end function
 
+/*
+ * Handles BRIEF: switches to long-description-once-then-short from
+ * now on.
+ */
 function verbBrief%()
     global descriptionMode
-    ' *** BRIEF ***
     PRINT "OK, I'll only describe the room in detail the first time."
     descriptionMode=2
     return 0
 end function
 
+/*
+ * Handles QUIT: optionally saves the game first, then ends it.
+ */
 function verbQuit%()
     global scratchValue
-    ' *** QUIT ***
     PRINT "Save game";
     scratchValue = askYesNo%()
     IF scratchValue=1 THEN return verbSaveGame%()
@@ -1858,11 +1703,18 @@ function verbQuit%()
     return 0
 end function
 
+/*
+ * Handles SCORE: prints the player's current score.
+ */
 function verbScore%()
     printScore()
     return 0
 end function
 
+/*
+ * Handles SAVE: writes the full game state -- room, item locations,
+ * every flag and counter -- to a save file the player names.
+ */
 function verbSaveGame%()
     global paddedCommand$
     global totalRooms
@@ -1891,7 +1743,6 @@ function verbSaveGame%()
     global gameLoaded
     global commandLine$
     global keywordFound
-    ' *** SAVE GAME ***
     INPUT "What do you want to call the save file? ";paddedCommand$
     try
         OPEN paddedCommand$ FOR OUTPUT AS #5
@@ -1904,7 +1755,6 @@ function verbSaveGame%()
     FOR recordIndex%=1 TO 99
         PRINT #5,itemRoom(recordIndex%);",";roomVisited(recordIndex%)
     end for
-
     PRINT #5,roomVisited(100)
     CLOSE #5
     PRINT "Game saved"
@@ -1916,6 +1766,10 @@ function verbSaveGame%()
     return 0
 end function
 
+/*
+ * Handles LOAD: reads a previously saved game state back in, refusing
+ * to overwrite a game already in progress.
+ */
 function verbLoadOldGame%()
     global paddedCommand$
     global totalRooms
@@ -1943,7 +1797,6 @@ function verbLoadOldGame%()
     global roomVisited
     global gameLoaded
     global commandLine$
-    ' *** LOAD OLD GAME ***
     if gameLoaded<>0 then
         PRINT "You already have a loaded game!"
         commandLine$=""
@@ -1962,19 +1815,21 @@ function verbLoadOldGame%()
     FOR recordIndex%=1 TO 99
         INPUT #5,itemLocationValue,roomVisitedValue:itemRoom(recordIndex%)=itemLocationValue:roomVisited(recordIndex%)=roomVisitedValue
     end for
-
     INPUT #5,roomVisitedValue:roomVisited(100)=roomVisitedValue
     CLOSE #5
     gameLoaded=1
     return 1
 end function
 
+/*
+ * Handles READ (or EXAMINE): reads the spelunker magazine, if the
+ * player is carrying it.
+ */
 function verbReadMagazine%()
     global itemCode%
     global itemRoom
     global responseText$
     global commandLine$
-    ' *** READ THE MAGAZINE ***
     findMatchedItems()
     if itemCode% <> 25 then
         printMessage(74)
@@ -1983,22 +1838,19 @@ function verbReadMagazine%()
         responseText$="magazine"
         PRINT "You don't have the ";responseText$ : commandLine$=""
     else
-        ' OK, LET HIM READ IT
         printMessage(303)
     end if
     return 0
 end function
 
+/*
+ * Handles YES: only meaningful in the dragon's room, where it
+ * confirms killing the dragon bare-handed.
+ */
 function verbYes%()
     global currentRoom%
     global itemRoom
     global dragonAlive
-    ' *** YES (only meaningful in the dragon's lair, room 82) *** --
-    ' physically relocated here from inside the ATTACK handler's own body
-    ' (stage 2/3 had it at its original numeric position, L4490, sitting
-    ' between L4480 and L4520 -- reachable only via the dispatch table,
-    ' never by ATTACK's own fall-through, so moving it doesn't change
-    ' behavior) so its case can be its own block below.
     if currentRoom% <> 82 then
         printDontUnderstand()
         return 0
@@ -2008,11 +1860,14 @@ function verbYes%()
     return 0
 end function
 
+/*
+ * Handles BUG: appends a player-submitted bug report, up to five
+ * lines, to ADVBUGS.TXT.
+ */
 function verbBug%()
     global paddedCommand$
     global scratchValue
     global commandLine$
-    ' *** BUG ***
     paddedCommand$ = "ADVBUGS.TXT"
     try
         OPEN paddedCommand$ FOR APPEND AS #5
@@ -2041,24 +1896,10 @@ function verbBug%()
     return 0
 end function
 
-' ==========================================================================
-' Stage 12: the command-parsing cascade (keyword matching, then dispatch)
-' is now two functions of its own, the same treatment stage 8 gave the
-' 40 verb handlers -- dispatchVerb%() is just the old SELECT CASE, moved
-' verbatim; parseAndDispatchCommand%() is everything from the old L400
-' onward (read a line, split it on commas, match keywords, then call
-' dispatchVerb%()). A `return` unwinds a function regardless of loop
-' nesting, so this eliminates every remaining `GOTO` this stretch of the
-' program needed purely to escape two loop levels at once (`L300`,
-' `L400`/`L410`, and the exotic-word/direction/item-but-no-verb `FOR`
-' loops' own `GOTO`s to them) -- see stage 6's and stage 8's own
-' comments for why those were needed before this extraction was
-' possible. `L1950`'s own re-scan (find which keyword in 100..totalKeywords
-' matched, a second time, since the first scan that found one -- was
-' `for scanIndex = 110 to totalKeywords` -- never kept its own `scanIndex`) is gone too: the verb-
-' word `FOR` below just keeps the matched index directly instead.
-' ==========================================================================
-
+/*
+ * Dispatches to the right verb-handler function for a numeric verb
+ * code (1-40, one per recognized command word).
+ */
 function dispatchVerb%(verbCode%)
     select case verbCode%
         case 1
@@ -2147,16 +1988,13 @@ function dispatchVerb%(verbCode%)
     end select
 end function
 
-' Reads one line of player input (unless a previous, comma-separated
-' line still has more commands buffered in c$), extracts the next
-' comma-delimited command from it, matches it against the keyword
-' table, and dispatches -- was the whole stretch from stage 2's L400
-' through L2090. Returns 0 ("get another command") or 1 ("redisplay
-' the room"), the same convention every verbXxx%() function already
-' uses, since this just passes a verb's own return value straight
-' through (or supplies 0/1 itself for the cases -- an exotic word, a
-' successful/failed move, an item named with no verb, or "I don't
-' understand" -- that never reach a verbXxx%() function at all).
+/*
+ * Reads a command line from the player if one isn't already pending,
+ * tokenizes it against the keyword table, and dispatches it: an item
+ * name with no verb prompts what to do with it, a recognized verb
+ * calls dispatchVerb%(), and a direction attempts a move. Falls
+ * through to printDontUnderstand() if nothing matched.
+ */
 function parseAndDispatchCommand%()
     global commandLine$
     global paddedCommand$
@@ -2174,14 +2012,12 @@ function parseAndDispatchCommand%()
         end if
         PRINT: PRINT
         commandLine$ = ucase$(commandLine$)
-        '    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,
         for scanIndex% = 1 to len(commandLine$)
             charCode = asc(mid$(commandLine$,scanIndex%,1))
             if not ((charCode > 64 and charCode < 91) or (charCode > 47 and charCode < 58) or charCode = 44) then
                 commandLine$ = mid$(commandLine$,1,scanIndex%-1)+" "+mid$(commandLine$,scanIndex%+1)
             end if
         end for
-
         if mid$(commandLine$,len(commandLine$),1) <> "," then
             commandLine$ = commandLine$+","
         end if
@@ -2189,12 +2025,6 @@ function parseAndDispatchCommand%()
     commaPos = instr(commandLine$,",")
     paddedCommand$ = ucase$(mid$(commandLine$,1,commaPos-1)) : commandLine$ = mid$(commandLine$,commaPos+1)
     paddedCommand$ = " "+paddedCommand$+" "
-    ' search paddedCommand$ for keywords, put keyword code into keywordFound()
-    ' items
-    ' keyword/item/direction/verb table (items, directions, then verbs) --
-    ' issue #171 fixed the `--target c` bug that forced this DATA to stay
-    ' top-level; it now lives right where it's read, like every other
-    ' RESTORE target in this file.
     keywordTable: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
     data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
     data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
@@ -2206,11 +2036,9 @@ function parseAndDispatchCommand%()
     data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
     data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
     data 46,"ROAD",47,"ALL",47,"EVERYTHING"
-    ' DIRECTIONS
     data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
     data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
     data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
-    ' VERBS
     data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
     data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
     data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
@@ -2225,19 +2053,15 @@ function parseAndDispatchCommand%()
     for i% = 1 to 200
         keywordFound(i%) = 0
     end for
-
     itemCode% = 0
-    ' totalKeywords=TOTAL NUMBER OF KEYWORDS
     keywordCode% = 0
     while keywordCode% <= totalKeywords
         read keywordCode%,responseText$
         responseText$ = " "+responseText$+" "
-        ' IF KEYWORD WAS FOUND, NOTE THIS IN keywordFound(keywordCode)
         if instr(paddedCommand$,responseText$) <> 0 then
             keywordFound(keywordCode%) = 1
         end if
     end while
-    ' EXOTIC WORDS
     for scanIndex% = 36 to 46
         if keywordFound(scanIndex%) = 1 then
             findFirstNamedItem()
@@ -2246,13 +2070,11 @@ function parseAndDispatchCommand%()
             return 0
         end if
     end for
-    ' VERB WORD?
     for scanIndex% = 110 to totalKeywords
         if keywordFound(scanIndex%) = 1 then
             return dispatchVerb%(scanIndex% - 109)
         end if
     end for
-    ' THEN IT'S A DIRECTION
     for directionIndex% = 1 to 10
         if keywordFound(directionIndex%+99) = 1 then
             if attemptMove%(directionIndex%) then
@@ -2263,8 +2085,6 @@ function parseAndDispatchCommand%()
             end if
         end if
     end for
-    ' COMMAND NOT A DIRECTION -- ITEM BUT NO VERB?
-    ' (was: restore L9961 -- item names now come from itemname$())
     for scanIndex% = 1 to 35
         selectedItemName$ = itemNames$(scanIndex%)
         if keywordFound(scanIndex%) = 1 then
@@ -2276,35 +2096,14 @@ function parseAndDispatchCommand%()
     printDontUnderstand()
     return 0
 end function
-
-' ADVENTURE/3000 VERSION 3.2     27 FEB 1979 AT 5:30 PM
-' THIS PROGRAM IS RELATIVELY BUG-FREE, BUT ONE STILL MUST
-' realize that murphy 'S LAW STILL PREVAILS!
-'
-' ADVENTURE: PROGRAMMED IN HP/3000 BASIC BY BENJAMIN MOSER
-' JAMES MADISON HIGH SCHOOL, VIENNA, VIRGINIA.  THE BASIC LAYOUT OF THE
-' GAME WAS CONCEIVED BY DON WOODS & WILLIE CROWTHER, BOTH OF M.I.T.
-'
-' ADVENTURE WAS PORTED TO THE MACINTOSH PLUS BY THE ELIZABETH AND DAVID HUNTER
-' IN MARCH 1998 AND THEN TO PYBASIC FOR THE RASPBERRY RP2040 IN JUNE 2021
-' PRINT "Adventure 3.2 on ";date$;" at ";time$
 PRINT "Adventure 3.2 for PyBASIC"
 open "AMOVING" for INPUT as #4
-' ADESCRIP, AITEMS, and AMESSAGE are loaded fully into memory
-' below instead of opened here -- this port replaces the original's
-' fseek-based random access into them, which BASCAL (and classic
-' Microsoft BASIC) has no equivalent for. See ../README.md.
-' dirs is an array of possible room directions, it replaces file AMOVING
 dim roomExits(100,10)
-' indx()/fraindx() are now dim'd near the top of the file (see the
-' procedure declarations), alongside descrip$()/items$()/msg$()/itemname$().
 dim itemRoom(99)
 dim roomVisited(100)
 dim keywordFound(200)
 dim itemPoints(15)
 PRINT: PRINT "Initializing.";
-' initialize
-' total rooms, items,and keywords
 currentRoom% = int(RND(1)*4)+1 : previousRoom = currentRoom%
 grateOpen = 0 : bottleContents% = 1 : snakeAlive = 1 : dragonAlive = 1 : ironDoorOiled = 0 : trollState = 1 : bearFedState = 0 : crystalBridgeBuilt = 0 : pirateState = 0: isDead = 0
 lampOn = 0 : bearTamedScored = 0 : dwarfGaveAxe = 0 : birdInCage = 0 : descriptionMode = 2 : totalRooms = 100 : totalItems = 35 : totalKeywords = 149 : deathCount = 0 : gameLoaded = 0: commandLine$=""
@@ -2312,21 +2111,15 @@ dwarfHitChance = 1.02
 for roomIndex% = 1 to 99
     itemRoom(roomIndex%) = 0 : roomVisited(roomIndex%) = 0
 end for
-
 PRINT ".";:roomVisited(100) = 0
 messageIndex(1) = -1:messageIndex(2)=-1
-'   read in possible movement direction array
 for targetRoom% = 1 to 100
     INPUT #4,field1,field2,field3,field4,field5,field6,field7,field8,field9,field10
     roomExits(targetRoom%,1)=field1:roomExits(targetRoom%,2)=field2:roomExits(targetRoom%,3)=field3:roomExits(targetRoom%,4)=field4:roomExits(targetRoom%,5)=field5
     roomExits(targetRoom%,6)=field6:roomExits(targetRoom%,7)=field7:roomExits(targetRoom%,8)=field8:roomExits(targetRoom%,9)=field9:roomExits(targetRoom%,10)=field10
     PRINT ".";
 end for
-
 close #4
-' Load ADESCRIP, AITEMS, AMESSAGE (+ its index), and the short
-' item names -- see the procedure declarations near the top of this
-' file for what each replaces.
 loadAdescrip()
 loadAitems()
 loadAmessage()
@@ -2334,12 +2127,10 @@ buildMessageIndex()
 loadItemNames()
 PRINT
 restore itemLocationData
-'    read in locations of items
 for targetRoom% = 1 to totalItems step 5
     read field1,field2,field3,field4,field5:itemRoom(targetRoom%)=field1:itemRoom(targetRoom%+1)=field2:itemRoom(targetRoom%+2)=field3:itemRoom(targetRoom%+3)=field4:itemRoom(targetRoom%+4)=field5
     PRINT ".";
 end for
-
 itemLocationData: data 18,25,23,24,21
 data 52,0,71,74,58
 data 59,69,66,82,100
@@ -2351,22 +2142,13 @@ for itemPointsIndex% = 1 to 15 step 5
     read field1,field2,field3,field4,field5:itemPoints(itemPointsIndex%)=field1:itemPoints(itemPointsIndex%+1)=field2:itemPoints(itemPointsIndex%+2)=field3:itemPoints(itemPointsIndex%+3)=field4:itemPoints(itemPointsIndex%+4)=field5
     PRINT ".";
 end for
-
 data 1,2,2,2,2
 data 3,4,3,3,2
 data 5,3,2,3,3
-' ASK IF HE WANTS DIRECTIONS
 printMessage(301)
 scratchValue = askYesNo%()
 if scratchValue then printMessage(302)
-'    command INPUT routine
-' outer loop: (re)display the room, then run the command loop below until
-' something (a move, a pit, death) needs the room redisplayed -- replaces
-' every stage 2 "GOTO L300"/"GOTO L320" (the two landed on the same next
-' statement, since L300 was just a comment immediately before L320).
 while true
-    ' PRINT room, items
-    ' If it's dark don't let him see anything
     if currentRoom% < 13 or currentRoom% = 58 or (lampOn = 1 and (itemRoom(18) = currentRoom% or itemRoom(18) = -1)) then
         select case descriptionMode
             case 0
@@ -2383,27 +2165,13 @@ while true
     else
         printMessage(45)
     end if
-    ' inner loop: get/parse/dispatch one command, now via
-    ' parseAndDispatchCommand%() -- see its own comment (stage 12) for
-    ' why neither this loop nor that function need a `GOTO`-reachable
-    ' label anywhere anymore, unlike every earlier stage back to 6.
     while true
         moved% = parseAndDispatchCommand%()
         if moved% = 1 then exit
         continue
     end while
 end while
-' *** SEEK A "YES" OR "NO" is now the askYesNo%() function above.
-' score computation/printing are now computeScore()/printScore() above,
-' called from verbScore%() -- the DATA line right below is still needed
-' here, at the top level (not inside verbScore%() itself), since RESTORE
-' targets must be top-level per issue #149/PR #150.
 skillTitles: DATA "beginner","novice","experienced","advanced","expert"
-' printDontUnderstand()'s own DATA (was L2070) and the keyword table
-' (was L580, read by parseAndDispatchCommand%()) both moved back to
-' their own functions once issue #171 fixed the `--target c` bug that
-' had forced them to stay top-level -- see those functions above.
-' ---- SHORT NAMES FOR STUFF ----
 itemNames: data "large gold nugget"
 data "bars of silver"
 data "precious jewelry"
@@ -2451,9 +2219,3 @@ data "pit"
 data "volcano"
 data "road"
 data "everything"
-' INITIALIZE MESSAGE INDEX is now the buildMessageIndex() procedure above.
-```
-
-</details>
-
-[← Stage 15: Integer-Typed Array Indices](adventure3000-stage15.md) [Next: Stage 17: Final Cleanup and Attribution →](adventure3000-stage17.md)
