@@ -29,17 +29,17 @@
 // full 100..t3 range, reached only after both the verb and direction
 // checks had already failed, could only ever ALSO fail.
 //
-// The keyword-table `DATA` (was `L580`, and `printDontUnderstand()`'s
-// own `L2070`, previously alongside it in the same physical spot)
-// couldn't move into these new functions with the code that reads
-// them: `RESTORE` targets must be top-level (issue #149/PR #150, the
-// same reason `L6470` moved in stage 8), and `--target c` specifically
-// turned out to need this literally, not just as a style convention --
-// it rejected `RESTORE L580` outright when tried inside
-// `parseAndDispatchCommand%()`, a genuine backend limitation `--target
-// basic` doesn't share (which compiled the exact same arrangement
-// clean). Left both tables at the top level rather than chase that
-// further.
+// The keyword-table `DATA` (was `L580`) and `printDontUnderstand()`'s
+// own `L2070` originally had to stay at the top level: `--target c`
+// rejected `RESTORE L580` outright when both it and its `DATA` lived
+// inside `parseAndDispatchCommand%()`, a genuine backend limitation
+// `--target basic` didn't share (`collect_data_items_and_labels` in
+// `codegen_c.rs` only ever walked top-level statements, so a label
+// declared inside a function body -- even one targeted by a `RESTORE`
+// in that very same function -- was invisible to it). Issue #171 fixed
+// this in the compiler itself, so both tables now live right inside
+// the functions that read them, like every other `RESTORE` target in
+// this file.
 //
 // `bcc`'s own hand-wired-loop warnings are down to zero for the first
 // time in this port's history. Every `GOTO` in this file is now inside
@@ -56,6 +56,11 @@
 // in line N` diagnostic, which necessarily differs since this stage
 // moved code around (confirmed by diffing everything before that one
 // line, which matched exactly).
+//
+// The `L580`/`L2070` `DATA` relocation (issue #171's follow-up) was
+// re-verified the same way: `bcc --check`, a fresh `--target c`
+// smoke-test diff against this same file's own pre-relocation output,
+// and `--target basic` unchanged.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -611,19 +616,16 @@ procedure askWhatToDoWithItem()
 end procedure
 
 ' Prints one of four random "I don't understand"-style messages --
-' replaces stage 2's L2040 GOSUB-like target (its DATA line, L2070,
-' deliberately stays at its original top-level position further down
-' rather than moving up here with the rest of this logic -- RESTORE
-' can target a label anywhere in the file, and leaving DATA statement
-' order completely undisturbed avoids any risk to some other, unrelated
-' unrestored sequential READ elsewhere in this 1149-line program).
-' Reached via GOTO from every verb handler that couldn't make sense of
-' the player's command (the fallback for an unrecognized word entirely,
-' and several verb handlers' own "you didn't say what" case). Every
-' call site GOTOs L400 right after, same reason as
-' askWhatToDoWithItem() above.
+' replaces stage 2's L2040 GOSUB-like target (its DATA line, L2070, now
+' lives right here -- issue #171 fixed the `--target c` bug that used
+' to force it to stay top-level). Reached via GOTO from every verb
+' handler that couldn't make sense of the player's command (the
+' fallback for an unrecognized word entirely, and several verb
+' handlers' own "you didn't say what" case). Every call site GOTOs
+' L400 right after, same reason as askWhatToDoWithItem() above.
 procedure printDontUnderstand()
     global b$
+    L2070: data "What?","I don't understand.","I can't understand that.","I don't know that word."
     restore L2070
     for x = 1 to int(RND(1)*4)+1
         read b$
@@ -2178,8 +2180,36 @@ function parseAndDispatchCommand%()
     a$ = " "+a$+" "
     ' search a$ for keywords,puut kwd code into k(x)
     ' items
-    ' keyword/item/direction/verb table -- kept top-level, see below,
-    ' for the same RESTORE-must-be-top-level reason as L6470/L2070.
+    ' keyword/item/direction/verb table (items, directions, then verbs) --
+    ' issue #171 fixed the `--target c` bug that forced this DATA to stay
+    ' top-level; it now lives right where it's read, like every other
+    ' RESTORE target in this file.
+    L580: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
+    data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
+    data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
+    data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
+    data 16,"WATER",17,"OIL",18,"LAMP",18,"LANTERN",19,"KEYS",20,"FOOD",21,"BOTTLE"
+    data 22,"CAGE",23,"ROD",23,"WAND",24,"CLAM",25,"MAGAZINE",26,"BEAR"
+    data 27,"AXE",28,"VELVET",28,"PILLOW",29,"SHARDS",30,"OYSTER"
+    data 31,"BIRD",32,"TROLL",33,"DRAGON",34,"SNAKE",35,"DWARF"
+    data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
+    data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
+    data 46,"ROAD",47,"ALL",47,"EVERYTHING"
+    ' DIRECTIONS
+    data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
+    data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
+    data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
+    ' VERBS
+    data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
+    data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
+    data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
+    data 124,"GET",124,"CATCH",124,"TAKE",125,"DROP",125,"DUMP",126,"THROW",127,"ATTACK"
+    data 127,"KILL",128,"FEED",129,"WATER",130,"LOCK",131,"UNLOCK"
+    data 132,"FREE",132,"RELEASE",133,"WAVE",134,"OPEN",135,"CLOSE"
+    data 136,"OIL",137,"EAT",138,"DRINK",139,"FEE FIE FOE FOO"
+    data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
+    data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
+    data 148,"YES",148,"Y",149,"BUG",150,"*"
     restore L580
     for i = 1 to 200
         k(i) = 0
@@ -2358,41 +2388,10 @@ end while
 ' here, at the top level (not inside verbScore%() itself), since RESTORE
 ' targets must be top-level per issue #149/PR #150.
 L6470: DATA "beginner","novice","experienced","advanced","expert"
-' printDontUnderstand()'s own random "I don't understand" messages --
-' likewise kept top-level rather than moved into
-' parseAndDispatchCommand%() (stage 12) with the rest of the cascade,
-' for the same RESTORE-must-be-top-level reason.
-' search a$ for keywords, put keyword code into k(x) -- was inline in
-' parseAndDispatchCommand%() itself; kept top-level for the same
-' RESTORE-must-be-top-level reason as L6470/L2070 above.
-L580: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
-data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
-data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
-data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
-data 16,"WATER",17,"OIL",18,"LAMP",18,"LANTERN",19,"KEYS",20,"FOOD",21,"BOTTLE"
-data 22,"CAGE",23,"ROD",23,"WAND",24,"CLAM",25,"MAGAZINE",26,"BEAR"
-data 27,"AXE",28,"VELVET",28,"PILLOW",29,"SHARDS",30,"OYSTER"
-data 31,"BIRD",32,"TROLL",33,"DRAGON",34,"SNAKE",35,"DWARF"
-data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
-data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
-data 46,"ROAD",47,"ALL",47,"EVERYTHING"
-' DIRECTIONS
-data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
-data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
-data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
-' VERBS
-data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
-data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
-data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
-data 124,"GET",124,"CATCH",124,"TAKE",125,"DROP",125,"DUMP",126,"THROW",127,"ATTACK"
-data 127,"KILL",128,"FEED",129,"WATER",130,"LOCK",131,"UNLOCK"
-data 132,"FREE",132,"RELEASE",133,"WAVE",134,"OPEN",135,"CLOSE"
-data 136,"OIL",137,"EAT",138,"DRINK",139,"FEE FIE FOE FOO"
-data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
-data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
-data 148,"YES",148,"Y",149,"BUG",150,"*"
-
-L2070: data "What?","I don't understand.","I can't understand that.","I don't know that word."
+' printDontUnderstand()'s own DATA (was L2070) and the keyword table
+' (was L580, read by parseAndDispatchCommand%()) both moved back to
+' their own functions once issue #171 fixed the `--target c` bug that
+' had forced them to stay top-level -- see those functions above.
 ' ---- SHORT NAMES FOR STUFF ----
 L9961: data "large gold nugget"
 data "bars of silver"

@@ -520,11 +520,18 @@ source from scratch.
   so a second scan had to re-find it) is gone too -- the new `FOR` just
   captures its index directly.
 
-  The keyword-table `DATA` couldn't move into these new functions with the
-  code that reads it: `RESTORE` targets must stay top-level, and
-  `--target c` needed this literally, not just as style -- it rejected
-  `RESTORE` inside the new function outright, a genuine backend limitation
-  `--target basic` didn't share.
+  The keyword-table `DATA` originally couldn't move into these new
+  functions with the code that reads it: `--target c` rejected `RESTORE`
+  inside the new function outright, a genuine backend limitation `--target
+  basic` didn't share (`codegen_c.rs`'s DATA/label collector only ever
+  walked top-level statements, so a label declared inside a function body
+  was invisible to it even when the `RESTORE` targeting it lived in that
+  same function). Filed as issue #171 and fixed in the compiler itself, so
+  both the keyword table and `printDontUnderstand()`'s own `DATA` (`L2070`)
+  now live right inside the functions that read them, like every other
+  `RESTORE` target in this file -- re-verified with `bcc --check` and a
+  fresh `--target c` smoke-test diff against this stage's own
+  pre-relocation output (byte-identical).
 
   `bcc`'s own hand-wired-loop warnings are down to **zero** for the first
   time in this port's history -- every `GOTO` left in the file is inside a
