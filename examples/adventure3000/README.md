@@ -292,6 +292,41 @@ source from scratch.
   per-handler change -- flagged as **stage 6**'s job, not attempted
   here.
 
+- **`stage6-refactored-bascal/`** -- picks up exactly where stage 5 left
+  off: the outer game loop. Started as an exact copy of stage 5.
+
+  The outer redisplay loop (was `L300`/`L320`) and the inner "get one
+  command" loop (was `L400`/`L410`) are now a `WHILE TRUE` nested
+  inside another. This became possible only once BASCAL grew a
+  `continue` statement (added alongside this stage's own work,
+  unqualified like `exit` -- the transpiler resolves which enclosing
+  loop it leaves): `continue` for a verb handler that wants another
+  command without redisplaying (was `GOTO L400`/`GOTO L410`), `exit`
+  for one that wants the room redisplayed (was a direct `GOTO L300`, or
+  the pit-check's own `GOTO L9780` once no pit was hit). `L300`/`L400`/
+  `L410` stay real labels rather than disappearing entirely -- a
+  handful of stage 5's own scan loops need to jump out two loop levels
+  at once to reach them, which `continue`/`exit` can't do (each only
+  ever escapes its own innermost loop), so those sites keep an explicit
+  `GOTO` instead.
+
+  The reincarnation/pit-death cascade (was `L9540`-`L9840`) is now two
+  procedures, `reincarnate()` and `checkPitsAndReincarnateIfNeeded()`,
+  plus a third, `endGame()` (was `L9750`'s "Oh well..."/`printScore()`/
+  `STOP`), pulled out separately once it turned out two verb handlers
+  outside the cascade entirely -- QUIT's "don't save" path and SAVE
+  GAME's own "also quit" check -- shared that same target.
+
+  Verified with `bcc --check`, a real `fbc` build, and smoke tests
+  against stage 5 covering movement, inventory, GET/DROP, SAVE/LOAD,
+  QUIT with and without saving, SCORE, SHORT/LONG/BRIEF, an exotic word
+  (XYZZY), an item named with no verb, JUMP, ATTACK, and CLIMB --
+  byte-identical output throughout. The pit-fall/reincarnation cascade
+  itself was exercised separately in a scratch copy with the
+  darkness/pit checks temporarily patched to trigger on an early room,
+  confirming both death messages, a successful reincarnation, and a
+  "no" answer correctly ending the game via `endGame()`.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
