@@ -156,11 +156,79 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
                 .generate(&resolved)?;
             Ok(basic)
         }
+        Target::Fbc => {
+            reject_fbc_incompatible_constructs(&resolved.program)?;
+            let basic = CodeGenerator::new()
+                .with_line_numbers(options.line_numbers)
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)?;
+            Ok(basic)
+        }
         Target::C => {
             let generated = codegen_c::generate(&resolved.program)?;
             Ok(generated.app)
         }
         Target::Jvm => codegen_jvm::generate(&resolved.program),
+    }
+}
+
+/// `Target::Fbc` generates the exact same BASIC as `Target::Basic`
+/// (`codegen_basic` doesn't distinguish them at all), except that `try`/
+/// `catch`'s generated `RESUME <lineno>` is real, correct classic BASIC --
+/// verified against real IBM/Microsoft BASCOM under `dosbox-x` -- that
+/// `fbc` (FreeBASIC) nonetheless rejects outright, in every `-lang`
+/// dialect, with no switch that unlocks it (see GitHub issue #100's
+/// investigation and #153, tracking a real fix). Until #153 lands, reject
+/// `try`/`catch` here with a clear diagnostic rather than emit BASIC that
+/// compiles under `Target::Basic`'s own real-BASCOM verification but then
+/// silently fails under `fbc`.
+fn reject_fbc_incompatible_constructs(program: &ast::Program) -> Result<(), Vec<Diagnostic>> {
+    let mut diagnostics = Vec::new();
+    reject_try_catch(&program.statements, &mut diagnostics);
+    for function in &program.functions {
+        reject_try_catch(&function.body, &mut diagnostics);
+    }
+    if diagnostics.is_empty() {
+        Ok(())
+    } else {
+        Err(diagnostics)
+    }
+}
+
+fn reject_try_catch(statements: &[ast::Stmt], diagnostics: &mut Vec<Diagnostic>) {
+    for statement in statements {
+        match &statement.kind {
+            ast::Statement::TryCatch { try_body, catch, finally_body } => {
+                diagnostics.push(Diagnostic::error(
+                    statement.pos.clone(),
+                    "`try`/`catch` is not supported with --target fbc; fbc rejects the \
+                     `RESUME <lineno>` its generated BASIC relies on (valid under real \
+                     BASCOM, but not fbc -- see GitHub issue #153). Use `--target basic` \
+                     (verified against real BASCOM) or `on error goto`/`resume` for a \
+                     program that must build under fbc."
+                        .to_string(),
+                ));
+                reject_try_catch(try_body, diagnostics);
+                if let Some(catch) = catch {
+                    reject_try_catch(&catch.body, diagnostics);
+                }
+                reject_try_catch(finally_body, diagnostics);
+            }
+            ast::Statement::If { then_body, else_body, .. } => {
+                reject_try_catch(then_body, diagnostics);
+                reject_try_catch(else_body, diagnostics);
+            }
+            ast::Statement::For { body, .. }
+            | ast::Statement::While { body, .. }
+            | ast::Statement::Do { body, .. } => reject_try_catch(body, diagnostics),
+            ast::Statement::SelectCase { cases, else_body, .. } => {
+                for case in cases {
+                    reject_try_catch(&case.body, diagnostics);
+                }
+                reject_try_catch(else_body, diagnostics);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -211,7 +279,7 @@ fn print_const_convention_warnings(program: &ast::Program) {
 
 pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
     let extension = match target {
-        Target::Basic => "bas",
+        Target::Basic | Target::Fbc => "bas",
         Target::C => "c",
         Target::Jvm => "j",
     };

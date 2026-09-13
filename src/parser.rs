@@ -2111,17 +2111,27 @@ impl Parser {
 
     fn parse_const(&mut self) -> ParseResult<Statement> {
         self.expect_keyword("const")?;
+        let name_pos = self.current_pos();
         let mut name = BasicIdent::parse(&self.expect_ident("expected CONST name")?);
+        if name.suffix.is_some() {
+            return Err(Diagnostic::error(
+                name_pos,
+                format!(
+                    "`const {}` may not have a type suffix -- a const's type is always \
+                     inferred from its value (write `const {} = ...`)",
+                    name.as_basic(),
+                    name.name
+                ),
+            ));
+        }
         self.expect(TokenKind::Eq, "expected `=` in CONST")?;
         let value = self.parse_expr(0)?;
-        if name.suffix.is_none() {
-            name.suffix = Some(match value {
-                Expr::Integer(_) => TypeSuffix::Integer,
-                Expr::Float(_) => TypeSuffix::Single,
-                Expr::String(_) => TypeSuffix::String,
-                _ => TypeSuffix::Integer,
-            });
-        }
+        name.suffix = Some(match value {
+            Expr::Integer(_) => TypeSuffix::Integer,
+            Expr::Float(_) => TypeSuffix::Single,
+            Expr::String(_) => TypeSuffix::String,
+            _ => TypeSuffix::Integer,
+        });
         self.const_types
             .insert(name.name.to_ascii_lowercase(), name.suffix.unwrap());
         self.consume_line_end()?;
