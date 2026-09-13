@@ -1,97 +1,137 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 6: The Outer Game Loop
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 7: Reducing GOTO to a Minimum
 
 <div class="prose" markdown="1">
 
-# Stage 6: The Outer Game Loop
+# Stage 7: Reducing GOTO to a Minimum
 
+Three kinds of GOTO cleaned up so far, all without changing a single line
+of actual game logic: small shared message-and-continue targets embedded
+in one case but reached by `GOTO` from several others (e.g. `L2200`'s
+`printMessage(2)`, 17 call sites) are now duplicated inline instead of
+shared by label -- simpler than a procedure for a one- or two-statement
+body, though LIGHT/OFF's bigger shared "redo LOOK's dark-room check"
+became a real procedure, `describeRoomForLook()`; ENTER's and LEAVE's own
+"try every direction" manual scan loops became real `FOR` loops, the same
+way stage 5 converted the command-parsing cascade's; and GET and DROP --
+by far the two most GOTO-heavy handlers -- are now each a single
+structured `FOR z3 = 1 TO T2` scan, with their own "special case" logic
+(chain, bear, dragon, bird-in-cage, bottle, oil/water, the vase, and
+FEED's own reuse of DROP's tail) folded directly into the loop body as
+`IF`/`ELSEIF` instead of living as separate GOSUB-like targets reached
+mid-scan.
 
-The outer redisplay loop and the inner "get one command" loop are now a
-`WHILE TRUE` nested inside another. This became possible only once BASCAL
-grew a `continue` statement (added alongside this stage's own work,
-unqualified like `exit` -- the transpiler resolves which enclosing loop it
-leaves): `continue` for a verb handler that wants another command without
-redisplaying, `exit` for one that wants the room redisplayed. The original
-loop-entry labels stay real labels rather than disappearing entirely -- a
-handful of stage 5's own scan loops need to jump out *two* loop levels at
-once to reach them, which `continue`/`exit` can't do (each only ever escapes
-its own innermost loop), so those specific sites keep an explicit `GOTO`
-instead.
+A real bug turned up along the way: converting LOCK/UNLOCK's shared
+"you don't have the keys" check to structured `IF` initially inverted the
+`S(19) = -1` ("carrying") test, silently swapping which branch UNLOCK
+took -- caught immediately by this stage's own smoke tests, fixed, and
+reverified byte-identical.
 
-The reincarnation/pit-death cascade is now two procedures, `reincarnate()`
-and `checkPitsAndReincarnateIfNeeded()`, plus a third, `endGame()`, pulled
-out separately once it turned out two verb handlers outside the cascade
-entirely -- QUIT's "don't save" path and SAVE GAME's own "also quit" check
--- shared that same ending sequence.
+Verified with `bcc --check`, a real `fbc` build, and smoke tests against
+stage 6 covering movement, inventory, SAVE/LOAD, QUIT, SCORE,
+SHORT/LONG/BRIEF, an exotic word, JUMP, ATTACK, CLIMB, LIGHT/OFF/LOOK,
+FILL/EMPTY, LOCK/UNLOCK, FREE, WAVE, OPEN/CLOSE, OIL, and FEED/WATER/
+THROW -- byte-identical throughout. GET's and DROP's own special-case
+branches were each exercised separately in a scratch copy with the
+relevant items patched to be carried/present from the start.
 
-Verified with a real `fbc` build and smoke tests covering movement,
-inventory, GET/DROP, SAVE/LOAD, QUIT with and without saving, SCORE,
-SHORT/LONG/BRIEF, an exotic word, an item named with no verb, JUMP, ATTACK,
-and CLIMB -- byte-identical output against stage 5 throughout. The
-pit-fall/reincarnation cascade itself, not reachable from a fresh game
-within a short smoke test (every room reachable in a few moves is lit), was
-exercised separately in a scratch copy with the darkness/pit checks
-temporarily patched to trigger on an early, reachable room.
+**Where this stage stopped**: the 40-case `SELECT CASE` dispatch was still
+one massive block with every handler's logic inline, not yet split into
+its own procedure per verb. Extracting each case into a procedure isn't
+purely mechanical -- a procedure can only `return` to its own caller,
+never `continue`/`exit` a loop in the *caller's* scope the way every
+handler here did directly at this point, so each extracted verb procedure
+would need to return a code (get another command vs. redisplay) for the
+dispatcher to act on after the call -- the same restructuring problem
+stage 3's own commentary hit and stage 4 deliberately routed around. A few
+more small GOTO targets also remained unconverted. Left as clearly-marked
+future work, picked up by [Stage 8](adventure3000-stage8.md).
 
 </div>
 
 <details class="source-embed" markdown="1">
 
-<summary><code>stage6-refactored-bascal/adventure.bcl</code> -- Stage 6 — the outer game loop</summary>
+<summary><code>stage7-refactored-bascal/adventure.bcl</code> -- Stage 7: Reducing GOTO to a Minimum</summary>
 
 ```bascal
 
-// ADVENTURE/3000 -- Stage 6: structuring the outer game loop that every
-// one of the 40 verb handlers `GOTO`s back into -- picks up exactly
-// where stage 5 left off, the one thing its own header flagged as not
-// attempted. See ../README.md for the port's provenance, staging, and
-// exactly how far this refactor has gotten so far (it is NOT a
-// complete rewrite).
+// ADVENTURE/3000 -- Stage 7: reducing GOTO to a minimum inside the 40
+// verb handlers themselves, and cleaning up the resulting massive
+// SELECT CASE -- picks up where stage 6 left off. See ../README.md for
+// the port's provenance, staging, and exactly how far this refactor
+// has gotten so far (it is NOT a complete rewrite, and this stage in
+// particular is itself still IN PROGRESS -- see "Where this stops for
+// now" below).
 //
-// Started as an exact copy of stage 5. The outer redisplay loop
-// (was `L300`/`L320`) and the inner "get one command" loop (was
-// `L400`/`L410`) are now a `WHILE TRUE` nested inside another, closing
-// over the whole room-display-then-command-dispatch body. This became
-// possible only once BASCAL grew a `continue` statement (added
-// alongside this stage's own work) -- unqualified, like `exit`,
-// resolving to whichever of the two loops actually encloses each call
-// site: `continue` for a verb handler that wants another command
-// without redisplaying (was `GOTO L400`/`GOTO L410`, `c$=""` first for
-// the `L410` case so the next INPUT actually prompts), `exit` for one
-// that's done and wants the room redisplayed (was a direct `GOTO
-// L300`, or the pit-check's own `GOTO L9780` once no pit was hit).
-// `L300`/`L400`/`L410` themselves stay real labels rather than
-// disappearing entirely: a handful of stage 5's own scan loops (the
-// exotic-word/item-but-no-verb `FOR`s, and the direction-of-movement
-// `FOR`) need to jump out two loop levels at once to reach them, which
-// `continue`/`exit` can't do (each only ever escapes its own innermost
-// loop) -- those sites keep an explicit `GOTO` to the label instead.
+// Started as an exact copy of stage 6. Three kinds of GOTO got cleaned
+// up so far, all without changing a single line of actual game logic:
 //
-// The reincarnation/pit-death cascade (was `L9540`-`L9840`) is now two
-// procedures: reincarnate() (was `L9540`/`L9550`'s own `R0=R0+1` cascade
-// through `L9580`/`L9610`/`L9630`/`L9740`) and
-// checkPitsAndReincarnateIfNeeded() (was `L9780`/`L9840`). A third,
-// endGame() (was `L9750`'s "Oh well..."/printScore()/STOP), got pulled
-// out of reincarnate() once it turned out two verb handlers outside the
-// cascade entirely -- QUIT's "don't save" path and SAVE GAME's own
-// "also quit" check -- shared that same `GOTO L9750` target. Every
-// checkPitsAndReincarnateIfNeeded() call site follows it with `exit`
-// (or, for the one inside the direction-of-movement `FOR`, `GOTO L300`
-// directly, for the two-loop-levels reason above) to reach the outer
-// loop's redisplay, whether or not a pit was actually fallen into.
+// 1. Small shared message-and-continue targets embedded inside one
+//    case but GOTO'd into from several others (the same pattern stage
+//    3/5 already extracted into procedures like printDontUnderstand(),
+//    just smaller) -- e.g. `L2200`'s `printMessage(2)` (17 call sites)
+//    and `L2710`'s "you don't have the X" (7 call sites). Each such
+//    target's tiny body is now duplicated inline at every call site
+//    instead of shared via GOTO -- simpler than a procedure for a
+//    one-or-two-statement body, and it's what LIGHT/OFF's shared
+//    "redo LOOK's dark-room check" became instead:
+//    describeRoomForLook(), a real procedure, since that one's bigger.
+//
+// 2. Two more manual scan loops, ENTER's and LEAVE's own "try every
+//    direction" (was `LW3240`/`LW3400`), converted to real `FOR`
+//    loops the same way stage 5 converted the command-parsing
+//    cascade's -- `GOTO L300`/`GOTO L400` inside them, not `exit`/
+//    `continue`, for the same two-loop-levels reason as stage 6's own
+//    direction-of-movement `FOR`.
+//
+// 3. GET and DROP, by far the two most GOTO-heavy handlers, are now
+//    each a single structured `FOR z3 = 1 TO T2` scan over the item
+//    table (was `LW3680`/`LW4000`), with their own "special case"
+//    logic -- SPECIAL GETS (was `L6880` onward: chain, bear, dragon,
+//    bird-in-cage, bottle) and SPECIAL DROP (was `L7380` onward: bird-
+//    in-cage, bottle, oil/water, troll-and-bear, the vase) -- folded
+//    directly into the loop body as `IF`/`ELSEIF` instead of living as
+//    separate GOSUB-like targets a GOTO reached mid-scan. FEED's own
+//    `L4760` check reused SPECIAL DROP's tail (`L7600`) to "drop" food
+//    already left for the bear via the exact same code; that call site
+//    now inlines the same two statements directly instead.
+//
+// A real, subtle bug turned up converting LOCK/UNLOCK's shared
+// "you don't have the keys" check to structured `IF`: the first
+// attempt inverted the `S(19) = -1` ("carrying") test, silently
+// swapping which branch UNLOCK took. Caught immediately by this
+// stage's own smoke tests (`unlock door` from the start of a fresh
+// game started reporting "Nothing seems to happen" instead of "You
+// don't have the keys"), fixed, and reverified byte-identical.
 //
 // Verified with `bcc --check`, a real `fbc` build, and smoke tests
-// against stage 5 covering movement in all directions, inventory,
-// GET/DROP, SAVE/LOAD, QUIT with and without saving, SCORE,
-// SHORT/LONG/BRIEF, an exotic word (XYZZY), an item named with no verb,
-// JUMP, ATTACK, and CLIMB -- byte-identical output throughout. The
-// pit-fall/reincarnation cascade itself (not reachable from the game's
-// own start within a short smoke test, since every room a fresh game
-// can reach in a few moves is lit) was exercised separately, in a
-// scratch copy with the "is this room dark" and "which rooms have
-// pits" checks temporarily patched to trigger on an early, reachable
-// room: confirmed the first and second deaths' distinct messages,
-// reincarnation actually resetting state and respawning, and a "no" to
-// "reincarnate you?" correctly ending the game via endGame().
+// against stage 6 covering movement, inventory, SAVE/LOAD, QUIT, SCORE,
+// SHORT/LONG/BRIEF, an exotic word, JUMP, ATTACK, CLIMB, LIGHT/OFF/
+// LOOK, FILL/EMPTY, LOCK/UNLOCK, FREE, WAVE, OPEN/CLOSE, OIL, and
+// FEED/WATER/THROW -- byte-identical throughout. GET's and DROP's own
+// special-case branches (chain, bear, dragon+rug, bird/cage/rod in
+// every combination, a full bottle, oil/water, the troll-scaring-bear
+// bridge case, and the vase with and without the pillow already here)
+// were each exercised separately in a scratch copy with the relevant
+// items' locations patched to be carried/present from the start,
+// confirming byte-identical output against stage 6 for every branch.
+//
+// Where this stops for now: the 40-case `SELECT CASE` dispatch itself
+// is still one massive block with every handler's logic inline, not
+// yet split into its own procedure per verb the way "cleanup massive
+// select case with embedded code in each case" asks for. Extracting
+// each case into a procedure isn't a purely mechanical move -- a
+// procedure can only ever `return` to its own caller, never `continue`
+// or `exit` a loop in the *caller's* scope the way every handler here
+// currently does directly, so each extracted verb procedure would need
+// to return a code (e.g. 0 = get another command, 1 = redisplay the
+// room) for the dispatcher itself to act on with `continue`/`exit`
+// after the call -- the same restructuring problem stage 3's own
+// README section hit and stage 4 deliberately routed around by keeping
+// handlers inline. A few more small GOTO targets also remain
+// unconverted (`L2420`'s CROSS message, the BUG-report loop's
+// `LW9430`, and OPEN's/CLOSE's intentional single remaining
+// cross-references into LOCK/UNLOCK) -- left as clearly-marked future
+// work rather than attempted partially.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -424,6 +464,28 @@ procedure describeRoomOnEntry()
         shortDescription()
     else
         longDescription()
+    end if
+end procedure
+
+' Shows the room as LOOK does: the full long description unless it's
+' dark and unlit, in which case just the "too dark to see" message --
+' replaces stage 2's L2940-L2970 GOSUB-like target, shared by LOOK
+' itself and by LIGHT/OFF (both re-run this same check right after
+' changing the lamp's state, since that can change whether it applies).
+procedure describeRoomForLook()
+    global l1
+    global l
+    global s
+    if l1 < 13 or l1 = 58 or (l = 1 and (s(18) = l1 or s(18) = -1)) then
+        longDescription() ' (was: gosub 8050 -- jumped past the old
+        ' subroutine's own `v(l1)=1` to avoid redundantly re-marking the
+        ' room visited; by the time LOOK is typeable the room's already
+        ' been entered via describeRoomOnEntry(), which already sets
+        ' v(l1)=1, so calling the full longDescription() here just
+        ' re-does that no-op assignment)
+        describeRoomContents()
+    else
+        printMessage(45)
     end if
 end procedure
 
@@ -1133,11 +1195,11 @@ while true
                 Z2=26
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
-                L2170: IF L1<>26 THEN goto L2200
+                L2170: IF L1<>26 THEN printMessage(2) : continue
                 Z2=7
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
-                L2200: printMessage(2)
+                printMessage(2)
                 continue
             case 2
                 ' *** XYZZY ***
@@ -1146,7 +1208,7 @@ while true
                 Z2=13
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
-                L2270: IF L1<>13 THEN goto L2200
+                L2270: IF L1<>13 THEN printMessage(2) : continue
                 Z2=7
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
@@ -1160,7 +1222,7 @@ while true
                 L2340: Z2 = 58
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
-                L2360: IF L1<>58 THEN goto L2200
+                L2360: IF L1<>58 THEN printMessage(2) : continue
                 Z2=26
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
@@ -1192,7 +1254,7 @@ while true
                 else
                     continue
                 end if
-                L2540: IF L1<>61 THEN goto L2200
+                L2540: IF L1<>61 THEN printMessage(2) : continue
                 D=6
                 if attemptMove%(D) then
                     checkPitsAndReincarnateIfNeeded() : exit
@@ -1201,23 +1263,23 @@ while true
                 end if
             case 5
                 ' *** CLIMB ***
-                IF L1<>50 THEN goto L2200
+                IF L1<>50 THEN printMessage(2) : continue
                 ' CAN HE CLIMB BEANSTALK?
-                IF P1<2 THEN goto L2200
+                IF P1<2 THEN printMessage(2) : continue
                 ' YES
                 Z2=70
                 performMove%(Z2)
                 checkPitsAndReincarnateIfNeeded() : exit
             case 6
                 ' *** JUMP *** STRICTLY SUICIDAL
-                IF L1<>16 AND L1<>19 AND L1<>20 AND L1<>27 THEN goto L2200
+                IF L1<>16 AND L1<>19 AND L1<>20 AND L1<>27 THEN printMessage(2) : continue
                 printMessage(4)
                 reincarnate() : exit
             case 7
                 ' FILL
                 IF S(21)=-1 THEN goto L2730
-                L2700: B$="bottle"
-                L2710: PRINT "You don't have the ";b$
+                B$="bottle"
+                PRINT "You don't have the ";b$
                 c$="" : continue
                 L2730: IF B0=0 THEN goto L2760
                 printMessage(5)
@@ -1227,7 +1289,7 @@ while true
                 GOTO L2840
                 L2790: IF L1=49 THEN goto L2830
                 B$="oil"
-                L2810: PRINT "I see no ";B$;" here."
+                PRINT "I see no ";B$;" here."
                 continue
                 L2830: B0=2:S(17)=-1
                 L2840: PRINT "The bottle is now filled."
@@ -1235,39 +1297,40 @@ while true
             case 8
                 ' *** EMPTY ***
                 IF S(21)=-1 THEN goto L2890
-                GOTO L2700
+                B$="bottle" : PRINT "You don't have the ";b$ : c$="" : continue
                 L2890: ' EMPTY BOTTLE (ASSUMED FULL)
                 S(B0+15)=0:B0=0
                 PRINT "Emptied"
                 continue
             case 9
                 ' *** LOOK ***
-                L2940: if l1 < 13 or l1 = 58 then goto L2970
-                if l = 1 and (s(18) = l1 or s(18) = -1) then goto L2970
-                printMessage(45)
-                continue
-                L2970: longDescription() ' (was: gosub 8050 -- jumped past the old
-                ' subroutine's own `v(l1)=1` to avoid redundantly re-marking the room
-                ' visited; by the time LOOK is typeable the room's already been entered
-                ' via describeRoomOnEntry(), which already sets v(l1)=1, so calling the
-                ' full longDescription() here just re-does that no-op assignment)
-                describeRoomContents()
+                describeRoomForLook()
                 continue
             case 10
                 ' *** LIGHT ***
-                if s(18) = -1 then goto L3040
-                L3020: b$ = "lamp"
-                goto L2710
-                L3040: l = 1
-                b$ = "on"
-                L3060: PRINT "The lamp is now ";b$
-                goto L2940
+                if s(18) = -1 then
+                    l = 1
+                    b$ = "on"
+                else
+                    b$ = "lamp"
+                    PRINT "You don't have the ";b$
+                    c$="" : continue
+                end if
+                PRINT "The lamp is now ";b$
+                describeRoomForLook()
+                continue
             case 11
                 ' *** OFF (EXTINGUSIH) ***
-                IF S(18)=-1 THEN goto L3110
-                GOTO L3020
-                L3110: L=0:B$="off"
-                GOTO L3060
+                if s(18) = -1 then
+                    L=0:B$="off"
+                else
+                    b$ = "lamp"
+                    PRINT "You don't have the ";b$
+                    c$="" : continue
+                end if
+                PRINT "The lamp is now ";b$
+                describeRoomForLook()
+                continue
             case 12
                 ' *** ENTER ***
                 IF L1<>6 THEN goto L3180
@@ -1286,20 +1349,23 @@ while true
                 else
                     continue
                 end if
-                L3240: D = 10
-                LW3240: if D < 1 then goto L3270
-                Z2 = DIRS(L1,D)
-                IF Z2>0 AND Z2<101 THEN
-                    if checkSpecialRoomAndMove%(D, Z2) then
-                        checkPitsAndReincarnateIfNeeded() : exit
-                    else
-                        continue
+                ' Scan every direction for one that works, starting from the
+                ' last (D=10, "down") -- was a manual D=10 downto 1 GOTO loop
+                ' (LW3240). `goto L300`/`goto L400` here, not `exit`/`continue`
+                ' -- this `for` is one loop level inside the inner command
+                ' loop, and `exit`/`continue` only ever reach their own
+                ' innermost loop.
+                L3240: for D = 10 to 1 step -1
+                    Z2 = DIRS(L1,D)
+                    IF Z2>0 AND Z2<101 THEN
+                        if checkSpecialRoomAndMove%(D, Z2) then
+                            checkPitsAndReincarnateIfNeeded() : goto L300
+                        else
+                            goto L400
+                        end if
                     end if
-                end if
-                D = D + (-1)
-                goto LW3240
-                L3270:
-                GOTO L2200
+                end for
+                printMessage(2) : continue
             case 13
                 ' ** LEAVE ***
                 IF L1<>7 THEN goto L3340
@@ -1318,20 +1384,21 @@ while true
                 else
                     continue
                 end if
-                L3400: D = 1
-                LW3400: if D > 10 then goto L3430
-                Z2 = DIRS(L1,D)
-                IF Z2>0 AND Z2<101 THEN
-                    if checkSpecialRoomAndMove%(D, Z2) then
-                        checkPitsAndReincarnateIfNeeded() : exit
-                    else
-                        continue
+                ' Scan every direction for one that works, starting from the
+                ' first (D=1, "north") -- was a manual D=1 to 10 GOTO loop
+                ' (LW3400). See ENTER's own comment above for why this uses
+                ' `goto L300`/`goto L400` instead of `exit`/`continue`.
+                L3400: for D = 1 to 10
+                    Z2 = DIRS(L1,D)
+                    IF Z2>0 AND Z2<101 THEN
+                        if checkSpecialRoomAndMove%(D, Z2) then
+                            checkPitsAndReincarnateIfNeeded() : goto L300
+                        else
+                            goto L400
+                        end if
                     end if
-                end if
-                D = D + (1)
-                goto LW3400
-                L3430:
-                GOTO L2200
+                end for
+                printMessage(2) : continue
             case 14
                 ' *** INVENTORY ***
                 Z0=0
@@ -1350,64 +1417,157 @@ while true
                 continue
             case 15
                 ' *** GET ***
-                if k(47) = 1 then goto L3680
-                findMatchedItems()
-                if z8 > 0 then goto L3680
-                PRINT "Get what?"
-                printDontUnderstand()
-                continue
-                L3680: z3 = 1
-                LW3680: if z3 > t2 then goto L3900
-                if k(47) = 1 then goto L3730
-                if k(z3) = 0 then goto LCONT3680
-                L3730: if s(z3) <> l1 then goto L3750
-                if s(z3) = l1 then goto L3790
-                L3750: if k(47) = 1 then goto LCONT3680
-                a$ = itemname$(z3):PRINT a$;" not here."
-                goto LCONT3680
-                ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
-                L3790: z8 = 0
-                for x = 1 to t2
-                    if s(x) = -1 then
-                        z8 = z8+1
+                if k(47) <> 1 then
+                    findMatchedItems()
+                    if z8 = 0 then
+                        PRINT "Get what?"
+                        printDontUnderstand()
+                        continue
                     end if
-                end for
+                end if
+                ' Scan every item for one matching the player's command and
+                ' present in this room -- was a manual z3=1 to t2 GOTO loop
+                ' (LW3680). `goto L400`/`goto L410` below, not `exit`/
+                ' `continue`, wherever the *original* GOTO's ultimate target
+                ' (L3900, whose own body was a bare `continue`, or the
+                ' "carrying too much" check's own `c$="":continue`) meant
+                ' "abandon the scan and get another command" rather than
+                ' "try the next item" -- this `for` is one loop level inside
+                ' the inner command loop, and `exit`/`continue` only ever
+                ' reach their own innermost loop. A bare `continue` below
+                ' really does mean "try the next item": every such site was
+                ' the old loop's own LCONT3680 (or, for the special-gets
+                ' checks folded in below, a genuine take that should keep
+                ' scanning for more when GET ALL is in effect).
+                for z3 = 1 to t2
+                    if k(47) <> 1 and k(z3) = 0 then continue
+                    if s(z3) <> l1 then
+                        if k(47) <> 1 then
+                            a$ = itemname$(z3) : PRINT a$;" not here."
+                        end if
+                        continue
+                    end if
+                    ' MUST CHECK NOW FOR LEGALITY OF TAKING ITEM
+                    z8 = 0
+                    for x = 1 to t2
+                        if s(x) = -1 then
+                            z8 = z8+1
+                        end if
+                    end for
 
-                if z8 < 7 then goto L3870
-                ' CARRYING TOO MUCH
-                printMessage(54)
-                c$="" : continue
-                L3870: goto L6880
-                L3880: s(z3) = -1
-                L3890: a$ = itemname$(z3):PRINT a$;":taken."
-                LCONT3680: z3 = z3 + (1)
-                goto LW3680
-                L3900:
+                    if z8 >= 7 then
+                        ' CARRYING TOO MUCH
+                        printMessage(54)
+                        c$="" : goto L410
+                    end if
+                    ' SPECIAL GETS -- was L6880, a GOSUB-like target reached
+                    ' only from this scan (see stage 4's own note on why
+                    ' RESTORE-adjacent DATA stays at its original top-level
+                    ' position elsewhere in this file; this had no DATA of
+                    ' its own to worry about, so it moves here in full).
+                    if z3 = 24 or z3 = 30 or z3 > 31 then
+                        ' CAN'T GET THESE FOR SOME REASON
+                        printMessage(61)
+                        goto L400
+                    elseif z3 = 12 and c = 0 then
+                        ' CHAIN
+                        printMessage(58)
+                        goto L400
+                    elseif z3 = 26 and b1 <> 2 then
+                        ' BEAR IS HE FED? UNLOCKED?
+                        printMessage(61)
+                        goto L400
+                    elseif z3 = 14 and d1 = 1 then
+                        ' DRAGON AND RUG
+                        printMessage(59)
+                        goto L400
+                    elseif z3 = 16 or z3 = 17 then
+                        ' OIL AND WATER DO SAME AS FILL
+                        PRINT "Why not say 'fill'?"
+                        goto L400
+                    elseif z3 = 22 and b3 then
+                        ' TAKE BIRD SINCE IT'S IN CAGE
+                        s(31) = -1 : PRINT "Bird and ";
+                    elseif z3 = 31 then
+                        ' GETTING BIRD
+                        if b3 = 1 then
+                            ' TAKE CAGE, SINCE BIRD IS IN IT
+                            PRINT "Cage and "; : s(22) = -1
+                        elseif s(22) <> -1 then
+                            b$ = "cage" : PRINT "I see no ";b$;" here." : goto L400
+                        elseif s(23) = -1 then
+                            ' ROD SCARES BIRD
+                            printMessage(37)
+                            goto L400
+                        else
+                            ' OK TO TAKE BIRD
+                            b3 = 1
+                        end if
+                    elseif z3 = 21 and b0 then
+                        ' BOTTLE FULL? IF SO, GET CONTENTS
+                        PRINT "Contents and the ";
+                        s(b0+15) = -1
+                    end if
+                    s(z3) = -1
+                    a$ = itemname$(z3):PRINT a$;":taken."
+                end for
                 continue
             case 16
                 ' *** DROP ***
-                if k(47) = 1 then goto L4000
-                findMatchedItems()
-                IF Z8>0 THEN goto L4000
-                PRINT "Drop what?"
-                printDontUnderstand()
-                continue
-                L4000: Z3 = 1
-                LW4000: if Z3 > T2 then goto L4140
-                IF K(47)=1 THEN goto L4060
-                IF K(Z3)<>1 THEN goto LCONT4000
-                IF S(Z3)=0 THEN goto LCONT4000
-                L4060: IF S(Z3)=-1 THEN goto L4100
-                IF K(47)=1 THEN goto LCONT4000
-                b$ = itemname$(z3):PRINT "You don't have the ";B$
-                GOTO LCONT4000
-                L4100: ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
-                GOTO L7380
-                L4120: b$ = itemname$(z3):PRINT B$;":dropped."
-                S(Z3)=L1
-                LCONT4000: Z3 = Z3 + (1)
-                goto LW4000
-                L4140:
+                if k(47) <> 1 then
+                    findMatchedItems()
+                    if Z8 = 0 then
+                        PRINT "Drop what?"
+                        printDontUnderstand()
+                        continue
+                    end if
+                end if
+                ' Scan every item the player is carrying that matches the
+                ' command -- was a manual Z3=1 to T2 GOTO loop (LW4000).
+                ' See GET's own comment above for why this uses
+                ' `goto L400` below instead of `exit`/`continue`.
+                for Z3 = 1 to T2
+                    if K(47) <> 1 then
+                        if K(Z3) <> 1 or S(Z3) = 0 then continue
+                    end if
+                    if S(Z3) <> -1 then
+                        if K(47) <> 1 then
+                            b$ = itemname$(z3):PRINT "You don't have the ";B$
+                        end if
+                        continue
+                    end if
+                    ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
+                    ' -- was L7380 onward, a GOSUB-like target reached only
+                    ' from here.
+                    if Z3 = 31 or (Z3 = 22 and B3 = 1) then
+                        ' BIRD IN CAGE
+                        S(31)=L1:S(22)=L1:B3=1
+                        if Z3 = 31 then
+                            PRINT "Cage and ";
+                            PRINT "Bird and ";
+                        end if
+                    elseif Z3 = 21 and B0 <> 0 then
+                        ' BOTTLE IS FULL, DO DROP CONTENTS TOO
+                        PRINT "Contents and ";
+                        S(15+B0)=L1
+                    elseif Z3 = 16 or Z3 = 17 then
+                        PRINT "Try saying 'empty'"
+                        goto L400
+                    elseif Z3 = 26 and T = 1 and (L1 = 60 or L1 = 61) then
+                        printMessage(28)
+                        T=0:S(26)=L1:S(32)=0
+                        goto L400
+                    elseif Z3 = 6 and S(28) <> L1 then
+                        ' GOODBYE, FRAGILE VASE!
+                        printMessage(43)
+                        S(6)=0:S(29)=L1
+                        goto L400
+                    elseif Z3 = 6 then
+                        printMessage(60)
+                    end if
+                    b$ = itemname$(z3):PRINT B$;":dropped."
+                    S(Z3)=L1
+                end for
                 continue
             case 17
                 ' *** THROW ***
@@ -1416,7 +1576,7 @@ while true
                 PRINT "Throw what?"
                 printDontUnderstand()
                 continue
-                L4210: IF S(Z3)<>-1 THEN goto L2710
+                L4210: IF S(Z3)<>-1 THEN PRINT "You don't have the ";b$ : c$="" : continue
                 IF NOT (Z3<16 AND S(32)=L1) THEN goto L4260
                 ' THROW TREASURE TO TROLL
                 printMessage(27)
@@ -1475,19 +1635,30 @@ while true
                 printMessage(24)
                 continue
                 L4690: IF S(20) = -1 THEN goto L4720
-                B$ = "FOOD":GOTO L2710
+                B$ = "FOOD" : PRINT "You don't have the ";b$ : c$="" : continue
                 L4720: IF L1=69 THEN goto L4760
                 PRINT "I can't feed it."
                 printMessage(23)
                 continue
-                L4760: IF S(20)=L1 THEN goto L7600
-                B1=1:S(20)=0:printMessage(6)
+                L4760: if S(20)=L1 then
+                    ' was: `GOTO L7600`, itself `printMessage(60):GOTO L4120`
+                    ' -- L4120 was DROP's own per-item "dropped" epilogue,
+                    ' reused here verbatim (feeding the bear food already
+                    ' here also "drops" it via the exact same z3/S() update
+                    ' DROP's own scan loop does, now inlined there instead
+                    ' of living at a shared label).
+                    printMessage(60)
+                    b$ = itemname$(z3):PRINT b$;":dropped."
+                    S(Z3)=L1
+                else
+                    B1=1:S(20)=0:printMessage(6)
+                end if
                 continue
             case 20
                 ' *** WATER ***
                 IF S(16) = -1 THEN goto L4840
-                B$ = "water":GOTO L2710
-                L4840: IF L1<>50 THEN goto L2200
+                B$ = "water" : PRINT "You don't have the ";b$ : c$="" : continue
+                L4840: IF L1<>50 THEN printMessage(2) : continue
                 ' GOTO P1+1 OF 4860,4890,4920
                 IF P1 = 0 THEN goto L4860
                 IF P1 = 1 THEN goto L4890
@@ -1500,79 +1671,106 @@ while true
                 P1=0:S(16)=0:B0=0:continue
             case 21
                 ' *** LOCK ***
-                L4960: IF L1=10 OR L1=11 THEN goto L4990
-                ' NOTHING LOCKABLE
-                GOTO L2200
-                L4990: IF S(19)=-1 THEN goto L5020
-                L5000: B$="keys":goto L2710
-                L5020: G=0:printMessage(10)
+                L4960: if L1=10 or L1=11 then
+                    if S(19)=-1 then
+                        G=0:printMessage(10)
+                    else
+                        B$="keys"
+                        PRINT "You don't have the ";b$ : c$="" : continue
+                    end if
+                else
+                    ' NOTHING LOCKABLE
+                    printMessage(2)
+                end if
                 continue
             case 22
                 ' *** UNLOCK ***
-                L5070: IF S(19)<>-1 THEN goto L5000
-                IF L1<>10 AND L1<>11 THEN goto L5120
-                G=1:printMessage(11)
-                continue
-                L5120: IF L1<>69 THEN goto L2200
-                IF B1>0 THEN goto L5160
-                printMessage(12)
-                continue
-                L5160: IF C<>0 THEN goto L5170
-                C=1:B1=2
-                L5170: printMessage(13)
+                L5070: if S(19) <> -1 then
+                    B$="keys"
+                    PRINT "You don't have the ";b$ : c$="" : continue
+                end if
+                if L1=10 or L1=11 then
+                    G=1:printMessage(11)
+                elseif L1=69 then
+                    if B1>0 then
+                        if C=0 then
+                            C=1:B1=2
+                        end if
+                        printMessage(13)
+                    else
+                        printMessage(12)
+                    end if
+                else
+                    printMessage(2)
+                end if
                 continue
             case 23
                 ' *** FREE ***
-                IF K(31) = 1 THEN goto L5240
-                ' CAN'T FREE ANYTHING BUT BIRD
-                L5220: printMessage(2)
-                c$="" : continue
-                L5240: IF S(31)<>-1 THEN goto L5220
+                if K(31) <> 1 or S(31) <> -1 then
+                    ' CAN'T FREE ANYTHING BUT BIRD
+                    printMessage(2)
+                    c$="" : continue
+                end if
                 S(31) = L1:B3=0
                 PRINT "Freed."
-                IF L1<>22 THEN goto L5350
-                IF SN<>1 THEN continue
-                B$="snake"
-                L5300: PRINT "The little bird attacks the green ";B$;" and"
-                IF L1=82 THEN goto L5380
-                PRINT "drives it off"
-                SN=0:S(34)=0:continue
-                L5350: IF L1<>82 THEN continue
-                B$="dragon":GOTO L5300
-                L5380: PRINT "gets burned to a crisp"
-                S(31)=0
+                if L1 = 22 and SN = 1 then
+                    B$ = "snake"
+                elseif L1 = 82 then
+                    B$ = "dragon"
+                else
+                    continue
+                end if
+                PRINT "The little bird attacks the green ";B$;" and"
+                if L1 = 82 then
+                    PRINT "gets burned to a crisp"
+                    S(31)=0
+                else
+                    PRINT "drives it off"
+                    SN=0:S(34)=0
+                end if
                 continue
             case 24
                 ' *** WAVE ***
-                IF K(23) <> 1 THEN goto L2200
-                IF S(23)=-1 THEN goto L5460
-                B$="rod":GOTO L2710
-                L5460: '  IS HERE NEAR FISSURE
-                IF L1<>19 AND L1<>20 THEN goto L2200
-                ' yes
-                ' GOTO B2+1 OF 5500,5530
-                IF B2=0 THEN goto L5500
-                IF B2=1 THEN goto L5530
-                L5500: printMessage(14)
-                B2=1:continue
-                L5530: printMessage(15)
-                B2=0:continue
+                if K(23) <> 1 then
+                    printMessage(2)
+                elseif S(23) <> -1 then
+                    B$="rod" : PRINT "You don't have the ";b$ : c$="" : continue
+                elseif L1<>19 and L1<>20 then
+                    ' NOT NEAR FISSURE
+                    printMessage(2)
+                elseif B2=0 then
+                    printMessage(14)
+                    B2=1
+                else
+                    printMessage(15)
+                    B2=0
+                end if
+                continue
             case 25
                 ' *** OPEN ***
                 findMatchedItems()
-                IF Z3>0 THEN goto L5610
-                PRINT "Open ";
-                printDontUnderstand()
-                continue
-                L5610: IF Z3=40 THEN goto L5070
-                IF S(Z3)=L1 THEN goto L5650
-                L5630: PRINT "I see no ";b$;" here.":continue
-                L5650: if z3=24 THEN goto L5680
-                PRINT "I don't know how to open a ";B$:continue
-                L5680: IF S(9)=-1 THEN goto L5710
-                printMessage(16)
-                continue
-                L5710: IF S(Z3) = 0 THEN goto L2200
+                if Z3=0 then
+                    PRINT "Open ";
+                    printDontUnderstand()
+                    continue
+                end if
+                if Z3=40 then goto L5070 ' OPEN a lock is the same as UNLOCK
+                if S(Z3)<>L1 then
+                    PRINT "I see no ";b$;" here."
+                    continue
+                end if
+                if z3<>24 then
+                    PRINT "I don't know how to open a ";B$
+                    continue
+                end if
+                if S(9)=-1 then
+                    printMessage(16)
+                    continue
+                end if
+                if S(Z3) = 0 then
+                    printMessage(2)
+                    continue
+                end if
                 ' HE'S OPENED CLAM, SO PRINT DESCRIPTION OF THIS
                 ' PUT PEARL IN CUL-DE-SAC
                 S(7)=43:S(24)=0:S(30)=L1:printMessage(17)
@@ -1596,13 +1794,18 @@ while true
                 continue
             case 27
                 ' OIL
-                IF K(17)=0 THEN goto L2200
-                IF S(17)=-1 THEN goto L5860
-                B$="oil":GOTO L5630
-                L5860: IF L1<>73 THEN goto L2200
-                ' IS DOOR STILL RUSTED
-                IF D2=1 THEN goto L2200
-                D2=1:S(17)=0:B0=0:printMessage(19)
+                if K(17)=0 then
+                    printMessage(2)
+                elseif S(17)<>-1 then
+                    B$="oil" : PRINT "I see no ";b$;" here."
+                elseif L1<>73 then
+                    printMessage(2)
+                elseif D2=1 then
+                    ' IS DOOR STILL RUSTED
+                    printMessage(2)
+                else
+                    D2=1:S(17)=0:B0=0:printMessage(19)
+                end if
                 continue
                 ' *** EAT ***
             case 28
@@ -1667,76 +1870,13 @@ while true
                 ' describeRoomContents() procedure above.
                 ' Print Short room description
                 ' short room description is now the shortDescription() procedure above.
-                L6880: ' SPECIAL GETS
-                if not (z3 = 24 or z3 = 30 or z3 > 31) then goto L6930
-                ' CAN'T GET THESE FOR SOME REASON
-                printMessage(61)
-                continue
-                L6930: if not (z3 = 12 and c = 0) then goto L6970
-                ' CHAIN
-                printMessage(58)
-                goto L3900
-                L6970: ' BEAR IS HE FED? UNLOCKED?
-                if not (z3 = 26 and b1 <> 2) then goto L7010
-                printMessage(61)
-                goto L3900
-                L7010: if not (z3 = 14 and d1 = 1) then goto L7050
-                ' DRAGON AND RUG
-                printMessage(59)
-                goto L3900
-                L7050: if not (z3 = 16 or z3 = 17) then goto L7090
-                ' OIL AND WATER DO SAME AS FILL
-                PRINT "Why not say 'fill'?"
-                goto L3900
-                L7090: if not (z3 = 22 and b3) then goto L7140
-                ' TAKE BIRD SINCE IT'S IN CAGE
-                s(31) = -1:PRINT "Bird and ";:goto L3880
-                L7140: if z3 <> 31 then goto L7310
-                ' GETTING BIRD
-                if b3 <> 1 then goto L7210
-                ' TAKE CAGE, SINCE BIRD IS IN IT
-                PRINT "Cage and ";:s(22) = -1:goto L3880
-                L7210: if s(22) = -1 then goto L7240
-                b$ = "cage":goto L2810
-                L7240: if s(23) = -1 then goto L7280
-                ' OK TO TAKE BIRD
-                s(31) = -1 : b3 = 1:goto L3890
-                L7280: ' ROD SCARES BIRD
-                printMessage(37)
-                goto L3900
-                L7310: ' BOTTLE FULL? IF SO, GET CONTENTS
-                if not (z3 = 21 and b0) then goto L7360
-                PRINT "Contents and the ";
-                s(b0+15) = -1
-                L7360: goto L3880
-                ' SPECIAL "DROP"
-                L7380: IF Z3<>31 THEN goto L7440
-                ' BIRD IN CAGE
-                L7400: S(31)=L1:S(22)=L1:B3=1
-                IF Z3<>31 THEN goto L7420
-                PRINT "Cage and ";
-                L7420: IF Z3=22 THEN goto L7430
-                PRINT "Bird and ";
-                L7430: goto L4120
-                L7440: if z3=22 and b3=1 then goto L7400
-                IF Z3<>21 THEN goto L7520
-                ' BOTTLE
-                IF B0=0 THEN goto L4120
-                ' BOTTLE IS FULL, DO DROP CONTENTS TOO
-                PRINT "Contents and ";
-                S(15+B0)=L1:GOTO L4120
-                L7520: IF NOT (Z3=16 OR Z3=17) THEN goto L7541
-                PRINT "Try saying 'empty'":goto L4140
-                L7541: IF Z3<>26 OR T<>1 OR (L1<>60 AND L1<>61) THEN goto L7550
-                printMessage(28)
-                T=0:S(26)=L1:S(32)=0:continue
-                L7550: IF Z3<>6 THEN goto L4120
-                IF S(28)=L1 THEN goto L7600
-                ' GOODBYE, FRAGILE VASE!
-                printMessage(43)
-                S(6)=0:S(29)=L1:continue
-                L7600: printMessage(60)
-                GOTO L4120
+                ' SPECIAL GETS is now folded directly into GET's own scan
+                ' loop above (was L6880-L7360, a GOSUB-like target reached
+                ' only from there).
+                ' SPECIAL "DROP" is now folded directly into DROP's own
+                ' scan loop above (was L7380-L7600, a GOSUB-like target
+                ' reached from there and, for its L7600 tail specifically,
+                ' from FEED as well -- see FEED's own comment above).
                 ' PRINT MESSAGE is now the printMessage() procedure above -- every
                 ' `z59 = N : gosub 7620` call site became `printMessage(N)`.
                 L7800: ' situation descriptions are now the situationDescriptions()
@@ -1807,7 +1947,7 @@ while true
                 c$="" : continue
                 L9270: IF S(25)=-1 THEN goto L9300
                 B$="magazine"
-                GOTO L2710
+                PRINT "You don't have the ";b$ : c$="" : continue
                 L9300: ' OK, LET HIM READ IT
                 printMessage(303)
                 continue
@@ -1907,4 +2047,4 @@ data "everything"
 
 </details>
 
-[← Stage 5: The Command-Parsing Cascade and Movement Engine](adventure3000-stage5.md) [Next: Stage 7: Reducing GOTO to a Minimum →](adventure3000-stage7.md)
+[← Stage 6: The Outer Game Loop](adventure3000-stage6.md) [Next: Stage 8: Splitting the Verb Dispatch →](adventure3000-stage8.md)
