@@ -1904,6 +1904,124 @@ end
     }
 
     #[test]
+    fn goto_into_a_procedure_body_from_top_level_is_rejected() {
+        // See GitHub issue #149: a top-level GOTO into a label declared
+        // inside a procedure transpiles to a GOTO landing on code whose
+        // block ends in a bare RETURN, with no matching GOSUB call frame.
+        let source =
+            "procedure demo()\n    inside: print \"inside\"\nend procedure\ngoto inside\nend\n";
+        let err = compile_source("goto_into_proc.bcl", source)
+            .expect_err("a goto into a procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto inside`") && d.message.contains("top-level")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_a_different_procedures_body_is_rejected() {
+        let source = "procedure a()\n    gosub bTarget\nend procedure\nprocedure b()\n    bTarget: print \"in b\"\nend procedure\na()\nb()\nend\n";
+        let err = compile_source("gosub_cross_procedure.bcl", source)
+            .expect_err("a gosub reaching into a different procedure's label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub btarget`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_the_same_procedures_own_body_is_also_rejected() {
+        // A raw GOSUB into a function/procedure body is rejected even when
+        // it targets a label inside that very same function/procedure --
+        // that body is meant to be entered only through the compiler's own
+        // generated call sequence, not a second, uncontrolled way in.
+        let source = "procedure demo()\n    gosub inner\n    return\n    inner:\n    print \"inner\"\n    return\nend procedure\ndemo()\nend\n";
+        let err = compile_source("gosub_same_procedure.bcl", source)
+            .expect_err("a gosub into the same procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub inner`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_out_of_a_procedure_to_top_level_is_rejected() {
+        let source =
+            "procedure demo()\n    goto outside\nend procedure\ndemo()\noutside: print \"outside\"\nend\n";
+        let err = compile_source("goto_out_of_proc.bcl", source).expect_err(
+            "a goto from inside a procedure out to a top-level label should be rejected",
+        );
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto outside`") && d.message.contains("`demo`")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_gosub_to_a_label_in_the_correct_scope_is_accepted() {
+        let source = r#"
+procedure demo()
+    goto inside
+    print "skipped"
+    inside: print "inside"
+end procedure
+demo()
+top: print "top"
+goto again
+again: print "again"
+end
+"#;
+        compile_source("goto_same_scope.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn gosub_to_a_top_level_label_is_accepted_from_top_level_and_from_inside_a_procedure() {
+        // A raw GOSUB to a top-level label is the one case the cross-scope
+        // check still allows regardless of where the GOSUB itself is
+        // written -- the classic BASIC "flat GOSUB subroutine" pattern,
+        // callable from anywhere, top-level code and procedure bodies
+        // alike, since the target was never inside a function/procedure
+        // body to begin with.
+        let source = r#"
+gosub topSub
+procedure demo()
+    gosub topSub
+end procedure
+demo()
+goto skip
+topSub:
+    print "in top-level subroutine"
+    return
+skip:
+end
+"#;
+        compile_source("gosub_top_level_target.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn on_error_goto_targeting_a_procedure_from_a_different_scope_is_still_allowed() {
+        // `on error goto` is exempt from the cross-scope check: its target
+        // may legitimately be a procedure declared anywhere in the
+        // program (see `error_handler_targets`), unlike a plain goto/gosub.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    resume next
+end procedure
+"#;
+        compile_source("on_error_goto_cross_scope_ok.bcl", source).expect("should compile");
+    }
+
+    #[test]
     fn error_handling_statements() {
         // `on error goto`/`resume` targets must be labels (not raw line
         // numbers) — BASCAL manages line numbers itself. `on error goto 0`
@@ -5825,7 +5943,13 @@ end
 
     #[test]
     fn c_target_rejects_gosub_inside_a_procedure() {
-        let source = "procedure p()\n    gosub top\nend procedure\np()\ntop:\nend\n";
+        // The label has to be inside the same procedure as the GOSUB (not
+        // top-level, like this test used to have it) -- otherwise
+        // resolver::reject_cross_scope_branch_targets rejects it first,
+        // for a different reason (a GOSUB can never reach a label in a
+        // different scope at all, on any target), before this C-target-
+        // specific "no GOSUB inside a procedure, full stop" rule ever runs.
+        let source = "procedure p()\n    gosub top\n    top:\nend procedure\np()\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
             diagnostics

@@ -181,6 +181,7 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
     reject_option_base(program, &mut diagnostics);
+    reject_cross_scope_branch_targets(program, &mut diagnostics);
     reject_duplicate_consts(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
@@ -432,6 +433,227 @@ fn reject_option_base(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     walk(&program.statements, diagnostics);
     for function in &program.functions {
         walk(&function.body, diagnostics);
+    }
+}
+
+/// Two related rules, both from GitHub issue #149, on where a `goto`/
+/// `gosub`/`on ... goto`/`on ... gosub`/`resume <label>` target may live
+/// (`on error goto` is deliberately exempt from both -- see the exclusion
+/// at its match arm below):
+///
+/// - `goto`/`on ... goto`/`resume <label>` must target a label declared in
+///   the *same* scope as the statement itself -- the top-level program
+///   body, or the one function/procedure body it's written inside -- in
+///   both directions: a top-level `goto` can't reach into a
+///   function/procedure, and a `goto` inside one can't reach out to
+///   top-level or into a *different* function/procedure. Transpiling a
+///   violation produces a real, silently broken program: a plain `GOTO`
+///   landing inside a function/procedure body lands on code whose block
+///   ends in a bare `RETURN` with no matching `GOSUB` call frame.
+/// - `gosub`/`on ... gosub` must target a label declared in the top-level
+///   program body -- *never* one inside a function/procedure body, even
+///   the very one the `gosub` itself is written inside. A function/
+///   procedure body is meant to be entered exactly one way: the compiler's
+///   own generated call sequence (assign params, `GOSUB` its one true
+///   entry label, assign the result). A raw user `GOSUB` reaching any
+///   *other* label inside that body enters it a second, uncontrolled way,
+///   with none of the parameter/local setup the real call path performs.
+fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    fn collect_labels(body: &[Stmt], out: &mut HashSet<String>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Label(name) => {
+                    out.insert(name.to_ascii_lowercase());
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_labels(then_body, out);
+                    collect_labels(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_labels(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_labels(&case.body, out);
+                    }
+                    collect_labels(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_labels(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_labels(&handler.body, out);
+                    }
+                    collect_labels(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // `None` when the target isn't a plain label reference at all -- a raw
+    // line number is already rejected elsewhere by each of these
+    // statements' own parser (see `parse_label_target`/
+    // `parse_on_error_goto_target`), except `on error goto 0`'s `0`
+    // sentinel, which disables the trap rather than naming a label.
+    fn target_name(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Ident(ident) => Some(ident.name.to_ascii_lowercase()),
+            _ => None,
+        }
+    }
+
+    fn collect_targets(body: &[Stmt], out: &mut Vec<(SourcePos, &'static str, String)>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Goto(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "goto", name));
+                    }
+                }
+                Statement::Gosub(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "gosub", name));
+                    }
+                }
+                // `on error goto` is deliberately excluded: unlike a plain
+                // `goto`/`gosub`, its target may legitimately be a
+                // *procedure* name declared anywhere in the program (see
+                // `error_handler_targets`/`reject_unsafe_error_handler_procedures`,
+                // which already validate that case on its own terms), and
+                // real BASIC's `ON ERROR GOTO` is itself a global trap, not
+                // scoped to wherever it was installed -- an error anywhere
+                // in the program can fire a handler installed elsewhere.
+                Statement::OnBranch {
+                    targets, is_gosub, ..
+                } => {
+                    let keyword = if *is_gosub {
+                        "on ... gosub"
+                    } else {
+                        "on ... goto"
+                    };
+                    for t in targets {
+                        if let Some(name) = target_name(t) {
+                            out.push((stmt.pos.clone(), keyword, name));
+                        }
+                    }
+                }
+                Statement::Resume(ResumeTarget::Line(expr)) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "resume", name));
+                    }
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_targets(then_body, out);
+                    collect_targets(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_targets(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_targets(&case.body, out);
+                    }
+                    collect_targets(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_targets(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_targets(&handler.body, out);
+                    }
+                    collect_targets(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn is_gosub_family(keyword: &str) -> bool {
+        matches!(keyword, "gosub" | "on ... gosub")
+    }
+
+    // `gosub`/`on ... gosub` may only ever reach a top-level label,
+    // regardless of where the statement itself lives -- computed once,
+    // rather than per scope, since the rule doesn't depend on the caller's
+    // own scope at all.
+    let mut top_labels = HashSet::new();
+    collect_labels(&program.statements, &mut top_labels);
+
+    fn check(
+        body: &[Stmt],
+        scope: &str,
+        own_labels: &HashSet<String>,
+        top_labels: &HashSet<String>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let mut targets = Vec::new();
+        collect_targets(body, &mut targets);
+        for (pos, keyword, name) in targets {
+            if is_gosub_family(keyword) {
+                if !top_labels.contains(&name) {
+                    diagnostics.push(Diagnostic::error(
+                        pos,
+                        format!(
+                            "`{keyword} {name}` doesn't name a top-level label -- a `gosub`/\
+                             `on ... gosub` target must be a label declared in the top-level \
+                             program body; it can never reach a label declared inside a \
+                             function/procedure body (even the one the `{keyword}` itself is \
+                             written inside), since that body is meant to be entered only \
+                             through the compiler's own generated call sequence"
+                        ),
+                    ));
+                }
+            } else if !own_labels.contains(&name) {
+                diagnostics.push(Diagnostic::error(
+                    pos,
+                    format!(
+                        "`{keyword} {name}` doesn't name a label in {scope} -- a `goto`/\
+                         `on ... goto`/`resume` target must be a label declared in the same \
+                         procedure/function (or, from top-level code, in the top-level program \
+                         body); it can never reach a label declared inside a different \
+                         procedure or function"
+                    ),
+                ));
+            }
+        }
+    }
+
+    check(
+        &program.statements,
+        "the top-level program body",
+        &top_labels,
+        &top_labels,
+        diagnostics,
+    );
+    for function in &program.functions {
+        let mut own_labels = HashSet::new();
+        collect_labels(&function.body, &mut own_labels);
+        check(
+            &function.body,
+            &format!("`{}`", function.name),
+            &own_labels,
+            &top_labels,
+            diagnostics,
+        );
     }
 }
 
