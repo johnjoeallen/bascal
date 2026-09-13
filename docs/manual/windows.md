@@ -16,7 +16,11 @@ toolchain for the target you need:
   <https://winlibs.com/>.
 - **BASIC target (FreeBASIC):** install FreeBASIC 1.10 or newer and add the
   folder containing `fbc.exe` to `PATH`:
-  <https://www.freebasic.net/get/>.
+  <https://www.freebasic.net/get/>. Use `--target fbc` (not `basic`) when
+  compiling with `--binary`/`--run` -- `fbc` is the only one of BASCAL's two
+  BASIC targets it can actually build; `basic` (alias `bascom`) is verified
+  against real BASCOM instead (see the next bullet) and produces the exact
+  same output except for `try`/`catch`, which `fbc` doesn't accept.
 - **BASIC target (real BASCOM):** BASCAL's `.bas` output is intended to be
   compatible with IBM Personal Computer BASIC Compiler 2.00 (BASCOM). BASCOM
   is a copyrighted DOS program, so it is not bundled; install or supply your

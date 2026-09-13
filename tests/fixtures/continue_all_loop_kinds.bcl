@@ -1,0 +1,72 @@
+// GitHub issue tracker doesn't have a number for this yet -- added
+// alongside `continue` itself. Exercises every loop shape `continue`
+// needs to behave correctly in, especially the one that turned up a
+// real bug in the C backend while implementing it: a do-loop with a
+// *post*-condition (`loop until`/`loop while`) compiles (on both the
+// BASIC and C backends) to a shape where the post-condition check runs
+// *after* the body, so `continue` must not skip straight back to the
+// loop's own top -- doing so would skip that check entirely and loop
+// forever. Every case here computes the sum of odd numbers 1..10 (25).
+program continueAllLoopKinds
+
+dim i%, total%
+
+' for
+total% = 0
+for i% = 1 to 10
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+end for
+print "for: "; total%
+
+' while (pre-condition, no post-check to skip)
+i% = 0
+total% = 0
+while i% < 10
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+end while
+print "while: "; total%
+
+' do while (pre-condition only)
+i% = 0
+total% = 0
+do while i% < 10
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+end do
+print "do-while(pre): "; total%
+
+' do ... loop until (post-condition -- the shape that had the real bug)
+i% = 0
+total% = 0
+do
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+loop until i% >= 10
+print "do-loop-until(post): "; total%
+
+' do ... loop while (post-condition, "while" form)
+i% = 0
+total% = 0
+do
+    i% = i% + 1
+    if i% mod 2 = 0 then
+        continue
+    end if
+    total% = total% + i%
+loop while i% < 10
+print "do-loop-while(post): "; total%
+
+end

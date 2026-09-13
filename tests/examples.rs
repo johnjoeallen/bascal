@@ -597,6 +597,56 @@ fn freebasic_runs_mid_assign_edge_cases_when_available() {
     );
 }
 
+/// `continue` across every loop shape that needs its own continue target
+/// (see codegen_basic.rs's `loop_continue_stack`/codegen_c.rs's own field
+/// of the same name) -- specifically the do-loop-with-a-post-condition
+/// case, which had a real bug on the C backend while `continue` was
+/// being added: `Statement::Do` always compiles to a `while (1) { ...;
+/// guard }` shape there, never a native `do { } while (...)`, so a bare
+/// C `continue;` skipped the post-condition guard entirely and looped
+/// forever. Real `fbc`, not just bcc's own unit tests, since the BASIC
+/// backend's own `do` codegen has the same "guard runs after the body"
+/// shape and deserves the same real-compiler check the C-target bug was
+/// actually found under.
+#[test]
+fn freebasic_runs_continue_across_every_loop_kind_when_available() {
+    if Command::new("fbc").arg("-version").output().is_err() {
+        return;
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_path = repo_root.join("tests/fixtures/continue_all_loop_kinds.bcl");
+    let output_path = repo_root.join("output/continue_all_loop_kinds.bas");
+
+    compile_with_cli(&source_path, &output_path, &["--clean", "--binary"]);
+
+    let executable_path = repo_root.join("tmp/continue_all_loop_kinds");
+    let run = Command::new(&executable_path)
+        .output()
+        .expect("failed to run compiled continue_all_loop_kinds");
+    assert!(
+        run.status.success(),
+        "compiled continue_all_loop_kinds failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    assert_eq!(
+        lines,
+        vec![
+            "for:  25",
+            "while:  25",
+            "do-while(pre):  25",
+            "do-loop-until(post):  25",
+            "do-loop-while(post):  25",
+        ],
+        "continue should skip even numbers in every loop shape, leaving the sum of odd \
+         numbers 1..10 (25) in each case:\n{stdout}"
+    );
+}
+
 /// `MID$(...) = ...` statement-form assignment under `--target C`, checked
 /// against the same real-BASCOM-verified expectation
 /// `freebasic_runs_mid_assign_edge_cases_when_available` already pins for
@@ -977,16 +1027,19 @@ fn compile_with_cli(source_path: &Path, output_path: &Path, extra_args: &[&str])
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_bcc"));
     // Every current caller of this helper runs the result through `fbc`,
-    // so it always needs BASIC output -- explicit rather than relying on
-    // `bcc`'s own ambient default-target resolution (BASCAL_TARGET / a
-    // dev's own ~/.config/bascal/config), which a machine set to `C` by
-    // default would otherwise silently break this against.
+    // so it needs `--target fbc` specifically (required for --binary/--run
+    // on BASIC output, see GitHub issue #152 -- `--target basic`/`bascom`
+    // is verified against real BASCOM instead, whose .EXE this process
+    // can't run) -- explicit rather than relying on `bcc`'s own ambient
+    // default-target resolution (BASCAL_TARGET / a dev's own
+    // ~/.config/bascal/config), which a machine set to `C` by default
+    // would otherwise silently break this against.
     command
         .arg(source_path)
         .arg("-o")
         .arg(&dir_arg)
         .arg("--target")
-        .arg("basic");
+        .arg("fbc");
     for arg in extra_args {
         command.arg(arg);
     }

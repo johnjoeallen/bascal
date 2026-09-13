@@ -20,8 +20,20 @@ pub struct ResolvedProgram {
     /// localize one (this is the fact the "FIELD buffer re-namespaced per
     /// procedure" bug got wrong).
     pub record_buffer_names: HashSet<String>,
-    /// Lowercase BASIC names of every `const` declaration anywhere.
-    pub const_names: HashSet<String>,
+    /// Every `const` declaration anywhere, keyed by lowercase base name
+    /// (never including its type suffix -- `const` declarations may not
+    /// carry an explicit one at all, see `Parser::parse_const`, and a
+    /// reference is always written bare too, so name alone is a const's
+    /// whole identity). `reject_duplicate_consts` (part of `validate`)
+    /// guarantees this key is unique program-wide before `resolve` ever
+    /// builds this map, so whichever declaration is found first/last here
+    /// doesn't matter. `--target basic`/`fbc` uses this to inline every
+    /// reference to its literal value directly (see `codegen_basic.rs`'s
+    /// `render_const_literal`/`ident`) instead of emitting a runtime
+    /// variable -- the type is kept on hand for whichever backend still
+    /// needs to declare a real, correctly-typed symbol (`--target c`/
+    /// `jvm`).
+    pub const_info: HashMap<String, ConstInfo>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
     /// Lowercase names of every procedure named as an `on error goto`
@@ -34,6 +46,16 @@ pub struct ResolvedProgram {
     pub uses_catch_source_var: bool,
 }
 
+/// A single `const`'s declared type and value -- see
+/// `ResolvedProgram::const_info`'s own field comment for how it's keyed
+/// and why both target-specific rendering strategies (fold to a literal,
+/// or declare a real typed symbol) need the type kept alongside the value
+/// rather than just a bare `HashSet<String>` of names.
+pub struct ConstInfo {
+    pub suffix: TypeSuffix,
+    pub value: Expr,
+}
+
 /// Validate `program`, then compute the whole-program facts codegen needs.
 /// Returns the owned program wrapped in a [`ResolvedProgram`].
 pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
@@ -44,10 +66,21 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
         .map(|ident| ident.name.to_ascii_lowercase())
         .collect();
     let record_buffer_names = crate::codegen_basic::collect_record_buffer_names(&program);
-    let const_names = {
-        let mut consts = HashMap::new();
-        crate::codegen_basic::collect_consts(&program.statements, &mut consts);
-        consts.keys().map(|k| k.to_ascii_lowercase()).collect()
+    let const_info = {
+        let mut decls = Vec::new();
+        collect_const_decls(&program.statements, &mut decls);
+        for f in &program.functions {
+            collect_const_decls(&f.body, &mut decls);
+        }
+        decls
+            .into_iter()
+            .map(|(_pos, name, value)| {
+                let suffix = name
+                    .suffix
+                    .expect("Parser::parse_const always infers a const's suffix");
+                (name.name.to_ascii_lowercase(), ConstInfo { suffix, value })
+            })
+            .collect()
     };
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
@@ -55,11 +88,86 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     Ok(ResolvedProgram {
         program,
         record_buffer_names,
-        const_names,
+        const_info,
         top_level_array_ranks,
         error_handler_procedures,
         uses_catch_source_var,
     })
+}
+
+/// Every `const NAME = value` declaration reachable in `statements` --
+/// top-level control-flow bodies (`if`/`for`/`while`/`do`/`select case`/
+/// `try`/`catch`/`finally`) included, since a `const` is legal (if
+/// unusual) inside any of them and still resolves globally either way
+/// (see `ConstInfo`'s own doc comment) -- paired with its source position,
+/// for `reject_duplicate_consts`'s own diagnostics. Shared by that
+/// function and `resolve`'s own `const_info` construction so the two
+/// can never see a different set of declarations from each other.
+fn collect_const_decls(statements: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent, Expr)>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Const { name, value } => {
+                out.push((statement.pos.clone(), name.clone(), value.clone()));
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_const_decls(then_body, out);
+                collect_const_decls(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_const_decls(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_const_decls(&case.body, out);
+                }
+                collect_const_decls(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_const_decls(try_body, out);
+                if let Some(catch) = catch {
+                    collect_const_decls(&catch.body, out);
+                }
+                collect_const_decls(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// A const name must be unique program-wide regardless of type suffix --
+/// there's no such thing as two different consts sharing a name but
+/// differing only by suffix, since a const reference is always written
+/// bare (see `Parser::parse_const`'s suffix rejection) and always resolves
+/// globally (see `ConstInfo`'s own doc comment).
+fn reject_duplicate_consts(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let mut decls = Vec::new();
+    collect_const_decls(&program.statements, &mut decls);
+    for f in &program.functions {
+        collect_const_decls(&f.body, &mut decls);
+    }
+    let mut seen = HashSet::new();
+    for (pos, name, _) in &decls {
+        if !seen.insert(name.name.to_ascii_lowercase()) {
+            diagnostics.push(Diagnostic::error(
+                pos.clone(),
+                format!(
+                    "duplicate const `{}` -- a const name must be unique regardless of type \
+                     suffix",
+                    name.name
+                ),
+            ));
+        }
+    }
 }
 
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
@@ -74,6 +182,7 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
     reject_option_base(program, &mut diagnostics);
     reject_cross_scope_branch_targets(program, &mut diagnostics);
+    reject_duplicate_consts(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
@@ -82,23 +191,15 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
-/// Reports advisory naming/type-suffix findings for constants. Constants are
-/// type-inferred from their value; suffixes remain accepted for migration but
-/// are discouraged, and names conventionally use upper snake case.
+/// Reports an advisory naming finding for constants that don't use the
+/// conventional upper-snake-case style. A const's type suffix is no
+/// longer a source-level concern here at all: `Parser::parse_const`
+/// rejects an explicit one outright (a const's type is always inferred
+/// from its value), so there's nothing left to warn about there.
 pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
     let mut findings = Vec::new();
     for statement in &program.statements {
         if let Statement::Const { name, .. } = &statement.kind {
-            // Parser-inferred suffixes are also stored on the IR node so
-            // backends retain the constant's type. Do not report those as
-            // source suffixes when the declaration already follows the
-            // canonical uppercase-snake convention.
-            if name.suffix.is_some() && !is_upper_snake_case(&name.name) {
-                findings.push(Diagnostic::warning(
-                    SourcePos::new("<validation>", 1, 1),
-                    format!("constant `{name}` has a type suffix; constant types are inferred from their values"),
-                ));
-            }
             if !is_upper_snake_case(&name.name) {
                 findings.push(Diagnostic::warning(
                     SourcePos::new("<validation>", 1, 1),
@@ -1226,6 +1327,7 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)
@@ -1743,6 +1845,7 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)

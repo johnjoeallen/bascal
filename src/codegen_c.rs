@@ -2162,6 +2162,18 @@ struct ErrorDataCtx<'a> {
     /// reachable`) vs. silently discard the status (neither -- some
     /// unrelated call path this whole mechanism doesn't apply to).
     current_try_catch: Option<String>,
+    /// The `continue` target for the current innermost loop -- `None`
+    /// means a plain C `continue;` is correct (a real `for`/`while`, or a
+    /// `do ... end do`/`do <cond> ... end do` with no *post*-condition:
+    /// re-entering the loop's own top is exactly the right per-iteration
+    /// bookkeeping in each of those). `Some(label)` means `continue` must
+    /// `goto` that label instead: `Statement::Do`'s C translation always
+    /// compiles to `while (1) { ...; <post-condition guard> }`, never a
+    /// native C `do { } while (...)` (see its own doc comment) -- so
+    /// whenever a post-condition exists, a bare `continue;` would jump to
+    /// the `while (1)`'s own top and skip that guard entirely, silently
+    /// turning `do ... loop until done` into an infinite loop.
+    loop_continue_stack: Vec<Option<String>>,
 }
 
 /// Emits the shared "an error just occurred" block a raise site (`ERROR`
@@ -2908,6 +2920,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         try_reachable: &try_reachable,
         current_function_reachable: false,
         current_try_catch: None,
+        loop_continue_stack: Vec::new(),
     };
     let mut body = String::new();
     for statement in &program.statements {
@@ -3501,6 +3514,7 @@ fn emit_function_def(
         try_reachable,
         current_function_reachable: is_try_reachable,
         current_try_catch: None,
+        loop_continue_stack: Vec::new(),
     };
     for stmt in &func.body {
         emit_statement(
@@ -4704,6 +4718,13 @@ fn emit_statement(
                 "    for ({loop_var} = {start_text}; {step_var} >= 0 ? {loop_var} <= {limit} : \
                  {loop_var} >= {limit}; {loop_var} += {step_var}) {{\n"
             ));
+            // A real C `for`, so a bare `continue;` already does exactly
+            // the right thing (runs the increment clause, then re-checks
+            // the bound) -- `None` here just shadows whatever an
+            // *enclosing* loop pushed, so a `continue` inside this body
+            // correctly means *this* loop, not some outer `do` with its
+            // own post-condition label.
+            ctx.loop_continue_stack.push(None);
             for stmt in body {
                 emit_statement(
                     stmt,
@@ -4719,6 +4740,7 @@ fn emit_statement(
                     ctx,
                 )?;
             }
+            ctx.loop_continue_stack.pop();
             out.push_str("    }\n");
             Ok(())
         }
@@ -4745,6 +4767,12 @@ fn emit_statement(
                 let (cond_text, _) = render_numeric_expr(condition, needs_math, functions)?;
                 out.push_str(&format!("    while ({cond_text}) {{\n"));
             }
+            // Either shape's own condition guard sits at the very top of
+            // the loop body, so a bare `continue;` (re-entering the
+            // native `while`, or re-running the hoisted `if (!cond)
+            // break;` guard) is already exactly correct -- see the `for`
+            // case above for why `None` is still pushed regardless.
+            ctx.loop_continue_stack.push(None);
             for stmt in body {
                 emit_statement(
                     stmt,
@@ -4760,6 +4788,7 @@ fn emit_statement(
                     ctx,
                 )?;
             }
+            ctx.loop_continue_stack.pop();
             out.push_str("    }\n");
             Ok(())
         }
@@ -4792,6 +4821,17 @@ fn emit_statement(
                 )?;
                 out.push_str(&guard);
             }
+            // See `loop_continue_stack`'s own doc comment: a bare C
+            // `continue;` inside this `while (1)` would skip a
+            // post-condition guard entirely, so `continue` needs a real
+            // label to `goto` whenever one exists.
+            let continue_label = post_condition
+                .is_some()
+                .then(|| format!("bcc_continue_{temp_counter}"));
+            if continue_label.is_some() {
+                *temp_counter += 1;
+            }
+            ctx.loop_continue_stack.push(continue_label.clone());
             for stmt in body {
                 emit_statement(
                     stmt,
@@ -4806,6 +4846,10 @@ fn emit_statement(
                     gosub_id,
                     ctx,
                 )?;
+            }
+            ctx.loop_continue_stack.pop();
+            if let Some(label) = &continue_label {
+                out.push_str(&format!("    {label}: ;\n"));
             }
             if let Some(cond) = post_condition {
                 let guard = emit_do_guard(
@@ -4832,6 +4876,20 @@ fn emit_statement(
         // needed here.
         Statement::Exit => {
             out.push_str("    break;\n");
+            Ok(())
+        }
+        // `continue` is unqualified in BASCAL source, same as `exit`.
+        // Unlike `exit`, this does need `loop_continue_stack`: a real
+        // `for`/`while` (or a `do` with no post-condition) is correctly
+        // served by a bare native `continue;`, but `Statement::Do`'s own
+        // post-condition guard sits *after* the body in its `while (1)`
+        // translation -- see `loop_continue_stack`'s own doc comment --
+        // so that one case needs an explicit `goto` instead.
+        Statement::Continue => {
+            match ctx.loop_continue_stack.last() {
+                Some(Some(label)) => out.push_str(&format!("    goto {label};\n")),
+                _ => out.push_str("    continue;\n"),
+            }
             Ok(())
         }
         // A pure compile-time directive, not a runtime statement: it just
@@ -6218,7 +6276,7 @@ fn emit_statement(
         }
         other => Err(format!(
             "{other:?} is not supported by the minimal C backend yet -- only `print`, `end`, \
-             `dim`, `if`, `for`, `while`, `do`, `exit`, `select case`, `return`, a bare \
+             `dim`, `if`, `for`, `while`, `do`, `exit`, `continue`, `select case`, `return`, a bare \
              function/procedure call, and assignment/`const` of scalar variables (%, &, !, #, \
              $) are implemented so far"
         )),

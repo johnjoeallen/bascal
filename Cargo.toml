@@ -1,6 +1,6 @@
 [package]
 name = "bcc"
-version = "0.99.59"
+version = "0.99.60"
 edition = "2021"
 license = "GPL-3.0-only"
 description = "Compiles structured .bcl source to BASIC, C, or JVM assembly"
@@ -40,6 +40,16 @@ clap = { version = "4", features = ["derive"] }
 # upstream at https://github.com/Storyyeller/Krakatau/pull/216; once
 # merged, switch this back to `https://github.com/Storyyeller/Krakatau`
 # directly and drop the fork.
+#
+# `assemble()`'s recursive stack-map-frame/control-flow analysis can
+# overflow the calling thread's stack on a sufficiently large generated
+# program. We proposed fixing this inside the library itself twice
+# (PRs #217 "Give the library's assemble()/disassemble() their own
+# big-stack worker thread" and #218 "Add assemble_with_stack/
+# disassemble_with_stack" against Storyyeller/Krakatau) -- both closed
+# unmerged, so `main.rs`'s `invoke_krak2` handles it on bcc's own side
+# instead: `assemble()` runs on a dedicated worker thread with an
+# explicit, user-configurable stack size (`--krak-stack-size`).
 krakatau2 = { git = "https://github.com/johnjoeallen/Krakatau", rev = "4342f95f9028b6b7cdb2c5bef267e12c3e74ab42" }
 
 [dev-dependencies]

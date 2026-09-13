@@ -552,6 +552,14 @@ pub enum Statement {
     /// `exit` — leaves the innermost enclosing `for`/`while`/`do` loop.
     /// Unqualified: the transpiler resolves which loop kind it's inside.
     Exit,
+    /// `continue` — skips the rest of the innermost enclosing `for`/
+    /// `while`/`do` loop's current iteration and goes straight to that
+    /// loop's own per-iteration bookkeeping (a `for`'s increment, a
+    /// `while`'s condition re-check, a `do`'s post-condition check if it
+    /// has one) instead of falling through the rest of the body first.
+    /// Unqualified, same as `exit` — the transpiler resolves which loop
+    /// kind it's inside.
+    Continue,
     SelectCase {
         expr: Expr,
         cases: Vec<CaseClause>,
