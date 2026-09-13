@@ -26,28 +26,9 @@ rather than only at the end. Every stage after the first has been verified
 with `bcc --check`, a real `fbc` (FreeBASIC) build, and smoke tests
 diffed for byte-identical output against the previous stage.
 
-## The six stages
-
-Each stage page below has that stage's own commentary and its complete,
-unabridged, syntax-highlighted source.
-
-- **[Stage 1: The Original, Untouched](adventure3000-stage1.md)** -- the
-  starting point, checked in verbatim for provenance: 1149 lines of classic
-  line-numbered BASIC, unchanged.
-- **[Stage 2: Minimal Valid BASCAL](adventure3000-stage2.md)** -- the same
-  program as valid `.bcl` source, changed as little as the language allows.
-- **[Stage 3: Clean GOSUBs Become Procedures](adventure3000-stage3.md)** --
-  every genuine, single-entry/single-exit `GOSUB` subroutine becomes a real
-  `procedure`/`function`.
-- **[Stage 4: The 40-Way Dispatch Becomes SELECT CASE](adventure3000-stage4.md)**
-  -- the command loop's 40-way `ON z1 GOTO` dispatch becomes `SELECT CASE`,
-  without needing to touch any handler's own internal `GOTO`-heavy logic.
-- **[Stage 5: The Command-Parsing Cascade and Movement Engine](adventure3000-stage5.md)**
-  -- eight "scan until match" loops become `WHILE`/`FOR`, and the movement
-  engine becomes four functions.
-- **[Stage 6: The Outer Game Loop](adventure3000-stage6.md)** -- the outer
-  game loop every verb handler `GOTO`s back into becomes a nested
-  `WHILE TRUE`, using BASCAL's `continue`/`exit` statements.
+Six stages take it from that unmodified original to fully structured BASCAL,
+each with its own commentary and complete, syntax-highlighted source --
+start at Stage 1 below and follow each page's Next link through to Stage 6.
 
 ## Verification
 
