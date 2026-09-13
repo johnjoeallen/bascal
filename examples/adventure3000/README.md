@@ -327,6 +327,53 @@ source from scratch.
   confirming both death messages, a successful reincarnation, and a
   "no" answer correctly ending the game via `endGame()`.
 
+- **`stage7-refactored-bascal/`** -- reducing GOTO to a minimum inside the
+  40 verb handlers themselves, and cleaning up the resulting massive
+  `SELECT CASE` -- picks up where stage 6 left off. **In progress**, not a
+  finished pass. Started as an exact copy of stage 6.
+
+  Three kinds of GOTO cleaned up so far, all without changing a single line
+  of actual game logic: small shared message-and-continue targets embedded
+  in one case but reached by `GOTO` from several others (e.g. `L2200`'s
+  `printMessage(2)`, 17 call sites) are now duplicated inline instead of
+  shared by label -- simpler than a procedure for a one- or two-statement
+  body, though LIGHT/OFF's bigger shared "redo LOOK's dark-room check"
+  became a real procedure, `describeRoomForLook()`; ENTER's and LEAVE's own
+  "try every direction" manual scan loops became real `FOR` loops, the same
+  way stage 5 converted the command-parsing cascade's; and GET and DROP --
+  by far the two most GOTO-heavy handlers -- are now each a single
+  structured `FOR z3 = 1 TO T2` scan, with their own "special case" logic
+  (chain, bear, dragon, bird-in-cage, bottle, oil/water, the vase, and
+  FEED's own reuse of DROP's tail) folded directly into the loop body as
+  `IF`/`ELSEIF` instead of living as separate GOSUB-like targets reached
+  mid-scan.
+
+  A real bug turned up along the way: converting LOCK/UNLOCK's shared
+  "you don't have the keys" check to structured `IF` initially inverted the
+  `S(19) = -1` ("carrying") test, silently swapping which branch UNLOCK
+  took -- caught immediately by this stage's own smoke tests, fixed, and
+  reverified byte-identical.
+
+  Verified with `bcc --check`, a real `fbc` build, and smoke tests against
+  stage 6 covering movement, inventory, SAVE/LOAD, QUIT, SCORE,
+  SHORT/LONG/BRIEF, an exotic word, JUMP, ATTACK, CLIMB, LIGHT/OFF/LOOK,
+  FILL/EMPTY, LOCK/UNLOCK, FREE, WAVE, OPEN/CLOSE, OIL, and FEED/WATER/
+  THROW -- byte-identical throughout. GET's and DROP's own special-case
+  branches were each exercised separately in a scratch copy with the
+  relevant items patched to be carried/present from the start.
+
+  **Where this stops for now**: the 40-case `SELECT CASE` dispatch is still
+  one massive block with every handler's logic inline, not yet split into
+  its own procedure per verb. Extracting each case into a procedure isn't
+  purely mechanical -- a procedure can only `return` to its own caller,
+  never `continue`/`exit` a loop in the *caller's* scope the way every
+  handler here does directly today, so each extracted verb procedure would
+  need to return a code (get another command vs. redisplay) for the
+  dispatcher to act on after the call -- the same restructuring problem
+  stage 3's own README section hit and stage 4 deliberately routed around.
+  A few more small GOTO targets also remain unconverted. Left as clearly-
+  marked future work rather than attempted partially.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
