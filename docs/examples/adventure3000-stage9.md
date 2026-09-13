@@ -1,123 +1,82 @@
-[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 8: Splitting the Verb Dispatch
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 9: Modernizing Verb Function Style
 
 <div class="prose" markdown="1">
 
-# Stage 8: Splitting the Verb Dispatch
+# Stage 9: Modernizing Verb Function Style
 
-Every verb handler is now its own `function verbXxx%()`, returning 0
-("get another command") or 1 ("redisplay the room") for the `SELECT
-CASE` -- now a lean one-line-per-case dispatch table -- to act on with
-`continue`/`exit` itself, replacing the direct `continue`/`exit` every
-handler used when it was inline. This turned out to simplify more than
-it complicated: a `return` unwinds the whole function regardless of loop
-nesting, so GET's, DROP's, ENTER's, and LEAVE's own scan loops no longer
-need stage 6/7's two-loop-levels `GOTO L300`/`GOTO L400` workaround --
-every one of those became a plain `return 0`/`return 1` instead.
+Every verb function's own `GOTO`-chained branches (classic one-line `IF
+cond THEN goto Label` chains, and the ALL-CAPS labels they jumped to,
+read verbatim from stage 2) became structured, lowercase `IF`/`ELSEIF`/
+`END IF` -- the same style the rest of this port has used since stage 3.
+Several near-duplicate branches the original's labels converged on
+folded into shared fall-through or a single `OR` condition instead --
+PLUGH/XYZZY's two teleport-or-fail tails, ENTER/LEAVE's "house"/"barren
+room" cases. `ON ERROR GOTO` (SAVE GAME, LOAD OLD GAME, BUG) stays
+exactly as-is, with no structured equivalent; CLOSE's own dead-code
+branch (a preserved upstream bug) was left alone too, since there's no
+live code there to modernize.
 
-A few handlers' own GOTOs crossed into what's now a different function
-entirely (labels are function-scoped, so a GOTO can no longer reach
-across): QUIT's "yes, save first" path and OPEN's/CLOSE's "it's actually
-a lock" cases became direct calls to `verbSaveGame%()`/`verbUnlock%()`/
-`verbLock%()` instead, using the same 0/1 convention. BUG's error
-handler used to reuse LOAD's own error label the same way; since `on
-error goto`'s target must live in the same function, it now has its own
-copy of the same message. SCORE's own `DATA` line moved to the top
-level, since `RESTORE` targets must stay top-level (issue #149/PR #150)
-and can no longer live inside `verbScore%()` with the rest of that
-case's logic.
+A real bug turned up along the way: converting PLOVER's "was he
+carrying the emerald" check to structured `IF` inverted the `S(10) =
+-1` ("carrying") test the same way stage 7's LOCK/UNLOCK bug did --
+caught by this stage's own smoke tests (a missing room-contents line
+after teleporting via PLOVER), fixed, and reverified byte-identical.
 
-Every verb function declares `global` for each shared variable it
-touches; missing even one silently creates a fresh, always-zero local
-instead of erroring, so this was checked both by an automated scan
-(every scalar/array name known to be global anywhere in the program,
-cross-referenced against each function's own `global` list) and by the
-smoke tests -- two real omissions (`t2` in GET and DROP) were caught
-this way before ever reaching a manual test.
-
-Verified with `bcc --check`, a real `fbc` build, and the same smoke
-tests as stage 7 against a stage 7 baseline -- byte-identical
-throughout, including GET/DROP/FEED's special-case branches and the
-pit-fall/reincarnation cascade, each exercised separately in a scratch
-copy with the relevant items/rooms patched. `bcc`'s own hand-wired-loop
-warnings on this file are down to 5, all the outer loop's own
-intentional labels plus one small remaining leftover (CROSS's own
-message) -- not attempted here, since this stage's own goal is
-otherwise complete.
+Verified with `bcc --check`, a real `fbc` build, and the stage 8 smoke
+suite against a stage 8 baseline -- byte-identical throughout. `bcc`'s
+own hand-wired-loop warnings are down to 4 (all the outer loop's own
+intentional labels); total GOTO count in the file down from 105 to 59,
+nearly all of what's left being `ON ERROR GOTO` or comments documenting
+the port's own history.
 
 </div>
 
 <details class="source-embed" markdown="1">
 
-<summary><code>stage8-refactored-bascal/adventure.bcl</code> -- Stage 8: Splitting the Verb Dispatch</summary>
+<summary><code>stage9-refactored-bascal/adventure.bcl</code> -- Stage 9: Modernizing Verb Function Style</summary>
 
 ```bascal
 
-// ADVENTURE/3000 -- Stage 8: splitting the 40-case SELECT CASE dispatch
-// into its own procedure per verb -- the piece of stage 7's own goal
-// ("cleanup massive select case with embedded code in each case") that
-// stage 7 explicitly stopped short of. See ../README.md for the port's
-// provenance and staging.
+// ADVENTURE/3000 -- Stage 9: modernizing the verb functions' own internal
+// style -- now that stage 8 has given every verb its own function, this
+// stage rewrites what's *inside* each one, replacing the classic
+// one-line `IF cond THEN goto Label` chains (and the ALL-CAPS labels
+// they jump to) those functions still read verbatim from stage 2 with
+// structured, lowercase `IF`/`ELSEIF`/`END IF` -- the same style the
+// rest of this port has used since stage 3. See ../README.md for the
+// port's provenance and staging.
 //
-// Started as an exact copy of stage 7. Every one of the 40 verb
-// handlers is now its own `function verbXxx%()`, returning 0 ("get
-// another command") or 1 ("redisplay the room") for the SELECT CASE --
-// now a lean one-line-per-case dispatch table -- to act on with
-// `continue`/`exit` itself. This return code is what a procedure has
-// to use instead of directly `continue`/`exit`-ing a loop in its
-// *caller's* scope, the restructuring problem stage 7's own header
-// (and stage 3's, on the same problem in miniature) flagged as the
-// reason this couldn't be a purely mechanical extraction.
+// Started as an exact copy of stage 8. Every verb function's own
+// `GOTO`-chained branches became `IF`/`ELSEIF`/`ELSE` blocks, usually
+// with a shared tail the original's labels converged on folded back
+// into ordinary fall-through -- e.g. PLUGH/XYZZY (teleport one way or
+// the other, or fail) collapse their two near-identical "move, check
+// pits, return 1" tails into one, and ENTER/LEAVE's near-duplicate
+// "house"/"barren room" branches (same direction, same message) merge
+// into a single `OR` condition. A handful of GOTOs are unavoidable and
+// stay exactly as they are: `ON ERROR GOTO` (SAVE GAME, LOAD OLD GAME,
+// BUG) has no structured equivalent BASCAL supports for the reasons
+// documented at each site, and CLOSE's own dead-code branch (a
+// preserved upstream bug, see its own comment) was left alone since
+// there's no live code there to modernize.
 //
-// This turned out to simplify more than it complicated, though: a
-// `return` unwinds the whole function regardless of how many loops
-// it's nested inside, so GET's, DROP's, ENTER's, and LEAVE's own scan
-// loops no longer need stage 6/7's `GOTO L300`/`GOTO L400` workaround
-// for escaping two loop levels at once -- every one of those became a
-// plain `return 0`/`return 1` instead. A bare `continue` inside one of
-// those loops still means exactly what it always did (try the next
-// item/direction); only the sites that used to escape the loop
-// entirely needed converting.
+// A real, subtle bug turned up doing this: converting PLOVER's "was he
+// carrying the emerald" check to structured `IF` initially inverted the
+// `S(10) = -1` ("carrying") test the same way stage 7's LOCK/UNLOCK bug
+// did -- caught by this stage's own smoke tests (a missing room-contents
+// line after teleporting via PLOVER), fixed, and reverified
+// byte-identical. Two now-vestigial labels (`L8970`, left over from
+// SAVE GAME's old cross-case entry point once stage 8 replaced it with
+// a direct call) were also removed.
 //
-// A few verb handlers' own internal GOTOs crossed into what's now a
-// *different* function entirely, which a GOTO can no longer reach
-// (labels are function-scoped) -- each became a direct call instead,
-// using the same 0/1 return convention: QUIT's "yes, save first" path
-// now calls verbSaveGame%(); OPEN's "it's actually a lock" case and
-// CLOSE's own dead-code branch (see its own comment -- still
-// deliberately unreachable, preserving the original's real bug) both
-// now call verbUnlock%()/verbLock%(). BUG's error handler used to reuse
-// LOAD's own `L9150` label the same way; since `on error goto`'s target
-// must live in the same function, it now has its own copy of the same
-// "unable to use file" message instead. The BUG-report loop itself (was
-// a manual GOTO loop, `LW9430`) became a real `WHILE`, since it's now
-// alone in its own function with nothing outside to escape to.
-//
-// SCORE's own DATA line (the adventurer-tier names, `L6470`) moved out
-// to the top level, right after the outer loop -- RESTORE targets must
-// be top-level per issue #149/PR #150, so it couldn't move into
-// verbScore%() with the rest of that case's logic.
-//
-// Every verb function declares `global` for each shared variable it
-// touches; missing even one would silently create a fresh, always-zero
-// local instead of erroring, so this was checked both by an automated
-// scan (every scalar/array name known to be global anywhere in this
-// program, cross-referenced against each function's own `global` list)
-// and by the smoke tests below -- two real omissions (`t2` in GET and
-// DROP) were caught this way before ever reaching a manual test.
-//
-// Verified with `bcc --check`, a real `fbc` build, and the same smoke
-// tests as stage 7 (expanded to explicitly cover LIGHT/OFF/LOOK,
-// FILL/EMPTY, LOCK/UNLOCK, FREE, WAVE, OPEN/CLOSE, OIL, GET/DROP's
-// special cases, and BUG) against a stage 7 baseline -- byte-identical
-// throughout, including GET/DROP/FEED's special-case branches and the
-// pit-fall/reincarnation cascade, each exercised separately in a
-// scratch copy with the relevant items/rooms patched.
-//
-// `bcc`'s own hand-wired-loop warnings on this file are down to 5, all
-// of them the outer game loop's own intentional `L300`/`L400`/`L410`
-// labels (see stage 6's header) plus one small remaining leftover
-// (CROSS's own `L2420` message) -- not attempted here, since this
-// stage's own goal (the SELECT CASE split) is otherwise complete.
+// Verified with `bcc --check`, a real `fbc` build, and the stage 8
+// smoke suite against a stage 8 baseline -- byte-identical throughout.
+// `bcc`'s own hand-wired-loop warnings are down to 4, all the outer
+// game loop's own intentional `L300`/`L400`/`L410` labels (see stage
+// 6's header) -- CROSS's own remaining message GOTO from stage 8 is
+// gone along with the rest. Total GOTO count in the file: 105 (stage 8)
+// down to 59, nearly all of what's left being `ON ERROR GOTO` or
+// comments documenting the port's own history.
 program adventure3000
 
 ' The original used PyBASIC's UPPER$/LOWER$, which real BASIC (and BASCAL's
@@ -960,15 +919,18 @@ function verbPlugh%()
     global s
     global z2
     ' *** PLUGH ***
-    IF L1<>7 THEN goto L2170
-    IF S(35)=L1 THEN S(35)=0
-    Z2=26
-    performMove%(Z2)
-    checkPitsAndReincarnateIfNeeded()
-    return 1
-    L2170: IF L1<>26 THEN printMessage(2) : return 0
-    Z2=7
-    performMove%(Z2)
+    if l1 = 7 then
+        if s(35) = l1 then
+            s(35) = 0
+        end if
+        z2 = 26
+    elseif l1 = 26 then
+        z2 = 7
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(z2)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
@@ -978,15 +940,18 @@ function verbXyzzy%()
     global s
     global z2
     ' *** XYZZY ***
-    IF L1<>7 THEN goto L2270
-    IF S(35)=L1 THEN S(35)=0
-    Z2=13
-    performMove%(Z2)
-    checkPitsAndReincarnateIfNeeded()
-    return 1
-    L2270: IF L1<>13 THEN printMessage(2) : return 0
-    Z2=7
-    performMove%(Z2)
+    if l1 = 7 then
+        if s(35) = l1 then
+            s(35) = 0
+        end if
+        z2 = 13
+    elseif l1 = 13 then
+        z2 = 7
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(z2)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
@@ -996,18 +961,21 @@ function verbPlover%()
     global s
     global z2
     ' *** PLOVER *** (CAN'T BRING EMERALD WITH HIM)
-    IF L1>26 THEN goto L2360
-    IF S(35)<>L1 THEN goto L2330
-    S(35) = 0
-    L2330: IF S(10)<>-1 THEN goto L2340
-    S(10) = L1
-    L2340: Z2 = 58
-    performMove%(Z2)
-    checkPitsAndReincarnateIfNeeded()
-    return 1
-    L2360: IF L1<>58 THEN printMessage(2) : return 0
-    Z2=26
-    performMove%(Z2)
+    if l1 <= 26 then
+        if s(35) = l1 then
+            s(35) = 0
+        end if
+        if s(10) = -1 then
+            s(10) = l1
+        end if
+        z2 = 58
+    elseif l1 = 58 then
+        z2 = 26
+    else
+        printMessage(2)
+        return 0
+    end if
+    performMove%(z2)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
@@ -1018,43 +986,39 @@ function verbCross%()
     global d
     global z2
     ' *** CROSS ***
-    IF L1<>19 THEN goto L2470
-    IF B2<>0 THEN goto L2440
-    L2420: printMessage(3)
+    if l1 = 19 and b2 = 0 then
+        printMessage(3)
+    elseif l1 = 19 then
+        ' JUST GIVE NEW DIRECTION, USE MOVE ROUTINE
+        d = 7
+        if attemptMove%(d) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
+    elseif l1 = 20 and b2 = 0 then
+        printMessage(3)
+    elseif l1 = 20 then
+        d = 3
+        if attemptMove%(d) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
+    elseif l1 = 60 then
+        d = 2
+        if attemptMove%(d) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
+    elseif l1 = 61 then
+        d = 6
+        if attemptMove%(d) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
+    else
+        printMessage(2)
+    end if
     return 0
-    L2440: D=7
-    ' JUST GIVE NEW DIRECTION, USE MOVE ROUTINE
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
-    L2470: IF L1<>20 THEN goto L2510
-    IF B2=0 THEN goto L2420
-    D=3
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
-    L2510: IF L1<>60 THEN goto L2540
-    D=2
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
-    L2540: IF L1<>61 THEN printMessage(2) : return 0
-    D=6
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
 end function
 
 function verbClimb%()
@@ -1088,24 +1052,27 @@ function verbFill%()
     global b$
     global c$
     ' FILL
-    IF S(21)=-1 THEN goto L2730
-    B$="bottle"
-    PRINT "You don't have the ";b$
-    c$=""
-    return 0
-    L2730: IF B0=0 THEN goto L2760
-    printMessage(5)
-    c$=""
-    return 0
-    L2760: IF L1<>7 AND L1<>8 AND L1<>9 AND L1<>35 AND L1<>74 AND L1<>81 THEN goto L2790
-    B0=1:S(16)=-1
-    GOTO L2840
-    L2790: IF L1=49 THEN goto L2830
-    B$="oil"
-    PRINT "I see no ";B$;" here."
-    return 0
-    L2830: B0=2:S(17)=-1
-    L2840: PRINT "The bottle is now filled."
+    if S(21) <> -1 then
+        B$="bottle"
+        PRINT "You don't have the ";b$
+        c$=""
+        return 0
+    end if
+    if B0 <> 0 then
+        printMessage(5)
+        c$=""
+        return 0
+    end if
+    if L1=7 or L1=8 or L1=9 or L1=35 or L1=74 or L1=81 then
+        B0=1:S(16)=-1
+    elseif L1=49 then
+        B0=2:S(17)=-1
+    else
+        B$="oil"
+        PRINT "I see no ";B$;" here."
+        return 0
+    end if
+    PRINT "The bottle is now filled."
     return 0
 end function
 
@@ -1115,10 +1082,11 @@ function verbEmpty%()
     global b$
     global c$
     ' *** EMPTY ***
-    IF S(21)=-1 THEN goto L2890
-    B$="bottle" : PRINT "You don't have the ";b$ : c$=""
-    return 0
-    L2890: ' EMPTY BOTTLE (ASSUMED FULL)
+    if S(21)<>-1 then
+        B$="bottle" : PRINT "You don't have the ";b$ : c$=""
+        return 0
+    end if
+    ' EMPTY BOTTLE (ASSUMED FULL)
     S(B0+15)=0:B0=0
     PRINT "Emptied"
     return 0
@@ -1175,29 +1143,20 @@ function verbEnter%()
     global z2
     global dirs
     ' *** ENTER ***
-    IF L1<>6 THEN goto L3180
-    ' TO HOUSE
-    D=3
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
-    L3180: IF L1<>68 THEN goto L3240
-    ' TO BARREN ROOM
-    D=3
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
+    if l1 = 6 or l1 = 68 then
+        ' TO HOUSE / TO BARREN ROOM
+        D=3
+        if attemptMove%(D) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
         return 0
     end if
     ' Scan every direction for one that works, starting from the last
     ' (D=10, "down") -- was a manual D=10 downto 1 GOTO loop (LW3240).
     ' `return` here, not `exit`/`continue` -- it unwinds this whole
     ' function regardless of the `for` loop it's inside.
-    L3240: for D = 10 to 1 step -1
+    for D = 10 to 1 step -1
         Z2 = DIRS(L1,D)
         IF Z2>0 AND Z2<101 THEN
             if checkSpecialRoomAndMove%(D, Z2) then
@@ -1218,29 +1177,20 @@ function verbLeave%()
     global z2
     global dirs
     ' ** LEAVE ***
-    IF L1<>7 THEN goto L3340
-    ' LEAVE HOUSE
-    D=7
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
-        return 0
-    end if
-    L3340: IF L1<>69 THEN goto L3400
-    ' LEAVE BARREN ROOM
-    D = 7
-    if attemptMove%(D) then
-        checkPitsAndReincarnateIfNeeded()
-        return 1
-    else
+    if l1 = 7 or l1 = 69 then
+        ' LEAVE HOUSE / LEAVE BARREN ROOM
+        D=7
+        if attemptMove%(D) then
+            checkPitsAndReincarnateIfNeeded()
+            return 1
+        end if
         return 0
     end if
     ' Scan every direction for one that works, starting from the first
     ' (D=1, "north") -- was a manual D=1 to 10 GOTO loop (LW3400). See
     ' ENTER's own comment above for why this uses `return` instead of
     ' `exit`/`continue`.
-    L3400: for D = 1 to 10
+    for D = 1 to 10
         Z2 = DIRS(L1,D)
         IF Z2>0 AND Z2<101 THEN
             if checkSpecialRoomAndMove%(D, Z2) then
@@ -1272,9 +1222,10 @@ function verbInventory%()
         end if
     end for
 
-    IF Z0=0 THEN goto L3551 else goto L3560
-    L3551: PRINT "nothing."
-    L3560: PRINT
+    if Z0=0 then
+        PRINT "nothing."
+    end if
+    PRINT
     return 0
 end function
 
@@ -1466,39 +1417,48 @@ function verbThrow%()
     global dead
     ' *** THROW ***
     findMatchedItems()
-    IF Z8>0 THEN goto L4210
-    PRINT "Throw what?"
-    printDontUnderstand()
-    return 0
-    L4210: IF S(Z3)<>-1 THEN PRINT "You don't have the ";b$ : c$="" : return 0
-    IF NOT (Z3<16 AND S(32)=L1) THEN goto L4260
-    ' THROW TREASURE TO TROLL
-    printMessage(27)
-    S(Z3)=0:T=3
-    return 0
-    L4260: IF NOT (Z3=27 AND S(32)=L1) THEN goto L4300
-    ' TRYING TO BUTCHER TROLL?
-    printMessage(26)
-    S(27)=L1
-    return 0
-    L4300: IF NOT (Z3=27 AND S(35)=L1) THEN goto L4380
-    ' TRYING TO KILL DWARF
-    IF RND(1)>0.5 THEN goto L4360
-    printMessage(29)
-    checkDwarfAttack() ' (was: GOSUB 8650 -- jumped straight into the
-    ' attack-check half of the original dwarf subroutine, deliberately
-    ' skipping the axe-giving check; see checkDwarfAttack()'s own comment)
-    GOTO L4410
-    L4360: printMessage(30)
-    S(35)=0:GOTO L4410
-    L4380: ' NOTHING SPECIAL, JUST DROP ITEM
-    IF S(35)<>L1 THEN goto L4400
-    checkDwarf() ' (was: GOSUB L8550 -- L8550 was just a comment
-    ' immediately before the real dwarf subroutine's first line, L8560, so
-    ' this call wanted the full checkDwarf() behavior, axe-check included --
-    ' a call site missed when checkDwarf()/checkDwarfAttack() were split out)
-    L4400: PRINT "Thrown."
-    L4410: S(Z3) = L1
+    if z8 = 0 then
+        PRINT "Throw what?"
+        printDontUnderstand()
+        return 0
+    end if
+    if s(z3) <> -1 then
+        PRINT "You don't have the ";b$ : c$="" : return 0
+    end if
+    if z3 < 16 and s(32) = l1 then
+        ' THROW TREASURE TO TROLL
+        printMessage(27)
+        s(z3) = 0 : t = 3
+        return 0
+    elseif z3 = 27 and s(32) = l1 then
+        ' TRYING TO BUTCHER TROLL?
+        printMessage(26)
+        s(27) = l1
+        return 0
+    elseif z3 = 27 and s(35) = l1 then
+        ' TRYING TO KILL DWARF
+        if rnd(1) <= 0.5 then
+            printMessage(29)
+            checkDwarfAttack() ' (was: GOSUB 8650 -- jumped straight into
+            ' the attack-check half of the original dwarf subroutine,
+            ' deliberately skipping the axe-giving check; see
+            ' checkDwarfAttack()'s own comment)
+        else
+            printMessage(30)
+            s(35) = 0
+        end if
+    else
+        ' NOTHING SPECIAL, JUST DROP ITEM
+        if s(35) = l1 then
+            checkDwarf() ' (was: GOSUB L8550 -- L8550 was just a comment
+            ' immediately before the real dwarf subroutine's first line,
+            ' L8560, so this call wanted the full checkDwarf() behavior,
+            ' axe-check included -- a call site missed when checkDwarf()/
+            ' checkDwarfAttack() were split out)
+        end if
+        PRINT "Thrown."
+    end if
+    s(z3) = l1
     if dead = 1 then
         reincarnate()
         return 1
@@ -1513,25 +1473,25 @@ function verbAttack%()
     global c$
     ' *** ATTACK ***
     findMatchedItems()
-    IF NOT (Z3=33 AND S(Z3)=L1 AND L1=82) THEN goto L4520
-    ' HE CAN KILL DRAGON
-    printMessage(68)
-    c$=""
-    return 0
-    L4520: IF S(32)<>L1 THEN goto L4560
-    ' TRYING TO MUNGE TROLL
-    ' (was: Z9=FNA(25):GOTO 400 -- FNA is called with no matching DEF FN
-    ' anywhere in the original source; this looks like leftover/broken code
-    ' from an earlier version of the upstream port, not something this port
-    ' introduced. Z9's assignment here isn't read before it's next assigned
-    ' elsewhere, so dropping the call changes nothing observable.)
-    return 0
-    L4560: IF NOT (Z3=26 OR Z3>30) THEN goto L4600
-    ' DANGEROUS TO ATTACK THESE
-    printMessage(70)
-    return 0
-    L4600: ' NOTHING TO ATTACK
-    printMessage(71)
+    if z3 = 33 and s(z3) = l1 and l1 = 82 then
+        ' HE CAN KILL DRAGON
+        printMessage(68)
+        c$=""
+    elseif s(32) = l1 then
+        ' TRYING TO MUNGE TROLL
+        ' (was: Z9=FNA(25):GOTO 400 -- FNA is called with no matching DEF FN
+        ' anywhere in the original source; this looks like leftover/broken
+        ' code from an earlier version of the upstream port, not something
+        ' this port introduced. Z9's assignment here isn't read before it's
+        ' next assigned elsewhere, so dropping the call changes nothing
+        ' observable.)
+    elseif z3 = 26 or z3 > 30 then
+        ' DANGEROUS TO ATTACK THESE
+        printMessage(70)
+    else
+        ' NOTHING TO ATTACK
+        printMessage(71)
+    end if
     return 0
 end function
 
@@ -1545,17 +1505,20 @@ function verbFeed%()
     global itemname$
     ' *** FEED ***
     findMatchedItems()
-    IF Z3<>35 THEN goto L4690
-    ' CAN'T FEED DWARF!
-    printMessage(24)
-    return 0
-    L4690: IF S(20) = -1 THEN goto L4720
-    B$ = "FOOD" : PRINT "You don't have the ";b$ : c$="" : return 0
-    L4720: IF L1=69 THEN goto L4760
-    PRINT "I can't feed it."
-    printMessage(23)
-    return 0
-    L4760: if S(20)=L1 then
+    if z3 = 35 then
+        ' CAN'T FEED DWARF!
+        printMessage(24)
+        return 0
+    end if
+    if s(20) <> -1 then
+        B$ = "FOOD" : PRINT "You don't have the ";b$ : c$="" : return 0
+    end if
+    if l1 <> 69 then
+        PRINT "I can't feed it."
+        printMessage(23)
+        return 0
+    end if
+    if S(20)=L1 then
         ' was: `GOTO L7600`, itself `printMessage(60):GOTO L4120` -- L4120
         ' was DROP's own per-item "dropped" epilogue, reused here verbatim
         ' (feeding the bear food already here also "drops" it via the
@@ -1578,21 +1541,25 @@ function verbWater%()
     global p1
     global b0
     ' *** WATER ***
-    IF S(16) = -1 THEN goto L4840
-    B$ = "water" : PRINT "You don't have the ";b$ : c$="" : return 0
-    L4840: IF L1<>50 THEN printMessage(2) : return 0
+    if s(16) <> -1 then
+        B$ = "water" : PRINT "You don't have the ";b$ : c$="" : return 0
+    end if
+    if l1 <> 50 then
+        printMessage(2)
+        return 0
+    end if
     ' GOTO P1+1 OF 4860,4890,4920
-    IF P1 = 0 THEN goto L4860
-    IF P1 = 1 THEN goto L4890
-    IF P1 = 2 THEN goto L4920
-    L4860: printMessage(7)
-    P1=1:S(16)=0:B0=0
-    return 0
-    L4890: printMessage(8)
-    P1=2:S(16)=0:B0=0
-    return 0
-    L4920: printMessage(9)
-    P1=0:S(16)=0:B0=0
+    if p1 = 0 then
+        printMessage(7)
+        p1 = 1
+    elseif p1 = 1 then
+        printMessage(8)
+        p1 = 2
+    else
+        printMessage(9)
+        p1 = 0
+    end if
+    S(16)=0:B0=0
     return 0
 end function
 
@@ -1794,12 +1761,16 @@ function verbEat%()
     global b0
     global c$
     ' *** EAT ***
-    IF K(20) = 1 THEN goto L5950
-    printMessage(20)
-    c$=""
-    return 0
-    L5950: Z3=20:checkCarryingItem()
-    IF Z5=0 THEN c$="" : return 0
+    if K(20) <> 1 then
+        printMessage(20)
+        c$=""
+        return 0
+    end if
+    Z3=20:checkCarryingItem()
+    if Z5=0 then
+        c$=""
+        return 0
+    end if
     printMessage(73)
     S(20)=0:B0=0
     return 0
@@ -1813,12 +1784,16 @@ function verbDrink%()
     global b0
     global c$
     ' *** DRINK ***
-    IF K(16) =1 THEN goto L6040
-    printMessage(21)
-    c$=""
-    return 0
-    L6040: Z3=16:checkCarryingItem()
-    IF Z5=0 THEN c$="" : return 0
+    if K(16) <> 1 then
+        printMessage(21)
+        c$=""
+        return 0
+    end if
+    Z3=16:checkCarryingItem()
+    if Z5=0 then
+        c$=""
+        return 0
+    end if
     printMessage(22)
     S(17)=0:B0=0
     return 0
@@ -1829,19 +1804,19 @@ function verbFeeFieFoeFoo%()
     global s
     global c$
     ' *** FEE FIE FOE FOO ***
-    IF L1=71 THEN goto L6130
-    printMessage(2)
-    c$=""
-    return 0
-    L6130: IF S(8)<>L1 THEN goto L6180
-    ' MAKE NEST VANISH
-    printMessage(79)
-    S(8)=0
-    return 0
-    L6180: ' IF S(8)=0 THEN goto L6110
-    S(8)=L1
-    ' MAKE NEST RE-APPEAR
-    printMessage(81)
+    if l1 <> 71 then
+        printMessage(2)
+        c$=""
+    elseif s(8) = l1 then
+        ' MAKE NEST VANISH
+        printMessage(79)
+        S(8)=0
+    else
+        ' IF S(8)=0 THEN goto L6110
+        S(8)=L1
+        ' MAKE NEST RE-APPEAR
+        printMessage(81)
+    end if
     return 0
 end function
 
@@ -1912,7 +1887,7 @@ function verbSaveGame%()
     global c0
     global c$
     global k
-    L8970: ' *** SAVE GAME ***
+    ' *** SAVE GAME ***
     INPUT "What do you want to call the save file? ";A$
     ' `on error goto` (not `try`/`catch`) here on purpose -- see the
     ' README's own note on why, and GitHub issues #61 (on error goto is
@@ -1969,11 +1944,12 @@ function verbLoadOldGame%()
     global c0
     global c$
     ' *** LOAD OLD GAME ***
-    IF C0=0 THEN goto L9120
-    PRINT "You already have a loaded game!"
-    c$=""
-    return 0
-    L9120: INPUT "Save file name? ";A$
+    if C0<>0 then
+        PRINT "You already have a loaded game!"
+        c$=""
+        return 0
+    end if
+    INPUT "Save file name? ";A$
     on error goto L9150
     OPEN A$ FOR INPUT AS #5
     on error goto 0
@@ -2000,16 +1976,16 @@ function verbReadMagazine%()
     global c$
     ' *** READ THE MAGAZINE ***
     findMatchedItems()
-    IF Z3=25 THEN goto L9270
-    printMessage(74)
-    c$=""
-    return 0
-    L9270: IF S(25)=-1 THEN goto L9300
-    B$="magazine"
-    PRINT "You don't have the ";b$ : c$=""
-    return 0
-    L9300: ' OK, LET HIM READ IT
-    printMessage(303)
+    if z3 <> 25 then
+        printMessage(74)
+        c$=""
+    elseif s(25) <> -1 then
+        B$="magazine"
+        PRINT "You don't have the ";b$ : c$=""
+    else
+        ' OK, LET HIM READ IT
+        printMessage(303)
+    end if
     return 0
 end function
 
@@ -2453,4 +2429,4 @@ data "everything"
 
 </details>
 
-[← Stage 7: Reducing GOTO to a Minimum](adventure3000-stage7.md) [Next: Stage 9: Modernizing Verb Function Style →](adventure3000-stage9.md)
+[← Stage 8: Splitting the Verb Dispatch](adventure3000-stage8.md) [Next: Stage 10: Try/Catch Error Handling →](adventure3000-stage10.md)
