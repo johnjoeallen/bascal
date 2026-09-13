@@ -448,6 +448,38 @@ source from scratch.
   nearly all of what's left being `ON ERROR GOTO` or comments documenting
   the port's own history.
 
+- **`stage10-refactored-bascal/`** -- replacing SAVE GAME's, LOAD OLD
+  GAME's, and BUG's `ON ERROR GOTO` with `TRY`/`CATCH`, BASCAL's portable
+  error model. Started as an exact copy of stage 9.
+
+  A genuine trade, not a pure upgrade: `on error goto` builds under both
+  `--target basic` (real BASCOM) and `--target fbc`, but is permanently
+  rejected under `--target c` (issue #61). `try`/`catch` builds under
+  `--target basic` and `--target c`, but `--target fbc` now rejects it
+  outright at compile time (issue #153 -- the same underlying limitation
+  issue #100 originally reported, now diagnosed instead of just failing
+  at `fbc`'s own compile step). Converting gains `--target c` for the
+  first time in this case study's history, at the cost of `--target fbc`,
+  every earlier stage's primary verification backend.
+
+  Unblocking `--target c` surfaced one unrelated, genuinely pre-existing
+  limitation: `checkSpecialRoomAndMove%()`'s troll-state `SELECT CASE`
+  had no `CASE ELSE`, and the C backend requires every function to
+  visibly return on every path -- never reached before, since `on error
+  goto` always failed compilation first. Fixed with a `CASE ELSE`
+  matching `CASE 4`'s own body; provably unreachable, not a behavior
+  change.
+
+  Verified three ways: `bcc --check`; a real BASCOM build (headless,
+  under `dosbox-x`) of both this stage and stage 9, run against identical
+  scripted input (movement, SAVE, LOAD, BUG, and a LOAD of a nonexistent
+  file to exercise the `catch`/`on error goto` path itself) with stdin/
+  stdout redirected inside the DOS batch file -- byte-identical output
+  between the two stages in both the success and failure cases; and a
+  real native `--target c` build, run interactively, confirming SAVE/
+  LOAD/BUG all work correctly under the backend this stage exists to
+  unblock, including the file-not-found `catch` path.
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
@@ -519,3 +551,14 @@ Stage 5 started as an exact copy of stage 4 and hasn't diverged from it
 yet, so everything above about stage 4 -- `--target basic`/`bascom`
 verified against real BASCOM, `--target fbc`/`--target c`/`--target jvm`
 each blocked the same way -- currently applies to it identically.
+
+**Stage 10 changes this for itself only.** Every stage through 9 keeps
+`on error goto`, so everything above still applies to stages 1-9
+unchanged. Stage 10 converts to `try`/`catch` instead (see its own bullet
+above), which flips its own `--target c`/`--target fbc` status: it builds
+and runs correctly under `--target c` (verified interactively, including
+the file-not-found `catch` path) for the first time in this case study,
+but `--target fbc` now rejects it outright at compile time (issue #153).
+`--target basic` (real BASCOM) keeps working for stage 10, same as every
+other stage; `--target jvm` remains blocked for the same file-I/O reason
+as always.
