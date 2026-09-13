@@ -201,9 +201,13 @@ fn reject_try_catch(statements: &[ast::Stmt], diagnostics: &mut Vec<Diagnostic>)
             ast::Statement::TryCatch { try_body, catch, finally_body } => {
                 diagnostics.push(Diagnostic::error(
                     statement.pos.clone(),
-                    "`try`/`catch` is not supported with --target fbc; fbc rejects the \
-                     `RESUME <lineno>` its generated BASIC relies on (valid under real \
-                     BASCOM, but not fbc -- see GitHub issue #153). Use `--target basic` \
+                    "`try`/`catch` is permanently unsupported with --target fbc; fbc's \
+                     `RESUME`/`RESUME NEXT` cannot resume at an arbitrary later line the \
+                     way `RESUME <lineno>` does under real BASCOM (verified: fbc's parser \
+                     rejects `RESUME <lineno>`/`RESUME <label>` outright under every \
+                     `-lang` dialect, and the obvious GOSUB-plus-`RESUME NEXT` workaround \
+                     crashes at runtime with fbc's own \"illegal resume\" error -- see \
+                     GitHub issue #153 for the full investigation). Use `--target basic` \
                      (verified against real BASCOM) or `on error goto`/`resume` for a \
                      program that must build under fbc."
                         .to_string(),
