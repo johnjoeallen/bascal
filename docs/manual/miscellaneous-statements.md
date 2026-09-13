@@ -195,6 +195,8 @@ end
 
 Portable structured error recovery: works unchanged under both `--target basic` and `--target c`. A failed statement anywhere in the `try` body abandons the rest of it and runs `catch` once, then always runs the rest of the program after `end try` — never back inside `try`. There is no `resume` equivalent: recovery always continues right after `end try`, not at the failing statement or "next".
 
+**Not supported under `--target fbc`, permanently.** `bcc` rejects `try`/`catch` outright for that target (a compile-time error, not a silent miscompile). This isn't a gap awaiting a fix: the generated BASIC relies on `RESUME <lineno>` to implement "always resume right after `end try`", which real BASCOM accepts but `fbc`'s parser rejects outright under every `-lang` dialect — and the obvious workaround (wrapping the risky code in its own `GOSUB`, then using the `RESUME NEXT` form `fbc` *does* accept) crashes at runtime with `fbc`'s own "illegal resume" error, since `fbc`'s resume model can't unwind across a `GOSUB` call frame either. A program that must build under `fbc` needs classic `on error goto`/`resume` instead (see below) — which has the opposite restriction, permanently rejected under `--target c` (GitHub issue #61). See GitHub issue #153 for the full investigation.
+
 ```bascal
 try
     open fileName$ for input as #1

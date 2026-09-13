@@ -22,12 +22,18 @@ pub(crate) use crate::codegen_basic::{
 /// `Fbc` generates the same BASIC (`codegen_basic`, identically) but for
 /// `fbc` (FreeBASIC) specifically, rejecting the handful of constructs real
 /// BASCOM accepts that `fbc`'s own parser does not -- currently just
-/// `try`/`catch`'s generated `RESUME <lineno>` (see GitHub issue #153;
-/// #100 has the original report and the real-BASCOM-vs-`fbc` investigation
-/// that led to this split, #152). `Basic` and `Fbc` are otherwise
-/// interchangeable output -- BASCAL's actual complete backend is one thing,
-/// this is only about which of its two downstream verifiers a given
-/// program is guaranteed to satisfy. `C` is a native-C backend -- see
+/// `try`/`catch`'s generated `RESUME <lineno>`. This is permanent, not a
+/// gap awaiting a fix: fbc's parser rejects `RESUME <lineno>`/`RESUME
+/// <label>` outright under every `-lang` dialect, and the obvious
+/// GOSUB-plus-`RESUME NEXT` workaround crashes at runtime with fbc's own
+/// "illegal resume" error -- fbc's error-resume model simply cannot
+/// express `try`/`catch`'s "always resume right after `end try`, not at
+/// the next statement" guarantee (see GitHub issue #153 for the full
+/// investigation; #100 has the original report, #152 the real-BASCOM-
+/// vs-`fbc` investigation that led to this split). `Basic` and `Fbc` are
+/// otherwise interchangeable output -- BASCAL's actual complete backend
+/// is one thing, this is only about which of its two downstream
+/// verifiers a given program is guaranteed to satisfy. `C` is a native-C backend -- see
 /// `codegen_c`'s own module doc comment for exactly what it supports
 /// today. `Jvm` is a bootstrap-stage native-JVM backend -- see
 /// `codegen_jvm`'s own module doc comment; it currently supports a small
