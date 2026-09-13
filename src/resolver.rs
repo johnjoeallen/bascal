@@ -1004,6 +1004,7 @@ fn statement_calls_function(statement: &Stmt, target: &BasicIdent) -> bool {
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)
@@ -1521,6 +1522,7 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
         | Statement::Clear
         | Statement::System
         | Statement::Exit
+        | Statement::Continue
         | Statement::Restore(None)
         | Statement::ReturnVoid
         | Statement::GlobalDecl(_)

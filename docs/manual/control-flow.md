@@ -212,6 +212,27 @@ end for
 
 `exit do`, `exit for`, and `exit while` are not valid — a loop-type keyword after `exit` is a transpile-time error.
 
+### Continue
+
+```bascal
+continue
+```
+
+Same idea as `exit`, unqualified the same way, but for skipping to the *next* iteration instead of leaving the loop: `continue` skips the rest of the innermost enclosing `for`/`while`/`do` loop's current iteration and goes straight to that loop's own per-iteration bookkeeping — a `for`'s increment, a `while`'s condition re-check, or a `do`'s post-condition check if it has one — rather than falling through the rest of the body first.
+
+```bascal
+for i% = 1 to 10
+    if i% mod 2 = 0 then
+        continue      ' skip even numbers, still increments i% normally
+    end if
+    print i%
+end for
+```
+
+`continue for`, `continue while`, and `continue do` are not valid, for the same reason as `exit`'s own qualified forms: a transpile-time error.
+
+`for`/`while` transpile `continue` to a plain `GOTO` (or, on `--target c`, a native `continue;`) that re-checks the loop's own condition or runs its own increment, exactly what falling off the end of the body would have done anyway. A `do` loop with a *post*-condition (`loop while`/`loop until`) is the one case worth knowing about: its post-condition check runs *after* the body, so `continue` targets a label placed there specifically — jumping straight back to the loop's own top instead would skip that check on every `continue`, silently turning the loop into an infinite one.
+
 ### SELECT CASE
 
 ```bascal

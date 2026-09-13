@@ -182,6 +182,7 @@ pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
         context: &context,
         next_label: 0,
         loop_exits: Vec::new(),
+        loop_continues: Vec::new(),
         return_type: None,
         labels: collect_labels(&program.statements),
         exception_handlers: Vec::new(),
@@ -1106,6 +1107,7 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
         context: &context,
         next_label: 0,
         loop_exits: Vec::new(),
+        loop_continues: Vec::new(),
         return_type: (!function.is_procedure).then(|| type_for_ident(&function.name)),
         labels: collect_labels(&function.body),
         exception_handlers: Vec::new(),
@@ -1154,6 +1156,14 @@ struct JvmEmitter<'a> {
     context: &'a JvmContext,
     next_label: usize,
     loop_exits: Vec<String>,
+    // The label a `continue` inside the current innermost loop should
+    // `goto` -- for `while`, this is the same label as `loop_exits`'s own
+    // top-of-loop condition check (re-checking the condition *is* a
+    // while loop's own per-iteration bookkeeping); for `for`/`do`, it's a
+    // dedicated label placed right after the body, before the increment/
+    // post-condition-check bytecode that follows -- jumping straight to
+    // the loop's own top label instead would skip that bytecode entirely.
+    loop_continues: Vec<String>,
     return_type: Option<JvmType>,
     labels: HashSet<String>,
     exception_handlers: Vec<JvmExceptionHandler>,
@@ -1496,6 +1506,13 @@ impl JvmEmitter<'_> {
                 out.push_str(&format!("    goto {label}\n"));
                 Ok(())
             }
+            Statement::Continue => {
+                let label = self.loop_continues.last().ok_or_else(|| {
+                    "`continue` is only supported inside a JVM-transpiled loop".to_string()
+                })?;
+                out.push_str(&format!("    goto {label}\n"));
+                Ok(())
+            }
             Statement::Return { value } => match self.return_type {
                 Some(JvmType::String) => {
                     emit_string_expr(value, out, self.context)?;
@@ -1619,9 +1636,14 @@ impl JvmEmitter<'_> {
         out.push_str(&format!("{top_label}:\n"));
         emit_jump_if_false(condition, &end_label, out, self.context)?;
         self.loop_exits.push(end_label.clone());
+        // Re-checking the condition at `top_label` *is* this loop's own
+        // per-iteration bookkeeping, so `continue` can reuse it directly --
+        // no separate label needed, unlike `for`/`do` below.
+        self.loop_continues.push(top_label.clone());
         for statement in body {
             self.emit_statement(statement, out)?;
         }
+        self.loop_continues.pop();
         self.loop_exits.pop();
         out.push_str(&format!("    goto {top_label}\n{end_label}:\n"));
         Ok(())
@@ -1677,10 +1699,19 @@ impl JvmEmitter<'_> {
         };
         out.push_str(&format!("    {branch} {end_label}\n"));
         self.loop_exits.push(end_label.clone());
+        // `top_label` re-checks the loop bound, not the increment -- a
+        // `continue` jumping straight there would skip incrementing the
+        // loop variable entirely (an infinite loop on the same value), so
+        // it needs its own label placed right before the increment code
+        // below instead.
+        let continue_label = format!("L_for_{id}_continue");
+        self.loop_continues.push(continue_label.clone());
         for statement in body {
             self.emit_statement(statement, out)?;
         }
+        self.loop_continues.pop();
         self.loop_exits.pop();
+        out.push_str(&format!("{continue_label}:\n"));
         emit_load(variable, out, self.context);
         emit_numeric_expr_as(step, NumericType::Int, out, self.context)?;
         out.push_str(&format!("    iadd\n"));
@@ -1709,10 +1740,19 @@ impl JvmEmitter<'_> {
             }
         }
         self.loop_exits.push(end_label.clone());
+        // `top_label` re-checks the pre-condition (if any); a `continue`
+        // jumping straight there would skip the post-condition check
+        // below entirely, silently turning `do ... loop until done` into
+        // an infinite loop on `continue` -- so it needs its own label,
+        // placed right after the body instead.
+        let continue_label = format!("L_do_{id}_continue");
+        self.loop_continues.push(continue_label.clone());
         for statement in body {
             self.emit_statement(statement, out)?;
         }
+        self.loop_continues.pop();
         self.loop_exits.pop();
+        out.push_str(&format!("{continue_label}:\n"));
         if let Some(condition) = post_condition {
             if condition.is_while {
                 emit_jump_if_false(&condition.expr, &end_label, out, self.context)?;
