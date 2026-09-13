@@ -1,4 +1,4 @@
-[Home](../../) / [Examples](sort-driver.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 3: Clean GOSUBs Become Procedures
+[Home](../../) / [Examples](index.md) / [ADVENTURE/3000 Port](adventure3000.md) / Stage 3: Clean GOSUBs Become Procedures
 
 <div class="prose" markdown="1">
 

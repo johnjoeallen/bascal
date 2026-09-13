@@ -100,6 +100,7 @@ nav:
       - Portable Structured Error Handling: tutorials/portable_error_handling.md
       - RESTORE and DATA: tutorials/restore_data.md
   - Examples:
+      - Overview: examples/index.md
       - Sort Driver: examples/sort-driver.md
       - REMLINE: examples/remline.md
       - Card Catalog: examples/card-catalog.md

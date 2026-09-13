@@ -1,4 +1,4 @@
-[Home](../../) / [Examples](sort-driver.md) / Adventure Game
+[Home](../../) / [Examples](index.md) / Adventure Game
 
 <div class="prose" markdown="1">
 
