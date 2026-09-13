@@ -29,9 +29,9 @@ mod tests {
 
     #[test]
     fn trailing_fixed_parameter_defaults_are_inserted_at_call_sites() {
-        let source = r#"const punctuation$ = "!"
+        let source = r#"const punctuation = "!"
 
-function decorate$(text$, suffix$ = punctuation$)
+function decorate$(text$, suffix$ = punctuation)
     return text$ + suffix$
 end function
 
@@ -45,7 +45,8 @@ print result$
 end
 "#;
         let basic = compile_source("defaults.bcl", source).expect("defaults should compile");
-        assert!(basic.contains("decorateSuffix0$ = punctuation$"), "{basic}");
+        assert!(basic.contains("CONSTPUNCTUATION$ = \"!\""), "{basic}");
+        assert!(basic.contains("decorateSuffix0$ = CONSTPUNCTUATION$"), "{basic}");
         assert!(basic.contains("announceSuffix0$ = \"!\""), "{basic}");
 
         let c = compile_source_via_c_target(source);
@@ -498,17 +499,20 @@ end
     }
 
     #[test]
-    fn function_local_const_declares_and_reads_the_same_lowered_name() {
-        // A `const` declared inside a function/procedure body must be
-        // renamed to its local BASIC name (like `dim`/assignment already
-        // are) so the assignment and every later read of it agree --
-        // otherwise the declaration binds one name while reads resolve to a
-        // fresh, never-assigned local of a different name. Real MBASIC/
-        // BASCOM has no CONST statement at all, so `const` always lowers to
-        // a plain assignment, never a CONST line.
+    fn const_declares_and_reads_a_fixed_underscore_free_generated_name() {
+        // A `const`'s generated BASIC name is always `CONST` followed by
+        // its own name's words uppercased and run together (see
+        // `const_var_name`) -- never a camelCased rendering of the source
+        // spelling, which real BASCOM rejects outright whenever the
+        // source name contains an underscore (confirmed under real
+        // BASCOM/dosbox-x, even used only as an assignment target). This
+        // holds the same way whether the const is declared inside a
+        // function/procedure body or at the top level: `const` values
+        // always resolve globally either way (see `resolver::ConstInfo`'s
+        // own doc comment) -- there's no per-function local, ever.
         let source = r#"procedure show()
-    const n% = 5
-    print n%
+    const GREETING_WORD = 5
+    print GREETING_WORD
 end procedure
 
 show()
@@ -516,29 +520,25 @@ end
 "#;
         let output = compile_source("const_local.bcl", source).expect("should compile");
         assert!(
-            !output.contains("CONST "),
-            "CONST isn't valid on real MBASIC/BASCOM:\n{output}"
+            output.contains("CONSTGREETINGWORD% = 5"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            output.contains("showN0% = 5"),
-            "unexpected const line:\n{output}"
-        );
-        assert!(
-            output.contains("PRINT showN0%"),
-            "PRINT should read back the same local name the const line declared:\n{output}"
+            output.contains("PRINT CONSTGREETINGWORD%"),
+            "PRINT should read back the const's generated name:\n{output}"
         );
     }
 
     #[test]
-    fn top_level_const_resolves_globally_inside_procedure() {
+    fn top_level_const_resolves_globally_inside_a_procedure() {
         // A top-level `const` referenced inside a `procedure` body must
-        // resolve to the real top-level name, not a fresh per-function
-        // local -- otherwise the reference reads an unassigned local
-        // instead of the actual constant.
-        let source = r#"const col% = 20
+        // resolve to the same generated name as everywhere else, not a
+        // fresh per-function local -- otherwise the reference reads an
+        // unassigned local instead of the actual constant.
+        let source = r#"const MAX_COL = 20
 
 procedure show()
-    locate 1, col%
+    locate 1, MAX_COL
 end procedure
 
 show()
@@ -546,11 +546,15 @@ end
 "#;
         let output = compile_source("const_global_proc.bcl", source).expect("should compile");
         assert!(
-            output.contains("LOCATE 1, col%"),
-            "reference inside the procedure should resolve to the real top-level const, not a synthesized showCol-style local:\n{output}"
+            output.contains("CONSTMAXCOL% = 20"),
+            "unexpected const declaration:\n{output}"
         );
         assert!(
-            !output.contains("showCol"),
+            output.contains("LOCATE 1, CONSTMAXCOL%"),
+            "reference inside the procedure should resolve to the const's generated name, not a synthesized showMaxCol-style local:\n{output}"
+        );
+        assert!(
+            !output.contains("showMaxCol"),
             "no per-function local should be synthesized for a top-level const:\n{output}"
         );
     }
@@ -651,10 +655,10 @@ end
         // both callable kinds -- ident() resolution doesn't distinguish
         // between them, but the regression this guards against was only
         // ever demonstrated against `procedure`.
-        let source = r#"const factor% = 3
+        let source = r#"const factor = 3
 
 function scale%(n%)
-    return n% * factor%
+    return n% * factor
 end function
 
 print scale%(5)
@@ -662,7 +666,7 @@ end
 "#;
         let output = compile_source("const_global_func.bcl", source).expect("should compile");
         assert!(
-            output.contains("factor%"),
+            output.contains("CONSTFACTOR%"),
             "reference inside the function should resolve to the real top-level const:\n{output}"
         );
         assert!(
@@ -678,12 +682,12 @@ end
         // interfere with each other -- the const resolves globally
         // without a `global` declaration, and the explicit global keeps
         // working exactly as before.
-        let source = r#"const limit% = 10
+        let source = r#"const limit = 10
 dim total%
 
 procedure accumulate()
     global total%
-    total% = total% + limit%
+    total% = total% + limit
 end procedure
 
 accumulate()
@@ -692,11 +696,11 @@ end
 "#;
         let output = compile_source("const_and_global.bcl", source).expect("should compile");
         assert!(
-            output.contains("limit%"),
+            output.contains("CONSTLIMIT%"),
             "the const should still resolve to the real top-level name:\n{output}"
         );
         assert!(
-            output.contains("total% = total% + limit%"),
+            output.contains("total% = total% + CONSTLIMIT%"),
             "the explicit global and the const should resolve together correctly:\n{output}"
         );
     }
@@ -707,26 +711,26 @@ end
         // different procedures in the same program must resolve to the
         // same real name everywhere -- no per-function duplication or
         // divergence.
-        let source = r#"const rate% = 7
+        let source = r#"const rate = 7
 
 procedure showA()
-    print rate%
+    print rate
 end procedure
 
 procedure showB()
-    print rate% * 2
+    print rate * 2
 end procedure
 
-print rate%
+print rate
 showA()
 showB()
 end
 "#;
         let output = compile_source("const_multi_proc.bcl", source).expect("should compile");
-        let occurrences = output.matches("rate%").count();
+        let occurrences = output.matches("CONSTRATE%").count();
         assert!(
             occurrences >= 4,
-            "every reference (top level + both procedures) should use the same real `rate%` name:\n{output}"
+            "every reference (top level + both procedures) should use the same real `CONSTRATE%` name:\n{output}"
         );
         assert!(
             !output.contains("showARate") && !output.contains("showBRate"),
@@ -986,10 +990,10 @@ end
             "program clean\n\
              declare score%, y%(20)\n\
              dim total%\n\
-             const bonus% = 5\n\
+             const bonus = 5\n\
              score% = 10\n\
              y%(1) = 5\n\
-             total% = score% + y%(1) + bonus%\n\
+             total% = score% + y%(1) + bonus\n\
              for i% = 1 to 5\n\
              \x20   print i%\n\
              end for\n\
@@ -1897,6 +1901,124 @@ end
                 "unexpected diagnostics for {source:?}: {err:?}"
             );
         }
+    }
+
+    #[test]
+    fn goto_into_a_procedure_body_from_top_level_is_rejected() {
+        // See GitHub issue #149: a top-level GOTO into a label declared
+        // inside a procedure transpiles to a GOTO landing on code whose
+        // block ends in a bare RETURN, with no matching GOSUB call frame.
+        let source =
+            "procedure demo()\n    inside: print \"inside\"\nend procedure\ngoto inside\nend\n";
+        let err = compile_source("goto_into_proc.bcl", source)
+            .expect_err("a goto into a procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto inside`") && d.message.contains("top-level")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_a_different_procedures_body_is_rejected() {
+        let source = "procedure a()\n    gosub bTarget\nend procedure\nprocedure b()\n    bTarget: print \"in b\"\nend procedure\na()\nb()\nend\n";
+        let err = compile_source("gosub_cross_procedure.bcl", source)
+            .expect_err("a gosub reaching into a different procedure's label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub btarget`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn gosub_into_the_same_procedures_own_body_is_also_rejected() {
+        // A raw GOSUB into a function/procedure body is rejected even when
+        // it targets a label inside that very same function/procedure --
+        // that body is meant to be entered only through the compiler's own
+        // generated call sequence, not a second, uncontrolled way in.
+        let source = "procedure demo()\n    gosub inner\n    return\n    inner:\n    print \"inner\"\n    return\nend procedure\ndemo()\nend\n";
+        let err = compile_source("gosub_same_procedure.bcl", source)
+            .expect_err("a gosub into the same procedure's own label should be rejected");
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`gosub inner`")
+                    && d.message.contains("top-level label")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_out_of_a_procedure_to_top_level_is_rejected() {
+        let source =
+            "procedure demo()\n    goto outside\nend procedure\ndemo()\noutside: print \"outside\"\nend\n";
+        let err = compile_source("goto_out_of_proc.bcl", source).expect_err(
+            "a goto from inside a procedure out to a top-level label should be rejected",
+        );
+        assert!(
+            err.iter()
+                .any(|d| d.message.contains("`goto outside`") && d.message.contains("`demo`")),
+            "unexpected diagnostics: {err:?}"
+        );
+    }
+
+    #[test]
+    fn goto_gosub_to_a_label_in_the_correct_scope_is_accepted() {
+        let source = r#"
+procedure demo()
+    goto inside
+    print "skipped"
+    inside: print "inside"
+end procedure
+demo()
+top: print "top"
+goto again
+again: print "again"
+end
+"#;
+        compile_source("goto_same_scope.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn gosub_to_a_top_level_label_is_accepted_from_top_level_and_from_inside_a_procedure() {
+        // A raw GOSUB to a top-level label is the one case the cross-scope
+        // check still allows regardless of where the GOSUB itself is
+        // written -- the classic BASIC "flat GOSUB subroutine" pattern,
+        // callable from anywhere, top-level code and procedure bodies
+        // alike, since the target was never inside a function/procedure
+        // body to begin with.
+        let source = r#"
+gosub topSub
+procedure demo()
+    gosub topSub
+end procedure
+demo()
+goto skip
+topSub:
+    print "in top-level subroutine"
+    return
+skip:
+end
+"#;
+        compile_source("gosub_top_level_target.bcl", source).expect("should compile");
+    }
+
+    #[test]
+    fn on_error_goto_targeting_a_procedure_from_a_different_scope_is_still_allowed() {
+        // `on error goto` is exempt from the cross-scope check: its target
+        // may legitimately be a procedure declared anywhere in the
+        // program (see `error_handler_targets`), unlike a plain goto/gosub.
+        let source = r#"
+on error goto errHandler
+x% = 1 / 0
+end
+
+procedure errHandler()
+    resume next
+end procedure
+"#;
+        compile_source("on_error_goto_cross_scope_ok.bcl", source).expect("should compile");
     }
 
     #[test]
@@ -3525,8 +3647,8 @@ function sumArr%(arr%(?))
   return total%
 end function
 
-const n% = 6
-dim data%(n%)
+const n = 6
+dim data%(n)
 dummy% = sumArr%(data%)
 end
 "#;
@@ -4630,9 +4752,9 @@ end
 
     #[test]
     fn c_target_supports_string_variables_const_and_assignment() {
-        let source = r#"const appName$ = "Grade Checker"
+        let source = r#"const appName = "Grade Checker"
 playerName$ = "Alice"
-print appName$
+print appName
 print "Player: "; playerName$
 end
 "#;
@@ -4790,11 +4912,11 @@ end
         // codegens exactly like an ordinary assignment, same as the BASIC
         // backend's own treatment of it (BASCAL's resolver, not codegen,
         // is what enforces a const is never reassigned).
-        let source = r#"const maxScore% = 100
-const rate! = 0.15
+        let source = r#"const maxScore = 100
+const rate = 0.15
 score% = 85
-print "Score: "; score%; " / "; maxScore%
-print "Bonus: "; score% * rate!
+print "Score: "; score%; " / "; maxScore
+print "Bonus: "; score% * rate
 end
 "#;
         let output = compile_source_via_c_target(source);
@@ -5821,7 +5943,13 @@ end
 
     #[test]
     fn c_target_rejects_gosub_inside_a_procedure() {
-        let source = "procedure p()\n    gosub top\nend procedure\np()\ntop:\nend\n";
+        // The label has to be inside the same procedure as the GOSUB (not
+        // top-level, like this test used to have it) -- otherwise
+        // resolver::reject_cross_scope_branch_targets rejects it first,
+        // for a different reason (a GOSUB can never reach a label in a
+        // different scope at all, on any target), before this C-target-
+        // specific "no GOSUB inside a procedure, full stop" rule ever runs.
+        let source = "procedure p()\n    gosub top\n    top:\nend procedure\np()\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);
         assert!(
             diagnostics
@@ -5978,7 +6106,7 @@ end
         // `dim country$(numCapitals%)` -- a real C array needs a literal
         // size, so the const's own integer value must be recovered at
         // compile time, not treated as a runtime-only variable read.
-        let source = "const n% = 5\ndim arr%(n%)\narr%(0) = 1\nprint arr%(0)\nend\n";
+        let source = "const n = 5\ndim arr%(n)\narr%(0) = 1\nprint arr%(0)\nend\n";
         let output = compile_source_via_c_target(source);
         assert!(
             output.contains("static int bv_i_arr[6] = {0};"),
@@ -7101,7 +7229,7 @@ end
         let basic = compile_source("no_source_binding.bcl", source)
             .expect("try/catch without source$ should compile");
         assert!(!basic.contains("BCC_RESOLVE_SOURCE_FILE"), "{basic}");
-        assert!(!basic.contains("BCC_SOURCE_FILE$"), "{basic}");
+        assert!(!basic.contains("BCCSOURCEFILE$"), "{basic}");
     }
 
     #[test]
@@ -7121,11 +7249,11 @@ end
         let basic = compile_source("issue_74.bcl", source)
             .expect("catch's optional source$ binding should compile");
         assert!(basic.contains("GOSUB"), "{basic}");
-        assert!(basic.contains("s$ = BCC_SOURCE_FILE$"), "{basic}");
+        assert!(basic.contains("s$ = BCCSOURCEFILE$"), "{basic}");
         // A single-file program collapses to one unconditional assignment,
         // no `IF ERL <= ...` boundary chain needed.
         assert!(
-            basic.contains("BCC_SOURCE_FILE$ = \"issue_74.bcl\""),
+            basic.contains("BCCSOURCEFILE$ = \"issue_74.bcl\""),
             "{basic}"
         );
         assert!(!basic.contains("IF ERL <="), "{basic}");
@@ -7223,7 +7351,7 @@ end
         assert!(basic.contains("IF (ERR = 53) THEN GOTO"), "{basic}");
         assert!(basic.contains("PRINT \"cleanup\""), "{basic}");
         assert!(
-            basic.contains("IF BCC_TRY_0001_PENDING% <> 0 THEN ERROR BCC_TRY_0001_PENDING%"),
+            basic.contains("IF BCCTRY0001PENDING% <> 0 THEN ERROR BCCTRY0001PENDING%"),
             "{basic}"
         );
     }
@@ -7292,11 +7420,11 @@ end
         let basic = compile_source("try_finally_only.bcl", source)
             .expect("try/finally without catch should compile");
         assert!(
-            basic.contains("BCC_TRY_") && basic.contains("_PENDING% = ERR"),
+            basic.contains("BCCTRY") && basic.contains("PENDING% = ERR"),
             "{basic}"
         );
         assert!(
-            basic.contains("THEN ERROR BCC_TRY_") && basic.contains("_PENDING%"),
+            basic.contains("THEN ERROR BCCTRY") && basic.contains("PENDING%"),
             "{basic}"
         );
 
@@ -7337,17 +7465,20 @@ end try
 end
 "#;
         let basic = compile_source("catch_err_erl.bcl", source).expect("should compile");
-        // `err% = ERR`/`erl% = ERL` (the catch block's own real read of
-        // the pseudo-variables) is correct and expected -- the bug was
-        // specifically in copying err%/erl% *into report()'s own call-
-        // argument locals*, which must read `= err%`/`= erl%`, not the
-        // literal (wrong) `= ERR%`/`= ERL%`.
-        assert!(basic.contains("err% = ERR"), "{basic}");
-        assert!(basic.contains("erl% = ERL"), "{basic}");
+        // `BCCERR% = ERR`/`BCCERL% = ERL` (the catch block's own real read
+        // of the pseudo-variables, into its top-level `err%`/`erl%`
+        // bindings' generated safe name -- see `ident()`'s real-BASCOM-
+        // reserved-word rename) is correct and expected -- the bug this
+        // test guards against was specifically in copying err%/erl% *into
+        // report()'s own call-argument locals*, which must read
+        // `= BCCERR%`/`= BCCERL%`, not the literal (wrong) `= ERR%`/
+        // `= ERL%`.
+        assert!(basic.contains("BCCERR% = ERR"), "{basic}");
+        assert!(basic.contains("BCCERL% = ERL"), "{basic}");
         assert!(!basic.contains("= ERR%"), "{basic}");
         assert!(!basic.contains("= ERL%"), "{basic}");
-        assert!(basic.contains("= err%"), "{basic}");
-        assert!(basic.contains("= erl%"), "{basic}");
+        assert!(basic.contains("= BCCERR%"), "{basic}");
+        assert!(basic.contains("= BCCERL%"), "{basic}");
     }
 
     #[test]
@@ -7777,7 +7908,7 @@ end
         let basic =
             compile_file(&path, &CompileOptions::new()).expect("nested try/catch should compile");
         assert!(basic.contains("ON ERROR GOTO 60"), "{basic}");
-        assert!(basic.contains("BCC_TRY_0002_PENDING%"), "{basic}");
+        assert!(basic.contains("BCCTRY0002PENDING%"), "{basic}");
     }
 
     /// Helper for the C-backend tests above: writes `source` (with a
@@ -7814,5 +7945,68 @@ end
             ..CompileOptions::new()
         };
         compile_file(&path, &options).expect_err("should not compile")
+    }
+
+    /// GitHub issue #152: `Target::Fbc` generates identical BASIC to
+    /// `Target::Basic` (`codegen_basic` doesn't distinguish them), except
+    /// that it rejects `try`/`catch` -- see `driver.rs`'s
+    /// `reject_fbc_incompatible_constructs` doc comment and issue #153 for
+    /// why (real `fbc` rejects the `RESUME <lineno>` its generated BASIC
+    /// relies on, even though that's valid, real-BASCOM-verified BASIC).
+    #[test]
+    fn fbc_target_rejects_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\ntry\n    print \"hi\"\ncatch e%, l%\nend try\nend\n",
+        )
+        .unwrap();
+        let options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("--target fbc") && d.message.contains("#153")),
+            "try/catch should be rejected for --target fbc, referencing issue #153: {diagnostics:?}"
+        );
+    }
+
+    /// Same source that `fbc_target_rejects_try_catch` rejects under
+    /// `Target::Fbc` still compiles under `Target::Basic` -- `try`/`catch`
+    /// remains fully supported there (verified against real BASCOM).
+    #[test]
+    fn basic_target_still_accepts_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("try_catch.bcl");
+        std::fs::write(
+            &path,
+            "program p\ntry\n    print \"hi\"\ncatch e%, l%\nend try\nend\n",
+        )
+        .unwrap();
+        let basic = compile_file(&path, &CompileOptions::new())
+            .expect("try/catch should compile under --target basic");
+        assert!(basic.contains("RESUME"), "{basic}");
+    }
+
+    /// `Target::Fbc` and `Target::Basic` produce identical output for a
+    /// program that doesn't use `try`/`catch` -- `codegen_basic` itself
+    /// doesn't distinguish the two targets at all; only `driver.rs`'s
+    /// pre-codegen check differs between them.
+    #[test]
+    fn fbc_target_matches_basic_target_output_without_try_catch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plain.bcl");
+        std::fs::write(&path, "program p\nprint \"hello\"\nend\n").unwrap();
+        let basic = compile_file(&path, &CompileOptions::new()).expect("should compile");
+        let fbc_options = CompileOptions {
+            target: Target::Fbc,
+            ..CompileOptions::new()
+        };
+        let fbc = compile_file(&path, &fbc_options).expect("should compile");
+        assert_eq!(basic, fbc);
     }
 }

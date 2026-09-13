@@ -20,8 +20,20 @@ pub struct ResolvedProgram {
     /// localize one (this is the fact the "FIELD buffer re-namespaced per
     /// procedure" bug got wrong).
     pub record_buffer_names: HashSet<String>,
-    /// Lowercase BASIC names of every `const` declaration anywhere.
-    pub const_names: HashSet<String>,
+    /// Every `const` declaration anywhere, keyed by lowercase base name
+    /// (never including its type suffix -- `const` declarations may not
+    /// carry an explicit one at all, see `Parser::parse_const`, and a
+    /// reference is always written bare too, so name alone is a const's
+    /// whole identity). `reject_duplicate_consts` (part of `validate`)
+    /// guarantees this key is unique program-wide before `resolve` ever
+    /// builds this map, so whichever declaration is found first/last here
+    /// doesn't matter. `--target basic`/`fbc` uses this to inline every
+    /// reference to its literal value directly (see `codegen_basic.rs`'s
+    /// `render_const_literal`/`ident`) instead of emitting a runtime
+    /// variable -- the type is kept on hand for whichever backend still
+    /// needs to declare a real, correctly-typed symbol (`--target c`/
+    /// `jvm`).
+    pub const_info: HashMap<String, ConstInfo>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
     /// Lowercase names of every procedure named as an `on error goto`
@@ -34,6 +46,16 @@ pub struct ResolvedProgram {
     pub uses_catch_source_var: bool,
 }
 
+/// A single `const`'s declared type and value -- see
+/// `ResolvedProgram::const_info`'s own field comment for how it's keyed
+/// and why both target-specific rendering strategies (fold to a literal,
+/// or declare a real typed symbol) need the type kept alongside the value
+/// rather than just a bare `HashSet<String>` of names.
+pub struct ConstInfo {
+    pub suffix: TypeSuffix,
+    pub value: Expr,
+}
+
 /// Validate `program`, then compute the whole-program facts codegen needs.
 /// Returns the owned program wrapped in a [`ResolvedProgram`].
 pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
@@ -44,10 +66,21 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
         .map(|ident| ident.name.to_ascii_lowercase())
         .collect();
     let record_buffer_names = crate::codegen_basic::collect_record_buffer_names(&program);
-    let const_names = {
-        let mut consts = HashMap::new();
-        crate::codegen_basic::collect_consts(&program.statements, &mut consts);
-        consts.keys().map(|k| k.to_ascii_lowercase()).collect()
+    let const_info = {
+        let mut decls = Vec::new();
+        collect_const_decls(&program.statements, &mut decls);
+        for f in &program.functions {
+            collect_const_decls(&f.body, &mut decls);
+        }
+        decls
+            .into_iter()
+            .map(|(_pos, name, value)| {
+                let suffix = name
+                    .suffix
+                    .expect("Parser::parse_const always infers a const's suffix");
+                (name.name.to_ascii_lowercase(), ConstInfo { suffix, value })
+            })
+            .collect()
     };
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
@@ -55,11 +88,86 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     Ok(ResolvedProgram {
         program,
         record_buffer_names,
-        const_names,
+        const_info,
         top_level_array_ranks,
         error_handler_procedures,
         uses_catch_source_var,
     })
+}
+
+/// Every `const NAME = value` declaration reachable in `statements` --
+/// top-level control-flow bodies (`if`/`for`/`while`/`do`/`select case`/
+/// `try`/`catch`/`finally`) included, since a `const` is legal (if
+/// unusual) inside any of them and still resolves globally either way
+/// (see `ConstInfo`'s own doc comment) -- paired with its source position,
+/// for `reject_duplicate_consts`'s own diagnostics. Shared by that
+/// function and `resolve`'s own `const_info` construction so the two
+/// can never see a different set of declarations from each other.
+fn collect_const_decls(statements: &[Stmt], out: &mut Vec<(SourcePos, BasicIdent, Expr)>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::Const { name, value } => {
+                out.push((statement.pos.clone(), name.clone(), value.clone()));
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_const_decls(then_body, out);
+                collect_const_decls(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_const_decls(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_const_decls(&case.body, out);
+                }
+                collect_const_decls(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_const_decls(try_body, out);
+                if let Some(catch) = catch {
+                    collect_const_decls(&catch.body, out);
+                }
+                collect_const_decls(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// A const name must be unique program-wide regardless of type suffix --
+/// there's no such thing as two different consts sharing a name but
+/// differing only by suffix, since a const reference is always written
+/// bare (see `Parser::parse_const`'s suffix rejection) and always resolves
+/// globally (see `ConstInfo`'s own doc comment).
+fn reject_duplicate_consts(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    let mut decls = Vec::new();
+    collect_const_decls(&program.statements, &mut decls);
+    for f in &program.functions {
+        collect_const_decls(&f.body, &mut decls);
+    }
+    let mut seen = HashSet::new();
+    for (pos, name, _) in &decls {
+        if !seen.insert(name.name.to_ascii_lowercase()) {
+            diagnostics.push(Diagnostic::error(
+                pos.clone(),
+                format!(
+                    "duplicate const `{}` -- a const name must be unique regardless of type \
+                     suffix",
+                    name.name
+                ),
+            ));
+        }
+    }
 }
 
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
@@ -73,6 +181,8 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
     reject_option_base(program, &mut diagnostics);
+    reject_cross_scope_branch_targets(program, &mut diagnostics);
+    reject_duplicate_consts(program, &mut diagnostics);
 
     if diagnostics.is_empty() {
         Ok(())
@@ -81,23 +191,15 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
-/// Reports advisory naming/type-suffix findings for constants. Constants are
-/// type-inferred from their value; suffixes remain accepted for migration but
-/// are discouraged, and names conventionally use upper snake case.
+/// Reports an advisory naming finding for constants that don't use the
+/// conventional upper-snake-case style. A const's type suffix is no
+/// longer a source-level concern here at all: `Parser::parse_const`
+/// rejects an explicit one outright (a const's type is always inferred
+/// from its value), so there's nothing left to warn about there.
 pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
     let mut findings = Vec::new();
     for statement in &program.statements {
         if let Statement::Const { name, .. } = &statement.kind {
-            // Parser-inferred suffixes are also stored on the IR node so
-            // backends retain the constant's type. Do not report those as
-            // source suffixes when the declaration already follows the
-            // canonical uppercase-snake convention.
-            if name.suffix.is_some() && !is_upper_snake_case(&name.name) {
-                findings.push(Diagnostic::warning(
-                    SourcePos::new("<validation>", 1, 1),
-                    format!("constant `{name}` has a type suffix; constant types are inferred from their values"),
-                ));
-            }
             if !is_upper_snake_case(&name.name) {
                 findings.push(Diagnostic::warning(
                     SourcePos::new("<validation>", 1, 1),
@@ -331,6 +433,227 @@ fn reject_option_base(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     walk(&program.statements, diagnostics);
     for function in &program.functions {
         walk(&function.body, diagnostics);
+    }
+}
+
+/// Two related rules, both from GitHub issue #149, on where a `goto`/
+/// `gosub`/`on ... goto`/`on ... gosub`/`resume <label>` target may live
+/// (`on error goto` is deliberately exempt from both -- see the exclusion
+/// at its match arm below):
+///
+/// - `goto`/`on ... goto`/`resume <label>` must target a label declared in
+///   the *same* scope as the statement itself -- the top-level program
+///   body, or the one function/procedure body it's written inside -- in
+///   both directions: a top-level `goto` can't reach into a
+///   function/procedure, and a `goto` inside one can't reach out to
+///   top-level or into a *different* function/procedure. Transpiling a
+///   violation produces a real, silently broken program: a plain `GOTO`
+///   landing inside a function/procedure body lands on code whose block
+///   ends in a bare `RETURN` with no matching `GOSUB` call frame.
+/// - `gosub`/`on ... gosub` must target a label declared in the top-level
+///   program body -- *never* one inside a function/procedure body, even
+///   the very one the `gosub` itself is written inside. A function/
+///   procedure body is meant to be entered exactly one way: the compiler's
+///   own generated call sequence (assign params, `GOSUB` its one true
+///   entry label, assign the result). A raw user `GOSUB` reaching any
+///   *other* label inside that body enters it a second, uncontrolled way,
+///   with none of the parameter/local setup the real call path performs.
+fn reject_cross_scope_branch_targets(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+    fn collect_labels(body: &[Stmt], out: &mut HashSet<String>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Label(name) => {
+                    out.insert(name.to_ascii_lowercase());
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_labels(then_body, out);
+                    collect_labels(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_labels(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_labels(&case.body, out);
+                    }
+                    collect_labels(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_labels(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_labels(&handler.body, out);
+                    }
+                    collect_labels(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // `None` when the target isn't a plain label reference at all -- a raw
+    // line number is already rejected elsewhere by each of these
+    // statements' own parser (see `parse_label_target`/
+    // `parse_on_error_goto_target`), except `on error goto 0`'s `0`
+    // sentinel, which disables the trap rather than naming a label.
+    fn target_name(expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Ident(ident) => Some(ident.name.to_ascii_lowercase()),
+            _ => None,
+        }
+    }
+
+    fn collect_targets(body: &[Stmt], out: &mut Vec<(SourcePos, &'static str, String)>) {
+        for stmt in body {
+            match &stmt.kind {
+                Statement::Goto(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "goto", name));
+                    }
+                }
+                Statement::Gosub(expr) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "gosub", name));
+                    }
+                }
+                // `on error goto` is deliberately excluded: unlike a plain
+                // `goto`/`gosub`, its target may legitimately be a
+                // *procedure* name declared anywhere in the program (see
+                // `error_handler_targets`/`reject_unsafe_error_handler_procedures`,
+                // which already validate that case on its own terms), and
+                // real BASIC's `ON ERROR GOTO` is itself a global trap, not
+                // scoped to wherever it was installed -- an error anywhere
+                // in the program can fire a handler installed elsewhere.
+                Statement::OnBranch {
+                    targets, is_gosub, ..
+                } => {
+                    let keyword = if *is_gosub {
+                        "on ... gosub"
+                    } else {
+                        "on ... goto"
+                    };
+                    for t in targets {
+                        if let Some(name) = target_name(t) {
+                            out.push((stmt.pos.clone(), keyword, name));
+                        }
+                    }
+                }
+                Statement::Resume(ResumeTarget::Line(expr)) => {
+                    if let Some(name) = target_name(expr) {
+                        out.push((stmt.pos.clone(), "resume", name));
+                    }
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_targets(then_body, out);
+                    collect_targets(else_body, out);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect_targets(body, out),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect_targets(&case.body, out);
+                    }
+                    collect_targets(else_body, out);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                } => {
+                    collect_targets(try_body, out);
+                    if let Some(handler) = catch {
+                        collect_targets(&handler.body, out);
+                    }
+                    collect_targets(finally_body, out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn is_gosub_family(keyword: &str) -> bool {
+        matches!(keyword, "gosub" | "on ... gosub")
+    }
+
+    // `gosub`/`on ... gosub` may only ever reach a top-level label,
+    // regardless of where the statement itself lives -- computed once,
+    // rather than per scope, since the rule doesn't depend on the caller's
+    // own scope at all.
+    let mut top_labels = HashSet::new();
+    collect_labels(&program.statements, &mut top_labels);
+
+    fn check(
+        body: &[Stmt],
+        scope: &str,
+        own_labels: &HashSet<String>,
+        top_labels: &HashSet<String>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let mut targets = Vec::new();
+        collect_targets(body, &mut targets);
+        for (pos, keyword, name) in targets {
+            if is_gosub_family(keyword) {
+                if !top_labels.contains(&name) {
+                    diagnostics.push(Diagnostic::error(
+                        pos,
+                        format!(
+                            "`{keyword} {name}` doesn't name a top-level label -- a `gosub`/\
+                             `on ... gosub` target must be a label declared in the top-level \
+                             program body; it can never reach a label declared inside a \
+                             function/procedure body (even the one the `{keyword}` itself is \
+                             written inside), since that body is meant to be entered only \
+                             through the compiler's own generated call sequence"
+                        ),
+                    ));
+                }
+            } else if !own_labels.contains(&name) {
+                diagnostics.push(Diagnostic::error(
+                    pos,
+                    format!(
+                        "`{keyword} {name}` doesn't name a label in {scope} -- a `goto`/\
+                         `on ... goto`/`resume` target must be a label declared in the same \
+                         procedure/function (or, from top-level code, in the top-level program \
+                         body); it can never reach a label declared inside a different \
+                         procedure or function"
+                    ),
+                ));
+            }
+        }
+    }
+
+    check(
+        &program.statements,
+        "the top-level program body",
+        &top_labels,
+        &top_labels,
+        diagnostics,
+    );
+    for function in &program.functions {
+        let mut own_labels = HashSet::new();
+        collect_labels(&function.body, &mut own_labels);
+        check(
+            &function.body,
+            &format!("`{}`", function.name),
+            &own_labels,
+            &top_labels,
+            diagnostics,
+        );
     }
 }
 
