@@ -6031,6 +6031,44 @@ end
     }
 
     #[test]
+    fn c_target_restore_resolves_a_label_whose_data_lives_inside_a_function() {
+        // A label declared inside a function/procedure body is invisible to
+        // a DATA/label collector that only walks top-level statements --
+        // `FunctionDef.body` is a separate `Vec<Stmt>`, not spliced into
+        // `Program.statements`. This must work even when the RESTORE
+        // targeting that label is inside the very same function.
+        let source = "function readItem%()\n    goto after\n    item:\n    data \"widget\"\n    after:\n    restore item\n    dim x$\n    read x$\n    print x$\n    return 0\nend function\nreadItem%()\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_DATA_COUNT 1")
+                && output.contains(
+                    "static const char* bcc_data[BCC_DATA_COUNT] = { \"widget\" };"
+                ),
+            "DATA inside a function body should still be collected into the flat array:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_data_ptr = 0;"),
+            "RESTORE to a label declared inside a function should resolve to that label's offset:\n{output}"
+        );
+    }
+
+    #[test]
+    fn c_target_restore_resolves_a_top_level_label_whose_data_is_inside_a_function() {
+        // The reverse direction: DATA (and its label) live inside a
+        // function, but the RESTORE targeting it is at top level.
+        let source = "function stashData%()\n    stashed:\n    data \"x\", \"y\", \"z\"\n    return 0\nend function\ndim v$\nrestore stashed\nread v$\nprint v$\nend\n";
+        let output = compile_source_via_c_target(source);
+        assert!(
+            output.contains("#define BCC_DATA_COUNT 3"),
+            "DATA inside a function body should still be collected into the flat array:\n{output}"
+        );
+        assert!(
+            output.contains("bcc_data_ptr = 0;"),
+            "top-level RESTORE to a label declared inside a function should resolve to that label's offset:\n{output}"
+        );
+    }
+
+    #[test]
     fn c_target_rejects_read_when_the_program_has_no_data() {
         let source = "dim x%\nread x%\nend\n";
         let diagnostics = compile_source_via_c_target_err(source);

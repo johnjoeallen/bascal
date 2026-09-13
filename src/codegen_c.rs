@@ -2041,12 +2041,28 @@ fn render_data_item(expr: &Expr) -> Result<String, String> {
 /// `RESTORE <label>` resolves directly to this count at compile time (see
 /// `Statement::Restore`'s own arm), no runtime lookup needed, since a
 /// label always denotes a fixed position in program order.
+// Walks the *whole* program -- top-level statements, then every function/
+// procedure body, in `program.functions` order -- into one flat DATA pool
+// with one shared label->offset map. This mirrors classic BASIC's own
+// semantics (and `codegen_basic.rs`'s emission order, which flattens
+// top-level statements followed by each function body into a single
+// sequential line-numbered listing): DATA/READ/RESTORE all share one
+// program-wide cursor and label space, regardless of which function a
+// given DATA or RESTORE physically lives in. Without this, a RESTORE
+// targeting a label whose DATA sits inside a function body -- even the
+// *same* function -- would fail with "no such label", since a label
+// declared inside `program.functions` is invisible to a walk over
+// `program.statements` alone (`FunctionDef.body` is a separate `Vec<Stmt>`,
+// not spliced into `Program.statements`).
 fn collect_data_items_and_labels(
-    statements: &[Stmt],
+    program: &Program,
 ) -> Result<(Vec<String>, HashMap<String, usize>), String> {
     let mut items = Vec::new();
     let mut labels = HashMap::new();
-    collect_data_items_and_labels_into(statements, &mut items, &mut labels)?;
+    collect_data_items_and_labels_into(&program.statements, &mut items, &mut labels)?;
+    for function in &program.functions {
+        collect_data_items_and_labels_into(&function.body, &mut items, &mut labels)?;
+    }
     Ok((items, labels))
 }
 
@@ -2814,7 +2830,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
     // `RESUME`/`ERROR` are rejected outright inside a function/procedure
     // body -- see `Statement::OnErrorGoto`'s own arm in `emit_statement`).
     let on_error_handler_ids = collect_on_error_handler_ids(&program.statements);
-    let (data_items, data_labels) = collect_data_items_and_labels(&program.statements)
+    let (data_items, data_labels) = collect_data_items_and_labels(program)
         .map_err(|message| vec![unsupported(&message)])?;
     let raise_site_count = count_raise_sites(&program.statements);
 
