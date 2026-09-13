@@ -503,6 +503,40 @@ source from scratch.
   several different room-entry counts to vary which point in the
   random-number sequence each run consumes.
 
+- **`stage12-refactored-bascal/`** -- the command-parsing cascade (keyword
+  matching, then dispatch) becomes two functions of its own, the last piece
+  of this port's GOTO-reduction work. Started as an exact copy of stage 11.
+
+  `dispatchVerb%(z1%)` is the old 40-case `SELECT CASE` moved verbatim into
+  its own function. `parseAndDispatchCommand%()` is everything from stage
+  6's own `L400` onward: read a line, split it, match keywords, call
+  `dispatchVerb%()`. Both return 0/1, the same convention every `verbXxx%()`
+  function already uses. This eliminates every `GOTO` this stretch needed
+  purely to escape two loop levels at once -- `L300`, `L400`/`L410`, and
+  the scan loops' own `GOTO`s to them -- the same way extracting the verb
+  handlers did for `GET`/`DROP`/`ENTER`/`LEAVE` in stage 8: a `return`
+  unwinds a function regardless of loop nesting. `L1950`'s own redundant
+  re-scan (the original verb-word check never kept its own matched index,
+  so a second scan had to re-find it) is gone too -- the new `FOR` just
+  captures its index directly.
+
+  The keyword-table `DATA` couldn't move into these new functions with the
+  code that reads it: `RESTORE` targets must stay top-level, and
+  `--target c` needed this literally, not just as style -- it rejected
+  `RESTORE` inside the new function outright, a genuine backend limitation
+  `--target basic` didn't share.
+
+  `bcc`'s own hand-wired-loop warnings are down to **zero** for the first
+  time in this port's history -- every `GOTO` left in the file is inside a
+  comment. Verified with `bcc --check`; the stage 11 smoke suite
+  (`--target c`) against a stage 11 baseline -- byte-identical, covering
+  every keyword class; and, since this touches the keyword parser itself,
+  a real BASCOM run (headless, under `dosbox-x`) of both stages against a
+  longer scripted session -- byte-identical except for BASCOM's own
+  end-of-program `STOP in line N` diagnostic, which necessarily differs
+  since code moved around (confirmed by diffing everything before that
+  line, which matched exactly).
+
 Each stage is a complete, independently runnable program with its own copy
 of the four data files, so the port's progress can be checked stage by
 stage rather than only at the end.
