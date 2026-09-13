@@ -185,6 +185,15 @@ There is no `printscore_result` variable. A bare `return` inside a procedure tra
 - inside `while` → `GOTO end_label`
 - inside `do` → `GOTO end_label`
 
+### Continue Statements
+
+`continue` is unqualified too, resolved the same way as `exit`, but always to a `GOTO` — never `EXIT FOR`, since that ends the loop rather than skipping to its next iteration:
+
+- inside `for` → `GOTO continue_label`, a label placed right before `NEXT` (BASIC has no native "skip to the increment", the way it has `EXIT FOR`)
+- inside `while` → `GOTO top_label` — the same label the loop's own back-edge already targets, since re-checking the condition *is* a `while` loop's own per-iteration bookkeeping
+- inside `do` with no *post*-condition → `GOTO top_label`, same reasoning as `while`
+- inside `do` with a post-condition (`loop while`/`loop until`) → `GOTO continue_label`, a label placed right after the body, before that post-condition check — targeting `top_label` instead would skip the post-condition check on every `continue`, turning the loop into an infinite one
+
 </div>
 
 [← Shared COMMON](shared-common.md) [Command-Line Reference →](command-line-reference.md)
