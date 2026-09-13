@@ -18,7 +18,7 @@ study](adventure.md) -- that one is a small, from-scratch Delphi port used as
 a language-design exercise for BASCAL's record model. This one is a large,
 real historical BASIC program (1149 lines, four sequential data files,
 hundreds of rooms/items/keywords), used as a case study in **porting existing
-BASIC**, not in designing new BASCAL source from scratch. Each of its fifteen
+BASIC**, not in designing new BASCAL source from scratch. Each of its sixteen
 stages is a complete, independently runnable program with its own copy of the
 four data files, checked in under [`examples/adventure3000`](https://github.com/johnjoeallen/bascal/tree/main/examples/adventure3000)
 -- so the port's progress can be inspected, run, and diffed stage by stage
@@ -26,10 +26,10 @@ rather than only at the end. Every stage after the first has been verified
 with `bcc --check`, a real `fbc` (FreeBASIC) build, and smoke tests
 diffed for byte-identical output against the previous stage.
 
-Fifteen stages take it from that unmodified original to fully structured
+Sixteen stages take it from that unmodified original to fully structured
 BASCAL, each with its own commentary and complete, syntax-highlighted
 source -- start at Stage 1 below and follow each page's Next link through
-to Stage 15.
+to Stage 16.
 
 ## Verification
 
