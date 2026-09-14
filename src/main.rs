@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-use bcc::{check_file, compile_file, default_output_path, CompileOptions, Target};
+use bcc::{check_file, compile_file, default_output_path, format, CompileOptions, Target};
 use clap::Parser;
 
 mod jvm_classfile;
@@ -65,6 +65,14 @@ struct Cli {
     /// Parse this source and every required library without resolving or generating a backend output file
     #[arg(long)]
     check: bool,
+
+    /// Report indentation lines that don't match `bcc`'s own formatting, without changing the file -- exits non-zero if any are found. v1 only fixes indentation (recomputed from the real token stream, so keywords inside a string/comment never confuse it); every other stylistic choice -- keyword casing, spacing, blank lines -- is left exactly as written
+    #[arg(long)]
+    format_check: bool,
+
+    /// Rewrites this file in place with corrected indentation. See --format-check for what "corrected" means
+    #[arg(long)]
+    format: bool,
 
     /// Compile the generated output to a binary in tmp/: for --target basic/bascom, real BASCOM under dosbox-x (needs dosbox-x on PATH plus a local BASCOM fixture -- see CONTRIBUTING.md), producing a DOS .EXE; fbc for --target fbc's .bas, gcc for --target c's .c, krak2 for --target jvm's .j
     #[arg(short = 'b', long)]
@@ -331,7 +339,56 @@ fn resolve_output_path(cli: &Cli, target: Target) -> Result<PathBuf, String> {
     Ok(output.join(file_name))
 }
 
+/// Handles `--format-check`/`--format`, both of which operate on `cli.input`
+/// directly and never touch backend/target machinery at all.
+fn run_format(cli: &Cli) -> Result<(), String> {
+    if cli.format_check && cli.format {
+        return Err(
+            "error: --format-check and --format cannot be combined -- --format-check \
+                     only reports what would change, --format rewrites the file; pick one"
+                .to_string(),
+        );
+    }
+    let source = fs::read_to_string(&cli.input)
+        .map_err(|err| format!("error: failed to read {}: {err}", cli.input.display()))?;
+    let filename = cli.input.display().to_string();
+
+    if cli.format_check {
+        let diffs = format::check(&filename, &source);
+        if diffs.is_empty() {
+            println!("format check passed: {}", cli.input.display());
+            return Ok(());
+        }
+        for diff in &diffs {
+            println!("{}:{}:", cli.input.display(), diff.line);
+            println!("  - {}", diff.before);
+            println!("  + {}", diff.after);
+        }
+        return Err(format!(
+            "format check failed: {} ({} line{} would change -- run `bcc --format {}` to fix)",
+            cli.input.display(),
+            diffs.len(),
+            if diffs.len() == 1 { "" } else { "s" },
+            cli.input.display()
+        ));
+    }
+
+    let formatted = format::reindent(&filename, &source);
+    if formatted == source {
+        println!("already formatted: {}", cli.input.display());
+        return Ok(());
+    }
+    fs::write(&cli.input, &formatted)
+        .map_err(|err| format!("error: failed to write {}: {err}", cli.input.display()))?;
+    println!("formatted: {}", cli.input.display());
+    Ok(())
+}
+
 fn run(cli: Cli) -> Result<(), String> {
+    if cli.format_check || cli.format {
+        return run_format(&cli);
+    }
+
     let target = cli.target.unwrap_or_else(resolve_default_target);
     let krak_stack_size = cli
         .krak_stack_size
@@ -655,8 +712,8 @@ fn invoke_bascom(bas_path: &PathBuf) -> Result<PathBuf, String> {
     for entry in fs::read_dir(&fixture_dir)
         .map_err(|err| format!("error: failed to read {}: {err}", fixture_dir.display()))?
     {
-        let entry = entry
-            .map_err(|err| format!("error: failed to read compiler fixture entry: {err}"))?;
+        let entry =
+            entry.map_err(|err| format!("error: failed to read compiler fixture entry: {err}"))?;
         let dest = work_dir.join(entry.file_name());
         fs::copy(entry.path(), &dest)
             .map_err(|err| format!("error: failed to stage {}: {err}", dest.display()))?;
@@ -715,10 +772,7 @@ fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| format!("error: invalid DOS binary path {}", exe_path.display()))?;
-    write_dos_file(
-        &work_dir.join("RUN.BAT"),
-        &format!("{exe_name}\nEXIT\n"),
-    )?;
+    write_dos_file(&work_dir.join("RUN.BAT"), &format!("{exe_name}\nEXIT\n"))?;
     let mount_arg = format!("MOUNT C: {}", work_dir.display());
     let status = Command::new("dosbox-x")
         .arg("-c")
@@ -1044,6 +1098,8 @@ mod tests {
             sparse_line_numbers: false,
             clean: false,
             check: false,
+            format_check: false,
+            format: false,
             binary: false,
             run: false,
             target: None,

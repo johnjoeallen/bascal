@@ -4,6 +4,7 @@ mod codegen_basic;
 mod codegen_c;
 mod codegen_jvm;
 pub mod diagnostics;
+pub mod format;
 pub mod lexer;
 mod lower;
 pub mod parser;
