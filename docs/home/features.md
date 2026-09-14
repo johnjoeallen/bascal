@@ -163,6 +163,22 @@ $ bcc --format legacy.bcl
 formatted: legacy.bcl
 ```
 
+It also knows a bare `label:` followed by `data` lines is a table, and indents accordingly:
+
+```bascal
+' before
+myTable:
+data 1, 2, 3
+data 4, 5, 6
+print "after"
+
+' after bcc --format
+myTable:
+    data 1, 2, 3
+    data 4, 5, 6
+print "after"
+```
+
 See [A built-in source formatter](formatter.md) for the full before/after walkthrough of every rule.
 
 </div>
