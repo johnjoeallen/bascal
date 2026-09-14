@@ -66,11 +66,11 @@ struct Cli {
     #[arg(long)]
     check: bool,
 
-    /// Report indentation lines that don't match `bcc`'s own formatting, without changing the file -- exits non-zero if any are found. v1 only fixes indentation (recomputed from the real token stream, so keywords inside a string/comment never confuse it); every other stylistic choice -- keyword casing, spacing, blank lines -- is left exactly as written
+    /// Report every line whose indentation, spacing, or casing doesn't match `bcc`'s own canonical style, without changing the file -- exits non-zero if any are found. Casing includes required-library call/variable sites, resolved the same way `-L` resolves them for a real compile. See the manual's "Source Formatting" section for the full rule set
     #[arg(long)]
     format_check: bool,
 
-    /// Rewrites this file in place with corrected indentation. See --format-check for what "corrected" means
+    /// Rewrites this file in place with corrected formatting. See --format-check for what "corrected" means
     #[arg(long)]
     format: bool,
 
@@ -354,7 +354,7 @@ fn run_format(cli: &Cli) -> Result<(), String> {
     let filename = cli.input.display().to_string();
 
     if cli.format_check {
-        let diffs = format::check(&filename, &source);
+        let diffs = format::check(&filename, &source, &cli.library_dirs);
         if diffs.is_empty() {
             println!("format check passed: {}", cli.input.display());
             return Ok(());
@@ -373,7 +373,7 @@ fn run_format(cli: &Cli) -> Result<(), String> {
         ));
     }
 
-    let formatted = format::reindent(&filename, &source);
+    let formatted = format::reindent(&filename, &source, &cli.library_dirs);
     if formatted == source {
         println!("already formatted: {}", cli.input.display());
         return Ok(());

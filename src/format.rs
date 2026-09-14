@@ -95,6 +95,7 @@ use crate::ast::{BasicIdent, Program, Statement, Stmt, TypeSuffix};
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::parser::Parser;
 use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 
 const INDENT_UNIT: &str = "    ";
 
@@ -246,16 +247,55 @@ fn collect_program_names(program: &Program) -> HashMap<NameKey, String> {
     map
 }
 
-/// Parses `source` (best-effort: an unparseable file just yields an empty
-/// map, leaving declaration-matching casing skipped for it -- this
-/// formatter never refuses to run over a syntax error) and collects its
-/// declared names.
-fn declared_names(filename: &str, source: &str) -> HashMap<NameKey, String> {
+/// Collects declared names for declaration-matching casing, from `source`
+/// alone plus -- when `filename` names a real, readable file -- every
+/// `require`/`import`ed library and `shared` file it transitively pulls
+/// in too, the same resolution `bcc` itself does before compiling (see
+/// `load_merged_program`). Best-effort throughout: an unparseable file,
+/// a `filename` with no file behind it (as in this module's own unit
+/// tests, which pass a nonexistent placeholder path), or a library that
+/// can't be resolved all just fall back to *not* including that source
+/// -- this formatter never refuses to run over a syntax error or a
+/// missing dependency.
+fn declared_names(filename: &str, source: &str, library_dirs: &[PathBuf]) -> HashMap<NameKey, String> {
+    if let Some(program) = load_merged_program(filename, library_dirs) {
+        return collect_program_names(&program);
+    }
     let tokens = Lexer::new(filename, source).lex();
     match Parser::new(filename.to_string(), tokens).parse_program() {
         Ok(program) => collect_program_names(&program),
         Err(_) => HashMap::new(),
     }
+}
+
+/// Parses `filename` from disk and merges in every file it transitively
+/// `require`s/`import`s, reusing `bcc`'s own multi-file resolution
+/// (`driver::load_program_recursive`) so a call/variable site that
+/// refers to a function/procedure/variable declared in a required
+/// library gets matched against *that* declaration's own casing, not
+/// just this file's own. `library_dirs` mirrors the CLI's own `-L`
+/// flags; the file's own parent directory and the bundled `com/`
+/// standard library are always searched too (see
+/// `driver::search_roots`). Returns `None` -- silently, no diagnostic --
+/// when `filename` isn't a real file (this module's own unit tests use
+/// placeholder filenames) or when parsing/resolution fails for any
+/// reason; the caller falls back to a plain, single-file, in-memory
+/// parse in that case.
+fn load_merged_program(filename: &str, library_dirs: &[PathBuf]) -> Option<Program> {
+    let path = Path::new(filename);
+    if !path.is_file() {
+        return None;
+    }
+    let mut options = crate::driver::CompileOptions::new();
+    options.library_dirs = library_dirs.to_vec();
+    if let Some(parent) = path.parent() {
+        let parent = parent.to_path_buf();
+        if !options.library_dirs.contains(&parent) {
+            options.library_dirs.insert(0, parent);
+        }
+    }
+    let mut visited = std::collections::HashSet::new();
+    crate::driver::load_program_recursive(path, true, &options, &mut visited).ok()
 }
 
 /// One nested block currently open, and what closes it. `SelectCaseHeader`
@@ -282,15 +322,18 @@ enum Frame {
     Method,
 }
 
-/// Reindents `source` (BASCAL text, `filename` used only for diagnostic
-/// positions the lexer attaches to tokens) and returns the result. Never
+/// Reindents `source` (BASCAL text, `filename` used both for diagnostic
+/// positions the lexer attaches to tokens and, when it names a real file
+/// on disk, to resolve its `require`/`import`ed libraries for
+/// declaration-matching casing -- see `declared_names`; `library_dirs`
+/// mirrors the CLI's own `-L` flags) and returns the result. Never
 /// fails: an unrecognized token sequence just falls back to leaving that
 /// line's own indent alone, since a formatter that refuses to run on
 /// slightly-unusual-but-valid source is worse than one that quietly
 /// leaves a corner case untouched.
-pub fn reindent(filename: &str, source: &str) -> String {
+pub fn reindent(filename: &str, source: &str, library_dirs: &[PathBuf]) -> String {
     let tokens = Lexer::new(filename, source).lex();
-    let declared = declared_names(filename, source);
+    let declared = declared_names(filename, source, library_dirs);
     let lines: Vec<&str> = source.lines().collect();
 
     let mut by_line: BTreeMap<usize, Vec<&Token>> = BTreeMap::new();
@@ -704,8 +747,9 @@ pub struct Diff {
 
 /// Compares `source` against its own reindented form and returns every
 /// differing line, 1-indexed. Empty means the file is already compliant.
-pub fn check(filename: &str, source: &str) -> Vec<Diff> {
-    let formatted = reindent(filename, source);
+/// See `reindent` for what `library_dirs` is for.
+pub fn check(filename: &str, source: &str, library_dirs: &[PathBuf]) -> Vec<Diff> {
+    let formatted = reindent(filename, source, library_dirs);
     let before_lines: Vec<&str> = source.lines().collect();
     let after_lines: Vec<&str> = formatted.lines().collect();
     let mut diffs = Vec::new();
@@ -728,8 +772,8 @@ mod tests {
     use super::*;
 
     fn assert_idempotent(source: &str) {
-        let once = reindent("test.bcl", source);
-        let twice = reindent("test.bcl", &once);
+        let once = reindent("test.bcl", source, &[]);
+        let twice = reindent("test.bcl", &once, &[]);
         assert_eq!(once, twice, "reindent should be idempotent");
     }
 
@@ -767,7 +811,7 @@ function f%()
     return 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -785,7 +829,7 @@ function f%()
     print \"after\"
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
     }
 
     #[test]
@@ -814,7 +858,7 @@ function f%()
     end select
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -836,7 +880,7 @@ function f%()
     return 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
     }
 
     #[test]
@@ -865,7 +909,7 @@ function f%()
     print \"after\"
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -887,7 +931,7 @@ function f%()
         data 4, 5, 6
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -921,7 +965,7 @@ function f%()
     print \"after\"
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -945,7 +989,7 @@ function f%()
     end for
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
     }
 
     #[test]
@@ -968,7 +1012,7 @@ function f%()
     end for
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -996,7 +1040,7 @@ function f%()
     end try
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1007,7 +1051,7 @@ end function
         // multi_line_block_comment_interior_is_left_alone above).
         let source = "function f%()   \nprint 1  \n/* a comment   \n   more   \n*/\nend function\n";
         let expected = "function f%()\n    print 1\n    /* a comment\n   more\n*/\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1015,7 +1059,7 @@ end function
     fn comma_gets_no_space_before_and_one_space_after() {
         let source = "function f%()\nprint a% ,b% , c%\nend function\n";
         let expected = "function f%()\n    print a%, b%, c%\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1023,7 +1067,7 @@ end function
     fn always_binary_operators_get_padded_both_sides() {
         let source = "function f%()\nx%=1*2\nif x%<>3 and x%<=4 then print x%\nend function\n";
         let expected = "function f%()\n    x% = 1 * 2\n    if x% <> 3 and x% <= 4 then print x%\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1049,7 +1093,7 @@ function f%()
     end for
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1057,7 +1101,7 @@ end function
     fn multiple_spaces_between_tokens_collapse_to_one() {
         let source = "function f%()\nprint    \"a\"   ;    \"b\"\nend function\n";
         let expected = "function f%()\n    print \"a\" ; \"b\"\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1083,7 +1127,7 @@ function f%()
     end while ' done
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1109,14 +1153,14 @@ function f%()
     loop until x% = 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
     #[test]
     fn check_reports_only_the_differing_lines() {
         let source = "function f%()\n  print 1\nend function\n";
-        let diffs = check("test.bcl", source);
+        let diffs = check("test.bcl", source, &[]);
         assert_eq!(
             diffs.len(),
             1,
@@ -1132,7 +1176,7 @@ end function
     #[test]
     fn already_compliant_source_reports_no_diffs() {
         let source = "function f%()\n    print 1\nend function\n";
-        assert!(check("test.bcl", source).is_empty());
+        assert!(check("test.bcl", source, &[]).is_empty());
     }
 
     #[test]
@@ -1163,7 +1207,7 @@ function f%()
     return 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1177,7 +1221,7 @@ end function
         let source = "function f%()\nx% = Len(a$)\ny$ = Mid$(a$, 1, 2)\nend function\n";
         let expected =
             "function f%()\n    x% = len(a$)\n    y$ = mid$(a$, 1, 2)\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1185,7 +1229,7 @@ end function
     fn plain_identifiers_are_never_mistaken_for_keywords() {
         let source = "function f%()\nBase% = 1\nprint Base%\nend function\n";
         let expected = "function f%()\n    Base% = 1\n    print Base%\nend function\n";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1205,7 +1249,7 @@ function f%()
     print myCount%
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1227,7 +1271,7 @@ end function
 program p
 print computeTotal%(3)
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1268,7 +1312,7 @@ function f%()
     return 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
     }
 
@@ -1278,7 +1322,7 @@ end function
         // every other rule (here, indentation and keyword casing) still
         // applies, just without any declaration-matching casing.
         let source = "function f%(\nPRINT myVar%\n";
-        let out = reindent("test.bcl", source);
+        let out = reindent("test.bcl", source, &[]);
         assert!(out.contains("print myVar%"));
     }
 
@@ -1315,7 +1359,43 @@ function f%()
     return 0
 end function
 ";
-        assert_eq!(reindent("test.bcl", source), expected);
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
         assert_idempotent(source);
+    }
+
+    #[test]
+    fn declaration_matching_casing_reaches_into_a_required_librarys_own_file() {
+        // Declaration-matching casing must not stop at this file's own
+        // border: a call site naming a function declared in a `require`d
+        // library should be recased to match *that* declaration, not
+        // left alone just because the declaration itself lives
+        // elsewhere. This only works when `filename` names a real file
+        // on disk (see `load_merged_program`) -- unlike every other test
+        // in this module, which passes a placeholder path and so never
+        // exercises this at all.
+        let dir = std::env::temp_dir().join(format!(
+            "bcc_format_test_{}_{}",
+            std::process::id(),
+            line!()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("greeter.bcl"),
+            "library greeter\n\nfunction greet$(name$)\n    return \"Hello, \" + name$\nend function\n",
+        )
+        .unwrap();
+        let root_path = dir.join("root.bcl");
+        let source = "program p\nrequire greeter\n\nprint GREET$(\"world\")\n";
+        std::fs::write(&root_path, source).unwrap();
+
+        let formatted = reindent(root_path.to_str().unwrap(), source, &[]);
+
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert!(
+            formatted.contains("greet$(\"world\")"),
+            "expected the call site recased to match greeter.bcl's own \
+             declaration, got:\n{formatted}"
+        );
     }
 }
