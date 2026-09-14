@@ -1663,9 +1663,14 @@ fn walk_statement_exprs(statement: &Stmt, f: &mut dyn FnMut(&Expr, &SourcePos)) 
                 }
             }
         }
-        Statement::Open { file, channel, .. } => {
+        Statement::Open {
+            file, channel, len, ..
+        } => {
             walk_expr(file, pos, f);
             walk_expr(channel, pos, f);
+            if let Some(len) = len {
+                walk_expr(len, pos, f);
+            }
         }
         Statement::FileDecl { path, .. } => walk_expr(path, pos, f),
         Statement::LineInput { channel, target } => {
@@ -2063,6 +2068,473 @@ fn walk_legacy_forms(
     }
 }
 
+// ── Optional lints (`--lint`) ─────────────────────────────────────────────
+//
+// Four independent, warning-only checks, off by default (unlike
+// `check_legacy_forms`/`check_const_conventions` above, which run on every
+// compile) since they're more heuristic and more likely to surface a false
+// positive on existing, working code -- particularly a program ported from
+// real BASIC, where an unexplained literal or a declaration left over from
+// an earlier revision is common and not necessarily worth fixing right
+// now. See `CompileOptions::lint` / `main.rs`'s own `--lint` flag.
+
+/// One `dim`/`const` declaration, with its own position -- the detailed
+/// counterpart to `collect_declarations`'s plain `HashSet<VarKey>` above,
+/// used by both `check_unused_declarations` and `check_shadowing` since
+/// both need to report against a specific declaration, not just test
+/// membership. Deliberately excludes a raw `FIELD` buffer variable (unlike
+/// `collect_declarations`): those exist to be `LSET`/read through
+/// record/file operations that don't always look like an ordinary
+/// reference, so flagging one as unused or shadowing risks a real false
+/// positive `collect_declarations`'s narrower, membership-only use case
+/// doesn't share.
+struct Declaration {
+    ident: BasicIdent,
+    pos: SourcePos,
+}
+
+fn collect_declarations_detailed(statements: &[Stmt], out: &mut Vec<Declaration>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::Dim { name, .. } | Statement::Const { name, .. } => {
+                out.push(Declaration {
+                    ident: name.clone(),
+                    pos: stmt.pos.clone(),
+                });
+            }
+            Statement::For { body, .. } => collect_declarations_detailed(body, out),
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_declarations_detailed(then_body, out);
+                collect_declarations_detailed(else_body, out);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_declarations_detailed(body, out);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_declarations_detailed(&case.body, out);
+                }
+                collect_declarations_detailed(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_declarations_detailed(try_body, out);
+                if let Some(catch) = catch {
+                    collect_declarations_detailed(&catch.body, out);
+                }
+                collect_declarations_detailed(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The declared name an expression *references* (reads or writes), if
+/// any -- `Expr::Ident`/`ArrayRef`/`Call` all name something declared
+/// elsewhere; every other expression kind either has no name of its own
+/// or (a record/method call) is out of scope for this pair of checks the
+/// same way declaration-matching casing's own doc comment explains.
+fn referenced_var_key(expr: &Expr) -> Option<VarKey> {
+    match expr {
+        Expr::Ident(ident) => Some(var_key(ident)),
+        Expr::ArrayRef { name, .. } | Expr::Call { name, .. } => Some(var_key(name)),
+        _ => None,
+    }
+}
+
+/// A `for` loop's own counter (`Statement::For`'s `var` field) is never
+/// itself wrapped in an `Expr` -- `walk_statements_exprs` only walks its
+/// `start`/`end`/`step`/`body`, not `var` -- so `referenced_var_key`
+/// alone would never see it as a use. A `dim`'d name later driven by `for
+/// name% = ...` is genuinely being used (as the loop counter), even
+/// though `--strict-vars` doesn't strictly require that `dim` in the
+/// first place (a `for` counter is one of its own exemptions); this just
+/// keeps `check_unused_declarations` from misreading that as dead.
+fn collect_for_loop_var_uses(statements: &[Stmt], used: &mut HashSet<VarKey>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::For { var, body, .. } => {
+                used.insert(var_key(var));
+                collect_for_loop_var_uses(body, used);
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_for_loop_var_uses(then_body, used);
+                collect_for_loop_var_uses(else_body, used);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_for_loop_var_uses(body, used);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_for_loop_var_uses(&case.body, used);
+                }
+                collect_for_loop_var_uses(else_body, used);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_for_loop_var_uses(try_body, used);
+                if let Some(catch) = catch {
+                    collect_for_loop_var_uses(&catch.body, used);
+                }
+                collect_for_loop_var_uses(finally_body, used);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every `dim`/`const` never referenced again after its own declaration --
+/// at the top level, "referenced" means anywhere in the whole program (a
+/// top-level name is visible from every function); for a function-local
+/// declaration, only within that same function's own body, matching
+/// BASCAL's function-local-by-default scoping (see tutorial 14). A name
+/// only ever *assigned*, never read, still counts as used here -- this
+/// only catches a declaration nothing ever touches again at all, not the
+/// harder "written but never read" case.
+pub fn check_unused_declarations(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    let mut used_anywhere: HashSet<VarKey> = HashSet::new();
+    let mut collect_uses = |expr: &Expr, _pos: &SourcePos| {
+        if let Some(key) = referenced_var_key(expr) {
+            used_anywhere.insert(key);
+        }
+    };
+    walk_statements_exprs(&program.statements, &mut collect_uses);
+    for function in &program.functions {
+        walk_statements_exprs(&function.body, &mut collect_uses);
+    }
+    collect_for_loop_var_uses(&program.statements, &mut used_anywhere);
+    for function in &program.functions {
+        collect_for_loop_var_uses(&function.body, &mut used_anywhere);
+    }
+
+    let mut top_decls = Vec::new();
+    collect_declarations_detailed(&program.statements, &mut top_decls);
+    for decl in &top_decls {
+        if !used_anywhere.contains(&var_key(&decl.ident)) {
+            diagnostics.push(Diagnostic::warning(
+                decl.pos.clone(),
+                format!("`{}` is declared but never used", decl.ident),
+            ));
+        }
+    }
+
+    for function in &program.functions {
+        let mut local_used: HashSet<VarKey> = HashSet::new();
+        let mut collect_local = |expr: &Expr, _pos: &SourcePos| {
+            if let Some(key) = referenced_var_key(expr) {
+                local_used.insert(key);
+            }
+        };
+        walk_statements_exprs(&function.body, &mut collect_local);
+        collect_for_loop_var_uses(&function.body, &mut local_used);
+
+        let mut decls = Vec::new();
+        collect_declarations_detailed(&function.body, &mut decls);
+        for decl in &decls {
+            if !local_used.contains(&var_key(&decl.ident)) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!("`{}` is declared but never used", decl.ident),
+                ));
+            }
+        }
+    }
+
+    diagnostics
+}
+
+/// A local `dim`/`const` that shadows -- collides in name with -- either
+/// this function's own parameter, or a name already meaningful at the
+/// whole-program level (a top-level `dim`/`const`, or a name any function
+/// promotes with `global`): confusing either way, since within the
+/// shadowing function that name now silently means something different
+/// from what a reader skimming the rest of the program would expect. Also
+/// flags a `for` loop reusing a still-open enclosing `for` loop's own
+/// counter -- silently overwriting it mid-iteration, a classic real bug.
+pub fn check_shadowing(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+
+    let mut globals: HashSet<VarKey> = HashSet::new();
+    let mut top_decls = Vec::new();
+    collect_declarations_detailed(&program.statements, &mut top_decls);
+    for decl in &top_decls {
+        globals.insert(var_key(&decl.ident));
+    }
+    for function in &program.functions {
+        let mut global_decls = Vec::new();
+        collect_global_decls(&function.body, &mut global_decls);
+        for (_, ident) in &global_decls {
+            globals.insert(var_key(ident));
+        }
+    }
+
+    for function in &program.functions {
+        let param_keys: HashSet<VarKey> =
+            function.params.iter().map(|p| var_key(&p.name)).collect();
+
+        for param in &function.params {
+            if globals.contains(&var_key(&param.name)) {
+                diagnostics.push(Diagnostic::warning(
+                    function.pos.clone(),
+                    format!(
+                        "parameter `{}` of `{}` shadows a global of the same name",
+                        param.name, function.name
+                    ),
+                ));
+            }
+        }
+
+        let mut locals = Vec::new();
+        collect_declarations_detailed(&function.body, &mut locals);
+        for decl in &locals {
+            let key = var_key(&decl.ident);
+            if param_keys.contains(&key) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!(
+                        "`{}` shadows this function's own parameter of the same name",
+                        decl.ident
+                    ),
+                ));
+            } else if globals.contains(&key) {
+                diagnostics.push(Diagnostic::warning(
+                    decl.pos.clone(),
+                    format!("`{}` shadows a global of the same name", decl.ident),
+                ));
+            }
+        }
+
+        check_nested_for_shadowing(&function.body, &mut Vec::new(), &mut diagnostics);
+    }
+
+    diagnostics
+}
+
+fn check_nested_for_shadowing(
+    statements: &[Stmt],
+    open_for_vars: &mut Vec<BasicIdent>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::For { var, body, .. } => {
+                if open_for_vars.iter().any(|v| same_ident(v, var)) {
+                    diagnostics.push(Diagnostic::warning(
+                        stmt.pos.clone(),
+                        format!(
+                            "`{var}` shadows an already-open `for` loop variable of the same \
+                             name -- the inner loop silently reuses the outer loop's own counter"
+                        ),
+                    ));
+                }
+                open_for_vars.push(var.clone());
+                check_nested_for_shadowing(body, open_for_vars, diagnostics);
+                open_for_vars.pop();
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                check_nested_for_shadowing(then_body, open_for_vars, diagnostics);
+                check_nested_for_shadowing(else_body, open_for_vars, diagnostics);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                check_nested_for_shadowing(body, open_for_vars, diagnostics);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    check_nested_for_shadowing(&case.body, open_for_vars, diagnostics);
+                }
+                check_nested_for_shadowing(else_body, open_for_vars, diagnostics);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                check_nested_for_shadowing(try_body, open_for_vars, diagnostics);
+                if let Some(catch) = catch {
+                    check_nested_for_shadowing(&catch.body, open_for_vars, diagnostics);
+                }
+                check_nested_for_shadowing(finally_body, open_for_vars, diagnostics);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// True for a statement that unconditionally leaves its own block --
+/// `return`, `goto`, `exit`, `throw`, `end`, `stop` -- so anything after
+/// it in the *same* statement list (until a `label:` resets reachability;
+/// see `walk_unreachable`) never runs.
+fn is_terminal_statement(kind: &Statement) -> bool {
+    matches!(
+        kind,
+        Statement::Return { .. }
+            | Statement::Goto(_)
+            | Statement::Exit
+            | Statement::ThrowStmt { .. }
+            | Statement::End
+            | Statement::Stop
+    )
+}
+
+/// Every statement unreachable because a same-block predecessor
+/// unconditionally leaves it (see `is_terminal_statement`), with no
+/// `label:` in between to reset reachability -- a label might be jumped
+/// to from anywhere else in the program, so it always counts as reachable
+/// regardless of what came right before it; this check has no
+/// whole-program control-flow graph to know otherwise, so it only ever
+/// looks at same-block, no-intervening-label fall-through. Reports only
+/// the first unreachable statement in a run, not every one after it --
+/// the rest follow from the same cause.
+pub fn check_unreachable_code(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    walk_unreachable(&program.statements, &mut diagnostics);
+    for function in &program.functions {
+        walk_unreachable(&function.body, &mut diagnostics);
+    }
+    diagnostics
+}
+
+fn walk_unreachable(statements: &[Stmt], diagnostics: &mut Vec<Diagnostic>) {
+    let mut dead = false;
+    let mut reported_this_run = false;
+    for stmt in statements {
+        if matches!(stmt.kind, Statement::Label(_)) {
+            dead = false;
+            reported_this_run = false;
+        } else if dead && !reported_this_run {
+            diagnostics.push(Diagnostic::warning(
+                stmt.pos.clone(),
+                "unreachable code: nothing before this point in the same block can reach it"
+                    .to_string(),
+            ));
+            reported_this_run = true;
+        }
+
+        match &stmt.kind {
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                walk_unreachable(then_body, diagnostics);
+                walk_unreachable(else_body, diagnostics);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => walk_unreachable(body, diagnostics),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    walk_unreachable(&case.body, diagnostics);
+                }
+                walk_unreachable(else_body, diagnostics);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                walk_unreachable(try_body, diagnostics);
+                if let Some(catch) = catch {
+                    walk_unreachable(&catch.body, diagnostics);
+                }
+                walk_unreachable(finally_body, diagnostics);
+            }
+            _ => {}
+        }
+
+        if !matches!(stmt.kind, Statement::Label(_)) && is_terminal_statement(&stmt.kind) {
+            dead = true;
+        }
+    }
+}
+
+fn is_comparison_op(op: BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+    )
+}
+
+/// `Some(text)` when `expr` is a bare integer/hex literal outside the
+/// exempt sentinel set (`0`, `1`, `-1`, spelled as a literal or as `-`
+/// applied to one) -- the literal's own text, for the diagnostic message.
+fn magic_number_text(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Integer(n) if *n != 0 && *n != 1 => Some(n.to_string()),
+        Expr::HexLit(text) => Some(text.clone()),
+        Expr::Unary {
+            op: UnaryOp::Neg,
+            expr,
+        } => match expr.as_ref() {
+            Expr::Integer(n) if *n != 1 => Some(format!("-{n}")),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A comparison (`=`, `<>`, `<`, `<=`, `>`, `>=`) against a bare numeric
+/// literal with no name explaining what it means -- `if blah% = 34 and
+/// zog% = 65 then` is the motivating shape: nothing about `34`/`65` says
+/// what they represent. `0`, `1`, and `-1` are exempted as near-universal
+/// sentinels (empty/none, first/last, true/false) that read fine
+/// un-named; everything else is flagged as a candidate for a `const`.
+pub fn check_magic_numbers(program: &Program) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut check = |expr: &Expr, pos: &SourcePos| {
+        let Expr::Binary { left, op, right } = expr else {
+            return;
+        };
+        if !is_comparison_op(*op) {
+            return;
+        }
+        for side in [left.as_ref(), right.as_ref()] {
+            if let Some(text) = magic_number_text(side) {
+                diagnostics.push(Diagnostic::warning(
+                    pos.clone(),
+                    format!(
+                        "`{text}` is an unexplained numeric literal in a comparison -- \
+                         consider naming it with a `const`"
+                    ),
+                ));
+            }
+        }
+    };
+    walk_statements_exprs(&program.statements, &mut check);
+    for function in &program.functions {
+        walk_statements_exprs(&function.body, &mut check);
+    }
+    diagnostics
+}
+
 #[cfg(test)]
 mod legacy_form_tests {
     use super::*;
@@ -2227,6 +2699,260 @@ end
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
         assert!(msgs[0].contains("FIELD"), "{}", msgs[0]);
         assert!(msgs[0].contains("record"), "{}", msgs[0]);
+    }
+}
+
+#[cfg(test)]
+mod lint_tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse(source: &str) -> Program {
+        let tokens = Lexer::new("test.bcl", source).lex();
+        Parser::new("test.bcl".to_string(), tokens)
+            .parse_program()
+            .expect("source should parse")
+    }
+
+    fn messages(findings: Vec<Diagnostic>) -> Vec<String> {
+        findings.into_iter().map(|d| d.message).collect()
+    }
+
+    #[test]
+    fn unused_top_level_dim_is_flagged() {
+        let msgs = messages(check_unused_declarations(&parse(
+            "dim total%\nprint \"hi\"\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("total%"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_top_level_const_used_only_inside_a_function_is_not_flagged() {
+        let msgs = messages(check_unused_declarations(&parse(
+            "const MAX = 10\nfunction f%()\nreturn MAX\nend function\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn unused_function_local_dim_is_flagged_but_a_same_named_local_elsewhere_is_not_confused() {
+        let source = "\
+function f%()
+dim unused%
+dim used%
+used% = 1
+return used%
+end function
+
+function g%()
+dim unused%
+return unused%
+end function
+";
+        let msgs = messages(check_unused_declarations(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("unused%"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_dim_used_only_as_a_for_loop_counter_is_not_flagged_as_unused() {
+        // A real false positive found via the whole corpus: a `for`
+        // loop's own counter (`Statement::For`'s `var` field) is never
+        // itself wrapped in an `Expr`, so plain expression-walking alone
+        // never sees `for pickCount% = 1 to 5` as a *use* of
+        // `pickCount%` -- even though it obviously is one.
+        // Nothing else references `pickCount%` at all -- the loop header
+        // is its only use, isolating the exact gap the fix closes.
+        let source = "\
+function f%()
+dim pickCount%
+for pickCount% = 1 to 5
+print \"tick\"
+end for
+return 0
+end function
+";
+        let msgs = messages(check_unused_declarations(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_const_used_only_as_an_open_statements_len_is_not_flagged_as_unused() {
+        // Another real false positive found via the whole corpus:
+        // `walk_statement_exprs`'s own `Statement::Open` arm didn't walk
+        // its `len` field at all, so `open ... len = RECLEN` was
+        // invisible to any check built on it -- not just this one; a
+        // fix in the shared walker, not just here.
+        let msgs = messages(check_unused_declarations(&parse(
+            "const RECLEN = 50\nopen \"x\" for random as #1 len = RECLEN\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_local_shadowing_its_own_parameter_is_flagged() {
+        let msgs = messages(check_shadowing(&parse(
+            "function f%(n%)\ndim n%\nreturn n%\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("parameter"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_local_shadowing_a_top_level_const_is_flagged() {
+        // A `const`'s own suffix is inferred from its value even though
+        // none was written (`MAX` here means `MAX%`, since `10` is an
+        // integer) -- the shadowing local must match that inferred
+        // suffix to actually collide with it.
+        let msgs = messages(check_shadowing(&parse(
+            "const MAX = 10\nfunction f%()\ndim MAX%\nreturn MAX%\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("global"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_local_shadowing_a_cross_function_global_is_flagged() {
+        // `total%` promoted to global inside `g%` (not `f%`, where the
+        // shadowing local lives) -- distinct from the resolver's own
+        // existing hard-error check for a `global` colliding with a
+        // parameter *in the same function* (see
+        // `global_shadowed_by_same_named_parameter_is_rejected` in
+        // lib.rs), which this must not trip.
+        let source = "\
+function g%()
+global total%
+total% = 1
+return total%
+end function
+
+function f%()
+dim total%
+return total%
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("global"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_parameter_shadowing_a_cross_function_global_is_flagged() {
+        // Same reasoning as the local case above: `total%` is promoted to
+        // global inside `g%`, and `f%`'s own *parameter* (not its own
+        // `global` declaration) is what collides -- the resolver's
+        // existing same-function hard-error check doesn't cover this.
+        let source = "\
+function g%()
+global total%
+total% = 1
+return total%
+end function
+
+function f%(total%)
+return total%
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("parameter"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_nested_for_loop_reusing_the_outer_loop_variable_is_flagged() {
+        let source = "\
+function f%()
+for i% = 1 to 10
+for i% = 1 to 5
+print i%
+end for
+end for
+return 0
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("for"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn sequential_non_nested_for_loops_reusing_the_same_variable_are_not_flagged() {
+        let source = "\
+function f%()
+for i% = 1 to 10
+print i%
+end for
+for i% = 1 to 5
+print i%
+end for
+return 0
+end function
+";
+        let msgs = messages(check_shadowing(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_return_is_flagged_but_only_the_first_line() {
+        let msgs = messages(check_unreachable_code(&parse(
+            "function f%()\nreturn 1\nprint \"a\"\nprint \"b\"\nend function\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_a_label_following_a_return_is_not_flagged() {
+        let source = "\
+function f%()
+return 1
+skip:
+print \"reachable via goto skip\"
+end function
+end
+";
+        let msgs = messages(check_unreachable_code(&parse(source)));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn code_after_goto_is_flagged() {
+        let msgs = messages(check_unreachable_code(&parse(
+            "goto skip\nprint \"dead\"\nskip:\nend\n",
+        )));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn an_unexplained_literal_in_a_comparison_is_flagged() {
+        let msgs = messages(check_magic_numbers(&parse(
+            "if blah% = 34 and zog% = 65 then\nprint \"hit\"\nend if\nend\n",
+        )));
+        assert_eq!(msgs.len(), 2, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("34"), "{}", msgs[0]);
+        assert!(msgs[1].contains("65"), "{}", msgs[1]);
+    }
+
+    #[test]
+    fn sentinel_literals_zero_one_and_negative_one_are_not_flagged() {
+        let msgs = messages(check_magic_numbers(&parse(
+            "if a% = 0 then\nend if\nif b% = 1 then\nend if\nif c% = -1 then\nend if\nend\n",
+        )));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
+    }
+
+    #[test]
+    fn a_negative_non_sentinel_literal_is_still_flagged() {
+        let msgs = messages(check_magic_numbers(&parse("if a% = -5 then\nend if\nend\n")));
+        assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
+        assert!(msgs[0].contains("-5"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn a_plain_assignment_is_never_flagged_as_a_magic_number() {
+        let msgs = messages(check_magic_numbers(&parse("x% = 34\nend\n")));
+        assert!(msgs.is_empty(), "unexpected findings: {msgs:?}");
     }
 }
 

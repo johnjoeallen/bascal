@@ -42,6 +42,16 @@ pub struct CompileOptions {
     /// as a warning instead of failing the compile -- for trying strict
     /// mode against an existing program without committing to it yet.
     pub strict_vars_warn: bool,
+    /// Runs `resolver::check_unused_declarations`/`check_shadowing`/
+    /// `check_unreachable_code`/`check_magic_numbers` against the root
+    /// program's own parse (same reasoning as `strict_vars`: never a
+    /// `require`d library's own internals, never the DSL-lowered form) and
+    /// prints every finding to stderr as a warning. Opt-in and off by
+    /// default, unlike `check_legacy_forms`/`check_const_conventions`
+    /// (always on): these four are more heuristic and more likely to flag
+    /// something on existing, working code that isn't actually worth
+    /// fixing right now, especially a program ported from real BASIC.
+    pub lint: bool,
 }
 
 impl CompileOptions {
@@ -53,6 +63,7 @@ impl CompileOptions {
             target: Target::Basic,
             strict_vars: false,
             strict_vars_warn: false,
+            lint: false,
         }
     }
 }
@@ -98,6 +109,31 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         }
     }
     let options = &options;
+
+    if options.lint {
+        // Same reasoning as --strict-vars above: checked against the root
+        // file's own parse, not a required library's own internals, and
+        // not the DSL-lowered form.
+        let source = fs::read_to_string(input).map_err(|err| {
+            vec![Diagnostic::error(
+                diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+                format!("failed to read source file: {err}"),
+            )]
+        })?;
+        let root_only = parse_source(input.display().to_string(), &source)?;
+        for finding in resolver::check_unused_declarations(&root_only) {
+            eprintln!("{finding}");
+        }
+        for finding in resolver::check_shadowing(&root_only) {
+            eprintln!("{finding}");
+        }
+        for finding in resolver::check_unreachable_code(&root_only) {
+            eprintln!("{finding}");
+        }
+        for finding in resolver::check_magic_numbers(&root_only) {
+            eprintln!("{finding}");
+        }
+    }
 
     if options.strict_vars || options.strict_vars_warn {
         // Checked against the root file's own parse, on its own -- not the

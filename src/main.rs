@@ -94,6 +94,10 @@ struct Cli {
     #[arg(long)]
     strict_vars_warn: bool,
 
+    /// Warn (to stderr, non-fatal) about unused dim/const declarations, a local shadowing a parameter/global/enclosing for-loop variable, unreachable code after return/goto/exit/throw/end/stop, and a bare numeric literal compared against a variable (magic numbers -- 0/1/-1 exempted as common sentinels). Checked only against this program's own source, never a required library's
+    #[arg(long)]
+    lint: bool,
+
     /// --target jvm only: stack size for the Krakatau assembler's own worker thread (the host-side compiler tool that turns codegen_jvm.rs's .j text into a .class -- not the JVM's own runtime stack, unrelated to `java -Xss`). Its recursive stack-map-frame/control-flow analysis can overflow a too-small stack on a large generated program -- see Cargo.toml's own comment on why this is bcc's own responsibility, not the library's. Plain bytes, or suffixed with k/kb, m/mb, g/gb (case-insensitive, powers of 1024 -- e.g. `64mb`, `256M`, `1gb`). Default, if this flag isn't given: see KRAK_STACK_SIZE below. Ignored for every other --target
     #[arg(long, value_name = "SIZE", value_parser = parse_byte_count_value)]
     krak_stack_size: Option<usize>,
@@ -405,6 +409,7 @@ fn run(cli: Cli) -> Result<(), String> {
             target,
             strict_vars: false,
             strict_vars_warn: false,
+            lint: false,
         };
         check_file(&cli.input, &options).map_err(|diagnostics| {
             diagnostics
@@ -454,6 +459,7 @@ fn run(cli: Cli) -> Result<(), String> {
         target,
         strict_vars: cli.strict_vars,
         strict_vars_warn: cli.strict_vars_warn && !cli.strict_vars,
+        lint: cli.lint,
     };
     let generated = compile_file(&cli.input, &options).map_err(|diagnostics| {
         diagnostics
@@ -1105,6 +1111,7 @@ mod tests {
             target: None,
             strict_vars: false,
             strict_vars_warn: false,
+            lint: false,
             krak_stack_size: None,
         }
     }
