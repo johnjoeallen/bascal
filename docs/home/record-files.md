@@ -276,4 +276,4 @@ Nothing above runs slower — every line here transpiles to exactly the same `OP
 
 ---
 
-[← Previous: Structured control flow](control-flow.md) · [Next: Tutorials and examples →](tutorials.md)
+[← Previous: Structured control flow](control-flow.md) · [Next: A built-in source formatter →](formatter.md)

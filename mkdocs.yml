@@ -33,6 +33,7 @@ nav:
       - What BASCAL adds: home/features.md
       - Structured control flow: home/control-flow.md
       - Record files: home/record-files.md
+      - A built-in source formatter: home/formatter.md
       - Tutorials and examples: home/tutorials.md
   - Language Book:
       - Overview: language/index.md

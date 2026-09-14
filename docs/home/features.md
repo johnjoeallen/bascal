@@ -163,6 +163,8 @@ $ bcc --format legacy.bcl
 formatted: legacy.bcl
 ```
 
+See [A built-in source formatter](formatter.md) for the full before/after walkthrough of every rule.
+
 </div>
 
 <div class="snippet" markdown="1">

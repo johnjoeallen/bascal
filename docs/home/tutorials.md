@@ -35,4 +35,4 @@ matrix across the BASIC, C, and JVM backends.
 
 ---
 
-[← Previous: Record files](record-files.md)
+[← Previous: A built-in source formatter](formatter.md)
