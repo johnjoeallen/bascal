@@ -1,0 +1,33 @@
+{
+  "name": "bascal-language",
+  "displayName": "BASCAL",
+  "description": "Syntax highlighting for BASCAL (.bcl) source files -- a Pascal-inspired, structured superset of classic Microsoft BASIC.",
+  "version": "0.1.0",
+  "publisher": "bascal-contributors",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnjoeallen/bascal"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bascal",
+        "aliases": ["BASCAL", "bascal"],
+        "extensions": [".bcl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bascal",
+        "scopeName": "source.bascal",
+        "path": "./syntaxes/bascal.tmLanguage.json"
+      }
+    ]
+  }
+}
