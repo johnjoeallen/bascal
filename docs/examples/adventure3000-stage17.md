@@ -46,6 +46,18 @@ outcomes. Renamed to `handleDeath()` (and its caller,
 `checkPitsAndHandleDeathIfNeeded()`), a pure rename verified
 byte-identical against the version above under `--target c`.
 
+**Second follow-up:** the three data-file loaders still carried their
+names straight over from the original 8.3-era filenames --
+`loadAdescrip()`, `loadAitems()`, `loadAmessage()` -- the same kind of
+un-word-separated abbreviation stage 14 eliminated everywhere else in
+this port. Renamed to match what each one actually loads its data
+into (already given real names back in stage 14): `loadAdescrip()` ->
+`loadRoomDescriptions()` (fills `roomDescriptions$()`), `loadAitems()`
+-> `loadItemDescriptions()` (fills `itemDescriptions$()`, distinct from
+the unrelated `loadItemNames()` next to it), and `loadAmessage()` ->
+`loadMessages()` (fills `messages$()`). Again a pure rename, verified
+byte-identical under `--target c`.
+
 </div>
 
 <details class="source-embed" markdown="1">
@@ -84,7 +96,7 @@ dim itemNames$(47)
  * Loads the room descriptions from ADESCRIP into roomDescriptions$(),
  * one room per line, in file order.
  */
-procedure loadAdescrip()
+procedure loadRoomDescriptions()
     global roomDescriptions$
     dim dcount%, line$
     open "ADESCRIP" for INPUT as #1
@@ -101,7 +113,7 @@ end procedure
  * Loads the item-in-room messages from AITEMS into itemDescriptions$(),
  * one item per line, in file order.
  */
-procedure loadAitems()
+procedure loadItemDescriptions()
     global itemDescriptions$
     dim icount%, line$
     open "AITEMS" for INPUT as #2
@@ -118,7 +130,7 @@ end procedure
  * Loads every numbered message from AMESSAGE into messages$(), one
  * line per array slot, ready for buildMessageIndex() to index.
  */
-procedure loadAmessage()
+procedure loadMessages()
     global messages$
     global messageCount
     dim line$
@@ -133,7 +145,7 @@ procedure loadAmessage()
 end procedure
 
 /*
- * Scans the messages$() lines loaded by loadAmessage() and records, in
+ * Scans the messages$() lines loaded by loadMessages() and records, in
  * messageIndex()/fragmentIndex(), where each numbered message ("#N" or
  * a fractional variant "#N.M") begins, so printMessage() can jump
  * straight to it instead of scanning from the top every time.
@@ -2176,9 +2188,9 @@ for targetRoom% = 1 to 100
     PRINT ".";
 end for
 close #4
-loadAdescrip()
-loadAitems()
-loadAmessage()
+loadRoomDescriptions()
+loadItemDescriptions()
+loadMessages()
 buildMessageIndex()
 loadItemNames()
 PRINT
