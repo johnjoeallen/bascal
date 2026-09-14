@@ -1003,9 +1003,15 @@ function verbClimb%()
     global pirateState
     global targetRoom%
     ' *** CLIMB ***
-    if currentRoom% <> 50 then printMessage(2) : return 0
+    if currentRoom% <> 50 then
+        printMessage(2)
+        return 0
+    end if
     ' CAN HE CLIMB BEANSTALK?
-    if pirateState < 2 then printMessage(2) : return 0
+    if pirateState < 2 then
+        printMessage(2)
+        return 0
+    end if
     ' YES
     targetRoom% = 70
     performMove%(targetRoom%)
@@ -1016,7 +1022,10 @@ end function
 function verbJump%()
     global currentRoom%
     ' *** JUMP *** STRICTLY SUICIDAL
-    if currentRoom% <> 16 and currentRoom% <> 19 and currentRoom% <> 20 and currentRoom% <> 27 then printMessage(2) : return 0
+    if currentRoom% <> 16 and currentRoom% <> 19 and currentRoom% <> 20 and currentRoom% <> 27 then
+        printMessage(2)
+        return 0
+    end if
     printMessage(4)
     reincarnate()
     return 1
@@ -2352,7 +2361,10 @@ while true
         end select
         roomVisited(currentRoom%) = 1
         describeRoomContents()
-        if isDead = 1 then reincarnate() : continue
+        if isDead = 1 then
+            reincarnate()
+            continue
+        end if
         situationDescriptions()
     else
         printMessage(45)
