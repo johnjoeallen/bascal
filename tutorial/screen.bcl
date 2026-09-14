@@ -28,10 +28,18 @@ locate 3, 1
 print "Screen I/O tutorial"
 
 /* Move to specific positions */
-locate 5, 1 : color 10 : print "Green text" // bright green
-locate 6, 1 : color 12 : print "Red text" // bright red
-locate 7, 1 : color 11 : print "Cyan text" // bright cyan
-locate 8, 1 : color 7 : print "Normal text"
+locate 5, 1
+color 10
+print "Green text" // bright green
+locate 6, 1
+color 12
+print "Red text" // bright red
+locate 7, 1
+color 11
+print "Cyan text" // bright cyan
+locate 8, 1
+color 7
+print "Normal text"
 
 /* Sound the bell */
 beep

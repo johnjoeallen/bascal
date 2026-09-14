@@ -1,15 +1,14 @@
 //! `bcc --format-check` / `bcc --format` -- BASCAL's own source formatter.
 //!
 //! Deliberately narrow: it never reflows an expression, and the only
-//! rule that changes line count at all is exploding a single-line `if`
-//! whose then-/else-body has more than one `:`-chained statement into
-//! ordinary block form (see `explode_multi_statement_ifs`) -- a bare
-//! top-level `:`-chain with no `if` involved (`a = 1 : b = 2`) is left
-//! exactly as written; splitting *that* doesn't need block-conversion
-//! logic and hasn't been asked for yet. Every other fix here is pure
-//! whitespace or a same-meaning keyword substitution, both recomputed
-//! from the real token stream (`Lexer`, not a regex) so a string or
-//! comment's own content is never touched:
+//! rule that changes line count at all is splitting a `:`-chained
+//! multi-statement line -- `a = 1 : b = 2` becomes two ordinary lines,
+//! and a single-line `if` (`if cond then s1:s2`) whose then-/else-body
+//! has more than one such statement is exploded into full block form
+//! instead (see `explode_multi_statement_lines`). Every other fix here
+//! is pure whitespace or a same-meaning keyword substitution, both
+//! recomputed from the real token stream (`Lexer`, not a regex) so a
+//! string or comment's own content is never touched:
 //!
 //! - **Indentation**, recomputed from a block-nesting stack (see `Frame`
 //!   and `reindent`'s own per-keyword handling below).
@@ -73,28 +72,30 @@
 //!   attempt) are excluded for the same reason a builtin *method* isn't
 //!   touched above. All three are candidates for a future, more
 //!   context-aware pass.
-//! - **Multi-statement single-line `if` explosion**: a single-line `if`
-//!   (`if cond then stmt1 : stmt2`, real BASIC's own no-`end if` form --
-//!   see `parser.rs::parse_single_line_if`) whose then- or else-body has
-//!   more than one `:`-chained statement is rewritten into ordinary
-//!   block form: `if cond then` / one statement per line / (`else` / one
-//!   statement per line, if present) / `end if`, indented and
+//! - **Multi-statement line splitting**: every physical line holding
+//!   more than one top-level `:`-chained statement is split, one
+//!   statement per line, at the same nesting level -- `a = 1 : b = 2`
+//!   becomes two lines, no new block introduced. A single-line `if`
+//!   (`if cond then s1:s2`, real BASIC's own no-`end if` form -- see
+//!   `parser.rs::parse_single_line_if`) whose then- or else-body has
+//!   more than one such statement is different: it can't just split in
+//!   place, since a single-line `if` has no closing keyword for a
+//!   multi-line body to end at. That case explodes into full block
+//!   form instead -- `if cond then` / one statement per line / (`else` /
+//!   one statement per line, if present) / `end if` -- indented and
 //!   respaced/recased by every rule above exactly like a hand-written
-//!   block `if`. A nested single-line `if` cascades too -- `if a then if
-//!   b then s1:s2` can't leave the outer `if` alone once the inner one
-//!   is forced onto multiple lines, since single-line-if syntax has no
-//!   way to hold a multi-line body (see `if_needs_explosion`). A
-//!   trailing single-line comment moves to the new `if ... then` header
-//!   line, since it almost always describes the condition, not whichever
-//!   branch happened to be physically last. Narrower than every rule
-//!   above in one way: a single-line `if` that shares its own physical
-//!   line with an unrelated sibling statement at the same nesting level
-//!   (`stmt1 : if cond then a:b`, colon-chained -- rare in practice) is
-//!   left exactly as written rather than guess how to interleave the
-//!   two, and so is one with a trailing multi-line `/* ... */` comment
-//!   (splitting one deliberately written to span lines is more likely to
-//!   mangle a hand-aligned layout than respect it). See
-//!   `explode_multi_statement_ifs`'s own doc comment for the exact
+//!   block `if`; a nested single-line `if` cascades too, since `if a
+//!   then if b then s1:s2` can't leave the outer `if` alone once the
+//!   inner one is forced onto multiple lines either (see
+//!   `if_needs_explosion`). A trailing single-line comment on an
+//!   exploded `if` moves to the new `if ... then` header line, since it
+//!   almost always describes the condition, not whichever branch
+//!   happened to be physically last; on a plain split line it just
+//!   stays with whichever statement was already physically last.
+//!   Narrower in one way: a line with a trailing multi-line `/* ... */`
+//!   comment is left exactly as written rather than risk splitting a
+//!   comment deliberately written to span lines. See
+//!   `explode_multi_statement_lines`'s own doc comment for the exact
 //!   rules -- it runs as its own pass, before every rule above, so its
 //!   own output (indentation aside) is exactly what those rules already
 //!   know how to handle.
@@ -325,48 +326,49 @@ fn load_merged_program(filename: &str, library_dirs: &[PathBuf]) -> Option<Progr
     crate::driver::load_program_recursive(path, true, &options, &mut visited).ok()
 }
 
-/// Rewrites every single-line `if`/`else` whose then- or else-body has
-/// more than one statement into ordinary block form (`if ... then` / one
-/// statement per line / `end if`), so the rest of this formatter's
-/// existing block-`if` indentation logic can take over from there
-/// unchanged. Purely structural: indentation of the newly emitted lines
-/// is not this function's job -- whatever it emits gets re-lexed and
-/// reindented by `reindent` right after, the same as any hand-written
-/// block `if` -- only correct newline placement and preserving every
+/// Rewrites every physical line holding more than one top-level
+/// `:`-chained statement, one statement per output line -- either at
+/// the *same* nesting level (an ordinary `a = 1 : b = 2` colon-chain),
+/// or, for a single-line `if` whose then-/else-body itself needs
+/// splitting, exploded into full block form (`if ... then` / one
+/// statement per line / `end if`) since single-line-if syntax has no
+/// closing keyword for a multi-line body to end at. Either way, the
+/// rest of this formatter's existing indentation logic takes over from
+/// there unchanged: indentation of the newly emitted lines is not this
+/// function's job -- whatever it emits gets re-lexed and reindented by
+/// `reindent` right after, the same as any hand-written multi-line
+/// source -- only correct newline placement and preserving every
 /// token's own text verbatim matters here. A nested single-line `if`
 /// found inside a body that's itself being exploded (`if a then if b
 /// then s1:s2 else s3`) is exploded too, recursively, in the same pass.
 ///
 /// Deliberately narrow, matching this module's own "never refuses to
-/// run" philosophy: best-effort throughout, silently leaving a
-/// construct exactly as written whenever explosion isn't a clean,
-/// unambiguous rewrite --
-/// - an unparseable file is returned unchanged;
-/// - a single-line `if` sharing its own physical line with another
-///   top-level statement (`stmt1 : if cond then a:b`, colon-chained at
-///   the *same* nesting level -- rare in practice) is left alone rather
-///   than guessing how to interleave the two; a block-form `if`'s own
-///   header sharing a line with nothing else (the overwhelmingly common
-///   shape) is unaffected by this;
-/// - a trailing multi-line `/* ... */` block comment is left alone
-///   rather than risk splitting a comment that was never meant to be
-///   read on one line.
+/// run" philosophy: best-effort throughout, silently leaving a line
+/// exactly as written whenever splitting it isn't a clean, unambiguous
+/// rewrite -- an unparseable file is returned unchanged, and so is any
+/// individual line with a trailing multi-line `/* ... */` block
+/// comment, rather than risk splitting a comment that was never meant
+/// to be read on one line.
 ///
-/// A trailing single-line comment, when present, moves to the end of
-/// the newly generated `if ... then` header line -- not to `end if` or
-/// to whichever statement happened to be physically last -- since it
-/// almost always describes the condition, not one particular branch.
-fn explode_multi_statement_ifs(filename: &str, source: &str) -> String {
+/// A trailing single-line comment, when present, can only ever belong
+/// to the line's own last top-level statement (a comment consumes to
+/// end of line) -- if that statement is a single-line `if` being
+/// exploded, the comment moves to the end of the newly generated `if
+/// ... then` header line instead of to `end if` or to whichever branch
+/// happened to be physically last, since it almost always describes the
+/// condition; otherwise it just stays with that last statement, exactly
+/// as written.
+fn explode_multi_statement_lines(filename: &str, source: &str) -> String {
     let tokens = Lexer::new(filename, source).lex();
     let program = match Parser::new(filename.to_string(), tokens).parse_program() {
         Ok(p) => p,
         Err(_) => return source.to_string(),
     };
 
-    let mut targets: Vec<&Stmt> = Vec::new();
-    find_explosion_targets(&program.statements, &mut targets);
+    let mut targets: BTreeMap<usize, Vec<&Stmt>> = BTreeMap::new();
+    collect_line_targets(&program.statements, &mut targets);
     for f in &program.functions {
-        find_explosion_targets(&f.body, &mut targets);
+        collect_line_targets(&f.body, &mut targets);
     }
     if targets.is_empty() {
         return source.to_string();
@@ -378,19 +380,19 @@ fn explode_multi_statement_ifs(filename: &str, source: &str) -> String {
     let lines: Vec<&str> = source.lines().collect();
 
     let mut replacement: HashMap<usize, String> = HashMap::new();
-    for stmt in &targets {
+    for (&lineno, group) in &targets {
         let line_tokens: Vec<&Token> = tokens
             .iter()
             .filter(|t| {
-                t.pos.line == stmt.pos.line
-                    && !matches!(t.kind, TokenKind::Newline | TokenKind::Eof)
+                t.pos.line == lineno && !matches!(t.kind, TokenKind::Newline | TokenKind::Eof)
             })
             .collect();
-        let Some(raw_line) = lines.get(stmt.pos.line - 1) else {
+        let Some(raw_line) = lines.get(lineno - 1) else {
             continue;
         };
-        if let Some(rendered) = render_exploded_if(stmt, &line_tokens, raw_line) {
-            replacement.insert(stmt.pos.line, rendered);
+        let chars: Vec<char> = raw_line.chars().collect();
+        if let Some(rendered) = render_target_line(group, &line_tokens, &chars) {
+            replacement.insert(lineno, rendered);
         }
     }
     if replacement.is_empty() {
@@ -411,16 +413,6 @@ fn explode_multi_statement_ifs(filename: &str, source: &str) -> String {
     out
 }
 
-/// True for a `Statement::If` that itself needs exploding (more than
-/// one statement on either side), *or* whose then-/else-body is a lone
-/// statement that is itself such an `if` -- `if a then if b then s1:s2`
-/// parses as the outer's then-body holding exactly one statement (the
-/// inner `if`), so the outer can't stay single-line either once the
-/// inner one is forced onto multiple lines; single-line-if syntax has
-/// no way to hold a multi-line body. Checked recursively so a deeper
-/// chain (`if a then if b then if c then s1:s2`) still finds its way
-/// back to the outermost `if` that has to become the actual rewrite
-/// target -- see `find_explosion_targets`.
 /// True for an `if` actually written in single-line form -- its
 /// then-/else-body's own first statement (if any) still starts on the
 /// *same* physical line as the `if` keyword itself, which single-line
@@ -442,6 +434,16 @@ fn is_single_line_if(stmt: &Stmt) -> bool {
     starts_here(then_body) && starts_here(else_body)
 }
 
+/// True for a `Statement::If` that itself needs exploding (more than
+/// one statement on either side), *or* whose then-/else-body is a lone
+/// statement that is itself such an `if` -- `if a then if b then s1:s2`
+/// parses as the outer's then-body holding exactly one statement (the
+/// inner `if`), so the outer can't stay single-line either once the
+/// inner one is forced onto multiple lines; single-line-if syntax has
+/// no way to hold a multi-line body. Checked recursively so a deeper
+/// chain (`if a then if b then if c then s1:s2`) still finds its way
+/// back to the outermost `if` that has to become the actual rewrite
+/// target -- see `collect_line_targets`.
 fn if_needs_explosion(stmt: &Stmt) -> bool {
     if !is_single_line_if(stmt) {
         return false;
@@ -470,17 +472,41 @@ fn if_needs_explosion(stmt: &Stmt) -> bool {
     false
 }
 
-/// Collects every `Statement::If` in `statements` (recursing into every
-/// nested statement body) that `if_needs_explosion` and is the sole
-/// statement occupying its own physical line -- see
-/// `explode_multi_statement_ifs`'s own doc comment for why the latter
-/// check exists. A qualifying `if`'s own then-/else-bodies are *not*
-/// separately recursed into here: `render_exploded_if` walks them
-/// itself, so any nested single-line `if` inside one -- however deep --
-/// is discovered and exploded as part of rendering its outermost
-/// ancestor, not as an independent target sharing the same physical
-/// line as that ancestor's own, still-unwritten header.
-fn find_explosion_targets<'a>(statements: &'a [Stmt], targets: &mut Vec<&'a Stmt>) {
+/// Groups `statements` (recursing into every nested statement body) by
+/// physical line, and records a line as a rewrite target whenever
+/// either: it holds more than one top-level statement (an ordinary
+/// `a = 1 : b = 2` colon-chain, no `if` involved at all), or its lone
+/// statement `if_needs_explosion`. A target line's own group members
+/// are *not* separately recursed into here for their own nested bodies
+/// when the group is a lone exploding `if`: `render_exploded_if` walks
+/// that one itself, so any nested single-line `if` inside it -- however
+/// deep -- is discovered and exploded as part of rendering its
+/// outermost ancestor, not as an independent target sharing the same
+/// physical line as that ancestor's own, still-unwritten header. Every
+/// other statement kind's own body always lives on later physical
+/// lines, so it's always safe to recurse into regardless of whether
+/// this line turned out to be a target.
+fn collect_line_targets<'a>(statements: &'a [Stmt], targets: &mut BTreeMap<usize, Vec<&'a Stmt>>) {
+    let mut by_line: BTreeMap<usize, Vec<&'a Stmt>> = BTreeMap::new();
+    for stmt in statements {
+        by_line.entry(stmt.pos.line).or_default().push(stmt);
+    }
+    for (line, group) in by_line {
+        let (_, rest) = split_leading_label(&group);
+        // A label appearing anywhere in `rest` (i.e. anywhere but as a
+        // *leading* one, already set aside) is an exotic enough shape
+        // to just leave alone entirely, rather than risk mangling it --
+        // `render_target_line`'s own trailing-colon stripping assumes a
+        // colon it finds there is a plain statement separator, which
+        // isn't true for a label's own defining colon.
+        let has_further_label = rest.iter().any(|s| matches!(s.kind, Statement::Label(_)));
+        let is_target = !has_further_label
+            && (rest.len() > 1 || rest.iter().any(|s| if_needs_explosion(s)));
+        if is_target {
+            targets.insert(line, group);
+        }
+    }
+
     for stmt in statements {
         match &stmt.kind {
             Statement::If {
@@ -489,47 +515,32 @@ fn find_explosion_targets<'a>(statements: &'a [Stmt], targets: &mut Vec<&'a Stmt
                 ..
             } => {
                 if if_needs_explosion(stmt) {
-                    let sole_occupant = statements
-                        .iter()
-                        .filter(|s| s.pos.line == stmt.pos.line)
-                        .count()
-                        == 1;
-                    if sole_occupant {
-                        targets.push(stmt);
-                    }
-                    // Not recursing here either way: a target's own
-                    // body is handled by `render_exploded_if`'s
-                    // recursion; a skipped (non-sole-occupant) one
-                    // shares the same problematic physical line as its
-                    // body, so nothing inside it is independently
-                    // rewritable without also rewriting that line's
-                    // other, unrelated content.
-                } else {
-                    find_explosion_targets(then_body, targets);
-                    find_explosion_targets(else_body, targets);
+                    continue;
                 }
+                collect_line_targets(then_body, targets);
+                collect_line_targets(else_body, targets);
             }
             Statement::For { body, .. }
             | Statement::While { body, .. }
-            | Statement::Do { body, .. } => find_explosion_targets(body, targets),
+            | Statement::Do { body, .. } => collect_line_targets(body, targets),
             Statement::SelectCase {
                 cases, else_body, ..
             } => {
                 for case in cases {
-                    find_explosion_targets(&case.body, targets);
+                    collect_line_targets(&case.body, targets);
                 }
-                find_explosion_targets(else_body, targets);
+                collect_line_targets(else_body, targets);
             }
             Statement::TryCatch {
                 try_body,
                 catch,
                 finally_body,
             } => {
-                find_explosion_targets(try_body, targets);
+                collect_line_targets(try_body, targets);
                 if let Some(catch) = catch {
-                    find_explosion_targets(&catch.body, targets);
+                    collect_line_targets(&catch.body, targets);
                 }
-                find_explosion_targets(finally_body, targets);
+                collect_line_targets(finally_body, targets);
             }
             _ => {}
         }
@@ -542,15 +553,160 @@ fn col_to_index(column: usize, len: usize) -> usize {
     column.saturating_sub(1).min(len)
 }
 
-/// Renders one target `if` (see `find_explosion_targets`) as block-form
-/// text -- possibly several lines, always ending in `\n` -- or `None`
-/// when it turns out not to be a clean rewrite after all (a trailing
-/// multi-line block comment; see `explode_multi_statement_ifs`'s own
-/// doc comment). `line_tokens` is every token on `stmt`'s own physical
-/// line, `raw_line` that line's own raw text -- both shared unchanged
-/// across a recursive call for a nested single-line `if`, since it
-/// necessarily lives on the very same physical line as its parent.
-fn render_exploded_if(stmt: &Stmt, line_tokens: &[&Token], raw_line: &str) -> Option<String> {
+/// A trailing comment on a physical line, when present, is always the
+/// very last token on it (a comment consumes to end of line) and so can
+/// only ever belong to the *last* top-level statement on that line --
+/// `render_target_line` uses this once per line, not once per
+/// statement. Returns `Ok(None)` for no trailing comment, `Ok(Some((col,
+/// text)))` for one, and `Err(())` for a trailing multi-line `/* ...
+/// */` block comment, which bails the whole line out of rewriting:
+/// splitting one deliberately written to span lines is more likely to
+/// mangle a hand-aligned layout than respect it.
+fn trailing_comment(line_tokens: &[&Token], chars: &[char]) -> Result<Option<(usize, String)>, ()> {
+    match line_tokens.last() {
+        Some(t) if matches!(t.kind, TokenKind::Comment(_)) => {
+            let start = col_to_index(t.pos.column, chars.len());
+            Ok(Some((t.pos.column, chars[start..].iter().collect())))
+        }
+        Some(t) => match &t.kind {
+            TokenKind::BlockComment(text) if text.contains('\n') => Err(()),
+            TokenKind::BlockComment(_) => {
+                let start = col_to_index(t.pos.column, chars.len());
+                Ok(Some((t.pos.column, chars[start..].iter().collect())))
+            }
+            _ => Ok(None),
+        },
+        None => Ok(None),
+    }
+}
+
+/// Splits a leading `label:` off `group`, when its first member is one --
+/// the common, deliberate `label: statement` idiom (a label and the
+/// single statement it guards, written on one line) must never be torn
+/// apart into a bare label line plus a separate statement line just
+/// because splitting logic is running at all. Only a *leading* label is
+/// recognized; one appearing later in `group` is handled by
+/// `collect_line_targets` refusing to treat the line as a target at all
+/// (see its own doc comment).
+fn split_leading_label<'g, 'a>(group: &'g [&'a Stmt]) -> (Option<&'a Stmt>, &'g [&'a Stmt]) {
+    match group.split_first() {
+        Some((first, rest)) if matches!(first.kind, Statement::Label(_)) => (Some(*first), rest),
+        _ => (None, group),
+    }
+}
+
+/// True when every statement in `group` (after any leading label; see
+/// `split_leading_label`) is separated from the next by a real `:`
+/// token -- *not* true for `dim a%, b%`, which the parser desugars into
+/// two sibling `Statement::Dim` nodes sharing one line and one another's
+/// comma, not a colon (see `Parser::parse_dim`'s own doc comment): two
+/// AST siblings on the same line doesn't by itself mean "independently
+/// splittable statements". Splitting on anything but a genuine `:`
+/// would silently turn a comma-joined multi-name declaration into two
+/// bare, invalid statements.
+fn adjacent_members_are_colon_separated(group: &[&Stmt], line_tokens: &[&Token]) -> bool {
+    group.windows(2).all(|pair| {
+        let next = pair[1];
+        match line_tokens.iter().position(|t| t.pos == next.pos) {
+            Some(0) | None => false,
+            Some(idx) => matches!(line_tokens[idx - 1].kind, TokenKind::Colon),
+        }
+    })
+}
+
+/// Renders one target physical line (see `collect_line_targets`) as its
+/// replacement text -- possibly several lines, always ending in `\n` --
+/// or `None` when it turns out not to be a clean rewrite after all (a
+/// trailing multi-line block comment, or adjacent statements that
+/// aren't actually `:`-separated -- see
+/// `adjacent_members_are_colon_separated`). `group` is every top-level
+/// statement sharing this physical line, in source order; each is
+/// either an ordinary statement (sliced verbatim onto its own line) or
+/// an `if` needing explosion (rendered as a block via
+/// `render_exploded_if`). A leading `label:` (see `split_leading_label`)
+/// stays attached to whatever follows it, on the same output line.
+/// Only the last member's own trailing region can carry the line's own
+/// trailing comment -- see `trailing_comment`.
+fn render_target_line(group: &[&Stmt], line_tokens: &[&Token], chars: &[char]) -> Option<String> {
+    if !adjacent_members_are_colon_separated(group, line_tokens) {
+        return None;
+    }
+
+    let comment = trailing_comment(line_tokens, chars).ok()?;
+    let line_end_col = comment.as_ref().map(|(c, _)| *c).unwrap_or(chars.len() + 1);
+
+    let (label, rest) = split_leading_label(group);
+    let label_prefix = match label {
+        Some(label_stmt) => {
+            let start = col_to_index(label_stmt.pos.column, chars.len());
+            let end = rest
+                .first()
+                .map(|s| col_to_index(s.pos.column, chars.len()))
+                .unwrap_or(chars.len());
+            let text: String = chars[start..end.max(start)].iter().collect();
+            format!("{} ", text.trim())
+        }
+        None => String::new(),
+    };
+
+    let mut out = String::new();
+    for (i, stmt) in rest.iter().enumerate() {
+        let is_last = i + 1 == rest.len();
+        let region_end_col = if is_last {
+            line_end_col
+        } else {
+            rest[i + 1].pos.column
+        };
+        let prefix = if i == 0 { label_prefix.as_str() } else { "" };
+        if if_needs_explosion(stmt) {
+            let own_comment = if is_last { comment.clone() } else { None };
+            let rendered =
+                render_exploded_if(stmt, line_tokens, chars, region_end_col, own_comment)?;
+            out.push_str(prefix);
+            out.push_str(&rendered);
+            continue;
+        }
+        let start = col_to_index(stmt.pos.column, chars.len());
+        let end = col_to_index(region_end_col, chars.len());
+        let text: String = chars[start..end.max(start)].iter().collect();
+        let text = text.trim();
+        let text = text.strip_suffix(':').map(str::trim_end).unwrap_or(text);
+        out.push_str(prefix);
+        out.push_str(text);
+        if is_last {
+            if let Some((_, c)) = &comment {
+                out.push(' ');
+                out.push_str(c.trim_end());
+            }
+        }
+        out.push('\n');
+    }
+    Some(out)
+}
+
+/// Renders one target `if` as block-form text -- possibly several
+/// lines, always ending in `\n` -- or `None` on the (already screened
+/// out by the caller) multi-line-block-comment case. `line_tokens` is
+/// every token on `stmt`'s own physical line, `chars` that line's own
+/// raw text as chars -- both shared unchanged across a recursive call
+/// for a nested single-line `if`, since it necessarily lives on the
+/// very same physical line as its parent. `region_end_col` (1-indexed,
+/// exclusive) is the caller-determined boundary for this `if`'s own
+/// content -- the next sibling statement's start column, when this
+/// `if` isn't the last thing on its line, or the line's own end
+/// otherwise. `comment`, when `Some`, is placed at the end of the new
+/// `if ... then` header line instead of wherever it originally
+/// trailed -- since it almost always describes the condition, not
+/// whichever branch happened to be physically last -- and is only ever
+/// passed for the group's own last (and therefore outermost, in a
+/// nested chain) `if`; a nested one recurses with `None`.
+fn render_exploded_if(
+    stmt: &Stmt,
+    line_tokens: &[&Token],
+    chars: &[char],
+    region_end_col: usize,
+    comment: Option<(usize, String)>,
+) -> Option<String> {
     let Statement::If {
         then_body,
         else_body,
@@ -560,39 +716,11 @@ fn render_exploded_if(stmt: &Stmt, line_tokens: &[&Token], raw_line: &str) -> Op
         return None;
     };
 
-    let chars: Vec<char> = raw_line.chars().collect();
-
     let if_idx = line_tokens.iter().position(|t| t.pos == stmt.pos)?;
     let then_idx = line_tokens[if_idx + 1..].iter().position(|t| {
         matches!(&t.kind, TokenKind::Ident(s) if s.eq_ignore_ascii_case("then"))
     })? + if_idx
         + 1;
-
-    // A trailing comment, when present, is always the very last token
-    // on the line (a comment consumes to end of line) -- moved to the
-    // header below rather than left where it was. A multi-line block
-    // comment bails out entirely: splitting one that was deliberately
-    // written to span lines is more likely to mangle a hand-aligned
-    // layout than respect it.
-    let trailing_comment: Option<(usize, String)> = match line_tokens.last() {
-        Some(t) if matches!(t.kind, TokenKind::Comment(_)) => {
-            let start = col_to_index(t.pos.column, chars.len());
-            Some((t.pos.column, chars[start..].iter().collect()))
-        }
-        Some(t) => match &t.kind {
-            TokenKind::BlockComment(text) if text.contains('\n') => return None,
-            TokenKind::BlockComment(_) => {
-                let start = col_to_index(t.pos.column, chars.len());
-                Some((t.pos.column, chars[start..].iter().collect()))
-            }
-            _ => None,
-        },
-        None => None,
-    };
-    let content_end_col = trailing_comment
-        .as_ref()
-        .map(|(c, _)| *c)
-        .unwrap_or(chars.len() + 1);
 
     let else_idx = if else_body.is_empty() {
         None
@@ -615,7 +743,7 @@ fn render_exploded_if(stmt: &Stmt, line_tokens: &[&Token], raw_line: &str) -> Op
     out.push_str("if ");
     out.push_str(&condition);
     out.push_str(" then");
-    if let Some((_, text)) = &trailing_comment {
+    if let Some((_, text)) = &comment {
         out.push(' ');
         out.push_str(text.trim_end());
     }
@@ -623,12 +751,12 @@ fn render_exploded_if(stmt: &Stmt, line_tokens: &[&Token], raw_line: &str) -> Op
 
     let then_end_col = else_idx
         .map(|i| line_tokens[i].pos.column)
-        .unwrap_or(content_end_col);
-    render_body_lines(then_body, line_tokens, raw_line, &chars, then_end_col, &mut out)?;
+        .unwrap_or(region_end_col);
+    render_body_lines(then_body, line_tokens, chars, then_end_col, &mut out)?;
 
     if else_idx.is_some() {
         out.push_str("else\n");
-        render_body_lines(else_body, line_tokens, raw_line, &chars, content_end_col, &mut out)?;
+        render_body_lines(else_body, line_tokens, chars, region_end_col, &mut out)?;
     }
 
     out.push_str("end if\n");
@@ -637,15 +765,17 @@ fn render_exploded_if(stmt: &Stmt, line_tokens: &[&Token], raw_line: &str) -> Op
 
 /// Renders one `if`'s then- or else-body, one statement per line
 /// (recursing into `render_exploded_if` for a nested single-line `if`
-/// that itself needs exploding -- it shares `line_tokens`/`raw_line`
-/// with its parent unchanged, since it necessarily lives on the very
-/// same physical line), up to `region_end_col` (1-indexed source
-/// column, exclusive -- the position of whatever comes right after this
-/// body: `else`, a trailing comment, or simply end of line).
+/// that itself needs exploding -- it shares `line_tokens`/`chars` with
+/// its parent unchanged, since it necessarily lives on the very same
+/// physical line, and always recurses with no comment of its own: only
+/// the outermost `if` in a nested chain ever carries one, already
+/// placed on its own header by the caller), up to `region_end_col`
+/// (1-indexed source column, exclusive -- the position of whatever
+/// comes right after this body: `else`, a trailing comment, or simply
+/// end of line).
 fn render_body_lines(
     body: &[Stmt],
     line_tokens: &[&Token],
-    raw_line: &str,
     chars: &[char],
     region_end_col: usize,
     out: &mut String,
@@ -656,8 +786,12 @@ fn render_body_lines(
             Some(next) => col_to_index(next.pos.column, chars.len()),
             None => col_to_index(region_end_col, chars.len()),
         };
-        if matches!(&item.kind, Statement::If { .. }) && if_needs_explosion(item) {
-            let nested = render_exploded_if(item, line_tokens, raw_line)?;
+        if if_needs_explosion(item) {
+            let item_region_end_col = match body.get(i + 1) {
+                Some(next) => next.pos.column,
+                None => region_end_col,
+            };
+            let nested = render_exploded_if(item, line_tokens, chars, item_region_end_col, None)?;
             out.push_str(&nested);
             continue;
         }
@@ -704,7 +838,7 @@ enum Frame {
 /// slightly-unusual-but-valid source is worse than one that quietly
 /// leaves a corner case untouched.
 pub fn reindent(filename: &str, source: &str, library_dirs: &[PathBuf]) -> String {
-    let exploded = explode_multi_statement_ifs(filename, source);
+    let exploded = explode_multi_statement_lines(filename, source);
     let source = exploded.as_str();
     let tokens = Lexer::new(filename, source).lex();
     let declared = declared_names(filename, source, library_dirs);
@@ -1849,13 +1983,12 @@ end function
     }
 
     #[test]
-    fn a_multi_statement_single_line_if_colon_chained_with_a_sibling_is_left_untouched() {
+    fn a_multi_statement_single_line_if_colon_chained_with_a_sibling_splits_both() {
         // `stmt : if cond then a:b` -- the `if` shares its own physical
         // line with an unrelated sibling statement at the same nesting
-        // level (rare in practice). Rewriting the `if` alone would still
-        // leave that sibling behind on the same original line in a
-        // structurally awkward spot, so this is left exactly as written
-        // rather than guessing how to interleave the two.
+        // level. The sibling splits onto its own line same as any other
+        // multi-statement split, and the `if` explodes into block form
+        // same as it would on its own line.
         let source = "\
 function f%()
 x% = 0 : if y% > 0 then p% = 1 : q% = 2
@@ -1864,7 +1997,72 @@ end function
 ";
         let expected = "\
 function f%()
-    x% = 0 : if y% > 0 then p% = 1 : q% = 2
+    x% = 0
+    if y% > 0 then
+        p% = 1
+        q% = 2
+    end if
+    return 0
+end function
+";
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn a_plain_top_level_colon_chain_splits_one_statement_per_line() {
+        let source = "\
+function f%()
+x% = 1 : y% = 2 : z% = 3
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    x% = 1
+    y% = 2
+    z% = 3
+    return 0
+end function
+";
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn a_trailing_comment_on_a_plain_colon_chain_stays_with_the_last_statement() {
+        let source = "\
+function f%()
+x% = 1 : y% = 2 ' note
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    x% = 1
+    y% = 2 ' note
+    return 0
+end function
+";
+        assert_eq!(reindent("test.bcl", source, &[]), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn a_leading_label_stays_attached_to_the_statement_it_guards_even_when_splitting() {
+        // The common, deliberate `label: statement` idiom must never be
+        // torn apart into a bare label line plus a separate statement
+        // line just because the *rest* of the line needs splitting.
+        let source = "\
+function f%()
+myLabel: x% = 1 : y% = 2
+return 0
+end function
+";
+        let expected = "\
+function f%()
+    myLabel: x% = 1
+    y% = 2
     return 0
 end function
 ";
@@ -1915,5 +2113,26 @@ end function
             formatted.contains("if x% > 0 then y% = 1 : z% = 2 /* a"),
             "the if should not have been exploded, got:\n{formatted}"
         );
+    }
+
+    #[test]
+    fn a_comma_joined_multi_name_dim_is_never_mistaken_for_a_colon_chain() {
+        // `dim i%, total%` desugars into two sibling `Statement::Dim`
+        // nodes sharing one physical line (see `Parser::parse_dim`) --
+        // exactly the same AST shape a real `a = 1 : b = 2` colon-chain
+        // has. Splitting this on the comma would produce `dim i%,` and
+        // a bare `total%` on their own lines, neither of which is valid
+        // BASCAL on its own -- a real bug this pins down.
+        let source = "\
+function f%()
+dim i%, total%
+return 0
+end function
+";
+        assert_eq!(
+            reindent("test.bcl", source, &[]),
+            "function f%()\n    dim i%, total%\n    return 0\nend function\n"
+        );
+        assert_idempotent(source);
     }
 }
