@@ -207,7 +207,86 @@ end if
 
 </div>
 
-This is deliberately as far as it goes: `bcc --format` never reflows an expression, and a `label: statement` line (a common, deliberate idiom) never gets torn apart just because splitting logic is running at all. See the [Command-Line Reference's Source Formatting section](../manual/command-line-reference.md#source-formatting) for the complete, exact rule set.
+<div class="compare" markdown="1">
+
+### 6. `data` lines indented under their own label
+
+A bare `label:` (nothing else on its own line) indents the `data` lines that immediately follow it one level deeper, matching its usual role as a `restore` target for a data table — grouping what belongs to it, for the same reason a `for`/`if` body is indented. That implicit block has no closing keyword of its own: it ends at the first line that isn't a `data` statement (or a comment about the table), or at a blank line.
+
+<div class="compare-grid" markdown="1">
+
+<div class="pane old" markdown="1">
+
+<span class="tag">Before</span>
+
+```bascal
+function f%()
+myTable:
+data 1, 2, 3
+data 4, 5, 6
+print "after"
+end function
+```
+
+</div>
+
+<div class="pane new" markdown="1">
+
+<span class="tag">After `bcc --format`</span>
+
+```bascal
+function f%()
+    myTable:
+        data 1, 2, 3
+        data 4, 5, 6
+    print "after"
+end function
+```
+
+</div>
+
+</div>
+
+</div>
+
+<div class="compare" markdown="1">
+
+### 7. A `label: statement` line is never torn apart
+
+Multi-statement splitting (rule 4) applies to the rest of a line, but a leading label always stays attached to whatever follows it — the common, deliberate `label: statement` idiom (a label and the one statement it guards, written on one line) is never split into a bare label line plus a separate statement line just because splitting logic is running at all.
+
+<div class="compare-grid" markdown="1">
+
+<div class="pane old" markdown="1">
+
+<span class="tag">Before</span>
+
+```bascal
+function f%()
+loopStart: x% = 1 : y% = 2
+end function
+```
+
+</div>
+
+<div class="pane new" markdown="1">
+
+<span class="tag">After `bcc --format`</span>
+
+```bascal
+function f%()
+    loopStart: x% = 1
+    y% = 2
+end function
+```
+
+</div>
+
+</div>
+
+</div>
+
+This is deliberately as far as it goes: `bcc --format` never reflows an expression. See the [Command-Line Reference's Source Formatting section](../manual/command-line-reference.md#source-formatting) for the complete, exact rule set.
 
 </div>
 
