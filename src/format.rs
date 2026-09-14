@@ -1,18 +1,37 @@
 //! `bcc --format-check` / `bcc --format` -- BASCAL's own source formatter.
 //!
-//! v1 is deliberately narrow: it only fixes *indentation*, leaving every
-//! other stylistic choice (keyword casing, spacing around operators,
-//! blank-line placement) exactly as the author wrote it. This is a much
-//! smaller, safer problem than full token-level pretty-printing (no risk
-//! of subtly reflowing an expression wrong), and it's the dimension real
-//! BASCAL source actually drifts on in practice -- copy-pasted blocks,
-//! hand-edited `if`/`for` bodies, and so on.
+//! Deliberately narrow: it never reflows an expression or changes line
+//! count (the one exception -- splitting a `:`-joined multi-statement
+//! line -- is intentionally *not* handled yet; see the module's own
+//! tracking notes on why that needs block-conversion logic single-line
+//! `if`/`elseif` can trigger). Every fix here is either pure whitespace
+//! or a same-meaning keyword substitution, both recomputed from the real
+//! token stream (`Lexer`, not a regex) so a string or comment's own
+//! content is never touched:
 //!
-//! Indentation is recomputed from the real token stream (`Lexer`, not a
-//! regex), so keywords inside a string or comment never confuse the
-//! block-nesting tracker. Everything else about each line -- keyword
-//! casing, inter-token spacing, trailing comments -- is copied through
-//! byte-for-byte after its own leading whitespace is replaced.
+//! - **Indentation**, recomputed from a block-nesting stack (see `Frame`
+//!   and `reindent`'s own per-keyword handling below).
+//! - **Trailing whitespace**, stripped from every line unconditionally.
+//! - **Comma spacing**: no space before, exactly one space after.
+//! - **Operator spacing**: `=`, `<>`, `<=`, `>=`, `<`, `>`, `*`, `/`,
+//!   `\`, `^`, `+=`, `-=`, `*=`, `/=`, `&&`, `||` are always binary in
+//!   BASIC, so always get exactly one space on each side. `+`/`-` are
+//!   only forced when they're unambiguously binary -- the token right
+//!   before is a number, string, closing bracket, or a `%`/`&`/`!`/`#`/
+//!   `$`-suffixed identifier (never a bare keyword, which is lexed
+//!   identically to a variable name and would make `return -1` wrongly
+//!   read as binary). Anything not covered by one of these rules keeps
+//!   its original spacing, except a run of 2+ spaces between any two
+//!   tokens, which always collapses to one.
+//! - **Legacy closer keywords**: a bare `wend` becomes `end while`, and
+//!   a bare `loop` (no trailing `while`/`until` -- that form has no
+//!   `end do` equivalent, so it's left alone) becomes `end do`, matching
+//!   the `end <keyword>` spelling every other block already uses.
+//!
+//! Keyword *casing* is deliberately not touched here -- the corpus is
+//! consistent enough on indentation and closer spelling to infer a
+//! confident default, but casing needs the same evidence-gathering
+//! pass before picking one, and is left for a follow-up.
 //!
 //! Multi-line `/* ... */` comments are a deliberate exception: only their
 //! opening line is reindented. Interior lines are often hand-aligned
@@ -84,7 +103,7 @@ pub fn reindent(filename: &str, source: &str) -> String {
     for (i, raw_line) in lines.iter().enumerate() {
         let lineno = i + 1;
         if lineno <= verbatim_until {
-            out.push(raw_line.to_string());
+            out.push(raw_line.trim_end().to_string());
             continue;
         }
         if raw_line.trim().is_empty() {
@@ -199,7 +218,7 @@ pub fn reindent(filename: &str, source: &str) -> String {
                         pop_count += 1;
                     }
                 }
-                "next" | "wend" | "loop" => pop_count += 1,
+                "wend" | "loop" => pop_count += 1,
                 "elseif" | "else" => {
                     if stack.last() == Some(&Frame::If) {
                         pop_count += 1;
@@ -255,11 +274,8 @@ pub fn reindent(filename: &str, source: &str) -> String {
         }
 
         let level = stack.len();
-        out.push(format!(
-            "{}{}",
-            INDENT_UNIT.repeat(level),
-            raw_line.trim_start()
-        ));
+        let content = respace(raw_line, &toks, words.len() == 1, first_word);
+        out.push(format!("{}{}", INDENT_UNIT.repeat(level), content));
 
         if let Some(frame) = pending_push {
             stack.push(frame);
@@ -271,6 +287,183 @@ pub fn reindent(filename: &str, source: &str) -> String {
     let mut result = out.join("\n");
     result.push('\n');
     result
+}
+
+/// True for a token kind that's always binary in BASIC -- safe to always
+/// pad with exactly one space on each side, unlike `+`/`-`, which can
+/// also be unary.
+fn is_forced_binary_operator(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Eq
+            | TokenKind::Ne
+            | TokenKind::Lt
+            | TokenKind::Le
+            | TokenKind::Gt
+            | TokenKind::Ge
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Backslash
+            | TokenKind::Caret
+            | TokenKind::PlusEq
+            | TokenKind::MinusEq
+            | TokenKind::StarEq
+            | TokenKind::SlashEq
+            | TokenKind::AndAnd
+            | TokenKind::OrOr
+    )
+}
+
+/// True for a token that can only be the *end* of a value -- a number,
+/// string, closing bracket, or a `%`/`&`/`!`/`#`/`$`-suffixed identifier
+/// (never a bare keyword, which lexes identically to a plain variable
+/// name and would make `return -1`/`to -5` wrongly read as binary).
+/// Used to tell a binary `+`/`-` (`total - 1`) from a unary one
+/// (`return -1`) by looking at the token immediately before it.
+fn is_value_ending(kind: &TokenKind) -> bool {
+    match kind {
+        TokenKind::Number(_)
+        | TokenKind::Float(_)
+        | TokenKind::HexLit(_)
+        | TokenKind::String(_)
+        | TokenKind::RParen
+        | TokenKind::RBracket => true,
+        TokenKind::Ident(s) => s.ends_with(['%', '&', '!', '#', '$']),
+        _ => false,
+    }
+}
+
+/// Rebuilds one line's content (everything after its own leading
+/// whitespace, which `reindent` replaces separately) from `toks`,
+/// normalizing inter-token spacing without ever touching a token's own
+/// text -- every token's text is sliced verbatim from `raw_line` by its
+/// real source span, never regenerated from its parsed value, so a
+/// string's exact quoting or a number's exact digits can never drift.
+///
+/// `is_solitary_keyword`/`first_word` identify a bare `wend` or `loop`
+/// (the only content on the line besides an optional trailing comment)
+/// so its own token text can be swapped for the `end while`/`end do`
+/// spelling every other block already uses -- `loop while`/`loop until`
+/// has no such equivalent and is left alone.
+fn respace(raw_line: &str, toks: &[&Token], is_solitary_keyword: bool, first_word: &str) -> String {
+    let chars: Vec<char> = raw_line.chars().collect();
+    let real: Vec<&&Token> = toks
+        .iter()
+        .filter(|t| !matches!(t.kind, TokenKind::Newline | TokenKind::Eof))
+        .collect();
+    if real.is_empty() {
+        return raw_line.trim().to_string();
+    }
+
+    // Each real token's own [start, end) char span in `raw_line`, found
+    // by trimming trailing whitespace off the gap up to the next
+    // token's start (or end of line, for the last one).
+    let mut spans: Vec<(usize, usize)> = Vec::with_capacity(real.len());
+    for (i, t) in real.iter().enumerate() {
+        let start = t.pos.column.saturating_sub(1).min(chars.len());
+        let bound = if i + 1 < real.len() {
+            real[i + 1].pos.column.saturating_sub(1)
+        } else {
+            chars.len()
+        }
+        .clamp(start, chars.len());
+        let mut end = bound;
+        while end > start && chars[end - 1].is_whitespace() {
+            end -= 1;
+        }
+        spans.push((start, end));
+    }
+
+    let legacy_replacement =
+        if is_solitary_keyword && (first_word == "wend" || first_word == "loop") {
+            real.iter().enumerate().find_map(|(i, t)| {
+                let TokenKind::Ident(original) = &t.kind else {
+                    return None;
+                };
+                if !original.eq_ignore_ascii_case(first_word) {
+                    return None;
+                }
+                let upper = original.chars().any(char::is_alphabetic)
+                    && original
+                        .chars()
+                        .filter(|c| c.is_alphabetic())
+                        .all(char::is_uppercase);
+                let text = match (first_word, upper) {
+                    ("wend", true) => "END WHILE",
+                    ("wend", false) => "end while",
+                    ("loop", true) => "END DO",
+                    ("loop", false) => "end do",
+                    _ => return None,
+                };
+                Some((i, text))
+            })
+        } else {
+            None
+        };
+
+    // `+`/`-` are binary exactly when the token right before them ends a
+    // value (see `is_value_ending`'s own doc comment for why a bare
+    // keyword doesn't count).
+    let mut is_binary_pm = vec![false; real.len()];
+    for i in 1..real.len() {
+        if matches!(real[i].kind, TokenKind::Plus | TokenKind::Minus)
+            && is_value_ending(&real[i - 1].kind)
+        {
+            is_binary_pm[i] = true;
+        }
+    }
+
+    let mut out = String::new();
+    for i in 0..real.len() {
+        if let Some((idx, text)) = legacy_replacement {
+            if idx == i {
+                out.push_str(text);
+            } else {
+                let (s, e) = spans[i];
+                out.push_str(&chars[s..e].iter().collect::<String>());
+            }
+        } else {
+            let (s, e) = spans[i];
+            out.push_str(&chars[s..e].iter().collect::<String>());
+        }
+
+        if matches!(
+            real[i].kind,
+            TokenKind::Comment(_) | TokenKind::BlockComment(_)
+        ) {
+            break; // nothing meaningful can follow a comment on its own line
+        }
+        if i + 1 >= real.len() {
+            break;
+        }
+
+        let this_kind = &real[i].kind;
+        let next_kind = &real[i + 1].kind;
+        let force_space = matches!(this_kind, TokenKind::Comma)
+            || is_forced_binary_operator(this_kind)
+            || is_forced_binary_operator(next_kind)
+            || (matches!(this_kind, TokenKind::Plus | TokenKind::Minus) && is_binary_pm[i])
+            || (matches!(next_kind, TokenKind::Plus | TokenKind::Minus) && is_binary_pm[i + 1]);
+
+        let gap: &str = if matches!(next_kind, TokenKind::Comma) {
+            ""
+        } else if force_space {
+            " "
+        } else {
+            // Not a rule above: preserve whether tokens were adjacent
+            // (no space at all, e.g. a call's own `(`) or separated, but
+            // collapse any run of 2+ spaces down to exactly one.
+            let (_, this_end) = spans[i];
+            let next_start = real[i + 1].pos.column.saturating_sub(1);
+            if next_start.saturating_sub(this_end) == 0 {
+                ""
+            } else {
+                " "
+            }
+        };
+        out.push_str(gap);
+    }
+    out
 }
 
 /// A single line that differs between the original and the reindented
@@ -326,7 +519,7 @@ print \"other\"
 end if
 for i% = 1 to 3
 print i%
-next
+end for
 return 0
 end function
 ";
@@ -342,7 +535,7 @@ function f%()
     end if
     for i% = 1 to 3
         print i%
-    next
+    end for
     return 0
 end function
 ";
@@ -430,8 +623,8 @@ end function
 function f%()
 myLabel:
 ' a comment about the table
-data 1,2,3
-data 4,5,6
+data 1, 2, 3
+data 4, 5, 6
 print \"after\"
 end function
 ";
@@ -439,8 +632,8 @@ end function
 function f%()
     myLabel:
         ' a comment about the table
-        data 1,2,3
-        data 4,5,6
+        data 1, 2, 3
+        data 4, 5, 6
     print \"after\"
 end function
 ";
@@ -453,17 +646,17 @@ end function
         let source = "\
 function f%()
 firstTable:
-data 1,2,3
+data 1, 2, 3
 secondTable:
-data 4,5,6
+data 4, 5, 6
 end function
 ";
         let expected = "\
 function f%()
     firstTable:
-        data 1,2,3
+        data 1, 2, 3
     secondTable:
-        data 4,5,6
+        data 4, 5, 6
 end function
 ";
         assert_eq!(reindent("test.bcl", source), expected);
@@ -481,7 +674,7 @@ end function
         let source = "\
 function f%()
 myTable:
-data 1,2,3
+data 1, 2, 3
 
 /*
  * Unrelated comment, not about myTable.
@@ -492,7 +685,7 @@ end function
         let expected = "\
 function f%()
     myTable:
-        data 1,2,3
+        data 1, 2, 3
 
     /*
  * Unrelated comment, not about myTable.
@@ -573,6 +766,119 @@ function f%()
     finally
         close #1
     end try
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn trailing_whitespace_is_stripped_everywhere() {
+        // Including inside a multi-line block comment's own interior,
+        // which stays otherwise untouched (see
+        // multi_line_block_comment_interior_is_left_alone above).
+        let source = "function f%()   \nprint 1  \n/* a comment   \n   more   \n*/\nend function\n";
+        let expected = "function f%()\n    print 1\n    /* a comment\n   more\n*/\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn comma_gets_no_space_before_and_one_space_after() {
+        let source = "function f%()\nprint a% ,b% , c%\nend function\n";
+        let expected = "function f%()\n    print a%, b%, c%\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn always_binary_operators_get_padded_both_sides() {
+        let source = "function f%()\nx%=1*2\nif x%<>3 and x%<=4 then print x%\nend function\n";
+        let expected = "function f%()\n    x% = 1 * 2\n    if x% <> 3 and x% <= 4 then print x%\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn binary_minus_is_padded_but_unary_minus_is_left_alone() {
+        // `total%-1` (preceded by a suffixed identifier -- unambiguously
+        // a value) is binary; `return -1`/`to -5` (preceded by a bare
+        // keyword, lexed the same as a variable name) are left exactly
+        // as written rather than risk guessing wrong.
+        let source = "\
+function f%()
+y% = total%-1
+if y% < 0 then return -1
+for i% = 10 to -5 step -1
+end for
+end function
+";
+        let expected = "\
+function f%()
+    y% = total% - 1
+    if y% < 0 then return -1
+    for i% = 10 to -5 step -1
+    end for
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn multiple_spaces_between_tokens_collapse_to_one() {
+        let source = "function f%()\nprint    \"a\"   ;    \"b\"\nend function\n";
+        let expected = "function f%()\n    print \"a\" ; \"b\"\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn bare_wend_becomes_end_while_preserving_case_and_trailing_comment() {
+        let source = "\
+function f%()
+while x% < 10
+x% = x% + 1
+wend
+WHILE x% > 0
+x% = x% - 1
+WEND ' done
+end function
+";
+        let expected = "\
+function f%()
+    while x% < 10
+        x% = x% + 1
+    end while
+    WHILE x% > 0
+        x% = x% - 1
+    END WHILE ' done
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn bare_loop_becomes_end_do_but_conditioned_loop_is_untouched() {
+        let source = "\
+function f%()
+do
+x% = x% + 1
+loop
+do
+x% = x% - 1
+loop until x% = 0
+end function
+";
+        let expected = "\
+function f%()
+    do
+        x% = x% + 1
+    end do
+    do
+        x% = x% - 1
+    loop until x% = 0
 end function
 ";
         assert_eq!(reindent("test.bcl", source), expected);
