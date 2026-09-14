@@ -21,9 +21,9 @@ If a shared file is referenced, `COMMON` lines appear before the header comment.
 
 ### Line Numbers
 
-By default, `bcc` numbers every emitted line, not just branch targets. Real MBASIC/BASCOM has no notion of an unnumbered statement line -- classic BASIC source is a sequence of numbered lines, full stop -- so this is what real compilers and interpreters expect. Numbered comment-only lines are harmless on real BASCOM, but an unnumbered *statement* line is a syntax error.
+By default, `bcc` numbers every emitted line, not just branch targets, matching real MBASIC/BASCOM's own default: an unnumbered statement line is a syntax error unless the compiler is explicitly told to accept one (see below). Numbered comment-only lines are harmless either way.
 
-Pass `--sparse-line-numbers` to fall back to the old behavior, numbering only lines that are branch targets (destinations of `GOTO` or `GOSUB`) and leaving everything else unnumbered. This is more readable, but only safe with more lenient dialects (e.g. FreeBASIC's `-lang qb`) -- not real MBASIC/BASCOM.
+Pass `--sparse-line-numbers` to fall back to the old behavior, numbering only lines that are branch targets (destinations of `GOTO` or `GOSUB`) and leaving everything else unnumbered. This is more readable, and real MBASIC/BASCOM-family compilers can compile it too -- they just need a switch to accept unnumbered statement lines at all (Microsoft's BASCOM uses `/C`, IBM's BASIC Compiler uses `/N`); FreeBASIC's `-lang qb` accepts it with no switch at all. See the [Command-Line Reference](command-line-reference.md) for the exact flags.
 
 ### If Transpilation
 
