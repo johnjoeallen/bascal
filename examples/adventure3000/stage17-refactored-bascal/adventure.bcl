@@ -862,7 +862,6 @@ function verbCross%()
     global currentRoom%
     global crystalBridgeBuilt%
     global direction%
-    global targetRoom%
     if currentRoom% = 19 and crystalBridgeBuilt% = 0 then
         printMessage(3)
     elseif currentRoom% = 19 then
@@ -1049,7 +1048,6 @@ end function
  */
 function verbEnter%()
     global currentRoom%
-    global direction%
     global targetRoom%
     global roomExits%
     if currentRoom% = 6 or currentRoom% = 68 then
@@ -1082,7 +1080,6 @@ end function
  */
 function verbLeave%()
     global currentRoom%
-    global direction%
     global targetRoom%
     global roomExits%
     if currentRoom% = 7 or currentRoom% = 69 then
@@ -1586,7 +1583,6 @@ function verbOpen%()
     global itemRoom%
     global currentRoom%
     global responseText$
-    global commandLine$
     findMatchedItems()
     if itemCode%=0 then
         PRINT "Open ";
@@ -1626,7 +1622,6 @@ end function
  */
 function verbClose%()
     global itemCode%
-    global itemRoom%
     return 0
     findMatchedItems()
     IF itemCode%=40 THEN return verbLock%()
