@@ -1,0 +1,156 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "BASCAL",
+  "scopeName": "source.bascal",
+  "fileTypes": ["bcl"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#labels" },
+    { "include": "#builtin-functions" },
+    { "include": "#type-suffixed-identifiers" },
+    { "include": "#dependency-decls" },
+    { "include": "#storage-decls" },
+    { "include": "#control-keywords" },
+    { "include": "#operators-keywords" },
+    { "include": "#constants" },
+    { "include": "#file-modes" },
+    { "include": "#function-calls" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.bascal",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.double-slash.bascal",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.apostrophe.bascal",
+          "match": "'.*$"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.bascal",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": []
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.bascal",
+          "match": "&[Hh][0-9A-Fa-f]+"
+        },
+        {
+          "name": "constant.numeric.octal.bascal",
+          "match": "&[Oo]?[0-7]+"
+        },
+        {
+          "name": "constant.numeric.float.bascal",
+          "match": "\\b[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?[!#]?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.bascal",
+          "match": "\\b[0-9]+[%&!#]?\\b"
+        }
+      ]
+    },
+    "labels": {
+      "name": "entity.name.label.bascal",
+      "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*:(?!=)"
+    },
+    "dependency-decls": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(require|import)\\b(\\s+[A-Za-z_][A-Za-z0-9_.]*)?",
+          "captures": {
+            "1": { "name": "keyword.control.import.bascal" },
+            "2": { "name": "entity.name.type.module.bascal" }
+          }
+        }
+      ]
+    },
+    "storage-decls": {
+      "patterns": [
+        {
+          "name": "storage.type.bascal",
+          "match": "(?i)\\b(dim|declare|global|const|record|field|file|def|fn|method|combines|extends|fluent|byref|byval|returns|shared|common)\\b"
+        },
+        {
+          "name": "storage.type.function.bascal keyword.declaration.bascal",
+          "match": "(?i)\\b(program|procedure|function)\\b"
+        }
+      ]
+    },
+    "control-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.bascal",
+          "match": "(?i)\\b(if|then|elseif|else|end\\s+if|for|to|downto|step|next|end\\s+for|while|end\\s+while|wend|do|loop|until|select|case|end\\s+select|try|catch|finally|end\\s+try|return|exit|continue|goto|gosub|on|resume|error|throw|end)\\b"
+        }
+      ]
+    },
+    "operators-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.operator.word.bascal",
+          "match": "(?i)\\b(and|or|not|xor|mod|is)\\b"
+        },
+        {
+          "name": "keyword.operator.bascal",
+          "match": "(<>|<=|>=|=|<|>|\\+|-|\\*|/|\\\\|\\^)"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.bascal",
+          "match": "(?i)\\b(true|false)\\b"
+        }
+      ]
+    },
+    "file-modes": {
+      "patterns": [
+        {
+          "name": "keyword.other.io.bascal",
+          "match": "(?i)\\b(open|close|input|output|append|random|binary|as|write|line|print|lprint|get|put|lset|rset|seek|kill|name|data|read|restore|erase|stop|cls|beep|system|randomize|poke|out|width|clear|swap|locate|color|let|option|base)\\b"
+        }
+      ]
+    },
+    "builtin-functions": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.bascal",
+          "match": "(?i)\\b(str|chr|hex|oct|space|environ|command|trim|left|right|mid|instr|format|len|val|asc|sqr|abs|int|fix|sgn|rnd|eof|sin|cos|tan|atn|log|exp|cint|clng|csng|cdbl|peek|inp|lof|loc|pos|csrlin|freefile|fre|lpos|varptr|date|time|timer|inkey|err|erl|tab|spc|ubound|lbound|iif|mki|mkl|mks|mkd|cvi|cvl|cvs|cvd|lpad|rpad)\\$?%?\\b(?=\\s*\\()"
+        }
+      ]
+    },
+    "type-suffixed-identifiers": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)([%&!#$])",
+          "captures": {
+            "1": { "name": "variable.other.bascal" },
+            "2": { "name": "storage.type.suffix.bascal" }
+          }
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*[%&!#$]?)\\s*(?=\\()",
+          "name": "entity.name.function.bascal"
+        }
+      ]
+    }
+  }
+}

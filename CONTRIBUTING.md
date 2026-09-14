@@ -80,6 +80,7 @@ one behavior, the same way the existing fixture is scoped.
 ```
 src/        Rust transpiler source
 tutorial/   BASCAL tutorials and worked examples (.bas/.c generated alongside each .bcl)
+editors/    editor support (currently: a VS Code/IntelliJ .bcl syntax-highlighting grammar)
 tmp/        temporary compiled binaries (git-ignored)
 ```
 
