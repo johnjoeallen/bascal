@@ -113,6 +113,39 @@ AMESSAGE's fractional "#N.M" variant-message numbers).
 Verified byte-identical under `--target c`, all four kinds of change
 included.
 
+**Fifth follow-up:** `findMatchedItems()` sets four globals --
+`matchCount%`, `itemCode%`, `selectedItemName$`, and `responseText$`
+-- but a careful trace of all 8 call sites (confirmed independently
+with `--strict-vars-warn`: remove a `global` declaration, recompile,
+and see whether the compiler flags a genuine pre-reassignment read at
+the exact line, rather than trusting a single test run that might not
+exercise every state) showed `selectedItemName$` is never read by any
+of them -- it only round-trips into `responseText$` inside
+`findMatchedItems()` itself, so that round-trip (and the variable) is
+gone; `findMatchedItems()` now writes `responseText$` directly.
+`verbGet%()` and `verbDrop%()` only ever consume `matchCount%` from
+the call -- their own `itemCode%`/`responseText$` outputs are
+overwritten before use every time (`itemCode%` by their own
+`for itemCode% = 1 to totalItems%` immediately after, `responseText$`
+inside one branch's own self-contained message) -- so both functions'
+now-pointless `global itemCode%`/`global responseText$` declarations
+are gone too. `verbFeed%()` and `verbReadMagazine%()` keep needing
+`itemCode%` but never read `responseText$` from the call (always
+overwritten with a literal first), so just their `global responseText$`
+lines drop. `verbThrow%()`, `verbAttack%()`, and `verbOpen%()` are
+unchanged -- they're the functions that actually depend on this call's
+output. Caught one self-inflicted bug during this cleanup: an initial
+edit missed `findMatchedItems()`'s trailing `responseText$ =
+selectedItemName$` copy-back line, which `--strict-vars-warn` flagged
+immediately (referencing the just-deleted variable) before it could
+reach the compiled output.
+
+Verified byte-identical under `--target c` against a richer command
+sequence than prior follow-ups used -- GET/DROP of both matched and
+unmatched items, GET ALL/DROP ALL, OPEN/CLOSE, READ MAGAZINE,
+ATTACK, FEED, DRINK, EAT, THROW -- specifically because this change
+touches those functions' own logic, not just cosmetics.
+
 </div>
 
 <details class="source-embed" markdown="1">
@@ -525,30 +558,27 @@ end procedure
 /*
  * Scans the parsed keyword flags for item names the player typed:
  * matchCount counts how many matched, itemCode% remembers the first
- * exact-item match's own code, and selectedItemName$/responseText$ end
- * up holding the last match's display name.
+ * exact-item match's own code, and responseText$ ends up holding the
+ * last match's display name.
  */
 procedure findMatchedItems()
     global keywordFound%
     global matchCount%
     global itemCode%
-    global selectedItemName$
     global responseText$
     global itemNames$
     matchCount% = 0
     itemCode% = 0
-    selectedItemName$ = ""
+    responseText$ = ""
     for itemScanIndex% = 1 to 45
         if keywordFound%(itemScanIndex%) <> 0 then
             matchCount% = matchCount% + 1
             responseText$ = itemNames$(itemScanIndex%)
-            selectedItemName$ = responseText$
             if keywordFound%(itemScanIndex%) = 1 and matchCount% = 1 then
                 itemCode% = itemScanIndex%
             end if
         end if
     end for
-    responseText$ = selectedItemName$
 end procedure
 
 /*
@@ -1268,7 +1298,6 @@ end function
 function verbGet%()
     global keywordFound%
     global matchCount%
-    global itemCode%
     global itemRoom%
     global currentRoom%
     global bearTamedScored%
@@ -1279,7 +1308,6 @@ function verbGet%()
     global totalItems%
     global itemNames$
     global paddedCommand$
-    global responseText$
     global commandLine$
     if keywordFound%(47) <> 1 then
         findMatchedItems()
@@ -1359,14 +1387,12 @@ end function
 function verbDrop%()
     global keywordFound%
     global matchCount%
-    global itemCode%
     global itemRoom%
     global currentRoom%
     global birdInCage%
     global bottleContents%
     global trollState%
     global totalItems%
-    global responseText$
     global itemNames$
     if keywordFound%(47) <> 1 then
         findMatchedItems()
@@ -1508,7 +1534,6 @@ function verbFeed%()
     global itemCode%
     global itemRoom%
     global currentRoom%
-    global responseText$
     global commandLine$
     global bearFedState%
     global itemNames$
@@ -2040,7 +2065,6 @@ end function
 function verbReadMagazine%()
     global itemCode%
     global itemRoom%
-    global responseText$
     global commandLine$
     findMatchedItems()
     if itemCode% <> 25 then

@@ -402,30 +402,27 @@ end procedure
 /*
  * Scans the parsed keyword flags for item names the player typed:
  * matchCount counts how many matched, itemCode% remembers the first
- * exact-item match's own code, and selectedItemName$/responseText$ end
- * up holding the last match's display name.
+ * exact-item match's own code, and responseText$ ends up holding the
+ * last match's display name.
  */
 procedure findMatchedItems()
     global keywordFound%
     global matchCount%
     global itemCode%
-    global selectedItemName$
     global responseText$
     global itemNames$
     matchCount% = 0
     itemCode% = 0
-    selectedItemName$ = ""
+    responseText$ = ""
     for itemScanIndex% = 1 to 45
         if keywordFound%(itemScanIndex%) <> 0 then
             matchCount% = matchCount% + 1
             responseText$ = itemNames$(itemScanIndex%)
-            selectedItemName$ = responseText$
             if keywordFound%(itemScanIndex%) = 1 and matchCount% = 1 then
                 itemCode% = itemScanIndex%
             end if
         end if
     end for
-    responseText$ = selectedItemName$
 end procedure
 
 /*
@@ -1145,7 +1142,6 @@ end function
 function verbGet%()
     global keywordFound%
     global matchCount%
-    global itemCode%
     global itemRoom%
     global currentRoom%
     global bearTamedScored%
@@ -1156,7 +1152,6 @@ function verbGet%()
     global totalItems%
     global itemNames$
     global paddedCommand$
-    global responseText$
     global commandLine$
     if keywordFound%(47) <> 1 then
         findMatchedItems()
@@ -1236,14 +1231,12 @@ end function
 function verbDrop%()
     global keywordFound%
     global matchCount%
-    global itemCode%
     global itemRoom%
     global currentRoom%
     global birdInCage%
     global bottleContents%
     global trollState%
     global totalItems%
-    global responseText$
     global itemNames$
     if keywordFound%(47) <> 1 then
         findMatchedItems()
@@ -1385,7 +1378,6 @@ function verbFeed%()
     global itemCode%
     global itemRoom%
     global currentRoom%
-    global responseText$
     global commandLine$
     global bearFedState%
     global itemNames$
@@ -1917,7 +1909,6 @@ end function
 function verbReadMagazine%()
     global itemCode%
     global itemRoom%
-    global responseText$
     global commandLine$
     findMatchedItems()
     if itemCode% <> 25 then
