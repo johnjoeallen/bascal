@@ -150,7 +150,7 @@ end if
 
 ### A built-in source formatter
 
-`bcc --format` rewrites a `.bcl` file's indentation, spacing, and reserved-word casing to `bcc`'s own canonical style, in the same spirit as `gofmt`; `--format-check` reports what's non-compliant without touching the file. It never reflows an expression or changes line count.
+`bcc --format` rewrites a `.bcl` file's indentation, spacing, and casing to `bcc`'s own canonical style, in the same spirit as `gofmt`; `--format-check` reports what's non-compliant without touching the file. It never reflows an expression, but it will split a `:`-chained multi-statement line into one statement per line — or, when that line is a single-line `if`, explode it into full block form, since single-line-if syntax has no closing keyword for a multi-line body to end at.
 
 ```bash
 $ bcc --format-check legacy.bcl
