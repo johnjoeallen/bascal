@@ -41,29 +41,35 @@ correctly to a wide range of commands," not "every path verified."
 
 ### `--target C` and `--target jvm`
 
-- **`--target jvm` cannot run any stage.** Every stage `OPEN`s its data
-  files, and the JVM backend has no file I/O support at all yet.
-- **`--target c` cannot currently build any stage either, but for a more
-  interesting reason.** All stages use classic `on error goto` at three call
-  sites (SAVE GAME, LOAD OLD GAME, and BUG report), and the C backend
-  permanently rejects `on error goto`/`resume`/`error` by design (GitHub
-  issue #61). BASCAL's documented portable alternative, `try`/`catch`/
-  `finally`, does make every stage build and run under `--target c` --
-  but its generated BASIC uses `RESUME <linenum>`, which real `fbc` rejects
-  outright, a genuine pre-existing `bcc` bug (issue #100) confirmed to
-  predate this port. Until #100 is fixed, no BASCAL program can use
-  `try`/`catch` for error handling *and* build cleanly under real `fbc`, so
-  every stage keeps `on error goto`, preserving the `fbc`-verified BASIC
-  target at the cost of `--target c` support. Stages 2 and 3 have an
-  independent, additional blocker: their still-`ON ... GOTO` legacy
-  dispatch forms aren't supported by the C backend at all.
+- **`--target jvm` cannot run any stage.** The JVM backend doesn't
+  implement `DATA`/`READ` at all yet (every stage hits this immediately,
+  in the Bedquilt room-pick table), and even past that, it only supports
+  `OPEN ... FOR RANDOM` (fixed-width record I/O) -- not the sequential
+  `OPEN ... FOR INPUT`/`OUTPUT`/`APPEND` every stage uses to load its data
+  files and to SAVE/LOAD/BUG.
+- **`--target c` works for stages 10-17, not for stages 1-9.** Stages 1-9
+  use classic `on error goto` at three call sites (SAVE GAME, LOAD OLD
+  GAME, and BUG report), and the C backend permanently rejects `on error
+  goto`/`resume`/`error` by design (GitHub issue #61) -- stages 2 and 3
+  have an independent, additional blocker besides, since their
+  still-`ON ... GOTO` legacy dispatch forms aren't supported by the C
+  backend at all. Stage 10 switched those three call sites to BASCAL's
+  portable `try`/`catch`/`finally` instead, which the C backend fully
+  supports -- confirmed end to end (SAVE/LOAD/BUG all work under a real
+  native `--target c` build, including the file-not-found `catch` path).
+  That's a trade, not a pure upgrade, though: `try`/`catch`'s generated
+  `RESUME <lineno>` is valid under real BASCOM but real `fbc` rejects it
+  outright (issue #100/#153), so stages 10-17 no longer build under
+  `--target fbc` the way stages 1-9 still do. `--target basic` (real
+  BASCOM, this case study's primary verification target throughout) works
+  for every stage regardless.
 
-In short: `--target c` compatibility for this case study is blocked on two
-already-tracked upstream `bcc` issues, not on anything about the port
-itself -- #61 is permanent by design, #100 is a real bug that could in
-principle be fixed.
+In short: no stage runs under `--target jvm` yet (tracked, in-progress
+backend gaps); `--target c` works for the second half of the port
+(stages 10-17) at the cost of `--target fbc`, a deliberate trade stage 10
+documents in full.
 
-The complete port, all fifteen stages, is in
+The complete port, all seventeen stages, is in
 [`examples/adventure3000`](https://github.com/johnjoeallen/bascal/tree/main/examples/adventure3000).
 
 </div>
