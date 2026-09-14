@@ -1573,6 +1573,15 @@ fn check_var_uses(
         let ident = match expr {
             Expr::Ident(ident) => ident,
             Expr::ArrayRef { name, .. } => name,
+            // A multi-dimensional array reference (`grid%(row%, col%)`)
+            // parses as `Expr::Call`, not `Expr::ArrayRef` -- see
+            // `make_paren_ident_expr`'s own doc comment in parser.rs: a
+            // suffixed identifier only becomes `ArrayRef` when it has
+            // exactly one index argument. A real function call also
+            // parses this way, but `known_callables` below already
+            // exempts those, so checking `Expr::Call`'s own name here
+            // only catches what that single-index special case misses.
+            Expr::Call { name, .. } => name,
             _ => return,
         };
         if known_callables.contains(&ident.name.to_ascii_lowercase()) {
@@ -2333,6 +2342,24 @@ mod position_tests {
         assert_real_pos(&diags);
         assert_eq!(diags.len(), 1, "diagnostics: {diags:?}");
         assert_eq!(diags[0].pos.line, 3, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn strict_vars_catches_an_undeclared_multi_dimensional_array_read() {
+        // A single-index array reference (`items%(idx%)`) parses as
+        // `Expr::ArrayRef`, which `check_var_uses` already checked; a
+        // multi-index reference (`grid%(row%, col%)`) parses as
+        // `Expr::Call` instead (see `make_paren_ident_expr` in parser.rs),
+        // which `check_var_uses` used to skip entirely -- issue #185.
+        let source = "\nfunction readCell%(row%, col%)\n    return grid%(row%, col%)\nend function\n\nprint readCell%(1, 2)\nend\n";
+        let program = parse(source);
+        let diags = check_strict_vars(&program, false);
+        assert_real_pos(&diags);
+        let undeclared = diags
+            .iter()
+            .find(|d| d.message.contains("`grid%`"))
+            .unwrap_or_else(|| panic!("expected an undeclared-grid% diagnostic: {diags:?}"));
+        assert_eq!(undeclared.pos.line, 3, "diagnostics: {diags:?}");
     }
 
     #[test]
