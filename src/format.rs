@@ -19,6 +19,19 @@
 //! (e.g. a `* ` prefix per line, or ASCII art), and this formatter has no
 //! opinion on that -- reindenting them blindly would be more likely to
 //! break a deliberate layout than fix an accidental one.
+//!
+//! A bare `label:` (nothing else on its own line) indents the `data`
+//! lines that immediately follow it one level deeper, matching its usual
+//! role as a `restore` target for a data table -- grouping what belongs
+//! to it, for the same reason a `for`/`if` body is indented. That block
+//! has no closing keyword of its own: it ends at the first line that
+//! isn't a `data` statement or a comment about the table, or at a blank
+//! line (which is how a table's own trailing comment ends and something
+//! unrelated -- often the next function's own doc comment -- begins,
+//! even when that next thing is itself just a comment). A label
+//! immediately followed by a real statement on the same line (e.g.
+//! `L6483: FOR Z0=0 TO Z9`) is not a bare label and never triggers this
+//! -- its statement is classified normally instead.
 
 use crate::lexer::{Lexer, Token, TokenKind};
 use std::collections::BTreeMap;
@@ -40,6 +53,12 @@ enum Frame {
     Try,
     Fn,
     Record,
+    /// A bare `label:` immediately followed by one or more `data`
+    /// statements (its usual role: a `restore` target for a data
+    /// table). Pushed by the label itself; popped automatically by the
+    /// first line afterward that isn't a `data` statement or a comment,
+    /// so the block needs no closing keyword of its own.
+    LabelData,
     Method,
 }
 
@@ -69,6 +88,14 @@ pub fn reindent(filename: &str, source: &str) -> String {
             continue;
         }
         if raw_line.trim().is_empty() {
+            // A blank line is the natural way a data table's own trailing
+            // comment ends and something unrelated (often the next
+            // function's own doc comment) begins -- unlike a comment
+            // line right in the middle of the table, it does close a
+            // still-open `LabelData` block.
+            if matches!(stack.last(), Some(Frame::LabelData)) {
+                stack.pop();
+            }
             out.push(String::new());
             continue;
         }
@@ -110,6 +137,15 @@ pub fn reindent(filename: &str, source: &str) -> String {
             .collect();
 
         let first_word = words.first().map(String::as_str).unwrap_or("");
+        // `effective` still holds the line's own trailing `Newline`
+        // token even when nothing else follows the label, so "nothing
+        // real after the colon" has to be judged by `words` (Ident
+        // tokens only), not by whether the slice itself is empty.
+        let is_bare_label = has_leading_label && words.is_empty();
+        let is_comment_only = words.is_empty()
+            && toks
+                .iter()
+                .any(|t| matches!(t.kind, TokenKind::Comment(_) | TokenKind::BlockComment(_)));
 
         // `case`/`select case` need to know whether the LAST significant
         // token on the line is `then` (a block `if`/`elseif`) so a
@@ -130,6 +166,17 @@ pub fn reindent(filename: &str, source: &str) -> String {
         let mut pop_count = 0usize;
         let mut pending_push: Option<Frame> = None;
 
+        // A `LabelData` block (a bare `label:` followed by `data` lines)
+        // has no closing keyword of its own -- it just ends the moment
+        // something other than a `data` statement or a comment shows up,
+        // including a fresh label starting a new block right after it.
+        if matches!(stack.last(), Some(Frame::LabelData))
+            && first_word != "data"
+            && !is_comment_only
+        {
+            pop_count += 1;
+        }
+
         if !effective.is_empty() {
             match first_word {
                 "end" => {
@@ -149,19 +196,19 @@ pub fn reindent(filename: &str, source: &str) -> String {
                             pop_count += 1;
                         }
                     } else if words.len() > 1 {
-                        pop_count = 1;
+                        pop_count += 1;
                     }
                 }
-                "next" | "wend" | "loop" => pop_count = 1,
+                "next" | "wend" | "loop" => pop_count += 1,
                 "elseif" | "else" => {
                     if stack.last() == Some(&Frame::If) {
-                        pop_count = 1;
+                        pop_count += 1;
                         pending_push = Some(Frame::If);
                     }
                 }
                 "catch" | "finally" => {
                     if stack.last() == Some(&Frame::Try) {
-                        pop_count = 1;
+                        pop_count += 1;
                         pending_push = Some(Frame::Try);
                     }
                 }
@@ -175,7 +222,7 @@ pub fn reindent(filename: &str, source: &str) -> String {
                     // popping first so this line re-aligns with its
                     // siblings rather than nesting inside the last one.
                     if matches!(stack.last(), Some(Frame::Case)) {
-                        pop_count = 1;
+                        pop_count += 1;
                     }
                     pending_push = Some(Frame::Case);
                 }
@@ -216,6 +263,8 @@ pub fn reindent(filename: &str, source: &str) -> String {
 
         if let Some(frame) = pending_push {
             stack.push(frame);
+        } else if is_bare_label {
+            stack.push(Frame::LabelData);
         }
     }
 
@@ -370,17 +419,109 @@ end function
     }
 
     #[test]
-    fn label_keeps_current_level() {
+    fn bare_label_indents_its_own_data_lines_but_not_what_follows() {
+        // A bare `label:` (its usual role: a `restore` target for a data
+        // table) indents consecutive `data` lines -- and a comment among
+        // them -- one level deeper, for the same reason a `for`/`if`
+        // body does: grouping what belongs to it. The first real,
+        // non-`data` statement after it (here `print`) closes that
+        // implicit block with no keyword of its own.
         let source = "\
 function f%()
 myLabel:
+' a comment about the table
 data 1,2,3
+data 4,5,6
+print \"after\"
 end function
 ";
         let expected = "\
 function f%()
     myLabel:
-    data 1,2,3
+        ' a comment about the table
+        data 1,2,3
+        data 4,5,6
+    print \"after\"
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn back_to_back_data_labels_each_get_their_own_indent() {
+        let source = "\
+function f%()
+firstTable:
+data 1,2,3
+secondTable:
+data 4,5,6
+end function
+";
+        let expected = "\
+function f%()
+    firstTable:
+        data 1,2,3
+    secondTable:
+        data 4,5,6
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn blank_line_closes_a_data_label_even_before_an_unrelated_comment() {
+        // A comment right in the middle of a table (no blank line
+        // separating it) stays part of the table (see the test above).
+        // But a *blank* line is how a table's own trailing comment ends
+        // and something unrelated -- often the next function's own doc
+        // comment -- begins, so it must close the block even though the
+        // very next line is itself just a comment.
+        let source = "\
+function f%()
+myTable:
+data 1,2,3
+
+/*
+ * Unrelated comment, not about myTable.
+ */
+print \"after\"
+end function
+";
+        let expected = "\
+function f%()
+    myTable:
+        data 1,2,3
+
+    /*
+ * Unrelated comment, not about myTable.
+ */
+    print \"after\"
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn label_with_a_statement_on_the_same_line_does_not_indent_what_follows() {
+        // Only a *bare* label (nothing after the colon on its own line)
+        // opens a data-block indent. `label: statement` already had its
+        // statement classified normally (see the test above this one in
+        // the file); it must not also behave like a bare label.
+        let source = "\
+function f%()
+loopStart: for i% = 1 to 3
+print i%
+end for
+end function
+";
+        let expected = "\
+function f%()
+    loopStart: for i% = 1 to 3
+        print i%
+    end for
 end function
 ";
         assert_eq!(reindent("test.bcl", source), expected);
