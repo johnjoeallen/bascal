@@ -999,7 +999,10 @@ while true
         end select
         v(l1) = 1
         describeRoomContents()
-        if dead = 1 then reincarnate() : continue
+        if dead = 1 then
+            reincarnate()
+            continue
+        end if
         situationDescriptions()
     else
         printMessage(45)
@@ -1015,7 +1018,10 @@ while true
     while true
         L400: if len(c$) > 0 then goto L500
         L410: input ">";c$:c$ = ucase$(c$)
-        if c$ = "" then c$ = "" : continue
+        if c$ = "" then
+            c$ = ""
+            continue
+        end if
         print: print
         c$ = ucase$(c$)
         '    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,
@@ -1207,16 +1213,25 @@ while true
                 end if
             case 5
                 ' *** CLIMB ***
-                if l1 <> 50 then printMessage(2) : continue
+                if l1 <> 50 then
+                    printMessage(2)
+                    continue
+                end if
                 ' CAN HE CLIMB BEANSTALK?
-                if p1 < 2 then printMessage(2) : continue
+                if p1 < 2 then
+                    printMessage(2)
+                    continue
+                end if
                 ' YES
                 z2 = 70
                 performMove%(z2)
                 checkPitsAndReincarnateIfNeeded() : exit
             case 6
                 ' *** JUMP *** STRICTLY SUICIDAL
-                if l1 <> 16 and l1 <> 19 and l1 <> 20 and l1 <> 27 then printMessage(2) : continue
+                if l1 <> 16 and l1 <> 19 and l1 <> 20 and l1 <> 27 then
+                    printMessage(2)
+                    continue
+                end if
                 printMessage(4)
                 reincarnate() : exit
             case 7
@@ -1547,7 +1562,10 @@ while true
                 ' a call site missed when checkDwarf()/checkDwarfAttack() were split out)
                 L4400: print "Thrown."
                 L4410: s(z3) = l1
-                if dead = 1 then reincarnate() : exit
+                if dead = 1 then
+                    reincarnate()
+                    exit
+                end if
                 continue
             case 18
                 ' *** ATTACK ***
@@ -1757,7 +1775,10 @@ while true
                 printMessage(20)
                 c$ = "" : continue
                 L5950: z3 = 20:checkCarryingItem()
-                if z5 = 0 then c$ = "" : continue
+                if z5 = 0 then
+                    c$ = ""
+                    continue
+                end if
                 printMessage(73)
                 s(20) = 0:B0 = 0:continue
             case 29
@@ -1766,7 +1787,10 @@ while true
                 printMessage(21)
                 c$ = "" : continue
                 L6040: z3 = 16:checkCarryingItem()
-                if z5 = 0 then c$ = "" : continue
+                if z5 = 0 then
+                    c$ = ""
+                    continue
+                end if
                 printMessage(22)
                 s(17) = 0:B0 = 0:continue
             case 30

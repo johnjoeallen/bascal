@@ -1008,9 +1008,15 @@ function verbClimb%()
     global p1
     global z2
     ' *** CLIMB ***
-    if l1 <> 50 then printMessage(2) : return 0
+    if l1 <> 50 then
+        printMessage(2)
+        return 0
+    end if
     ' CAN HE CLIMB BEANSTALK?
-    if p1 < 2 then printMessage(2) : return 0
+    if p1 < 2 then
+        printMessage(2)
+        return 0
+    end if
     ' YES
     z2 = 70
     performMove%(z2)
@@ -1021,7 +1027,10 @@ end function
 function verbJump%()
     global l1
     ' *** JUMP *** STRICTLY SUICIDAL
-    if l1 <> 16 and l1 <> 19 and l1 <> 20 and l1 <> 27 then printMessage(2) : return 0
+    if l1 <> 16 and l1 <> 19 and l1 <> 20 and l1 <> 27 then
+        printMessage(2)
+        return 0
+    end if
     printMessage(4)
     reincarnate()
     return 1
@@ -1745,7 +1754,10 @@ function verbEat%()
     c$ = ""
     return 0
     L5950: z3 = 20:checkCarryingItem()
-    if z5 = 0 then c$ = "" : return 0
+    if z5 = 0 then
+        c$ = ""
+        return 0
+    end if
     printMessage(73)
     s(20) = 0:b0 = 0
     return 0
@@ -1764,7 +1776,10 @@ function verbDrink%()
     c$ = ""
     return 0
     L6040: z3 = 16:checkCarryingItem()
-    if z5 = 0 then c$ = "" : return 0
+    if z5 = 0 then
+        c$ = ""
+        return 0
+    end if
     printMessage(22)
     s(17) = 0:b0 = 0
     return 0
@@ -2118,7 +2133,10 @@ while true
         end select
         v(l1) = 1
         describeRoomContents()
-        if dead = 1 then reincarnate() : continue
+        if dead = 1 then
+            reincarnate()
+            continue
+        end if
         situationDescriptions()
     else
         printMessage(45)
@@ -2134,7 +2152,10 @@ while true
     while true
         L400: if len(c$) > 0 then goto L500
         L410: input ">";c$:c$ = ucase$(c$)
-        if c$ = "" then c$ = "" : continue
+        if c$ = "" then
+            c$ = ""
+            continue
+        end if
         print: print
         c$ = ucase$(c$)
         '    65-90 = A-Z               48-57 = 0-9         46 = . 44 = ,
