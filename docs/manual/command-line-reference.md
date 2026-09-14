@@ -38,9 +38,8 @@ bcc input.bcl [-o dir/] [-L dir] [-l library]
 - **Trailing whitespace**, stripped from every line unconditionally.
 - **Comma spacing**: no space before, exactly one space after.
 - **Operator spacing**: `=`, `<>`, `<=`, `>=`, `<`, `>`, `*`, `/`, `\`, `^`, `+=`, `-=`, `*=`, `/=`, `&&`, `||` are always binary in BASIC, so always get exactly one space on each side. `+`/`-` are only forced when unambiguously binary -- the token right before is a number, string, closing bracket, or a `%`/`&`/`!`/`#`/`$`-suffixed identifier (never a bare keyword, which lexes identically to a plain variable name and would make `return -1` wrongly read as binary). Anything not covered by one of these rules keeps its original spacing, except a run of 2+ spaces between any two tokens, which always collapses to one.
-- **Legacy closer keywords**: a bare `wend` becomes `end while`, and a bare `loop` (no trailing `while`/`until` -- that form has no `end do` equivalent, so it's left alone) becomes `end do`, matching the `end <keyword>` spelling every other block already uses. Replacement casing follows the original keyword's own casing.
-
-Keyword *casing* (e.g. a stray `IF`/`PRINT` left over from a BASIC source a program was ported from) is not touched by either flag yet.
+- **Legacy closer keywords**: a bare `wend` becomes `end while`, and a bare `loop` (no trailing `while`/`until` -- that form has no `end do` equivalent, so it's left alone) becomes `end do`, matching the `end <keyword>` spelling every other block already uses.
+- **Keyword casing**: every reserved word (`if`/`then`/`print`/`end function`/... -- anything the parser itself treats as syntax, including the `and`/`or`/`not`/`xor`/`mod` operators, `true`/`false`, and the scalar type names) is lowercased, e.g. a stray `IF`/`PRINT` left over from a BASIC source a program was ported from becomes `if`/`print`. A builtin *function* name like `len`/`mid$`/`sizeof` -- recognized by name rather than by the grammar -- keeps whatever casing it was written with; only true reserved words are touched.
 
 ### Default Target
 

@@ -37,7 +37,7 @@ points% = 85
 if points% >= 90 then
     grade$ = "A"
 elseif points% >= 80 then
-    grade$ = "B"        // points% = 85 lands here
+    grade$ = "B" // points% = 85 lands here
 elseif points% >= 70 then
     grade$ = "C"
 elseif points% >= 60 then
@@ -66,7 +66,7 @@ if temperature% > 30 then print "Hot day (single-line)"
 if temperature% > 100 then print "Scorching" else print "Not scorching"
 
 /* Compound conditions */
-age%    = 25
+age% = 25
 income% = 45000
 if age% >= 18 and income% >= 30000 then
     print "Eligible"

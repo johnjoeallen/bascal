@@ -8,8 +8,8 @@ library bubbleSort
 function bubbleSort%(byref data%(?))
     count% = sizeof(data%)
     /* After each outer pass, the largest remaining value has bubbled right. */
-    FOR i% = 1 TO count% - 1
-        FOR j% = 1 TO count% - i%
+    for i% = 1 to count% - 1
+        for j% = 1 to count% - i%
             if data%(j%) > data%(j% + 1) then
                 /* Swap adjacent out-of-order elements. */
                 temp% = data%(j%)

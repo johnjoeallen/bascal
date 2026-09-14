@@ -27,11 +27,22 @@
 //!   a bare `loop` (no trailing `while`/`until` -- that form has no
 //!   `end do` equivalent, so it's left alone) becomes `end do`, matching
 //!   the `end <keyword>` spelling every other block already uses.
-//!
-//! Keyword *casing* is deliberately not touched here -- the corpus is
-//! consistent enough on indentation and closer spelling to infer a
-//! confident default, but casing needs the same evidence-gathering
-//! pass before picking one, and is left for a follow-up.
+//! - **Keyword casing**: every token whose text case-insensitively
+//!   matches a reserved word (see `KEYWORDS`) is lowercased, e.g. a
+//!   stray `IF`/`PRINT`/`END FUNCTION` left over from a BASIC source a
+//!   program was ported from becomes `if`/`print`/`end function`.
+//!   `KEYWORDS` lists only words the parser itself treats as reserved
+//!   syntax (`classify_keyword`, `check_keyword`'s own call sites,
+//!   the `and`/`or`/`not`/`xor`/`true`/`false` operators/literals, and
+//!   the scalar type names) -- never a builtin *function* name like
+//!   `len`/`mid`/`sizeof` recognized by a different, name-based
+//!   mechanism, since conflating the two would broaden this well past
+//!   "keyword casing". Parsing itself is already fully case-insensitive
+//!   (`keyword_eq`/`classify_keyword` both lowercase before comparing),
+//!   so this can never change what a line parses as -- only a plain
+//!   identifier that happens to be spelled exactly like a reserved word
+//!   (vanishingly rare, and would show up as a generated-output diff in
+//!   this formatter's own corpus verification) could visibly change.
 //!
 //! Multi-line `/* ... */` comments are a deliberate exception: only their
 //! opening line is reindented. Interior lines are often hand-aligned
@@ -56,6 +67,31 @@ use crate::lexer::{Lexer, Token, TokenKind};
 use std::collections::BTreeMap;
 
 const INDENT_UNIT: &str = "    ";
+
+/// Every word the parser itself treats as reserved syntax -- statement
+/// dispatch (`classify_keyword`), mid-statement structural checks
+/// (`check_keyword`/`expect_keyword`/`check_next_keyword`), the logical
+/// operators and boolean literals (`keyword_eq`), and the scalar type
+/// names (`scalar_type_name`) -- all in `parser.rs`. Deliberately excludes
+/// builtin *function* names (`len`, `mid`, `sizeof`, ...) recognized by a
+/// separate, name-based mechanism rather than the grammar itself; casing
+/// those is a different, broader change than this list makes.
+const KEYWORDS: &[&str] = &[
+    "and", "append", "as", "base", "beep", "binary", "byref", "byval", "case", "catch", "clear",
+    "close", "cls", "color", "combines", "common", "const", "continue", "data", "declare", "def",
+    "dim", "do", "double", "downto", "else", "elseif", "end", "erase", "error", "exit", "false",
+    "field", "file", "finally", "fluent", "fn", "for", "function", "get", "global", "gosub",
+    "goto", "if", "import", "input", "integer", "is", "kill", "let", "library", "line", "locate",
+    "long", "loop", "lprint", "lset", "method", "mod", "name", "next", "not", "on", "open",
+    "option", "or", "out", "output", "poke", "print", "procedure", "program", "put", "random",
+    "randomize", "read", "record", "require", "restore", "resume", "return", "returns", "rset",
+    "seek", "select", "shared", "single", "step", "stop", "string", "swap", "system", "then",
+    "throw", "to", "true", "try", "until", "using", "wend", "while", "width", "write", "xor",
+];
+
+fn is_keyword_word(lower: &str) -> bool {
+    KEYWORDS.contains(&lower)
+}
 
 /// One nested block currently open, and what closes it. `SelectCaseHeader`
 /// is the odd one out: `select case` opens it, but the first `case` line
@@ -335,10 +371,11 @@ fn is_value_ending(kind: &TokenKind) -> bool {
 
 /// Rebuilds one line's content (everything after its own leading
 /// whitespace, which `reindent` replaces separately) from `toks`,
-/// normalizing inter-token spacing without ever touching a token's own
-/// text -- every token's text is sliced verbatim from `raw_line` by its
-/// real source span, never regenerated from its parsed value, so a
-/// string's exact quoting or a number's exact digits can never drift.
+/// normalizing inter-token spacing and (for a reserved word) casing.
+/// Every non-keyword token's text is still sliced verbatim from
+/// `raw_line` by its real source span, never regenerated from its parsed
+/// value, so a string's exact quoting or a number's exact digits can
+/// never drift.
 ///
 /// `is_solitary_keyword`/`first_word` identify a bare `wend` or `loop`
 /// (the only content on the line besides an optional trailing comment)
@@ -383,16 +420,9 @@ fn respace(raw_line: &str, toks: &[&Token], is_solitary_keyword: bool, first_wor
                 if !original.eq_ignore_ascii_case(first_word) {
                     return None;
                 }
-                let upper = original.chars().any(char::is_alphabetic)
-                    && original
-                        .chars()
-                        .filter(|c| c.is_alphabetic())
-                        .all(char::is_uppercase);
-                let text = match (first_word, upper) {
-                    ("wend", true) => "END WHILE",
-                    ("wend", false) => "end while",
-                    ("loop", true) => "END DO",
-                    ("loop", false) => "end do",
+                let text = match first_word {
+                    "wend" => "end while",
+                    "loop" => "end do",
                     _ => return None,
                 };
                 Some((i, text))
@@ -413,18 +443,32 @@ fn respace(raw_line: &str, toks: &[&Token], is_solitary_keyword: bool, first_wor
         }
     }
 
+    // A token's rendered text: the legacy `wend`/`loop` replacement takes
+    // priority; otherwise a reserved word is lowercased, and anything
+    // else is sliced verbatim from the source (see this fn's own doc
+    // comment for why: a string/comment/number's exact text must never
+    // be regenerated).
+    let render = |i: usize| -> String {
+        if let TokenKind::Ident(name) = &real[i].kind {
+            let lower = name.to_ascii_lowercase();
+            if is_keyword_word(&lower) {
+                return lower;
+            }
+        }
+        let (s, e) = spans[i];
+        chars[s..e].iter().collect()
+    };
+
     let mut out = String::new();
     for i in 0..real.len() {
         if let Some((idx, text)) = legacy_replacement {
             if idx == i {
                 out.push_str(text);
             } else {
-                let (s, e) = spans[i];
-                out.push_str(&chars[s..e].iter().collect::<String>());
+                out.push_str(&render(i));
             }
         } else {
-            let (s, e) = spans[i];
-            out.push_str(&chars[s..e].iter().collect::<String>());
+            out.push_str(&render(i));
         }
 
         if matches!(
@@ -834,7 +878,7 @@ end function
     }
 
     #[test]
-    fn bare_wend_becomes_end_while_preserving_case_and_trailing_comment() {
+    fn bare_wend_becomes_end_while_lowercased_and_keeps_the_trailing_comment() {
         let source = "\
 function f%()
 while x% < 10
@@ -850,9 +894,9 @@ function f%()
     while x% < 10
         x% = x% + 1
     end while
-    WHILE x% > 0
+    while x% > 0
         x% = x% - 1
-    END WHILE ' done
+    end while ' done
 end function
 ";
         assert_eq!(reindent("test.bcl", source), expected);
@@ -905,5 +949,57 @@ end function
     fn already_compliant_source_reports_no_diffs() {
         let source = "function f%()\n    print 1\nend function\n";
         assert!(check("test.bcl", source).is_empty());
+    }
+
+    #[test]
+    fn reserved_words_are_lowercased_regardless_of_original_casing() {
+        let source = "\
+PROGRAM p
+FUNCTION f%()
+IF x% = 1 THEN
+PRINT \"one\"
+ELSEIF x% = 2 THEN
+PRINT \"two\"
+ELSE
+PRINT \"other\"
+END IF
+RETURN 0
+END FUNCTION
+";
+        let expected = "\
+program p
+function f%()
+    if x% = 1 then
+        print \"one\"
+    elseif x% = 2 then
+        print \"two\"
+    else
+        print \"other\"
+    end if
+    return 0
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn builtin_function_names_keep_their_original_casing() {
+        // `Len`/`Mid$` are builtin *functions*, resolved by name rather
+        // than by the parser's own reserved-word grammar -- keyword
+        // casing must leave them alone, unlike `PRINT`/`IF` above.
+        let source = "function f%()\nx% = Len(a$)\ny$ = Mid$(a$, 1, 2)\nend function\n";
+        let expected =
+            "function f%()\n    x% = Len(a$)\n    y$ = Mid$(a$, 1, 2)\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn plain_identifiers_are_never_mistaken_for_keywords() {
+        let source = "function f%()\nBase% = 1\nprint Base%\nend function\n";
+        let expected = "function f%()\n    Base% = 1\n    print Base%\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
     }
 }

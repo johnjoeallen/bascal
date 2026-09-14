@@ -9,7 +9,7 @@
 //   /* ... */  block comment, each line becomes a ' comment in the output
 program hello
 
-print "Hello, World!"        // inline comment after a statement
+print "Hello, World!" // inline comment after a statement
 print "Welcome to BASCAL."
 ' print "This line is commented out."
 

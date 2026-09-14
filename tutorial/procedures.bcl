@@ -31,7 +31,7 @@ end procedure
 // score% -- score to test against the passing threshold
 procedure printIfPass(name$, score%)
     if score% < 60 then
-        return          // early exit — nothing printed for failing scores
+        return // early exit — nothing printed for failing scores
     end if
     print name$ + " passed with " + str$(score%)
 end procedure
@@ -58,14 +58,14 @@ end procedure
 
 printSeparator()
 printScore("Alice", 91)
-printScore("Bob",   54)
+printScore("Bob", 54)
 printScore("Carol", 78)
 printSeparator()
 
 print "Passes only:"
-printIfPass("Alice", 91)   // printed
-printIfPass("Bob",   54)   // skipped (score < 60)
-printIfPass("Carol", 78)   // printed
+printIfPass("Alice", 91) // printed
+printIfPass("Bob", 54) // skipped (score < 60)
+printIfPass("Carol", 78) // printed
 
 const N = 5
 dim data%(N)
@@ -78,6 +78,6 @@ end for
 increment()
 increment()
 increment()
-print "globalCount = " + str$(globalCount%)   // 3
+print "globalCount = " + str$(globalCount%) // 3
 
 end

@@ -5,11 +5,11 @@ require com.bascal.examples.remline.strings
 
 /* REMLINE works on an input BASIC listing and writes a cleaned version. */
 
-DIM rawLine$(1000)
-DIM lineText$(1000)
-DIM lineNumber%(1000)
-DIM keepLine%(1000)
-DIM refNumber%(1000)
+dim rawLine$(1000)
+dim lineText$(1000)
+dim lineNumber%(1000)
+dim keepLine%(1000)
+dim refNumber%(1000)
 
 function loadLines%()
     global refCount%
@@ -19,19 +19,19 @@ function loadLines%()
     global lineNumber%
     global keepLine%
     global inputFile$
-    refCount%  = 0
+    refCount% = 0
     lineCount% = 0
-    OPEN inputFile$ FOR INPUT AS #1
+    open inputFile$ for input as #1
     while EOF(1) = 0
         lineCount% = lineCount% + 1
-        LINE INPUT #1, rawLine$(lineCount%)
+        line input #1, rawLine$(lineCount%)
     end while
-    CLOSE #1
+    close #1
     i% = 1
     while i% <= lineCount%
         lineNumber%(i%) = parseLineNumber%(rawLine$(i%))
-        lineText$(i%)   = stripLineNumber$(rawLine$(i%))
-        keepLine%(i%)   = 0
+        lineText$(i%) = stripLineNumber$(rawLine$(i%))
+        keepLine%(i%) = 0
         i% = i% + 1
     end while
     return 0
@@ -57,20 +57,20 @@ function transformLines%()
     global lineText$
     global keepLine%
     global outputFile$
-    OPEN outputFile$ FOR OUTPUT AS #2
+    open outputFile$ for output as #2
     i% = 1
     while i% <= lineCount%
         if lineNumber%(i%) > 0 then
             if keepLine%(i%) <> 0 or isReferenced%(lineNumber%(i%)) <> 0 then
-                PRINT #2, trimLeft$(STR$(lineNumber%(i%))) + " " + lineText$(i%)
+                print #2, trimLeft$(STR$(lineNumber%(i%))) + " " + lineText$(i%)
             else
-                PRINT #2, lineText$(i%)
+                print #2, lineText$(i%)
             end if
         else
-            PRINT #2, lineText$(i%)
+            print #2, lineText$(i%)
         end if
         i% = i% + 1
     end while
-    CLOSE #2
+    close #2
     return 0
 end function

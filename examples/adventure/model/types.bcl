@@ -13,7 +13,7 @@ end record
 record Room
     name: string
     description: string
-    exits: Exits             // nested record keeps the map cohesive
+    exits: Exits // nested record keeps the map cohesive
 end record
 record Thing
     name: string
