@@ -634,12 +634,12 @@ end procedure
  * Performs the actual room transition, carrying the pirate along with
  * the player if he was following.
  */
-function performMove%(targetRoom%)
+function performMove%(destRoom%)
     global currentRoom%
     global previousRoom%
     global itemRoom%
     previousRoom% = currentRoom%
-    currentRoom% = targetRoom%
+    currentRoom% = destRoom%
     if itemRoom%(35) = previousRoom% then
         itemRoom%(35) = currentRoom%
     end if
@@ -653,7 +653,7 @@ end function
  * already found for a given direction, then completes the move if
  * nothing blocks it.
  */
-function checkSpecialRoomAndMove%(direction%, targetRoom%)
+function checkSpecialRoomAndMove%(dir%, destRoom%)
     global currentRoom%
     global grateOpen%
     global crystalBridgeBuilt%
@@ -664,24 +664,24 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
     global keywordFound%
     global totalItems%
     dim itemScanIndex%
-    if (currentRoom% = 10 and (direction% = 10 or direction% = 5)) or (currentRoom% = 11 and (direction% = 9 or direction% = 3)) then
+    if (currentRoom% = 10 and (dir% = 10 or dir% = 5)) or (currentRoom% = 11 and (dir% = 9 or dir% = 3)) then
         if grateOpen% = 1 then
-            return performMove%(targetRoom%)
+            return performMove%(destRoom%)
         end if
         printMessage(10)
         return 0
-    elseif currentRoom% = 17 and direction% = 9 and itemRoom%(1) = -1 then
+    elseif currentRoom% = 17 and dir% = 9 and itemRoom%(1) = -1 then
         printMessage(38)
         return 0
-    elseif (currentRoom% = 19 and direction% = 7) or (currentRoom% = 20 and direction% = 3) then
+    elseif (currentRoom% = 19 and dir% = 7) or (currentRoom% = 20 and dir% = 3) then
         if crystalBridgeBuilt% then
-            return performMove%(targetRoom%)
+            return performMove%(destRoom%)
         end if
         printMessage(3)
         return 0
-    elseif currentRoom% = 22 and direction% <> 3 and direction% <> 9 then
+    elseif currentRoom% = 22 and dir% <> 3 and dir% <> 9 then
         if snakeAlive% = 0 then
-            return performMove%(targetRoom%)
+            return performMove%(destRoom%)
         end if
         printMessage(50)
         return 0
@@ -694,11 +694,11 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
                 end if
             end for
         end if
-        return performMove%(targetRoom%)
-    elseif (currentRoom% = 60 and direction% = 2) or (currentRoom% = 61 and direction% = 6) then
+        return performMove%(destRoom%)
+    elseif (currentRoom% = 60 and dir% = 2) or (currentRoom% = 61 and dir% = 6) then
         select case trollState% + 1
             case 1
-                return performMove%(targetRoom%)
+                return performMove%(destRoom%)
             case 2
                 printMessage(55)
                 return 0
@@ -709,18 +709,18 @@ function checkSpecialRoomAndMove%(direction%, targetRoom%)
                 return 0
             case 4
                 trollState% = 2
-                return performMove%(targetRoom%)
+                return performMove%(destRoom%)
             case else
-                return performMove%(targetRoom%)
+                return performMove%(destRoom%)
         end select
-    elseif currentRoom% = 73 and direction% = 1 and ironDoorOiled% = 0 then
+    elseif currentRoom% = 73 and dir% = 1 and ironDoorOiled% = 0 then
         printMessage(57)
         return 0
-    elseif currentRoom% = 82 and itemRoom%(33) = currentRoom% and direction% = 1 then
+    elseif currentRoom% = 82 and itemRoom%(33) = currentRoom% and dir% = 1 then
         printMessage(51)
         return 0
     else
-        return performMove%(targetRoom%)
+        return performMove%(destRoom%)
     end if
 end function
 
@@ -731,14 +731,14 @@ end function
  */
 function attemptRandomMove%()
     global currentRoom%
-    dim targetRoom%, pickCount%
+    dim destRoom%, pickCount%
     if currentRoom% = 44 then
         if rnd(1) > 0.5 then
             restore bedquiltRooms
             for pickCount% = 1 to int(rnd(1) * 5) + 1
-                read targetRoom%
+                read destRoom%
             end for
-            return performMove%(targetRoom%)
+            return performMove%(destRoom%)
         end if
         printMessage(52)
         return 0
@@ -760,19 +760,19 @@ bedquiltRooms:
  * Looks up the destination room for a direction and either moves
  * there or prints why not.
  */
-function attemptMove%(direction%)
+function attemptMove%(dir%)
     global currentRoom%
     global roomExits%
-    dim targetRoom%
-    targetRoom% = roomExits%(currentRoom%, direction%)
-    if targetRoom% = 255 then
+    dim destRoom%
+    destRoom% = roomExits%(currentRoom%, dir%)
+    if destRoom% = 255 then
         return attemptRandomMove%()
     end if
-    if targetRoom% < 1 or targetRoom% > 254 then
+    if destRoom% < 1 or destRoom% > 254 then
         printMessage(1)
         return 0
     end if
-    return checkSpecialRoomAndMove%(direction%, targetRoom%)
+    return checkSpecialRoomAndMove%(dir%, destRoom%)
 end function
 
 /*
