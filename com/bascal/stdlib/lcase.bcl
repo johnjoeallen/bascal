@@ -7,12 +7,12 @@ library lcase
 
 method lcase[string]()
     out$ = ""
-    for i% = 1 to LEN(self$)
-        c% = ASC(MID$(self$, i%, 1))
+    for i% = 1 to len(self$)
+        c% = asc(mid$(self$, i%, 1))
         if c% >= 65 && c% <= 90 then
             c% = c% + 32
         end if
-        out$ = out$ + CHR$(c%)
+        out$ = out$ + chr$(c%)
     end for
     return out$
 end method

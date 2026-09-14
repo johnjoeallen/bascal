@@ -26,7 +26,7 @@
 //! - **Legacy closer keywords**: a bare `wend` becomes `end while`, and
 //!   a bare `loop` (no trailing `while`/`until` -- that form has no
 //!   `end do` equivalent, so it's left alone) becomes `end do`, matching
-//!   the `end <keyword>` spelling every other block already uses.
+//!   the `end <keyword>` form every other block already uses.
 //! - **Keyword casing**: every token whose text case-insensitively
 //!   matches a reserved word (see `KEYWORDS`) is lowercased, e.g. a
 //!   stray `IF`/`PRINT`/`END FUNCTION` left over from a BASIC source a
@@ -40,9 +40,37 @@
 //!   "keyword casing". Parsing itself is already fully case-insensitive
 //!   (`keyword_eq`/`classify_keyword` both lowercase before comparing),
 //!   so this can never change what a line parses as -- only a plain
-//!   identifier that happens to be spelled exactly like a reserved word
+//!   identifier that happens to be written exactly like a reserved word
 //!   (vanishingly rare, and would show up as a generated-output diff in
 //!   this formatter's own corpus verification) could visibly change.
+//! - **Builtin casing**: a real BASIC intrinsic (`crate::codegen_basic::
+//!   BASIC_BUILTINS` -- `RND`, `LEN`, `STR$`, `MID$`, ...) is lowercased
+//!   the same way a reserved word is, stripping and reattaching its own
+//!   `%`/`&`/`!`/`#`/`$` suffix first (the builtin list itself is bare
+//!   names). A user function is never allowed to shadow one of these
+//!   (see `reject_functions_shadowing_builtins` in `resolver.rs`), so
+//!   there's no ambiguity to worry about.
+//! - **Declaration-matching casing**: every reference to a function,
+//!   procedure, or variable is rewritten to match how that name's own
+//!   declaration was written (first occurrence wins, file-wide), the
+//!   same way `rustfmt` doesn't touch identifier casing itself but a
+//!   project's own consistent casing stops drifting between a `dim` and
+//!   a later, differently-cased use. Built from one full parse of the
+//!   file (`crate::parser::Parser`, matching `resolver.rs::
+//!   check_strict_vars`'s own pre-`records::lower` AST) -- if that parse
+//!   fails for any reason, this step is silently skipped (see this
+//!   module's own doc comment on never refusing to run) and every other
+//!   rule above still applies. Deliberately narrow: a name that's also a
+//!   record type name is dropped entirely, both the type and any
+//!   same-cased variable left untouched (`record Header` alongside `file
+//!   header as Header = open(...)` is legal, real corpus code -- see
+//!   `collect_program_names`'s own doc comment for why the two can't
+//!   safely share this map's one slot per name); record *field* and
+//!   *method* names (both reached only through `.` syntax, which needs
+//!   its own receiver-type-aware AST walk this doesn't
+//!   attempt) are excluded for the same reason a builtin *method* isn't
+//!   touched above. All three are candidates for a future, more
+//!   context-aware pass.
 //!
 //! Multi-line `/* ... */` comments are a deliberate exception: only their
 //! opening line is reindented. Interior lines are often hand-aligned
@@ -63,8 +91,10 @@
 //! `L6483: FOR Z0=0 TO Z9`) is not a bare label and never triggers this
 //! -- its statement is classified normally instead.
 
+use crate::ast::{BasicIdent, Program, Statement, Stmt, TypeSuffix};
 use crate::lexer::{Lexer, Token, TokenKind};
-use std::collections::BTreeMap;
+use crate::parser::Parser;
+use std::collections::{BTreeMap, HashMap};
 
 const INDENT_UNIT: &str = "    ";
 
@@ -91,6 +121,141 @@ const KEYWORDS: &[&str] = &[
 
 fn is_keyword_word(lower: &str) -> bool {
     KEYWORDS.contains(&lower)
+}
+
+fn is_builtin_word(lower_base: &str) -> bool {
+    crate::codegen_basic::BASIC_BUILTINS.contains(&lower_base)
+}
+
+/// A declared name's own key: its base name lowercased plus its type
+/// suffix (`None` for an unsuffixed, record-typed variable) -- two names
+/// that only differ by suffix are different declarations, matching how
+/// BASCAL itself tells `total%` and `total$` apart.
+type NameKey = (String, Option<TypeSuffix>);
+
+fn record_declaration(map: &mut HashMap<NameKey, String>, ident: &BasicIdent) {
+    map.entry((ident.name.to_ascii_lowercase(), ident.suffix))
+        .or_insert_with(|| ident.as_basic());
+}
+
+/// Every name a `dim`/`declare`/`const`/`global`, a `for` loop's own
+/// counter, a raw `FIELD` buffer variable, a `file <var> = open(...)`
+/// declaration, or a `catch` clause's own `err`/`erl`/source variable
+/// declares, recursing into every nested statement body -- deliberately
+/// not scope-aware (unlike
+/// `resolver.rs::collect_declarations`, which this otherwise mirrors):
+/// this only needs one file-wide "what casing does this name use" answer, not
+/// a validity check, and two same-named declarations in different scopes
+/// overwhelmingly agree on casing in practice; the rare disagreement is
+/// caught by this formatter's own corpus verification, not by a design
+/// meant to handle it.
+fn collect_declared_names(statements: &[Stmt], map: &mut HashMap<NameKey, String>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::Dim { name, .. } | Statement::Const { name, .. } => {
+                record_declaration(map, name);
+            }
+            Statement::GlobalDecl(ident) => {
+                record_declaration(map, ident);
+            }
+            Statement::FileDecl { var, .. } => {
+                record_declaration(map, var);
+            }
+            Statement::For { var, body, .. } => {
+                record_declaration(map, var);
+                collect_declared_names(body, map);
+            }
+            Statement::Field { fields, .. } => {
+                for (_, name) in fields {
+                    record_declaration(map, name);
+                }
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_declared_names(then_body, map);
+                collect_declared_names(else_body, map);
+            }
+            Statement::While { body, .. } | Statement::Do { body, .. } => {
+                collect_declared_names(body, map);
+            }
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_declared_names(&case.body, map);
+                }
+                collect_declared_names(else_body, map);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_declared_names(try_body, map);
+                if let Some(catch) = catch {
+                    record_declaration(map, &catch.err_var);
+                    record_declaration(map, &catch.erl_var);
+                    if let Some(source_var) = &catch.source_var {
+                        record_declaration(map, source_var);
+                    }
+                    collect_declared_names(&catch.body, map);
+                }
+                collect_declared_names(finally_body, map);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Every declared name in `program` this formatter will canonicalize
+/// call/use sites against: ordinary (non-method) functions and
+/// procedures and their own parameters, and every variable
+/// `collect_declared_names` finds (top-level and inside each function/
+/// procedure body) -- *except* a name that's also a record type name.
+/// See this module's own doc comment for why record *field* and
+/// *method* names are excluded outright; record *type* names are their
+/// own separate namespace instead: a type name and a same-cased variable
+/// name are legal, real corpus code (`record Header` alongside `file
+/// header as Header = open(...)` -- see `examples/card_catalog/
+/// card_catalog.bcl`), but this map has only one slot per
+/// case-insensitive name, so a variable and its own same-named record
+/// type can't both live in it safely -- not even the record's own
+/// declaration line is safe, since its type name token is otherwise
+/// indistinguishable from an ordinary identifier at render time. Rather
+/// than guess which of the two a given occurrence means, any name a
+/// record type also claims is dropped from this map entirely, leaving
+/// every occurrence of it (type *and* variable alike) untouched.
+fn collect_program_names(program: &Program) -> HashMap<NameKey, String> {
+    let mut map = HashMap::new();
+    for f in &program.functions {
+        if f.receiver.is_none() && f.record_receiver.is_none() {
+            record_declaration(&mut map, &f.name);
+        }
+        for param in &f.params {
+            record_declaration(&mut map, &param.name);
+        }
+        collect_declared_names(&f.body, &mut map);
+    }
+    collect_declared_names(&program.statements, &mut map);
+    for r in &program.records {
+        map.remove(&(r.name.to_ascii_lowercase(), None));
+    }
+    map
+}
+
+/// Parses `source` (best-effort: an unparseable file just yields an empty
+/// map, leaving declaration-matching casing skipped for it -- this
+/// formatter never refuses to run over a syntax error) and collects its
+/// declared names.
+fn declared_names(filename: &str, source: &str) -> HashMap<NameKey, String> {
+    let tokens = Lexer::new(filename, source).lex();
+    match Parser::new(filename.to_string(), tokens).parse_program() {
+        Ok(program) => collect_program_names(&program),
+        Err(_) => HashMap::new(),
+    }
 }
 
 /// One nested block currently open, and what closes it. `SelectCaseHeader`
@@ -125,6 +290,7 @@ enum Frame {
 /// leaves a corner case untouched.
 pub fn reindent(filename: &str, source: &str) -> String {
     let tokens = Lexer::new(filename, source).lex();
+    let declared = declared_names(filename, source);
     let lines: Vec<&str> = source.lines().collect();
 
     let mut by_line: BTreeMap<usize, Vec<&Token>> = BTreeMap::new();
@@ -310,7 +476,7 @@ pub fn reindent(filename: &str, source: &str) -> String {
         }
 
         let level = stack.len();
-        let content = respace(raw_line, &toks, words.len() == 1, first_word);
+        let content = respace(raw_line, &toks, words.len() == 1, first_word, &declared);
         out.push(format!("{}{}", INDENT_UNIT.repeat(level), content));
 
         if let Some(frame) = pending_push {
@@ -380,9 +546,15 @@ fn is_value_ending(kind: &TokenKind) -> bool {
 /// `is_solitary_keyword`/`first_word` identify a bare `wend` or `loop`
 /// (the only content on the line besides an optional trailing comment)
 /// so its own token text can be swapped for the `end while`/`end do`
-/// spelling every other block already uses -- `loop while`/`loop until`
+/// form every other block already uses -- `loop while`/`loop until`
 /// has no such equivalent and is left alone.
-fn respace(raw_line: &str, toks: &[&Token], is_solitary_keyword: bool, first_word: &str) -> String {
+fn respace(
+    raw_line: &str,
+    toks: &[&Token],
+    is_solitary_keyword: bool,
+    first_word: &str,
+    declared: &HashMap<NameKey, String>,
+) -> String {
     let chars: Vec<char> = raw_line.chars().collect();
     let real: Vec<&&Token> = toks
         .iter()
@@ -453,6 +625,18 @@ fn respace(raw_line: &str, toks: &[&Token], is_solitary_keyword: bool, first_wor
             let lower = name.to_ascii_lowercase();
             if is_keyword_word(&lower) {
                 return lower;
+            }
+            let ident = BasicIdent::parse(name);
+            let base_lower = ident.name.to_ascii_lowercase();
+            if is_builtin_word(&base_lower) {
+                return BasicIdent {
+                    name: base_lower,
+                    suffix: ident.suffix,
+                }
+                .as_basic();
+            }
+            if let Some(canonical) = declared.get(&(base_lower, ident.suffix)) {
+                return canonical.clone();
             }
         }
         let (s, e) = spans[i];
@@ -984,13 +1168,15 @@ end function
     }
 
     #[test]
-    fn builtin_function_names_keep_their_original_casing() {
+    fn builtin_function_names_are_lowercased_too() {
         // `Len`/`Mid$` are builtin *functions*, resolved by name rather
-        // than by the parser's own reserved-word grammar -- keyword
-        // casing must leave them alone, unlike `PRINT`/`IF` above.
+        // than by the parser's own reserved-word grammar -- a separate
+        // rule from keyword casing, but they get the same lowercase
+        // treatment (real BASIC intrinsics can never be shadowed by a
+        // user function, so there's no ambiguity in doing so).
         let source = "function f%()\nx% = Len(a$)\ny$ = Mid$(a$, 1, 2)\nend function\n";
         let expected =
-            "function f%()\n    x% = Len(a$)\n    y$ = Mid$(a$, 1, 2)\nend function\n";
+            "function f%()\n    x% = len(a$)\n    y$ = mid$(a$, 1, 2)\nend function\n";
         assert_eq!(reindent("test.bcl", source), expected);
         assert_idempotent(source);
     }
@@ -999,6 +1185,136 @@ end function
     fn plain_identifiers_are_never_mistaken_for_keywords() {
         let source = "function f%()\nBase% = 1\nprint Base%\nend function\n";
         let expected = "function f%()\n    Base% = 1\n    print Base%\nend function\n";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn variable_uses_are_recased_to_match_their_dim() {
+        let source = "\
+function f%()
+dim myCount%
+MYCOUNT% = MYCOUNT% + 1
+print mycount%
+end function
+";
+        let expected = "\
+function f%()
+    dim myCount%
+    myCount% = myCount% + 1
+    print myCount%
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn function_call_sites_are_recased_to_match_the_declaration() {
+        let source = "\
+function computeTotal%(n%)
+return n% * 2
+end function
+
+program p
+print COMPUTETOTAL%(3)
+";
+        let expected = "\
+function computeTotal%(n%)
+    return n% * 2
+end function
+
+program p
+print computeTotal%(3)
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn record_type_references_are_never_recased_even_when_wrong() {
+        // `record Header` alongside `file header as Header = open(...)`
+        // -- a type name and a case-insensitively-same variable name --
+        // is legal, real corpus code (examples/card_catalog/
+        // card_catalog.bcl). This formatter used to fold both into one
+        // declared-name map, so whichever was recorded first silently
+        // overwrote the other's own casing everywhere it was used.
+        // Record type names are their own, deliberately untouched
+        // namespace now (see this module's own doc comment) -- a
+        // mismatched reference like `as HEADER` below stays exactly as
+        // written, even though a variable in the same spot would get
+        // corrected (`MYCOUNT%` below does).
+        let source = "\
+record Header
+    id: integer
+end record
+
+function f%()
+dim myCount%
+MYCOUNT% = 1
+dim s as HEADER
+return 0
+end function
+";
+        let expected = "\
+record Header
+    id: integer
+end record
+
+function f%()
+    dim myCount%
+    myCount% = 1
+    dim s as HEADER
+    return 0
+end function
+";
+        assert_eq!(reindent("test.bcl", source), expected);
+        assert_idempotent(source);
+    }
+
+    #[test]
+    fn declaration_matching_is_skipped_gracefully_for_a_file_that_fails_to_parse() {
+        // A syntax error must never make the formatter itself fail --
+        // every other rule (here, indentation and keyword casing) still
+        // applies, just without any declaration-matching casing.
+        let source = "function f%(\nPRINT myVar%\n";
+        let out = reindent("test.bcl", source);
+        assert!(out.contains("print myVar%"));
+    }
+
+    #[test]
+    fn a_variable_sharing_a_record_types_own_name_leaves_both_untouched() {
+        // The exact shape that broke this formatter for real:
+        // `record Header` and a `file header as Header = open(...)`
+        // variable sharing one case-insensitive name. Even the record's
+        // *own* declaration line (`record Header`) used to get corrupted
+        // here, because its type-name token is otherwise indistinguishable
+        // from an ordinary identifier at render time and the variable's
+        // map entry (whichever of the two happened to be recorded first)
+        // silently won everywhere. Now the colliding name is dropped from
+        // the declared-name map entirely, so every occurrence -- the
+        // record's own declaration, the `file` declaration, and the type
+        // reference inside it -- stays exactly as written.
+        let source = "\
+record Header
+    id: integer
+end record
+
+function f%()
+file header as Header = open(\"x\")
+return 0
+end function
+";
+        let expected = "\
+record Header
+    id: integer
+end record
+
+function f%()
+    file header as Header = open(\"x\")
+    return 0
+end function
+";
         assert_eq!(reindent("test.bcl", source), expected);
         assert_idempotent(source);
     }
