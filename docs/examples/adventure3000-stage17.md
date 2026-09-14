@@ -36,6 +36,16 @@ warnings; and a `--target c` smoke test (the same command sequence as
 every prior stage, plus a SAVE GAME round trip) byte-identical against
 stage 16.
 
+**Follow-up:** `reincarnate()` was misnamed -- despite the name, it
+doesn't always reincarnate the player. On the third death, or a "no"
+answer to "do you want to be reincarnated?", it ends the game instead;
+its own doc comment already said as much ("Handles a death, however it
+happened..."), but the function name only described one of its two
+outcomes. Renamed to `handleDeath()` (and its caller,
+`checkPitsAndReincarnateIfNeeded()`, to
+`checkPitsAndHandleDeathIfNeeded()`), a pure rename verified
+byte-identical against the version above under `--target c`.
+
 </div>
 
 <details class="source-embed" markdown="1">
@@ -611,7 +621,7 @@ end procedure
  * otherwise resets carried-item locations and respawns the player in a
  * random forest room.
  */
-procedure reincarnate()
+procedure handleDeath()
     global deathCount
     global scratchValue
     global itemRoom
@@ -646,9 +656,9 @@ end procedure
 
 /*
  * Checks whether the room just moved into is dark and has a pit to
- * fall into, reincarnating the player if so.
+ * fall into, handling the resulting death if so.
  */
-procedure checkPitsAndReincarnateIfNeeded()
+procedure checkPitsAndHandleDeathIfNeeded()
     global currentRoom%
     global lampOn
     global itemRoom
@@ -657,7 +667,7 @@ procedure checkPitsAndReincarnateIfNeeded()
     end if
     if currentRoom% = 16 or currentRoom% = 17 or currentRoom% = 19 or currentRoom% = 20 or currentRoom% = 25 or currentRoom% = 47 or currentRoom% = 48 or currentRoom% = 59 or currentRoom% = 60 or currentRoom% = 61 or currentRoom% = 75 or currentRoom% = 76 or currentRoom% = 98 then
         printMessage(44)
-        reincarnate()
+        handleDeath()
     end if
 end procedure
 
@@ -824,7 +834,7 @@ function verbPlugh%()
         return 0
     end if
     performMove%(targetRoom%)
-    checkPitsAndReincarnateIfNeeded()
+    checkPitsAndHandleDeathIfNeeded()
     return 1
 end function
 
@@ -848,7 +858,7 @@ function verbXyzzy%()
         return 0
     end if
     performMove%(targetRoom%)
-    checkPitsAndReincarnateIfNeeded()
+    checkPitsAndHandleDeathIfNeeded()
     return 1
 end function
 
@@ -876,7 +886,7 @@ function verbPlover%()
         return 0
     end if
     performMove%(targetRoom%)
-    checkPitsAndReincarnateIfNeeded()
+    checkPitsAndHandleDeathIfNeeded()
     return 1
 end function
 
@@ -894,7 +904,7 @@ function verbCross%()
     elseif currentRoom% = 19 then
         direction% = 7
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
     elseif currentRoom% = 20 and crystalBridgeBuilt = 0 then
@@ -902,19 +912,19 @@ function verbCross%()
     elseif currentRoom% = 20 then
         direction% = 3
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
     elseif currentRoom% = 60 then
         direction% = 2
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
     elseif currentRoom% = 61 then
         direction% = 6
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
     else
@@ -935,7 +945,7 @@ function verbClimb%()
     IF pirateState<2 THEN printMessage(2) : return 0
     targetRoom%=70
     performMove%(targetRoom%)
-    checkPitsAndReincarnateIfNeeded()
+    checkPitsAndHandleDeathIfNeeded()
     return 1
 end function
 
@@ -947,7 +957,7 @@ function verbJump%()
     global currentRoom%
     IF currentRoom%<>16 AND currentRoom%<>19 AND currentRoom%<>20 AND currentRoom%<>27 THEN printMessage(2) : return 0
     printMessage(4)
-    reincarnate()
+    handleDeath()
     return 1
 end function
 
@@ -1066,7 +1076,7 @@ function verbEnter%()
     if currentRoom% = 6 or currentRoom% = 68 then
         direction%=3
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
         return 0
@@ -1075,7 +1085,7 @@ function verbEnter%()
         targetRoom% = roomExits(currentRoom%,direction%)
         IF targetRoom%>0 AND targetRoom%<101 THEN
             if checkSpecialRoomAndMove%(direction%, targetRoom%) then
-                checkPitsAndReincarnateIfNeeded()
+                checkPitsAndHandleDeathIfNeeded()
                 return 1
             else
                 return 0
@@ -1099,7 +1109,7 @@ function verbLeave%()
     if currentRoom% = 7 or currentRoom% = 69 then
         direction%=7
         if attemptMove%(direction%) then
-            checkPitsAndReincarnateIfNeeded()
+            checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
         return 0
@@ -1108,7 +1118,7 @@ function verbLeave%()
         targetRoom% = roomExits(currentRoom%,direction%)
         IF targetRoom%>0 AND targetRoom%<101 THEN
             if checkSpecialRoomAndMove%(direction%, targetRoom%) then
-                checkPitsAndReincarnateIfNeeded()
+                checkPitsAndHandleDeathIfNeeded()
                 return 1
             else
                 return 0
@@ -1341,7 +1351,7 @@ function verbThrow%()
     end if
     itemRoom(itemCode%) = currentRoom%
     if isDead = 1 then
-        reincarnate()
+        handleDeath()
         return 1
     end if
     return 0
@@ -2124,7 +2134,7 @@ function parseAndDispatchCommand%()
     for directionIndex% = 1 to 10
         if keywordFound(directionIndex%+99) = 1 then
             if attemptMove%(directionIndex%) then
-                checkPitsAndReincarnateIfNeeded()
+                checkPitsAndHandleDeathIfNeeded()
                 return 1
             else
                 return 0
@@ -2206,7 +2216,7 @@ while true
         end select
         roomVisited(currentRoom%) = 1
         describeRoomContents()
-        if isDead = 1 then reincarnate() : continue
+        if isDead = 1 then handleDeath() : continue
         situationDescriptions()
     else
         printMessage(45)
