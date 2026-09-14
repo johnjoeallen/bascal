@@ -146,6 +146,43 @@ unmatched items, GET ALL/DROP ALL, OPEN/CLOSE, READ MAGAZINE,
 ATTACK, FEED, DRINK, EAT, THROW -- specifically because this change
 touches those functions' own logic, not just cosmetics.
 
+**Sixth follow-up:** generalized the fifth follow-up's technique from
+one function's outputs to every `global` declaration in the program at
+once -- remove all 323 of them in one pass, recompile with
+`--strict-vars-warn`, and see which (function, variable) pairs never
+get flagged at all (meaning that variable is never referenced,
+read or write, anywhere in that function's body). Three were
+genuinely dead: `verbCross%()`'s `global targetRoom%` (it always
+routes moves through `attemptMove%()`, which computes its own target
+internally), `verbClose%()`'s `global itemRoom%`, and `verbOpen%()`'s
+`global commandLine$` -- the one sibling verb handler that never
+resets it, unlike every other one. All three declarations are gone.
+
+This pass also surfaced a real blind spot in `bcc`'s own
+`--strict-vars` checker, not a program bug: it never flags a read
+through a *multi*-dimensional array subscript (`roomExits%(a, b)`),
+likely because a two-argument access parses as `Expr::Call` rather
+than `Expr::ArrayRef`, and the checker only inspects those two node
+kinds. That made `roomExits%` look unused in `attemptMove%()`/
+`verbEnter%()`/`verbLeave%()`, which direct reading disproves --
+discarded as a tooling limitation, not acted on.
+
+Separately, `verbEnter%()`/`verbLeave%()` both declare
+`global direction%`, but it's masked by their own
+`for direction% = ...`/assignment before any read -- the same shape
+`itemCode%` had in `verbGet%()`/`verbDrop%()` in the fifth follow-up.
+Tracing every declaration of `direction%` in the file (only these two
+plus `verbCross%()`) found no function reading a value it leaves
+behind, so `global direction%` is gone from both -- it's now a plain
+per-function local in each.
+
+Verified byte-identical under `--target c` across four separate
+command sequences (the standard smoke test, the richer GET/DROP/etc.
+sequence from the fifth follow-up, a SAVE GAME round trip, and a new
+one exercising CROSS/ENTER/LEAVE/OPEN/CLOSE specifically -- the
+functions this change touches); `--target basic` still compiles with
+zero warnings; full `cargo test` suite passes.
+
 </div>
 
 <details class="source-embed" markdown="1">
@@ -1018,7 +1055,6 @@ function verbCross%()
     global currentRoom%
     global crystalBridgeBuilt%
     global direction%
-    global targetRoom%
     if currentRoom% = 19 and crystalBridgeBuilt% = 0 then
         printMessage(3)
     elseif currentRoom% = 19 then
@@ -1205,7 +1241,6 @@ end function
  */
 function verbEnter%()
     global currentRoom%
-    global direction%
     global targetRoom%
     global roomExits%
     if currentRoom% = 6 or currentRoom% = 68 then
@@ -1238,7 +1273,6 @@ end function
  */
 function verbLeave%()
     global currentRoom%
-    global direction%
     global targetRoom%
     global roomExits%
     if currentRoom% = 7 or currentRoom% = 69 then
@@ -1742,7 +1776,6 @@ function verbOpen%()
     global itemRoom%
     global currentRoom%
     global responseText$
-    global commandLine$
     findMatchedItems()
     if itemCode%=0 then
         PRINT "Open ";
@@ -1782,7 +1815,6 @@ end function
  */
 function verbClose%()
     global itemCode%
-    global itemRoom%
     return 0
     findMatchedItems()
     IF itemCode%=40 THEN return verbLock%()
