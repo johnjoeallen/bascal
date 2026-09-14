@@ -19,19 +19,19 @@ program screen
 /* Clear screen and draw a simple title banner */
 cls
 
-color 14, 1           // bright yellow text on blue background
+color 14, 1 // bright yellow text on blue background
 locate 1, 30
 print "  BASCAL DEMO  "
 
-color 7, 0            // restore white on black
+color 7, 0 // restore white on black
 locate 3, 1
 print "Screen I/O tutorial"
 
 /* Move to specific positions */
-locate 5, 1  : color 10 : print "Green text"   // bright green
-locate 6, 1  : color 12 : print "Red text"     // bright red
-locate 7, 1  : color 11 : print "Cyan text"    // bright cyan
-locate 8, 1  : color 7  : print "Normal text"
+locate 5, 1 : color 10 : print "Green text" // bright green
+locate 6, 1 : color 12 : print "Red text" // bright red
+locate 7, 1 : color 11 : print "Cyan text" // bright cyan
+locate 8, 1 : color 7 : print "Normal text"
 
 /* Sound the bell */
 beep

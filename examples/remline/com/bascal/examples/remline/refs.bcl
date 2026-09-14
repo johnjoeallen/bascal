@@ -56,14 +56,14 @@ end function
 // line$    -- source line to scan
 // keyword$ -- keyword to look for (e.g. "GOTO")
 function scanKeywordRefs%(line$, keyword$)
-    ul$  = upper$(line$)
-    uk$  = upper$(keyword$)
+    ul$ = upper$(line$)
+    uk$ = upper$(keyword$)
     pos% = ul$.instr(uk$)
     if pos% = 0 then
         return 0
     end if
     after$ = trimLeft$(line$.mid(pos% + keyword$.len()))
-    ref%   = parseLineNumber%(after$)
+    ref% = parseLineNumber%(after$)
     if ref% > 0 then
         addRef%(ref%)
         return 1
