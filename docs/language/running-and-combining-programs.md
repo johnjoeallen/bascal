@@ -30,6 +30,8 @@ connected directly to your terminal.
 
 `--strict-vars` turns on Pascal-style mandatory declaration: every variable — any scalar or array, any type suffix, not just the arrays introduced in [Arrays and strings](arrays-and-strings.md) — must have a `dim`/`declare` (or be a `const`, a `for` loop’s own counter, or a function/procedure parameter), or the compile is rejected. `--strict-vars-warn` runs the identical check but only prints findings to stderr, without failing the build.
 
+`bcc` also ships its own source formatter, in the same spirit as `gofmt`: `--format-check` reports every line whose indentation, spacing, or keyword casing doesn't match `bcc`'s own canonical style (without touching the file, exiting non-zero if it finds any), and `--format` rewrites the file in place. It never reflows an expression or changes how many lines a file has — every fix is pure whitespace, a `wend`/`loop` → `end while`/`end do` spelling, or lowercasing a reserved word (`IF` → `if`, but never a builtin function name like `LEN`, which keeps whatever casing it was written with) — so it's safe to run on a file mid-edit, or across an entire ported-from-BASIC case study in one pass. See the [Command-Line Reference](../manual/command-line-reference.md#source-formatting) for the full rule set.
+
 ## Screen and console output
 
 Beyond `print`, a handful of statements reach the console more directly — meaningful mainly for the BASIC target, where a real terminal or DOS screen is what’s listening.

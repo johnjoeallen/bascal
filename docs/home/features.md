@@ -148,6 +148,25 @@ end if
 
 <div class="snippet" markdown="1">
 
+### A built-in source formatter
+
+`bcc --format` rewrites a `.bcl` file's indentation, spacing, and reserved-word casing to `bcc`'s own canonical style, in the same spirit as `gofmt`; `--format-check` reports what's non-compliant without touching the file. It never reflows an expression or changes line count.
+
+```bash
+$ bcc --format-check legacy.bcl
+legacy.bcl:3:
+  - IF x% = 1 THEN
+  +     if x% = 1 then
+format check failed: legacy.bcl (1 line would change -- run `bcc --format legacy.bcl` to fix)
+
+$ bcc --format legacy.bcl
+formatted: legacy.bcl
+```
+
+</div>
+
+<div class="snippet" markdown="1">
+
 ### Readable generated output
 
 Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number — everything else stays plain, hand-readable BASIC.
