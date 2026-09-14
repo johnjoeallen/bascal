@@ -88,7 +88,9 @@ procedure buildMessageIndex()
     global messageIndex
     global fragmentIndex
     dim fpos%, fracnt%, lastfra, messageLine$, fragmentNumber
-    fpos% = 0 : fracnt% = 0 : lastfra = -1
+    fpos% = 0
+    fracnt% = 0
+    lastfra = -1
     while fpos% <= messageCount
         fpos% = fpos% + 1
         if fpos% > messageCount then
@@ -253,7 +255,8 @@ procedure checkDwarf()
     if currentRoom% < 13 then return
     if RND(1) > 0.05 then return
     printMessage(80)
-    itemRoom(27) = currentRoom% : dwarfGaveAxe = 1
+    itemRoom(27) = currentRoom%
+    dwarfGaveAxe = 1
 end procedure
 
 /*
@@ -409,11 +412,14 @@ procedure findMatchedItems()
     global selectedItemName$
     global responseText$
     global itemNames$
-    matchCount = 0 : itemCode% = 0 : selectedItemName$ = ""
+    matchCount = 0
+    itemCode% = 0
+    selectedItemName$ = ""
     for itemScanIndex = 1 to 45
         if keywordFound(itemScanIndex) <> 0 then
             matchCount = matchCount + 1
-            responseText$ = itemNames$(itemScanIndex) : selectedItemName$ = responseText$
+            responseText$ = itemNames$(itemScanIndex)
+            selectedItemName$ = responseText$
             if keywordFound(itemScanIndex) = 1 and matchCount = 1 then
                 itemCode% = itemScanIndex
             end if
@@ -437,7 +443,8 @@ procedure findFirstNamedItem()
     for itemScanCode% = 1 to 47
         if foundFlag <> 1 then
             if keywordFound(itemScanCode%) = 1 then
-                selectedItemName$ = itemNames$(itemScanCode%) : foundFlag = 1
+                selectedItemName$ = itemNames$(itemScanCode%)
+                foundFlag = 1
             end if
         end if
     end for
@@ -483,7 +490,8 @@ procedure computeScore()
     global itemPoints
     global itemRoom
     restore itemLocationData
-    roomsVisitedCount = 0 : score = 0
+    roomsVisitedCount = 0
+    score = 0
     for treasureIndex% = 1 to 15
         read treasureRoom%
         if treasureRoom% <> 0 then
@@ -495,12 +503,19 @@ procedure computeScore()
             end if
         end if
     end for
-    score = (grateOpen = 1) * 10 + score : score = (snakeAlive = 0) * 20 + score : score = (dragonAlive = 0) * 30 + score
-    score = (trollState = 0) * 30 + score : score = (bearFedState = 2) * 20 + score : score = (crystalBridgeBuilt = 1) * 20 + score
-    score = (pirateState = 2) * 20 + score : score = (ironDoorOiled = 1) * 20 + score : score = (bearTamedScored = 1) * 20 + score
+    score = (grateOpen = 1) * 10 + score
+    score = (snakeAlive = 0) * 20 + score
+    score = (dragonAlive = 0) * 30 + score
+    score = (trollState = 0) * 30 + score
+    score = (bearFedState = 2) * 20 + score
+    score = (crystalBridgeBuilt = 1) * 20 + score
+    score = (pirateState = 2) * 20 + score
+    score = (ironDoorOiled = 1) * 20 + score
+    score = (bearTamedScored = 1) * 20 + score
     for roomIndex% = 1 to totalRooms
         if roomVisited(roomIndex%) = 1 then
-            score = score + 1 : roomsVisitedCount = roomsVisitedCount + 1
+            score = score + 1
+            roomsVisitedCount = roomsVisitedCount + 1
         end if
     end for
 end procedure
@@ -542,7 +557,8 @@ end procedure
  */
 procedure printDontUnderstand()
     global responseText$
-    dontUnderstandMessages: data "What?","I don't understand.","I can't understand that.","I don't know that word."
+    dontUnderstandMessages:
+        data "What?","I don't understand.","I can't understand that.","I don't know that word."
     restore dontUnderstandMessages
     for readCount = 1 to int(RND(1)*4)+1
         read responseText$
@@ -589,13 +605,17 @@ procedure handleDeath()
         endGame()
     end if
     printMessage(76)
-    itemRoom(18) = 7 : lampOn = 0 : isDead = 0 : dwarfHitChance = 1.03
+    itemRoom(18) = 7
+    lampOn = 0
+    isDead = 0
+    dwarfHitChance = 1.03
     for itemIndex% = 1 to totalItems
         if itemRoom(itemIndex%) = -1 then
             itemRoom(itemIndex%) = currentRoom%
         end if
     end for
-    currentRoom% = int(RND(1)*4)+1 : previousRoom = currentRoom%
+    currentRoom% = int(RND(1)*4)+1
+    previousRoom = currentRoom%
 end procedure
 
 /*
@@ -609,10 +629,11 @@ procedure checkPitsAndHandleDeathIfNeeded()
     if currentRoom% < 13 or (lampOn = 1 and (itemRoom(18) = -1 or itemRoom(18) = currentRoom%)) then
         return
     end if
-    if currentRoom% = 16 or currentRoom% = 17 or currentRoom% = 19 or currentRoom% = 20 or currentRoom% = 25 or currentRoom% = 47 or currentRoom% = 48 or currentRoom% = 59 or currentRoom% = 60 or currentRoom% = 61 or currentRoom% = 75 or currentRoom% = 76 or currentRoom% = 98 then
-        printMessage(44)
-        handleDeath()
-    end if
+    select case currentRoom%
+        case 16, 17, 19, 20, 25, 47, 48, 59 to 61, 75, 76, 98
+            printMessage(44)
+            handleDeath()
+    end select
 end procedure
 
 /*
@@ -623,7 +644,8 @@ function performMove%(targetRoom%)
     global currentRoom%
     global previousRoom
     global itemRoom
-    previousRoom = currentRoom% : currentRoom% = targetRoom%
+    previousRoom = currentRoom%
+    currentRoom% = targetRoom%
     if itemRoom(35) = previousRoom then
         itemRoom(35) = currentRoom%
     end if
@@ -737,7 +759,8 @@ function attemptRandomMove%()
     printMessage(1)
     return 0
 end function
-bedquiltRooms: data 33,37,45,92,76
+bedquiltRooms:
+    data 33,37,45,92,76
 
 /*
  * Looks up the destination room for a direction and either moves
@@ -885,8 +908,14 @@ function verbClimb%()
     global currentRoom%
     global pirateState
     global targetRoom%
-    IF currentRoom%<>50 THEN printMessage(2) : return 0
-    IF pirateState<2 THEN printMessage(2) : return 0
+    if currentRoom%<>50 then
+        printMessage(2)
+        return 0
+    end if
+    if pirateState<2 then
+        printMessage(2)
+        return 0
+    end if
     targetRoom%=70
     performMove%(targetRoom%)
     checkPitsAndHandleDeathIfNeeded()
@@ -899,7 +928,10 @@ end function
  */
 function verbJump%()
     global currentRoom%
-    IF currentRoom%<>16 AND currentRoom%<>19 AND currentRoom%<>20 AND currentRoom%<>27 THEN printMessage(2) : return 0
+    if currentRoom%<>16 AND currentRoom%<>19 AND currentRoom%<>20 AND currentRoom%<>27 then
+        printMessage(2)
+        return 0
+    end if
     printMessage(4)
     handleDeath()
     return 1
@@ -927,9 +959,11 @@ function verbFill%()
         return 0
     end if
     if currentRoom%=7 or currentRoom%=8 or currentRoom%=9 or currentRoom%=35 or currentRoom%=74 or currentRoom%=81 then
-        bottleContents%=1:itemRoom(16)=-1
+        bottleContents%=1
+        itemRoom(16)=-1
     elseif currentRoom%=49 then
-        bottleContents%=2:itemRoom(17)=-1
+        bottleContents%=2
+        itemRoom(17)=-1
     else
         responseText$="oil"
         PRINT "I see no ";responseText$;" here."
@@ -948,10 +982,13 @@ function verbEmpty%()
     global responseText$
     global commandLine$
     if itemRoom(21)<>-1 then
-        responseText$="bottle" : PRINT "You don't have the ";responseText$ : commandLine$=""
+        responseText$="bottle"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
         return 0
     end if
-    itemRoom(bottleContents%+15)=0:bottleContents%=0
+    itemRoom(bottleContents%+15)=0
+    bottleContents%=0
     PRINT "Emptied"
     return 0
 end function
@@ -995,7 +1032,8 @@ function verbOff%()
     global responseText$
     global commandLine$
     if itemRoom(18) = -1 then
-        lampOn=0:responseText$="off"
+        lampOn=0
+        responseText$="off"
     else
         responseText$ = "lamp"
         PRINT "You don't have the ";responseText$
@@ -1132,7 +1170,8 @@ function verbGet%()
         if keywordFound(47) <> 1 and keywordFound(itemCode%) = 0 then continue
         if itemRoom(itemCode%) <> currentRoom% then
             if keywordFound(47) <> 1 then
-                paddedCommand$ = itemNames$(itemCode%) : PRINT paddedCommand$;" not here."
+                paddedCommand$ = itemNames$(itemCode%)
+                PRINT paddedCommand$;" not here."
             end if
             continue
         end if
@@ -1163,12 +1202,15 @@ function verbGet%()
             PRINT "Why not say 'fill'?"
             return 0
         elseif itemCode% = 22 and birdInCage then
-            itemRoom(31) = -1 : PRINT "Bird and ";
+            itemRoom(31) = -1
+            PRINT "Bird and ";
         elseif itemCode% = 31 then
             if birdInCage = 1 then
-                PRINT "Cage and "; : itemRoom(22) = -1
+                PRINT "Cage and ";
+                itemRoom(22) = -1
             elseif itemRoom(22) <> -1 then
-                responseText$ = "cage" : PRINT "I see no ";responseText$;" here."
+                responseText$ = "cage"
+                PRINT "I see no ";responseText$;" here."
                 return 0
             elseif itemRoom(23) = -1 then
                 printMessage(37)
@@ -1181,7 +1223,8 @@ function verbGet%()
             itemRoom(bottleContents%+15) = -1
         end if
         itemRoom(itemCode%) = -1
-        paddedCommand$ = itemNames$(itemCode%):PRINT paddedCommand$;":taken."
+        paddedCommand$ = itemNames$(itemCode%)
+        PRINT paddedCommand$;":taken."
     end for
     return 0
 end function
@@ -1216,12 +1259,15 @@ function verbDrop%()
         end if
         if itemRoom(itemCode%) <> -1 then
             if keywordFound(47) <> 1 then
-                responseText$ = itemNames$(itemCode%):PRINT "You don't have the ";responseText$
+                responseText$ = itemNames$(itemCode%)
+                PRINT "You don't have the ";responseText$
             end if
             continue
         end if
         if itemCode% = 31 or (itemCode% = 22 and birdInCage = 1) then
-            itemRoom(31)=currentRoom%:itemRoom(22)=currentRoom%:birdInCage=1
+            itemRoom(31)=currentRoom%
+            itemRoom(22)=currentRoom%
+            birdInCage=1
             if itemCode% = 31 then
                 PRINT "Cage and ";
                 PRINT "Bird and ";
@@ -1234,16 +1280,20 @@ function verbDrop%()
             return 0
         elseif itemCode% = 26 and trollState = 1 and (currentRoom% = 60 or currentRoom% = 61) then
             printMessage(28)
-            trollState=0:itemRoom(26)=currentRoom%:itemRoom(32)=0
+            trollState=0
+            itemRoom(26)=currentRoom%
+            itemRoom(32)=0
             return 0
         elseif itemCode% = 6 and itemRoom(28) <> currentRoom% then
             printMessage(43)
-            itemRoom(6)=0:itemRoom(29)=currentRoom%
+            itemRoom(6)=0
+            itemRoom(29)=currentRoom%
             return 0
         elseif itemCode% = 6 then
             printMessage(60)
         end if
-        responseText$ = itemNames$(itemCode%):PRINT responseText$;":dropped."
+        responseText$ = itemNames$(itemCode%)
+        PRINT responseText$;":dropped."
         itemRoom(itemCode%)=currentRoom%
     end for
     return 0
@@ -1269,11 +1319,14 @@ function verbThrow%()
         return 0
     end if
     if itemRoom(itemCode%) <> -1 then
-        PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
     end if
     if itemCode% < 16 and itemRoom(32) = currentRoom% then
         printMessage(27)
-        itemRoom(itemCode%) = 0 : trollState = 3
+        itemRoom(itemCode%) = 0
+        trollState = 3
         return 0
     elseif itemCode% = 27 and itemRoom(32) = currentRoom% then
         printMessage(26)
@@ -1342,7 +1395,10 @@ function verbFeed%()
         return 0
     end if
     if itemRoom(20) <> -1 then
-        responseText$ = "FOOD" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+        responseText$ = "FOOD"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
     end if
     if currentRoom% <> 69 then
         PRINT "I can't feed it."
@@ -1351,10 +1407,13 @@ function verbFeed%()
     end if
     if itemRoom(20)=currentRoom% then
         printMessage(60)
-        responseText$ = itemNames$(itemCode%):PRINT responseText$;":dropped."
+        responseText$ = itemNames$(itemCode%)
+        PRINT responseText$;":dropped."
         itemRoom(itemCode%)=currentRoom%
     else
-        bearFedState=1:itemRoom(20)=0:printMessage(6)
+        bearFedState=1
+        itemRoom(20)=0
+        printMessage(6)
     end if
     return 0
 end function
@@ -1371,7 +1430,10 @@ function verbWater%()
     global pirateState
     global bottleContents%
     if itemRoom(16) <> -1 then
-        responseText$ = "water" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+        responseText$ = "water"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
     end if
     if currentRoom% <> 50 then
         printMessage(2)
@@ -1387,7 +1449,8 @@ function verbWater%()
         printMessage(9)
         pirateState = 0
     end if
-    itemRoom(16)=0:bottleContents%=0
+    itemRoom(16)=0
+    bottleContents%=0
     return 0
 end function
 
@@ -1402,10 +1465,13 @@ function verbLock%()
     global commandLine$
     if currentRoom%=10 or currentRoom%=11 then
         if itemRoom(19)=-1 then
-            grateOpen=0:printMessage(10)
+            grateOpen=0
+            printMessage(10)
         else
             responseText$="keys"
-            PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+            PRINT "You don't have the ";responseText$
+            commandLine$=""
+            return 0
         end if
     else
         printMessage(2)
@@ -1427,14 +1493,18 @@ function verbUnlock%()
     global commandLine$
     if itemRoom(19) <> -1 then
         responseText$="keys"
-        PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
     end if
     if currentRoom%=10 or currentRoom%=11 then
-        grateOpen=1:printMessage(11)
+        grateOpen=1
+        printMessage(11)
     elseif currentRoom%=69 then
         if bearFedState>0 then
             if bearTamedScored=0 then
-                bearTamedScored=1:bearFedState=2
+                bearTamedScored=1
+                bearFedState=2
             end if
             printMessage(13)
         else
@@ -1463,7 +1533,8 @@ function verbFree%()
         commandLine$=""
         return 0
     end if
-    itemRoom(31) = currentRoom%:birdInCage=0
+    itemRoom(31) = currentRoom%
+    birdInCage=0
     PRINT "Freed."
     if currentRoom% = 22 and snakeAlive = 1 then
         responseText$ = "snake"
@@ -1478,7 +1549,8 @@ function verbFree%()
         itemRoom(31)=0
     else
         PRINT "drives it off"
-        snakeAlive=0:itemRoom(34)=0
+        snakeAlive=0
+        itemRoom(34)=0
     end if
     return 0
 end function
@@ -1497,7 +1569,10 @@ function verbWave%()
     if keywordFound(23) <> 1 then
         printMessage(2)
     elseif itemRoom(23) <> -1 then
-        responseText$="rod" : PRINT "You don't have the ";responseText$ : commandLine$="" : return 0
+        responseText$="rod"
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
+        return 0
     elseif currentRoom%<>19 and currentRoom%<>20 then
         printMessage(2)
     elseif crystalBridgeBuilt=0 then
@@ -1543,7 +1618,10 @@ function verbOpen%()
         printMessage(2)
         return 0
     end if
-    itemRoom(7)=43:itemRoom(24)=0:itemRoom(30)=currentRoom%:printMessage(17)
+    itemRoom(7)=43
+    itemRoom(24)=0
+    itemRoom(30)=currentRoom%
+    printMessage(17)
     return 0
 end function
 
@@ -1578,13 +1656,17 @@ function verbOil%()
     if keywordFound(17)=0 then
         printMessage(2)
     elseif itemRoom(17)<>-1 then
-        responseText$="oil" : PRINT "I see no ";responseText$;" here."
+        responseText$="oil"
+        PRINT "I see no ";responseText$;" here."
     elseif currentRoom%<>73 then
         printMessage(2)
     elseif ironDoorOiled=1 then
         printMessage(2)
     else
-        ironDoorOiled=1:itemRoom(17)=0:bottleContents%=0:printMessage(19)
+        ironDoorOiled=1
+        itemRoom(17)=0
+        bottleContents%=0
+        printMessage(19)
     end if
     return 0
 end function
@@ -1604,13 +1686,15 @@ function verbEat%()
         commandLine$=""
         return 0
     end if
-    itemCode%=20:checkCarryingItem()
+    itemCode%=20
+    checkCarryingItem()
     if isCarrying=0 then
         commandLine$=""
         return 0
     end if
     printMessage(73)
-    itemRoom(20)=0:bottleContents%=0
+    itemRoom(20)=0
+    bottleContents%=0
     return 0
 end function
 
@@ -1629,13 +1713,15 @@ function verbDrink%()
         commandLine$=""
         return 0
     end if
-    itemCode%=16:checkCarryingItem()
+    itemCode%=16
+    checkCarryingItem()
     if isCarrying=0 then
         commandLine$=""
         return 0
     end if
     printMessage(22)
-    itemRoom(17)=0:bottleContents%=0
+    itemRoom(17)=0
+    bottleContents%=0
     return 0
 end function
 
@@ -1813,9 +1899,12 @@ function verbLoadOldGame%()
     INPUT #5,totalRooms,totalItems,totalKeywords,currentRoom%,previousRoom,grateOpen,bottleContents%,snakeAlive,dragonAlive,ironDoorOiled,descriptionMode,trollState,bearFedState,crystalBridgeBuilt,pirateState,lampOn,bearTamedScored,dwarfGaveAxe,birdInCage,deathCount,KCX$
     dwarfHitChance = val(kcx$)
     FOR recordIndex%=1 TO 99
-        INPUT #5,itemLocationValue,roomVisitedValue:itemRoom(recordIndex%)=itemLocationValue:roomVisited(recordIndex%)=roomVisitedValue
+        INPUT #5,itemLocationValue,roomVisitedValue
+        itemRoom(recordIndex%)=itemLocationValue
+        roomVisited(recordIndex%)=roomVisitedValue
     end for
-    INPUT #5,roomVisitedValue:roomVisited(100)=roomVisitedValue
+    INPUT #5,roomVisitedValue
+    roomVisited(100)=roomVisitedValue
     CLOSE #5
     gameLoaded=1
     return 1
@@ -1836,7 +1925,8 @@ function verbReadMagazine%()
         commandLine$=""
     elseif itemRoom(25) <> -1 then
         responseText$="magazine"
-        PRINT "You don't have the ";responseText$ : commandLine$=""
+        PRINT "You don't have the ";responseText$
+        commandLine$=""
     else
         printMessage(303)
     end if
@@ -1856,7 +1946,8 @@ function verbYes%()
         return 0
     end if
     printMessage(69)
-    itemRoom(33)=0:dragonAlive=0
+    itemRoom(33)=0
+    dragonAlive=0
     return 0
 end function
 
@@ -2005,12 +2096,14 @@ function parseAndDispatchCommand%()
     global itemCode%
     global itemNames$
     if len(commandLine$) = 0 then
-        INPUT ">";commandLine$:commandLine$=ucase$(commandLine$)
+        INPUT ">";commandLine$
+        commandLine$=ucase$(commandLine$)
         if commandLine$ = "" then
             commandLine$=""
             return 0
         end if
-        PRINT: PRINT
+        PRINT
+        PRINT
         commandLine$ = ucase$(commandLine$)
         for scanIndex% = 1 to len(commandLine$)
             charCode = asc(mid$(commandLine$,scanIndex%,1))
@@ -2023,32 +2116,34 @@ function parseAndDispatchCommand%()
         end if
     end if
     commaPos = instr(commandLine$,",")
-    paddedCommand$ = ucase$(mid$(commandLine$,1,commaPos-1)) : commandLine$ = mid$(commandLine$,commaPos+1)
+    paddedCommand$ = ucase$(mid$(commandLine$,1,commaPos-1))
+    commandLine$ = mid$(commandLine$,commaPos+1)
     paddedCommand$ = " "+paddedCommand$+" "
-    keywordTable: data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
-    data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
-    data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
-    data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
-    data 16,"WATER",17,"OIL",18,"LAMP",18,"LANTERN",19,"KEYS",20,"FOOD",21,"BOTTLE"
-    data 22,"CAGE",23,"ROD",23,"WAND",24,"CLAM",25,"MAGAZINE",26,"BEAR"
-    data 27,"AXE",28,"VELVET",28,"PILLOW",29,"SHARDS",30,"OYSTER"
-    data 31,"BIRD",32,"TROLL",33,"DRAGON",34,"SNAKE",35,"DWARF"
-    data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
-    data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
-    data 46,"ROAD",47,"ALL",47,"EVERYTHING"
-    data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
-    data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
-    data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
-    data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
-    data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
-    data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
-    data 124,"GET",124,"CATCH",124,"TAKE",125,"DROP",125,"DUMP",126,"THROW",127,"ATTACK"
-    data 127,"KILL",128,"FEED",129,"WATER",130,"LOCK",131,"UNLOCK"
-    data 132,"FREE",132,"RELEASE",133,"WAVE",134,"OPEN",135,"CLOSE"
-    data 136,"OIL",137,"EAT",138,"DRINK",139,"FEE FIE FOE FOO"
-    data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
-    data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
-    data 148,"YES",148,"Y",149,"BUG",150,"*"
+    keywordTable:
+        data 1,"GOLD",1,"NUGGET",2,"BARS",2,"SILVER",3,"JEWELRY",4,"COINS"
+        data 5,"DIAMONDS",6,"MING",6,"VASE",7,"PEARL",8,"EGGS",8,"NEST"
+        data 9,"TRIDENT",10,"EMERALD",11,"PLATINUM",11,"PYRAMID",12,"CHAIN"
+        data 13,"SPICES",14,"PERSIAN",14,"RUG",15,"TREASURE",15,"CHEST"
+        data 16,"WATER",17,"OIL",18,"LAMP",18,"LANTERN",19,"KEYS",20,"FOOD",21,"BOTTLE"
+        data 22,"CAGE",23,"ROD",23,"WAND",24,"CLAM",25,"MAGAZINE",26,"BEAR"
+        data 27,"AXE",28,"VELVET",28,"PILLOW",29,"SHARDS",30,"OYSTER"
+        data 31,"BIRD",32,"TROLL",33,"DRAGON",34,"SNAKE",35,"DWARF"
+        data 36,"ROCK",36,"BOULDER",37,"STAIRS",38,"STEPS",39,"HOUSE",39,"BUILDING"
+        data 40,"GRATE",41,"STREAM",42,"ROOM",43,"BRIDGE",44,"PIT",45,"VOLCANO"
+        data 46,"ROAD",47,"ALL",47,"EVERYTHING"
+        data 100,"N",100,"NORTH",101,"NE",101,"NORTHEAST",102,"E",102,"EAST"
+        data 103,"SE",103,"SOUTHEAST",104,"S",104,"SOUTH",105,"SW",105,"SOUTHWEST"
+        data 106,"W",106,"WEST",107,"NW",107,"NORTHWEST",108,"U",108,"UP",109,"D",109,"DOWN"
+        data 110,"PLUGH",111,"XYZZY",112,"PLOVER",113,"CROSS",114,"CLIMB",115,"JUMP"
+        data 116,"FILL",117,"EMPTY",117,"POUR",118,"LOOK",118,"L",119,"LIGHT",119,"ON",120,"EXTINGUISH"
+        data 120,"OFF",121,"IN",121,"ENTER",122,"LEAVE",122,"OUT",123,"INVENTORY",123,"I"
+        data 124,"GET",124,"CATCH",124,"TAKE",125,"DROP",125,"DUMP",126,"THROW",127,"ATTACK"
+        data 127,"KILL",128,"FEED",129,"WATER",130,"LOCK",131,"UNLOCK"
+        data 132,"FREE",132,"RELEASE",133,"WAVE",134,"OPEN",135,"CLOSE"
+        data 136,"OIL",137,"EAT",138,"DRINK",139,"FEE FIE FOE FOO"
+        data 140,"SHORT",141,"LONG",142,"BRIEF",143,"QUIT",143,"STOP",143,"END"
+        data 144,"SCORE",145,"SAVE",146,"LOAD",147,"READ",147,"EXAMINE"
+        data 148,"YES",148,"Y",149,"BUG",150,"*"
     restore keywordTable
     for i% = 1 to 200
         keywordFound(i%) = 0
@@ -2103,20 +2198,52 @@ dim itemRoom(99)
 dim roomVisited(100)
 dim keywordFound(200)
 dim itemPoints(15)
-PRINT: PRINT "Initializing.";
-currentRoom% = int(RND(1)*4)+1 : previousRoom = currentRoom%
-grateOpen = 0 : bottleContents% = 1 : snakeAlive = 1 : dragonAlive = 1 : ironDoorOiled = 0 : trollState = 1 : bearFedState = 0 : crystalBridgeBuilt = 0 : pirateState = 0: isDead = 0
-lampOn = 0 : bearTamedScored = 0 : dwarfGaveAxe = 0 : birdInCage = 0 : descriptionMode = 2 : totalRooms = 100 : totalItems = 35 : totalKeywords = 149 : deathCount = 0 : gameLoaded = 0: commandLine$=""
+PRINT
+PRINT "Initializing.";
+currentRoom% = int(RND(1)*4)+1
+previousRoom = currentRoom%
+grateOpen = 0
+bottleContents% = 1
+snakeAlive = 1
+dragonAlive = 1
+ironDoorOiled = 0
+trollState = 1
+bearFedState = 0
+crystalBridgeBuilt = 0
+pirateState = 0
+isDead = 0
+lampOn = 0
+bearTamedScored = 0
+dwarfGaveAxe = 0
+birdInCage = 0
+descriptionMode = 2
+totalRooms = 100
+totalItems = 35
+totalKeywords = 149
+deathCount = 0
+gameLoaded = 0
+commandLine$=""
 dwarfHitChance = 1.02
 for roomIndex% = 1 to 99
-    itemRoom(roomIndex%) = 0 : roomVisited(roomIndex%) = 0
+    itemRoom(roomIndex%) = 0
+    roomVisited(roomIndex%) = 0
 end for
-PRINT ".";:roomVisited(100) = 0
-messageIndex(1) = -1:messageIndex(2)=-1
+PRINT ".";
+roomVisited(100) = 0
+messageIndex(1) = -1
+messageIndex(2)=-1
 for targetRoom% = 1 to 100
     INPUT #4,field1,field2,field3,field4,field5,field6,field7,field8,field9,field10
-    roomExits(targetRoom%,1)=field1:roomExits(targetRoom%,2)=field2:roomExits(targetRoom%,3)=field3:roomExits(targetRoom%,4)=field4:roomExits(targetRoom%,5)=field5
-    roomExits(targetRoom%,6)=field6:roomExits(targetRoom%,7)=field7:roomExits(targetRoom%,8)=field8:roomExits(targetRoom%,9)=field9:roomExits(targetRoom%,10)=field10
+    roomExits(targetRoom%,1)=field1
+    roomExits(targetRoom%,2)=field2
+    roomExits(targetRoom%,3)=field3
+    roomExits(targetRoom%,4)=field4
+    roomExits(targetRoom%,5)=field5
+    roomExits(targetRoom%,6)=field6
+    roomExits(targetRoom%,7)=field7
+    roomExits(targetRoom%,8)=field8
+    roomExits(targetRoom%,9)=field9
+    roomExits(targetRoom%,10)=field10
     PRINT ".";
 end for
 close #4
@@ -2128,18 +2255,29 @@ loadItemNames()
 PRINT
 restore itemLocationData
 for targetRoom% = 1 to totalItems step 5
-    read field1,field2,field3,field4,field5:itemRoom(targetRoom%)=field1:itemRoom(targetRoom%+1)=field2:itemRoom(targetRoom%+2)=field3:itemRoom(targetRoom%+3)=field4:itemRoom(targetRoom%+4)=field5
+    read field1,field2,field3,field4,field5
+    itemRoom(targetRoom%)=field1
+    itemRoom(targetRoom%+1)=field2
+    itemRoom(targetRoom%+2)=field3
+    itemRoom(targetRoom%+3)=field4
+    itemRoom(targetRoom%+4)=field5
     PRINT ".";
 end for
-itemLocationData: data 18,25,23,24,21
-data 52,0,71,74,58
-data 59,69,66,82,100
-data 7,49,7,7,7
-data 7,12,13,40,38
-data 69,0,46,0,0
-data 15,60,82,22,250
+itemLocationData:
+    data 18,25,23,24,21
+    data 52,0,71,74,58
+    data 59,69,66,82,100
+    data 7,49,7,7,7
+    data 7,12,13,40,38
+    data 69,0,46,0,0
+    data 15,60,82,22,250
 for itemPointsIndex% = 1 to 15 step 5
-    read field1,field2,field3,field4,field5:itemPoints(itemPointsIndex%)=field1:itemPoints(itemPointsIndex%+1)=field2:itemPoints(itemPointsIndex%+2)=field3:itemPoints(itemPointsIndex%+3)=field4:itemPoints(itemPointsIndex%+4)=field5
+    read field1,field2,field3,field4,field5
+    itemPoints(itemPointsIndex%)=field1
+    itemPoints(itemPointsIndex%+1)=field2
+    itemPoints(itemPointsIndex%+2)=field3
+    itemPoints(itemPointsIndex%+3)=field4
+    itemPoints(itemPointsIndex%+4)=field5
     PRINT ".";
 end for
 data 1,2,2,2,2
@@ -2160,7 +2298,10 @@ while true
         end select
         roomVisited(currentRoom%) = 1
         describeRoomContents()
-        if isDead = 1 then handleDeath() : continue
+        if isDead = 1 then
+            handleDeath()
+            continue
+        end if
         situationDescriptions()
     else
         printMessage(45)
@@ -2171,51 +2312,53 @@ while true
         continue
     end while
 end while
-skillTitles: DATA "beginner","novice","experienced","advanced","expert"
-itemNames: data "large gold nugget"
-data "bars of silver"
-data "precious jewelry"
-data "many coins"
-data "several diamonds"
-data "fragile ming vase"
-data "glistening pearl"
-data "nest of golden eggs"
-data "jewel-encrusted trident"
-data "egg-sized emerald"
-data "platinum pyramid"
-data "golden chain"
-data "rare spices"
-data "persian rug"
-data "treasure chest"
-data "water"
-data "oil"
-data "brass lamp"
-data "keys"
-data "food"
-data "bottle"
-data "wicker cage"
-data "3-foot black rod"
-data "clam"
-data "magazine"
-data "bear"
-data "axe"
-data "velvet pillow"
-data "shards of pottery"
-data "oyster"
-data "bird"
-data "troll"
-data "dragon"
-data "snake"
-data "dwarf"
-data "rock"
-data "stairs"
-data "steps"
-data "house"
-data "grate"
-data "stream"
-data "room"
-data "bridge"
-data "pit"
-data "volcano"
-data "road"
-data "everything"
+skillTitles:
+    DATA "beginner","novice","experienced","advanced","expert"
+itemNames:
+    data "large gold nugget"
+    data "bars of silver"
+    data "precious jewelry"
+    data "many coins"
+    data "several diamonds"
+    data "fragile ming vase"
+    data "glistening pearl"
+    data "nest of golden eggs"
+    data "jewel-encrusted trident"
+    data "egg-sized emerald"
+    data "platinum pyramid"
+    data "golden chain"
+    data "rare spices"
+    data "persian rug"
+    data "treasure chest"
+    data "water"
+    data "oil"
+    data "brass lamp"
+    data "keys"
+    data "food"
+    data "bottle"
+    data "wicker cage"
+    data "3-foot black rod"
+    data "clam"
+    data "magazine"
+    data "bear"
+    data "axe"
+    data "velvet pillow"
+    data "shards of pottery"
+    data "oyster"
+    data "bird"
+    data "troll"
+    data "dragon"
+    data "snake"
+    data "dwarf"
+    data "rock"
+    data "stairs"
+    data "steps"
+    data "house"
+    data "grate"
+    data "stream"
+    data "room"
+    data "bridge"
+    data "pit"
+    data "volcano"
+    data "road"
+    data "everything"
