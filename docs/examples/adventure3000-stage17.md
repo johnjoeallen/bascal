@@ -183,6 +183,39 @@ one exercising CROSS/ENTER/LEAVE/OPEN/CLOSE specifically -- the
 functions this change touches); `--target basic` still compiles with
 zero warnings; full `cargo test` suite passes.
 
+**Seventh follow-up:** converted the two procedures whose only real
+effect was setting a single global for the caller to read right back
+into proper functions that `return` it directly.
+`checkCarryingItem()` became `checkCarryingItem%()` -- its output,
+`isCarrying%`, had no other reader or writer anywhere in the program,
+so making it a return value eliminates the global entirely.
+`findFirstNamedItem()` became `findFirstNamedItem$()`; its output,
+`selectedItemName$`, has a second, unrelated producer elsewhere
+(`parseAndDispatchCommand%()`'s own item-name scan), so the global
+itself stays, but the one call site that used this procedure now
+assigns the function's return value to it explicitly instead of
+relying on an implicit side effect. The other candidates considered
+and rejected: `checkDwarf()`/`checkDwarfAttack()`/`checkPirate()`,
+which look similar (callers check `isDead%` after calling them) but
+`isDead%` is shared persistent state set by many unrelated code paths
+(pits, the troll, the dragon, ...), not a single-purpose return
+channel -- converting them would misrepresent what the check after the
+call actually means.
+
+`findFirstNamedItem$()`'s new trailing `return ""` is unreachable in
+practice: every caller only invokes it once it has already confirmed
+some keyword code in 1-47 matched, and the function's own scan covers
+that same range, so it's guaranteed to return from inside the loop --
+kept only because a function's literal last statement must be
+`return`, the same reasoning `askYesNo%()`'s own trailing return uses.
+
+Verified byte-identical under `--target c` across five separate
+command sequences, including a new one exercising EAT/DRINK in both
+their carrying and not-carrying branches and every "exotic word"
+command (`ROCK`, `STAIRS`, `GRATE`, ...) that reaches
+`findFirstNamedItem$()`; `--target basic` still compiles with zero
+warnings; full `cargo test` suite passes.
+
 </div>
 
 <details class="source-embed" markdown="1">
@@ -619,44 +652,41 @@ procedure findMatchedItems()
 end procedure
 
 /*
- * Finds the first object code the player's command mentioned and sets
- * selectedItemName$ to its display name -- used for messages like
- * "What do you want to do with the LAMP?" where the exact item doesn't
- * matter, just naming *something* the player typed.
+ * Finds the first object code the player's command mentioned and
+ * returns its display name -- used for messages like "What do you
+ * want to do with the LAMP?" where the exact item doesn't matter,
+ * just naming *something* the player typed. Every caller only invokes
+ * this once it has already confirmed some code in 1-47 matched, so
+ * the loop always finds one; the trailing return is unreachable in
+ * practice, kept only because a function's literal last statement
+ * must be return.
  */
-procedure findFirstNamedItem()
+function findFirstNamedItem$()
     global keywordFound%
-    global selectedItemName$
     global itemNames$
-    dim foundFlag%
-    foundFlag% = 0
     for itemScanCode% = 1 to 47
-        if foundFlag% <> 1 then
-            if keywordFound%(itemScanCode%) = 1 then
-                selectedItemName$ = itemNames$(itemScanCode%)
-                foundFlag% = 1
-            end if
+        if keywordFound%(itemScanCode%) = 1 then
+            return itemNames$(itemScanCode%)
         end if
     end for
-end procedure
+    return ""
+end function
 
 /*
- * Checks whether the player is carrying item itemCode%, setting
- * isCarrying to 1 if so, 0 (and printing "You don't have the ...") if
- * not.
+ * Checks whether the player is carrying item itemCode%, returning 1
+ * if so, 0 (and printing "You don't have the ...") if not.
  */
-procedure checkCarryingItem()
+function checkCarryingItem%()
     global itemCode%
     global itemRoom%
     global paddedCommand$
-    global isCarrying%
     if itemRoom%(itemCode%) = -1 then
-        isCarrying% = 1
+        return 1
     else
         print "You don't have the "; paddedCommand$
-        isCarrying% = 0
+        return 0
     end if
-end procedure
+end function
 
 /*
  * Recomputes the current score from scratch -- treasures deposited or
@@ -1857,7 +1887,6 @@ end function
 function verbEat%()
     global keywordFound%
     global itemCode%
-    global isCarrying%
     global itemRoom%
     global bottleContents%
     global commandLine$
@@ -1867,8 +1896,7 @@ function verbEat%()
         return 0
     end if
     itemCode%=20
-    checkCarryingItem()
-    if isCarrying%=0 then
+    if checkCarryingItem%()=0 then
         commandLine$=""
         return 0
     end if
@@ -1884,7 +1912,6 @@ end function
 function verbDrink%()
     global keywordFound%
     global itemCode%
-    global isCarrying%
     global itemRoom%
     global bottleContents%
     global commandLine$
@@ -1894,8 +1921,7 @@ function verbDrink%()
         return 0
     end if
     itemCode%=16
-    checkCarryingItem()
-    if isCarrying%=0 then
+    if checkCarryingItem%()=0 then
         commandLine$=""
         return 0
     end if
@@ -2338,7 +2364,7 @@ function parseAndDispatchCommand%()
     end while
     for scanIndex% = 36 to 46
         if keywordFound%(scanIndex%) = 1 then
-            findFirstNamedItem()
+            selectedItemName$ = findFirstNamedItem$()
             askWhatToDoWithItem()
             commandLine$=""
             return 0
