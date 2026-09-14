@@ -167,9 +167,9 @@ formatted: legacy.bcl
 
 <div class="snippet" markdown="1">
 
-### Readable generated output
+### Generated output nobody deliberately obfuscated
 
-Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number — everything else stays plain, hand-readable BASIC.
+Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number, so a simple construct like this `if` stays plain, recognizable BASIC. That's not a guarantee, though: some constructs (functions/procedures compiled to the `basic` target, in particular — see [Generated BASIC Shape](../manual/generated-basic-shape.md)) transpile by their very nature into something far more `GOTO`/label-heavy and assembly-like than the source that produced them.
 
 ```bascal
 ' BASCAL source
