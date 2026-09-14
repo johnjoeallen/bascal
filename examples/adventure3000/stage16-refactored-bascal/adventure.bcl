@@ -53,7 +53,7 @@ procedure loadAdescrip()
     global roomDescriptions$
     dim dcount%, line$
     open "ADESCRIP" for input as #1
-    while not(EOF(1))
+    while not(eof(1))
         dcount% = dcount% + 1
         ' INPUT # into an array element directly isn't supported by the
         ' minimal C backend yet -- only a bare scalar variable is -- so
@@ -71,7 +71,7 @@ procedure loadAitems()
     global itemDescriptions$
     dim icount%, line$
     open "AITEMS" for input as #2
-    while not(EOF(2))
+    while not(eof(2))
         icount% = icount% + 1
         input #2, line$
         itemDescriptions$(icount%) = line$
@@ -88,7 +88,7 @@ procedure loadAmessage()
     dim line$
     messageCount = 0
     open "AMESSAGE" for input as #3
-    while not(EOF(3))
+    while not(eof(3))
         messageCount = messageCount + 1
         input #3, line$
         messages$(messageCount) = line$
@@ -184,7 +184,7 @@ procedure printMessage(msgNum%)
     if msgNum% = 2 or msgNum% = 61 then
         ' Messages 2 and 61 have several interchangeable variants
         ' (see AMESSAGE's "#2.1".."#2.5" entries); pick one at random.
-        xtmp% = fragmentIndex(xtmp% + int(RND(1) * 5))
+        xtmp% = fragmentIndex(xtmp% + int(rnd(1) * 5))
     end if
     mpos% = xtmp%
     messageText$ = messages$(mpos%)
@@ -272,7 +272,7 @@ procedure checkDwarf()
     end if
     ' SHOULD DWARF GIVE AWAY AXE?
     if currentRoom% < 13 then return
-    if RND(1) > 0.05 then return
+    if rnd(1) > 0.05 then return
     ' GIVE AWAY AXE
     printMessage(80)
     itemRoom(27) = currentRoom% : dwarfGaveAxe = 1
@@ -295,14 +295,14 @@ procedure checkDwarfAttack()
     end if
     if itemRoom(35) <> currentRoom% then
         ' SHOULD WE PUT A DWARF HERE?
-        if RND(1) >= 0.05 then return
+        if rnd(1) >= 0.05 then return
         if (currentRoom% = 60 or currentRoom% = 61) and trollState = 1 then return
         itemRoom(35) = currentRoom%
         printMessage(31)
         return
     end if
     if (currentRoom% <> 60 and currentRoom% <> 61) or trollState <> 1 then
-        if RND(1) > 0.5 then return
+        if rnd(1) > 0.5 then return
         ' YES!
         printMessage(32)
         ' DOES THE KNIFE KILL THE PLAYER?
@@ -310,7 +310,7 @@ procedure checkDwarfAttack()
         if dwarfHitChance < 0.75 then
             dwarfHitChance = 0.75
         end if
-        if RND(1) <= dwarfHitChance then
+        if rnd(1) <= dwarfHitChance then
             print "It gets you!"
             isDead = 1
         else
@@ -337,9 +337,9 @@ procedure checkPirate()
             stealableCount = stealableCount + 1
         end if
     end for
-    if stealableCount < int(RND(1) * 4) + 1 then return
+    if stealableCount < int(rnd(1) * 4) + 1 then return
     ' SHOULD WE RIP OFF HIS VALUABLES?
-    if RND(1) < 0.05 then
+    if rnd(1) < 0.05 then
         printMessage(33)
         for itemIndex% = 1 to 15
             if itemRoom(itemIndex%) = -1 then
@@ -413,7 +413,7 @@ procedure situationDescriptions()
         printMessage(14)
     end if
     ' PLUGH NOISE
-    if currentRoom% = 26 and RND(1) > 0.3 then
+    if currentRoom% = 26 and rnd(1) > 0.3 then
         printMessage(41)
     end if
     ' IRON DOOR
@@ -596,7 +596,7 @@ procedure printDontUnderstand()
     global responseText$
     dontUnderstandMessages: data "What?", "I don't understand.", "I can't understand that.", "I don't know that word."
     restore dontUnderstandMessages
-    for readCount = 1 to int(RND(1) * 4) + 1
+    for readCount = 1 to int(rnd(1) * 4) + 1
         read responseText$
     end for
     print responseText$
@@ -657,7 +657,7 @@ procedure reincarnate()
         end if
     end for
     ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
-    currentRoom% = int(RND(1) * 4) + 1 : previousRoom = currentRoom%
+    currentRoom% = int(rnd(1) * 4) + 1 : previousRoom = currentRoom%
 end procedure
 
 ' Checks whether the room just moved into is dark and has a pit to fall
@@ -810,9 +810,9 @@ function attemptRandomMove%()
     if currentRoom% = 44 then
         ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
         ' at random from the DATA table below (was L1470/L1510/L1530).
-        if RND(1) > 0.5 then
+        if rnd(1) > 0.5 then
             restore bedquiltRooms
-            for pickCount% = 1 to int(RND(1) * 5) + 1
+            for pickCount% = 1 to int(rnd(1) * 5) + 1
                 read targetRoom%
             end for
             return performMove%(targetRoom%)
@@ -822,7 +822,7 @@ function attemptRandomMove%()
     end if
     if currentRoom% = 39 then
         ' WITT'S END: 15% chance of escaping to room 38 (was L1590/L1650).
-        if RND(1) < 0.15 then
+        if rnd(1) < 0.15 then
             return performMove%(38)
         end if
         printMessage(52)
@@ -1981,7 +1981,7 @@ function verbBug%()
         return 0
     end try
     input "Your name: ";paddedCommand$
-    paddedCommand$ = paddedCommand$ + " " + DATE$
+    paddedCommand$ = paddedCommand$ + " " + date$
     print #5, paddedCommand$
     print "Enter your gripe in up to five lines (hit return to quit):"
     scratchValue = 1
@@ -2264,7 +2264,7 @@ dim itemPoints(15)
 print: print "Initializing.";
 ' initialize
 ' total rooms, items,and keywords
-currentRoom% = int(RND(1) * 4) + 1 : previousRoom = currentRoom%
+currentRoom% = int(rnd(1) * 4) + 1 : previousRoom = currentRoom%
 grateOpen = 0 : bottleContents% = 1 : snakeAlive = 1 : dragonAlive = 1 : ironDoorOiled = 0 : trollState = 1 : bearFedState = 0 : crystalBridgeBuilt = 0 : pirateState = 0: isDead = 0
 lampOn = 0 : bearTamedScored = 0 : dwarfGaveAxe = 0 : birdInCage = 0 : descriptionMode = 2 : totalRooms = 100 : totalItems = 35 : totalKeywords = 149 : deathCount = 0 : gameLoaded = 0: commandLine$ = ""
 dwarfHitChance = 1.02

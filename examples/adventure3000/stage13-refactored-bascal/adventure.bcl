@@ -57,7 +57,7 @@ procedure loadAdescrip()
     global descrip$
     dim dcount, line$
     open "ADESCRIP" for input as #1
-    while not(EOF(1))
+    while not(eof(1))
         dcount = dcount + 1
         ' INPUT # into an array element directly isn't supported by the
         ' minimal C backend yet -- only a bare scalar variable is -- so
@@ -75,7 +75,7 @@ procedure loadAitems()
     global items$
     dim icount, line$
     open "AITEMS" for input as #2
-    while not(EOF(2))
+    while not(eof(2))
         icount = icount + 1
         input #2, line$
         items$(icount) = line$
@@ -92,7 +92,7 @@ procedure loadAmessage()
     dim line$
     mcount = 0
     open "AMESSAGE" for input as #3
-    while not(EOF(3))
+    while not(eof(3))
         mcount = mcount + 1
         input #3, line$
         msg$(mcount) = line$
@@ -188,7 +188,7 @@ procedure printMessage(msgNum%)
     if msgNum% = 2 or msgNum% = 61 then
         ' Messages 2 and 61 have several interchangeable variants
         ' (see AMESSAGE's "#2.1".."#2.5" entries); pick one at random.
-        xtmp = fraindx(xtmp + int(RND(1) * 5))
+        xtmp = fraindx(xtmp + int(rnd(1) * 5))
     end if
     mpos = xtmp
     b1$ = msg$(mpos)
@@ -276,7 +276,7 @@ procedure checkDwarf()
     end if
     ' SHOULD DWARF GIVE AWAY AXE?
     if l1 < 13 then return
-    if RND(1) > 0.05 then return
+    if rnd(1) > 0.05 then return
     ' GIVE AWAY AXE
     printMessage(80)
     s(27) = l1 : d3 = 1
@@ -299,14 +299,14 @@ procedure checkDwarfAttack()
     end if
     if s(35) <> l1 then
         ' SHOULD WE PUT A DWARF HERE?
-        if RND(1) >= 0.05 then return
+        if rnd(1) >= 0.05 then return
         if (l1 = 60 or l1 = 61) and t = 1 then return
         s(35) = l1
         printMessage(31)
         return
     end if
     if (l1 <> 60 and l1 <> 61) or t <> 1 then
-        if RND(1) > 0.5 then return
+        if rnd(1) > 0.5 then return
         ' YES!
         printMessage(32)
         ' DOES THE KNIFE KILL THE PLAYER?
@@ -314,7 +314,7 @@ procedure checkDwarfAttack()
         if KC < 0.75 then
             KC = 0.75
         end if
-        if RND(1) <= KC then
+        if rnd(1) <= KC then
             print "It gets you!"
             dead = 1
         else
@@ -341,9 +341,9 @@ procedure checkPirate()
             z3 = z3 + 1
         end if
     end for
-    if z3 < int(RND(1) * 4) + 1 then return
+    if z3 < int(rnd(1) * 4) + 1 then return
     ' SHOULD WE RIP OFF HIS VALUABLES?
-    if RND(1) < 0.05 then
+    if rnd(1) < 0.05 then
         printMessage(33)
         for x = 1 to 15
             if s(x) = -1 then
@@ -417,7 +417,7 @@ procedure situationDescriptions()
         printMessage(14)
     end if
     ' PLUGH NOISE
-    if l1 = 26 and RND(1) > 0.3 then
+    if l1 = 26 and rnd(1) > 0.3 then
         printMessage(41)
     end if
     ' IRON DOOR
@@ -597,7 +597,7 @@ procedure printDontUnderstand()
     global b$
     dontUnderstandMessages: data "What?", "I don't understand.", "I can't understand that.", "I don't know that word."
     restore dontUnderstandMessages
-    for x = 1 to int(RND(1) * 4) + 1
+    for x = 1 to int(rnd(1) * 4) + 1
         read b$
     end for
     print b$
@@ -629,7 +629,7 @@ procedure reincarnate()
     global s
     global l
     global dead
-    global kc
+    global KC
     global t2
     global l1
     global l2
@@ -651,14 +651,14 @@ procedure reincarnate()
     end if
     printMessage(76)
     ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
-    s(18) = 7 : l = 0 : dead = 0 : kc = 1.03
+    s(18) = 7 : l = 0 : dead = 0 : KC = 1.03
     for x = 1 to t2
         if s(x) = -1 then
             s(x) = l1
         end if
     end for
     ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
-    l1 = int(RND(1) * 4) + 1 : l2 = l1
+    l1 = int(rnd(1) * 4) + 1 : l2 = l1
 end procedure
 
 ' Checks whether the room just moved into is dark and has a pit to fall
@@ -811,9 +811,9 @@ function attemptRandomMove%()
     if l1 = 44 then
         ' BEDQUILT: 50/50 chance of landing in one of five rooms picked
         ' at random from the DATA table below (was L1470/L1510/L1530).
-        if RND(1) > 0.5 then
+        if rnd(1) > 0.5 then
             restore bedquiltRooms
-            for z3% = 1 to int(RND(1) * 5) + 1
+            for z3% = 1 to int(rnd(1) * 5) + 1
                 read z2%
             end for
             return performMove%(z2%)
@@ -823,7 +823,7 @@ function attemptRandomMove%()
     end if
     if l1 = 39 then
         ' WITT'S END: 15% chance of escaping to room 38 (was L1590/L1650).
-        if RND(1) < 0.15 then
+        if rnd(1) < 0.15 then
             return performMove%(38)
         end if
         printMessage(52)
@@ -989,12 +989,12 @@ function verbClimb%()
     global p1
     global z2
     ' *** CLIMB ***
-    if L1 <> 50 then printMessage(2) : return 0
+    if l1 <> 50 then printMessage(2) : return 0
     ' CAN HE CLIMB BEANSTALK?
-    if P1 < 2 then printMessage(2) : return 0
+    if p1 < 2 then printMessage(2) : return 0
     ' YES
-    Z2 = 70
-    performMove%(Z2)
+    z2 = 70
+    performMove%(z2)
     checkPitsAndReincarnateIfNeeded()
     return 1
 end function
@@ -1002,7 +1002,7 @@ end function
 function verbJump%()
     global l1
     ' *** JUMP *** STRICTLY SUICIDAL
-    if L1 <> 16 and L1 <> 19 and L1 <> 20 and L1 <> 27 then printMessage(2) : return 0
+    if l1 <> 16 and l1 <> 19 and l1 <> 20 and l1 <> 27 then printMessage(2) : return 0
     printMessage(4)
     reincarnate()
     return 1
@@ -1015,24 +1015,24 @@ function verbFill%()
     global b$
     global c$
     ' FILL
-    if S(21) <> -1 then
-        B$ = "bottle"
+    if s(21) <> -1 then
+        b$ = "bottle"
         print "You don't have the ";b$
         c$ = ""
         return 0
     end if
-    if B0 <> 0 then
+    if b0 <> 0 then
         printMessage(5)
         c$ = ""
         return 0
     end if
-    if L1 = 7 or L1 = 8 or L1 = 9 or L1 = 35 or L1 = 74 or L1 = 81 then
-        B0 = 1:S(16) = -1
-    elseif L1 = 49 then
-        B0 = 2:S(17) = -1
+    if l1 = 7 or l1 = 8 or l1 = 9 or l1 = 35 or l1 = 74 or l1 = 81 then
+        b0 = 1:s(16) = -1
+    elseif l1 = 49 then
+        b0 = 2:s(17) = -1
     else
-        B$ = "oil"
-        print "I see no ";B$;" here."
+        b$ = "oil"
+        print "I see no ";b$;" here."
         return 0
     end if
     print "The bottle is now filled."
@@ -1045,12 +1045,12 @@ function verbEmpty%()
     global b$
     global c$
     ' *** EMPTY ***
-    if S(21) <> -1 then
-        B$ = "bottle" : print "You don't have the ";b$ : c$ = ""
+    if s(21) <> -1 then
+        b$ = "bottle" : print "You don't have the ";b$ : c$ = ""
         return 0
     end if
     ' EMPTY BOTTLE (ASSUMED FULL)
-    S(B0+15) = 0:B0 = 0
+    s(b0+15) = 0:b0 = 0
     print "Emptied"
     return 0
 end function
@@ -1088,7 +1088,7 @@ function verbOff%()
     global c$
     ' *** OFF (EXTINGUSIH) ***
     if s(18) = -1 then
-        L = 0:B$ = "off"
+        l = 0:b$ = "off"
     else
         b$ = "lamp"
         print "You don't have the ";b$
@@ -1108,8 +1108,8 @@ function verbEnter%()
     ' *** ENTER ***
     if l1 = 6 or l1 = 68 then
         ' TO HOUSE / TO BARREN ROOM
-        D = 3
-        if attemptMove%(D) then
+        d = 3
+        if attemptMove%(d) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
@@ -1119,10 +1119,10 @@ function verbEnter%()
     ' (D=10, "down") -- was a manual D=10 downto 1 GOTO loop (LW3240).
     ' `return` here, not `exit`/`continue` -- it unwinds this whole
     ' function regardless of the `for` loop it's inside.
-    for D = 10 to 1 step -1
-        Z2 = DIRS(L1, D)
-        if Z2 > 0 and Z2 < 101 then
-            if checkSpecialRoomAndMove%(D, Z2) then
+    for d = 10 to 1 step -1
+        z2 = dirs(l1, d)
+        if z2 > 0 and z2 < 101 then
+            if checkSpecialRoomAndMove%(d, z2) then
                 checkPitsAndReincarnateIfNeeded()
                 return 1
             else
@@ -1142,8 +1142,8 @@ function verbLeave%()
     ' ** LEAVE ***
     if l1 = 7 or l1 = 69 then
         ' LEAVE HOUSE / LEAVE BARREN ROOM
-        D = 7
-        if attemptMove%(D) then
+        d = 7
+        if attemptMove%(d) then
             checkPitsAndReincarnateIfNeeded()
             return 1
         end if
@@ -1153,10 +1153,10 @@ function verbLeave%()
     ' (D=1, "north") -- was a manual D=1 to 10 GOTO loop (LW3400). See
     ' ENTER's own comment above for why this uses `return` instead of
     ' `exit`/`continue`.
-    for D = 1 to 10
-        Z2 = DIRS(L1, D)
-        if Z2 > 0 and Z2 < 101 then
-            if checkSpecialRoomAndMove%(D, Z2) then
+    for d = 1 to 10
+        z2 = dirs(l1, d)
+        if z2 > 0 and z2 < 101 then
+            if checkSpecialRoomAndMove%(d, z2) then
                 checkPitsAndReincarnateIfNeeded()
                 return 1
             else
@@ -1175,17 +1175,17 @@ function verbInventory%()
     global b$
     global itemname$
     ' *** INVENTORY ***
-    Z0 = 0
+    z0 = 0
     print "You are carrying:";
-    for X = 1 to T2
-        if S(X) = -1 then
+    for x = 1 to t2
+        if s(x) = -1 then
             b$ = itemname$(x)
-            print B$
-            Z0 = Z0 + 1
+            print b$
+            z0 = z0 + 1
         end if
     end for
 
-    if Z0 = 0 then
+    if z0 = 0 then
         print "nothing."
     end if
     print
@@ -1316,7 +1316,7 @@ function verbDrop%()
     ' *** DROP ***
     if k(47) <> 1 then
         findMatchedItems()
-        if Z8 = 0 then
+        if z8 = 0 then
             print "Drop what?"
             printDontUnderstand()
             return 0
@@ -1325,46 +1325,46 @@ function verbDrop%()
     ' Scan every item the player is carrying that matches the command --
     ' was a manual Z3=1 to T2 GOTO loop (LW4000). See GET's own comment
     ' above for why this uses `return` instead of `exit`/`continue`.
-    for Z3 = 1 to T2
-        if K(47) <> 1 then
-            if K(Z3) <> 1 or S(Z3) = 0 then continue
+    for z3 = 1 to t2
+        if k(47) <> 1 then
+            if k(z3) <> 1 or s(z3) = 0 then continue
         end if
-        if S(Z3) <> -1 then
-            if K(47) <> 1 then
-                b$ = itemname$(z3):print "You don't have the ";B$
+        if s(z3) <> -1 then
+            if k(47) <> 1 then
+                b$ = itemname$(z3):print "You don't have the ";b$
             end if
             continue
         end if
         ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE) -- was
         ' L7380 onward, a GOSUB-like target reached only from here.
-        if Z3 = 31 or (Z3 = 22 and B3 = 1) then
+        if z3 = 31 or (z3 = 22 and b3 = 1) then
             ' BIRD IN CAGE
-            S(31) = L1:S(22) = L1:B3 = 1
-            if Z3 = 31 then
+            s(31) = l1:s(22) = l1:b3 = 1
+            if z3 = 31 then
                 print "Cage and ";
                 print "Bird and ";
             end if
-        elseif Z3 = 21 and B0 <> 0 then
+        elseif z3 = 21 and b0 <> 0 then
             ' BOTTLE IS FULL, DO DROP CONTENTS TOO
             print "Contents and ";
-            S(15 + B0) = L1
-        elseif Z3 = 16 or Z3 = 17 then
+            s(15 + b0) = l1
+        elseif z3 = 16 or z3 = 17 then
             print "Try saying 'empty'"
             return 0
-        elseif Z3 = 26 and T = 1 and (L1 = 60 or L1 = 61) then
+        elseif z3 = 26 and t = 1 and (l1 = 60 or l1 = 61) then
             printMessage(28)
-            T = 0:S(26) = L1:S(32) = 0
+            t = 0:s(26) = l1:s(32) = 0
             return 0
-        elseif Z3 = 6 and S(28) <> L1 then
+        elseif z3 = 6 and s(28) <> l1 then
             ' GOODBYE, FRAGILE VASE!
             printMessage(43)
-            S(6) = 0:S(29) = L1
+            s(6) = 0:s(29) = l1
             return 0
-        elseif Z3 = 6 then
+        elseif z3 = 6 then
             printMessage(60)
         end if
-        b$ = itemname$(z3):print B$;":dropped."
-        S(Z3) = L1
+        b$ = itemname$(z3):print b$;":dropped."
+        s(z3) = l1
     end for
     return 0
 end function
@@ -1474,14 +1474,14 @@ function verbFeed%()
         return 0
     end if
     if s(20) <> -1 then
-        B$ = "FOOD" : print "You don't have the ";b$ : c$ = "" : return 0
+        b$ = "FOOD" : print "You don't have the ";b$ : c$ = "" : return 0
     end if
     if l1 <> 69 then
         print "I can't feed it."
         printMessage(23)
         return 0
     end if
-    if S(20) = L1 then
+    if s(20) = l1 then
         ' was: `GOTO L7600`, itself `printMessage(60):GOTO L4120` -- L4120
         ' was DROP's own per-item "dropped" epilogue, reused here verbatim
         ' (feeding the bear food already here also "drops" it via the
@@ -1489,9 +1489,9 @@ function verbFeed%()
         ' there instead of living at a shared label).
         printMessage(60)
         b$ = itemname$(z3):print b$;":dropped."
-        S(Z3) = L1
+        s(z3) = l1
     else
-        B1 = 1:S(20) = 0:printMessage(6)
+        b1 = 1:s(20) = 0:printMessage(6)
     end if
     return 0
 end function
@@ -1505,7 +1505,7 @@ function verbWater%()
     global b0
     ' *** WATER ***
     if s(16) <> -1 then
-        B$ = "water" : print "You don't have the ";b$ : c$ = "" : return 0
+        b$ = "water" : print "You don't have the ";b$ : c$ = "" : return 0
     end if
     if l1 <> 50 then
         printMessage(2)
@@ -1522,7 +1522,7 @@ function verbWater%()
         printMessage(9)
         p1 = 0
     end if
-    S(16) = 0:B0 = 0
+    s(16) = 0:b0 = 0
     return 0
 end function
 
@@ -1533,11 +1533,11 @@ function verbLock%()
     global b$
     global c$
     ' *** LOCK ***
-    if L1 = 10 or L1 = 11 then
-        if S(19) = -1 then
-            G = 0:printMessage(10)
+    if l1 = 10 or l1 = 11 then
+        if s(19) = -1 then
+            g = 0:printMessage(10)
         else
-            B$ = "keys"
+            b$ = "keys"
             print "You don't have the ";b$ : c$ = "" : return 0
         end if
     else
@@ -1556,16 +1556,16 @@ function verbUnlock%()
     global b$
     global c$
     ' *** UNLOCK ***
-    if S(19) <> -1 then
-        B$ = "keys"
+    if s(19) <> -1 then
+        b$ = "keys"
         print "You don't have the ";b$ : c$ = "" : return 0
     end if
-    if L1 = 10 or L1 = 11 then
-        G = 1:printMessage(11)
-    elseif L1 = 69 then
-        if B1 > 0 then
-            if C = 0 then
-                C = 1:B1 = 2
+    if l1 = 10 or l1 = 11 then
+        g = 1:printMessage(11)
+    elseif l1 = 69 then
+        if b1 > 0 then
+            if c = 0 then
+                c = 1:b1 = 2
             end if
             printMessage(13)
         else
@@ -1586,28 +1586,28 @@ function verbFree%()
     global b$
     global c$
     ' *** FREE ***
-    if K(31) <> 1 or S(31) <> -1 then
+    if k(31) <> 1 or s(31) <> -1 then
         ' CAN'T FREE ANYTHING BUT BIRD
         printMessage(2)
         c$ = ""
         return 0
     end if
-    S(31) = L1:B3 = 0
+    s(31) = l1:b3 = 0
     print "Freed."
-    if L1 = 22 and SN = 1 then
-        B$ = "snake"
-    elseif L1 = 82 then
-        B$ = "dragon"
+    if l1 = 22 and sn = 1 then
+        b$ = "snake"
+    elseif l1 = 82 then
+        b$ = "dragon"
     else
         return 0
     end if
-    print "The little bird attacks the green ";B$;" and"
-    if L1 = 82 then
+    print "The little bird attacks the green ";b$;" and"
+    if l1 = 82 then
         print "gets burned to a crisp"
-        S(31) = 0
+        s(31) = 0
     else
         print "drives it off"
-        SN = 0:S(34) = 0
+        sn = 0:s(34) = 0
     end if
     return 0
 end function
@@ -1620,19 +1620,19 @@ function verbWave%()
     global l1
     global b2
     ' *** WAVE ***
-    if K(23) <> 1 then
+    if k(23) <> 1 then
         printMessage(2)
-    elseif S(23) <> -1 then
-        B$ = "rod" : print "You don't have the ";b$ : c$ = "" : return 0
-    elseif L1 <> 19 and L1 <> 20 then
+    elseif s(23) <> -1 then
+        b$ = "rod" : print "You don't have the ";b$ : c$ = "" : return 0
+    elseif l1 <> 19 and l1 <> 20 then
         ' NOT NEAR FISSURE
         printMessage(2)
-    elseif B2 = 0 then
+    elseif b2 = 0 then
         printMessage(14)
-        B2 = 1
+        b2 = 1
     else
         printMessage(15)
-        B2 = 0
+        b2 = 0
     end if
     return 0
 end function
@@ -1645,31 +1645,31 @@ function verbOpen%()
     global c$
     ' *** OPEN ***
     findMatchedItems()
-    if Z3 = 0 then
+    if z3 = 0 then
         print "Open ";
         printDontUnderstand()
         return 0
     end if
-    if Z3 = 40 then return verbUnlock%() ' OPEN a lock is the same as UNLOCK
-    if S(Z3) <> L1 then
+    if z3 = 40 then return verbUnlock%() ' OPEN a lock is the same as UNLOCK
+    if s(z3) <> l1 then
         print "I see no ";b$;" here."
         return 0
     end if
     if z3 <> 24 then
-        print "I don't know how to open a ";B$
+        print "I don't know how to open a ";b$
         return 0
     end if
-    if S(9) = -1 then
+    if s(9) = -1 then
         printMessage(16)
         return 0
     end if
-    if S(Z3) = 0 then
+    if s(z3) = 0 then
         printMessage(2)
         return 0
     end if
     ' HE'S OPENED CLAM, SO PRINT DESCRIPTION OF THIS
     ' PUT PEARL IN CUL-DE-SAC
-    S(7) = 43:S(24) = 0:S(30) = L1:printMessage(17)
+    s(7) = 43:s(24) = 0:s(30) = l1:printMessage(17)
     return 0
 end function
 
@@ -1688,7 +1688,7 @@ function verbClose%()
     return 0
     ' *** CLOSE *** (dead code -- see the comment above)
     findMatchedItems()
-    if Z3 = 40 then return verbLock%()
+    if z3 = 40 then return verbLock%()
     printMessage(18)
     return 0
 end function
@@ -1701,17 +1701,17 @@ function verbOil%()
     global b0
     global b$
     ' OIL
-    if K(17) = 0 then
+    if k(17) = 0 then
         printMessage(2)
-    elseif S(17) <> -1 then
-        B$ = "oil" : print "I see no ";b$;" here."
-    elseif L1 <> 73 then
+    elseif s(17) <> -1 then
+        b$ = "oil" : print "I see no ";b$;" here."
+    elseif l1 <> 73 then
         printMessage(2)
-    elseif D2 = 1 then
+    elseif d2 = 1 then
         ' IS DOOR STILL RUSTED
         printMessage(2)
     else
-        D2 = 1:S(17) = 0:B0 = 0:printMessage(19)
+        d2 = 1:s(17) = 0:b0 = 0:printMessage(19)
     end if
     return 0
 end function
@@ -1724,18 +1724,18 @@ function verbEat%()
     global b0
     global c$
     ' *** EAT ***
-    if K(20) <> 1 then
+    if k(20) <> 1 then
         printMessage(20)
         c$ = ""
         return 0
     end if
-    Z3 = 20:checkCarryingItem()
-    if Z5 = 0 then
+    z3 = 20:checkCarryingItem()
+    if z5 = 0 then
         c$ = ""
         return 0
     end if
     printMessage(73)
-    S(20) = 0:B0 = 0
+    s(20) = 0:b0 = 0
     return 0
 end function
 
@@ -1747,18 +1747,18 @@ function verbDrink%()
     global b0
     global c$
     ' *** DRINK ***
-    if K(16) <> 1 then
+    if k(16) <> 1 then
         printMessage(21)
         c$ = ""
         return 0
     end if
-    Z3 = 16:checkCarryingItem()
-    if Z5 = 0 then
+    z3 = 16:checkCarryingItem()
+    if z5 = 0 then
         c$ = ""
         return 0
     end if
     printMessage(22)
-    S(17) = 0:B0 = 0
+    s(17) = 0:b0 = 0
     return 0
 end function
 
@@ -1773,10 +1773,10 @@ function verbFeeFieFoeFoo%()
     elseif s(8) = l1 then
         ' MAKE NEST VANISH
         printMessage(79)
-        S(8) = 0
+        s(8) = 0
     else
         ' IF S(8)=0 THEN goto L6110
-        S(8) = L1
+        s(8) = l1
         ' MAKE NEST RE-APPEAR
         printMessage(81)
     end if
@@ -1787,7 +1787,7 @@ function verbShort%()
     global d0
     ' *** SHORT ***
     print "Short descriptions"
-    D0 = 0
+    d0 = 0
     return 0
 end function
 
@@ -1795,7 +1795,7 @@ function verbLong%()
     global d0
     ' *** LONG ***
     print "Long descriptions"
-    D0 = 1
+    d0 = 1
     return 0
 end function
 
@@ -1803,7 +1803,7 @@ function verbBrief%()
     global d0
     ' *** BRIEF ***
     print "OK, I'll only describe the room in detail the first time."
-    D0 = 2
+    d0 = 2
     return 0
 end function
 
@@ -1811,8 +1811,8 @@ function verbQuit%()
     global z0
     ' *** QUIT ***
     print "Save game";
-    Z0 = askYesNo%()
-    if Z0 = 1 then return verbSaveGame%()
+    z0 = askYesNo%()
+    if z0 = 1 then return verbSaveGame%()
     endGame()
     return 0
 end function
@@ -1844,30 +1844,30 @@ function verbSaveGame%()
     global d3
     global b3
     global r0
-    global kc
+    global KC
     global s
     global v
     global c0
     global c$
     global k
     ' *** SAVE GAME ***
-    input "What do you want to call the save file? ";A$
+    input "What do you want to call the save file? ";a$
     try
-        open A$ for output as #5
+        open a$ for output as #5
     catch err%, erl%
         print "File ";a$;" not created"
         c$ = ""
         return 0
     end try
-    print #5, T1;",";T2;",";T3;",";L1;",";L2;",";G;",";B0;",";SN;",";D1;",";D2;",";D0;",";T;",";B1;",";B2;",";P1;",";L;",";C;",";D3;",";B3;",";R0;",";KC
-    for X = 1 to 99
-        print #5, S(X);",";V(X)
+    print #5, t1;",";t2;",";t3;",";l1;",";l2;",";g;",";b0;",";sn;",";d1;",";d2;",";d0;",";t;",";b1;",";b2;",";p1;",";l;",";c;",";d3;",";b3;",";r0;",";KC
+    for x = 1 to 99
+        print #5, s(x);",";v(x)
     end for
 
-    print #5, V(100)
+    print #5, v(100)
     close #5
     print "Game saved"
-    C0 = 0
+    c0 = 0
     if k(143) = 1 then
         endGame()
     end if
@@ -1897,34 +1897,34 @@ function verbLoadOldGame%()
     global d3
     global b3
     global r0
-    global kc
+    global KC
     global s
     global v
     global c0
     global c$
     ' *** LOAD OLD GAME ***
-    if C0 <> 0 then
+    if c0 <> 0 then
         print "You already have a loaded game!"
         c$ = ""
         return 0
     end if
-    input "Save file name? ";A$
+    input "Save file name? ";a$
     try
-        open A$ for input as #5
+        open a$ for input as #5
     catch err%, erl%
-        print "Unable to use file ";A$
+        print "Unable to use file ";a$
         c$ = ""
         return 0
     end try
-    input #5, T1, T2, T3, L1, L2, G, B0, SN, D1, D2, D0, T, B1, B2, P1, L, C, D3, B3, R0, KCX$
-    kc = val(kcx$)
-    for X = 1 to 99
+    input #5, t1, t2, t3, l1, l2, g, b0, sn, d1, d2, d0, t, b1, b2, p1, l, c, d3, b3, r0, KCX$
+    KC = val(kcx$)
+    for x = 1 to 99
         input #5, SX, VX:s(x) = sx:v(x) = vx
     end for
 
     input #5, vx:v(100) = vx
     close #5
-    C0 = 1
+    c0 = 1
     return 1
 end function
 
@@ -1939,7 +1939,7 @@ function verbReadMagazine%()
         printMessage(74)
         c$ = ""
     elseif s(25) <> -1 then
-        B$ = "magazine"
+        b$ = "magazine"
         print "You don't have the ";b$ : c$ = ""
     else
         ' OK, LET HIM READ IT
@@ -1958,12 +1958,12 @@ function verbYes%()
     ' between L4480 and L4520 -- reachable only via the dispatch table,
     ' never by ATTACK's own fall-through, so moving it doesn't change
     ' behavior) so its case can be its own block below.
-    if L1 <> 82 then
+    if l1 <> 82 then
         printDontUnderstand()
         return 0
     end if
     printMessage(69)
-    S(33) = 0:D1 = 0
+    s(33) = 0:d1 = 0
     return 0
 end function
 
@@ -1972,27 +1972,27 @@ function verbBug%()
     global z0
     global c$
     ' *** BUG ***
-    A$ = "ADVBUGS.TXT"
+    a$ = "ADVBUGS.TXT"
     try
-        open A$ for append as #5
+        open a$ for append as #5
     catch err%, erl%
-        print "Unable to use file ";A$
+        print "Unable to use file ";a$
         c$ = ""
         return 0
     end try
-    input "Your name: ";A$
-    A$ = A$ + " " + DATE$
-    print #5, A$
+    input "Your name: ";a$
+    a$ = a$ + " " + date$
+    print #5, a$
     print "Enter your gripe in up to five lines (hit return to quit):"
-    Z0 = 1
-    while Z0 <= 5
-        print Z0;
-        input A$
-        if A$ = "" then
+    z0 = 1
+    while z0 <= 5
+        print z0;
+        input a$
+        if a$ = "" then
             exit
         end if
-        print #5, A$
-        Z0 = Z0 + (1)
+        print #5, a$
+        z0 = z0 + (1)
     end while
     print "Message recorded. Thank you!"
     close #5
@@ -2264,7 +2264,7 @@ dim o(15)
 print: print "Initializing.";
 ' initialize
 ' total rooms, items,and keywords
-l1 = int(RND(1) * 4) + 1 : l2 = l1
+l1 = int(rnd(1) * 4) + 1 : l2 = l1
 g = 0 : b0 = 1 : sn = 1 : d1 = 1 : d2 = 0 : t = 1 : b1 = 0 : b2 = 0 : p1 = 0: dead = 0
 l = 0 : c = 0 : d3 = 0 : b3 = 0 : d0 = 2 : t1 = 100 : t2 = 35 : t3 = 149 : r0 = 0 : c0 = 0: c$ = ""
 KC = 1.02
@@ -2294,7 +2294,7 @@ loadItemNames()
 print
 restore itemLocationData
 '    read in locations of items
-for z2 = 1 to T2 step 5
+for z2 = 1 to t2 step 5
     read dx1, dx2, dx3, dx4, dx5:s(z2) = dx1:s(z2+1) = dx2:s(z2+2) = dx3:s(z2+3) = dx4:s(z2+4) = dx5
     print ".";
 end for

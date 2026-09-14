@@ -47,7 +47,7 @@ dim o(15)
 print: print "Initializing.";
 ' initialize
 ' total rooms, items,and keywords
-l1 = int(RND(1) * 4) + 1 : l2 = l1
+l1 = int(rnd(1) * 4) + 1 : l2 = l1
 g = 0 : b0 = 1 : sn = 1 : d1 = 1 : d2 = 0 : t = 1 : b1 = 0 : b2 = 0 : p1 = 0: dead = 0
 l = 0 : c = 0 : d3 = 0 : b3 = 0 : d0 = 2 : t1 = 100 : t2 = 35 : t3 = 149 : r0 = 0 : c0 = 0: c$ = ""
 KC = 1.02
@@ -70,7 +70,7 @@ LA100: ' load ADESCRIP into memory (replaces fseek #1,0 + line-counted read)
 dim descrip$(200)
 open "ADESCRIP" for input as #1
 dcount = 0
-LA101: if EOF(1) then goto LA102
+LA101: if eof(1) then goto LA102
 dcount = dcount + 1
 ' INPUT # into an array element directly isn't supported by the minimal
 ' C backend yet (GitHub issue #151) -- only a bare scalar variable is --
@@ -84,7 +84,7 @@ LA110: ' load AITEMS into memory (replaces fseek #2,0 + full rescan)
 dim items$(200)
 open "AITEMS" for input as #2
 icount = 0
-LA111: if EOF(2) then goto LA112
+LA111: if eof(2) then goto LA112
 icount = icount + 1
 input #2, line$
 items$(icount) = line$
@@ -95,7 +95,7 @@ LA120: ' load AMESSAGE into memory (replaces AMESSAGE.IDX + fseek #3,xtmp)
 dim msg$(2500)
 open "AMESSAGE" for input as #3
 mcount = 0
-LA121: if EOF(3) then goto LA122
+LA121: if eof(3) then goto LA122
 mcount = mcount + 1
 input #3, line$
 msg$(mcount) = line$
@@ -136,7 +136,7 @@ data 5, 3, 2, 3, 3
 ' ASK IF HE WANTS DIRECTIONS
 z59 = 301:gosub L7620
 gosub L9860
-if z0 then goto L267 else goto L320
+if Z0 then goto L267 else goto L320
 L267: z59 = 302:gosub L7620
 '    command INPUT routine
 L300: ' PRINT room, items
@@ -213,8 +213,8 @@ k(z1) = 1
 ' KEYWORDK #Z1 NOT FOUND
 goto L820
 ' EXOTIC WORDS
-L900: z0 = 36
-x = z0
+L900: Z0 = 36
+x = Z0
 LW910: if x > 46 then goto L960
 if k(x) = 0 then goto LCONT910
 gosub L8390
@@ -276,13 +276,13 @@ z59 = 50:gosub L7620
 goto L400
 ' bedquilt and random directiosn
 L1470: if l1 <> 44 then goto L1590
-if RND(1) > 0.5 then goto L1510
+if rnd(1) > 0.5 then goto L1510
 z59 = 52:gosub L7620
 goto L400
 L1510: restore L1530
 ' ROOMS TO JU
 L1530: data 33, 37, 45, 92, 76
-for z3 = 1 to int(RND(1) * 5) + 1
+for z3 = 1 to int(rnd(1) * 5) + 1
     read z2
 end for
 
@@ -290,7 +290,7 @@ goto L1180
 ' WITT's END
 L1590: if l1 <> 39 then goto L1220
 ' SHOULD WE LET HIM OUT?
-if RND(1) < 0.15 then goto L1650
+if rnd(1) < 0.15 then goto L1650
 ' NO
 z59 = 52:gosub L7620
 goto L400
@@ -299,7 +299,7 @@ z2 = 38
 goto L1180
 ' Narrow Tunnel
 L1690: if not (l1 = 57 or l1 = 58) then goto L1780
-if K(102) = 0 and K(106) = 0 then goto L1780
+if k(102) = 0 and k(106) = 0 then goto L1780
 z3 = 1
 LW1700: if z3 > t2 then goto L1750
 if z3 = 10 then goto LCONT1700
@@ -345,7 +345,7 @@ x = x + (1)
 goto LW2000
 L2030:
 L2040: restore L2070
-for x = 1 to int(RND(1) * 4) + 1
+for x = 1 to int(rnd(1) * 4) + 1
     read b$
 end for
 
@@ -357,32 +357,32 @@ on z1 goto L2120, L2220, L2300, L2390, L2570, L2640, L2680, L2860, L2930, L3000,
 goto L2040
 L2120: ' *** PLUGH ***
 if L1 <> 7 then goto L2170
-if S(35) = L1 then S(35) = 0
-Z2 = 26
+if s(35) = L1 then s(35) = 0
+z2 = 26
 goto L1180
 L2170: if L1 <> 26 then goto L2200
-Z2 = 7
+z2 = 7
 goto L1180
 L2200: z59 = 2:gosub L7620
 goto L400
 L2220: ' *** XYZZY ***
 if L1 <> 7 then goto L2270
-if S(35) = L1 then S(35) = 0
-Z2 = 13
+if s(35) = L1 then s(35) = 0
+z2 = 13
 goto L1180
 L2270: if L1 <> 13 then goto L2200
-Z2 = 7
+z2 = 7
 goto L1180
 L2300: ' *** PLOVER *** (CAN'T BRING EMERALD WITH HIM)
 if L1 > 26 then goto L2360
-if S(35) <> L1 then goto L2330
-S(35) = 0
-L2330: if S(10) <> -1 then goto L2340
-S(10) = L1
-L2340: Z2 = 58
+if s(35) <> L1 then goto L2330
+s(35) = 0
+L2330: if s(10) <> -1 then goto L2340
+s(10) = L1
+L2340: z2 = 58
 goto L1180
 L2360: if L1 <> 58 then goto L2200
-Z2 = 26
+z2 = 26
 goto L1180
 L2390: ' *** CROSS ***
 if L1 <> 19 then goto L2470
@@ -407,14 +407,14 @@ if L1 <> 50 then goto L2200
 ' CAN HE CLIMB BEANSTALK?
 if P1 < 2 then goto L2200
 ' YES
-Z2 = 70
+z2 = 70
 goto L1180
 L2640: ' *** JUMP *** STRICTLY SUICIDAL
 if L1 <> 16 and L1 <> 19 and L1 <> 20 and L1 <> 27 then goto L2200
 z59 = 4:gosub L7620
 goto L9550
 L2680: ' FILL
-if S(21) = -1 then goto L2730
+if s(21) = -1 then goto L2730
 L2700: B$ = "bottle"
 L2710: print "You don't have the ";b$
 goto L410
@@ -422,20 +422,20 @@ L2730: if B0 = 0 then goto L2760
 z59 = 5:gosub L7620
 goto L410
 L2760: if L1 <> 7 and L1 <> 8 and L1 <> 9 and L1 <> 35 and L1 <> 74 and L1 <> 81 then goto L2790
-B0 = 1:S(16) = -1
+B0 = 1:s(16) = -1
 goto L2840
 L2790: if L1 = 49 then goto L2830
 B$ = "oil"
 L2810: print "I see no ";B$;" here."
 goto L400
-L2830: B0 = 2:S(17) = -1
+L2830: B0 = 2:s(17) = -1
 L2840: print "The bottle is now filled."
 goto L400
 L2860: ' *** EMPTY ***
-if S(21) = -1 then goto L2890
+if s(21) = -1 then goto L2890
 goto L2700
 L2890: ' EMPTY BOTTLE (ASSUMED FULL)
-S(B0+15) = 0:B0 = 0
+s(B0+15) = 0:B0 = 0
 print "Emptied"
 goto L400
 L2930: ' *** LOOK ***
@@ -455,7 +455,7 @@ b$ = "on"
 L3060: print "The lamp is now ";b$
 goto L2940
 L3080: ' *** OFF (EXTINGUSIH) ***
-if S(18) = -1 then goto L3110
+if s(18) = -1 then goto L3110
 goto L3020
 L3110: L = 0:B$ = "off"
 goto L3060
@@ -470,8 +470,8 @@ D = 3
 goto L1070
 L3240: D = 10
 LW3240: if D < 1 then goto L3270
-Z2 = DIRS(L1, D)
-if Z2 > 0 and Z2 < 101 then goto L1150
+z2 = dirs(L1, D)
+if z2 > 0 and z2 < 101 then goto L1150
 D = D + (-1)
 goto LW3240
 L3270:
@@ -487,8 +487,8 @@ D = 7
 goto L1070
 L3400: D = 1
 LW3400: if D > 10 then goto L3430
-Z2 = DIRS(L1, D)
-if Z2 > 0 and Z2 < 101 then goto L1150
+z2 = dirs(L1, D)
+if z2 > 0 and z2 < 101 then goto L1150
 D = D + (1)
 goto LW3400
 L3430:
@@ -496,8 +496,8 @@ goto L2200
 L3450: ' *** INVENTORY ***
 Z0 = 0
 print "You are carrying:";
-for X = 1 to T2
-    if S(X) = -1 then
+for x = 1 to T2
+    if s(x) = -1 then
         b$ = itemname$(x)
         print B$
         Z0 = Z0 + 1
@@ -548,20 +548,20 @@ gosub L8280
 if Z8 > 0 then goto L4000
 print "Drop what?"
 goto L2040
-L4000: Z3 = 1
-LW4000: if Z3 > T2 then goto L4140
-if K(47) = 1 then goto L4060
-if K(Z3) <> 1 then goto LCONT4000
-if S(Z3) = 0 then goto LCONT4000
-L4060: if S(Z3) = -1 then goto L4100
-if K(47) = 1 then goto LCONT4000
+L4000: z3 = 1
+LW4000: if z3 > T2 then goto L4140
+if k(47) = 1 then goto L4060
+if k(z3) <> 1 then goto LCONT4000
+if s(z3) = 0 then goto LCONT4000
+L4060: if s(z3) = -1 then goto L4100
+if k(47) = 1 then goto LCONT4000
 b$ = itemname$(z3):print "You don't have the ";B$
 goto LCONT4000
 L4100: ' STILL NEED TO ELABORATE ON DROP (BIRD IN CAGE, BOTTLE)
 goto L7380
 L4120: b$ = itemname$(z3):print B$;":dropped."
-S(Z3) = L1
-LCONT4000: Z3 = Z3 + (1)
+s(z3) = L1
+LCONT4000: z3 = z3 + (1)
 goto LW4000
 L4140:
 goto L400
@@ -570,40 +570,40 @@ gosub L8280
 if Z8 > 0 then goto L4210
 print "Throw what?"
 goto L2040
-L4210: if S(Z3) <> -1 then goto L2710
-if not (Z3 < 16 and S(32) = L1) then goto L4260
+L4210: if s(z3) <> -1 then goto L2710
+if not (z3 < 16 and s(32) = L1) then goto L4260
 ' THROW TREASURE TO TROLL
 z59 = 27:gosub L7620
-S(Z3) = 0:T = 3:goto L400
-L4260: if not (Z3 = 27 and S(32) = L1) then goto L4300
+s(z3) = 0:T = 3:goto L400
+L4260: if not (z3 = 27 and s(32) = L1) then goto L4300
 ' TRYING TO BUTCHER TROLL?
 z59 = 26:gosub L7620
-S(27) = L1:goto L400
-L4300: if not (Z3 = 27 and S(35) = L1) then goto L4380
+s(27) = L1:goto L400
+L4300: if not (z3 = 27 and s(35) = L1) then goto L4380
 ' TRYING TO KILL DWARF
-if RND(1) > 0.5 then goto L4360
+if rnd(1) > 0.5 then goto L4360
 z59 = 29:gosub L7620
 gosub L8650
 goto L4410
 L4360: z59 = 30:gosub L7620
-S(35) = 0:goto L4410
+s(35) = 0:goto L4410
 L4380: ' NOTHING SPECIAL, JUST DROP ITEM
-if S(35) <> L1 then goto L4400
+if s(35) <> L1 then goto L4400
 gosub L8550
 L4400: print "Thrown."
-L4410: S(Z3) = L1
+L4410: s(z3) = L1
 if dead = 1 then goto L9540
 goto L400
 L4430: ' *** ATTACK ***
 gosub L8280
-if not (Z3 = 33 and S(Z3) = L1 and L1 = 82) then goto L4520
+if not (z3 = 33 and s(z3) = L1 and L1 = 82) then goto L4520
 ' HE CAN KILL DRAGON
 z59 = 68:gosub L7620
 goto L410
 L4490: if L1 <> 82 then goto L2040
 z59 = 69:gosub L7620
-S(33) = 0:D1 = 0:goto L400
-L4520: if S(32) <> L1 then goto L4560
+s(33) = 0:D1 = 0:goto L400
+L4520: if s(32) <> L1 then goto L4560
 ' TRYING TO MUNGE TROLL
 ' (was: Z9=FNA(25):GOTO 400 -- FNA is called with no matching DEF FN
 ' anywhere in the original source; this looks like leftover/broken code
@@ -611,7 +611,7 @@ L4520: if S(32) <> L1 then goto L4560
 ' introduced. Z9's assignment here isn't read before it's next assigned
 ' elsewhere, so dropping the call changes nothing observable.)
 goto L400
-L4560: if not (Z3 = 26 or Z3 > 30) then goto L4600
+L4560: if not (z3 = 26 or z3 > 30) then goto L4600
 ' DANGEROUS TO ATTACK THESE
 z59 = 70:gosub L7620
 goto L400
@@ -620,21 +620,21 @@ z59 = 71:gosub L7620
 goto L400
 L4630: ' *** FEED ***
 gosub L8280
-if Z3 <> 35 then goto L4690
+if z3 <> 35 then goto L4690
 ' CAN'T FEED DWARF!
 z59 = 24:gosub L7620
 goto L400
-L4690: if S(20) = -1 then goto L4720
+L4690: if s(20) = -1 then goto L4720
 B$ = "FOOD":goto L2710
 L4720: if L1 = 69 then goto L4760
 print "I can't feed it."
 z59 = 23:gosub L7620
 goto L400
-L4760: if S(20) = L1 then goto L7600
-B1 = 1:S(20) = 0:z59 = 6:gosub L7620
+L4760: if s(20) = L1 then goto L7600
+B1 = 1:s(20) = 0:z59 = 6:gosub L7620
 goto L400
 L4800: ' *** WATER ***
-if S(16) = -1 then goto L4840
+if s(16) = -1 then goto L4840
 B$ = "water":goto L2710
 L4840: if L1 <> 50 then goto L2200
 ' GOTO P1+1 OF 4860,4890,4920
@@ -642,21 +642,21 @@ if P1 = 0 then goto L4860
 if P1 = 1 then goto L4890
 if P1 = 2 then goto L4920
 L4860: z59 = 7:gosub L7620
-P1 = 1:S(16) = 0:B0 = 0:goto L400
+P1 = 1:s(16) = 0:B0 = 0:goto L400
 L4890: z59 = 8:gosub L7620
-P1 = 2:S(16) = 0:B0 = 0:goto L400
+P1 = 2:s(16) = 0:B0 = 0:goto L400
 L4920: z59 = 9:gosub L7620
-P1 = 0:S(16) = 0:B0 = 0:goto L400
+P1 = 0:s(16) = 0:B0 = 0:goto L400
 L4950: ' *** LOCK ***
 L4960: if L1 = 10 or L1 = 11 then goto L4990
 ' NOTHING LOCKABLE
 goto L2200
-L4990: if S(19) = -1 then goto L5020
+L4990: if s(19) = -1 then goto L5020
 L5000: B$ = "keys":goto L2710
 L5020: G = 0:z59 = 10:gosub L7620
 goto L400
 L5060: ' *** UNLOCK ***
-L5070: if S(19) <> -1 then goto L5000
+L5070: if s(19) <> -1 then goto L5000
 if L1 <> 10 and L1 <> 11 then goto L5120
 G = 1:z59 = 11:gosub L7620
 goto L400
@@ -669,12 +669,12 @@ C = 1:B1 = 2
 L5170: z59 = 13:gosub L7620
 goto L400
 L5190: ' *** FREE ***
-if K(31) = 1 then goto L5240
+if k(31) = 1 then goto L5240
 ' CAN'T FREE ANYTHING BUT BIRD
 L5220: z59 = 2:gosub L7620
 goto L410
-L5240: if S(31) <> -1 then goto L5220
-S(31) = L1:B3 = 0
+L5240: if s(31) <> -1 then goto L5220
+s(31) = L1:B3 = 0
 print "Freed."
 if L1 <> 22 then goto L5350
 if SN <> 1 then goto L400
@@ -682,15 +682,15 @@ B$ = "snake"
 L5300: print "The little bird attacks the green ";B$;" and"
 if L1 = 82 then goto L5380
 print "drives it off"
-SN = 0:S(34) = 0:goto L400
+SN = 0:s(34) = 0:goto L400
 L5350: if L1 <> 82 then goto L400
 B$ = "dragon":goto L5300
 L5380: print "gets burned to a crisp"
-S(31) = 0
+s(31) = 0
 goto L400
 L5410: ' *** WAVE ***
-if K(23) <> 1 then goto L2200
-if S(23) = -1 then goto L5460
+if k(23) <> 1 then goto L2200
+if s(23) = -1 then goto L5460
 B$ = "rod":goto L2710
 L5460: '  IS HERE NEAR FISSURE
 if L1 <> 19 and L1 <> 20 then goto L2200
@@ -704,61 +704,61 @@ L5530: z59 = 15:gosub L7620
 B2 = 0:goto L400
 L5560: ' *** OPEN ***
 gosub L8280
-if Z3 > 0 then goto L5610
+if z3 > 0 then goto L5610
 print "Open ";:goto L2040
-L5610: if Z3 = 40 then goto L5070
-if S(Z3) = L1 then goto L5650
+L5610: if z3 = 40 then goto L5070
+if s(z3) = L1 then goto L5650
 L5630: print "I see no ";b$;" here.":goto L400
 L5650: if z3 = 24 then goto L5680
 print "I don't know how to open a ";B$:goto L400
-L5680: if S(9) = -1 then goto L5710
+L5680: if s(9) = -1 then goto L5710
 z59 = 16:gosub L7620
 goto L400
-L5710: if S(Z3) = 0 then goto L2200
+L5710: if s(z3) = 0 then goto L2200
 ' HE'S OPENED CLAM, SO PRINT DESCRIPTION OF THIS
 ' PUT PEARL IN CUL-DE-SAC
-S(7) = 43:S(24) = 0:S(30) = L1:z59 = 17:gosub L7620
+s(7) = 43:s(24) = 0:s(30) = L1:z59 = 17:gosub L7620
 L5750: goto L400
 ' *** CLOSE ***
 gosub L8280
-if Z3 = 40 then goto L4960
+if z3 = 40 then goto L4960
 z59 = 18:gosub L7620
 goto L400
 L5810: ' OIL
-if K(17) = 0 then goto L2200
-if S(17) = -1 then goto L5860
+if k(17) = 0 then goto L2200
+if s(17) = -1 then goto L5860
 B$ = "oil":goto L5630
 L5860: if L1 <> 73 then goto L2200
 ' IS DOOR STILL RUSTED
 if D2 = 1 then goto L2200
-D2 = 1:S(17) = 0:B0 = 0:z59 = 19:gosub L7620
+D2 = 1:s(17) = 0:B0 = 0:z59 = 19:gosub L7620
 goto L400
 ' *** EAT ***
-L5920: if K(20) = 1 then goto L5950
+L5920: if k(20) = 1 then goto L5950
 z59 = 20:gosub L7620
 goto L410
-L5950: Z3 = 20:gosub L8490
-if Z5 = 0 then goto L410
+L5950: z3 = 20:gosub L8490
+if z5 = 0 then goto L410
 z59 = 73:gosub L7620
-S(20) = 0:B0 = 0:goto L400
+s(20) = 0:B0 = 0:goto L400
 L6000: ' *** DRINK ***
-if K(16) = 1 then goto L6040
+if k(16) = 1 then goto L6040
 z59 = 21:gosub L7620
 goto L410
-L6040: Z3 = 16:gosub L8490
-if Z5 = 0 then goto L410
+L6040: z3 = 16:gosub L8490
+if z5 = 0 then goto L410
 z59 = 22:gosub L7620
-S(17) = 0:B0 = 0:goto L400
+s(17) = 0:B0 = 0:goto L400
 L6090: ' *** FEE FIE FOE FOO ***
 if L1 = 71 then goto L6130
 z59 = 2:gosub L7620
 goto L410
-L6130: if S(8) <> L1 then goto L6180
+L6130: if s(8) <> L1 then goto L6180
 ' MAKE NEST VANISH
 z59 = 79:gosub L7620
-S(8) = 0:goto L400
+s(8) = 0:goto L400
 L6180: ' IF S(8)=0 THEN goto L6110
-S(8) = L1
+s(8) = L1
 ' MAKE NEST RE-APPEAR
 z59 = 81:gosub L7620
 goto L400
@@ -785,7 +785,7 @@ print "Your score is now ";S0
 print "You have explored ";(Z9 / T1) * T1;"% of the cave."
 restore L6470
 L6470: data "beginner", "novice", "experienced", "advanced", "expert"
-Z9 = INT((S0-1) / 100)
+Z9 = int((S0-1) / 100)
 if Z9 <= 4 then goto L6483
 Z9 = 4
 L6483: for Z0 = 0 to Z9
@@ -798,13 +798,13 @@ L6510: ' COMPUTE CURRENT SCORE
 restore L230
 Z9 = 0:S0 = 0
 for Z0 = 1 to 15
-    read Z1
-    if Z1 <> 0 then
-        if V(Z1) = 1 then
-            S0 = S0+4 * O(Z0)
+    read z1
+    if z1 <> 0 then
+        if v(z1) = 1 then
+            S0 = S0+4 * o(Z0)
         end if
-        if S(Z0) = 7 then
-            S0 = S0+4 * O(Z0)
+        if s(Z0) = 7 then
+            S0 = S0+4 * o(Z0)
         end if
     end if
 end for
@@ -812,7 +812,7 @@ end for
 S0 = (G = 1) * 10 + S0:S0 = (SN = 0) * 20 + S0:S0 = (D1 = 0) * 30 + S0:S0 = (T = 0) * 30 + S0:S0 = (B1 = 2) * 20 + S0
 S0 = (B2 = 1) * 20 + S0:S0 = (P1 = 2) * 20 + S0:S0 = (D2 = 1) * 20 + S0:S0 = (C = 1) * 20 + S0
 for Z0 = 1 to T1
-    if V(Z0) = 1 then
+    if v(Z0) = 1 then
         S0 = S0+1:Z9 = Z9+1
     end if
 end for
@@ -823,7 +823,7 @@ L6680: ' (was: fseek #2,0)
 for z1 = 1 to t2
     if s(z1) = l1 then print items$(z1)
 end for
-if S(26) <> -1 then goto L6730
+if s(26) <> -1 then goto L6730
 z59 = 67:gosub L7620
 L6730: ' CHECK FOR DWARF,PIRATE
 gosub L8560
@@ -880,37 +880,37 @@ print "Contents and the ";
 s(b0+15) = -1
 L7360: goto L3880
 ' SPECIAL "DROP"
-L7380: if Z3 <> 31 then goto L7440
+L7380: if z3 <> 31 then goto L7440
 ' BIRD IN CAGE
-L7400: S(31) = L1:S(22) = L1:B3 = 1
-if Z3 <> 31 then goto L7420
+L7400: s(31) = L1:s(22) = L1:B3 = 1
+if z3 <> 31 then goto L7420
 print "Cage and ";
-L7420: if Z3 = 22 then goto L7430
+L7420: if z3 = 22 then goto L7430
 print "Bird and ";
 L7430: goto L4120
 L7440: if z3 = 22 and b3 = 1 then goto L7400
-if Z3 <> 21 then goto L7520
+if z3 <> 21 then goto L7520
 ' BOTTLE
 if B0 = 0 then goto L4120
 ' BOTTLE IS FULL, DO DROP CONTENTS TOO
 print "Contents and ";
-S(15 + B0) = L1:goto L4120
-L7520: if not (Z3 = 16 or Z3 = 17) then goto L7541
+s(15 + B0) = L1:goto L4120
+L7520: if not (z3 = 16 or z3 = 17) then goto L7541
 print "Try saying 'empty'":goto L4140
-L7541: if Z3 <> 26 or T <> 1 or (L1 <> 60 and L1 <> 61) then goto L7550
+L7541: if z3 <> 26 or T <> 1 or (L1 <> 60 and L1 <> 61) then goto L7550
 z59 = 28:gosub L7620
-T = 0:S(26) = L1:S(32) = 0:goto L400
-L7550: if Z3 <> 6 then goto L4120
-if S(28) = L1 then goto L7600
+T = 0:s(26) = L1:s(32) = 0:goto L400
+L7550: if z3 <> 6 then goto L4120
+if s(28) = L1 then goto L7600
 ' GOODBYE, FRAGILE VASE!
 z59 = 43:gosub L7620
-S(6) = 0:S(29) = L1:goto L400
+s(6) = 0:s(29) = L1:goto L400
 L7600: z59 = 60:gosub L7620
 goto L4120
 ' PRINT MESSAGE
 L7620: z59 = int(z59):xtmp = indx(z59)
 if z59 <> 2 and z59 <> 61 then goto L7660
-xtmp = fraindx(xtmp+int(RND(1) * 5)) ' (was: ...+min(int(RND(1)*5),5) -- BASIC has no MIN, and int(RND(1)*5) is always 0-4, so min(_,5) was always a no-op)
+xtmp = fraindx(xtmp+int(rnd(1) * 5)) ' (was: ...+min(int(RND(1)*5),5) -- BASIC has no MIN, and int(RND(1)*5) is always 0-4, so min(_,5) was always a no-op)
 L7660: mpos = xtmp
 b1$ = msg$(mpos)
 if mid$(b1$, 1, 1) = "#" and int(val(mid$(b1$, 2))) = z59 then goto L7720
@@ -932,7 +932,7 @@ L7842: z59 = (g+10):gosub L7620
 L7860: if (l1 = 19 or l1 = 20) and b2 = 1 then goto L7861 else goto L7880
 L7861: z59 = 14:gosub L7620
 ' PLUGH NOISE
-L7880: if l1 = 26 and RND(1) > 0.3 then goto L7881 else goto L7900
+L7880: if l1 = 26 and rnd(1) > 0.3 then goto L7881 else goto L7900
 L7881: z59 = 41:gosub L7620
 ' IRON DOOR
 L7900: if l1 = 73 and d2 = 0 then goto L7901 else goto L7920
@@ -992,9 +992,9 @@ b$ = d$
 return
 L8390: ' FIND FIRST ITEM AT ROOM
 x1 = 0
-for Z1 = 1 to 47
+for z1 = 1 to 47
     if x1 <> 1 then
-        if K(Z1) = 1 then
+        if k(z1) = 1 then
             d$ = itemname$(z1):x1 = 1
         end if
     end if
@@ -1004,17 +1004,17 @@ return
 '
 ' MAKE SURE HE'S CARRYING ITEM * Z3
 '
-L8490: if S(Z3) = -1 then goto L8530
+L8490: if s(z3) = -1 then goto L8530
 print "You don't have the ";A$
-Z5 = 0
+z5 = 0
 return
-L8530: Z5 = 1
+L8530: z5 = 1
 return
 L8550: '  *** DWARF ***
 L8560: if d3 <> 0 then goto L8640
 ' SHOULD DWARF GIVE AWAY AXE?
 if l1 < 13 then goto L8790
-if RND(1) > 0.05 then goto L8790
+if rnd(1) > 0.05 then goto L8790
 ' GIVE AWAY AXE
 z59 = 80:gosub L7620
 s(27) = l1 : d3 = 1
@@ -1026,21 +1026,21 @@ L8660: if s(35) <> L1 then goto L8770
 if (l1 <> 60 and l1 <> 61) or t <> 1 then goto L8670
 z59 = 299:gosub L7620
 s(35) = 0: goto L8790
-L8670: if RND(1) > 0.5 then goto L8790
+L8670: if rnd(1) > 0.5 then goto L8790
 ' YES!
 z59 = 32:gosub L7620
 ' DOES THE KNIFE KILL THE PLAYER?
 KC = KC - 0.02
 if KC >= 0.75 then goto L8710
 KC = 0.75
-L8710: if RND(1) <= KC then goto L8750
+L8710: if rnd(1) <= KC then goto L8750
 ' YES
 print "It gets you!"
 dead = 1 : goto L8790
 L8750: print "It misses!"
 goto L8790
 L8770: ' SHOULD WE PUT A DWARF HERE?
-if RND(1) >= 0.05 then goto L8790
+if rnd(1) >= 0.05 then goto L8790
 if (l1 = 60 or l1 = 61) and t = 1 then goto L8790
 s(35) = l1
 z59 = 31:gosub L7620
@@ -1055,9 +1055,9 @@ for x = 1 to 15
     end if
 end for
 
-if z3 < int(RND(1) * 4) + 1 then goto L8960
+if z3 < int(rnd(1) * 4) + 1 then goto L8960
 ' SHOULD WE RIP OFF HIS VALUABLES?
-if RND(1) < 0.05 then goto L8920
+if rnd(1) < 0.05 then goto L8920
 z59 = 34:gosub L7620
 goto L8960
 L8920: z59 = 33:gosub L7620
@@ -1081,11 +1081,11 @@ goto L9030
 L9010: print "File ";a$;" not created"
 goto L410
 L9030: print #5, T1;",";T2;",";T3;",";L1;",";L2;",";G;",";B0;",";SN;",";D1;",";D2;",";D0;",";T;",";B1;",";B2;",";P1;",";L;",";C;",";D3;",";B3;",";R0;",";KC
-for X = 1 to 99
-    print #5, S(X);",";V(X)
+for x = 1 to 99
+    print #5, s(x);",";v(x)
 end for
 
-print #5, V(100)
+print #5, v(100)
 close #5
 print "Game saved"
 C0 = 0
@@ -1104,7 +1104,7 @@ L9150: print "Unable to use file ";A$
 goto L410
 L9170: input #5, T1, T2, T3, L1, L2, G, B0, SN, D1, D2, D0, T, B1, B2, P1, L, C, D3, B3, R0, KCX$
 kc = val(kcx$)
-for X = 1 to 99
+for x = 1 to 99
     input #5, SX, VX:s(x) = sx:v(x) = vx
 end for
 
@@ -1114,10 +1114,10 @@ C0 = 1
 goto L300
 L9220: ' *** READ THE MAGAZINE ***
 gosub L8280
-if Z3 = 25 then goto L9270
+if z3 = 25 then goto L9270
 z59 = 74:gosub L7620
 goto L410
-L9270: if S(25) = -1 then goto L9300
+L9270: if s(25) = -1 then goto L9300
 B$ = "magazine"
 goto L2710
 L9300: ' OK, LET HIM READ IT
@@ -1129,7 +1129,7 @@ on error goto L9150
 open A$ for append as #5
 on error goto 0
 input "Your name: ";A$
-A$ = A$ + " " + DATE$
+A$ = A$ + " " + date$
 print #5, A$
 print "Enter your gripe in up to five lines (hit return to quit):"
 Z0 = 1
@@ -1158,15 +1158,15 @@ goto L9580
 L9630: if Z0 = 0 then goto L9750
 z59 = 76:gosub L7620
 ' PUT HIM BACK IN HOUSE, REARRANGE HIS STUFF
-S(18) = 7:L = 0:DEAD = 0:KC = 1.03
-for X = 1 to T2
-    if S(X) = -1 then
-        S(X) = L1
+s(18) = 7:L = 0:DEAD = 0:KC = 1.03
+for x = 1 to T2
+    if s(x) = -1 then
+        s(x) = L1
     end if
 end for
 
 ' WE'VE PUT THE LAMP IN HOUSE AND OTHER ITEMS WHERE HE DIED
-L1 = INT(RND(1) * 4) + 1:L2 = L1
+L1 = int(rnd(1) * 4) + 1:L2 = L1
 goto L320
 ' THIRD DEATH--END OF GAME
 L9740: z59 = 78:gosub L7620
@@ -1190,9 +1190,9 @@ a$ = " "
 L9880: a$ = lcase$(mid$(a$, 1, 1))
 if a$ <> "y" and a$ <> "n" then goto L9930
 if a$ = "y" then goto L9901 else goto L9910
-L9901: z0 = 1
+L9901: Z0 = 1
 L9910: if a$ = "n" then goto L9911 else goto L9920
-L9911: z0 = 0
+L9911: Z0 = 0
 L9920: goto L9945
 L9930: print "Yes or No-";
 goto L9870

@@ -22,7 +22,7 @@ function loadLines%()
     refCount% = 0
     lineCount% = 0
     open inputFile$ for input as #1
-    while EOF(1) = 0
+    while eof(1) = 0
         lineCount% = lineCount% + 1
         line input #1, rawLine$(lineCount%)
     end while
@@ -62,7 +62,7 @@ function transformLines%()
     while i% <= lineCount%
         if lineNumber%(i%) > 0 then
             if keepLine%(i%) <> 0 or isReferenced%(lineNumber%(i%)) <> 0 then
-                print #2, trimLeft$(STR$(lineNumber%(i%))) + " " + lineText$(i%)
+                print #2, trimLeft$(str$(lineNumber%(i%))) + " " + lineText$(i%)
             else
                 print #2, lineText$(i%)
             end if

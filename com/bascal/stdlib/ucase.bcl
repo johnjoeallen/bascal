@@ -7,12 +7,12 @@ library ucase
 
 method ucase[string]()
     out$ = ""
-    for i% = 1 to LEN(self$)
-        c% = ASC(MID$(self$, i%, 1))
+    for i% = 1 to len(self$)
+        c% = asc(mid$(self$, i%, 1))
         if c% >= 97 && c% <= 122 then
             c% = c% - 32
         end if
-        out$ = out$ + CHR$(c%)
+        out$ = out$ + chr$(c%)
     end for
     return out$
 end method
