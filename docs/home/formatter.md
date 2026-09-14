@@ -292,4 +292,4 @@ This is deliberately as far as it goes: `bcc --format` never reflows an expressi
 
 ---
 
-[← Previous: Record files](record-files.md) · [Next: Tutorials and examples →](tutorials.md)
+[← Previous: Record files](record-files.md) · [Next: Built-in linting →](linting.md)

@@ -35,4 +35,4 @@ matrix across the BASIC, C, and JVM backends.
 
 ---
 
-[← Previous: A built-in source formatter](formatter.md)
+[← Previous: Built-in linting](linting.md)

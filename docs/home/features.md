@@ -185,6 +185,22 @@ See [A built-in source formatter](formatter.md) for the full before/after walkth
 
 <div class="snippet" markdown="1">
 
+### Built-in linting
+
+`bcc --lint` runs four warning-only checks beyond `--strict-vars`'s mandatory-declaration rule: unused declarations, a local shadowing a parameter/global/enclosing `for` loop counter, unreachable code after `return`/`goto`/`end`/..., and a bare numeric literal compared against something (`0`/`1`/`-1` exempted as common sentinels). Opt-in and never fails the build.
+
+```bash
+$ bcc --lint legacy.bcl
+warning: `34` is an unexplained numeric literal in a comparison -- consider naming it with a `const`
+  --> legacy.bcl:4:5
+```
+
+See [Built-in linting](linting.md) for a real, verified example of every check.
+
+</div>
+
+<div class="snippet" markdown="1">
+
 ### Generated output nobody deliberately obfuscated
 
 Source comments pass straight through, and only the lines a `GOTO`/`GOSUB` actually targets get a line number, so a simple construct like this `if` stays plain, recognizable BASIC. That's not a guarantee, though: some constructs (functions/procedures compiled to the `basic` target, in particular — see [Generated BASIC Shape](../manual/generated-basic-shape.md)) transpile by their very nature into something far more `GOTO`/label-heavy and assembly-like than the source that produced them.
