@@ -16,4 +16,4 @@ end
 data "France"
 
 secondBatch:
-data "Japan"
+    data "Japan"
