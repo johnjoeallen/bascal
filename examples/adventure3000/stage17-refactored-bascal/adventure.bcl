@@ -24,6 +24,146 @@ dim messageIndex%(303)
 dim fragmentIndex%(10)
 dim itemNames$(47)
 
+' AMESSAGE message numbers referenced by comparison elsewhere in this
+' file, named so a bare number in an `if` doesn't have to be looked up
+' in AMESSAGE to know what it means.
+const MSG_NOTHING_HAPPENS = 2
+const MSG_NICE_TRY = 61
+
+' ADESCRIP room-number boundaries: rooms 1-4 are the forest (all four
+' share one description); rooms 89-97 and 99 are "a maze of twisty
+' little passages, all alike" -- room 98 (the stalactite room) sits
+' between them with its own distinct description.
+const FOREST_LAST_ROOM = 4
+const ROOM_AFTER_FOREST = 5
+const LAST_ROOM_BEFORE_MAZE = 88
+const STALACTITE_ROOM = 98
+const MAZE_ROOM_99 = 99
+
+' Rooms 1-12 are all above ground (forest, hill, building, valley,
+' streambed, grate, cobble crawl); room 13 -- the debris room -- is the
+' first underground room. Two names for the same room number: which one
+' reads right depends on whether the check is a boundary ("still on the
+' surface") or an exact match ("specifically the debris room").
+const FIRST_UNDERGROUND_ROOM = 13
+const DEBRIS_ROOM = 13
+
+' The troll's bridge crosses the chasm between these two rooms.
+const CHASM_SW_SIDE = 60
+const CHASM_NE_SIDE = 61
+
+' Situational one-off rooms (see situationDescriptions()'s own doc
+' comment: the grate, the fissure, plugh's noise, the iron door, the
+' bear, and the pirate's maze).
+const GRATE_ROOM_ABOVE = 10
+const GRATE_ROOM_BELOW = 11
+const FISSURE_EAST_BANK = 19
+const FISSURE_WEST_SIDE = 20
+const Y2_ROOM = 26
+const PLOVER_ROOM = 58
+const BARREN_ROOM = 69
+const IRON_DOOR_PASSAGE = 73
+const TWOPIT_WEST_END = 48
+const WEST_PIT = 50
+
+' Compact direction indices (1-10), used to index roomExits%() and
+' keywordFound%(). Authoritative mapping: the DATA table this file's
+' own dispatcher builds maps directionIndex% to keyword code
+' directionIndex%+99 -- 100="N"/"NORTH", 101="NE"/"NORTHEAST", ...,
+' 109="D"/"DOWN" -- see parseAndDispatchCommand()'s own direction loop.
+const DIR_NORTH = 1
+const DIR_NORTHEAST = 2
+const DIR_EAST = 3
+const DIR_SOUTH = 5
+const DIR_SOUTHWEST = 6
+const DIR_WEST = 7
+const DIR_UP = 9
+const DIR_DOWN = 10
+
+' More ADESCRIP rooms, named where they're referenced by number.
+const END_OF_ROAD = 6
+const VALLEY_ROOM = 8
+const STREAMBED_SLIT = 9
+const PIT_TOP = 16
+const HALL_OF_MISTS = 17
+const HALL_OF_MOUNTAIN_KING = 22
+const PIT_WINDOW = 27
+const STREAM_PIT = 35
+const WITTS_END = 39
+const BEDQUILT_ROOM = 44
+const EAST_PIT = 49
+const ALCOVE_ROOM = 57
+const OUTSIDE_BARREN_ROOM = 68
+const WATERFALL_CAVERN = 74
+const RESERVOIR_ROOM = 81
+const SECRET_CANYON = 82
+const NARROW_CORRIDOR = 70
+const GIANT_ROOM = 71
+
+' roomExits%() bounds/sentinels: 255 marks "no single fixed exit, pick
+' one at random" (see attemptRandomMove%()); a real room number is
+' always 1-100 (totalRooms%), so 254 and 101 both serve as an upper
+' bound check, just written two different ways at their own call sites.
+const RANDOM_EXIT_MARKER = 255
+const MAX_VALID_ROOM = 254
+const ROOM_BOUND_EXCLUSIVE = 101
+
+' AITEMS item numbers. Items 1-15 are the treasures (see
+' LAST_TREASURE_ITEM/FIRST_NON_TREASURE_ITEM below); 32-35 are the
+' creatures (troll, dragon, snake, dwarf), never pick-up-able.
+const GOLD_NUGGET_ITEM = 1
+const PEARL_ITEM = 7
+const TRIDENT_ITEM = 9
+const KEYWORD_GRATE = 40
+const CUL_DE_SAC_ROOM = 43
+const VASE_ITEM = 6
+const EMERALD_ITEM = 10
+const CHAIN_ITEM = 12
+const RUG_ITEM = 14
+const LAMP_ITEM = 18
+const WATER_ITEM = 16
+const FIRST_NON_TREASURE_ITEM = 16
+const OIL_ITEM = 17
+const FOOD_ITEM = 20
+const BOTTLE_ITEM = 21
+const CAGE_ITEM = 22
+const ROD_ITEM = 23
+const CLAM_ITEM = 24
+const BEAR_ITEM = 26
+const PILLOW_ITEM = 28
+const BROKEN_VASE_ITEM = 29
+const OYSTER_ITEM = 30
+const MAGAZINE_ITEM = 25
+const LAST_ORDINARY_ITEM = 30
+const AXE_ITEM = 27
+
+' Death, scoring, and dwarf/pirate/bear "state machine" values.
+const FINAL_DEATH_COUNT = 3
+const SECOND_DEATH_COUNT = 2
+const MAX_SKILL_TIER = 4
+const BEAR_STATE_TAMED = 2
+const PIRATE_STATE_DEFEATED = 2
+const BIRD_ITEM = 31
+const LAST_TAKEABLE_ITEM = 31
+const TROLL_ITEM = 32
+const DRAGON_ITEM = 33
+const DWARF_ITEM = 35
+
+' Keyword code for "ALL"/"EVERYTHING" (see the direction comment above
+' for where this file's own keyword-code DATA table lives).
+const KEYWORD_ALL = 47
+
+const MAX_CARRY_COUNT = 7
+const MAX_GRIPE_LINES = 5
+
+' ASCII bounds for sanitizing raw input to letters, digits, and comma
+' only (A-Z is 65-90, 0-9 is 48-57, comma is 44).
+const ASCII_BEFORE_UPPER_A = 64
+const ASCII_AFTER_UPPER_Z = 91
+const ASCII_BEFORE_DIGIT_0 = 47
+const ASCII_AFTER_DIGIT_9 = 58
+const ASCII_COMMA = 44
+
 /*
  * Loads the room descriptions from ADESCRIP into roomDescriptions$(),
  * one room per line, in file order.
@@ -163,7 +303,7 @@ procedure printMessage(msgNum%)
     global messages$
     dim xtmp%, mpos%, messageText$
     xtmp% = messageIndex%(msgNum%)
-    if msgNum% = 2 or msgNum% = 61 then
+    if msgNum% = MSG_NOTHING_HAPPENS or msgNum% = MSG_NICE_TRY then
         xtmp% = fragmentIndex%(xtmp% + int(rnd(1) * 5))
     end if
     mpos% = xtmp%
@@ -205,9 +345,9 @@ procedure longDescription()
     global currentRoom%
     global roomVisited%
     roomVisited%(currentRoom%) = 1
-    if currentRoom% <= 4 then
+    if currentRoom% <= FOREST_LAST_ROOM then
         printMessage(200)
-    elseif (currentRoom% > 88 and currentRoom% < 98) or currentRoom% = 99 then
+    elseif (currentRoom% > LAST_ROOM_BEFORE_MAZE and currentRoom% < STALACTITE_ROOM) or currentRoom% = MAZE_ROOM_99 then
         printMessage(288)
     else
         printMessage(200 + currentRoom%)
@@ -252,7 +392,7 @@ procedure checkDwarf()
         checkDwarfAttack()
         return
     end if
-    if currentRoom% < 13 then return
+    if currentRoom% < FIRST_UNDERGROUND_ROOM then return
     if rnd(1) > 0.05 then return
     printMessage(80)
     itemRoom%(27) = currentRoom%
@@ -270,18 +410,18 @@ procedure checkDwarfAttack()
     global trollState%
     global isDead%
     global dwarfHitChance
-    if currentRoom% < 13 then
+    if currentRoom% < FIRST_UNDERGROUND_ROOM then
         itemRoom%(35) = 0
         return
     end if
     if itemRoom%(35) <> currentRoom% then
         if rnd(1) >= 0.05 then return
-        if (currentRoom% = 60 or currentRoom% = 61) and trollState% = 1 then return
+        if (currentRoom% = CHASM_SW_SIDE or currentRoom% = CHASM_NE_SIDE) and trollState% = 1 then return
         itemRoom%(35) = currentRoom%
         printMessage(31)
         return
     end if
-    if (currentRoom% <> 60 and currentRoom% <> 61) or trollState% <> 1 then
+    if (currentRoom% <> CHASM_SW_SIDE and currentRoom% <> CHASM_NE_SIDE) or trollState% <> 1 then
         if rnd(1) > 0.5 then return
         printMessage(32)
         dwarfHitChance = dwarfHitChance - 0.02
@@ -309,7 +449,7 @@ procedure checkPirate()
     global itemRoom%
     dim stealableCount%, itemIndex%
     stealableCount% = 0
-    if currentRoom% < 13 then return
+    if currentRoom% < FIRST_UNDERGROUND_ROOM then return
     for itemIndex% = 1 to 15
         if itemRoom%(itemIndex%) = -1 then
             stealableCount% = stealableCount% + 1
@@ -335,7 +475,7 @@ end procedure
 procedure describeRoomOnEntry()
     global currentRoom%
     global roomVisited%
-    if currentRoom% < 5 or (currentRoom% > 88 and currentRoom% < 98) or currentRoom% = 99 then
+    if currentRoom% < ROOM_AFTER_FOREST or (currentRoom% > LAST_ROOM_BEFORE_MAZE and currentRoom% < STALACTITE_ROOM) or currentRoom% = MAZE_ROOM_99 then
         longDescription()
     elseif roomVisited%(currentRoom%) = 1 then
         shortDescription()
@@ -352,7 +492,7 @@ procedure describeRoomForLook()
     global currentRoom%
     global lampOn%
     global itemRoom%
-    if currentRoom% < 13 or currentRoom% = 58 or (lampOn% = 1 and (itemRoom%(18) = currentRoom% or itemRoom%(18) = -1)) then
+    if currentRoom% < FIRST_UNDERGROUND_ROOM or currentRoom% = PLOVER_ROOM or (lampOn% = 1 and (itemRoom%(LAMP_ITEM) = currentRoom% or itemRoom%(LAMP_ITEM) = -1)) then
         longDescription()
         describeRoomContents()
     else
@@ -373,28 +513,28 @@ procedure situationDescriptions()
     global trollState%
     global bearFedState%
     global pirateState%
-    if currentRoom% = 10 or currentRoom% = 11 then
+    if currentRoom% = GRATE_ROOM_ABOVE or currentRoom% = GRATE_ROOM_BELOW then
         printMessage(grateOpen% + 10)
     end if
-    if (currentRoom% = 19 or currentRoom% = 20) and crystalBridgeBuilt% = 1 then
+    if (currentRoom% = FISSURE_EAST_BANK or currentRoom% = FISSURE_WEST_SIDE) and crystalBridgeBuilt% = 1 then
         printMessage(14)
     end if
-    if currentRoom% = 26 and rnd(1) > 0.3 then
+    if currentRoom% = Y2_ROOM and rnd(1) > 0.3 then
         printMessage(41)
     end if
-    if currentRoom% = 73 and ironDoorOiled% = 0 then
+    if currentRoom% = IRON_DOOR_PASSAGE and ironDoorOiled% = 0 then
         printMessage(57)
     end if
-    if (currentRoom% = 60 or currentRoom% = 61) and trollState% = 1 then
+    if (currentRoom% = CHASM_SW_SIDE or currentRoom% = CHASM_NE_SIDE) and trollState% = 1 then
         printMessage(63)
     end if
-    if currentRoom% = 69 and bearFedState% = 0 then
+    if currentRoom% = BARREN_ROOM and bearFedState% = 0 then
         printMessage(64)
     end if
-    if currentRoom% = 69 and bearFedState% = 1 then
+    if currentRoom% = BARREN_ROOM and bearFedState% = 1 then
         printMessage(66)
     end if
-    if currentRoom% = 48 or currentRoom% = 50 then
+    if currentRoom% = TWOPIT_WEST_END or currentRoom% = WEST_PIT then
         printMessage(47 + pirateState%)
     end if
 end procedure
@@ -492,7 +632,7 @@ procedure computeScore()
             if roomVisited%(treasureRoom%) = 1 then
                 score% = score% + 4 * itemPoints%(treasureIndex%)
             end if
-            if itemRoom%(treasureIndex%) = 7 then
+            if itemRoom%(treasureIndex%) = BUILDING_ROOM then
                 score% = score% + 4 * itemPoints%(treasureIndex%)
             end if
         end if
@@ -501,9 +641,9 @@ procedure computeScore()
     score% = (snakeAlive% = 0) * 20 + score%
     score% = (dragonAlive% = 0) * 30 + score%
     score% = (trollState% = 0) * 30 + score%
-    score% = (bearFedState% = 2) * 20 + score%
+    score% = (bearFedState% = BEAR_STATE_TAMED) * 20 + score%
     score% = (crystalBridgeBuilt% = 1) * 20 + score%
-    score% = (pirateState% = 2) * 20 + score%
+    score% = (pirateState% = PIRATE_STATE_DEFEATED) * 20 + score%
     score% = (ironDoorOiled% = 1) * 20 + score%
     score% = (bearTamedScored% = 1) * 20 + score%
     for roomIndex% = 1 to totalRooms%
@@ -528,8 +668,8 @@ procedure printScore()
     print "You have explored "; (roomsVisitedCount% / totalRooms%) * totalRooms%; "% of the cave."
     restore skillTitles
     tier% = int((score% - 1) / 100)
-    if tier% > 4 then
-        tier% = 4
+    if tier% > MAX_SKILL_TIER then
+        tier% = MAX_SKILL_TIER
     end if
     for tierIndex% = 0 to tier%
         read skillTitle$
@@ -586,11 +726,11 @@ procedure handleDeath()
     global currentRoom%
     global previousRoom%
     deathCount% = deathCount% + 1
-    if deathCount% = 3 then
+    if deathCount% = FINAL_DEATH_COUNT then
         printMessage(78)
         endGame()
     end if
-    if deathCount% = 2 then
+    if deathCount% = SECOND_DEATH_COUNT then
         printMessage(77)
     end if
     printMessage(75)
@@ -599,7 +739,7 @@ procedure handleDeath()
         endGame()
     end if
     printMessage(76)
-    itemRoom%(18) = 7
+    itemRoom%(LAMP_ITEM) = 7
     lampOn% = 0
     isDead% = 0
     dwarfHitChance = 1.03
@@ -620,7 +760,7 @@ procedure checkPitsAndHandleDeathIfNeeded()
     global currentRoom%
     global lampOn%
     global itemRoom%
-    if currentRoom% < 13 or (lampOn% = 1 and (itemRoom%(18) = -1 or itemRoom%(18) = currentRoom%)) then
+    if currentRoom% < FIRST_UNDERGROUND_ROOM or (lampOn% = 1 and (itemRoom%(LAMP_ITEM) = -1 or itemRoom%(LAMP_ITEM) = currentRoom%)) then
         return
     end if
     select case currentRoom%
@@ -664,38 +804,38 @@ function checkSpecialRoomAndMove%(dir%, destRoom%)
     global keywordFound%
     global totalItems%
     dim itemScanIndex%
-    if (currentRoom% = 10 and (dir% = 10 or dir% = 5)) or (currentRoom% = 11 and (dir% = 9 or dir% = 3)) then
+    if (currentRoom% = GRATE_ROOM_ABOVE and (dir% = DIR_DOWN or dir% = DIR_SOUTH)) or (currentRoom% = GRATE_ROOM_BELOW and (dir% = DIR_UP or dir% = DIR_EAST)) then
         if grateOpen% = 1 then
             return performMove%(destRoom%)
         end if
         printMessage(10)
         return 0
-    elseif currentRoom% = 17 and dir% = 9 and itemRoom%(1) = -1 then
+    elseif currentRoom% = HALL_OF_MISTS and dir% = DIR_UP and itemRoom%(GOLD_NUGGET_ITEM) = -1 then
         printMessage(38)
         return 0
-    elseif (currentRoom% = 19 and dir% = 7) or (currentRoom% = 20 and dir% = 3) then
+    elseif (currentRoom% = FISSURE_EAST_BANK and dir% = DIR_WEST) or (currentRoom% = FISSURE_WEST_SIDE and dir% = DIR_EAST) then
         if crystalBridgeBuilt% then
             return performMove%(destRoom%)
         end if
         printMessage(3)
         return 0
-    elseif currentRoom% = 22 and dir% <> 3 and dir% <> 9 then
+    elseif currentRoom% = HALL_OF_MOUNTAIN_KING and dir% <> DIR_EAST and dir% <> DIR_UP then
         if snakeAlive% = 0 then
             return performMove%(destRoom%)
         end if
         printMessage(50)
         return 0
-    elseif currentRoom% = 57 or currentRoom% = 58 then
+    elseif currentRoom% = ALCOVE_ROOM or currentRoom% = PLOVER_ROOM then
         if keywordFound%(102) <> 0 or keywordFound%(106) <> 0 then
             for itemScanIndex% = 1 to totalItems%
-                if itemScanIndex% <> 10 and itemRoom%(itemScanIndex%) = -1 then
+                if itemScanIndex% <> EMERALD_ITEM and itemRoom%(itemScanIndex%) = -1 then
                     printMessage(53)
                     return 0
                 end if
             end for
         end if
         return performMove%(destRoom%)
-    elseif (currentRoom% = 60 and dir% = 2) or (currentRoom% = 61 and dir% = 6) then
+    elseif (currentRoom% = CHASM_SW_SIDE and dir% = DIR_NORTHEAST) or (currentRoom% = CHASM_NE_SIDE and dir% = DIR_SOUTHWEST) then
         select case trollState% + 1
             case 1
                 return performMove%(destRoom%)
@@ -713,10 +853,10 @@ function checkSpecialRoomAndMove%(dir%, destRoom%)
             case else
                 return performMove%(destRoom%)
         end select
-    elseif currentRoom% = 73 and dir% = 1 and ironDoorOiled% = 0 then
+    elseif currentRoom% = IRON_DOOR_PASSAGE and dir% = DIR_NORTH and ironDoorOiled% = 0 then
         printMessage(57)
         return 0
-    elseif currentRoom% = 82 and itemRoom%(33) = currentRoom% and dir% = 1 then
+    elseif currentRoom% = SECRET_CANYON and itemRoom%(DRAGON_ITEM) = currentRoom% and dir% = DIR_NORTH then
         printMessage(51)
         return 0
     else
@@ -732,7 +872,7 @@ end function
 function attemptRandomMove%()
     global currentRoom%
     dim destRoom%, pickCount%
-    if currentRoom% = 44 then
+    if currentRoom% = BEDQUILT_ROOM then
         if rnd(1) > 0.5 then
             restore bedquiltRooms
             for pickCount% = 1 to int(rnd(1) * 5) + 1
@@ -743,7 +883,7 @@ function attemptRandomMove%()
         printMessage(52)
         return 0
     end if
-    if currentRoom% = 39 then
+    if currentRoom% = WITTS_END then
         if rnd(1) < 0.15 then
             return performMove%(38)
         end if
@@ -765,10 +905,10 @@ function attemptMove%(dir%)
     global roomExits%
     dim destRoom%
     destRoom% = roomExits%(currentRoom%, dir%)
-    if destRoom% = 255 then
+    if destRoom% = RANDOM_EXIT_MARKER then
         return attemptRandomMove%()
     end if
-    if destRoom% < 1 or destRoom% > 254 then
+    if destRoom% < 1 or destRoom% > MAX_VALID_ROOM then
         printMessage(1)
         return 0
     end if
@@ -783,13 +923,13 @@ function verbPlugh%()
     global currentRoom%
     global itemRoom%
     global targetRoom%
-    if currentRoom% = 7 then
-        if itemRoom%(35) = currentRoom% then
-            itemRoom%(35) = 0
+    if currentRoom% = BUILDING_ROOM then
+        if itemRoom%(DWARF_ITEM) = currentRoom% then
+            itemRoom%(DWARF_ITEM) = 0
         end if
-        targetRoom% = 26
-    elseif currentRoom% = 26 then
-        targetRoom% = 7
+        targetRoom% = Y2_ROOM
+    elseif currentRoom% = Y2_ROOM then
+        targetRoom% = BUILDING_ROOM
     else
         printMessage(2)
         return 0
@@ -807,13 +947,13 @@ function verbXyzzy%()
     global currentRoom%
     global itemRoom%
     global targetRoom%
-    if currentRoom% = 7 then
-        if itemRoom%(35) = currentRoom% then
-            itemRoom%(35) = 0
+    if currentRoom% = BUILDING_ROOM then
+        if itemRoom%(DWARF_ITEM) = currentRoom% then
+            itemRoom%(DWARF_ITEM) = 0
         end if
-        targetRoom% = 13
-    elseif currentRoom% = 13 then
-        targetRoom% = 7
+        targetRoom% = DEBRIS_ROOM
+    elseif currentRoom% = DEBRIS_ROOM then
+        targetRoom% = BUILDING_ROOM
     else
         printMessage(2)
         return 0
@@ -832,16 +972,16 @@ function verbPlover%()
     global currentRoom%
     global itemRoom%
     global targetRoom%
-    if currentRoom% <= 26 then
-        if itemRoom%(35) = currentRoom% then
-            itemRoom%(35) = 0
+    if currentRoom% <= Y2_ROOM then
+        if itemRoom%(DWARF_ITEM) = currentRoom% then
+            itemRoom%(DWARF_ITEM) = 0
         end if
-        if itemRoom%(10) = -1 then
-            itemRoom%(10) = currentRoom%
+        if itemRoom%(EMERALD_ITEM) = -1 then
+            itemRoom%(EMERALD_ITEM) = currentRoom%
         end if
-        targetRoom% = 58
-    elseif currentRoom% = 58 then
-        targetRoom% = 26
+        targetRoom% = PLOVER_ROOM
+    elseif currentRoom% = PLOVER_ROOM then
+        targetRoom% = Y2_ROOM
     else
         printMessage(2)
         return 0
@@ -859,30 +999,30 @@ function verbCross%()
     global currentRoom%
     global crystalBridgeBuilt%
     global direction%
-    if currentRoom% = 19 and crystalBridgeBuilt% = 0 then
+    if currentRoom% = FISSURE_EAST_BANK and crystalBridgeBuilt% = 0 then
         printMessage(3)
-    elseif currentRoom% = 19 then
-        direction% = 7
+    elseif currentRoom% = FISSURE_EAST_BANK then
+        direction% = DIR_WEST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
-    elseif currentRoom% = 20 and crystalBridgeBuilt% = 0 then
+    elseif currentRoom% = FISSURE_WEST_SIDE and crystalBridgeBuilt% = 0 then
         printMessage(3)
-    elseif currentRoom% = 20 then
-        direction% = 3
+    elseif currentRoom% = FISSURE_WEST_SIDE then
+        direction% = DIR_EAST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
-    elseif currentRoom% = 60 then
-        direction% = 2
+    elseif currentRoom% = CHASM_SW_SIDE then
+        direction% = DIR_NORTHEAST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
         end if
-    elseif currentRoom% = 61 then
-        direction% = 6
+    elseif currentRoom% = CHASM_NE_SIDE then
+        direction% = DIR_SOUTHWEST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
@@ -901,15 +1041,15 @@ function verbClimb%()
     global currentRoom%
     global pirateState%
     global targetRoom%
-    if currentRoom% <> 50 then
+    if currentRoom% <> WEST_PIT then
         printMessage(2)
         return 0
     end if
-    if pirateState% < 2 then
+    if pirateState% < PIRATE_STATE_DEFEATED then
         printMessage(2)
         return 0
     end if
-    targetRoom% = 70
+    targetRoom% = NARROW_CORRIDOR
     performMove%(targetRoom%)
     checkPitsAndHandleDeathIfNeeded()
     return 1
@@ -921,7 +1061,7 @@ end function
  */
 function verbJump%()
     global currentRoom%
-    if currentRoom% <> 16 and currentRoom% <> 19 and currentRoom% <> 20 and currentRoom% <> 27 then
+    if currentRoom% <> PIT_TOP and currentRoom% <> FISSURE_EAST_BANK and currentRoom% <> FISSURE_WEST_SIDE and currentRoom% <> PIT_WINDOW then
         printMessage(2)
         return 0
     end if
@@ -940,7 +1080,7 @@ function verbFill%()
     global bottleContents%
     global responseText$
     global commandLine$
-    if itemRoom%(21) <> -1 then
+    if itemRoom%(BOTTLE_ITEM) <> -1 then
         responseText$ = "bottle"
         print "You don't have the ";responseText$
         commandLine$ = ""
@@ -951,12 +1091,12 @@ function verbFill%()
         commandLine$ = ""
         return 0
     end if
-    if currentRoom% = 7 or currentRoom% = 8 or currentRoom% = 9 or currentRoom% = 35 or currentRoom% = 74 or currentRoom% = 81 then
+    if currentRoom% = BUILDING_ROOM or currentRoom% = VALLEY_ROOM or currentRoom% = STREAMBED_SLIT or currentRoom% = STREAM_PIT or currentRoom% = WATERFALL_CAVERN or currentRoom% = RESERVOIR_ROOM then
         bottleContents% = 1
-        itemRoom%(16) = -1
-    elseif currentRoom% = 49 then
+        itemRoom%(WATER_ITEM) = -1
+    elseif currentRoom% = EAST_PIT then
         bottleContents% = 2
-        itemRoom%(17) = -1
+        itemRoom%(OIL_ITEM) = -1
     else
         responseText$ = "oil"
         print "I see no ";responseText$;" here."
@@ -974,7 +1114,7 @@ function verbEmpty%()
     global bottleContents%
     global responseText$
     global commandLine$
-    if itemRoom%(21) <> -1 then
+    if itemRoom%(BOTTLE_ITEM) <> -1 then
         responseText$ = "bottle"
         print "You don't have the ";responseText$
         commandLine$ = ""
@@ -1002,7 +1142,7 @@ function verbLight%()
     global lampOn%
     global responseText$
     global commandLine$
-    if itemRoom%(18) = -1 then
+    if itemRoom%(LAMP_ITEM) = -1 then
         lampOn% = 1
         responseText$ = "on"
     else
@@ -1024,7 +1164,7 @@ function verbOff%()
     global lampOn%
     global responseText$
     global commandLine$
-    if itemRoom%(18) = -1 then
+    if itemRoom%(LAMP_ITEM) = -1 then
         lampOn% = 0
         responseText$ = "off"
     else
@@ -1047,8 +1187,8 @@ function verbEnter%()
     global currentRoom%
     global targetRoom%
     global roomExits%
-    if currentRoom% = 6 or currentRoom% = 68 then
-        direction% = 3
+    if currentRoom% = END_OF_ROAD or currentRoom% = OUTSIDE_BARREN_ROOM then
+        direction% = DIR_EAST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
@@ -1057,7 +1197,7 @@ function verbEnter%()
     end if
     for direction% = 10 to 1 step -1
         targetRoom% = roomExits%(currentRoom%, direction%)
-        if targetRoom% > 0 and targetRoom% < 101 then
+        if targetRoom% > 0 and targetRoom% < ROOM_BOUND_EXCLUSIVE then
             if checkSpecialRoomAndMove%(direction%, targetRoom%) then
                 checkPitsAndHandleDeathIfNeeded()
                 return 1
@@ -1079,8 +1219,8 @@ function verbLeave%()
     global currentRoom%
     global targetRoom%
     global roomExits%
-    if currentRoom% = 7 or currentRoom% = 69 then
-        direction% = 7
+    if currentRoom% = BUILDING_ROOM or currentRoom% = BARREN_ROOM then
+        direction% = DIR_WEST
         if attemptMove%(direction%) then
             checkPitsAndHandleDeathIfNeeded()
             return 1
@@ -1089,7 +1229,7 @@ function verbLeave%()
     end if
     for direction% = 1 to 10
         targetRoom% = roomExits%(currentRoom%, direction%)
-        if targetRoom% > 0 and targetRoom% < 101 then
+        if targetRoom% > 0 and targetRoom% < ROOM_BOUND_EXCLUSIVE then
             if checkSpecialRoomAndMove%(direction%, targetRoom%) then
                 checkPitsAndHandleDeathIfNeeded()
                 return 1
@@ -1147,7 +1287,7 @@ function verbGet%()
     global itemNames$
     global paddedCommand$
     global commandLine$
-    if keywordFound%(47) <> 1 then
+    if keywordFound%(KEYWORD_ALL) <> 1 then
         findMatchedItems()
         if matchCount% = 0 then
             print "Get what?"
@@ -1156,9 +1296,9 @@ function verbGet%()
         end if
     end if
     for itemCode% = 1 to totalItems%
-        if keywordFound%(47) <> 1 and keywordFound%(itemCode%) = 0 then continue
+        if keywordFound%(KEYWORD_ALL) <> 1 and keywordFound%(itemCode%) = 0 then continue
         if itemRoom%(itemCode%) <> currentRoom% then
-            if keywordFound%(47) <> 1 then
+            if keywordFound%(KEYWORD_ALL) <> 1 then
                 paddedCommand$ = itemNames$(itemCode%)
                 print paddedCommand$;" not here."
             end if
@@ -1170,44 +1310,44 @@ function verbGet%()
                 matchCount% = matchCount% + 1
             end if
         end for
-        if matchCount% >= 7 then
+        if matchCount% >= MAX_CARRY_COUNT then
             printMessage(54)
             commandLine$ = ""
             return 0
         end if
-        if itemCode% = 24 or itemCode% = 30 or itemCode% > 31 then
+        if itemCode% = CLAM_ITEM or itemCode% = OYSTER_ITEM or itemCode% > LAST_TAKEABLE_ITEM then
             printMessage(61)
             return 0
-        elseif itemCode% = 12 and bearTamedScored% = 0 then
+        elseif itemCode% = CHAIN_ITEM and bearTamedScored% = 0 then
             printMessage(58)
             return 0
-        elseif itemCode% = 26 and bearFedState% <> 2 then
+        elseif itemCode% = BEAR_ITEM and bearFedState% <> BEAR_STATE_TAMED then
             printMessage(61)
             return 0
-        elseif itemCode% = 14 and dragonAlive% = 1 then
+        elseif itemCode% = RUG_ITEM and dragonAlive% = 1 then
             printMessage(59)
             return 0
-        elseif itemCode% = 16 or itemCode% = 17 then
+        elseif itemCode% = WATER_ITEM or itemCode% = OIL_ITEM then
             print "Why not say 'fill'?"
             return 0
-        elseif itemCode% = 22 and birdInCage% then
-            itemRoom%(31) = -1
+        elseif itemCode% = CAGE_ITEM and birdInCage% then
+            itemRoom%(BIRD_ITEM) = -1
             print "Bird and ";
-        elseif itemCode% = 31 then
+        elseif itemCode% = BIRD_ITEM then
             if birdInCage% = 1 then
                 print "Cage and ";
-                itemRoom%(22) = -1
-            elseif itemRoom%(22) <> -1 then
+                itemRoom%(CAGE_ITEM) = -1
+            elseif itemRoom%(CAGE_ITEM) <> -1 then
                 responseText$ = "cage"
                 print "I see no ";responseText$;" here."
                 return 0
-            elseif itemRoom%(23) = -1 then
+            elseif itemRoom%(ROD_ITEM) = -1 then
                 printMessage(37)
                 return 0
             else
                 birdInCage% = 1
             end if
-        elseif itemCode% = 21 and bottleContents% then
+        elseif itemCode% = BOTTLE_ITEM and bottleContents% then
             print "Contents and the ";
             itemRoom%(bottleContents% + 15) = -1
         end if
@@ -1232,7 +1372,7 @@ function verbDrop%()
     global trollState%
     global totalItems%
     global itemNames$
-    if keywordFound%(47) <> 1 then
+    if keywordFound%(KEYWORD_ALL) <> 1 then
         findMatchedItems()
         if matchCount% = 0 then
             print "Drop what?"
@@ -1241,42 +1381,42 @@ function verbDrop%()
         end if
     end if
     for itemCode% = 1 to totalItems%
-        if keywordFound%(47) <> 1 then
+        if keywordFound%(KEYWORD_ALL) <> 1 then
             if keywordFound%(itemCode%) <> 1 or itemRoom%(itemCode%) = 0 then continue
         end if
         if itemRoom%(itemCode%) <> -1 then
-            if keywordFound%(47) <> 1 then
+            if keywordFound%(KEYWORD_ALL) <> 1 then
                 responseText$ = itemNames$(itemCode%)
                 print "You don't have the ";responseText$
             end if
             continue
         end if
-        if itemCode% = 31 or (itemCode% = 22 and birdInCage% = 1) then
-            itemRoom%(31) = currentRoom%
-            itemRoom%(22) = currentRoom%
+        if itemCode% = BIRD_ITEM or (itemCode% = CAGE_ITEM and birdInCage% = 1) then
+            itemRoom%(BIRD_ITEM) = currentRoom%
+            itemRoom%(CAGE_ITEM) = currentRoom%
             birdInCage% = 1
-            if itemCode% = 31 then
+            if itemCode% = BIRD_ITEM then
                 print "Cage and ";
                 print "Bird and ";
             end if
-        elseif itemCode% = 21 and bottleContents% <> 0 then
+        elseif itemCode% = BOTTLE_ITEM and bottleContents% <> 0 then
             print "Contents and ";
             itemRoom%(15 + bottleContents%) = currentRoom%
-        elseif itemCode% = 16 or itemCode% = 17 then
+        elseif itemCode% = WATER_ITEM or itemCode% = OIL_ITEM then
             print "Try saying 'empty'"
             return 0
-        elseif itemCode% = 26 and trollState% = 1 and (currentRoom% = 60 or currentRoom% = 61) then
+        elseif itemCode% = BEAR_ITEM and trollState% = 1 and (currentRoom% = CHASM_SW_SIDE or currentRoom% = CHASM_NE_SIDE) then
             printMessage(28)
             trollState% = 0
-            itemRoom%(26) = currentRoom%
-            itemRoom%(32) = 0
+            itemRoom%(BEAR_ITEM) = currentRoom%
+            itemRoom%(TROLL_ITEM) = 0
             return 0
-        elseif itemCode% = 6 and itemRoom%(28) <> currentRoom% then
+        elseif itemCode% = VASE_ITEM and itemRoom%(PILLOW_ITEM) <> currentRoom% then
             printMessage(43)
-            itemRoom%(6) = 0
-            itemRoom%(29) = currentRoom%
+            itemRoom%(VASE_ITEM) = 0
+            itemRoom%(BROKEN_VASE_ITEM) = currentRoom%
             return 0
-        elseif itemCode% = 6 then
+        elseif itemCode% = VASE_ITEM then
             printMessage(60)
         end if
         responseText$ = itemNames$(itemCode%)
@@ -1310,25 +1450,25 @@ function verbThrow%()
         commandLine$ = ""
         return 0
     end if
-    if itemCode% < 16 and itemRoom%(32) = currentRoom% then
+    if itemCode% < FIRST_NON_TREASURE_ITEM and itemRoom%(TROLL_ITEM) = currentRoom% then
         printMessage(27)
         itemRoom%(itemCode%) = 0
         trollState% = 3
         return 0
-    elseif itemCode% = 27 and itemRoom%(32) = currentRoom% then
+    elseif itemCode% = AXE_ITEM and itemRoom%(TROLL_ITEM) = currentRoom% then
         printMessage(26)
-        itemRoom%(27) = currentRoom%
+        itemRoom%(AXE_ITEM) = currentRoom%
         return 0
-    elseif itemCode% = 27 and itemRoom%(35) = currentRoom% then
+    elseif itemCode% = AXE_ITEM and itemRoom%(DWARF_ITEM) = currentRoom% then
         if rnd(1) <= 0.5 then
             printMessage(29)
             checkDwarfAttack()
         else
             printMessage(30)
-            itemRoom%(35) = 0
+            itemRoom%(DWARF_ITEM) = 0
         end if
     else
-        if itemRoom%(35) = currentRoom% then
+        if itemRoom%(DWARF_ITEM) = currentRoom% then
             checkDwarf()
         end if
         print "Thrown."
@@ -1352,11 +1492,11 @@ function verbAttack%()
     global currentRoom%
     global commandLine$
     findMatchedItems()
-    if itemCode% = 33 and itemRoom%(itemCode%) = currentRoom% and currentRoom% = 82 then
+    if itemCode% = DRAGON_ITEM and itemRoom%(itemCode%) = currentRoom% and currentRoom% = SECRET_CANYON then
         printMessage(68)
         commandLine$ = ""
-    elseif itemRoom%(32) = currentRoom% then
-    elseif itemCode% = 26 or itemCode% > 30 then
+    elseif itemRoom%(TROLL_ITEM) = currentRoom% then
+    elseif itemCode% = BEAR_ITEM or itemCode% > LAST_ORDINARY_ITEM then
         printMessage(70)
     else
         printMessage(71)
@@ -1376,29 +1516,29 @@ function verbFeed%()
     global bearFedState%
     global itemNames$
     findMatchedItems()
-    if itemCode% = 35 then
+    if itemCode% = DWARF_ITEM then
         printMessage(24)
         return 0
     end if
-    if itemRoom%(20) <> -1 then
+    if itemRoom%(FOOD_ITEM) <> -1 then
         responseText$ = "FOOD"
         print "You don't have the ";responseText$
         commandLine$ = ""
         return 0
     end if
-    if currentRoom% <> 69 then
+    if currentRoom% <> BARREN_ROOM then
         print "I can't feed it."
         printMessage(23)
         return 0
     end if
-    if itemRoom%(20) = currentRoom% then
+    if itemRoom%(FOOD_ITEM) = currentRoom% then
         printMessage(60)
         responseText$ = itemNames$(itemCode%)
         print responseText$;":dropped."
         itemRoom%(itemCode%) = currentRoom%
     else
         bearFedState% = 1
-        itemRoom%(20) = 0
+        itemRoom%(FOOD_ITEM) = 0
         printMessage(6)
     end if
     return 0
@@ -1421,7 +1561,7 @@ function verbWater%()
         commandLine$ = ""
         return 0
     end if
-    if currentRoom% <> 50 then
+    if currentRoom% <> WEST_PIT then
         printMessage(2)
         return 0
     end if
@@ -1449,7 +1589,7 @@ function verbLock%()
     global grateOpen%
     global responseText$
     global commandLine$
-    if currentRoom% = 10 or currentRoom% = 11 then
+    if currentRoom% = GRATE_ROOM_ABOVE or currentRoom% = GRATE_ROOM_BELOW then
         if itemRoom%(19) = -1 then
             grateOpen% = 0
             printMessage(10)
@@ -1483,10 +1623,10 @@ function verbUnlock%()
         commandLine$ = ""
         return 0
     end if
-    if currentRoom% = 10 or currentRoom% = 11 then
+    if currentRoom% = GRATE_ROOM_ABOVE or currentRoom% = GRATE_ROOM_BELOW then
         grateOpen% = 1
         printMessage(11)
-    elseif currentRoom% = 69 then
+    elseif currentRoom% = BARREN_ROOM then
         if bearFedState% > 0 then
             if bearTamedScored% = 0 then
                 bearTamedScored% = 1
@@ -1514,25 +1654,25 @@ function verbFree%()
     global snakeAlive%
     global responseText$
     global commandLine$
-    if keywordFound%(31) <> 1 or itemRoom%(31) <> -1 then
+    if keywordFound%(BIRD_ITEM) <> 1 or itemRoom%(BIRD_ITEM) <> -1 then
         printMessage(2)
         commandLine$ = ""
         return 0
     end if
-    itemRoom%(31) = currentRoom%
+    itemRoom%(BIRD_ITEM) = currentRoom%
     birdInCage% = 0
     print "Freed."
-    if currentRoom% = 22 and snakeAlive% = 1 then
+    if currentRoom% = HALL_OF_MOUNTAIN_KING and snakeAlive% = 1 then
         responseText$ = "snake"
-    elseif currentRoom% = 82 then
+    elseif currentRoom% = SECRET_CANYON then
         responseText$ = "dragon"
     else
         return 0
     end if
     print "The little bird attacks the green ";responseText$;" and"
-    if currentRoom% = 82 then
+    if currentRoom% = SECRET_CANYON then
         print "gets burned to a crisp"
-        itemRoom%(31) = 0
+        itemRoom%(BIRD_ITEM) = 0
     else
         print "drives it off"
         snakeAlive% = 0
@@ -1552,14 +1692,14 @@ function verbWave%()
     global commandLine$
     global currentRoom%
     global crystalBridgeBuilt%
-    if keywordFound%(23) <> 1 then
+    if keywordFound%(ROD_ITEM) <> 1 then
         printMessage(2)
-    elseif itemRoom%(23) <> -1 then
+    elseif itemRoom%(ROD_ITEM) <> -1 then
         responseText$ = "rod"
         print "You don't have the ";responseText$
         commandLine$ = ""
         return 0
-    elseif currentRoom% <> 19 and currentRoom% <> 20 then
+    elseif currentRoom% <> FISSURE_EAST_BANK and currentRoom% <> FISSURE_WEST_SIDE then
         printMessage(2)
     elseif crystalBridgeBuilt% = 0 then
         printMessage(14)
@@ -1586,16 +1726,16 @@ function verbOpen%()
         printDontUnderstand()
         return 0
     end if
-    if itemCode% = 40 then return verbUnlock%()
+    if itemCode% = KEYWORD_GRATE then return verbUnlock%()
     if itemRoom%(itemCode%) <> currentRoom% then
         print "I see no ";responseText$;" here."
         return 0
     end if
-    if itemCode% <> 24 then
+    if itemCode% <> CLAM_ITEM then
         print "I don't know how to open a ";responseText$
         return 0
     end if
-    if itemRoom%(9) = -1 then
+    if itemRoom%(TRIDENT_ITEM) = -1 then
         printMessage(16)
         return 0
     end if
@@ -1603,9 +1743,9 @@ function verbOpen%()
         printMessage(2)
         return 0
     end if
-    itemRoom%(7) = 43
-    itemRoom%(24) = 0
-    itemRoom%(30) = currentRoom%
+    itemRoom%(PEARL_ITEM) = CUL_DE_SAC_ROOM
+    itemRoom%(CLAM_ITEM) = 0
+    itemRoom%(OYSTER_ITEM) = currentRoom%
     printMessage(17)
     return 0
 end function
@@ -1621,7 +1761,7 @@ function verbClose%()
     global itemCode%
     return 0
     findMatchedItems()
-    if itemCode% = 40 then return verbLock%()
+    if itemCode% = KEYWORD_GRATE then return verbLock%()
     printMessage(18)
     return 0
 end function
@@ -1637,12 +1777,12 @@ function verbOil%()
     global ironDoorOiled%
     global bottleContents%
     global responseText$
-    if keywordFound%(17) = 0 then
+    if keywordFound%(OIL_ITEM) = 0 then
         printMessage(2)
-    elseif itemRoom%(17) <> -1 then
+    elseif itemRoom%(OIL_ITEM) <> -1 then
         responseText$ = "oil"
         print "I see no ";responseText$;" here."
-    elseif currentRoom% <> 73 then
+    elseif currentRoom% <> IRON_DOOR_PASSAGE then
         printMessage(2)
     elseif ironDoorOiled% = 1 then
         printMessage(2)
@@ -1694,13 +1834,13 @@ function verbDrink%()
         commandLine$ = ""
         return 0
     end if
-    itemCode% = 16
+    itemCode% = WATER_ITEM
     if checkCarryingItem%() = 0 then
         commandLine$ = ""
         return 0
     end if
     printMessage(22)
-    itemRoom%(17) = 0
+    itemRoom%(OIL_ITEM) = 0
     bottleContents% = 0
     return 0
 end function
@@ -1713,7 +1853,7 @@ function verbFeeFieFoeFoo%()
     global currentRoom%
     global itemRoom%
     global commandLine$
-    if currentRoom% <> 71 then
+    if currentRoom% <> GIANT_ROOM then
         printMessage(2)
         commandLine$ = ""
     elseif itemRoom%(8) = currentRoom% then
@@ -1899,10 +2039,10 @@ function verbReadMagazine%()
     global itemRoom%
     global commandLine$
     findMatchedItems()
-    if itemCode% <> 25 then
+    if itemCode% <> MAGAZINE_ITEM then
         printMessage(74)
         commandLine$ = ""
-    elseif itemRoom%(25) <> -1 then
+    elseif itemRoom%(MAGAZINE_ITEM) <> -1 then
         responseText$ = "magazine"
         print "You don't have the ";responseText$
         commandLine$ = ""
@@ -1920,7 +2060,7 @@ function verbYes%()
     global currentRoom%
     global itemRoom%
     global dragonAlive%
-    if currentRoom% <> 82 then
+    if currentRoom% <> SECRET_CANYON then
         printDontUnderstand()
         return 0
     end if
@@ -1951,7 +2091,7 @@ function verbBug%()
     print #5, paddedCommand$
     print "Enter your gripe in up to five lines (hit return to quit):"
     scratchValue% = 1
-    while scratchValue% <= 5
+    while scratchValue% <= MAX_GRIPE_LINES
         print scratchValue%;
         input paddedCommand$
         if paddedCommand$ = "" then
@@ -2086,7 +2226,7 @@ function parseAndDispatchCommand%()
         commandLine$ = ucase$(commandLine$)
         for scanIndex% = 1 to len(commandLine$)
             charCode% = asc(mid$(commandLine$, scanIndex%, 1))
-            if not ((charCode% > 64 and charCode% < 91) or (charCode% > 47 and charCode% < 58) or charCode% = 44) then
+            if not ((charCode% > ASCII_BEFORE_UPPER_A and charCode% < ASCII_AFTER_UPPER_Z) or (charCode% > ASCII_BEFORE_DIGIT_0 and charCode% < ASCII_AFTER_DIGIT_9) or charCode% = ASCII_COMMA) then
                 commandLine$ = mid$(commandLine$, 1, scanIndex% - 1) + " " + mid$(commandLine$, scanIndex% + 1)
             end if
         end for
@@ -2266,7 +2406,7 @@ printMessage(301)
 scratchValue% = askYesNo%()
 if scratchValue% then printMessage(302)
 while true
-    if currentRoom% < 13 or currentRoom% = 58 or (lampOn% = 1 and (itemRoom%(18) = currentRoom% or itemRoom%(18) = -1)) then
+    if currentRoom% < FIRST_UNDERGROUND_ROOM or currentRoom% = PLOVER_ROOM or (lampOn% = 1 and (itemRoom%(LAMP_ITEM) = currentRoom% or itemRoom%(LAMP_ITEM) = -1)) then
         select case descriptionMode%
             case 0
                 shortDescription()
