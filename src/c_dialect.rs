@@ -82,6 +82,21 @@ pub(crate) struct CDialectProfile {
     /// behavior in C; only assignment *timing* does, and that's exactly
     /// what's preserved).
     pub(crate) supports_mixed_declarations: bool,
+    /// Whether the target C compiler accepts the standard C "elided
+    /// braces" shorthand for a multi-dimensional array's zero-initializer
+    /// (`static char x[6][256] = {0};`, relying on every element the
+    /// literal `0` doesn't explicitly reach still being zero-initialized
+    /// by default). `cc65` doesn't for rank 2 or higher -- confirmed by
+    /// hand: that exact declaration fails with "Error: '{' expected" /
+    /// "'}' expected", and the nesting required must match the array's
+    /// *exact* rank (`{{0}}` for rank 2, `{{{0}}}` for rank 3, ...; two
+    /// levels of nesting still fails to compile a 3-D array). Every
+    /// BASCAL string array is already rank 2 or higher in the generated
+    /// C even when it's rank 1 in BASIC source (`dim x$(n)` is a 1-D
+    /// array of fixed-size `char` buffers, so the buffer itself is a
+    /// second C dimension) -- this is a common case, not a rare one. Read
+    /// by `zero_init_braces`.
+    pub(crate) supports_elided_braces: bool,
 }
 
 impl CDialectProfile {
@@ -98,6 +113,7 @@ impl CDialectProfile {
             supports_float: true,
             supports_vla: true,
             supports_mixed_declarations: true,
+            supports_elided_braces: true,
         }
     }
 
@@ -114,6 +130,7 @@ impl CDialectProfile {
             supports_float: false,
             supports_vla: false,
             supports_mixed_declarations: false,
+            supports_elided_braces: false,
         }
     }
 
@@ -187,6 +204,7 @@ mod tests {
         assert!(profile.supports_float);
         assert!(profile.supports_vla);
         assert!(profile.supports_mixed_declarations);
+        assert!(profile.supports_elided_braces);
     }
 
     #[test]
@@ -197,6 +215,7 @@ mod tests {
         assert!(!profile.supports_float);
         assert!(!profile.supports_vla);
         assert!(!profile.supports_mixed_declarations);
+        assert!(!profile.supports_elided_braces);
     }
 
     #[test]

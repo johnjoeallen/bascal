@@ -3136,13 +3136,21 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
             .iter()
             .map(|bound| format!("[{}]", bound + 1))
             .collect();
+        let rank = info.bounds.len();
         match info.element_type {
             Some((c_type, _)) => {
-                globals_decl.push_str(&format!("static {c_type} {c_name}{dims} = {{0}};\n"));
+                let zero = zero_init_braces(rank, &functions.dialect);
+                globals_decl.push_str(&format!("static {c_type} {c_name}{dims} = {zero};\n"));
             }
             None => {
+                // A string array's buffer dimension (`[STRING_BUFFER_SIZE]`)
+                // is a real extra C rank beyond `dims`'s own BASIC-level
+                // axes -- see `supports_elided_braces`'s own doc comment
+                // on why this makes even a rank-1 BASIC string array
+                // rank-2 in the generated C.
+                let zero = zero_init_braces(rank + 1, &functions.dialect);
                 globals_decl.push_str(&format!(
-                    "static char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {{0}};\n"
+                    "static char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {zero};\n"
                 ));
             }
         }
@@ -3562,13 +3570,18 @@ fn emit_function_def(
             .iter()
             .map(|bound| format!("[{}]", bound + 1))
             .collect();
+        let rank = info.bounds.len();
         match info.element_type {
             Some((c_type, _)) => {
-                body.push_str(&format!("    {c_type} {c_name}{dims} = {{0}};\n"));
+                let zero = zero_init_braces(rank, &functions.dialect);
+                body.push_str(&format!("    {c_type} {c_name}{dims} = {zero};\n"));
             }
             None => {
+                // See the top-level array loop's own comment on why a
+                // string array's rank is `dims`'s axis count plus one.
+                let zero = zero_init_braces(rank + 1, &functions.dialect);
                 body.push_str(&format!(
-                    "    char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {{0}};\n"
+                    "    char {c_name}{dims}[{STRING_BUFFER_SIZE}] = {zero};\n"
                 ));
             }
         }
@@ -9083,6 +9096,20 @@ fn ends_with_end(statements: &[Stmt]) -> bool {
         .is_some_and(|s| matches!(&**s, Statement::End))
 }
 
+/// The zero-initializer text for a `rank`-dimensional array declaration
+/// -- see `CDialectProfile::supports_elided_braces`'s own doc comment.
+/// `{0}` (this backend's own long-standing behavior) whenever the
+/// dialect supports elided braces or `rank <= 1`; otherwise nested to
+/// match `rank` exactly (`{{0}}`, `{{{0}}}`, ...), since `cc65` rejects
+/// anything less.
+fn zero_init_braces(rank: usize, dialect: &CDialectProfile) -> String {
+    if dialect.supports_elided_braces || rank <= 1 {
+        "{0}".to_string()
+    } else {
+        format!("{}0{}", "{".repeat(rank), "}".repeat(rank))
+    }
+}
+
 fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::error(SourcePos::new("<target>", 1, 1), message.to_string())
 }
@@ -9352,6 +9379,45 @@ mod dialect_tests {
         assert!(!c.contains("<math.h>"), "{c}");
         assert!(c.contains("(long)(17) / (long)(5)"), "{c}");
         assert!(c.contains("(long)(17) % (long)(5)"), "{c}");
+    }
+
+    /// A 1-D BASIC string array is already rank 2 in the generated C (the
+    /// per-element string buffer is a second C dimension) -- `Target::C`
+    /// must keep emitting the bare `{0}` elided-braces form it always
+    /// has (byte-for-byte unchanged output).
+    #[test]
+    fn target_c_keeps_elided_braces_for_a_string_array() {
+        let c = generate_for_target(
+            "program p\ndim names$(5)\nnames$(0) = \"a\"\nend\n",
+            Target::C,
+        );
+        assert!(c.contains("[6][256] = {0};"), "{c}");
+    }
+
+    /// The same 1-D string array, under a `supports_elided_braces: false`
+    /// profile (`Target::C64`'s), needs braces nested to match its real
+    /// rank (2) exactly -- confirmed by hand that `cc65` rejects a bare
+    /// `{0}` for rank 2 or higher, and that partial nesting short of the
+    /// exact rank also fails.
+    #[test]
+    fn target_c64_nests_braces_for_a_string_array() {
+        let c = generate_for_target(
+            "program p\ndim names$(5)\nnames$(0) = \"a\"\nend\n",
+            Target::C64,
+        );
+        assert!(c.contains("[6][256] = {{0}};"), "{c}");
+    }
+
+    /// A 2-D numeric array is rank 2 in BASIC already (no implicit extra
+    /// dimension the way a string array gets) -- same nesting rule
+    /// applies regardless of which side of the rank contributes it.
+    #[test]
+    fn target_c64_nests_braces_for_a_2d_numeric_array() {
+        let c = generate_for_target(
+            "program p\ndim grid%(3, 3)\ngrid%(0, 0) = 1\nend\n",
+            Target::C64,
+        );
+        assert!(c.contains("[4][4] = {{0}};"), "{c}");
     }
 
     /// Same pipeline as `generate_for_target`, but for a negative test:
