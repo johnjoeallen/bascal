@@ -1,5 +1,16 @@
 # BASCAL — Agent Instructions
 
+## Audience and documentation style
+
+BASCAL is a technical project: a compiler, aimed at programmers who already
+know a language like BASIC, Pascal, or C. Documentation, commit messages,
+and code comments should use precise technical/compiler terminology rather
+than plain-English paraphrases — say "lexer", "parser", "AST", "resolver",
+"codegen backend", "diagnostic", "scope", "shadowing", "transpile" (per the
+convention below), not informal substitutes like "the part that reads the
+code" or "turns it into". Prefer the exact term a compiler engineer would
+use, and don't soften or simplify jargon for a lay reader.
+
 ## Terminology
 
 When describing how BASCAL source turns into generated BASIC or C code —
