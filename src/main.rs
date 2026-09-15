@@ -934,6 +934,22 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
 /// doesn't have a `<math.h>`/`libm` to link in the first place (see
 /// `c_dialect.rs`'s own doc comment on `supports_float`), and nothing
 /// Phase 3 lets through here could have pulled one in anyway.
+///
+/// `--static-locals`: `cc65` allocates locals on a software-emulated
+/// stack (the 6502 has no real hardware call-frame support), which has
+/// low capacity -- confirmed by hand that most non-trivial BASCAL
+/// functions hit "Error: Too many local variables" without this flag.
+/// `--static-locals` instead puts every local in fixed static storage
+/// (BSS), sidestepping that limit entirely -- at the cost of making the
+/// generated code non-reentrant, which would silently corrupt a
+/// recursive function's locals across nested calls. Safe to pass
+/// unconditionally here because BASCAL itself has no recursive
+/// functions to begin with, on any target: `resolver::validate`'s
+/// `reject_call_cycles` rejects direct or indirect recursion at
+/// resolve time, before any backend (including this one) ever sees the
+/// program -- driven by the *BASIC* backend's own GOSUB-against-shared-
+/// globals calling convention having the identical non-reentrancy
+/// problem, not something specific to `cc65`/C64.
 fn invoke_cl65(c_path: &PathBuf) -> Result<PathBuf, String> {
     let binary_name = c_path
         .file_stem()
@@ -945,6 +961,7 @@ fn invoke_cl65(c_path: &PathBuf) -> Result<PathBuf, String> {
     let status = Command::new("cl65")
         .arg("-t")
         .arg("c64")
+        .arg("--static-locals")
         .arg(c_path)
         .arg("-o")
         .arg(&binary_path)
