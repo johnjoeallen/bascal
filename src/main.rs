@@ -86,7 +86,7 @@ struct Cli {
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (a Commodore 64 target via cc65 -- reuses the c backend, restricted to a subset (no /, ^, single/double variables, or byval array parameters -- cc65 has no floating-point support and no VLAs) with a clear diagnostic naming the target for anything unsupported; --binary needs cc65 on PATH, --run isn't implemented yet -- load the built PRG in a C64 emulator by hand). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (a Commodore 64 target via cc65 -- reuses the c backend, restricted to a subset (no /, ^, single/double variables, or byval array parameters -- cc65 has no floating-point support and no VLAs) with a clear diagnostic naming the target for anything unsupported; --binary needs cc65 on PATH, --run launches the built PRG under VICE's x64sc -- needs a display, and VICE isn't packaged for Debian/Ubuntu, see run_c64_prg's own doc comment for the from-source build steps). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -512,20 +512,11 @@ fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     // A `--target c64` "binary" (`invoke_cl65`) is a Commodore 64 `PRG`
     // image -- 6502 machine code this process's own (x86/ARM/...) OS can
     // never exec directly, unlike `Target::Fbc`/`Target::C`'s native
-    // binaries. Running one needs a C64 emulator (VICE's `x64sc` is the
-    // one `RETRO_BASIC_SUPPORT_PROMPT.md`'s own Testing strategy names) --
-    // not yet wired up here (a later phase's "run under emulator" flag,
-    // parallel to `run_dos_exe`'s dosbox-x window), so this names exactly
-    // what to do by hand instead of attempting (and failing) a direct
-    // exec the way falling through to the generic case below would.
+    // binaries. Same reasoning as the DOS `.EXE` case just above: needs a
+    // real emulator window, not an inherited-stdio child process -- see
+    // `run_c64_prg`'s own doc comment.
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("prg") {
-        return Err(format!(
-            "error: --run isn't implemented yet for --target c64 -- {} is a Commodore 64 PRG \
-             image, not something this process can run directly. Load it in a C64 emulator by \
-             hand, e.g.: x64sc {}",
-            binary_path.display(),
-            binary_path.display()
-        ));
+        return run_c64_prg(binary_path);
     }
     let status = Command::new(binary_path)
         .status()
@@ -817,6 +808,38 @@ fn run_dos_exe(exe_path: &Path) -> Result<(), String> {
         .map_err(|err| format!("error: failed to invoke dosbox-x: {err}"))?;
     if !status.success() {
         return Err(format!("error: dosbox-x exited with {status}"));
+    }
+    Ok(())
+}
+
+/// Runs a C64 `PRG` image (built by `invoke_cl65`) under VICE's `x64sc`,
+/// same reasoning as `run_dos_exe`'s DOS `.EXE` case just above: 6502
+/// machine code can't be `exec`'d by this process's own (x86/ARM/...) OS
+/// at all, so this needs `x64sc`'s own window rather than an
+/// inherited-stdio child process. Needs a display; won't work over a
+/// plain SSH session or other fully headless environment. `-autostart`
+/// loads and runs the `PRG` immediately -- the "insert and go" experience
+/// a real C64 user gets from a cartridge/disk, and the same flag
+/// `RETRO_BASIC_SUPPORT_PROMPT.md`'s own Testing strategy names `x64sc`
+/// for. VICE isn't packaged for Debian/Ubuntu -- see `doc/building/
+/// SDL-Howto.txt` in VICE's own source tree (https://github.com/VICE-
+/// Team/svn-mirror) for the from-source `./autogen.sh && ./configure
+/// --enable-sdl2ui --with-sdlsound --without-png && make && make install`
+/// steps this project's own README doesn't duplicate.
+fn run_c64_prg(prg_path: &Path) -> Result<(), String> {
+    let status = Command::new("x64sc")
+        .arg("-autostart")
+        .arg(prg_path)
+        .status()
+        .map_err(|err| {
+            format!(
+                "error: failed to invoke x64sc: {err} -- install VICE to run --target c64 \
+                 output (not packaged for Debian/Ubuntu -- build from source, see \
+                 https://github.com/VICE-Team/svn-mirror's doc/building/SDL-Howto.txt)"
+            )
+        })?;
+    if !status.success() {
+        return Err(format!("error: x64sc exited with {status}"));
     }
     Ok(())
 }

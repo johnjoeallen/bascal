@@ -60,8 +60,10 @@ pub enum Target {
     /// `codegen_c::validate_capabilities`); everything else transpiles
     /// like `Target::C`. `main.rs`'s `--binary`/`-b` shells out to `cl65`
     /// to produce a loadable Commodore 64 `PRG` image (needs `cc65` on
-    /// `PATH`); `--run`/`-r` isn't implemented yet -- a `PRG` needs a C64
-    /// emulator (VICE's `x64sc`), not something this process can exec
-    /// directly.
+    /// `PATH`); `--run`/`-r` launches it under VICE's `x64sc` (needs a
+    /// display, and `x64sc` on `PATH` -- VICE isn't packaged for
+    /// Debian/Ubuntu, see `main.rs`'s `run_c64_prg` for the from-source
+    /// build steps), since a `PRG`'s 6502 machine code isn't something
+    /// this process can exec directly.
     C64,
 }
