@@ -18,7 +18,7 @@ A `dim`/`declare`/`const` never referenced again after its own declaration. A to
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 function computeArea%(width%, height%)
@@ -56,7 +56,7 @@ A local `dim`/`const` colliding with this function's own parameter, or with a na
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 function setRoom%()
@@ -106,7 +106,7 @@ The fourth shadowing case, with its own example: a `for` loop variable reused wh
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 function sumGrid%()
@@ -149,7 +149,7 @@ A statement after `return`/`goto`/`exit`/`throw`/`end`/`stop` in the same block,
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 function verbClose%()
@@ -193,7 +193,7 @@ A bare numeric literal — other than `0`, `1`, or `-1`, exempted as near-univer
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 function checkFlags%(blah%, zog%)
@@ -253,7 +253,7 @@ A top-level `const` whose name isn't uppercase snake case: it must start with an
 
 <div class="pane old" markdown="1">
 
-<span class="tag">Before</span>
+<span class="tag">Input</span>
 
 ```bascal
 const maxCount = 10
