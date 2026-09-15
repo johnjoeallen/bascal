@@ -49,13 +49,19 @@ pub enum Target {
     C,
     Jvm,
     /// First of a planned family of native 1980s/1990s home-computer
-    /// targets (see `RETRO_BASIC_SUPPORT_PROMPT.md`): will eventually
-    /// reuse `codegen_c`, parameterized for `cc65`'s C dialect, and route
-    /// the result through `cc65`/`cl65` to produce a loadable Commodore 64
-    /// `PRG` image, the same "emit C, shell out to a real cross-compiler"
-    /// pattern `Fbc` and `C` already use. Not implemented yet: every
-    /// `compile_file` call with this target always fails with a "not
-    /// implemented" diagnostic until the dialect-parameterization and
-    /// toolchain-invocation work lands.
+    /// targets (see `RETRO_BASIC_SUPPORT_PROMPT.md`): reuses `codegen_c`,
+    /// parameterized for `cc65`'s C dialect (see `c_dialect.rs`'s
+    /// `CDialectProfile::c64_cc65`), the same "emit C, shell out to a real
+    /// cross-compiler" pattern `Fbc` and `C` already use. A construct the
+    /// C64/`cc65` dialect can't express (`/`, `^`, `single`/`double`
+    /// variables, `byval` array parameters -- `cc65` has no
+    /// floating-point support and no C99 VLAs) is rejected with a clear
+    /// diagnostic naming the target, before any C is emitted (Phase 3's
+    /// `codegen_c::validate_capabilities`); everything else transpiles
+    /// like `Target::C`. `main.rs`'s `--binary`/`-b` shells out to `cl65`
+    /// to produce a loadable Commodore 64 `PRG` image (needs `cc65` on
+    /// `PATH`); `--run`/`-r` isn't implemented yet -- a `PRG` needs a C64
+    /// emulator (VICE's `x64sc`), not something this process can exec
+    /// directly.
     C64,
 }

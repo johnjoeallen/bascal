@@ -207,12 +207,21 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(generated.app)
         }
         Target::Jvm => codegen_jvm::generate(&resolved.program),
-        Target::C64 => Err(vec![Diagnostic::error(
-            diagnostics::SourcePos::new("<c64-target>", 1, 1),
-            "--target c64 is not implemented yet -- see RETRO_BASIC_SUPPORT_PROMPT.md for \
-             the planned cc65-based implementation"
-                .to_string(),
-        )]),
+        // Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md: reuses `codegen_c.rs`
+        // exactly like `Target::C` above, just under the C64/`cc65`
+        // `CDialectProfile` -- Phase 3's `validate_capabilities` (run
+        // first, inside `codegen_c::generate`) rejects whatever that
+        // profile can't express (`/`, `^`, `single`/`double` variables,
+        // `byval` array parameters) before any C is emitted, so what
+        // reaches here is always C `cl65` can actually compile.
+        // `main.rs`'s `--binary`/`-b` is what invokes `cl65` itself,
+        // parallel to `Target::Fbc`/`Target::C`'s own `fbc`/`gcc`
+        // invocations -- this function only ever produces the
+        // intermediate C text, never a binary, for any target.
+        Target::C64 => {
+            let generated = codegen_c::generate(&resolved.program, Target::C64)?;
+            Ok(generated.app)
+        }
     }
 }
 
@@ -322,14 +331,17 @@ fn print_legacy_form_warnings(program: &ast::Program) {
 pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
     let extension = match target {
         Target::Basic | Target::Fbc => "bas",
-        Target::C => "c",
+        // `Target::C64`'s primary `transpile` output is C text too --
+        // `codegen_c::generate` under the C64/`cc65` `CDialectProfile`,
+        // exactly like `Target::C` (see `transpile`'s own `Target::C64`
+        // arm). The loadable `PRG` image is a separate, later artifact
+        // `--binary`'s `cl65` invocation produces in `tmp/`, the same way
+        // `Target::Basic`'s DOS `.EXE`/`Target::Fbc`'s native binary
+        // aren't this function's concern either -- an earlier version of
+        // this comment reserved `prg` here on the (wrong) assumption that
+        // C64's primary output would be the binary itself.
+        Target::C | Target::C64 => "c",
         Target::Jvm => "j",
-        // Placeholder: the real C64 target will produce a loadable `PRG`
-        // image (see Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md), not a text
-        // file -- `prg` is reserved for that now so this doesn't change
-        // again once the toolchain invocation lands. Unreachable today:
-        // `transpile` always fails first for `Target::C64`.
-        Target::C64 => "prg",
     };
     input.with_extension(extension)
 }

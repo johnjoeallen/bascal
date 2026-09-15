@@ -8015,12 +8015,12 @@ end
         );
     }
 
-    /// `Target::C64` is accepted by `--target`/`CompileOptions` (Phase 1 of
-    /// RETRO_BASIC_SUPPORT_PROMPT.md), but not implemented yet: every
-    /// compile must fail with a clear "not implemented" diagnostic rather
-    /// than silently falling back to another backend or emitting anything.
+    /// `Target::C64` (Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md) reuses the
+    /// `c` backend end-to-end through the public `compile_file` API: an
+    /// all-integer program -- the subset the C64/`cc65` `CDialectProfile`
+    /// actually supports -- compiles to real C, the same as `Target::C`.
     #[test]
-    fn c64_target_is_not_implemented_yet() {
+    fn c64_target_compiles_a_supported_integer_only_program() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("hello.bcl");
         std::fs::write(&path, "program p\nprint \"hi\"\nend\n").unwrap();
@@ -8028,13 +8028,31 @@ end
             target: Target::C64,
             ..CompileOptions::new()
         };
-        let diagnostics = compile_file(&path, &options).expect_err("should not compile yet");
+        let c = compile_file(&path, &options).expect("should compile for the c64 target");
+        assert!(c.contains("printf"), "{c}");
+    }
+
+    /// A program using a construct the C64/`cc65` dialect can't express
+    /// (here: `/`, always floating-point-producing -- see
+    /// `c_dialect.rs`'s own doc comment) is rejected with a clear
+    /// diagnostic naming the target, through the same public
+    /// `compile_file` API -- not just at `codegen_c::generate`'s own
+    /// internal level.
+    #[test]
+    fn c64_target_rejects_an_unsupported_float_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("division.bcl");
+        std::fs::write(&path, "program p\na% = 17 / 5\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::C64,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile");
         assert!(
             diagnostics
                 .iter()
-                .any(|d| d.message.contains("--target c64")
-                    && d.message.contains("not implemented")),
-            "c64 target should fail with a clear not-implemented diagnostic: {diagnostics:?}"
+                .any(|d| d.message.contains('/') && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
         );
     }
 

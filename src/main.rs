@@ -15,9 +15,10 @@ mod jvm_classfile;
 /// comment in codegen.rs), a mostly-complete native-C backend (the `c`
 /// target), a brand-new, bootstrap-stage native-JVM backend (the `jvm`
 /// target -- just beginning, not yet ready for real programs), or a
-/// planned Commodore 64 target via `cc65` (the `c64` target -- accepted by
-/// `--target` but not implemented yet; see `Target::C64`'s own doc comment
-/// in codegen.rs).
+/// a Commodore 64 target via `cc65` (the `c64` target -- reuses the `c`
+/// backend, restricted by Phase 3's capability validation to whatever the
+/// C64/`cc65` C dialect can actually express; see `c_dialect.rs`'s own doc
+/// comment and `RETRO_BASIC_SUPPORT_PROMPT.md`).
 /// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
 /// --version`, `bash --version`) for what a copyright/license notice in
 /// `--version` output should look like; the GPL itself recommends exactly
@@ -85,7 +86,7 @@ struct Cli {
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (planned Commodore 64 target via cc65 -- accepted but not implemented yet; always fails with a "not implemented" diagnostic). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (a Commodore 64 target via cc65 -- reuses the c backend, restricted to a subset (no /, ^, single/double variables, or byval array parameters -- cc65 has no floating-point support and no VLAs) with a clear diagnostic naming the target for anything unsupported; --binary needs cc65 on PATH, --run isn't implemented yet -- load the built PRG in a C64 emulator by hand). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -172,8 +173,8 @@ fn parse_target_str(value: &str) -> Option<Target> {
 fn parse_target_value(value: &str) -> Result<Target, String> {
     parse_target_str(value).ok_or_else(|| {
         format!(
-            "expected `basic` (alias `bascom`), `fbc`, `c`, `jvm`, or `c64` (case-insensitive, \
-             not implemented yet), got `{value}`"
+            "expected `basic` (alias `bascom`), `fbc`, `c`, `jvm`, or `c64` (case-insensitive), \
+             got `{value}`"
         )
     })
 }
@@ -508,6 +509,24 @@ fn run_binary(binary_path: &PathBuf) -> Result<(), String> {
     if binary_path.extension().and_then(|ext| ext.to_str()) == Some("EXE") {
         return run_dos_exe(binary_path);
     }
+    // A `--target c64` "binary" (`invoke_cl65`) is a Commodore 64 `PRG`
+    // image -- 6502 machine code this process's own (x86/ARM/...) OS can
+    // never exec directly, unlike `Target::Fbc`/`Target::C`'s native
+    // binaries. Running one needs a C64 emulator (VICE's `x64sc` is the
+    // one `RETRO_BASIC_SUPPORT_PROMPT.md`'s own Testing strategy names) --
+    // not yet wired up here (a later phase's "run under emulator" flag,
+    // parallel to `run_dos_exe`'s dosbox-x window), so this names exactly
+    // what to do by hand instead of attempting (and failing) a direct
+    // exec the way falling through to the generic case below would.
+    if binary_path.extension().and_then(|ext| ext.to_str()) == Some("prg") {
+        return Err(format!(
+            "error: --run isn't implemented yet for --target c64 -- {} is a Commodore 64 PRG \
+             image, not something this process can run directly. Load it in a C64 emulator by \
+             hand, e.g.: x64sc {}",
+            binary_path.display(),
+            binary_path.display()
+        ));
+    }
     let status = Command::new(binary_path)
         .status()
         .map_err(|err| format!("error: failed to run {}: {err}", binary_path.display()))?;
@@ -576,15 +595,7 @@ fn invoke_binary(
         Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
         Target::Jvm => invoke_krak2(output_path, krak_stack_size),
-        // Unreachable today: `compile_file` already fails `Target::C64`
-        // with a "not implemented" diagnostic before `--binary` is ever
-        // reached. Kept explicit (not a wildcard) so a real `cc65`/`cl65`
-        // invocation is added here, not silently defaulted to some other
-        // toolchain, once the target is actually implemented.
-        Target::C64 => Err(
-            "error: --target c64 is not implemented yet -- see RETRO_BASIC_SUPPORT_PROMPT.md"
-                .to_string(),
-        ),
+        Target::C64 => invoke_cl65(output_path),
     }
 }
 
@@ -839,6 +850,15 @@ fn expected_binary_path(target: Target, output_path: &Path) -> Result<PathBuf, S
         })?;
         return Ok(bascom_work_dir(stem).join("PROG.EXE"));
     }
+    if target == Target::C64 {
+        let stem = output_path.file_stem().ok_or_else(|| {
+            format!(
+                "error: invalid generated output path {}",
+                output_path.display()
+            )
+        })?;
+        return Ok(c64_prg_path_from_stem(&PathBuf::from("tmp"), stem));
+    }
     native_binary_path(output_path)
 }
 
@@ -877,6 +897,55 @@ fn invoke_gcc(c_path: &PathBuf) -> Result<PathBuf, String> {
     }
     println!("binary: {}", binary_path.display());
     Ok(binary_path)
+}
+
+/// `cl65` -- `cc65`'s all-in-one compile+assemble+link driver -- turns
+/// `Target::C64`'s generated C (already restricted to what the C64/`cc65`
+/// `CDialectProfile` supports by Phase 3's `validate_capabilities`, see
+/// `driver.rs`'s own `Target::C64` `transpile` arm) into a loadable
+/// Commodore 64 `PRG` image, the same role `invoke_gcc` plays for
+/// `Target::C`. `-t c64` selects the platform variant (parallel to
+/// `cc65`'s own `-t atari`/`-t apple2`/... for the family-A targets a
+/// later phase may add -- see `RETRO_BASIC_SUPPORT_PROMPT.md`'s Phase 5).
+/// Unlike `gcc`, no `-lm` (or any other link flag) is needed: `cc65`
+/// doesn't have a `<math.h>`/`libm` to link in the first place (see
+/// `c_dialect.rs`'s own doc comment on `supports_float`), and nothing
+/// Phase 3 lets through here could have pulled one in anyway.
+fn invoke_cl65(c_path: &PathBuf) -> Result<PathBuf, String> {
+    let binary_name = c_path
+        .file_stem()
+        .ok_or_else(|| format!("error: invalid C output path {}", c_path.display()))?;
+    let binary_dir = PathBuf::from("tmp");
+    fs::create_dir_all(&binary_dir)
+        .map_err(|err| format!("error: failed to create {}: {err}", binary_dir.display()))?;
+    let binary_path = c64_prg_path_from_stem(&binary_dir, binary_name);
+    let status = Command::new("cl65")
+        .arg("-t")
+        .arg("c64")
+        .arg(c_path)
+        .arg("-o")
+        .arg(&binary_path)
+        .status()
+        .map_err(|err| {
+            format!(
+                "error: failed to invoke cl65: {err} -- install cc65 (e.g. `apt install cc65`) \
+                 to build/run --target c64 output"
+            )
+        })?;
+    if !status.success() {
+        return Err(format!("error: cl65 failed compiling {}", c_path.display()));
+    }
+    println!("binary: {}", binary_path.display());
+    Ok(binary_path)
+}
+
+/// A C64 `PRG` image's own filename convention is platform-independent --
+/// unlike `native_binary_path_from_stem` (which appends `.exe` only on a
+/// Windows *host*), a `PRG` always gets a `.prg` extension regardless of
+/// what OS `bcc` itself is running on, since the file is never exec'd by
+/// this process's own OS at all (see `run_binary`'s `Target::C64` case).
+fn c64_prg_path_from_stem(directory: &Path, stem: &std::ffi::OsStr) -> PathBuf {
+    directory.join(stem).with_extension("prg")
 }
 
 /// Assembles `codegen_jvm.rs`'s generated `.j` into a real `.class` via
