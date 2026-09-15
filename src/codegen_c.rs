@@ -652,8 +652,28 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
 /// *those* inside `LEN`/`ASC` still isn't supported (see
 /// `render_prelude_free_string_arg`).
 const MID_STATE: &str = "#define BCC_STRBUF_COUNT 8\nstatic char bcc_strbuf[BCC_STRBUF_COUNT][256];\nstatic int bcc_strbuf_next = 0;\n\n";
-const MID_PROTOS: &str = "static char* bcc_strbuf_take(void);\nstatic const char* bcc_mid(const char* s, int start, int length);\nstatic const char* bcc_chr(int code);\nstatic const char* bcc_stri(int value);\nstatic const char* bcc_strd(double value);\n";
-const MID_BODY: &str = "static char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\nstatic const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
+const MID_PROTOS: &str = "static char* bcc_strbuf_take(void);\nstatic const char* bcc_mid(const char* s, int start, int length);\nstatic const char* bcc_chr(int code);\nstatic const char* bcc_stri(int value);\n";
+const MID_BODY: &str = "static char* bcc_strbuf_take(void) {\n    char* buf = bcc_strbuf[bcc_strbuf_next];\n    bcc_strbuf_next = (bcc_strbuf_next + 1) % BCC_STRBUF_COUNT;\n    return buf;\n}\n\nstatic const char* bcc_mid(const char* s, int start, int length) {\n    char* out = bcc_strbuf_take();\n    int len = (int)strlen(s);\n    int from = start - 1;\n    if (from < 0) from = 0;\n    if (from > len) from = len;\n    int avail = len - from;\n    if (length < 0) length = 0;\n    if (length > avail) length = avail;\n    snprintf(out, 256, \"%.*s\", length, s + from);\n    return out;\n}\n\nstatic const char* bcc_chr(int code) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"%c\", code);\n    return out;\n}\n\nstatic const char* bcc_stri(int value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% d\", value);\n    return out;\n}\n\n";
+/// Split out of `MID_PROTOS`/`MID_BODY` (rather than bundled in with
+/// `bcc_strbuf_take`/`bcc_mid`/`bcc_chr`/`bcc_stri`, which a `STR$` call on
+/// an `int%`/`&` value, `MID$`, `LEFT$`/`RIGHT$`, and plenty else all pull
+/// in) so it can be gated independently on `functions.dialect.
+/// supports_float`: `bcc_strd`'s only call site (`STR$` on a value
+/// `render_numeric_expr` marks `is_float`) can never be reached at all on
+/// a `supports_float: false` target -- Phase 3's capability validation
+/// (`validate_capabilities`/`reject_float`) rejects every float-typed
+/// variable and every float-*producing* expression before emission ever
+/// starts. But `bcc_strd`'s own `double value` parameter still needs to
+/// *parse*, and `cc65` rejects any `double` outright (confirmed by hand:
+/// "Fatal: Floating point type is currently unsupported") -- so before
+/// this split, a real-world program with no `double` anywhere in it (just
+/// an ordinary `MID$`/`CHR$` call, pulling in the old bundled `MID_BODY`)
+/// would still fail to compile under `cl65`, purely because of this
+/// never-callable helper's own declaration. Emitted only when both
+/// actually used *and* the target dialect can support it -- see
+/// `generate`'s own gating.
+const STRD_PROTO: &str = "static const char* bcc_strd(double value);\n";
+const STRD_BODY: &str = "static const char* bcc_strd(double value) {\n    char* out = bcc_strbuf_take();\n    snprintf(out, 256, \"% g\", value);\n    return out;\n}\n\n";
 
 /// Random-access record I/O runtime support: `bcc_files` is a fixed-size
 /// table of open `FILE*` handles, sized `[BCC_MAX_CHANNELS]` and indexed
@@ -688,8 +708,23 @@ const MID_BODY: &str = "static char* bcc_strbuf_take(void) {\n    char* buf = bc
 /// little-endian layout only on those platforms).
 const FILE_IO_STATE: &str =
     "#define BCC_MAX_CHANNELS 32\nstatic FILE* bcc_files[BCC_MAX_CHANNELS];\n\n";
-const FILE_IO_PROTOS: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);\nstatic void bcc_mki(char* out, int value);\nstatic void bcc_mkl(char* out, int value);\nstatic void bcc_mks(char* out, double value);\nstatic void bcc_mkd(char* out, double value);\nstatic int bcc_cvi(const char* s);\nstatic int bcc_cvl(const char* s);\nstatic float bcc_cvs(const char* s);\nstatic double bcc_cvd(const char* s);\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);\n";
-const FILE_IO_BODY: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
+const FILE_IO_PROTOS: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width);\nstatic void bcc_mki(char* out, int value);\nstatic void bcc_mkl(char* out, int value);\nstatic int bcc_cvi(const char* s);\nstatic int bcc_cvl(const char* s);\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record);\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record);\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width);\n";
+const FILE_IO_BODY: &str = "static void bcc_read_string_field(char* field, const unsigned char* source, size_t width) {\n    memcpy(field, source, width);\n    field[width] = 0;\n    while (width > 0 && field[width - 1] == ' ') field[--width] = 0;\n}\n\nstatic void bcc_mki(char* out, int value) {\n    int16_t v = (int16_t)value;\n    memcpy(out, &v, 2);\n}\n\nstatic void bcc_mkl(char* out, int value) {\n    int32_t v = (int32_t)value;\n    memcpy(out, &v, 4);\n}\n\nstatic int bcc_cvi(const char* s) {\n    int16_t v;\n    memcpy(&v, s, 2);\n    return (int)v;\n}\n\nstatic int bcc_cvl(const char* s) {\n    int32_t v;\n    memcpy(&v, s, 4);\n    return (int)v;\n}\n\nstatic int bcc_read_record(FILE* file, void* buffer, size_t reclen, long record) {\n    if (fseek(file, (record - 1) * (long)reclen, SEEK_SET) != 0) return 0;\n    return fread(buffer, 1, reclen, file) == reclen;\n}\n\nstatic void bcc_write_record(FILE* file, const void* buffer, size_t reclen, long record) {\n    fseek(file, (record - 1) * (long)reclen, SEEK_SET);\n    fwrite(buffer, 1, reclen, file);\n}\n\nstatic void bcc_pad_string_field(unsigned char* dest, const char* value, size_t width) {\n    size_t len = strlen(value);\n    if (len > width) len = width;\n    memcpy(dest, value, len);\n    memset(dest + len, ' ', width - len);\n}\n\n";
+/// `bcc_mks`/`bcc_mkd`/`bcc_cvs`/`bcc_cvd` (`MKS$`/`MKD$`/`CVS`/`CVD`'s
+/// helpers) split out of `FILE_IO_PROTOS`/`FILE_IO_BODY` for exactly the
+/// same reason `STRD_PROTO`/`STRD_BODY` was split out of `MID_PROTOS`/
+/// `MID_BODY` (see that pair's own doc comment): every one of these four
+/// touches `float`/`double`, which `cc65` can't parse at all regardless
+/// of whether the helper is ever actually called -- confirmed by hand
+/// against `tutorial/files.bcl`, whose `main()` only ever calls
+/// int-only-typed record helpers (`bcc_mki`/`bcc_mkl`/`bcc_cvi`/
+/// `bcc_cvl`) but still failed to compile under `cl65` purely because
+/// these four were bundled in unconditionally. Gated the same way:
+/// emitted only when the record/file feature that needs the *bundle* is
+/// used at all, **and** the active dialect supports float -- `Target::C`
+/// always does, so this is byte-for-byte unchanged there.
+const FILE_IO_FLOAT_PROTOS: &str = "static void bcc_mks(char* out, double value);\nstatic void bcc_mkd(char* out, double value);\nstatic float bcc_cvs(const char* s);\nstatic double bcc_cvd(const char* s);\n";
+const FILE_IO_FLOAT_BODY: &str = "static void bcc_mks(char* out, double value) {\n    float v = (float)value;\n    memcpy(out, &v, 4);\n}\n\nstatic void bcc_mkd(char* out, double value) {\n    memcpy(out, &value, 8);\n}\n\nstatic float bcc_cvs(const char* s) {\n    float v;\n    memcpy(&v, s, 4);\n    return v;\n}\n\nstatic double bcc_cvd(const char* s) {\n    double v;\n    memcpy(&v, s, 8);\n    return v;\n}\n\n";
 
 /// `COLOR fg[, bg]`'s runtime helper -- real BASCOM's classic CGA palette
 /// (0-15 foreground, 0-7 background) has no single portable C equivalent,
@@ -3140,6 +3175,17 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         runtime_state.push_str(MID_STATE);
         runtime_protos.push_str(MID_PROTOS);
         runtime_body.push_str(MID_BODY);
+        // `bcc_strd` used to be bundled directly into `MID_PROTOS`/
+        // `MID_BODY` above -- split out (see `STRD_PROTO`/`STRD_BODY`'s
+        // own doc comment) so a `supports_float: false` target never
+        // emits it: `--target c`'s own `host_gcc` profile always supports
+        // float, so this condition is `true` in exactly the same cases
+        // the old, unconditional inclusion covered -- byte-for-byte
+        // unchanged output there.
+        if functions.dialect.supports_float {
+            runtime_protos.push_str(STRD_PROTO);
+            runtime_body.push_str(STRD_BODY);
+        }
     }
     if needs_mid_assign {
         runtime_protos.push_str(MID_ASSIGN_PROTO);
@@ -3197,6 +3243,14 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         runtime_protos.push_str(&file_io.helper_protos);
         runtime_body.push_str(FILE_IO_BODY);
         runtime_body.push_str(&file_io.helper_defs);
+        // See `FILE_IO_FLOAT_PROTOS`/`FILE_IO_FLOAT_BODY`'s own doc
+        // comment: `--target c`'s own `host_gcc` profile always supports
+        // float, so this condition is always `true` there -- byte-for-
+        // byte unchanged output.
+        if functions.dialect.supports_float {
+            runtime_protos.push_str(FILE_IO_FLOAT_PROTOS);
+            runtime_body.push_str(FILE_IO_FLOAT_BODY);
+        }
     }
     if needs_seq_io {
         runtime_state.push_str(SEQ_FILE_STATE);
@@ -9142,7 +9196,14 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
     }
 
     // `/` and `^`: precise per-use-site diagnostics, via the same
-    // statement/expression walker `resolver.rs`'s own checks use.
+    // statement/expression walker `resolver.rs`'s own checks use. Also
+    // `MKS$`/`MKD$`/`CVS`/`CVD`: their own `bcc_mks`/`bcc_mkd`/`bcc_cvs`/
+    // `bcc_cvd` helpers touch `float`/`double` just as directly as `/`/`^`
+    // do, and are omitted entirely from a `supports_float: false`
+    // target's output (see `FILE_IO_FLOAT_PROTOS`/`FILE_IO_FLOAT_BODY`'s
+    // own doc comment) -- reject the call here, with a clear diagnostic,
+    // rather than letting it fall through to `cl65`'s own confusing
+    // "undefined symbol" for a helper this backend chose not to emit.
     let mut reject_op = |statements: &[Stmt]| {
         walk_statements_exprs(statements, &mut |expr, pos| {
             if let Expr::Binary { op, .. } = expr {
@@ -9160,6 +9221,25 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
                     format!(
                         "`{symbol}` is not supported by the {target} target -- {reason}, and \
                          {target} has no floating-point support at all"
+                    ),
+                ));
+                return;
+            }
+            let name = match expr {
+                Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => name,
+                _ => return,
+            };
+            let builtin = ["mks", "mkd", "cvs", "cvd"]
+                .into_iter()
+                .find(|b| name.name.eq_ignore_ascii_case(b));
+            if let Some(builtin) = builtin {
+                diagnostics.push(Diagnostic::error(
+                    pos.clone(),
+                    format!(
+                        "`{builtin}{dollar}` is not supported by the {target} target -- it \
+                         packs/unpacks a single- or double-precision floating-point value, and \
+                         {target} has no floating-point support at all",
+                        dollar = if matches!(builtin, "mks" | "mkd") { "$" } else { "" }
                     ),
                 ));
             }

@@ -42,17 +42,43 @@
 /// so this module never sees them) variable with. `float`/`double` are
 /// included for completeness even though Phase 3's capability validation
 /// means no `supports_mixed_declarations: false` profile (`cc65`'s) can
-/// ever actually reach a `float`/`double` local in practice -- harmless
-/// to check for regardless. Checked longest-first so `"unsigned char"`
-/// never partially matches as bare `"char"` first.
-const LOCAL_DECL_KEYWORDS: &[&str] = &["unsigned char", "double", "float", "long", "char", "int"];
+/// ever actually reach a `float`/`double` local in *program* code -- but
+/// this backend's own fixed runtime-helper bodies (`size_t`/`int16_t`/
+/// `int32_t` locals inside e.g. `bcc_read_file_field`/`bcc_mki`) are
+/// exactly as subject to the mixed-declarations problem as anything this
+/// backend generates per-program, and this list has to cover those too
+/// (confirmed by hand: omitting `size_t` here left a real `bcc_read_file_
+/// field` declaration unhoisted, reproducing the original bug for that
+/// one helper). Checked longest-first so `"unsigned char"` never
+/// partially matches as bare `"char"` first.
+const LOCAL_DECL_KEYWORDS: &[&str] = &[
+    "unsigned char",
+    "double",
+    "float",
+    "size_t",
+    "int16_t",
+    "int32_t",
+    "uint16_t",
+    "uint32_t",
+    "long",
+    "char",
+    "int",
+];
 
 pub(crate) fn hoist_declarations_for_c89(source: &str) -> String {
     transform(source)
 }
 
 enum Segment {
-    Decl { hoisted: String, inline: String },
+    /// `leading` (whitespace and any `//`/`/* */` comments right before
+    /// the declaration -- e.g. a comment explaining *why* the variable
+    /// exists) always stays at the original position, never hoisted:
+    /// only `hoisted` (the bare declaration) moves to the block's top.
+    Decl {
+        leading: String,
+        hoisted: String,
+        inline: String,
+    },
     Other(String),
 }
 
@@ -129,7 +155,10 @@ fn transform(text: &str) -> String {
     }
     for seg in &segments {
         match seg {
-            Segment::Decl { inline, .. } => out.push_str(inline),
+            Segment::Decl { leading, inline, .. } => {
+                out.push_str(leading);
+                out.push_str(inline);
+            }
             Segment::Other(text) => out.push_str(text),
         }
     }
@@ -140,13 +169,53 @@ fn preceded_by_equals(text: &str, seg_start: usize, brace_pos: usize) -> bool {
     text[seg_start..brace_pos].trim_end().ends_with('=')
 }
 
+/// How far into `bytes` (from its start) leading whitespace *and*
+/// `//`/`/* */` comments extend -- unlike a plain `str::trim_start`,
+/// which only skips whitespace. Without this, a declaration preceded by
+/// a comment (with no `;` inside the comment itself to end the previous
+/// segment early) has its comment text merged into the *same* captured
+/// span as the declaration; checking that combined span's prefix against
+/// `LOCAL_DECL_KEYWORDS` then fails (it starts with `//`, not `char`/
+/// `int`/...), so the declaration silently falls through to `Other` and
+/// never gets hoisted at all -- confirmed by hand as the exact cause of
+/// a real cc65 compile failure in `tutorial/files.bcl` (a `char
+/// bt_s_0[256];` declaration preceded by a `//` comment stayed in place,
+/// after an earlier statement in the same block).
+fn skip_leading_trivia(bytes: &[u8]) -> usize {
+    let mut i = 0;
+    loop {
+        while i < bytes.len() && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\r') {
+            i += 1;
+        }
+        if bytes.get(i) == Some(&b'/') && bytes.get(i + 1) == Some(&b'/') {
+            i = skip_line_comment(bytes, i);
+            continue;
+        }
+        if bytes.get(i) == Some(&b'/') && bytes.get(i + 1) == Some(&b'*') {
+            i = skip_block_comment(bytes, i);
+            continue;
+        }
+        break;
+    }
+    i
+}
+
 /// Classifies one `;`-terminated statement span (including its own
 /// leading whitespace/comments, since `transform` captures spans that
 /// way) as a hoistable local declaration or as ordinary code. `stmt`
 /// always ends with `;` by construction.
 fn classify_statement(stmt: &str) -> Segment {
-    let trimmed = stmt.trim_start();
-    let indent = &stmt[..stmt.len() - trimmed.len()];
+    let content_start = skip_leading_trivia(stmt.as_bytes());
+    let leading = &stmt[..content_start];
+    let trimmed = &stmt[content_start..];
+    // `indent`: whitespace-only tail of `leading`, reused as the hoisted
+    // declaration's own indentation -- consistent even when `leading`
+    // also carries a preceding comment.
+    let indent_len = leading.len()
+        - leading
+            .trim_end_matches(|c: char| c == ' ' || c == '\t')
+            .len();
+    let indent = &leading[leading.len() - indent_len..];
 
     for &kw in LOCAL_DECL_KEYWORDS {
         let Some(after_kw) = trimmed.strip_prefix(kw) else {
@@ -181,10 +250,12 @@ fn classify_statement(stmt: &str) -> Segment {
 
         let Some(init) = rest.strip_prefix('=') else {
             // No initializer (every local array this backend emits, plus
-            // any bare scalar declaration) -- hoist the whole statement
-            // verbatim, nothing left behind.
+            // any bare scalar declaration) -- hoist the bare declaration
+            // (never `leading`: a comment explaining it stays at the
+            // original position), nothing left behind at that position.
             return Segment::Decl {
-                hoisted: format!("{stmt}\n"),
+                leading: leading.to_string(),
+                hoisted: format!("{trimmed}\n"),
                 inline: String::new(),
             };
         };
@@ -197,7 +268,8 @@ fn classify_statement(stmt: &str) -> Segment {
             // on an earlier statement in this block, which is the only
             // shape C itself allows here anyway.
             return Segment::Decl {
-                hoisted: format!("{stmt}\n"),
+                leading: leading.to_string(),
+                hoisted: format!("{trimmed}\n"),
                 inline: String::new(),
             };
         }
@@ -205,11 +277,15 @@ fn classify_statement(stmt: &str) -> Segment {
         // `has_dims` is always `false` here (the `if has_dims` branch
         // above already returned for the array case), so the declared
         // name alone -- no `[...]` suffix -- is the whole bare
-        // declaration.
+        // declaration. `inline` doesn't repeat `indent`: `leading`
+        // already ends with that same whitespace run, immediately before
+        // where `inline` is concatenated onto it (see `transform`'s
+        // reassembly).
         let init_expr = init.trim();
         return Segment::Decl {
+            leading: leading.to_string(),
             hoisted: format!("{indent}{kw} {name};\n"),
-            inline: format!("{indent}{name} = {init_expr};"),
+            inline: format!("{name} = {init_expr};"),
         };
     }
     Segment::Other(stmt.to_string())
@@ -306,6 +382,31 @@ fn skip_block_comment(bytes: &[u8], start: usize) -> usize {
 mod tests {
     use super::*;
 
+    /// Real bug, found by hand-compiling `tutorial/files.bcl` under
+    /// `cl65`: a declaration preceded by a `//` comment (with no `;`
+    /// inside the comment to end the previous segment early) had its
+    /// comment text merged into the *same* captured span as the
+    /// declaration -- `classify_statement` then failed to recognize it
+    /// (the span starts with `//`, not a type keyword) and left it
+    /// un-hoisted, reproducing the exact "mixed declarations" cc65 error
+    /// this whole module exists to fix. See `skip_leading_trivia`'s own
+    /// doc comment for the root cause.
+    #[test]
+    fn hoists_a_declaration_preceded_by_a_comment() {
+        let input = "int main(void) {\n    // (produces data that input # can read back)\n\n    char bt_s_0[256];\n    snprintf(bt_s_0, sizeof(bt_s_0), \"%s\", \"x\");\n    char bt_s_1[256];\n    snprintf(bt_s_1, sizeof(bt_s_1), \"%s\", bt_s_0);\n}\n";
+        let output = hoist_declarations_for_c89(input);
+        let brace = output.find('{').unwrap();
+        let decl = output.find("char bt_s_0[256];").unwrap();
+        let comment_pos = output.find("// (produces").unwrap();
+        assert!(
+            decl > brace && decl < comment_pos,
+            "bt_s_0 should hoist before the comment that used to swallow it:\n{output}"
+        );
+        // The comment itself must still appear, at its original position
+        // (never hoisted, never dropped).
+        assert!(output.contains("// (produces data that input # can read back)"));
+    }
+
     #[test]
     fn hoists_a_scalar_declaration_after_a_statement() {
         let input = "int main(void) {\n    printf(\"before\\n\");\n    int x = 5;\n    printf(\"%d\\n\", x);\n    return 0;\n}\n";
@@ -385,7 +486,7 @@ mod tests {
         let input = "static int helper(int a) {\n    printf(\"x\\n\");\n    int y = a;\n    return y;\n}\n";
         let output = hoist_declarations_for_c89(input);
         assert!(
-            output.starts_with("static int helper(int a) {\n    int y;\n"),
+            output.starts_with("static int helper(int a) {    int y;\n"),
             "{output}"
         );
         assert!(output.contains("y = a;"), "{output}");
