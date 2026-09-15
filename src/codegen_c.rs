@@ -564,7 +564,7 @@ struct BuiltinUsage {
     needs_date_helper: bool,
 }
 
-fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
+fn scan_builtin_usage(program: &Program, dialect: &CDialectProfile) -> BuiltinUsage {
     let mut usage = BuiltinUsage {
         needs_string_h: false,
         needs_ring_buffer_helpers: false,
@@ -600,6 +600,16 @@ fn scan_builtin_usage(program: &Program) -> BuiltinUsage {
                 }
                 "eof" => usage.needs_seq_file_helper = true,
                 "sgn" => usage.needs_sgn_helper = true,
+                // `!dialect.supports_float` guarantees ABS's argument is
+                // always integer-typed (Phase 3's `reject_float` rejects
+                // every way a float value could reach it) -- ABS then
+                // uses plain C `abs()` (see its own emission site), which
+                // needs `<stdlib.h>`, not `<math.h>`. `host_gcc`'s
+                // `fabs()` path doesn't, so this must stay dialect-gated:
+                // setting it unconditionally would add an `#include
+                // <stdlib.h>` line to *every* --target c program using
+                // ABS, breaking the byte-for-byte-unchanged guarantee.
+                "abs" if !dialect.supports_float => usage.needs_stdlib_h = true,
                 "rnd" => {
                     usage.needs_stdlib_h = true;
                     usage.needs_rnd_helper = true;
@@ -798,6 +808,18 @@ const MID_ASSIGN_BODY: &str = "static const char* bcc_mid_assign(const char* tar
 /// `sqrt`/`fabs`/`floor`/`trunc`), so it gets a small helper of its own.
 const SGN_PROTO: &str = "static int bcc_sgn(double v);\n";
 const SGN_BODY: &str = "static int bcc_sgn(double v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
+/// `bcc_sgn`'s int-only twin -- `SGN`'s real BASIC result is always an
+/// integer regardless of its argument's own type, but `bcc_sgn` itself
+/// still takes a `double`, needing float support just to *parse* even
+/// when called with an integer argument (confirmed by hand: `cc65` fails
+/// on the bare `double v` parameter, same as every other always-`double`
+/// helper this backend has -- see `STRD_PROTO`'s own doc comment for the
+/// pattern). Phase 3 guarantees `SGN`'s argument is always integer-typed
+/// on a `supports_float: false` target (every way a float value could
+/// reach it is already rejected -- see `reject_float`), so this one
+/// never loses any real capability by being int-only.
+const SGN_I_PROTO: &str = "static int bcc_sgn_i(int v);\n";
+const SGN_I_BODY: &str = "static int bcc_sgn_i(int v) {\n    if (v > 0) return 1;\n    if (v < 0) return -1;\n    return 0;\n}\n\n";
 
 /// `RND(x)` -- real BASIC's argument-selects-behavior convention: `x < 0`
 /// reseeds the sequence from `x` and returns the first draw of that new,
@@ -3019,7 +3041,7 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         body.push_str("    return 0;\n");
     }
 
-    let builtin_usage = scan_builtin_usage(program);
+    let builtin_usage = scan_builtin_usage(program, &dialect);
     let needs_color = program_uses_color(program);
     let needs_input = program_uses_input(program);
     let needs_mid_assign = program_uses_mid_assign(program);
@@ -3204,8 +3226,13 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         runtime_body.push_str(INSTR_BODY);
     }
     if builtin_usage.needs_sgn_helper {
-        runtime_protos.push_str(SGN_PROTO);
-        runtime_body.push_str(SGN_BODY);
+        if dialect.supports_float {
+            runtime_protos.push_str(SGN_PROTO);
+            runtime_body.push_str(SGN_BODY);
+        } else {
+            runtime_protos.push_str(SGN_I_PROTO);
+            runtime_body.push_str(SGN_I_BODY);
+        }
     }
     if builtin_usage.needs_rnd_helper {
         runtime_protos.push_str(RND_PROTO);
@@ -8275,6 +8302,15 @@ fn render_numeric_call(
     // division.
     if name.name.eq_ignore_ascii_case("abs") && args.len() == 1 {
         let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        if !functions.dialect.supports_float {
+            // Phase 3's `reject_float` guarantees `is_float` is always
+            // `false` here (every way a float value could reach this
+            // argument is already rejected) -- plain C `abs()` (needs
+            // `<stdlib.h>`, not `<math.h>`; see `scan_builtin_usage`'s
+            // own `"abs"` arm) evaluates `inner` exactly once, same as
+            // the `fabs()` path below.
+            return Ok((format!("abs((int)({inner}))"), false));
+        }
         *needs_math = true;
         let call = format!("fabs((double)({inner}))");
         return Ok((
@@ -8288,6 +8324,13 @@ fn render_numeric_call(
     }
     if name.name.eq_ignore_ascii_case("int") && args.len() == 1 {
         let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        if !functions.dialect.supports_float {
+            // An already-integer value has no fractional part for
+            // `floor()`'s rounding-toward-negative-infinity behavior to
+            // change -- `INT(x%)` is exactly `x%` (Phase 3 guarantees
+            // `is_float` is always `false` here).
+            return Ok((inner, false));
+        }
         *needs_math = true;
         let call = format!("floor((double)({inner}))");
         return Ok((
@@ -8301,6 +8344,11 @@ fn render_numeric_call(
     }
     if name.name.eq_ignore_ascii_case("fix") && args.len() == 1 {
         let (inner, is_float) = render_numeric_expr(&args[0], needs_math, functions)?;
+        if !functions.dialect.supports_float {
+            // Same reasoning as `INT` just above: `trunc()` of an
+            // already-integer value is that value unchanged.
+            return Ok((inner, false));
+        }
         *needs_math = true;
         let call = format!("trunc((double)({inner}))");
         return Ok((
@@ -8313,9 +8361,15 @@ fn render_numeric_call(
         ));
     }
     // `SGN(x)` -- -1/0/1 by sign, always an integer result regardless of
-    // its argument's own type (see `bcc_sgn` in `SGN_HELPER`).
+    // its argument's own type (see `bcc_sgn`/`bcc_sgn_i` in
+    // `SGN_PROTO`/`SGN_I_PROTO`'s own doc comments for why which one gets
+    // called is dialect-dependent even though the visible result type
+    // never is).
     if name.name.eq_ignore_ascii_case("sgn") && args.len() == 1 {
         let (inner, _) = render_numeric_expr(&args[0], needs_math, functions)?;
+        if !functions.dialect.supports_float {
+            return Ok((format!("bcc_sgn_i((int)({inner}))"), false));
+        }
         *needs_math = true;
         return Ok((format!("bcc_sgn((double)({inner}))"), false));
     }
@@ -9189,6 +9243,24 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
             collect_vars_in_statement(stmt, &mut numeric_vars, &mut string_vars);
         }
     }
+    // `global X` inside any function/procedure body -- a bare declaration,
+    // not a use `collect_vars_in_statement`'s expression walk would ever
+    // see (mirrors `generate`'s own top-level `collect_global_decl_idents`
+    // pass exactly, for the same reason: skipping this omits a variable
+    // whose *only* mention anywhere is a `global` declaration from the
+    // scan). Confirmed by hand as the real root cause of
+    // `examples/card_catalog`'s unrejected `bv_f_last_slot`: `const
+    // LAST_SLOT = 11` is only ever mentioned again via `global LAST_SLOT`
+    // inside a procedure and a record-literal field value -- suffixless,
+    // so `effective_suffix` defaults it to `single`, and this was the one
+    // registration path this scan hadn't replicated yet.
+    for func in &program.functions {
+        let mut globals = Vec::new();
+        collect_global_decl_idents(&func.body, &mut globals);
+        for ident in &globals {
+            register_var(ident, &mut numeric_vars, &mut string_vars);
+        }
+    }
     // Scalar parameters and (for a `function`, not a `procedure`) the
     // return type -- both carry their own type suffix directly on a
     // `BasicIdent`, not through a `dim`/assignment `collect_vars_in_
@@ -9203,6 +9275,7 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
             }
         }
     }
+    let mut reported: BTreeSet<String> = BTreeSet::new();
     for (c_name, c_type) in &numeric_vars {
         let needed = match *c_type {
             "float" => Some(CDialectFeature::Float),
@@ -9210,6 +9283,7 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
             _ => None,
         };
         if needed.is_some_and(|feature| !dialect.supports(feature)) {
+            reported.insert(c_name.clone());
             diagnostics.push(Diagnostic::error(
                 SourcePos::new("<target>", 1, 1),
                 format!(
@@ -9222,17 +9296,92 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
         }
     }
 
+    // Supplementary pass, over every `Expr::Ident` occurrence anywhere
+    // (not just declaration sites `collect_vars_in_statement` above
+    // walks): catches a suffixless const/variable referenced *only*
+    // inside a record-literal field value, method-call base, or
+    // field-access base -- `collect_vars_in_expr` (reused by the
+    // declaration scan above, shared with `generate`'s own global-
+    // collection pass, so left alone rather than extended here) has a
+    // catch-all arm that doesn't recurse into any of those. Confirmed by
+    // hand: `examples/card_catalog`'s `const LAST_SLOT = 11`, referenced
+    // only inside `header[1] = { size: LAST_SLOT, ... }`, produced an
+    // unrejected `static float bv_f_last_slot` that crashed `cl65` before
+    // this pass existed. Deduped against `reported` so a variable caught
+    // by both passes is only ever diagnosed once.
+    if !dialect.supports_float {
+        let mut check_ident = |statements: &[Stmt]| {
+            walk_statements_exprs(statements, &mut |expr, pos| {
+                let Expr::Ident(ident) = expr else {
+                    return;
+                };
+                if ident.suffix == Some(TypeSuffix::String) {
+                    return;
+                }
+                if ident.suffix.is_none()
+                    && (ident.name.eq_ignore_ascii_case("err")
+                        || ident.name.eq_ignore_ascii_case("erl"))
+                {
+                    return;
+                }
+                let feature = match effective_suffix(ident.suffix) {
+                    TypeSuffix::Single => CDialectFeature::Float,
+                    TypeSuffix::Double => CDialectFeature::Double,
+                    _ => return,
+                };
+                if dialect.supports(feature) {
+                    return;
+                }
+                let c_name = c_var_name(ident, effective_suffix(ident.suffix));
+                if !reported.insert(c_name) {
+                    return;
+                }
+                diagnostics.push(Diagnostic::error(
+                    pos.clone(),
+                    format!(
+                        "`{}` is a floating-point variable, and floating-point types are not \
+                         supported by the {target} target -- give it an explicit `%`/`&` \
+                         (integer) type suffix instead (a suffixless numeric variable defaults \
+                         to `single`, real MBASIC/BASCOM's own convention)",
+                        ident.name
+                    ),
+                ));
+            });
+        };
+        check_ident(&program.statements);
+        for func in &program.functions {
+            check_ident(&func.body);
+        }
+    }
+
     // `/` and `^`: precise per-use-site diagnostics, via the same
-    // statement/expression walker `resolver.rs`'s own checks use. Also
-    // `MKS$`/`MKD$`/`CVS`/`CVD`: their own `bcc_mks`/`bcc_mkd`/`bcc_cvs`/
-    // `bcc_cvd` helpers touch `float`/`double` just as directly as `/`/`^`
-    // do, and are omitted entirely from a `supports_float: false`
-    // target's output (see `FILE_IO_FLOAT_PROTOS`/`FILE_IO_FLOAT_BODY`'s
-    // own doc comment) -- reject the call here, with a clear diagnostic,
-    // rather than letting it fall through to `cl65`'s own confusing
-    // "undefined symbol" for a helper this backend chose not to emit.
+    // statement/expression walker `resolver.rs`'s own checks use. Also a
+    // bare floating-point literal, and every builtin that's unconditionally
+    // float-*producing* regardless of its argument's own type: `VAL`
+    // (parses a fractional prefix, needs real rounding), `SQR` (`sqrt`),
+    // `RND`/`RND(x)` (`bcc_rnd` always returns `double`), and `MKS$`/
+    // `MKD$`/`CVS`/`CVD` (their own `bcc_mks`/`bcc_mkd`/`bcc_cvs`/
+    // `bcc_cvd` helpers are omitted entirely from a `supports_float:
+    // false` target's output -- see `FILE_IO_FLOAT_PROTOS`/
+    // `FILE_IO_FLOAT_BODY`'s own doc comment) -- reject each here, with a
+    // clear diagnostic, rather than letting it fall through to `cl65`'s
+    // own confusing "undefined function"/"Floating point type is
+    // currently unsupported" for a construct this backend can't support
+    // on this target at all. `ABS`/`INT`/`FIX`/`SGN` are deliberately
+    // NOT here: given an integer argument they never need float support
+    // in the first place -- see their own dialect-aware codegen.
     let mut reject_op = |statements: &[Stmt]| {
         walk_statements_exprs(statements, &mut |expr, pos| {
+            if matches!(expr, Expr::Float(_)) {
+                diagnostics.push(Diagnostic::error(
+                    pos.clone(),
+                    format!(
+                        "floating-point literals are not supported by the {target} target -- \
+                         {target} has no floating-point support at all"
+                    ),
+                ));
+                return;
+            }
             if let Expr::Binary { op, .. } = expr {
                 let (symbol, reason) = match op {
                     BinaryOp::Div => {
@@ -9256,10 +9405,10 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
                 Expr::Call { name, .. } | Expr::ArrayRef { name, .. } => name,
                 _ => return,
             };
-            let builtin = ["mks", "mkd", "cvs", "cvd"]
+            let pack_unpack = ["mks", "mkd", "cvs", "cvd"]
                 .into_iter()
                 .find(|b| name.name.eq_ignore_ascii_case(b));
-            if let Some(builtin) = builtin {
+            if let Some(builtin) = pack_unpack {
                 diagnostics.push(Diagnostic::error(
                     pos.clone(),
                     format!(
@@ -9269,7 +9418,24 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
                         dollar = if matches!(builtin, "mks" | "mkd") { "$" } else { "" }
                     ),
                 ));
+                return;
             }
+            let (builtin, reason) = if name.name.eq_ignore_ascii_case("val") {
+                ("VAL", "it parses a fractional numeric prefix and rounds the result")
+            } else if name.name.eq_ignore_ascii_case("sqr") {
+                ("SQR", "it always returns a floating-point result")
+            } else if name.name.eq_ignore_ascii_case("rnd") {
+                ("RND", "it always returns a floating-point result")
+            } else {
+                return;
+            };
+            diagnostics.push(Diagnostic::error(
+                pos.clone(),
+                format!(
+                    "`{builtin}` is not supported by the {target} target -- {reason}, and \
+                     {target} has no floating-point support at all"
+                ),
+            ));
         });
     };
     reject_op(&program.statements);
@@ -9554,5 +9720,127 @@ mod dialect_tests {
              end\n",
             Target::C,
         );
+    }
+
+    /// `VAL`/`SQR`/`RND` are all unconditionally float-*producing* in
+    /// real BASIC semantics regardless of argument type -- confirmed by
+    /// hand that `examples/remline`'s use of `VAL` transpiled clean but
+    /// crashed `cl65` with "Call to undefined function 'round'"/"Fatal:
+    /// Floating point type is currently unsupported" before this
+    /// rejection existed.
+    #[test]
+    fn target_c64_rejects_val_sqr_rnd() {
+        for (source, builtin) in [
+            ("program p\na% = val(\"3\")\nend\n", "VAL"),
+            ("program p\na% = sqr(9)\nend\n", "SQR"),
+            ("program p\na% = rnd(1)\nend\n", "RND"),
+        ] {
+            let diagnostics = generate_for_target_err(source, Target::C64);
+            assert!(
+                diagnostics
+                    .iter()
+                    .any(|d| d.message.contains(builtin) && d.message.contains("C64 (cc65)")),
+                "{builtin}: {diagnostics:?}"
+            );
+        }
+    }
+
+    /// A bare floating-point literal must be rejected too, not just a
+    /// `single`/`double` variable or `/`/`^`.
+    #[test]
+    fn target_c64_rejects_a_float_literal() {
+        let diagnostics = generate_for_target_err("program p\nprint 3.14\nend\n", Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("literal") && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// Real bug, found by corpus-testing `examples/card_catalog`: a
+    /// suffixless `const` referenced *only* inside a record-literal field
+    /// value (`collect_vars_in_expr`'s declaration-based scan has a
+    /// catch-all that skips `Expr::RecordLit` entirely) used to slip
+    /// through as an unrejected `float` global, crashing `cl65` instead
+    /// of getting a clear `bcc` diagnostic.
+    #[test]
+    fn target_c64_rejects_a_float_const_only_reachable_via_a_global_declaration() {
+        // Mirrors examples/card_catalog/card_catalog.bcl's exact shape:
+        // `LAST_SLOT` is declared suffixless at top level, then only ever
+        // mentioned again via `global LAST_SLOT` inside a procedure (plus
+        // a record-literal field value) -- neither the declaration-based
+        // scan (missing `collect_global_decl_idents`, a `global`
+        // statement's own name is a declaration, never an expression
+        // `Expr::Ident` "use") nor the ident-walk supplementary pass
+        // alone catches this; only the combination does.
+        let source = "program p\n\
+             record Header\n\
+             \x20   size: int16\n\
+             \x20   reserved: string(58) lpad\n\
+             end record\n\
+             const LAST_SLOT = 11\n\
+             file header as Header = open(\"catalog.dat\")\n\
+             procedure initCatalog()\n\
+             \x20   global LAST_SLOT\n\
+             \x20   global header\n\
+             \x20   header[1] = { size: LAST_SLOT, reserved: \"\" }\n\
+             end procedure\n\
+             dummy% = 0\n\
+             end\n";
+        let diagnostics = generate_for_target_err(source, Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("last_slot") && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// `ABS`/`INT`/`FIX`/`SGN` on an integer argument never need float
+    /// support in the first place (their *result* is already integer,
+    /// and on a `supports_float: false` target Phase 3 guarantees the
+    /// argument is too) -- confirmed by hand that the old unconditional
+    /// `(double)`/`fabs`/`floor`/`trunc`/`bcc_sgn(double)` implementation
+    /// crashed `cl65` even for a plain `ABS(x%)` with no `double`/`float`
+    /// anywhere in the source.
+    #[test]
+    fn target_c64_avoids_double_for_abs_int_fix_sgn_on_integers() {
+        let c = generate_for_target(
+            "program p\n\
+             a% = abs(-5)\n\
+             b% = int(7)\n\
+             c% = fix(7)\n\
+             d% = sgn(-3)\n\
+             end\n",
+            Target::C64,
+        );
+        assert!(!c.contains("(double)"), "{c}");
+        assert!(!c.contains("fabs("), "{c}");
+        assert!(!c.contains("floor("), "{c}");
+        assert!(!c.contains("trunc("), "{c}");
+        assert!(!c.contains("<math.h>"), "{c}");
+        assert!(c.contains("abs((int)"), "{c}");
+        assert!(c.contains("bcc_sgn_i("), "{c}");
+    }
+
+    /// `Target::C`'s own profile must keep using `fabs`/`floor`/`trunc`/
+    /// `bcc_sgn(double)` exactly as before -- byte-for-byte unchanged
+    /// output, not just "still compiles".
+    #[test]
+    fn target_c_keeps_double_based_abs_int_fix_sgn() {
+        let c = generate_for_target(
+            "program p\n\
+             a% = abs(-5)\n\
+             b% = int(7)\n\
+             c% = fix(7)\n\
+             d% = sgn(-3)\n\
+             end\n",
+            Target::C,
+        );
+        assert!(c.contains("fabs((double)"), "{c}");
+        assert!(c.contains("floor((double)"), "{c}");
+        assert!(c.contains("trunc((double)"), "{c}");
+        assert!(c.contains("bcc_sgn((double)"), "{c}");
     }
 }
