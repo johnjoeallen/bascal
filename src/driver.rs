@@ -203,7 +203,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(basic)
         }
         Target::C => {
-            let generated = codegen_c::generate(&resolved.program)?;
+            let generated = codegen_c::generate(&resolved.program, Target::C)?;
             Ok(generated.app)
         }
         Target::Jvm => codegen_jvm::generate(&resolved.program),

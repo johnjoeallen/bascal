@@ -134,6 +134,8 @@ use crate::ast::{
     ParamMode, PrintToken, Program, RecordFieldType, RecordStringAlignment, ResumeTarget,
     Statement, Stmt, TypeSuffix, UnaryOp,
 };
+use crate::c_dialect::CDialectProfile;
+use crate::codegen::Target;
 use crate::diagnostics::{Diagnostic, SourcePos};
 
 /// One user-defined function's C-callable shape, built by
@@ -263,10 +265,17 @@ type ArrayTable = HashMap<String, ArrayInfo>;
 /// exactly the same points it needs `funcs` -- `Expr::ArrayRef`'s own
 /// parse-time ambiguity (see `is_known_callable`'s doc comment) means a
 /// single identifier lookup has to check both tables together anyway.
+///
+/// `dialect` rides along for the same reason: the active `CDialectProfile`
+/// (see that module's own doc comment) is needed at exactly the same
+/// deeply-nested call sites `funcs`/`arrays` already reach, so it's a field
+/// here rather than yet another parameter threaded through every one of
+/// them by hand.
 struct FunctionTable {
     funcs: FunctionMap,
     methods: HashMap<(TypeSuffix, String), FnSig>,
     arrays: ArrayTable,
+    dialect: CDialectProfile,
 }
 
 impl FunctionTable {
@@ -371,6 +380,7 @@ fn function_scoped_table(
         funcs: functions.funcs.clone(),
         methods: functions.methods.clone(),
         arrays,
+        dialect: functions.dialect,
     })
 }
 
@@ -2719,7 +2729,13 @@ pub(crate) struct GeneratedC {
     pub(crate) app: String,
 }
 
-pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>> {
+/// `target` selects the active `CDialectProfile` (see that module's own
+/// doc comment) -- always `Target::C` today, since `driver.rs` doesn't
+/// call this for `Target::C64` yet (it fails that target with a "not
+/// implemented" diagnostic first). Threading `target` through here now,
+/// ahead of Phase 4 actually needing it, keeps this signature change from
+/// happening twice.
+pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, Vec<Diagnostic>> {
     let mut legacy_error_diagnostics = Vec::new();
     reject_classic_error_handling(&program.statements, &mut legacy_error_diagnostics);
     for function in &program.functions {
@@ -2738,6 +2754,7 @@ pub(crate) fn generate(program: &Program) -> Result<GeneratedC, Vec<Diagnostic>>
         funcs,
         methods,
         arrays,
+        dialect: CDialectProfile::for_target(target),
     };
     let try_reachable = collect_try_reachable_callables(program, &functions);
     for key in &try_reachable {
@@ -8517,6 +8534,17 @@ fn render_numeric_expr(
         // mismatch. Overflow (a rounded operand or the quotient not
         // fitting in `long`/`int`) isn't specially detected, same as `/`'s
         // division-by-zero gap above.
+        // The `round()`/`(double)` round-trip above is only needed for a
+        // genuinely float-valued operand (`2.5 \ 1`) -- on a target whose
+        // `CDialectProfile::supports_float` is `false` (`cc65`: no
+        // `<math.h>`, `round()` unavailable at all -- confirmed by hand,
+        // see `c_dialect.rs`'s own doc comment), Phase 3's capability
+        // validation guarantees every operand reaching here is already
+        // integer-typed, so the plain `long` cast/division below is
+        // exactly the same value with no float involved. Skipped, not
+        // replaced, for a `supports_float: true` target (`Target::C`'s own
+        // output stays byte-for-byte what it was before this branch
+        // existed).
         Expr::Binary {
             left,
             op: BinaryOp::IntDiv,
@@ -8524,13 +8552,20 @@ fn render_numeric_expr(
         } => {
             let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
             let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
-            *needs_math = true;
-            Ok((
-                format!(
-                    "((int)((long)round((double){left_text}) / (long)round((double){right_text})))"
-                ),
-                false,
-            ))
+            if functions.dialect.supports_float {
+                *needs_math = true;
+                Ok((
+                    format!(
+                        "((int)((long)round((double){left_text}) / (long)round((double){right_text})))"
+                    ),
+                    false,
+                ))
+            } else {
+                Ok((
+                    format!("((int)((long)({left_text}) / (long)({right_text})))"),
+                    false,
+                ))
+            }
         }
         // Real MBASIC/BASCOM's `MOD`: "the integer value that is the
         // remainder of an integer division" -- the same rounded, truncating
@@ -8544,6 +8579,8 @@ fn render_numeric_expr(
         // behavior in C (typically SIGFPE), where BASIC raises a runtime
         // "Division by zero" error instead -- not addressed here, same
         // category of gap as `/`'s and `\`'s.
+        // Same `supports_float`-gated round-trip skip as `IntDiv` just
+        // above -- see that arm's comment for why it's safe.
         Expr::Binary {
             left,
             op: BinaryOp::Mod,
@@ -8551,13 +8588,20 @@ fn render_numeric_expr(
         } => {
             let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
             let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
-            *needs_math = true;
-            Ok((
-                format!(
-                    "((int)((long)round((double){left_text}) % (long)round((double){right_text})))"
-                ),
-                false,
-            ))
+            if functions.dialect.supports_float {
+                *needs_math = true;
+                Ok((
+                    format!(
+                        "((int)((long)round((double){left_text}) % (long)round((double){right_text})))"
+                    ),
+                    false,
+                ))
+            } else {
+                Ok((
+                    format!("((int)((long)({left_text}) % (long)({right_text})))"),
+                    false,
+                ))
+            }
         }
         // `^` (right-associative -- already reflected in the tree shape by
         // the time it reaches here, same as `+`/`-`/`*`'s precedence, so no
@@ -8678,6 +8722,9 @@ fn render_numeric_expr(
         // bitwise AND/OR/XOR already reproduces BASIC's truth table exactly
         // (two's complement -1 is all-ones), so no separate boolean-vs-
         // integer branch is needed.
+        // Same `supports_float`-gated round-trip skip as `IntDiv`/`Mod`
+        // above -- see `IntDiv`'s comment for why it's safe to skip rather
+        // than replace.
         Expr::Binary {
             left,
             op: op @ (BinaryOp::And | BinaryOp::Or | BinaryOp::Xor),
@@ -8685,31 +8732,43 @@ fn render_numeric_expr(
         } => {
             let (left_text, _) = render_numeric_expr(left, needs_math, functions)?;
             let (right_text, _) = render_numeric_expr(right, needs_math, functions)?;
-            *needs_math = true;
             let c_op = match op {
                 BinaryOp::And => "&",
                 BinaryOp::Or => "|",
                 BinaryOp::Xor => "^",
                 _ => unreachable!(),
             };
-            Ok((
-                format!(
-                    "((int)((long)round((double){left_text}) {c_op} (long)round((double){right_text})))"
-                ),
-                false,
-            ))
+            if functions.dialect.supports_float {
+                *needs_math = true;
+                Ok((
+                    format!(
+                        "((int)((long)round((double){left_text}) {c_op} (long)round((double){right_text})))"
+                    ),
+                    false,
+                ))
+            } else {
+                Ok((
+                    format!("((int)((long)({left_text}) {c_op} (long)({right_text})))"),
+                    false,
+                ))
+            }
         }
         // `NOT` is bitwise complement, not boolean negation -- `NOT 1` is
         // `-2`, not `0` (the manual's own Logical Operators section makes a
         // point of this exact example, since it surprises anyone expecting
-        // C-style `!`). Same round-to-integer step as AND/OR/XOR above.
+        // C-style `!`). Same round-to-integer step, and same
+        // `supports_float`-gated skip, as AND/OR/XOR above.
         Expr::Unary {
             op: UnaryOp::Not,
             expr,
         } => {
             let (inner, _) = render_numeric_expr(expr, needs_math, functions)?;
-            *needs_math = true;
-            Ok((format!("((int)(~(long)round((double){inner})))"), false))
+            if functions.dialect.supports_float {
+                *needs_math = true;
+                Ok((format!("((int)(~(long)round((double){inner})))"), false))
+            } else {
+                Ok((format!("((int)(~(long)({inner})))"), false))
+            }
         }
         // A call to a user-defined numeric-returning BASCAL function --
         // and a single-argument (or zero-argument) one parses as
@@ -8964,4 +9023,77 @@ fn ends_with_end(statements: &[Stmt]) -> bool {
 
 fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::error(SourcePos::new("<target>", 1, 1), message.to_string())
+}
+
+#[cfg(test)]
+mod dialect_tests {
+    use super::*;
+    use crate::{lower, parse_source, resolver};
+
+    /// Mirrors `driver::transpile`'s own parse -> lower -> resolve ->
+    /// `codegen_c::generate` pipeline exactly, but calls `generate`
+    /// directly with an explicit `target` instead of going through
+    /// `driver::transpile`'s `Target` dispatch -- `Target::C64` isn't
+    /// reachable through that dispatch yet (`driver.rs` fails it with a
+    /// "not implemented" diagnostic first, ahead of Phase 4 wiring this
+    /// target all the way through), but `codegen_c::generate` itself is
+    /// already fully dialect-parameterized (this Phase 2 change), so this
+    /// is the right level to test it at.
+    fn generate_for_target(source: &str, target: Target) -> String {
+        let program = parse_source("dialect_test.bcl".to_string(), source)
+            .unwrap_or_else(|d| panic!("should parse: {d:?}"));
+        let lower::Lowered { program, .. } =
+            lower::lower(program).unwrap_or_else(|d| panic!("should lower: {d:?}"));
+        let resolved =
+            resolver::resolve(program).unwrap_or_else(|d| panic!("should resolve: {d:?}"));
+        generate(&resolved.program, target)
+            .unwrap_or_else(|d| panic!("should generate: {d:?}"))
+            .app
+    }
+
+    /// `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` on integer operands must still
+    /// produce the exact same `round((double)...)` round-trip for
+    /// `Target::C` that they always have -- this phase's dialect
+    /// parameterization must not change host-`gcc` output at all (see
+    /// `CDialectProfile::host_gcc`'s own doc comment).
+    #[test]
+    fn target_c_keeps_the_double_round_trip_for_integer_operators() {
+        let c = generate_for_target(
+            "program p\n\
+             a% = 17 \\ 5\n\
+             b% = 17 mod 5\n\
+             c% = 6 and 3\n\
+             d% = not 1\n\
+             end\n",
+            Target::C,
+        );
+        assert!(c.contains("round((double)"), "{c}");
+        assert!(c.contains("#include <math.h>"), "{c}");
+    }
+
+    /// The same operators, under a `supports_float: false` profile
+    /// (`Target::C64`'s), must skip the `round()`/`(double)` round-trip
+    /// entirely -- `cc65` has no `<math.h>` and no floating-point support
+    /// at all (confirmed by hand, see `c_dialect.rs`), so emitting either
+    /// would produce C `cc65` can't compile. Not reachable via `--target
+    /// c64` yet (see `generate_for_target`'s own doc comment), but the
+    /// codegen this exercises is already live.
+    #[test]
+    fn target_c64_skips_the_double_round_trip_for_integer_operators() {
+        let c = generate_for_target(
+            "program p\n\
+             a% = 17 \\ 5\n\
+             b% = 17 mod 5\n\
+             c% = 6 and 3\n\
+             d% = 6 or 3\n\
+             e% = 6 xor 3\n\
+             f% = not 1\n\
+             end\n",
+            Target::C64,
+        );
+        assert!(!c.contains("round("), "{c}");
+        assert!(!c.contains("<math.h>"), "{c}");
+        assert!(c.contains("(long)(17) / (long)(5)"), "{c}");
+        assert!(c.contains("(long)(17) % (long)(5)"), "{c}");
+    }
 }
