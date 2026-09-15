@@ -134,9 +134,10 @@ use crate::ast::{
     ParamMode, PrintToken, Program, RecordFieldType, RecordStringAlignment, ResumeTarget,
     Statement, Stmt, TypeSuffix, UnaryOp,
 };
-use crate::c_dialect::CDialectProfile;
+use crate::c_dialect::{CDialectFeature, CDialectProfile};
 use crate::codegen::Target;
 use crate::diagnostics::{Diagnostic, SourcePos};
+use crate::resolver::walk_statements_exprs;
 
 /// One user-defined function's C-callable shape, built by
 /// `build_function_table` before any codegen runs -- looked up by
@@ -2736,6 +2737,9 @@ pub(crate) struct GeneratedC {
 /// ahead of Phase 4 actually needing it, keeps this signature change from
 /// happening twice.
 pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, Vec<Diagnostic>> {
+    let dialect = CDialectProfile::for_target(target);
+    validate_capabilities(program, &dialect)?;
+
     let mut legacy_error_diagnostics = Vec::new();
     reject_classic_error_handling(&program.statements, &mut legacy_error_diagnostics);
     for function in &program.functions {
@@ -2754,7 +2758,7 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         funcs,
         methods,
         arrays,
-        dialect: CDialectProfile::for_target(target),
+        dialect,
     };
     let try_reachable = collect_try_reachable_callables(program, &functions);
     for key in &try_reachable {
@@ -9025,6 +9029,175 @@ fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::error(SourcePos::new("<target>", 1, 1), message.to_string())
 }
 
+/// Phase 3 of `RETRO_BASIC_SUPPORT_PROMPT.md`: rejects a BASCAL construct
+/// the active `dialect` can't express, with a diagnostic naming the target
+/// explicitly, before any C is emitted -- a target must never see partial
+/// or broken output (the plan's own "capability validation must occur
+/// before emission" rule). Called once, at the very top of `generate`,
+/// ahead of every other pass.
+///
+/// `CDialectProfile::host_gcc` (`Target::C`'s own profile) supports every
+/// `CDialectFeature` checked here, so this is provably a no-op for
+/// `--target c` -- not a special-cased skip, just every
+/// `dialect.supports(..)` check below returning `true`.
+fn validate_capabilities(
+    program: &Program,
+    dialect: &CDialectProfile,
+) -> Result<(), Vec<Diagnostic>> {
+    let mut diagnostics = Vec::new();
+
+    if !dialect.supports(CDialectFeature::Float) || !dialect.supports(CDialectFeature::Double) {
+        reject_float(program, dialect, &mut diagnostics);
+    }
+    if !dialect.supports(CDialectFeature::VariableLengthArrays) {
+        reject_byval_array_params(program, dialect, &mut diagnostics);
+    }
+
+    if diagnostics.is_empty() {
+        Ok(())
+    } else {
+        Err(diagnostics)
+    }
+}
+
+/// `dialect.target`'s human-readable name for a capability-rejection
+/// diagnostic -- deliberately not the bare `Debug` spelling (`C64` vs. a
+/// clearer "C64 (cc65)" naming the actual toolchain), and kept local to
+/// this validation pass rather than on `Target` itself, since this exact
+/// phrasing only matters here.
+fn target_diagnostic_name(target: Target) -> &'static str {
+    match target {
+        Target::C64 => "C64 (cc65)",
+        // Unreachable today: no other target's profile rejects anything
+        // (see `validate_capabilities`'s own doc comment) -- named
+        // explicitly rather than folded into a wildcard, so a future
+        // target whose profile *does* reject something is forced to give
+        // itself a real name here instead of silently falling through to
+        // one.
+        Target::Basic => "basic",
+        Target::Fbc => "fbc",
+        Target::C => "c",
+        Target::Jvm => "jvm",
+    }
+}
+
+/// Rejects every floating-point-typed variable and every `/`/`^` use --
+/// see `CDialectFeature::Float`'s own doc comment for why both matter
+/// (real BASIC's suffixless-numeric default is single-precision, and `/`/
+/// `^` are always float-*producing* regardless of operand type).
+fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut Vec<Diagnostic>) {
+    let target = target_diagnostic_name(dialect.target);
+
+    // Variables: reuses `generate`'s own type-inference
+    // (`collect_vars_in_statement`/`register_var`/`effective_suffix`) so
+    // this can never disagree with what `--target c` would actually emit
+    // for the same variable's type. That collection wasn't built to track
+    // per-use source positions, so this reports one program-wide
+    // diagnostic per offending variable rather than one per use site.
+    let mut numeric_vars = BTreeMap::new();
+    let mut string_vars = BTreeSet::new();
+    for statement in &program.statements {
+        collect_vars_in_statement(statement, &mut numeric_vars, &mut string_vars);
+    }
+    for func in &program.functions {
+        for stmt in &func.body {
+            collect_vars_in_statement(stmt, &mut numeric_vars, &mut string_vars);
+        }
+    }
+    // Scalar parameters and (for a `function`, not a `procedure`) the
+    // return type -- both carry their own type suffix directly on a
+    // `BasicIdent`, not through a `dim`/assignment `collect_vars_in_
+    // statement` would see.
+    for func in &program.functions {
+        if !func.is_procedure {
+            register_var(&func.name, &mut numeric_vars, &mut string_vars);
+        }
+        for param in &func.params {
+            if param.axes.is_none() {
+                register_var(&param.name, &mut numeric_vars, &mut string_vars);
+            }
+        }
+    }
+    for (c_name, c_type) in &numeric_vars {
+        let needed = match *c_type {
+            "float" => Some(CDialectFeature::Float),
+            "double" => Some(CDialectFeature::Double),
+            _ => None,
+        };
+        if needed.is_some_and(|feature| !dialect.supports(feature)) {
+            diagnostics.push(Diagnostic::error(
+                SourcePos::new("<target>", 1, 1),
+                format!(
+                    "`{c_name}` is a floating-point variable, and floating-point types are not \
+                     supported by the {target} target -- give it an explicit `%`/`&` (integer) \
+                     type suffix instead (a suffixless numeric variable defaults to `single`, \
+                     real MBASIC/BASCOM's own convention)"
+                ),
+            ));
+        }
+    }
+
+    // `/` and `^`: precise per-use-site diagnostics, via the same
+    // statement/expression walker `resolver.rs`'s own checks use.
+    let mut reject_op = |statements: &[Stmt]| {
+        walk_statements_exprs(statements, &mut |expr, pos| {
+            if let Expr::Binary { op, .. } = expr {
+                let (symbol, reason) = match op {
+                    BinaryOp::Div => {
+                        ("/", "true division always produces a floating-point result")
+                    }
+                    BinaryOp::Pow => {
+                        ("^", "exponentiation always produces a floating-point result")
+                    }
+                    _ => return,
+                };
+                diagnostics.push(Diagnostic::error(
+                    pos.clone(),
+                    format!(
+                        "`{symbol}` is not supported by the {target} target -- {reason}, and \
+                         {target} has no floating-point support at all"
+                    ),
+                ));
+            }
+        });
+    };
+    reject_op(&program.statements);
+    for func in &program.functions {
+        reject_op(&func.body);
+    }
+}
+
+/// Rejects a `byval` array parameter -- `emit_function_def`'s own local
+/// copy for one always emits a C99 variable-length array, which a
+/// `supports_vla: false` target's C compiler can't accept (confirmed by
+/// hand against `cc65`: "Error: Constant integer expression expected" --
+/// see `CDialectProfile::supports_vla`'s own doc comment). `byref` doesn't
+/// need this local copy at all (the caller's own array is read/written
+/// directly), so it's unaffected.
+fn reject_byval_array_params(
+    program: &Program,
+    dialect: &CDialectProfile,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let target = target_diagnostic_name(dialect.target);
+    for func in &program.functions {
+        for param in &func.params {
+            if param.mode == ParamMode::ByVal && param.axes.is_some() {
+                diagnostics.push(Diagnostic::error(
+                    func.pos.clone(),
+                    format!(
+                        "`{}`'s `byval` array parameter `{}` is not supported by the {target} \
+                         target -- its own local copy needs a variable-length array, which \
+                         {target}'s C compiler doesn't support; declare it `byref` instead (the \
+                         caller's array is then read/written directly, with no copy)",
+                        func.name.name, param.name.name
+                    ),
+                ));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod dialect_tests {
     use super::*;
@@ -9095,5 +9268,141 @@ mod dialect_tests {
         assert!(!c.contains("<math.h>"), "{c}");
         assert!(c.contains("(long)(17) / (long)(5)"), "{c}");
         assert!(c.contains("(long)(17) % (long)(5)"), "{c}");
+    }
+
+    /// Same pipeline as `generate_for_target`, but for a negative test:
+    /// returns the diagnostics from a compile expected to fail Phase 3's
+    /// capability validation, panicking if it unexpectedly succeeds.
+    fn generate_for_target_err(source: &str, target: Target) -> Vec<Diagnostic> {
+        let program = parse_source("dialect_test.bcl".to_string(), source)
+            .unwrap_or_else(|d| panic!("should parse: {d:?}"));
+        let lower::Lowered { program, .. } =
+            lower::lower(program).unwrap_or_else(|d| panic!("should lower: {d:?}"));
+        let resolved =
+            resolver::resolve(program).unwrap_or_else(|d| panic!("should resolve: {d:?}"));
+        match generate(&resolved.program, target) {
+            Ok(_) => panic!("should be rejected by Phase 3"),
+            Err(diagnostics) => diagnostics,
+        }
+    }
+
+    /// `/` is always floating-point-*producing* per real BASIC semantics
+    /// regardless of operand type (`Target::C`'s own `(double)`-cast
+    /// emission for it) -- confirmed by hand that `cc65` has no float
+    /// support at all, so this must be rejected outright for `Target::C64`
+    /// (see `CDialectFeature::Float`'s own doc comment), even though both
+    /// operands here are plain `%` integers.
+    #[test]
+    fn target_c64_rejects_true_division() {
+        let diagnostics =
+            generate_for_target_err("program p\na% = 17 / 5\nend\n", Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains('/') && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// Same reasoning as true division just above -- `^` always produces a
+    /// floating-point result too.
+    #[test]
+    fn target_c64_rejects_exponentiation() {
+        let diagnostics =
+            generate_for_target_err("program p\na% = 2 ^ 8\nend\n", Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains('^') && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// A suffixless numeric variable defaults to `single` (real
+    /// MBASIC/BASCOM's own convention -- see `effective_suffix`'s doc
+    /// comment), so it needs float support just as much as an explicit
+    /// `!`/`#` variable does.
+    #[test]
+    fn target_c64_rejects_suffixless_numeric_variable() {
+        let diagnostics = generate_for_target_err("program p\na = 1\nend\n", Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("floating-point") && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// An explicit `#` (double) variable must be rejected the same way.
+    #[test]
+    fn target_c64_rejects_double_variable() {
+        let diagnostics = generate_for_target_err("program p\na# = 1.5\nend\n", Target::C64);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("floating-point") && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// A `byval` array parameter's own local copy always emits a C99 VLA
+    /// (`emit_function_def`'s `byval` branch) -- `cc65` doesn't support
+    /// VLAs at all (confirmed by hand: "Error: Constant integer expression
+    /// expected"), so this must be rejected for `Target::C64` rather than
+    /// emitting C the toolchain will fail to compile.
+    #[test]
+    fn target_c64_rejects_byval_array_parameter() {
+        let source = "program p\n\
+             function zeroOut%(arr%(?))\n\
+             \x20   for i% = 0 to sizeof(arr%) - 1\n\
+             \x20       arr%(i%) = 0\n\
+             \x20   end for\n\
+             \x20   return 0\n\
+             end function\n\
+             dim data%(3)\n\
+             dummy% = zeroOut%(data%)\n\
+             end\n";
+        let diagnostics = generate_for_target_err(source, Target::C64);
+        assert!(
+            diagnostics.iter().any(|d| d.message.contains("byval")
+                && d.message.contains("arr")
+                && d.message.contains("C64 (cc65)")),
+            "{diagnostics:?}"
+        );
+    }
+
+    /// `byref` doesn't need a local copy at all (the caller's own array is
+    /// read/written directly), so it must NOT be rejected even on
+    /// `Target::C64`.
+    #[test]
+    fn target_c64_accepts_byref_array_parameter() {
+        let source = "program p\n\
+             function zeroOut%(byref arr%(?))\n\
+             \x20   for i% = 0 to sizeof(arr%) - 1\n\
+             \x20       arr%(i%) = 0\n\
+             \x20   end for\n\
+             \x20   return 0\n\
+             end function\n\
+             dim data%(3)\n\
+             dummy% = zeroOut%(data%)\n\
+             end\n";
+        generate_for_target(source, Target::C64);
+    }
+
+    /// `Target::C`'s own profile supports every `CDialectFeature` checked
+    /// here, so none of the above should ever reject anything for it --
+    /// confirms Phase 3 really is a no-op for `--target c`, not just a
+    /// special-cased skip.
+    #[test]
+    fn target_c_still_accepts_division_exponentiation_and_float_variables() {
+        generate_for_target(
+            "program p\n\
+             a% = 17 / 5\n\
+             b% = 2 ^ 8\n\
+             c = 1\n\
+             d# = 1.5\n\
+             end\n",
+            Target::C,
+        );
     }
 }

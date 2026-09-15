@@ -1576,7 +1576,7 @@ fn check_var_uses(
     walk_statements_exprs(statements, &mut check);
 }
 
-fn walk_statements_exprs(statements: &[Stmt], f: &mut dyn FnMut(&Expr, &SourcePos)) {
+pub(crate) fn walk_statements_exprs(statements: &[Stmt], f: &mut dyn FnMut(&Expr, &SourcePos)) {
     for stmt in statements {
         walk_statement_exprs(stmt, f);
     }

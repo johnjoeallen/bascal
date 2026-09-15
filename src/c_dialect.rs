@@ -112,6 +112,46 @@ impl CDialectProfile {
             Target::Basic | Target::Fbc | Target::C | Target::Jvm => Self::host_gcc(),
         }
     }
+
+    /// Whether this profile supports `feature` -- the single entry point
+    /// Phase 3's capability validation (`codegen_c::validate_capabilities`)
+    /// reads, rather than matching on individual `bool` fields by hand at
+    /// each call site.
+    pub(crate) fn supports(&self, feature: CDialectFeature) -> bool {
+        match feature {
+            CDialectFeature::Float | CDialectFeature::Double => self.supports_float,
+            CDialectFeature::VariableLengthArrays => self.supports_vla,
+        }
+    }
+}
+
+/// A source-level capability a target's C dialect either does or doesn't
+/// support -- what Phase 3's validation pass checks a program against, one
+/// `CDialectProfile` field per feature (see `CDialectProfile::supports`).
+/// Deliberately only the features `codegen_c.rs`'s Phase 0 investigation
+/// actually found a real construct needing; extend this, per the same
+/// "only what's needed" rule as `CDialectProfile` itself, when a new
+/// target's own investigation finds another one (records/random-access
+/// files and unbounded recursion are both plausible future additions --
+/// see `RETRO_BASIC_SUPPORT_PROMPT.md`'s Phase 4 -- but neither has a
+/// confirmed `cc65` divergence backing it yet, so neither is here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CDialectFeature {
+    /// Any floating-point type or floating-point-*producing* expression:
+    /// a `single`-suffixed (`!`) variable, `/` (true division -- always
+    /// float-producing per real BASIC semantics regardless of operand
+    /// type, `5 / 2` is `2.5`), and `^` (exponentiation, same). `cc65`
+    /// supports neither `float` nor `double` at all (confirmed by hand --
+    /// see `CDialectProfile::supports_float`'s own doc comment), so both
+    /// this and `Double` read the same underlying flag today; a future
+    /// target that genuinely distinguishes them (supports one, not the
+    /// other) earns `CDialectProfile` a second flag then, not before.
+    Float,
+    /// A `double`-suffixed (`#`) variable. See `Float`'s own doc comment
+    /// for why this reads the same `supports_float` flag today.
+    Double,
+    /// A C99 variable-length array -- see `CDialectProfile::supports_vla`.
+    VariableLengthArrays,
 }
 
 #[cfg(test)]
@@ -158,5 +198,21 @@ mod tests {
             CDialectProfile::for_target(Target::Jvm),
             CDialectProfile::host_gcc()
         );
+    }
+
+    #[test]
+    fn host_gcc_supports_every_feature() {
+        let profile = CDialectProfile::host_gcc();
+        assert!(profile.supports(CDialectFeature::Float));
+        assert!(profile.supports(CDialectFeature::Double));
+        assert!(profile.supports(CDialectFeature::VariableLengthArrays));
+    }
+
+    #[test]
+    fn c64_supports_no_feature_checked_here() {
+        let profile = CDialectProfile::c64_cc65();
+        assert!(!profile.supports(CDialectFeature::Float));
+        assert!(!profile.supports(CDialectFeature::Double));
+        assert!(!profile.supports(CDialectFeature::VariableLengthArrays));
     }
 }
