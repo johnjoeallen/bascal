@@ -3257,6 +3257,10 @@ pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, 
         app.push_str(&runtime_body);
     }
 
+    if !functions.dialect.supports_mixed_declarations {
+        app = crate::c89_hoist::hoist_declarations_for_c89(&app);
+    }
+
     Ok(GeneratedC { app })
 }
 

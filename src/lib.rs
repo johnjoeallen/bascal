@@ -1,4 +1,5 @@
 pub mod ast;
+mod c89_hoist;
 mod c_dialect;
 pub mod codegen;
 mod codegen_basic;

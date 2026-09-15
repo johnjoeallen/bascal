@@ -61,6 +61,27 @@ pub(crate) struct CDialectProfile {
     /// investigation.
     #[allow(dead_code)] // not read anywhere yet -- deferred to Phase 4.
     pub(crate) supports_vla: bool,
+    /// Whether the target C compiler accepts "mixed declarations and
+    /// code" (C99): a local variable declared after an earlier statement
+    /// in the same block, e.g. `printf(...); int x = 1;`. `cc65` doesn't
+    /// -- it's a C89-only compiler, confirmed by hand: that exact
+    /// fragment fails with "Error: Expression expected" / "';' expected"
+    /// / "Undefined symbol: 'x'". `codegen_c.rs` declares locals (string
+    /// buffers especially, always "declare, then `snprintf` into it")
+    /// exactly where BASIC's own "a variable springs into existence where
+    /// first used" semantics puts them, which is routinely after an
+    /// earlier statement in the same block -- this is not a rare
+    /// construct to reject (unlike `supports_float`/`supports_vla`'s
+    /// constructs), it's close to *every* block with more than one local.
+    /// Read by `c89_hoist::hoist_declarations_for_c89`, run once as a
+    /// whole-file post-pass over `codegen_c::generate`'s output when
+    /// `false`: splits each such declaration into a bare `TYPE name;`
+    /// hoisted to the top of its block, plus a `name = expr;` assignment
+    /// left at the original position -- the standard, semantics-
+    /// preserving C99-to-C89 rewrite (declaration *order* never affects
+    /// behavior in C; only assignment *timing* does, and that's exactly
+    /// what's preserved).
+    pub(crate) supports_mixed_declarations: bool,
 }
 
 impl CDialectProfile {
@@ -76,6 +97,7 @@ impl CDialectProfile {
             int_bits: 32,
             supports_float: true,
             supports_vla: true,
+            supports_mixed_declarations: true,
         }
     }
 
@@ -84,15 +106,14 @@ impl CDialectProfile {
     /// (Debian package `cc65` 2.19-2), not assumed from documentation
     /// alone -- see `RETRO_BASIC_SUPPORT_PROMPT.md`'s Phase 0 findings for
     /// the specific test programs and compiler output that confirmed each
-    /// one. Not reachable via `--target c64` yet: `driver.rs` still fails
-    /// that target with a "not implemented" diagnostic before
-    /// `codegen_c::generate` is ever called (Phase 4 wires this in).
+    /// one.
     pub(crate) const fn c64_cc65() -> Self {
         CDialectProfile {
             target: Target::C64,
             int_bits: 16,
             supports_float: false,
             supports_vla: false,
+            supports_mixed_declarations: false,
         }
     }
 
@@ -165,6 +186,7 @@ mod tests {
         assert_eq!(profile.int_bits, 32);
         assert!(profile.supports_float);
         assert!(profile.supports_vla);
+        assert!(profile.supports_mixed_declarations);
     }
 
     #[test]
@@ -174,6 +196,7 @@ mod tests {
         assert_eq!(profile.int_bits, 16);
         assert!(!profile.supports_float);
         assert!(!profile.supports_vla);
+        assert!(!profile.supports_mixed_declarations);
     }
 
     #[test]
