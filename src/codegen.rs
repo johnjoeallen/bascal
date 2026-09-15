@@ -48,4 +48,14 @@ pub enum Target {
     Fbc,
     C,
     Jvm,
+    /// First of a planned family of native 1980s/1990s home-computer
+    /// targets (see `RETRO_BASIC_SUPPORT_PROMPT.md`): will eventually
+    /// reuse `codegen_c`, parameterized for `cc65`'s C dialect, and route
+    /// the result through `cc65`/`cl65` to produce a loadable Commodore 64
+    /// `PRG` image, the same "emit C, shell out to a real cross-compiler"
+    /// pattern `Fbc` and `C` already use. Not implemented yet: every
+    /// `compile_file` call with this target always fails with a "not
+    /// implemented" diagnostic until the dialect-parameterization and
+    /// toolchain-invocation work lands.
+    C64,
 }

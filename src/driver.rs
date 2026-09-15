@@ -207,6 +207,12 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(generated.app)
         }
         Target::Jvm => codegen_jvm::generate(&resolved.program),
+        Target::C64 => Err(vec![Diagnostic::error(
+            diagnostics::SourcePos::new("<c64-target>", 1, 1),
+            "--target c64 is not implemented yet -- see RETRO_BASIC_SUPPORT_PROMPT.md for \
+             the planned cc65-based implementation"
+                .to_string(),
+        )]),
     }
 }
 
@@ -318,6 +324,12 @@ pub fn default_output_path(input: &Path, target: Target) -> std::path::PathBuf {
         Target::Basic | Target::Fbc => "bas",
         Target::C => "c",
         Target::Jvm => "j",
+        // Placeholder: the real C64 target will produce a loadable `PRG`
+        // image (see Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md), not a text
+        // file -- `prg` is reserved for that now so this doesn't change
+        // again once the toolchain invocation lands. Unreachable today:
+        // `transpile` always fails first for `Target::C64`.
+        Target::C64 => "prg",
     };
     input.with_extension(extension)
 }

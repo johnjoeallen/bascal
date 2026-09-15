@@ -13,8 +13,11 @@ mod jvm_classfile;
 /// or `fbc`, identical output but rejecting the handful of constructs real
 /// BASCOM accepts that `fbc` itself does not -- see `Target`'s own doc
 /// comment in codegen.rs), a mostly-complete native-C backend (the `c`
-/// target), or a brand-new, bootstrap-stage native-JVM backend (the `jvm`
-/// target -- just beginning, not yet ready for real programs).
+/// target), a brand-new, bootstrap-stage native-JVM backend (the `jvm`
+/// target -- just beginning, not yet ready for real programs), or a
+/// planned Commodore 64 target via `cc65` (the `c64` target -- accepted by
+/// `--target` but not implemented yet; see `Target::C64`'s own doc comment
+/// in codegen.rs).
 /// `--version`'s full text -- GNU tools' own convention (see e.g. `gcc
 /// --version`, `bash --version`) for what a copyright/license notice in
 /// `--version` output should look like; the GPL itself recommends exactly
@@ -82,7 +85,7 @@ struct Cli {
     #[arg(short = 'r', long)]
     run: bool,
 
-    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), or `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
+    /// Backend to generate code for: `basic` (alias `bascom` -- the original, complete backend, verified against real BASCOM, including for --binary/--run via dosbox-x), `fbc` (the same BASIC, but for FreeBASIC specifically -- a native binary for --binary/--run, and permanently rejects the handful of constructs real BASCOM accepts that fbc does not -- just try/catch today), `c` (a mostly-complete native-C backend), `jvm` (a brand-new, bootstrap-stage native-JVM backend, just beginning), or `c64` (planned Commodore 64 target via cc65 -- accepted but not implemented yet; always fails with a "not implemented" diagnostic). Case-insensitive. Default, if this flag isn't given: see DEFAULT TARGET below
     #[arg(short = 't', long, value_name = "TARGET", value_parser = parse_target_value)]
     target: Option<Target>,
 
@@ -158,6 +161,7 @@ fn parse_target_str(value: &str) -> Option<Target> {
         "fbc" => Some(Target::Fbc),
         "c" => Some(Target::C),
         "jvm" => Some(Target::Jvm),
+        "c64" => Some(Target::C64),
         _ => None,
     }
 }
@@ -168,7 +172,8 @@ fn parse_target_str(value: &str) -> Option<Target> {
 fn parse_target_value(value: &str) -> Result<Target, String> {
     parse_target_str(value).ok_or_else(|| {
         format!(
-            "expected `basic` (alias `bascom`), `fbc`, `c`, or `jvm` (case-insensitive), got `{value}`"
+            "expected `basic` (alias `bascom`), `fbc`, `c`, `jvm`, or `c64` (case-insensitive, \
+             not implemented yet), got `{value}`"
         )
     })
 }
@@ -571,6 +576,15 @@ fn invoke_binary(
         Target::Fbc => invoke_fbc(output_path),
         Target::C => invoke_gcc(output_path),
         Target::Jvm => invoke_krak2(output_path, krak_stack_size),
+        // Unreachable today: `compile_file` already fails `Target::C64`
+        // with a "not implemented" diagnostic before `--binary` is ever
+        // reached. Kept explicit (not a wildcard) so a real `cc65`/`cl65`
+        // invocation is added here, not silently defaulted to some other
+        // toolchain, once the target is actually implemented.
+        Target::C64 => Err(
+            "error: --target c64 is not implemented yet -- see RETRO_BASIC_SUPPORT_PROMPT.md"
+                .to_string(),
+        ),
     }
 }
 
@@ -981,6 +995,12 @@ mod tests {
         assert_eq!(parse_target_str("BASCOM"), Some(Target::Basic));
         assert_eq!(parse_target_str("fbc"), Some(Target::Fbc));
         assert_eq!(parse_target_str("FBC"), Some(Target::Fbc));
+    }
+
+    #[test]
+    fn parse_target_str_accepts_c64() {
+        assert_eq!(parse_target_str("c64"), Some(Target::C64));
+        assert_eq!(parse_target_str("C64"), Some(Target::C64));
     }
 
     #[test]

@@ -8014,6 +8014,29 @@ end
         );
     }
 
+    /// `Target::C64` is accepted by `--target`/`CompileOptions` (Phase 1 of
+    /// RETRO_BASIC_SUPPORT_PROMPT.md), but not implemented yet: every
+    /// compile must fail with a clear "not implemented" diagnostic rather
+    /// than silently falling back to another backend or emitting anything.
+    #[test]
+    fn c64_target_is_not_implemented_yet() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("hello.bcl");
+        std::fs::write(&path, "program p\nprint \"hi\"\nend\n").unwrap();
+        let options = CompileOptions {
+            target: Target::C64,
+            ..CompileOptions::new()
+        };
+        let diagnostics = compile_file(&path, &options).expect_err("should not compile yet");
+        assert!(
+            diagnostics
+                .iter()
+                .any(|d| d.message.contains("--target c64")
+                    && d.message.contains("not implemented")),
+            "c64 target should fail with a clear not-implemented diagnostic: {diagnostics:?}"
+        );
+    }
+
     /// Same source that `fbc_target_rejects_try_catch` rejects under
     /// `Target::Fbc` still compiles under `Target::Basic` -- `try`/`catch`
     /// remains fully supported there (verified against real BASCOM).
