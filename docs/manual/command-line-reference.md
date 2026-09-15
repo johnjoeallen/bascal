@@ -48,12 +48,13 @@ bcc input.bcl [-o dir/] [-L dir] [-l library]
 
 ### Lints
 
-`--lint` runs four independent, warning-only checks against the program's own source (never a `require`d library's) and prints every finding to stderr. Unlike `--strict-vars`, there's no fatal counterpart -- these are all heuristic enough that a false positive is plausible, especially on a program ported from real BASIC, so nothing here ever fails the build.
+`--lint` runs five independent, warning-only checks against the program's own source (never a `require`d library's) and prints every finding to stderr. Unlike `--strict-vars`, there's no fatal counterpart -- these are all heuristic enough that a false positive is plausible, especially on a program ported from real BASIC, so nothing here ever fails the build.
 
 - **Unused declarations**: a `dim`/`declare`/`const` never referenced again after its own declaration. A top-level declaration is checked against the whole program (every function can see it); a function-local one, only within that same function. A name only ever *assigned*, never read, still counts as used -- this only catches a declaration nothing touches again at all.
 - **Shadowing**: a local `dim`/`const` with the same name as this function's own parameter, or as a name already meaningful at the whole-program level (a top-level `dim`/`const`, or a name any function promotes with `global`); a parameter with the same name as such a global; or a `for` loop reusing a still-open enclosing `for` loop's own counter (silently overwriting it mid-iteration -- a classic real bug). All are heuristic name-collision checks, not full scope analysis.
 - **Unreachable code**: a statement after `return`/`goto`/`exit`/`throw`/`end`/`stop` in the same block, with no `label:` in between (a label might be jumped to from anywhere else in the program, so it always counts as reachable). Only the first unreachable statement in a run is reported; the rest follow from the same cause. This has no whole-program control-flow graph, so it only ever looks at same-block, no-intervening-label fall-through.
 - **Magic numbers**: a bare numeric literal (other than `0`, `1`, or `-1`, exempted as near-universal sentinels) compared against something with `=`, `<>`, `<`, `<=`, `>`, or `>=` -- `if roomCode% = 34 then` flags `34` as a candidate for a named `const`. Only comparisons are checked, not every literal in the program (a loop bound or array size is left alone).
+- **Constant naming convention**: a top-level `const` whose name isn't uppercase snake case (`MAX_COUNT`-style: starts with an uppercase letter, every character an uppercase letter/digit/underscore, no doubled or trailing underscore) -- `const maxCount = 10` is flagged, `const MAX_COUNT = 10` isn't.
 
 ### Default Target
 

@@ -2,9 +2,9 @@
 
 <div id="linting" class="section" markdown="1">
 
-## `bcc --lint`: four checks for things the compiler won't stop you on
+## `bcc --lint`: five checks for things the compiler won't stop you on
 
-Beyond `--strict-vars`'s mandatory-declaration check, `bcc --lint` runs four more warning-only passes against a program's own source (never a `require`d library's) and prints every finding to stderr. Unlike `check_legacy_forms`/`check_const_conventions` (always on, every compile), `--lint` is opt-in and never fails the build — these four are more heuristic, and more likely to flag something on existing, working code, especially a program ported from real BASIC.
+Beyond `--strict-vars`'s mandatory-declaration check, `bcc --lint` runs five more warning-only passes against a program's own source (never a `require`d library's) and prints every finding to stderr. Unlike `check_legacy_forms` (always on, every compile), `--lint` is opt-in and never fails the build — these five are more heuristic, and more likely to flag something on existing, working code, especially a program ported from real BASIC.
 
 Every comparison below is a real, verified `bcc --lint` run.
 
@@ -243,7 +243,41 @@ end function
 
 </div>
 
-This is deliberately as far as it goes: none of the four checks ever fails the build, and `--lint` has no whole-program understanding of what a name is *supposed* to mean — only that a declaration went unused, a name collided, a line can't run, or a literal has no explanation nearby. All four proved themselves on real code: applied to the `adventure3000` case study's own `stage17`, `--lint` found 6 genuine shadowing collisions and 156 unnamed room/item/message/direction codes across the whole file — including rediscovering a real, already-documented bug in the original 1979 game. See the [Command-Line Reference's Lints section](../manual/command-line-reference.md#lints) for the complete, exact rule set.
+<div class="compare" markdown="1">
+
+### 6. Constant naming convention
+
+A top-level `const` whose name isn't uppercase snake case: it must start with an uppercase letter, contain only uppercase letters/digits/underscores, and have no doubled or trailing underscore. `MAX_COUNT` passes; `maxCount`, `Max_Count`, and `MAX__COUNT` don't.
+
+<div class="compare-grid" markdown="1">
+
+<div class="pane old" markdown="1">
+
+<span class="tag">Before</span>
+
+```bascal
+const maxCount = 10
+```
+
+</div>
+
+<div class="pane new" markdown="1">
+
+<span class="tag">`bcc --lint` says</span>
+
+```
+warning: constant `maxCount` is not uppercase
+snake case; use names such as `MAX_COUNT`
+  --> constname.bcl:1:1
+```
+
+</div>
+
+</div>
+
+</div>
+
+This is deliberately as far as it goes: none of the five checks ever fails the build, and `--lint` has no whole-program understanding of what a name is *supposed* to mean — only that a declaration went unused, a name collided, a line can't run, a literal has no explanation nearby, or a constant's name doesn't follow convention. The first four proved themselves on real code: applied to the `adventure3000` case study's own `stage17`, `--lint` found 6 genuine shadowing collisions and 156 unnamed room/item/message/direction codes across the whole file — including rediscovering a real, already-documented bug in the original 1979 game. See the [Command-Line Reference's Lints section](../manual/command-line-reference.md#lints) for the complete, exact rule set.
 
 </div>
 

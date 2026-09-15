@@ -191,36 +191,6 @@ pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
-/// Reports an advisory naming finding for constants that don't use the
-/// conventional upper-snake-case style. A const's type suffix is no
-/// longer a source-level concern here at all: `Parser::parse_const`
-/// rejects an explicit one outright (a const's type is always inferred
-/// from its value), so there's nothing left to warn about there.
-pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
-    let mut findings = Vec::new();
-    for statement in &program.statements {
-        if let Statement::Const { name, .. } = &statement.kind {
-            if !is_upper_snake_case(&name.name) {
-                findings.push(Diagnostic::warning(
-                    SourcePos::new("<validation>", 1, 1),
-                    format!("constant `{name}` is not uppercase snake case; use names such as `MAX_COUNT`"),
-                ));
-            }
-        }
-    }
-    findings
-}
-
-fn is_upper_snake_case(name: &str) -> bool {
-    let mut chars = name.chars();
-    matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
-        && name
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
-        && !name.contains("__")
-        && !name.ends_with('_')
-}
-
 fn reject_invalid_parameter_defaults(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     let fixed_consts: HashSet<String> = program
         .statements
@@ -2070,13 +2040,43 @@ fn walk_legacy_forms(
 
 // ── Optional lints (`--lint`) ─────────────────────────────────────────────
 //
-// Four independent, warning-only checks, off by default (unlike
-// `check_legacy_forms`/`check_const_conventions` above, which run on every
-// compile) since they're more heuristic and more likely to surface a false
-// positive on existing, working code -- particularly a program ported from
-// real BASIC, where an unexplained literal or a declaration left over from
-// an earlier revision is common and not necessarily worth fixing right
-// now. See `CompileOptions::lint` / `main.rs`'s own `--lint` flag.
+// Five independent, warning-only checks, off by default (unlike
+// `check_legacy_forms` above, which runs on every compile) since they're
+// more heuristic and more likely to surface a false positive on existing,
+// working code -- particularly a program ported from real BASIC, where an
+// unexplained literal or a declaration left over from an earlier revision
+// is common and not necessarily worth fixing right now. See
+// `CompileOptions::lint` / `main.rs`'s own `--lint` flag.
+
+/// Reports an advisory naming finding for constants that don't use the
+/// conventional upper-snake-case style. A const's type suffix is no
+/// longer a source-level concern here at all: `Parser::parse_const`
+/// rejects an explicit one outright (a const's type is always inferred
+/// from its value), so there's nothing left to warn about there.
+pub fn check_const_conventions(program: &Program) -> Vec<Diagnostic> {
+    let mut findings = Vec::new();
+    for statement in &program.statements {
+        if let Statement::Const { name, .. } = &statement.kind {
+            if !is_upper_snake_case(&name.name) {
+                findings.push(Diagnostic::warning(
+                    statement.pos.clone(),
+                    format!("constant `{name}` is not uppercase snake case; use names such as `MAX_COUNT`"),
+                ));
+            }
+        }
+    }
+    findings
+}
+
+fn is_upper_snake_case(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_uppercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && !name.contains("__")
+        && !name.ends_with('_')
+}
 
 /// One `dim`/`const` declaration, with its own position -- the detailed
 /// counterpart to `collect_declarations`'s plain `HashSet<VarKey>` above,

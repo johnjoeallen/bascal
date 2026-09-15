@@ -187,7 +187,7 @@ See [A built-in source formatter](formatter.md) for the full before/after walkth
 
 ### Built-in linting
 
-`bcc --lint` runs four warning-only checks beyond `--strict-vars`'s mandatory-declaration rule: unused declarations, a local shadowing a parameter/global/enclosing `for` loop counter, unreachable code after `return`/`goto`/`end`/..., and a bare numeric literal compared against something (`0`/`1`/`-1` exempted as common sentinels). Opt-in and never fails the build.
+`bcc --lint` runs five warning-only checks beyond `--strict-vars`'s mandatory-declaration rule: unused declarations, a local shadowing a parameter/global/enclosing `for` loop counter, unreachable code after `return`/`goto`/`end`/..., a bare numeric literal compared against something (`0`/`1`/`-1` exempted as common sentinels), and a top-level `const` whose name isn't uppercase snake case. Opt-in and never fails the build.
 
 ```bash
 $ bcc --lint legacy.bcl

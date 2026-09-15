@@ -43,14 +43,15 @@ pub struct CompileOptions {
     /// mode against an existing program without committing to it yet.
     pub strict_vars_warn: bool,
     /// Runs `resolver::check_unused_declarations`/`check_shadowing`/
-    /// `check_unreachable_code`/`check_magic_numbers` against the root
-    /// program's own parse (same reasoning as `strict_vars`: never a
-    /// `require`d library's own internals, never the DSL-lowered form) and
-    /// prints every finding to stderr as a warning. Opt-in and off by
-    /// default, unlike `check_legacy_forms`/`check_const_conventions`
-    /// (always on): these four are more heuristic and more likely to flag
-    /// something on existing, working code that isn't actually worth
-    /// fixing right now, especially a program ported from real BASIC.
+    /// `check_unreachable_code`/`check_magic_numbers`/
+    /// `check_const_conventions` against the root program's own parse (same
+    /// reasoning as `strict_vars`: never a `require`d library's own
+    /// internals, never the DSL-lowered form) and prints every finding to
+    /// stderr as a warning. Opt-in and off by default, unlike
+    /// `check_legacy_forms` (always on): these five are more heuristic and
+    /// more likely to flag something on existing, working code that isn't
+    /// actually worth fixing right now, especially a program ported from
+    /// real BASIC.
     pub lint: bool,
 }
 
@@ -86,7 +87,6 @@ pub fn compile_source(
     } = lower::lower(program)?;
     let resolved = resolver::resolve(program)?;
     print_legacy_form_warnings(&resolved.program);
-    print_const_convention_warnings(&resolved.program);
     let conflicts = codegen::check_generated_name_conflicts(&resolved.program);
     if !conflicts.is_empty() {
         return Err(conflicts);
@@ -131,6 +131,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             eprintln!("{finding}");
         }
         for finding in resolver::check_magic_numbers(&root_only) {
+            eprintln!("{finding}");
+        }
+        for finding in resolver::check_const_conventions(&root_only) {
             eprintln!("{finding}");
         }
     }
@@ -183,7 +186,6 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     } = lower::lower(program)?;
     let resolved = resolver::resolve(program)?;
     print_legacy_form_warnings(&resolved.program);
-    print_const_convention_warnings(&resolved.program);
     match options.target {
         Target::Basic => {
             let basic = CodeGenerator::new()
@@ -307,12 +309,6 @@ pub fn check_file(input: &Path, options: &CompileOptions) -> Result<(), Vec<Diag
 /// comment on `check_legacy_forms`).
 fn print_legacy_form_warnings(program: &ast::Program) {
     for finding in resolver::check_legacy_forms(program) {
-        eprintln!("{finding}");
-    }
-}
-
-fn print_const_convention_warnings(program: &ast::Program) {
-    for finding in resolver::check_const_conventions(program) {
         eprintln!("{finding}");
     }
 }
