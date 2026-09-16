@@ -34,14 +34,19 @@ cargo run -p rdgen -- path/to/grammar.rdg --emit-rust
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next
-alternative is tried. Optional and zero-or-more repetition of a single
-literal, terminal, or rule is supported, as are groups whose alternatives each
-contain one such element. Multi-element grouped alternatives and complex
-grouped sequences are supported as unit-valued parser control flow. Nested
-groups/repetitions are diagnosed as unsupported until their control flow is
-implemented. Alternatives without constructor annotations receive stable
-`AltN` AST variants so grammars remain representable while annotations are
-added incrementally.
+alternative is tried. Optional and zero-or-more repetition, grouped
+alternatives, and nested groups/repetitions are emitted as recursive parser
+control flow. Grouped elements are currently unit-valued unless their
+contents are bound directly as constructor fields. Alternatives without
+constructor annotations receive stable `AltN` AST variants so grammars remain
+representable while annotations are added incrementally.
+
+Lexical policy is injected by the generated parser API rather than embedded in
+the grammar backend. `TerminalScanner` recognizes named terminals and
+`TriviaSkipper` advances over whitespace/comments. Use
+`Parser::with_scanner_and_trivia` to provide both; `Parser::new` retains a
+deliberately non-scanning default for literal-only parser tests. The public
+`parse` method also rejects unconsumed non-trivia input.
 
 Alternatives can carry grammar-directed recovery metadata:
 
