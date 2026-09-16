@@ -38,7 +38,9 @@ alternative is tried. Optional and zero-or-more repetition of a single
 literal, terminal, or rule is supported, as are groups whose alternatives each
 contain one such element. Multi-element grouped alternatives and complex
 grouped repetitions are diagnosed as unsupported until their control flow is
-implemented.
+implemented. Alternatives without constructor annotations receive stable
+`AltN` AST variants so grammars remain representable while annotations are
+added incrementally.
 
 Alternatives can carry grammar-directed recovery metadata:
 

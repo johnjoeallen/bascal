@@ -22,8 +22,8 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
-    for alternative in &rule.alternatives {
-        let variant = type_name(&alternative.constructor.type_name.0);
+    for (index, alternative) in rule.alternatives.iter().enumerate() {
+        let variant = variant_name(rule, alternative, index);
         if !variants.insert(variant.clone()) {
             return Err(format!("duplicate AST variant '{}' in rule '{}'", variant, rule.name));
         }
@@ -43,6 +43,14 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     }
     output.push_str("}\n\n");
     Ok(())
+}
+
+fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) -> String {
+    if alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name {
+        format!("Alt{}", index + 1)
+    } else {
+        type_name(&alternative.constructor.type_name.0)
+    }
 }
 
 fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a Element> {
@@ -126,14 +134,14 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
 
 fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     output.push_str(&format!("    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n", rule.name, type_name(&rule.name)));
-    for alternative in &rule.alternatives {
+    for (index, alternative) in rule.alternatives.iter().enumerate() {
         output.push_str("        let start = self.position;\n");
         output.push_str(&format!("        let attempt: Result<{}, ParseError> = (|| {{\n", type_name(&rule.name)));
         for (index, element) in alternative.elements.iter().enumerate() {
             let variable = element_variable(element, index);
             emit_element_binding(output, element, &variable, "            ")?;
         }
-        output.push_str(&format!("            Ok({}{})\n", type_name(&alternative.constructor.type_name.0), emit_constructor_fields(alternative)?));
+        output.push_str(&format!("            Ok({}{})\n", variant_name(rule, alternative, index), emit_constructor_fields(alternative)?));
         output.push_str("        })();\n");
         output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
     }
@@ -260,5 +268,13 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("let mut element_1 = Vec::new()"));
         assert!(generated.contains("if self.position == item_start"));
+    }
+
+    #[test]
+    fn synthesizes_unique_variants_for_unannotated_alternatives() {
+        let grammar = compile("grammar Suffix; suffix = \"%\" | \"$\";").unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("Alt1,"));
+        assert!(generated.contains("Alt2,"));
     }
 }
