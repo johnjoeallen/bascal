@@ -456,7 +456,18 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
 }
 
 fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
-    matches!(elements.first(), Some(rdgen_ir::Element::Rule { rule: name, .. }) if name == rule)
+    let Some(element) = elements.first() else { return false };
+    match element {
+        rdgen_ir::Element::Rule { rule: name, .. } => name == rule,
+        rdgen_ir::Element::Group { alternatives, .. } => {
+            alternatives.iter().any(|alternative| starts_with_rule(alternative, rule))
+        }
+        rdgen_ir::Element::Repeat { element, min, .. } => {
+            starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
+                || (*min == 0 && starts_with_rule(&elements[1..], rule))
+        }
+        rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => false,
+    }
 }
 
 fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
@@ -484,20 +495,35 @@ fn first_rule_names<'a>(
     names: &std::collections::HashSet<&'a str>,
     output: &mut Vec<&'a str>,
 ) {
-    let Some(element) = elements.first() else { return };
-    match element {
-        rdgen_ir::Element::Rule { rule, .. } => {
-            if names.contains(rule.as_str()) { output.push(rule.as_str()); }
+    for (index, element) in elements.iter().enumerate() {
+        match element {
+            rdgen_ir::Element::Rule { rule, .. } => {
+                if names.contains(rule.as_str()) { output.push(rule.as_str()); }
+            }
+            rdgen_ir::Element::Group { alternatives, .. } => {
+                for alternative in alternatives { first_rule_names(alternative, names, output); }
+            }
+            rdgen_ir::Element::Repeat { element, .. } => {
+                first_rule_names(std::slice::from_ref(element.as_ref()), names, output);
+            }
+            rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
         }
-        rdgen_ir::Element::Group { alternatives, .. } => {
-            for alternative in alternatives { first_rule_names(alternative, names, output); }
-        }
-        rdgen_ir::Element::Repeat { element, min, .. } => {
-            first_rule_names(std::slice::from_ref(element.as_ref()), names, output);
-            if *min > 0 { return; }
-        }
-        rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
+        if !nullable_element(element) || index + 1 == elements.len() { break; }
     }
+}
+
+fn nullable_element(element: &rdgen_ir::Element) -> bool {
+    match element {
+        rdgen_ir::Element::Repeat { min, .. } => *min == 0,
+        rdgen_ir::Element::Group { alternatives, .. } => alternatives.iter().any(|alternative| nullable_sequence(alternative)),
+        rdgen_ir::Element::Rule { .. }
+        | rdgen_ir::Element::Token { .. }
+        | rdgen_ir::Element::Literal { .. } => false,
+    }
+}
+
+fn nullable_sequence(elements: &[rdgen_ir::Element]) -> bool {
+    elements.iter().all(nullable_element)
 }
 
 fn find_cycle<'a>(
@@ -557,6 +583,12 @@ mod tests {
     fn rejects_indirect_left_recursion() {
         let error = compile("grammar Bad; a = b ; b = a | \"x\" ;").unwrap_err();
         assert!(error.contains("left recursion through a -> b -> a"));
+    }
+
+    #[test]
+    fn rejects_left_recursion_hidden_behind_an_optional_prefix() {
+        let error = compile("grammar Bad; expr = [prefix] , expr | atom; prefix = \"p\"; atom = \"x\";").unwrap_err();
+        assert!(error.contains("direct left recursion in rule 'expr'"));
     }
 
     #[test]
