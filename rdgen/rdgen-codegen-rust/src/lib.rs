@@ -1,6 +1,6 @@
 //! Rust backend for emitting hand-written-style recursive-descent parsers.
 
-use rdgen_ir::{Element, Grammar, Rule};
+use rdgen_ir::{Element, Grammar, RecoveryStrategy, Rule};
 
 /// Emit the typed AST declarations for a resolved grammar.
 ///
@@ -127,6 +127,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal } }\n"
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = self.parse_" + &start.name + "()?; self.skip_trivia(); if self.position != self.source.len() { return Err(ParseError { message: \"unexpected trailing input\".into(), position: self.position }); } Ok(value) }\n"
             + "    fn skip_trivia(&mut self) { let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
+            + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
             + "        if self.position <= self.source.len() && self.source.is_char_boundary(self.position) {\n"
@@ -166,6 +167,13 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         ));
         output.push_str("        })();\n");
         output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
+    }
+    if let Some(recovery) = rule.alternatives.iter().find_map(|alternative| {
+        (alternative.recovery.as_ref().is_some_and(|point| matches!(point.strategy, RecoveryStrategy::SkipUntilSync)))
+            .then(|| alternative.recovery.as_ref().expect("recovery point checked"))
+    }) {
+        let sync = recovery.sync_tokens.iter().map(|token| format!("{:?}", token)).collect::<Vec<_>>().join(", ");
+        output.push_str(&format!("        self.skip_until_sync(&[{}]);\n", sync));
     }
     output.push_str(&format!("        Err(ParseError {{ message: \"no alternative for {}\".into(), position: self.position }})\n", rule.name));
     output.push_str("    }\n");
@@ -358,5 +366,15 @@ mod tests {
         let generated = emit_ast(&grammar).unwrap();
         assert!(generated.contains("Alt1,"));
         assert!(generated.contains("Alt2,"));
+    }
+
+    #[test]
+    fn emits_skip_until_sync_recovery() {
+        let grammar = compile(
+            "grammar Statement; statement = \"ok\" => Statement() recover { sync \";\", \"}\"; skip_until_sync; };",
+        ).unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("fn skip_until_sync(&mut self, sync: &[&str])"));
+        assert!(generated.contains("self.skip_until_sync(&[\";\", \"}\"]);"));
     }
 }
