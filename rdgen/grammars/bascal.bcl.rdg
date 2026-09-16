@@ -109,6 +109,7 @@ do_condition     = ( "while" | "until" ) , expr ;
 try_stmt         = "try" , { statement } ,
                    [ "catch" , identifier , { statement } ] ,
                    [ "finally" , { statement } ] , "end" , "try" ;
+assignment_or_expr_stmt = [ "let" ] , identifier , [ "=" , expr ] ;
 
 (* ----- Expressions -----
  * Precedence is represented explicitly in the IR rather than inferred by a

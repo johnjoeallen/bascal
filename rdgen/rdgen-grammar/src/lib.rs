@@ -218,6 +218,7 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, self.previous().span.end),
             });
         }
+        resolve_symbols(&mut rules)?;
         reject_indirect_left_recursion(&rules)?;
         Ok(rdgen_ir::Grammar {
             name,
@@ -470,6 +471,50 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
     }
 }
 
+fn resolve_symbols(rules: &mut [rdgen_ir::Rule]) -> Result<(), String> {
+    let rule_names: std::collections::HashSet<String> = rules.iter().map(|rule| rule.name.clone()).collect();
+    for rule in rules {
+        for alternative in &mut rule.alternatives {
+            for element in &mut alternative.elements {
+                resolve_element(element, &rule_names)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn resolve_element(element: &mut rdgen_ir::Element, rule_names: &std::collections::HashSet<String>) -> Result<(), String> {
+    match element {
+        rdgen_ir::Element::Rule { rule, label, span } => {
+            let name = rule.clone();
+            let label = label.clone();
+            let span = *span;
+            if rule_names.contains(&name) { return Ok(()); }
+            if is_builtin_terminal(&name) {
+                *element = rdgen_ir::Element::Token { label, token: name, span };
+                return Ok(());
+            }
+            Err(format!("undefined rule or terminal '{}' at {}", name, span.start))
+        }
+        rdgen_ir::Element::Group { alternatives, .. } => {
+            for alternative in alternatives {
+                for child in alternative { resolve_element(child, rule_names)?; }
+            }
+            Ok(())
+        }
+        rdgen_ir::Element::Repeat { element, .. } => resolve_element(element, rule_names),
+        rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => Ok(()),
+    }
+}
+
+fn is_builtin_terminal(name: &str) -> bool {
+    matches!(name,
+        "letter" | "digit" | "hex_digit" | "java_ident_start" | "java_ident_part"
+        | "any_char" | "any_char_except_quote" | "any_char_except_newline"
+        | "any_char_except_slash" | "any_char_except_quote_or_open_brace_or_backslash"
+        | "any_char_except_slash_or_open_brace_or_backslash" | "text_block_char")
+}
+
 fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
     let names: std::collections::HashSet<&str> = rules.iter().map(|rule| rule.name.as_str()).collect();
     let mut graph = std::collections::HashMap::<&str, Vec<&str>>::new();
@@ -612,9 +657,25 @@ mod tests {
     }
 
     #[test]
+    fn resolves_builtin_terminals_and_rejects_unknown_references() {
+        let grammar = compile("grammar Demo; start = letter , missing; ").unwrap_err();
+        assert!(grammar.contains("undefined rule or terminal 'missing'"));
+
+        let grammar = compile("grammar Demo; start = letter , \"x\"; ").unwrap();
+        assert!(matches!(&grammar.rules[0].alternatives[0].elements[0], rdgen_ir::Element::Token { token, .. } if token == "letter"));
+    }
+
+    #[test]
+    fn parses_the_distill_starter_fixture() {
+        let grammar = compile(include_str!("../../grammars/distill.matcher.rdg")).unwrap();
+        assert_eq!(grammar.name, "DistillMatcher");
+        assert!(grammar.rules.iter().any(|rule| rule.name == "postfix_expr"));
+    }
+
+    #[test]
     fn preserves_labeled_constructor_annotations_in_the_typed_ir() {
         let grammar = compile(
-            "grammar Expr; expr = value: number => Number(value: value) | left: atom, \"+\", right: atom => Add(left: left, right: right); atom = \"x\";",
+            "grammar Expr; expr = value: number => Number(value: value) | left: atom, \"+\", right: atom => Add(left: left, right: right); number = \"n\"; atom = \"x\";",
         )
         .unwrap();
         let alternative = &grammar.rules[0].alternatives[0];
