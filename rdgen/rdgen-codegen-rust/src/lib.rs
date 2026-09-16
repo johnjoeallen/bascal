@@ -113,10 +113,13 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     let mut output = String::from(
         "#[derive(Clone, Debug, PartialEq)]\n"
             .to_owned() + "pub struct ParseError { pub message: String, pub position: usize }\n\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize }\n\n"
+            + "pub type TerminalScanner = fn(&str, usize, &str) -> Option<(Token, usize)>;\n\n"
+            + "fn missing_terminal(_: &str, _: usize, _: &str) -> Option<(Token, usize)> { None }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner }\n\n"
             + "impl<'a> Parser<'a> {\n"
-            + "    pub fn new(source: &'a str) -> Self { Self { source, position: 0 } }\n"
-            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { self.parse_" + &start.name + "() }\n"
+            + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
+            + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self { source, position: 0, scan_terminal } }\n"
+            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = self.parse_" + &start.name + "()?; if self.position != self.source.len() { return Err(ParseError { message: \"unexpected trailing input\".into(), position: self.position }); } Ok(value) }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        if self.source[self.position..].starts_with(literal) {\n"
             + "            self.position += literal.len();\n"
@@ -124,7 +127,10 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "        } else { Err(ParseError { message: format!(\"expected {:?}\", literal), position: self.position }) }\n"
             + "    }\n"
             + "    fn expect_terminal(&mut self, name: &str) -> Result<Token, ParseError> {\n"
-            + "        Err(ParseError { message: format!(\"terminal {:?} has no scanner definition\", name), position: self.position })\n"
+            + "        match (self.scan_terminal)(self.source, self.position, name) {\n"
+            + "            Some((token, end)) if end > self.position && end <= self.source.len() => { self.position = end; Ok(token) }\n"
+            + "            _ => Err(ParseError { message: format!(\"expected terminal {:?}\", name), position: self.position }),\n"
+            + "        }\n"
             + "    }\n",
     );
     for rule in &grammar.rules { emit_parser_rule(&mut output, rule)?; }
@@ -308,6 +314,8 @@ mod tests {
         assert!(generated.contains("pub struct Parser<'a>"));
         assert!(generated.contains("self.expect_literal(\"0\")?"));
         assert!(generated.contains("Ok(Number::Number { digit: digit })"));
+        assert!(generated.contains("pub type TerminalScanner = fn(&str, usize, &str)"));
+        assert!(generated.contains("unexpected trailing input"));
     }
 
     #[test]
