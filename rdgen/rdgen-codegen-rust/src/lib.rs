@@ -93,7 +93,83 @@ fn field_name(name: &str) -> String {
 
 /// Emit a Rust parser from the resolved grammar IR.
 pub fn emit(grammar: &Grammar) -> Result<String, String> {
-    emit_ast(grammar)
+    let mut output = emit_ast(grammar)?;
+    output.push_str(&emit_parser(grammar)?);
+    Ok(output)
+}
+
+/// Emit parser control flow for the currently supported core element set.
+pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
+    let start = grammar.rules.first().ok_or_else(|| "grammar has no rules".to_owned())?;
+    let mut output = String::from(
+        "#[derive(Clone, Debug, PartialEq)]\n"
+            .to_owned() + "pub struct ParseError { pub message: String, pub position: usize }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize }\n\n"
+            + "impl<'a> Parser<'a> {\n"
+            + "    pub fn new(source: &'a str) -> Self { Self { source, position: 0 } }\n"
+            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { self.parse_" + &start.name + "() }\n"
+            + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
+            + "        if self.source[self.position..].starts_with(literal) {\n"
+            + "            self.position += literal.len();\n"
+            + "            Ok(Token(literal.to_owned()))\n"
+            + "        } else { Err(ParseError { message: format!(\"expected {:?}\", literal), position: self.position }) }\n"
+            + "    }\n"
+            + "    fn expect_terminal(&mut self, name: &str) -> Result<Token, ParseError> {\n"
+            + "        Err(ParseError { message: format!(\"terminal {:?} has no scanner definition\", name), position: self.position })\n"
+            + "    }\n",
+    );
+    for rule in &grammar.rules { emit_parser_rule(&mut output, rule)?; }
+    output.push_str("}\n");
+    Ok(output)
+}
+
+fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
+    output.push_str(&format!("    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n", rule.name, type_name(&rule.name)));
+    for alternative in &rule.alternatives {
+        if alternative.elements.iter().any(|element| matches!(element, Element::Group { .. } | Element::Repeat { .. })) {
+            return Err(format!("parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
+        }
+        output.push_str("        let start = self.position;\n");
+        output.push_str(&format!("        let attempt: Result<{}, ParseError> = (|| {{\n", type_name(&rule.name)));
+        for (index, element) in alternative.elements.iter().enumerate() {
+            let variable = element_variable(element, index);
+            output.push_str(&format!("            let {} = {};\n", variable, emit_element_parse(element)?));
+        }
+        output.push_str(&format!("            Ok({}{})\n", type_name(&alternative.constructor.type_name.0), emit_constructor_fields(alternative)?));
+        output.push_str("        })();\n");
+        output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
+    }
+    output.push_str(&format!("        Err(ParseError {{ message: \"no alternative for {}\".into(), position: self.position }})\n", rule.name));
+    output.push_str("    }\n");
+    Ok(())
+}
+
+fn emit_element_parse(element: &Element) -> Result<String, String> {
+    match element {
+        Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
+        Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
+        Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
+        Element::Group { .. } | Element::Repeat { .. } => Err("unsupported parser element".into()),
+    }
+}
+
+fn element_variable(element: &Element, index: usize) -> String {
+    let label = match element {
+        Element::Rule { label, .. } | Element::Token { label, .. } | Element::Literal { label, .. } => label.as_deref(),
+        Element::Group { .. } | Element::Repeat { .. } => None,
+    };
+    label.map_or_else(|| format!("element_{}", index), field_name)
+}
+
+fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String, String> {
+    if alternative.constructor.fields.is_empty() { return Ok(String::new()); }
+    let mut output = String::from(" { ");
+    for (index, field) in alternative.constructor.fields.iter().enumerate() {
+        if index > 0 { output.push_str(", "); }
+        output.push_str(&format!("{}: {}", field_name(&field.field), field_name(&field.source_label)));
+    }
+    output.push_str(" }");
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -112,5 +188,16 @@ mod tests {
         assert!(generated.contains("value: Box<Number>"));
         assert!(generated.contains("right: Box<Expr>"));
         assert!(generated.contains("digit: Token"));
+    }
+
+    #[test]
+    fn emits_literal_parser_control_flow_and_constructor_assembly() {
+        let grammar = compile(
+            "grammar Expr; expr = value: number => Number(value: value); number = digit: \"0\" => Number(digit: digit);",
+        ).unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub struct Parser<'a>"));
+        assert!(generated.contains("self.expect_literal(\"0\")?"));
+        assert!(generated.contains("Ok(Number { digit: digit })"));
     }
 }
