@@ -29,8 +29,10 @@ The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next
 alternative is tried. Optional and zero-or-more repetition of a single
-literal, terminal, or rule is supported; complex grouped repetitions are
-diagnosed as unsupported until their control flow is implemented.
+literal, terminal, or rule is supported, as are groups whose alternatives each
+contain one such element. Multi-element grouped alternatives and complex
+grouped repetitions are diagnosed as unsupported until their control flow is
+implemented.
 
 Alternatives can carry grammar-directed recovery metadata:
 
