@@ -72,6 +72,10 @@ pub enum Element {
         max: Option<usize>,
         span: Span,
     },
+    Group {
+        alternatives: Vec<Vec<Element>>,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -136,7 +140,10 @@ pub struct IrError {
 
 impl IrError {
     pub fn new(message: impl Into<String>, span: Option<Span>) -> Self {
-        Self { message: message.into(), span }
+        Self {
+            message: message.into(),
+            span,
+        }
     }
 }
 
