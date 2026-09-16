@@ -25,6 +25,9 @@ The frontend can be exercised from the workspace CLI:
 cargo run -p rdgen -- rdgen/grammars/bascal.bcl.rdg
 ```
 
+The Rust backend currently emits the concrete typed AST declarations from the
+resolved IR. Parser control-flow emission is the next backend increment.
+
 Alternatives can carry grammar-directed recovery metadata:
 
 ```ebnf

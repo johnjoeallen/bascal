@@ -7,3 +7,6 @@ description = "Rust recursive-descent parser emitter for rdgen"
 
 [dependencies]
 rdgen-ir = { path = "../rdgen-ir" }
+
+[dev-dependencies]
+rdgen-grammar = { path = "../rdgen-grammar" }
