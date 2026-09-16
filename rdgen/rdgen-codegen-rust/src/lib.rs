@@ -117,19 +117,24 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "fn missing_terminal(_: &str, _: usize, _: &str) -> Option<(Token, usize)> { None }\n\n"
             + "pub type TriviaSkipper = fn(&str, usize) -> usize;\n\n"
             + "fn skip_no_trivia(_: &str, position: usize) -> usize { position }\n\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper }\n\n"
+            + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
+            + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source[position..].starts_with(literal).then_some(position + literal.len()) }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher }\n\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
-            + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self { source, position: 0, scan_terminal, skip_trivia } }\n"
+            + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
+            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal } }\n"
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = self.parse_" + &start.name + "()?; self.skip_trivia(); if self.position != self.source.len() { return Err(ParseError { message: \"unexpected trailing input\".into(), position: self.position }); } Ok(value) }\n"
             + "    fn skip_trivia(&mut self) { let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
-            + "        if self.position <= self.source.len() && self.source.is_char_boundary(self.position) && self.source[self.position..].starts_with(literal) {\n"
-            + "            self.position += literal.len();\n"
-            + "            Ok(Token(literal.to_owned()))\n"
-            + "        } else { Err(ParseError { message: format!(\"expected {:?}\", literal), position: self.position }) }\n"
+            + "        if self.position <= self.source.len() && self.source.is_char_boundary(self.position) {\n"
+            + "            if let Some(end) = (self.match_literal)(self.source, self.position, literal) {\n"
+            + "                if end <= self.source.len() && self.source.is_char_boundary(end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
+            + "            }\n"
+            + "        }\n"
+            + "        Err(ParseError { message: format!(\"expected {:?}\", literal), position: self.position })\n"
             + "    }\n"
             + "    fn expect_terminal(&mut self, name: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
@@ -323,6 +328,8 @@ mod tests {
         assert!(generated.contains("pub type TerminalScanner = fn(&str, usize, &str)"));
         assert!(generated.contains("pub type TriviaSkipper = fn(&str, usize) -> usize"));
         assert!(generated.contains("with_scanner_and_trivia"));
+        assert!(generated.contains("pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>"));
+        assert!(generated.contains("with_lexical_config"));
         assert!(generated.contains("unexpected trailing input"));
     }
 
