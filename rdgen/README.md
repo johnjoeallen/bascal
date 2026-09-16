@@ -37,7 +37,8 @@ Each alternative is attempted with input-offset backtracking before the next
 alternative is tried. Optional and zero-or-more repetition of a single
 literal, terminal, or rule is supported, as are groups whose alternatives each
 contain one such element. Multi-element grouped alternatives and complex
-grouped repetitions are diagnosed as unsupported until their control flow is
+grouped sequences are supported as unit-valued parser control flow. Nested
+groups/repetitions are diagnosed as unsupported until their control flow is
 implemented. Alternatives without constructor annotations receive stable
 `AltN` AST variants so grammars remain representable while annotations are
 added incrementally.
