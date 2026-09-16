@@ -79,7 +79,7 @@ fn rust_type(element: &Element) -> String {
         Element::Token { .. } | Element::Literal { .. } => "Token".into(),
         Element::Repeat { element, max: Some(1), .. } => format!("Option<{}>", rust_type(element)),
         Element::Repeat { element, .. } => format!("Vec<{}>", rust_type(element)),
-        Element::Group { .. } => "Token".into(),
+        Element::Group { .. } => "()".into(),
     }
 }
 
@@ -141,7 +141,12 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             let variable = element_variable(element, index);
             emit_element_binding(output, element, &variable, "            ")?;
         }
-        output.push_str(&format!("            Ok({}{})\n", variant_name(rule, alternative, index), emit_constructor_fields(alternative)?));
+        output.push_str(&format!(
+            "            Ok({}::{}{})\n",
+            type_name(&rule.name),
+            variant_name(rule, alternative, index),
+            emit_constructor_fields(alternative)?
+        ));
         output.push_str("        })();\n");
         output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
     }
@@ -155,15 +160,13 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
-        Element::Group { .. } => emit_group_expression(element),
-        Element::Repeat { .. } => Err("repetition requires inline emission".into()),
+        Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
     }
 }
 
 fn emit_element_binding(output: &mut String, element: &Element, variable: &str, indent: &str) -> Result<(), String> {
     match element {
         Element::Repeat { element: child, max: None, .. } => {
-            if matches!(child.as_ref(), Element::Repeat { .. }) { return Err("parser emitter does not yet support nested repetitions".into()); }
             let child = simple_group_element(child.as_ref()).unwrap_or(child.as_ref());
             output.push_str(&format!("{}let mut {} = Vec::new();\n", indent, variable));
             output.push_str(&format!("{}loop {{\n{}    let item_start = self.position;\n", indent, indent));
@@ -173,7 +176,6 @@ fn emit_element_binding(output: &mut String, element: &Element, variable: &str, 
             return Ok(());
         }
         Element::Repeat { element: child, max: Some(1), .. } => {
-            if matches!(child.as_ref(), Element::Repeat { .. }) { return Err("parser emitter does not yet support nested optional elements".into()); }
             let child = simple_group_element(child.as_ref()).unwrap_or(child.as_ref());
             output.push_str(&format!("{}let {} = {{\n{}    let optional_start = self.position;\n", indent, variable, indent));
             output.push_str(&format!("{}    match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n", indent, emit_element_parse(child)?));
@@ -186,10 +188,16 @@ fn emit_element_binding(output: &mut String, element: &Element, variable: &str, 
                 output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
                 return Ok(());
             }
-            let first = alternatives.first().and_then(|alternative| alternative.first()).ok_or_else(|| "empty grouped alternative".to_owned())?;
+            let first = alternatives.iter().find_map(|alternative| alternative.first());
+            if first.is_none() {
+                output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
+                return Ok(());
+            }
+            let first = first.expect("checked above");
             let expected_type = rust_type(first);
-            if alternatives.iter().any(|alternative| rust_type(&alternative[0]) != expected_type) {
-                return Err("grouped alternatives must have the same emitted type".into());
+            if alternatives.iter().any(|alternative| alternative.first().map_or(true, |element| rust_type(element) != expected_type)) {
+                output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
+                return Ok(());
             }
             output.push_str(&format!("{}let {} = {{\n{}    let group_result: Result<_, ParseError> = (|| {{\n", indent, variable, indent));
             for alternative in alternatives {
@@ -218,14 +226,9 @@ fn simple_group_element(element: &Element) -> Option<&Element> {
 
 fn emit_group_expression(element: &Element) -> Result<String, String> {
     let Element::Group { alternatives, .. } = element else { return Err("expected grouped element".into()) };
-    if alternatives.is_empty() || alternatives.iter().any(|alternative| alternative.is_empty()) {
-        return Err("empty grouped alternative".into());
-    }
+    if alternatives.is_empty() { return Err("empty group".into()); }
     let mut output = String::from("{ let group_result: Result<(), ParseError> = (|| { ");
     for alternative in alternatives {
-        if alternative.iter().any(|child| matches!(child, Element::Group { .. } | Element::Repeat { .. })) {
-            return Err("parser emitter does not yet support nested groups or repetitions inside groups".into());
-        }
         output.push_str("let group_start = self.position; ");
         output.push_str("let group_attempt = (|| -> Result<(), ParseError> { ");
         for child in alternative {
@@ -236,6 +239,27 @@ fn emit_group_expression(element: &Element) -> Result<String, String> {
     }
     output.push_str("Err(ParseError { message: \"no grouped alternative\".into(), position: self.position }) })(); match group_result { Ok(value) => value, Err(error) => return Err(error) } }");
     Ok(output)
+}
+
+fn emit_element_expression(element: &Element) -> Result<String, String> {
+    match element {
+        Element::Group { .. } => emit_group_expression(element),
+        Element::Repeat { element: child, max: None, .. } => {
+            let mut output = String::from("{ let mut values = Vec::new(); loop { let item_start = self.position; ");
+            output.push_str(&format!("let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ ", emit_element_expression(child)?));
+            output.push_str("Ok(item) => item, Err(_) => { self.position = item_start; break; } }; ");
+            output.push_str("if self.position == item_start { break; } values.push(item); } values }");
+            Ok(output)
+        }
+        Element::Repeat { element: child, max: Some(1), .. } => Ok(format!(
+            "{{ let optional_start = self.position; match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ Ok(value) => Some(value), Err(_) => {{ self.position = optional_start; None }} }} }}",
+            emit_element_expression(child)?
+        )),
+        Element::Repeat { .. } => Err("parser emitter only supports optional and zero-or-more repetitions".into()),
+        Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
+        Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
+        Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
+    }
 }
 
 fn element_variable(element: &Element, index: usize) -> String {
@@ -283,7 +307,7 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("pub struct Parser<'a>"));
         assert!(generated.contains("self.expect_literal(\"0\")?"));
-        assert!(generated.contains("Ok(Number { digit: digit })"));
+        assert!(generated.contains("Ok(Number::Number { digit: digit })"));
     }
 
     #[test]
