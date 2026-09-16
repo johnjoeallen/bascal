@@ -204,6 +204,7 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, self.previous().span.end),
             });
         }
+        reject_indirect_left_recursion(&rules)?;
         Ok(rdgen_ir::Grammar {
             name,
             rules,
@@ -389,6 +390,66 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
     matches!(elements.first(), Some(rdgen_ir::Element::Rule { rule: name, .. }) if name == rule)
 }
 
+fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
+    let names: std::collections::HashSet<&str> = rules.iter().map(|rule| rule.name.as_str()).collect();
+    let mut graph = std::collections::HashMap::<&str, Vec<&str>>::new();
+    for rule in rules {
+        let mut first = Vec::new();
+        for alternative in &rule.alternatives {
+            first_rule_names(&alternative.elements, &names, &mut first);
+        }
+        graph.insert(rule.name.as_str(), first);
+    }
+
+    for rule in rules {
+        let mut path = vec![rule.name.as_str()];
+        if let Some(cycle) = find_cycle(rule.name.as_str(), rule.name.as_str(), &graph, &mut path) {
+            return Err(format!("left recursion through {}", cycle.join(" -> ")));
+        }
+    }
+    Ok(())
+}
+
+fn first_rule_names<'a>(
+    elements: &'a [rdgen_ir::Element],
+    names: &std::collections::HashSet<&'a str>,
+    output: &mut Vec<&'a str>,
+) {
+    let Some(element) = elements.first() else { return };
+    match element {
+        rdgen_ir::Element::Rule { rule, .. } => {
+            if names.contains(rule.as_str()) { output.push(rule.as_str()); }
+        }
+        rdgen_ir::Element::Group { alternatives, .. } => {
+            for alternative in alternatives { first_rule_names(alternative, names, output); }
+        }
+        rdgen_ir::Element::Repeat { element, min, .. } => {
+            first_rule_names(std::slice::from_ref(element.as_ref()), names, output);
+            if *min > 0 { return; }
+        }
+        rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
+    }
+}
+
+fn find_cycle<'a>(
+    origin: &'a str,
+    current: &'a str,
+    graph: &std::collections::HashMap<&'a str, Vec<&'a str>>,
+    path: &mut Vec<&'a str>,
+) -> Option<Vec<String>> {
+    for next in graph.get(current).into_iter().flatten() {
+        if *next == origin {
+            return Some(path.iter().chain(std::iter::once(next)).map(|name| (*name).to_owned()).collect());
+        }
+        if !path.contains(next) {
+            path.push(next);
+            if let Some(cycle) = find_cycle(origin, next, graph, path) { return Some(cycle); }
+            path.pop();
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,6 +482,12 @@ mod tests {
     fn rejects_direct_left_recursion_with_source_offset() {
         let error = compile("grammar Bad; expr = expr , \"+\" , atom | atom;").unwrap_err();
         assert!(error.contains("direct left recursion in rule 'expr'"));
+    }
+
+    #[test]
+    fn rejects_indirect_left_recursion() {
+        let error = compile("grammar Bad; a = b ; b = a | \"x\" ;").unwrap_err();
+        assert!(error.contains("left recursion through a -> b -> a"));
     }
 
     #[test]

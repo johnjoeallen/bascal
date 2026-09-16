@@ -18,3 +18,9 @@ the grammar frontend will compile it into the typed IR as the next milestone.
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
 and string literals, closures, chainable postfix expressions, ternaries, and
 parse-time closed vocabularies.
+
+The frontend can be exercised from the workspace CLI:
+
+```text
+cargo run -p rdgen -- rdgen/grammars/bascal.bcl.rdg
+```
