@@ -225,6 +225,7 @@ impl<'a> Parser<'a> {
             });
         }
         resolve_symbols(&mut rules)?;
+        validate_constructors(&rules)?;
         reject_indirect_left_recursion(&rules)?;
         Ok(rdgen_ir::Grammar {
             name,
@@ -548,6 +549,47 @@ fn resolve_symbols(rules: &mut [rdgen_ir::Rule]) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
+    for rule in rules {
+        for alternative in &rule.alternatives {
+            let mut labels = Vec::new();
+            collect_labels(&alternative.elements, &mut labels);
+            let mut unique_labels = std::collections::HashSet::new();
+            for label in &labels {
+                if !unique_labels.insert(label.as_str()) {
+                    return Err(format!("duplicate element label '{}' in rule '{}'", label, rule.name));
+                }
+            }
+            let mut fields = std::collections::HashSet::new();
+            for binding in &alternative.constructor.fields {
+                if !fields.insert(binding.field.as_str()) {
+                    return Err(format!("duplicate constructor field '{}' in rule '{}'", binding.field, rule.name));
+                }
+                if !unique_labels.contains(binding.source_label.as_str()) {
+                    return Err(format!("constructor field '{}' references unknown label '{}' in rule '{}'", binding.field, binding.source_label, rule.name));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
+    for element in elements {
+        match element {
+            rdgen_ir::Element::Rule { label, .. }
+            | rdgen_ir::Element::Token { label, .. }
+            | rdgen_ir::Element::Literal { label, .. } => {
+                if let Some(label) = label { labels.push(label.clone()); }
+            }
+            rdgen_ir::Element::Group { alternatives, .. } => {
+                for alternative in alternatives { collect_labels(alternative, labels); }
+            }
+            rdgen_ir::Element::Repeat { element, .. } => collect_labels(std::slice::from_ref(element.as_ref()), labels),
+        }
+    }
+}
+
 fn resolve_element(element: &mut rdgen_ir::Element, rule_names: &std::collections::HashSet<String>) -> Result<(), String> {
     match element {
         rdgen_ir::Element::Rule { rule, label, span } => {
@@ -747,6 +789,20 @@ mod tests {
 
         let grammar = compile("grammar Demo; start = letter , \"x\"; ").unwrap();
         assert!(matches!(&grammar.rules[0].alternatives[0].elements[0], rdgen_ir::Element::Token { token, .. } if token == "letter"));
+    }
+
+    #[test]
+    fn rejects_constructor_bindings_without_matching_element_labels() {
+        let error = compile("grammar Demo; start = value: \"x\" => Node(other: value2); ").unwrap_err();
+        assert!(error.contains("constructor field 'other' references unknown label 'value2'"));
+    }
+
+    #[test]
+    fn rejects_duplicate_element_and_constructor_labels() {
+        let duplicate_element = compile("grammar Demo; start = value: \"x\", value: \"y\"; ").unwrap_err();
+        assert!(duplicate_element.contains("duplicate element label 'value'"));
+        let duplicate_field = compile("grammar Demo; start = value: \"x\" => Node(a: value, a: value); ").unwrap_err();
+        assert!(duplicate_field.contains("duplicate constructor field 'a'"));
     }
 
     #[test]
