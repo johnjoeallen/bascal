@@ -25,6 +25,12 @@ The frontend can be exercised from the workspace CLI:
 cargo run -p rdgen -- rdgen/grammars/bascal.bcl.rdg
 ```
 
+Use `--emit-rust` to write generated AST and parser Rust to stdout:
+
+```text
+cargo run -p rdgen -- path/to/grammar.rdg --emit-rust
+```
+
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next
