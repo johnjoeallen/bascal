@@ -28,8 +28,9 @@ cargo run -p rdgen -- rdgen/grammars/bascal.bcl.rdg
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next
-alternative is tried. Grouped and repeated parser elements are diagnosed as
-unsupported until their control flow is implemented.
+alternative is tried. Optional and zero-or-more repetition of a single
+literal, terminal, or rule is supported; complex grouped repetitions are
+diagnosed as unsupported until their control flow is implemented.
 
 Alternatives can carry grammar-directed recovery metadata:
 
