@@ -12,6 +12,7 @@ enum TokenKind {
     Ident(String),
     Literal(String),
     Symbol(char),
+    Arrow,
     Epsilon,
     Eof,
 }
@@ -84,6 +85,13 @@ impl<'a> Lexer<'a> {
                 });
                 continue;
             }
+            if ch == '=' && self.peek_char() == Some('>') {
+                let end = start + 2;
+                self.next_char();
+                self.next_char();
+                tokens.push(Token { kind: TokenKind::Arrow, span: rdgen_ir::Span::new(start, end) });
+                continue;
+            }
             if "=,;|(){}[]:".contains(ch) {
                 self.next_char();
                 tokens.push(Token {
@@ -154,6 +162,11 @@ struct Parser<'a> {
     source: &'a str,
 }
 
+struct ParsedAlternative {
+    elements: Vec<rdgen_ir::Element>,
+    constructor: Option<rdgen_ir::Constructor>,
+}
+
 impl<'a> Parser<'a> {
     fn new(source: &'a str) -> Self {
         Self {
@@ -177,7 +190,7 @@ impl<'a> Parser<'a> {
             self.expect_symbol(';')?;
             if alternatives
                 .iter()
-                .any(|alternative| starts_with_rule(alternative, &rule_name))
+                .any(|alternative| starts_with_rule(&alternative.elements, &rule_name))
             {
                 return Err(format!(
                     "direct left recursion in rule '{}' at {}",
@@ -186,18 +199,19 @@ impl<'a> Parser<'a> {
             }
             rules.push(rdgen_ir::Rule {
                 name: rule_name.clone(),
-                output: rdgen_ir::TypeName(rule_name),
+                output: rdgen_ir::TypeName(rule_name.clone()),
                 alternatives: alternatives
                     .into_iter()
-                    .map(|elements| rdgen_ir::Alternative {
-                        span: elements
+                    .map(|alternative| rdgen_ir::Alternative {
+                        span: alternative
+                            .elements
                             .first()
                             .map_or(rdgen_ir::Span::new(start, start), element_span),
-                        elements,
-                        constructor: rdgen_ir::Constructor {
-                            type_name: rdgen_ir::TypeName("".into()),
+                        elements: alternative.elements,
+                        constructor: alternative.constructor.unwrap_or(rdgen_ir::Constructor {
+                            type_name: rdgen_ir::TypeName(rule_name.clone()),
                             fields: Vec::new(),
-                        },
+                        }),
                         recovery: None,
                     })
                     .collect(),
@@ -212,12 +226,22 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn alternatives(&mut self) -> Result<Vec<Vec<rdgen_ir::Element>>, String> {
-        let mut result = vec![self.sequence()?];
+    fn alternatives(&mut self) -> Result<Vec<ParsedAlternative>, String> {
+        let mut result = vec![self.alternative()?];
         while self.accept_symbol('|') {
-            result.push(self.sequence()?);
+            result.push(self.alternative()?);
         }
         Ok(result)
+    }
+
+    fn alternative(&mut self) -> Result<ParsedAlternative, String> {
+        let elements = self.sequence()?;
+        let constructor = if self.accept_arrow() {
+            Some(self.parse_constructor()?)
+        } else {
+            None
+        };
+        Ok(ParsedAlternative { elements, constructor })
     }
 
     fn sequence(&mut self) -> Result<Vec<rdgen_ir::Element>, String> {
@@ -235,7 +259,7 @@ impl<'a> Parser<'a> {
     fn element(&mut self) -> Result<rdgen_ir::Element, String> {
         if self.accept_symbol('{') {
             let start = self.previous().span.start;
-            let alternatives = self.alternatives()?;
+            let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
             let end = self.expect_symbol('}')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
                 element: Box::new(rdgen_ir::Element::Group {
@@ -249,7 +273,7 @@ impl<'a> Parser<'a> {
         }
         if self.accept_symbol('[') {
             let start = self.previous().span.start;
-            let alternatives = self.alternatives()?;
+            let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
             let end = self.expect_symbol(']')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
                 element: Box::new(rdgen_ir::Element::Group {
@@ -261,23 +285,34 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, end),
             });
         }
+        let label = if self.is_labeled_element() {
+            let label = self.ident()?;
+            self.expect_symbol(':')?;
+            Some(label)
+        } else {
+            None
+        };
         let base = if let Some(text) = self.take_ident() {
             let span = self.previous().span;
             rdgen_ir::Element::Rule {
-                label: None,
+                label,
                 rule: text,
                 span,
             }
         } else if let Some(value) = self.take_literal() {
             let span = self.previous().span;
             rdgen_ir::Element::Literal {
-                label: None,
+                label,
                 value,
                 span,
             }
         } else if self.accept_symbol('(') {
             let start = self.previous().span.start;
-            let alternatives = self.alternatives()?;
+            let alternatives = self
+                .alternatives()?
+                .into_iter()
+                .map(|alternative| alternative.elements)
+                .collect();
             let end = self.expect_symbol(')')?.span.end;
             rdgen_ir::Element::Group {
                 alternatives,
@@ -287,6 +322,32 @@ impl<'a> Parser<'a> {
             return Err(self.error("expected identifier, literal, or group"));
         };
         Ok(base)
+    }
+
+    fn is_labeled_element(&self) -> bool {
+        matches!(self.current().kind, TokenKind::Ident(_))
+            && self.tokens.get(self.position + 1).map(|token| token.kind == TokenKind::Symbol(':')) == Some(true)
+    }
+
+    fn parse_constructor(&mut self) -> Result<rdgen_ir::Constructor, String> {
+        let type_name = rdgen_ir::TypeName(self.ident()?);
+        let mut fields = Vec::new();
+        let start = self.previous().span.start;
+        if self.accept_symbol('(') && !self.accept_symbol(')') {
+            loop {
+                let field = self.ident()?;
+                self.expect_symbol(':')?;
+                let source_label = self.ident()?;
+                fields.push(rdgen_ir::FieldBinding {
+                    field,
+                    source_label,
+                    span: rdgen_ir::Span::new(start, self.previous().span.end),
+                });
+                if self.accept_symbol(')') { break; }
+                self.expect_symbol(',')?;
+            }
+        }
+        Ok(rdgen_ir::Constructor { type_name, fields })
     }
 
     fn starts_element(&self) -> bool {
@@ -354,6 +415,14 @@ impl<'a> Parser<'a> {
     }
     fn accept_symbol(&mut self, symbol: char) -> bool {
         if self.current().kind == TokenKind::Symbol(symbol) {
+            self.position += 1;
+            true
+        } else {
+            false
+        }
+    }
+    fn accept_arrow(&mut self) -> bool {
+        if self.current().kind == TokenKind::Arrow {
             self.position += 1;
             true
         } else {
@@ -508,5 +577,21 @@ mod tests {
         let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
         assert_eq!(grammar.name, "Bascal");
         assert!(grammar.rules.iter().any(|rule| rule.name == "expr"));
+    }
+
+    #[test]
+    fn preserves_labeled_constructor_annotations_in_the_typed_ir() {
+        let grammar = compile(
+            "grammar Expr; expr = value: number => Number(value: value) | left: atom, \"+\", right: atom => Add(left: left, right: right); atom = \"x\";",
+        )
+        .unwrap();
+        let alternative = &grammar.rules[0].alternatives[0];
+        assert_eq!(alternative.constructor.type_name.0, "Number");
+        assert_eq!(alternative.constructor.fields[0].source_label, "value");
+        assert!(matches!(
+            &alternative.elements[0],
+            rdgen_ir::Element::Rule { label: Some(label), rule, .. }
+                if label == "value" && rule == "number"
+        ));
     }
 }
