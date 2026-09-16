@@ -24,3 +24,10 @@ The frontend can be exercised from the workspace CLI:
 ```text
 cargo run -p rdgen -- rdgen/grammars/bascal.bcl.rdg
 ```
+
+Alternatives can carry grammar-directed recovery metadata:
+
+```ebnf
+statement = "statement" => Statement()
+    recover { sync ";", "}"; skip_until_sync; };
+```

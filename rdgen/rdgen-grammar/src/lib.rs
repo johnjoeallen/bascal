@@ -165,6 +165,7 @@ struct Parser<'a> {
 struct ParsedAlternative {
     elements: Vec<rdgen_ir::Element>,
     constructor: Option<rdgen_ir::Constructor>,
+    recovery: Option<rdgen_ir::RecoveryPoint>,
 }
 
 impl<'a> Parser<'a> {
@@ -217,7 +218,7 @@ impl<'a> Parser<'a> {
                             type_name: rdgen_ir::TypeName(rule_name.clone()),
                             fields: Vec::new(),
                         }),
-                        recovery: None,
+                        recovery: alternative.recovery,
                     })
                     .collect(),
                 span: rdgen_ir::Span::new(start, self.previous().span.end),
@@ -271,7 +272,12 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(ParsedAlternative { elements, constructor })
+        let recovery = if self.at_ident("recover") {
+            Some(self.parse_recovery()?)
+        } else {
+            None
+        };
+        Ok(ParsedAlternative { elements, constructor, recovery })
     }
 
     fn sequence(&mut self) -> Result<Vec<rdgen_ir::Element>, String> {
@@ -378,6 +384,32 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(rdgen_ir::Constructor { type_name, fields })
+    }
+
+    fn parse_recovery(&mut self) -> Result<rdgen_ir::RecoveryPoint, String> {
+        self.expect_ident("recover")?;
+        let start = self.current().span.start;
+        self.expect_symbol('{')?;
+        self.expect_ident("sync")?;
+        let mut sync_tokens = Vec::new();
+        loop {
+            sync_tokens.push(self.take_literal().ok_or_else(|| self.error("recovery sync requires a literal"))?);
+            if !self.accept_symbol(',') { break; }
+        }
+        self.expect_symbol(';')?;
+        let strategy_name = self.ident()?;
+        let strategy = match strategy_name.as_str() {
+            "skip_until_sync" => rdgen_ir::RecoveryStrategy::SkipUntilSync,
+            "abort_rule" => rdgen_ir::RecoveryStrategy::AbortRule,
+            "insert_token" => {
+                let token = self.take_literal().ok_or_else(|| self.error("insert_token requires a literal"))?;
+                rdgen_ir::RecoveryStrategy::InsertToken(token)
+            }
+            other => return Err(format!("unknown recovery strategy '{}' at {}", other, self.previous().span.start)),
+        };
+        self.expect_symbol(';')?;
+        let end = self.expect_symbol('}')?.span.end;
+        Ok(rdgen_ir::RecoveryPoint { sync_tokens, strategy, span: rdgen_ir::Span::new(start, end) })
     }
 
     fn starts_element(&self) -> bool {
@@ -658,6 +690,14 @@ mod tests {
         assert_eq!(grammar.precedence[0].rule, "expr");
         assert_eq!(grammar.precedence[0].levels[0].operators, vec!["+", "-"]);
         assert_eq!(grammar.precedence[0].levels[1].associativity, rdgen_ir::Associativity::Right);
+    }
+
+    #[test]
+    fn preserves_recovery_annotations_in_the_ir() {
+        let grammar = compile("grammar Demo; statement = \"x\" => Statement() recover { sync \";\", \"}\"; skip_until_sync; }; ").unwrap();
+        let recovery = grammar.rules[0].alternatives[0].recovery.as_ref().unwrap();
+        assert_eq!(recovery.sync_tokens, vec![";", "}"]);
+        assert_eq!(recovery.strategy, rdgen_ir::RecoveryStrategy::SkipUntilSync);
     }
 
     #[test]
