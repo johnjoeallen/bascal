@@ -24,6 +24,7 @@ pub struct Grammar {
     pub name: String,
     pub rules: Vec<Rule>,
     pub tokens: Vec<Token>,
+    pub precedence: Vec<PrecedenceTable>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -11,6 +11,18 @@
 
 grammar Bascal;
 
+precedence expr {
+    left "xor";
+    left "or", "||";
+    left "and", "&&";
+    left "=", "<>", "<", ">", "<=", ">=";
+    left "+", "-";
+    left "mod";
+    left "\\";
+    left "*", "/";
+    right "^";
+}
+
 (* ----- Lexical terminals ----- *)
 
 identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;

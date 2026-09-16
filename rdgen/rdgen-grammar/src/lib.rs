@@ -182,7 +182,12 @@ impl<'a> Parser<'a> {
         let name = self.ident()?;
         self.expect_symbol(';')?;
         let mut rules = Vec::new();
+        let mut precedence = Vec::new();
         while !self.at_eof() {
+            if self.at_ident("precedence") {
+                precedence.push(self.parse_precedence()?);
+                continue;
+            }
             let start = self.current().span.start;
             let rule_name = self.ident()?;
             self.expect_symbol('=')?;
@@ -224,7 +229,31 @@ impl<'a> Parser<'a> {
             name,
             rules,
             tokens: Vec::new(),
+            precedence,
         })
+    }
+
+    fn parse_precedence(&mut self) -> Result<rdgen_ir::PrecedenceTable, String> {
+        self.expect_ident("precedence")?;
+        let rule = self.ident()?;
+        self.expect_symbol('{')?;
+        let mut levels = Vec::new();
+        while !self.accept_symbol('}') {
+            let associativity = match self.ident()?.as_str() {
+                "left" => rdgen_ir::Associativity::Left,
+                "right" => rdgen_ir::Associativity::Right,
+                other => return Err(format!("unknown associativity '{}' at {}", other, self.previous().span.start)),
+            };
+            let mut operators = Vec::new();
+            while self.starts_literal() {
+                operators.push(self.take_literal().expect("starts_literal guarantees a literal"));
+                self.accept_symbol(',');
+            }
+            if operators.is_empty() { return Err(self.error("precedence level requires an operator literal")); }
+            self.expect_symbol(';')?;
+            levels.push(rdgen_ir::PrecedenceLevel { operators, associativity });
+        }
+        Ok(rdgen_ir::PrecedenceTable { rule, levels })
     }
 
     fn alternatives(&mut self) -> Result<Vec<ParsedAlternative>, String> {
@@ -361,6 +390,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Symbol('[')
         )
     }
+    fn starts_literal(&self) -> bool { matches!(self.current().kind, TokenKind::Literal(_)) }
 
     fn current(&self) -> &Token {
         &self.tokens[self.position]
@@ -396,6 +426,9 @@ impl<'a> Parser<'a> {
                 self.previous().span.start
             ))
         }
+    }
+    fn at_ident(&self, expected: &str) -> bool {
+        matches!(&self.current().kind, TokenKind::Ident(value) if value == expected)
     }
     fn take_literal(&mut self) -> Option<String> {
         if let TokenKind::Literal(value) = &self.current().kind {
@@ -619,6 +652,15 @@ mod tests {
     }
 
     #[test]
+    fn parses_explicit_precedence_levels() {
+        let grammar = compile("grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";").unwrap();
+        assert_eq!(grammar.precedence.len(), 1);
+        assert_eq!(grammar.precedence[0].rule, "expr");
+        assert_eq!(grammar.precedence[0].levels[0].operators, vec!["+", "-"]);
+        assert_eq!(grammar.precedence[0].levels[1].associativity, rdgen_ir::Associativity::Right);
+    }
+
+    #[test]
     fn rejects_direct_left_recursion_with_source_offset() {
         let error = compile("grammar Bad; expr = expr , \"+\" , atom | atom;").unwrap_err();
         assert!(error.contains("direct left recursion in rule 'expr'"));
@@ -654,6 +696,8 @@ mod tests {
         let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
         assert_eq!(grammar.name, "Bascal");
         assert!(grammar.rules.iter().any(|rule| rule.name == "expr"));
+        assert_eq!(grammar.precedence[0].rule, "expr");
+        assert_eq!(grammar.precedence[0].levels.len(), 9);
     }
 
     #[test]
