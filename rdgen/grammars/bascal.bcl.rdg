@@ -1,0 +1,144 @@
+(* BASCAL (.bcl) starter grammar for rdgen.
+ *
+ * This is based on BASCAL grammar rev. 5. The source is intentionally kept
+ * in the EBNF-plus-constructor notation used during the design phase while
+ * rdgen's grammar frontend is being implemented. Confirmed bcc behavior and
+ * deliberate rdgen extensions are documented inline.
+ *
+ * Deliberate rdgen choice: && and || are ordinary expression operators here.
+ * Their contextual validity is a semantic validation pass, not a CFG rule.
+ *)
+
+grammar Bascal;
+
+(* ----- Lexical terminals ----- *)
+
+identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;
+suffix           = "%" | "$" | "!" | "#" | "&" ;
+integer_literal  = digit , { digit } ;
+float_literal    = digit , { digit } , "." , digit , { digit } ;
+hex_literal      = "&" , ( "H" | "h" ) , { hex_digit } ;
+octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
+string_literal   = "\"" , { string_char } , "\"" ;
+string_char      = escaped_quote | any_char_except_quote ;
+escaped_quote    = "\\\"" | "\"\"" ;
+line_comment     = ( "'" | "//" ) , { any_char_except_newline } ;
+block_comment    = "/*" , { any_char } , "*/" ;
+
+(* ----- Program and declarations ----- *)
+
+program          = { file_item } ;
+file_item        = program_decl | library_decl | shared_decl
+                 | require_decl | import_decl | subprogram
+                 | record_decl | statement ;
+
+program_decl     = "program" , identifier , [ "shared" , identifier ] ;
+library_decl     = "library" , identifier ;
+shared_decl      = "shared" , identifier ;
+require_decl     = "require" , identifier ;
+import_decl      = "import" , identifier ;
+
+record_decl      = "record" , identifier ,
+                    [ "combines" , identifier , { "," , identifier } ] ,
+                    { field_decl | inline_method } ,
+                    "end" , "record" ;
+field_decl       = identifier , ":" , field_type ;
+field_type       = "string" , [ "(" , integer_literal , ")" ]
+                 | "int16" | "int" | "int32" | "float32" | "float64"
+                 | identifier ;
+
+subprogram       = function_decl | procedure_decl | fluent_method_decl
+                 | method_decl ;
+function_decl    = "function" , typed_ident , "(" , [ param_list ] , ")"
+                   , { statement } , "end" , "function" ;
+procedure_decl   = "procedure" , identifier , "(" , [ param_list ] , ")"
+                   , { statement } , "end" , "procedure" ;
+fluent_method_decl = "fluent" , method_decl ;
+method_decl      = "method" , identifier , "[" , identifier , "]"
+                   , "(" , [ param_list ] , ")" , [ ":" , return_type ]
+                   , { statement } , "end" , "method" ;
+inline_method    = "method" , identifier , "(" , [ param_list ] , ")"
+                   , [ ":" , return_type ] , { statement }
+                   , "end" , "method" ;
+return_type      = "integer" | "long" | "single" | "double" | "string"
+                 | suffix ;
+param_list       = param , { "," , param } ;
+param            = [ "byref" | "byval" ] , typed_ident
+                   , [ array_axes ] , [ "=" , expr ]
+                   , [ "as" , identifier ] ;
+array_axes       = "(" , axis , { "," , axis } , ")" ;
+axis             = "?" | integer_literal ;
+typed_ident      = identifier ;
+
+(* ----- Statements ----- *)
+
+statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
+                 | global_decl | assignment_or_expr_stmt
+                 | if_stmt | for_stmt | while_stmt | do_stmt
+                 | return_stmt | exit_stmt | continue_stmt
+                 | goto_stmt | gosub_stmt | try_stmt | end_stmt ;
+label_stmt       = identifier , ":" ;
+comment_stmt     = line_comment | block_comment ;
+global_decl      = "global" , identifier ;
+dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
+dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
+const_stmt       = "const" , identifier , "=" , expr ;
+return_stmt      = "return" , [ expr ] ;
+exit_stmt        = "exit" ;
+continue_stmt    = "continue" ;
+goto_stmt        = "goto" , identifier ;
+gosub_stmt       = "gosub" , identifier ;
+end_stmt         = "end" ;
+
+if_stmt          = "if" , expr , "then" ,
+                    ( single_line_if_tail | block_if_tail ) ;
+block_if_tail    = { statement } ,
+                    ( "elseif" , expr , "then" , block_if_tail
+                    | [ "else" , { statement } ] , "end" , "if" ) ;
+single_line_if_tail = statement , { ":" , statement }
+                     , [ "else" , statement , { ":" , statement } ] ;
+for_stmt         = "for" , typed_ident , "=" , expr ,
+                    ( "to" , expr , [ "step" , expr ]
+                    | "downto" , expr ) ,
+                    { statement } , "end" , [ "for" ] ;
+while_stmt       = "while" , expr , { statement }
+                   , ( "wend" | "end" , [ "while" ] ) ;
+do_stmt          = "do" , [ do_condition ] , { statement }
+                   , ( "loop" , [ do_condition ] | "end" , [ "do" ] ) ;
+do_condition     = ( "while" | "until" ) , expr ;
+try_stmt         = "try" , { statement } ,
+                   [ "catch" , identifier , { statement } ] ,
+                   [ "finally" , { statement } ] , "end" , "try" ;
+
+(* ----- Expressions -----
+ * Precedence is represented explicitly in the IR rather than inferred by a
+ * backend. The order is xor < or/|| < and/&& < comparison < +/- < mod
+ * < integer division < multiplication/division < unary - < ^ (right associative).
+ *)
+
+expr             = xor_expr ;
+xor_expr         = or_expr , { "xor" , or_expr } ;
+or_expr          = and_expr , { ( "or" | "||" ) , and_expr } ;
+and_expr         = not_expr , { ( "and" | "&&" ) , not_expr } ;
+not_expr         = "not" , not_expr | compare_expr ;
+compare_expr     = add_expr , { compare_op , add_expr } ;
+compare_op       = "=" | "<>" | "<" | ">" | "<=" | ">=" ;
+add_expr         = mod_expr , { ( "+" | "-" ) , mod_expr } ;
+mod_expr         = intdiv_expr , { "mod" , intdiv_expr } ;
+intdiv_expr      = mul_expr , { "\\" , mul_expr } ;
+mul_expr         = unary_expr , { ( "*" | "/" ) , unary_expr } ;
+unary_expr       = "-" , unary_expr | pow_expr ;
+pow_expr         = postfix_expr , [ "^" , unary_expr ] ;
+postfix_expr     = primary , { "." , identifier
+                              , [ "(" , [ arg_list ] , ")" ] } ;
+arg_list         = expr , { "," , expr } ;
+primary          = integer_literal | hex_literal | octal_literal
+                 | float_literal | string_literal | "true" | "false"
+                 | ident_primary | "(" , expr , ")" ;
+ident_primary    = identifier ,
+                    ( "(" , [ arg_list ] , ")"
+                    | "[" , expr , "]" | ε ) ;
+
+(* Constructor annotations and recovery declarations are the next DSL
+ * frontend milestone. Their intended IR forms are represented directly in
+ * rdgen-ir::Constructor and rdgen-ir::RecoveryPoint. *)
