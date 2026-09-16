@@ -9220,6 +9220,54 @@ fn target_diagnostic_name(target: Target) -> &'static str {
     }
 }
 
+/// Every `Statement::Label` name declared anywhere in `statements`,
+/// lowercased, recursing into every nested block (mirrors `resolver.rs`'s
+/// own private `collect_labels`, duplicated here rather than exposed
+/// there since it's a small, self-contained recursion and the two
+/// modules otherwise have no reason to share it). Used by `reject_float`
+/// to keep a `GOTO`/`GOSUB`/`RESTORE` label reference (see its own doc
+/// comment) from being misread as a variable.
+fn collect_label_names(statements: &[Stmt], out: &mut BTreeSet<String>) {
+    for stmt in statements {
+        match &stmt.kind {
+            Statement::Label(name) => {
+                out.insert(name.to_ascii_lowercase());
+            }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_label_names(then_body, out);
+                collect_label_names(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_label_names(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_label_names(&case.body, out);
+                }
+                collect_label_names(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_label_names(try_body, out);
+                if let Some(handler) = catch {
+                    collect_label_names(&handler.body, out);
+                }
+                collect_label_names(finally_body, out);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Rejects every floating-point-typed variable and every `/`/`^` use --
 /// see `CDialectFeature::Float`'s own doc comment for why both matter
 /// (real BASIC's suffixless-numeric default is single-precision, and `/`/
@@ -9310,6 +9358,23 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
     // this pass existed. Deduped against `reported` so a variable caught
     // by both passes is only ever diagnosed once.
     if !dialect.supports_float {
+        // `GOTO`/`GOSUB`/`RESTORE`'s label target is stored as a bare
+        // `Expr::Ident` -- see `Statement::Restore`'s own doc comment --
+        // reusing the same AST shape an ordinary variable read has, even
+        // though it names a compile-time branch target, never a runtime
+        // value. `walk_statements_exprs` (shared with `resolver.rs`'s own
+        // checks, appropriate for the `/`/`^`/`MKS$` check above since
+        // none of those can legitimately appear as a label target) walks
+        // it exactly like any other `Expr::Ident`, so this ident-based
+        // pass must exclude every known label name explicitly -- without
+        // this, `restore someLabel` reading a suffixless label name was a
+        // real false-positive rejection (confirmed by hand against
+        // `tutorial/restore_data.bcl`'s `restore secondBatch`).
+        let mut label_names: BTreeSet<String> = BTreeSet::new();
+        collect_label_names(&program.statements, &mut label_names);
+        for func in &program.functions {
+            collect_label_names(&func.body, &mut label_names);
+        }
         let mut check_ident = |statements: &[Stmt]| {
             walk_statements_exprs(statements, &mut |expr, pos| {
                 let Expr::Ident(ident) = expr else {
@@ -9320,7 +9385,8 @@ fn reject_float(program: &Program, dialect: &CDialectProfile, diagnostics: &mut 
                 }
                 if ident.suffix.is_none()
                     && (ident.name.eq_ignore_ascii_case("err")
-                        || ident.name.eq_ignore_ascii_case("erl"))
+                        || ident.name.eq_ignore_ascii_case("erl")
+                        || label_names.contains(&ident.name.to_ascii_lowercase()))
                 {
                     return;
                 }
@@ -9795,6 +9861,26 @@ mod dialect_tests {
                 .any(|d| d.message.contains("last_slot") && d.message.contains("C64 (cc65)")),
             "{diagnostics:?}"
         );
+    }
+
+    /// Real false positive, found by re-running the full tutorial corpus
+    /// after the fix just above: a `GOTO`/`GOSUB`/`RESTORE` label target
+    /// reuses the same `Expr::Ident` AST shape an ordinary suffixless
+    /// variable read has, so `restore secondBatch` -- a plain label
+    /// reference, never a runtime value -- was wrongly rejected as a
+    /// "floating-point variable" by the supplementary ident-walk that
+    /// fixed the `global`-declaration gap above. Must NOT be rejected on
+    /// any target.
+    #[test]
+    fn target_c64_does_not_treat_a_restore_label_as_a_float_variable() {
+        let source = "program p\n\
+             restore secondBatch\n\
+             read x%\n\
+             print x%\n\
+             end\n\
+             secondBatch:\n\
+             data 42\n";
+        generate_for_target(source, Target::C64);
     }
 
     /// `ABS`/`INT`/`FIX`/`SGN` on an integer argument never need float
