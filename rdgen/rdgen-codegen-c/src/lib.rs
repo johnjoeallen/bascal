@@ -138,7 +138,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
             + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
             + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { size_t length = strlen(literal); rdgen_skip(parser); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, literal, length) == 0) { token->text = parser->source + parser->position; token->length = length; parser->position += length; return true; } return false; }\n"
-            + "static rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal }; return parser; }\n\n"
+            + "rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal }; return parser; }\n\n"
     ));
     for rule in &grammar.rules {
         output.push_str(&format!("static {} *rdgen_parse_{}(rdgen_parser *parser, rdgen_error *error);\n", c_type_name(&rule.name), rule.name));
@@ -147,6 +147,12 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     for rule in &grammar.rules {
         emit_c_parser_rule(&mut output, rule)?;
     }
+    let start = grammar.rules.first().ok_or_else(|| "grammar has no rules".to_owned())?;
+    let start_name = c_type_name(&start.name);
+    output.push_str(&format!(
+        "{start_name} *rdgen_parse(rdgen_parser *parser, rdgen_error *error) {{ {start_name} *node = rdgen_parse_{}(parser, error); if (node == NULL) return NULL; rdgen_skip(parser); if (parser->position != parser->length) {{ rdgen_set_error(error, \"unexpected trailing input\", parser->position); return NULL; }} return node; }}\n\n",
+        start.name
+    ));
     output.push_str("#endif /* RDGEN_AST_H */\n");
     Ok(output)
 }
@@ -234,6 +240,8 @@ mod tests {
         ).unwrap();
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("rdgen_parse_start"));
+        assert!(generated.contains("rdgen_parser rdgen_parser_init"));
+        assert!(generated.contains("rdgen_start *rdgen_parse("));
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
         assert!(generated.contains("node->as.rdgen_pair.left"));
         assert!(generated.contains("rdgen_alt_fail_0:"));

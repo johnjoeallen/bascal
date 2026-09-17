@@ -49,6 +49,8 @@ cargo run -p rdgen -- rdgen/grammars/c-parser-smoke.rdg --emit-c-parser
 
 It supports alternatives composed of literals, named terminals, and rule
 references with arena-backed AST construction and input-offset backtracking.
+The generated `rdgen_parser_init` and `rdgen_parse` functions provide the C
+entry point and enforce complete input consumption after trivia skipping.
 Groups and repetitions are rejected until their C control flow is implemented.
 
 The Rust backend emits concrete typed AST declarations and parser control flow
