@@ -147,7 +147,7 @@ name_stmt        = "name" , expr , "as" , expr ;
 close_stmt       = "close" , "#" , expr ;
 data_stmt        = "data" , expr , { "," , expr } ;
 read_stmt        = "read" , expr , { "," , expr } ;
-restore_stmt     = "restore" , [ identifier ] ;
+restore_stmt     = "restore" , [ same_line identifier ] ;
 locate_stmt      = "locate" , expr , "," , expr ;
 color_stmt       = "color" , expr , [ "," , expr ] ;
 swap_stmt        = "swap" , expr , "," , expr ;
@@ -156,7 +156,7 @@ cls_stmt         = "cls" ;
 beep_stmt        = "beep" ;
 system_stmt      = "system" ;
 clear_stmt       = "clear" ;
-randomize_stmt   = "randomize" , [ expr ] ;
+randomize_stmt   = "randomize" , [ same_line expr ] ;
 poke_stmt        = "poke" , expr , "," , expr ;
 out_stmt         = "out" , expr , "," , expr ;
 width_stmt       = "width" , [ "#" , expr , "," ] , expr ;
@@ -169,9 +169,9 @@ gosub_stmt       = "gosub" , identifier ;
 on_error_goto_stmt = "on" , "error" , "goto" , ( identifier | "0" ) ;
 on_branch_stmt   = "on" , expr , ( "goto" | "gosub" ) , identifier ,
                     { "," , identifier } ;
-resume_stmt      = "resume" , [ "next" | identifier ] ;
+resume_stmt      = "resume" , [ same_line ( "next" | identifier ) ] ;
 error_stmt       = "error" , expr ;
-throw_stmt       = "throw" , [ expr ] ;
+throw_stmt       = "throw" , [ same_line expr ] ;
 option_base_stmt = "option" , "base" , expr ;
 end_stmt         = "end" ;
 
@@ -185,11 +185,11 @@ single_line_if_tail = statement , { ":" , statement }
 for_stmt         = "for" , typed_ident , "=" , expr ,
                     ( "to" , expr , [ "step" , expr ]
                     | "downto" , expr ) ,
-                    { statement } until { "end" } , "end" , [ "for" ] ;
+                    { statement } until { "end" } , "end" , [ same_line "for" ] ;
 while_stmt       = "while" , expr , { statement } until { "wend", "end" }
-                   , ( "wend" | "end" , [ "while" ] ) ;
+                   , ( "wend" | "end" , [ same_line "while" ] ) ;
 do_stmt          = "do" , [ do_condition ] , { statement } until { "loop", "end" }
-                   , ( "loop" , [ do_condition ] | "end" , [ "do" ] ) ;
+                   , ( "loop" , [ same_line do_condition ] | "end" , [ same_line "do" ] ) ;
 do_condition     = ( "while" | "until" ) , expr ;
 select_case_stmt = "select" , "case" , expr ,
                     { "case" , case_values ,
