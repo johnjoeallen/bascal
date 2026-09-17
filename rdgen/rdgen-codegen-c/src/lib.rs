@@ -242,7 +242,7 @@ fn is_c_supported_element(element: &Element) -> bool {
     match element {
         Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. } => true,
         Element::Repeat { element, .. } => c_repeat_child(element).is_some_and(is_simple_element),
-        Element::Group { .. } => false,
+        Element::Group { .. } => c_group_child(element).is_some_and(is_simple_element),
     }
 }
 
@@ -272,6 +272,9 @@ fn c_local_declaration(element: &Element, index: usize) -> String {
     if matches!(element, Element::Repeat { .. }) {
         return format!("size_t {}_count", c_local_name(element, index));
     }
+    if let Some(child) = c_group_child(element) {
+        return c_local_declaration(child, index);
+    }
     format!("{} {}", match element { Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)), _ => "rdgen_token".into() }, c_local_name(element, index))
 }
 
@@ -281,9 +284,17 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
         Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
         Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
+        Element::Group { .. } => c_parse_statement(c_group_child(element).ok_or_else(|| "C grouped elements require one simple child".to_owned())?, index, alternative_index),
         Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{local}_count = 0; {{ size_t item_start_{index} = parser->position; {} if (parser->position != item_start_{index}) {local}_count = 1; else parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
         Element::Repeat { element: child, max: None, .. } => Ok(format!("{local}_count = 0; for (;;) {{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} {local}_count++; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C repetition requires a single-element group".to_owned())?, index)?)),
         _ => Err("unsupported C parser element".into()),
+    }
+}
+
+fn c_group_child(element: &Element) -> Option<&Element> {
+    match element {
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
+        _ => None,
     }
 }
 
@@ -337,7 +348,7 @@ mod tests {
 
     #[test]
     fn rejects_complex_elements_until_c_control_flow_exists() {
-        let grammar = compile("grammar Start; start = ( \"a\" );").unwrap();
+        let grammar = compile("grammar Start; start = ( \"a\" | \"b\" );").unwrap();
         let error = emit_parser(&grammar).unwrap_err();
         assert!(error.contains("does not yet support grouped or repeated elements"));
     }
@@ -348,5 +359,12 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("element_0_count = 0"));
         assert!(generated.contains("for (;;)"));
+    }
+
+    #[test]
+    fn emits_single_element_grouped_consumption() {
+        let grammar = compile("grammar Start; start = ( \"a\" ) => Start();").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
     }
 }

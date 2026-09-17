@@ -53,7 +53,8 @@ terminal, or rule, with arena-backed AST construction and input-offset
 backtracking.
 The generated `rdgen_parser_init` and `rdgen_parse` functions provide the C
 entry point and enforce complete input consumption after trivia skipping.
-Groups and repetitions are rejected until their C control flow is implemented.
+Single-element groups are supported; multi-element and multi-alternative
+groups are rejected until their C backtracking control flow is implemented.
 
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
