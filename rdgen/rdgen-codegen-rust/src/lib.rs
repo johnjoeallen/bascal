@@ -264,7 +264,11 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
                 matches!(level.associativity, rdgen_ir::Associativity::Right)
             ));
         }
-        output.push_str("];\n\n");
+        output.push_str("];\n");
+        output.push_str(&format!(
+            "pub fn {}_precedence(operator: &str) -> Option<(usize, bool)> {{ {}.iter().enumerate().find_map(|(level, spec)| spec.operators.iter().any(|candidate| *candidate == operator).then_some((level, spec.right_associative))) }}\n\n",
+            table.rule, constant
+        ));
     }
     Ok(())
 }
@@ -706,6 +710,7 @@ mod tests {
         assert!(generated.contains("pub const EXPR_PRECEDENCE"));
         assert!(generated.contains("operators: &[\"+\", \"-\"]"));
         assert!(generated.contains("right_associative: true"));
+        assert!(generated.contains("pub fn expr_precedence(operator: &str)"));
     }
 
     #[test]
@@ -732,7 +737,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ assert_eq!(EXPR_PRECEDENCE.len(), 2); assert_eq!(EXPR_PRECEDENCE[0].operators, &[\"+\", \"-\"]); assert!(!EXPR_PRECEDENCE[0].right_associative); assert!(EXPR_PRECEDENCE[1].right_associative); }}\n",
+                "include!({:?});\nfn main() {{ assert_eq!(EXPR_PRECEDENCE.len(), 2); assert_eq!(EXPR_PRECEDENCE[0].operators, &[\"+\", \"-\"]); assert!(!EXPR_PRECEDENCE[0].right_associative); assert!(EXPR_PRECEDENCE[1].right_associative); assert_eq!(expr_precedence(\"+\"), Some((0, false))); assert_eq!(expr_precedence(\"^\"), Some((1, true))); assert_eq!(expr_precedence(\"/\"), None); }}\n",
                 generated.to_str().unwrap()
             ),
         )
