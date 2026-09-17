@@ -8,7 +8,9 @@ construction are preferable to a generic parse-tree runtime.
 The workspace is organized around a language-agnostic IR. The grammar DSL
 compiler resolves rule references, constructor bindings, recovery points, and
 precedence tables into `rdgen-ir`; target-specific emitters consume that IR.
-The Rust emitter is the reference backend, followed by C and C++.
+Rust is currently the only completion target and the reference backend for
+BASCAL. The C emitter is retained as an experimental pressure test, but C++
+and GC-language backends are deferred until the Rust/BASCAL path is complete.
 
 The first grammar fixture is [`grammars/bascal.bcl.rdg`](grammars/bascal.bcl.rdg),
 derived from BASCAL grammar revision 5. The grammar frontend compiles it into
