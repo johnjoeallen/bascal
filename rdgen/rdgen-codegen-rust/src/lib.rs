@@ -752,6 +752,15 @@ mod tests {
     }
 
     #[test]
+    fn does_not_emit_precedence_api_without_a_table() {
+        let grammar = compile("grammar Start; start = \"x\" => Start();").unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(!generated.contains("RdgenPrecedenceLevel"));
+        assert!(!generated.contains("parse_start_precedence"));
+        assert!(!generated.contains("_PRECEDENCE"));
+    }
+
+    #[test]
     fn rejects_precedence_metadata_type_collisions() {
         let grammar = compile(
             "grammar Bad; precedence expr { left \"+\"; } rdgen_precedence_level = \"x\"; expr = \"x\", { \"+\", \"x\" };",
