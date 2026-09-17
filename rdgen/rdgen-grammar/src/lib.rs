@@ -856,6 +856,15 @@ fn validate_precedence_constructors(
                     constructor.type_name.0, table.rule
                 ));
             }
+            let mut field_names = std::collections::HashSet::new();
+            for field in &constructor.fields {
+                if !field_names.insert(field.field.as_str()) {
+                    return Err(format!(
+                        "precedence constructor '{}' for rule '{}' has duplicate output field '{}'",
+                        constructor.type_name.0, table.rule, field.field
+                    ));
+                }
+            }
         }
     }
     Ok(())
@@ -1170,6 +1179,17 @@ mod tests {
         .unwrap_err();
         assert!(error.contains(
             "precedence constructor 'Binary' for rule 'expr' must bind exactly left, operator, and right"
+        ));
+    }
+
+    #[test]
+    fn rejects_duplicate_precedence_constructor_fields() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, left: operator, right: right); } expr = \"x\", \"+\";",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "precedence constructor 'Binary' for rule 'expr' has duplicate output field 'left'"
         ));
     }
 
