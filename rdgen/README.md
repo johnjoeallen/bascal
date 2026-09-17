@@ -95,6 +95,18 @@ binding-power lookup automatically. AST-producing grammar-rule integration is
 still pending; precedence must currently be represented by explicit layered
 grammar rules, as in the BASCAL fixture.
 
+Precedence levels may carry an AST-constructor contract:
+
+```text
+precedence expr {
+    left "+" => Binary(left: left, operator: operator, right: right);
+}
+```
+
+The constructor must bind exactly `left`, `operator`, and `right`. The current
+Rust backend preserves this contract in generated metadata; automatic typed
+node construction from the annotation is still pending.
+
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
 `TriviaSkipper` advances over whitespace/comments. The C callback variants
