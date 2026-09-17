@@ -511,4 +511,17 @@ mod tests {
         let error = emit_ast(&grammar).unwrap_err();
         assert!(error.contains("duplicate C AST variant 'rdgen_same'"));
     }
+
+    #[test]
+    fn emits_reference_grammar_ast_headers() {
+        for source in [
+            include_str!("../../grammars/bascal.bcl.rdg"),
+            include_str!("../../grammars/distill.matcher.rdg"),
+        ] {
+            let grammar = rdgen_grammar::compile(source).unwrap();
+            let generated = emit_ast(&grammar).unwrap();
+            assert!(generated.contains("#ifndef RDGEN_AST_H"));
+            assert!(generated.contains("rdgen_arena_alloc"));
+        }
+    }
 }
