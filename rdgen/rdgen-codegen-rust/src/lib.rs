@@ -345,6 +345,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "        }\n"
             + "    }\n",
     );
+    output.push_str(
+        "    pub fn parse_precedence_climbing<T>(\n        &mut self,\n        minimum_binding_power: usize,\n        parse_atom: fn(&mut Self) -> Result<T, ParseError>,\n        parse_operator: fn(&mut Self) -> Result<Option<(Token, usize, usize)>, ParseError>,\n        combine: fn(T, Token, T) -> T,\n    ) -> Result<T, ParseError> {\n        let mut left = parse_atom(self)?;\n        loop {\n            let operator_start = self.position;\n            let Some((operator, left_binding_power, right_binding_power)) = parse_operator(self)? else {\n                self.position = operator_start;\n                break;\n            };\n            if left_binding_power < minimum_binding_power {\n                self.position = operator_start;\n                break;\n            }\n            let right = self.parse_precedence_climbing(right_binding_power, parse_atom, parse_operator, combine)?;\n            left = combine(left, operator, right);\n        }\n        Ok(left)\n    }\n\n",
+    );
     for rule in &grammar.rules {
         emit_parser_rule(&mut output, rule)?;
     }
@@ -883,6 +886,35 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn scan_digit(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ if name != \"digit\" || !source[position..].starts_with(\"7\") {{ None }} else {{ Some((Token(\"7\".into()), position + 1)) }} }}\nfn skip_spaces(source: &str, position: usize) -> usize {{ source[position..].chars().take_while(|character| character.is_whitespace()).map(char::len_utf8).sum::<usize>() + position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\" 7\", scan_digit, skip_spaces); assert!(parser.parse().is_ok()); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_precedence_climbing_loop_applies_binding_powers() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\"; right \"^\"; } expr = atom; atom = \"1\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("precedence-climbing");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn atom(parser: &mut Parser<'_>) -> Result<i64, ParseError> {{ let start = parser.position; for (literal, value) in [(\"1\", 1), (\"2\", 2), (\"3\", 3), (\"4\", 4)] {{ if parser.expect_literal(literal).is_ok() {{ return Ok(value); }} parser.position = start; }} Err(ParseError {{ message: \"expected atom\".into(), position: start }}) }}\nfn operator(parser: &mut Parser<'_>) -> Result<Option<(Token, usize, usize)>, ParseError> {{ let start = parser.position; for literal in [\"+\", \"^\"] {{ if let Ok(token) = parser.expect_literal(literal) {{ let (left, right) = expr_binding_power(literal).unwrap(); return Ok(Some((token, left, right))); }} parser.position = start; }} Ok(None) }}\nfn combine(left: i64, operator: Token, right: i64) -> i64 {{ match operator.0.as_str() {{ \"+\" => left + right, \"^\" => left.pow(right as u32), other => panic!(\"unexpected operator {{other}}\") }} }}\nfn main() {{ let mut parser = Parser::new(\"1+2^3^2+4\"); let value = parser.parse_precedence_climbing(0, atom, operator, combine).unwrap(); assert_eq!(value, 517); assert_eq!(parser.position, 9); }}\n",
                 generated.to_str().unwrap()
             ),
         )

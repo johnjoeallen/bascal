@@ -85,9 +85,10 @@ per-rule operator lookup functions returning the level and associativity. It
 also emits binding-power pairs for a conventional precedence-climbing loop:
 left-associative operators use `(left_bp, right_bp) = (bp, bp + 1)` and
 right-associative operators use `(bp, bp)`. The generated parser does not yet
-consume those functions for AST construction; expression precedence must
-currently be represented by explicit layered grammar rules, as in the BASCAL
-fixture.
+consume those functions to select a grammar rule automatically, but it exposes
+`Parser::parse_precedence_climbing` so an emitter can provide typed atom,
+operator, and combine callbacks. Expression precedence must currently be
+represented by explicit layered grammar rules, as in the BASCAL fixture.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
