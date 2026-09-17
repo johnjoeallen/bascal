@@ -135,6 +135,25 @@ pub enum Associativity {
     Right,
 }
 
+impl PrecedenceTable {
+    /// Return the minimum binding powers used by the generated precedence loop.
+    /// Levels are ordered from weakest to strongest precedence.
+    pub fn binding_powers(&self, operator: &str) -> Option<(usize, usize)> {
+        self.levels.iter().enumerate().find_map(|(level, spec)| {
+            spec.operators
+                .iter()
+                .any(|candidate| candidate == operator)
+                .then(|| {
+                    let binding_power = level * 2 + 1;
+                    match spec.associativity {
+                        Associativity::Left => (binding_power, binding_power + 1),
+                        Associativity::Right => (binding_power, binding_power),
+                    }
+                })
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IrError {
     pub message: String,
@@ -206,5 +225,20 @@ mod tests {
 
         assert_eq!(recovery.sync_tokens.len(), 2);
         assert_eq!(precedence.levels[0].associativity, Associativity::Left);
+        assert_eq!(precedence.binding_powers("PLUS"), Some((1, 2)));
+        assert_eq!(precedence.binding_powers("MINUS"), Some((1, 2)));
+        assert_eq!(precedence.binding_powers("STAR"), None);
+    }
+
+    #[test]
+    fn right_associative_precedence_uses_equal_binding_powers() {
+        let precedence = PrecedenceTable {
+            rule: "Expr".into(),
+            levels: vec![PrecedenceLevel {
+                operators: vec!["POWER".into()],
+                associativity: Associativity::Right,
+            }],
+        };
+        assert_eq!(precedence.binding_powers("POWER"), Some((1, 1)));
     }
 }
