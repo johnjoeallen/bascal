@@ -21,6 +21,18 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     }
     output.push('\n');
 
+    let mut collection_types = std::collections::HashSet::new();
+    for rule in &grammar.rules {
+        for alternative in &rule.alternatives {
+            for element in &alternative.elements {
+                emit_collection_types(&mut output, element, &mut collection_types);
+            }
+        }
+    }
+    if !collection_types.is_empty() {
+        output.push('\n');
+    }
+
     for rule in &grammar.rules {
         emit_rule(&mut output, rule)?;
     }
@@ -85,9 +97,55 @@ fn c_field_type(element: &Element) -> String {
     match element {
         Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)),
         Element::Token { .. } | Element::Literal { .. } => "rdgen_token".into(),
-        Element::Repeat { element, max: Some(1), .. } => format!("struct {{ bool present; {} value; }}", c_field_type(element)),
-        Element::Repeat { element, .. } => format!("struct {{ {} *items; size_t length; }}", c_field_type(element)),
+        Element::Repeat { element, max: Some(1), .. } => c_collection_name(element, true),
+        Element::Repeat { element, .. } => c_collection_name(element, false),
         Element::Group { .. } => "bool".into(),
+    }
+}
+
+fn c_value_type(element: &Element) -> String {
+    match element {
+        Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)),
+        Element::Token { .. } | Element::Literal { .. } => "rdgen_token".into(),
+        Element::Repeat { element, max: Some(1), .. } => c_collection_name(element, true),
+        Element::Repeat { element, .. } => c_collection_name(element, false),
+        Element::Group { .. } => "bool".into(),
+    }
+}
+
+fn c_collection_key(element: &Element) -> String {
+    match element {
+        Element::Rule { rule, .. } => c_type_name(rule).trim_start_matches("rdgen_").to_owned(),
+        Element::Token { .. } | Element::Literal { .. } => "token".into(),
+        Element::Repeat { element, max: Some(1), .. } => format!("optional_{}", c_collection_key(element)),
+        Element::Repeat { element, .. } => format!("list_{}", c_collection_key(element)),
+        Element::Group { .. } => "group".into(),
+    }
+}
+
+fn c_collection_name(element: &Element, optional: bool) -> String {
+    format!("rdgen_{}_{}", c_collection_key(element), if optional { "optional" } else { "list" })
+}
+
+fn emit_collection_types(output: &mut String, element: &Element, emitted: &mut std::collections::HashSet<String>) {
+    match element {
+        Element::Repeat { element: child, max: Some(1), .. } | Element::Repeat { element: child, max: None, .. } => {
+            emit_collection_types(output, child, emitted);
+            let optional = matches!(element, Element::Repeat { max: Some(1), .. });
+            let name = c_collection_name(child, optional);
+            if !emitted.insert(name.clone()) { return; }
+            if optional {
+                output.push_str(&format!("typedef struct {{ bool present; {} value; }} {};\n", c_value_type(child), name));
+            } else {
+                output.push_str(&format!("typedef struct {{ {} *items; size_t length; }} {};\n", c_value_type(child), name));
+            }
+        }
+        Element::Group { alternatives, .. } => {
+            for alternative in alternatives {
+                for child in alternative { emit_collection_types(output, child, emitted); }
+            }
+        }
+        _ => {}
     }
 }
 
@@ -161,7 +219,7 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     let name = c_type_name(&rule.name);
     output.push_str(&format!("static {name} *rdgen_parse_{}(rdgen_parser *parser, rdgen_error *error) {{\n", rule.name));
     for (index, alternative) in rule.alternatives.iter().enumerate() {
-        if alternative.elements.iter().any(|element| !is_simple_element(element)) {
+        if alternative.elements.iter().any(|element| !is_c_supported_element(element)) {
             return Err(format!("C parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
         }
         output.push_str(&format!("    {{ size_t start_{index} = parser->position;\n"));
@@ -178,6 +236,14 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     }
     output.push_str(&format!("    rdgen_set_error(error, \"no alternative for {}\", parser->position);\n    return NULL;\n}}\n\n", rule.name));
     Ok(())
+}
+
+fn is_c_supported_element(element: &Element) -> bool {
+    match element {
+        Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. } => true,
+        Element::Repeat { element, .. } => c_repeat_child(element).is_some_and(is_simple_element),
+        Element::Group { .. } => false,
+    }
 }
 
 fn is_simple_element(element: &Element) -> bool {
@@ -203,6 +269,9 @@ fn c_local_name(element: &Element, index: usize) -> String {
 }
 
 fn c_local_declaration(element: &Element, index: usize) -> String {
+    if matches!(element, Element::Repeat { .. }) {
+        return format!("size_t {}_count", c_local_name(element, index));
+    }
     format!("{} {}", match element { Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)), _ => "rdgen_token".into() }, c_local_name(element, index))
 }
 
@@ -212,7 +281,26 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
         Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
         Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
+        Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{local}_count = 0; {{ size_t item_start_{index} = parser->position; {} if (parser->position != item_start_{index}) {local}_count = 1; else parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
+        Element::Repeat { element: child, max: None, .. } => Ok(format!("{local}_count = 0; for (;;) {{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} {local}_count++; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C repetition requires a single-element group".to_owned())?, index)?)),
         _ => Err("unsupported C parser element".into()),
+    }
+}
+
+fn c_repeat_child(element: &Element) -> Option<&Element> {
+    match element {
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
+        _ => None,
+    }
+}
+
+fn c_repeat_probe(element: &Element, index: usize) -> Result<String, String> {
+    let item = format!("repeat_item_{index}");
+    match element {
+        Element::Literal { value, .. } => Ok(format!("rdgen_token {item}; if (!rdgen_expect_literal(parser, {:?}, &{item})) parser->position = item_start_{index};", value)),
+        Element::Token { token, .. } => Ok(format!("rdgen_token {item}; size_t repeat_end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{item}, &repeat_end_{index}) || repeat_end_{index} <= parser->position || repeat_end_{index} > parser->length) parser->position = item_start_{index}; else parser->position = repeat_end_{index};", token)),
+        Element::Rule { rule, .. } => Ok(format!("{} *{item} = rdgen_parse_{}(parser, error); if ({item} == NULL) parser->position = item_start_{index};", c_type_name(rule), rule)),
+        _ => Err("C repetitions currently require a literal, terminal, or rule child".into()),
     }
 }
 
@@ -249,8 +337,16 @@ mod tests {
 
     #[test]
     fn rejects_complex_elements_until_c_control_flow_exists() {
-        let grammar = compile("grammar Start; start = { \"a\" };").unwrap();
+        let grammar = compile("grammar Start; start = ( \"a\" );").unwrap();
         let error = emit_parser(&grammar).unwrap_err();
         assert!(error.contains("does not yet support grouped or repeated elements"));
+    }
+
+    #[test]
+    fn emits_simple_optional_and_repeated_consumption() {
+        let grammar = compile("grammar Start; start = [ \"a\" ], { \"b\" } => Start();").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("element_0_count = 0"));
+        assert!(generated.contains("for (;;)"));
     }
 }
