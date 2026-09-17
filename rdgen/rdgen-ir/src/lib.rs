@@ -89,6 +89,11 @@ pub enum Element {
         element: Box<Element>,
         span: Span,
     },
+    /// Commit the current ordered-choice alternative after the preceding
+    /// discriminating input has matched.
+    Cut {
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

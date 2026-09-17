@@ -210,6 +210,7 @@ fn rust_type(element: &Element) -> String {
         }
         Element::Group { .. } => "()".into(),
         Element::SameLine { element, .. } => rust_type(element),
+        Element::Cut { .. } => "()".into(),
     }
 }
 
@@ -409,13 +410,13 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
             + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source.get(position..)?.starts_with(literal).then_some(position + literal.len()) }\n\n"
             + "#[allow(dead_code)]\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError>, lexical_mode: bool, same_line_limit: Option<usize> }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError>, lexical_mode: bool, same_line_limit: Option<usize>, committed: bool }\n\n"
             + "#[allow(dead_code)]\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
             + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
-            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false, same_line_limit: None } }\n"
+            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false, same_line_limit: None, committed: false } }\n"
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); let next = self.same_line_limit.map_or(next, |limit| next.min(limit)); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
@@ -524,6 +525,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         rule.name,
         type_name(&rule.name)
     ));
+    output.push_str("        let previous_commit = self.committed;\n        self.committed = false;\n");
     if rule.lexical {
         output.push_str("        let lexical_start = self.position;\n        self.skip_trivia();\n        let lexical_token_start = self.position;\n        let previous_lexical_mode = self.lexical_mode;\n        self.lexical_mode = true;\n");
     }
@@ -547,14 +549,15 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         ));
         output.push_str("        })();\n");
         if rule.lexical {
-            output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; return Ok(value); }, Err(_) => self.position = lexical_token_start }\n");
+            output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { self.lexical_mode = previous_lexical_mode; return Err(error); } self.position = lexical_token_start } }\n");
         } else {
-            output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
+            output.push_str("        match attempt { Ok(value) => { self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { return Err(error); } self.position = start } }\n");
         }
     }
     if rule.lexical {
         output.push_str("        self.lexical_mode = previous_lexical_mode;\n        self.position = lexical_start;\n");
     }
+    output.push_str("        self.committed = previous_commit;\n");
     if let Some(recovery) = rule.alternatives.iter().find_map(|alternative| {
         (alternative
             .recovery
@@ -586,6 +589,7 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
         Element::SameLine { .. } => emit_element_expression(element),
+        Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
         Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
     }
 }
@@ -839,6 +843,7 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
         Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
+        Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
     }
 }
 
@@ -874,6 +879,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
         Element::SameLine { .. } => None,
+        Element::Cut { .. } => None,
     };
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
@@ -1399,6 +1405,30 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"x = 0 : y = 0\", scanner, trivia); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_cut_commits_an_ordered_choice() {
+        let grammar = compile("grammar Cut; start = \"a\", cut, \"b\" | \"a\", \"c\";").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("cut");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut committed = Parser::new(\"ac\"); assert!(committed.parse().is_err()); let mut first = Parser::new(\"ab\"); assert!(first.parse().is_ok()); }}\n",
                 generated.to_str().unwrap()
             ),
         )
