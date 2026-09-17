@@ -369,7 +369,7 @@ fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_in
 
 fn c_repeat_child(element: &Element) -> Option<&Element> {
     match element {
-        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => c_group_atom(&alternatives[0][0]),
         _ => None,
     }
 }
@@ -483,6 +483,14 @@ mod tests {
     fn emits_nested_single_element_groups() {
         let grammar = compile("grammar Start; start = (( \"a\" )) => Start();").unwrap();
         let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
+    }
+
+    #[test]
+    fn emits_repetition_over_nested_group() {
+        let grammar = compile("grammar Start; start = { (( \"a\" )) } => Start();").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("for (;;)"));
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
     }
 
