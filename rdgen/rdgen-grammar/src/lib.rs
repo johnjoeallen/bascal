@@ -230,6 +230,7 @@ impl<'a> Parser<'a> {
         validate_rule_names(&rules)?;
         resolve_symbols(&mut rules)?;
         validate_constructors(&rules)?;
+        validate_repetition_progress(&rules)?;
         reject_indirect_left_recursion(&rules)?;
         validate_precedence(&precedence, &rules)?;
         Ok(rdgen_ir::Grammar {
@@ -799,6 +800,43 @@ fn validate_rule_names(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_repetition_progress(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
+    let nullable = nullable_rules(rules);
+    for rule in rules {
+        for alternative in &rule.alternatives {
+            validate_repetition_elements(&alternative.elements, &nullable, &rule.name)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_repetition_elements(
+    elements: &[rdgen_ir::Element],
+    nullable: &std::collections::HashSet<&str>,
+    rule_name: &str,
+) -> Result<(), String> {
+    for element in elements {
+        match element {
+            rdgen_ir::Element::Repeat { element, .. } => {
+                if nullable_element(element, nullable) {
+                    return Err(format!(
+                        "repetition in rule '{}' can match empty input",
+                        rule_name
+                    ));
+                }
+                validate_repetition_elements(std::slice::from_ref(element.as_ref()), nullable, rule_name)?;
+            }
+            rdgen_ir::Element::Group { alternatives, .. } => {
+                for alternative in alternatives {
+                    validate_repetition_elements(alternative, nullable, rule_name)?;
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 fn first_rule_names<'a>(
     elements: &'a [rdgen_ir::Element],
     names: &std::collections::HashSet<&'a str>,
@@ -1033,6 +1071,12 @@ mod tests {
             grammar.rules[0].alternatives[0].elements[1],
             rdgen_ir::Element::Repeat { max: Some(1), .. }
         ));
+    }
+
+    #[test]
+    fn rejects_repetition_of_nullable_element() {
+        let error = compile("grammar Bad; start = { ε };").unwrap_err();
+        assert!(error.contains("repetition in rule 'start' can match empty input"));
     }
 
     #[test]
