@@ -946,6 +946,59 @@ int main(void) {
     }
 
     #[test]
+    fn generated_c_parser_uses_terminal_scanner_and_captures_token() {
+        let grammar =
+            rdgen_grammar::compile("grammar Start; start = item: digit => Start(item: item);")
+                .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-terminal");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <ctype.h>
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+bool scan_digit(const char *source, size_t position, const char *name, rdgen_token *token, size_t *end) {
+    if (name[0] != 'd' || name[1] != 'i' || name[2] != 'g' || name[3] != 'i' || name[4] != 't' || name[5] != '\0' || !isdigit((unsigned char)source[position])) return false;
+    size_t cursor = position + 1;
+    while (isalnum((unsigned char)source[cursor])) cursor++;
+    token->text = source + position;
+    token->length = cursor - position;
+    *end = cursor;
+    return true;
+}
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("7", 1, &arena, NULL, scan_digit);
+    rdgen_error error = { 0 };
+    rdgen_start *node = rdgen_parse(&parser, &error);
+    return node != NULL && node->as.rdgen_start.item.length == 1 && node->as.rdgen_start.item.text[0] == '7' ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    #[test]
     fn generated_c_parser_captures_optional_tokens() {
         let grammar =
             rdgen_grammar::compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);")
