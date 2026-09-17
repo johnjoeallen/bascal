@@ -696,6 +696,8 @@ mod tests {
         assert!(generated.contains("rdgen_parse_start"));
         assert!(generated.contains("rdgen_parser rdgen_parser_init"));
         assert!(generated.contains("rdgen_match_literal_fn"));
+        assert!(generated.contains("size_t source_length, const char *literal"));
+        assert!(generated.contains("rdgen_skip_trivia_fn)(const char *source, size_t position, size_t source_length"));
         assert!(generated.contains("rdgen_parser_init_with_literal_match"));
         assert!(generated.contains("rdgen_start *rdgen_parse("));
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
