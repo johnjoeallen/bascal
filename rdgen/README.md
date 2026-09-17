@@ -84,3 +84,9 @@ Alternatives can carry grammar-directed recovery metadata:
 statement = "statement" => Statement()
     recover { sync ";", "}"; skip_until_sync; };
 ```
+
+The Rust and C parser emitters currently implement `skip_until_sync` by
+advancing to the next synchronization literal and returning a diagnostic at
+that offset. `insert_token` and `abort_rule` remain represented in the IR but
+are rejected by the C backend until their target-language semantics are
+defined.
