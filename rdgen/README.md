@@ -82,10 +82,12 @@ Precedence tables are retained in the shared IR and validated for defined rule
 targets, non-empty levels, non-empty operators, and duplicate operators. The
 Rust emitter exposes the validated levels as typed generated metadata and emits
 per-rule operator lookup functions returning the level and associativity. It
-does not yet use those functions for parser control flow: expression
-precedence must currently be represented by explicit layered grammar rules, as
-in the BASCAL fixture. Precedence-climbing emission is the next parser-
-generation feature.
+also emits binding-power pairs for a conventional precedence-climbing loop:
+left-associative operators use `(left_bp, right_bp) = (bp, bp + 1)` and
+right-associative operators use `(bp, bp)`. The generated parser does not yet
+consume those functions for AST construction; expression precedence must
+currently be represented by explicit layered grammar rules, as in the BASCAL
+fixture.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and

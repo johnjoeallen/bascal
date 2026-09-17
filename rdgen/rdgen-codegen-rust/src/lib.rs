@@ -269,6 +269,10 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
             "pub fn {}_precedence(operator: &str) -> Option<(usize, bool)> {{ {}.iter().enumerate().find_map(|(level, spec)| spec.operators.iter().any(|candidate| *candidate == operator).then_some((level, spec.right_associative))) }}\n\n",
             table.rule, constant
         ));
+        output.push_str(&format!(
+            "pub fn {}_binding_power(operator: &str) -> Option<(usize, usize)> {{ {}_precedence(operator).map(|(level, right_associative)| {{ let binding_power = level * 2 + 1; if right_associative {{ (binding_power, binding_power) }} else {{ (binding_power, binding_power + 1) }} }}) }}\n\n",
+            table.rule, table.rule
+        ));
     }
     Ok(())
 }
@@ -711,6 +715,7 @@ mod tests {
         assert!(generated.contains("operators: &[\"+\", \"-\"]"));
         assert!(generated.contains("right_associative: true"));
         assert!(generated.contains("pub fn expr_precedence(operator: &str)"));
+        assert!(generated.contains("pub fn expr_binding_power(operator: &str)"));
     }
 
     #[test]
@@ -737,7 +742,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ assert_eq!(EXPR_PRECEDENCE.len(), 2); assert_eq!(EXPR_PRECEDENCE[0].operators, &[\"+\", \"-\"]); assert!(!EXPR_PRECEDENCE[0].right_associative); assert!(EXPR_PRECEDENCE[1].right_associative); assert_eq!(expr_precedence(\"+\"), Some((0, false))); assert_eq!(expr_precedence(\"^\"), Some((1, true))); assert_eq!(expr_precedence(\"/\"), None); }}\n",
+                "include!({:?});\nfn main() {{ assert_eq!(EXPR_PRECEDENCE.len(), 2); assert_eq!(EXPR_PRECEDENCE[0].operators, &[\"+\", \"-\"]); assert!(!EXPR_PRECEDENCE[0].right_associative); assert!(EXPR_PRECEDENCE[1].right_associative); assert_eq!(expr_precedence(\"+\"), Some((0, false))); assert_eq!(expr_precedence(\"^\"), Some((1, true))); assert_eq!(expr_precedence(\"/\"), None); assert_eq!(expr_binding_power(\"+\"), Some((1, 2))); assert_eq!(expr_binding_power(\"^\"), Some((3, 3))); assert_eq!(expr_binding_power(\"/\"), None); }}\n",
                 generated.to_str().unwrap()
             ),
         )
