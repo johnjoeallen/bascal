@@ -278,9 +278,9 @@ fn c_field_name(name: &str) -> String {
             | "double" | "else" | "enum" | "extern" | "float" | "for" | "goto" | "if"
             | "inline" | "int" | "long" | "register" | "restrict" | "return" | "short"
             | "signed" | "sizeof" | "static" | "struct" | "switch" | "typedef" | "union"
-            | "unsigned" | "void" | "volatile" | "while" | "_Alignas" | "_Atomic"
-            | "_Bool" | "_Complex" | "_Generic" | "_Imaginary" | "_Noreturn" | "_Static_assert"
-            | "_Thread_local"
+            | "unsigned" | "void" | "volatile" | "while" | "_alignas" | "_atomic"
+            | "_bool" | "_complex" | "_generic" | "_imaginary" | "_noreturn" | "_static_assert"
+            | "_thread_local"
     ) {
         format!("field_{result}")
     } else {
@@ -717,6 +717,13 @@ mod tests {
         .unwrap();
         let error = emit_ast(&grammar).unwrap_err();
         assert!(error.contains("collide after C spelling"));
+    }
+
+    #[test]
+    fn escapes_lowered_c11_reserved_constructor_fields() {
+        let grammar = compile("grammar Start; start = _Alignas: \"a\" => Start(_Alignas: _Alignas);").unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("rdgen_token field__alignas;"));
     }
 
     #[test]
