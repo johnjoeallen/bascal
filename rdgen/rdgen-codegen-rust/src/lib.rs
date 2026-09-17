@@ -587,6 +587,7 @@ fn emit_element_binding(
         Element::Repeat {
             element: child,
             max: None,
+            terminators,
             ..
         } => {
             let child = simple_group_element(child.as_ref()).unwrap_or(child.as_ref());
@@ -595,6 +596,7 @@ fn emit_element_binding(
                 "{}loop {{\n{}    let item_start = self.position;\n",
                 indent, indent
             ));
+            emit_repeat_terminator_guard(output, terminators, &format!("{}    ", indent));
             output.push_str(&format!(
                 "{}    let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n",
                 indent,
@@ -785,8 +787,24 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
             emit_group_value_expression(element)
         }
         Element::Group { .. } => emit_group_expression(element),
-        Element::Repeat { element: child, max: None, .. } => {
+        Element::Repeat {
+            element: child,
+            max: None,
+            terminators,
+            ..
+        } => {
             let mut output = String::from("{ let mut values = Vec::new(); loop { let item_start = self.position; ");
+            if !terminators.is_empty() {
+                output.push_str("self.skip_trivia(); if [");
+                output.push_str(
+                    &terminators
+                        .iter()
+                        .map(|terminator| format!("{:?}", terminator))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+                output.push_str("].iter().any(|literal| self.source[self.position..].starts_with(literal)) { break; } ");
+            }
             output.push_str(&format!("let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ ", emit_element_expression(child)?));
             output.push_str("Ok(item) => item, Err(_) => { self.position = item_start; break; } }; ");
             output.push_str("if self.position == item_start { break; } values.push(item); } values }");
@@ -801,6 +819,22 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
     }
+}
+
+fn emit_repeat_terminator_guard(output: &mut String, terminators: &[String], indent: &str) {
+    if terminators.is_empty() {
+        return;
+    }
+    output.push_str(&format!(
+        "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| self.source[self.position..].starts_with(literal)) {{ break; }}\n",
+        indent,
+        indent,
+        terminators
+            .iter()
+            .map(|terminator| format!("{:?}", terminator))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
 }
 
 fn element_variable(element: &Element, index: usize) -> String {
@@ -1280,6 +1314,35 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ for source in [\"program demo\", \"library demo\", \"shared demo\", \"// comment\\n\"] {{ let mut parser = Parser::with_scanner_and_trivia(source, scanner, trivia); parser.parse().unwrap(); }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_repetition_stops_before_declared_terminator() {
+        let grammar = compile(
+            "grammar Blocks; start block; block = \"begin\", { item } until { \"end\" }, \"end\"; item = \"item\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("repeat-terminator");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(_: &str, _: usize, _: &str) -> Option<(Token, usize)> {{ None }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"begin item item end\", scanner, trivia); parser.parse().unwrap(); }}\n",
                 generated.to_str().unwrap()
             ),
         )

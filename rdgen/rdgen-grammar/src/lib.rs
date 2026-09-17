@@ -367,6 +367,7 @@ impl<'a> Parser<'a> {
                 .map(|alternative| alternative.elements)
                 .collect();
             let end = self.expect_symbol('}')?.span.end;
+            let terminators = self.parse_repeat_terminators()?;
             return Ok(rdgen_ir::Element::Repeat {
                 label,
                 element: Box::new(rdgen_ir::Element::Group {
@@ -376,6 +377,7 @@ impl<'a> Parser<'a> {
                 }),
                 min: 0,
                 max: None,
+                terminators,
                 span: rdgen_ir::Span::new(start, end),
             });
         }
@@ -396,6 +398,7 @@ impl<'a> Parser<'a> {
                 }),
                 min: 0,
                 max: Some(1),
+                terminators: Vec::new(),
                 span: rdgen_ir::Span::new(start, end),
             });
         }
@@ -426,6 +429,23 @@ impl<'a> Parser<'a> {
             return Err(self.error("expected identifier, literal, or group"));
         };
         Ok(base)
+    }
+
+    fn parse_repeat_terminators(&mut self) -> Result<Vec<String>, String> {
+        if !self.at_ident("until") {
+            return Ok(Vec::new());
+        }
+        self.expect_ident("until")?;
+        self.expect_symbol('{')?;
+        let mut terminators = Vec::new();
+        while !self.accept_symbol('}') {
+            terminators.push(self.take_literal().ok_or_else(|| self.error("repeat terminator must be a literal"))?);
+            self.accept_symbol(',');
+        }
+        if terminators.is_empty() {
+            return Err(self.error("repeat terminator list cannot be empty"));
+        }
+        Ok(terminators)
     }
 
     fn is_labeled_element(&self) -> bool {
@@ -1392,6 +1412,20 @@ mod tests {
             "grammar Demo; start statement; statement = expr; expr = primary; primary = identifier, \"(\", [ expr ], \")\" | \"{\", field_init, \"}\" | identifier; field_init = identifier, \":\", expr; identifier = letter, { letter };",
         );
         assert!(grammar.is_ok(), "expression assignment fixture: {grammar:?}");
+    }
+
+    #[test]
+    fn preserves_repeat_terminators_in_the_ir() {
+        let grammar = compile(
+            "grammar Blocks; start block; block = \"begin\", { item } until { \"end\" }, \"end\"; item = \"item\";",
+        )
+        .unwrap();
+        let repeat = &grammar.rules[0].alternatives[0].elements[1];
+        assert!(matches!(
+            repeat,
+            rdgen_ir::Element::Repeat { terminators, .. }
+                if terminators == &["end".to_owned()]
+        ));
     }
 
     #[test]

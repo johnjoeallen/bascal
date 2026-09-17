@@ -74,6 +74,7 @@ pub enum Element {
         element: Box<Element>,
         min: usize,
         max: Option<usize>,
+        terminators: Vec<String>,
         span: Span,
     },
     Group {

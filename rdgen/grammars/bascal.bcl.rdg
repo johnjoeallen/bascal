@@ -54,7 +54,7 @@ import_decl      = "import" , identifier ;
 
 record_decl      = "record" , identifier ,
                     [ "combines" , identifier , { "," , identifier } ] ,
-                    { field_decl | inline_method } ,
+                    { field_decl | inline_method } until { "end" } ,
                     "end" , "record" ;
 field_decl       = identifier , ":" , field_type ;
 field_type       = "string" , [ "(" , integer_literal , ")" ]
@@ -64,15 +64,15 @@ field_type       = "string" , [ "(" , integer_literal , ")" ]
 subprogram       = function_decl | procedure_decl | fluent_method_decl
                  | method_decl ;
 function_decl    = "function" , typed_ident , "(" , [ param_list ] , ")"
-                   , { statement } , "end" , "function" ;
+                   , { statement } until { "end" } , "end" , "function" ;
 procedure_decl   = "procedure" , identifier , "(" , [ param_list ] , ")"
-                   , { statement } , "end" , "procedure" ;
+                   , { statement } until { "end" } , "end" , "procedure" ;
 fluent_method_decl = "fluent" , method_decl ;
 method_decl      = "method" , identifier , "[" , identifier , "]"
                    , "(" , [ param_list ] , ")" , [ ":" , return_type ]
-                   , { statement } , "end" , "method" ;
+                   , { statement } until { "end" } , "end" , "method" ;
 inline_method    = "method" , identifier , "(" , [ param_list ] , ")"
-                   , [ ":" , return_type ] , { statement }
+                   , [ ":" , return_type ] , { statement } until { "end" }
                    , "end" , "method" ;
 return_type      = "integer" | "long" | "single" | "double" | "string"
                  | suffix ;
@@ -158,23 +158,23 @@ end_stmt         = "end" ;
 
 if_stmt          = "if" , expr , "then" ,
                     ( single_line_if_tail | block_if_tail ) ;
-block_if_tail    = { statement } ,
+block_if_tail    = { statement } until { "elseif", "else", "end" } ,
                     ( "elseif" , expr , "then" , block_if_tail
-                    | [ "else" , { statement } ] , "end" , "if" ) ;
+                    | [ "else" , { statement } until { "end" } ] , "end" , "if" ) ;
 single_line_if_tail = statement , { ":" , statement }
                      , [ "else" , statement , { ":" , statement } ] ;
 for_stmt         = "for" , typed_ident , "=" , expr ,
                     ( "to" , expr , [ "step" , expr ]
                     | "downto" , expr ) ,
-                    { statement } , "end" , [ "for" ] ;
-while_stmt       = "while" , expr , { statement }
+                    { statement } until { "end" } , "end" , [ "for" ] ;
+while_stmt       = "while" , expr , { statement } until { "wend", "end" }
                    , ( "wend" | "end" , [ "while" ] ) ;
-do_stmt          = "do" , [ do_condition ] , { statement }
+do_stmt          = "do" , [ do_condition ] , { statement } until { "loop", "end" }
                    , ( "loop" , [ do_condition ] | "end" , [ "do" ] ) ;
 do_condition     = ( "while" | "until" ) , expr ;
-try_stmt         = "try" , { statement } ,
-                   [ "catch" , identifier , { statement } ] ,
-                   [ "finally" , { statement } ] , "end" , "try" ;
+try_stmt         = "try" , { statement } until { "catch", "finally", "end" } ,
+                    [ "catch" , identifier , { statement } until { "finally", "end" } ] ,
+                    [ "finally" , { statement } until { "end" } ] , "end" , "try" ;
 assignment_or_expr_stmt = [ "let" ] , expr ;
 
 (* ----- Expressions -----
