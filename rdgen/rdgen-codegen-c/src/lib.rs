@@ -671,4 +671,44 @@ int main(void) {
         }
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
+
+    #[test]
+    fn generated_c_parser_uses_literal_matcher_callback() {
+        let grammar = rdgen_grammar::compile("grammar Start; start = \"IF\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-literal-smoke");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <ctype.h>
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+bool match_keyword(const char *source, size_t position, const char *literal, size_t *end) {
+    size_t index = 0;
+    while (literal[index] != '\0') {
+        if (source[position + index] == '\0' || tolower((unsigned char)source[position + index]) != tolower((unsigned char)literal[index])) return false;
+        index++;
+    }
+    *end = position + index;
+    return true;
+}
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init_with_literal_match("if", 2, &arena, NULL, NULL, match_keyword);
+    rdgen_error error = { 0 };
+    return rdgen_parse(&parser, &error) != NULL ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args(["-std=c11", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
 }
