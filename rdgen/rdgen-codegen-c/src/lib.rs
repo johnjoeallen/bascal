@@ -239,11 +239,6 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         if alternative.elements.iter().any(|element| !is_c_supported_element(element)) {
             return Err(format!("C parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
         }
-        for field in &alternative.constructor.fields {
-            if find_labeled_element(&alternative.elements, &field.source_label).is_some_and(|element| matches!(element, Element::Group { .. })) {
-                return Err(format!("C parser emitter does not yet bind grouped field '{}' in rule '{}'", field.field, rule.name));
-            }
-        }
         output.push_str(&format!("    {{ size_t start_{index} = parser->position;\n"));
         for (element_index, element) in alternative.elements.iter().enumerate() {
             output.push_str(&format!("        {};\n", c_local_declaration(element, element_index)));
@@ -282,7 +277,9 @@ fn c_local_name_for_label(elements: &[Element], label: &str) -> String {
     elements.iter().enumerate().find_map(|(index, element)| match element {
         Element::Rule { label: Some(name), .. }
         | Element::Token { label: Some(name), .. }
-        | Element::Literal { label: Some(name), .. } if name == label => Some(c_local_name(element, index)),
+        | Element::Literal { label: Some(name), .. }
+        | Element::Group { label: Some(name), .. }
+        | Element::Repeat { label: Some(name), .. } if name == label => Some(c_local_name(element, index)),
         _ => None,
     }).unwrap_or_else(|| c_field_name(label))
 }
@@ -321,7 +318,7 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
         Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
         Element::Group { alternatives, .. } if c_group_child(element).is_some() => c_parse_statement(c_group_child(element).expect("group child checked"), index, alternative_index),
-        Element::Group { alternatives, .. } => c_group_statement(alternatives, index, alternative_index),
+        Element::Group { alternatives, .. } => c_group_statement(alternatives, index, alternative_index, &local),
         Element::Repeat { element: child, max: Some(1), label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, true, alternative_index),
         Element::Repeat { element: child, max: None, label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, false, alternative_index),
         Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{local}_count = 0; {{ size_t item_start_{index} = parser->position; {} if (parser->position != item_start_{index}) {local}_count = 1; else parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
@@ -345,8 +342,7 @@ fn c_repeat_storage_child(element: &Element) -> &Element {
     c_repeat_child(element).unwrap_or(element)
 }
 
-fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_index: usize) -> Result<String, String> {
-    let local = format!("element_{index}");
+fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_index: usize, local: &str) -> Result<String, String> {
     let mut output = format!("{local}_matched = false; do {{ size_t group_start_{index} = parser->position; ");
     for (group_index, alternative) in alternatives.iter().enumerate() {
         output.push_str(&format!("{{ parser->position = group_start_{index}; bool group_ok_{index}_{group_index} = true; "));
@@ -476,6 +472,14 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("group_start_0"));
         assert!(generated.contains("group_ok_0_1"));
+    }
+
+    #[test]
+    fn binds_labeled_group_presence_to_c_ast_fields() {
+        let grammar = compile("grammar Start; start = pair: ( \"a\", \"b\" ) => Start(pair: pair);").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("bool value_pair_matched"));
+        assert!(generated.contains("node->as.rdgen_start.pair = value_pair"));
     }
 
     #[test]
