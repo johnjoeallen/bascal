@@ -306,13 +306,13 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     output.push_str(&(
         "typedef struct rdgen_parser rdgen_parser;\n"
             .to_owned()
-            + "typedef size_t (*rdgen_skip_trivia_fn)(const char *source, size_t position);\n"
+            + "typedef size_t (*rdgen_skip_trivia_fn)(const char *source, size_t position, size_t source_length);\n"
             + "typedef bool (*rdgen_scan_terminal_fn)(const char *source, size_t position, size_t source_length, const char *name, rdgen_token *token, size_t *end);\n"
             + "typedef bool (*rdgen_match_literal_fn)(const char *source, size_t position, size_t source_length, const char *literal, size_t *end);\n"
             + "typedef struct rdgen_error { const char *message; size_t position; } rdgen_error;\n"
             + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; rdgen_match_literal_fn match_literal; };\n"
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
-            + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
+            + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position, parser->length); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
             + "static void rdgen_skip_until_sync(rdgen_parser *parser, const char *const *sync, size_t count) { while (parser->position < parser->length) { for (size_t index = 0; index < count; index++) { size_t length = strlen(sync[index]); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, sync[index], length) == 0) return; } parser->position++; } }\n"
             + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, parser->length, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
             + "static bool rdgen_match_literal_default(const char *source, size_t position, size_t source_length, const char *literal, size_t *end) { size_t length = strlen(literal); if (position > source_length || length > source_length - position || memcmp(source + position, literal, length) != 0) return false; *end = position + length; return true; }\n"
@@ -939,8 +939,8 @@ int main(void) {
 #include "generated.h"
 struct rdgen_arena { int unused; };
 void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
-size_t skip_spaces(const char *source, size_t position) {
-    while (source[position] != '\0' && isspace((unsigned char)source[position])) position++;
+size_t skip_spaces(const char *source, size_t position, size_t source_length) {
+    while (position < source_length && isspace((unsigned char)source[position])) position++;
     return position;
 }
 int main(void) {
