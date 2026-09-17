@@ -767,12 +767,10 @@ fn validate_precedence(
     let names: std::collections::HashSet<&str> =
         rules.iter().map(|rule| rule.name.as_str()).collect();
     let mut seen = std::collections::HashSet::new();
-    let mut literals = std::collections::HashSet::new();
-    for rule in rules {
-        for alternative in &rule.alternatives {
-            collect_literal_values(&alternative.elements, &mut literals);
-        }
-    }
+    let rule_map: std::collections::HashMap<&str, &rdgen_ir::Rule> = rules
+        .iter()
+        .map(|rule| (rule.name.as_str(), rule))
+        .collect();
     for table in precedence {
         if !names.contains(table.rule.as_str()) {
             return Err(format!(
@@ -792,6 +790,14 @@ fn validate_precedence(
                 table.rule
             ));
         }
+        let mut literals = std::collections::HashSet::new();
+        let mut visited = std::collections::HashSet::new();
+        collect_reachable_literals(
+            &table.rule,
+            &rule_map,
+            &mut visited,
+            &mut literals,
+        );
         let mut operators = std::collections::HashSet::new();
         for level in &table.levels {
             for operator in &level.operators {
@@ -819,8 +825,26 @@ fn validate_precedence(
     Ok(())
 }
 
+fn collect_reachable_literals(
+    rule_name: &str,
+    rules: &std::collections::HashMap<&str, &rdgen_ir::Rule>,
+    visited: &mut std::collections::HashSet<String>,
+    literals: &mut std::collections::HashSet<String>,
+) {
+    if !visited.insert(rule_name.to_owned()) {
+        return;
+    }
+    if let Some(rule) = rules.get(rule_name) {
+        for alternative in &rule.alternatives {
+            collect_literal_values(&alternative.elements, rules, visited, literals);
+        }
+    }
+}
+
 fn collect_literal_values(
     elements: &[rdgen_ir::Element],
+    rules: &std::collections::HashMap<&str, &rdgen_ir::Rule>,
+    visited: &mut std::collections::HashSet<String>,
     literals: &mut std::collections::HashSet<String>,
 ) {
     for element in elements {
@@ -830,13 +854,21 @@ fn collect_literal_values(
             }
             rdgen_ir::Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
-                    collect_literal_values(alternative, literals);
+                    collect_literal_values(alternative, rules, visited, literals);
                 }
             }
             rdgen_ir::Element::Repeat { element, .. } => {
-                collect_literal_values(std::slice::from_ref(element.as_ref()), literals);
+                collect_literal_values(
+                    std::slice::from_ref(element.as_ref()),
+                    rules,
+                    visited,
+                    literals,
+                );
             }
-            rdgen_ir::Element::Rule { .. } | rdgen_ir::Element::Token { .. } => {}
+            rdgen_ir::Element::Rule { rule, .. } => {
+                collect_reachable_literals(rule, rules, visited, literals);
+            }
+            rdgen_ir::Element::Token { .. } => {}
         }
     }
 }
@@ -1072,6 +1104,17 @@ mod tests {
     fn rejects_precedence_operators_missing_from_grammar() {
         let error = compile(
             "grammar Expr; precedence expr { left \"+\"; } expr = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "precedence operator \"+\" in rule 'expr' does not occur as a grammar literal"
+        ));
+    }
+
+    #[test]
+    fn precedence_coverage_ignores_unreachable_literals() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\"; } expr = atom; atom = \"x\"; unrelated = \"+\";",
         )
         .unwrap_err();
         assert!(error.contains(
