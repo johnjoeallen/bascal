@@ -774,6 +774,32 @@ mod tests {
     }
 
     #[test]
+    fn generated_rust_parser_reports_utf8_byte_offsets() {
+        let grammar = compile("grammar Start; start = \"é\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-utf8-offset");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"éx\"); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 2); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_rust_parser_uses_literal_matcher_callback() {
         let grammar = compile("grammar Start; start = \"IF\" => Start();").unwrap();
         let directory = tempfile::tempdir().unwrap();
