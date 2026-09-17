@@ -385,8 +385,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     }
     let start = grammar
         .rules
-        .first()
-        .ok_or_else(|| "grammar has no rules".to_owned())?;
+        .iter()
+        .find(|rule| rule.name == grammar.start)
+        .ok_or_else(|| format!("start rule '{}' is not declared", grammar.start))?;
     let mut output = String::from(
         "#[derive(Clone, Debug, PartialEq)]\n"
             .to_owned() + "pub struct ParseError { pub message: String, pub position: usize }\n\n"

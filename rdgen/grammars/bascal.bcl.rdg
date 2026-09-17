@@ -11,6 +11,8 @@
 
 grammar Bascal;
 
+start program;
+
 precedence expr {
     left "xor";
     left "or", "||";
@@ -85,16 +87,22 @@ typed_ident      = identifier ;
 (* ----- Statements ----- *)
 
 statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
-                 | global_decl | assignment_or_expr_stmt
+                 | print_stmt | lprint_stmt | global_decl
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | return_stmt | exit_stmt | continue_stmt
-                 | goto_stmt | gosub_stmt | try_stmt | end_stmt ;
+                 | goto_stmt | gosub_stmt | try_stmt | end_stmt
+                 (* assignment_or_expr_stmt remains the final fallback so
+                  * keyword-led statements are not consumed as bare calls. *)
+                 | assignment_or_expr_stmt ;
 label_stmt       = identifier , ":" ;
 comment_stmt     = line_comment | block_comment ;
 global_decl      = "global" , identifier ;
 dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
 dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
 const_stmt       = "const" , identifier , "=" , expr ;
+print_stmt       = "print" , { print_token } ;
+lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } ;
+print_token      = "," | ";" | expr ;
 return_stmt      = "return" , [ expr ] ;
 exit_stmt        = "exit" ;
 continue_stmt    = "continue" ;

@@ -187,7 +187,17 @@ impl<'a> Parser<'a> {
         self.expect_symbol(';')?;
         let mut rules = Vec::new();
         let mut precedence = Vec::new();
+        let mut start = None;
         while !self.at_eof() {
+            if self.is_start_directive() {
+                self.expect_ident("start")?;
+                if start.is_some() {
+                    return Err(self.error("duplicate start-rule declaration"));
+                }
+                start = Some(self.ident()?);
+                self.expect_symbol(';')?;
+                continue;
+            }
             if self.at_ident("precedence") {
                 precedence.push(self.parse_precedence()?);
                 continue;
@@ -234,8 +244,18 @@ impl<'a> Parser<'a> {
         reject_indirect_left_recursion(&rules)?;
         validate_precedence(&precedence, &rules)?;
         validate_precedence_constructors(&precedence)?;
+        let start = start.unwrap_or_else(|| {
+            rules
+                .first()
+                .map(|rule| rule.name.clone())
+                .unwrap_or_default()
+        });
+        if !rules.iter().any(|rule| rule.name == start) {
+            return Err(format!("start rule '{}' is not declared", start));
+        }
         Ok(rdgen_ir::Grammar {
             name,
+            start,
             rules,
             tokens: Vec::new(),
             precedence,
@@ -494,6 +514,21 @@ impl<'a> Parser<'a> {
     }
     fn starts_literal(&self) -> bool {
         matches!(self.current().kind, TokenKind::Literal(_))
+    }
+
+    fn is_start_directive(&self) -> bool {
+        matches!(
+            (
+                self.tokens.get(self.position).map(|token| &token.kind),
+                self.tokens.get(self.position + 1).map(|token| &token.kind),
+                self.tokens.get(self.position + 2).map(|token| &token.kind),
+            ),
+            (
+                Some(TokenKind::Ident(name)),
+                Some(TokenKind::Ident(_)),
+                Some(TokenKind::Symbol(';'))
+            ) if name.eq_ignore_ascii_case("start")
+        )
     }
 
     fn current(&self) -> &Token {
@@ -1288,9 +1323,26 @@ mod tests {
     fn parses_the_bascal_starter_fixture() {
         let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
         assert_eq!(grammar.name, "Bascal");
+        assert_eq!(grammar.start, "program");
         assert!(grammar.rules.iter().any(|rule| rule.name == "expr"));
         assert_eq!(grammar.precedence[0].rule, "expr");
         assert_eq!(grammar.precedence[0].levels.len(), 9);
+    }
+
+    #[test]
+    fn accepts_explicit_start_rule_before_lexical_rules() {
+        let grammar = compile(
+            "grammar Demo; start program; identifier = \"x\"; program = identifier;",
+        )
+        .unwrap();
+        assert_eq!(grammar.start, "program");
+        assert_eq!(grammar.rules[0].name, "identifier");
+    }
+
+    #[test]
+    fn rejects_unknown_explicit_start_rule() {
+        let error = compile("grammar Demo; start missing; item = \"x\";").unwrap_err();
+        assert!(error.contains("start rule 'missing' is not declared"));
     }
 
     #[test]

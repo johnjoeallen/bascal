@@ -348,8 +348,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     }
     let start = grammar
         .rules
-        .first()
-        .ok_or_else(|| "grammar has no rules".to_owned())?;
+        .iter()
+        .find(|rule| rule.name == grammar.start)
+        .ok_or_else(|| format!("start rule '{}' is not declared", grammar.start))?;
     let start_name = c_type_name(&start.name);
     output.push_str(&format!(
         "{start_name} *rdgen_parse(rdgen_parser *parser, rdgen_error *error) {{ parser->error = error; {start_name} *node = rdgen_parse_{}(parser, error); if (node == NULL) return NULL; rdgen_skip(parser); if (parser->position != parser->length) {{ rdgen_set_error(error, \"unexpected trailing input\", parser->position); return NULL; }} return node; }}\n\n",

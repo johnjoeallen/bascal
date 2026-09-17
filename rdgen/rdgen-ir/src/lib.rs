@@ -22,6 +22,7 @@ impl Span {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Grammar {
     pub name: String,
+    pub start: String,
     pub rules: Vec<Rule>,
     pub tokens: Vec<Token>,
     pub precedence: Vec<PrecedenceTable>,

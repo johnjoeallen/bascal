@@ -17,6 +17,11 @@ derived from BASCAL grammar revision 5. The grammar frontend compiles it into
 the typed IR and both current backends can emit declarations/parser source for
 it.
 
+Grammars may select their parser entry rule explicitly with `start <rule>;`.
+If omitted, rdgen retains the compatibility default of using the first rule.
+This is important for grammars that declare lexical rules before their
+syntactic start rule, as BASCAL does.
+
 [`grammars/distill.matcher.rdg`](grammars/distill.matcher.rdg) is a second
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
 and string literals, closures, chainable postfix expressions, ternaries, and
