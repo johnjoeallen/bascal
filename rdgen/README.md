@@ -11,8 +11,9 @@ precedence tables into `rdgen-ir`; target-specific emitters consume that IR.
 The Rust emitter is the reference backend, followed by C and C++.
 
 The first grammar fixture is [`grammars/bascal.bcl.rdg`](grammars/bascal.bcl.rdg),
-derived from BASCAL grammar revision 5. It is currently a design-spec fixture;
-the grammar frontend will compile it into the typed IR as the next milestone.
+derived from BASCAL grammar revision 5. The grammar frontend compiles it into
+the typed IR and both current backends can emit declarations/parser source for
+it.
 
 [`grammars/distill.matcher.rdg`](grammars/distill.matcher.rdg) is a second
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
@@ -37,9 +38,12 @@ Use `--emit-c` to write the current C AST ABI to stdout:
 cargo run -p rdgen -- path/to/grammar.rdg --emit-c
 ```
 
-The C backend currently emits arena-compatible tagged-union declarations and
-is validated as C11. Its recursive-descent parser emitter will consume the
-same IR in a subsequent backend increment.
+The C backend emits arena-compatible tagged-union declarations and a C11
+recursive-descent parser for the currently supported control-flow slice. The
+parser supports literals, named terminals, rule references, optional and
+zero-or-more repetitions, nested single-element groups, multi-element grouped
+alternatives, backtracking, trivia skipping, literal matching callbacks, and
+arena-backed AST construction.
 
 The initial C parser slice can be exercised with the smoke grammar:
 
@@ -54,8 +58,8 @@ backtracking.
 The generated `rdgen_parser_init` and `rdgen_parse` functions provide the C
 entry point and enforce complete input consumption after trivia skipping.
 Single- and multi-element groups, including groups with alternatives, are
-supported for consumption-only parsing. Nested groups and groups containing
-repetitions are rejected until their C control flow is implemented.
+supported for consumption-only parsing. Groups containing repetitions remain
+outside the current C parser slice and are rejected explicitly.
 
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
