@@ -198,6 +198,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; };\n"
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
             + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
+            + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
             + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { size_t length = strlen(literal); rdgen_skip(parser); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, literal, length) == 0) { token->text = parser->source + parser->position; token->length = length; parser->position += length; return true; } return false; }\n"
             + "rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal }; return parser; }\n\n"
     ));
@@ -226,8 +227,8 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             return Err(format!("C parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
         }
         for field in &alternative.constructor.fields {
-            if find_labeled_element(&alternative.elements, &field.source_label).is_some_and(|element| matches!(element, Element::Group { .. } | Element::Repeat { .. })) {
-                return Err(format!("C parser emitter does not yet bind grouped or repeated field '{}' in rule '{}'", field.field, rule.name));
+            if find_labeled_element(&alternative.elements, &field.source_label).is_some_and(|element| matches!(element, Element::Group { .. })) {
+                return Err(format!("C parser emitter does not yet bind grouped field '{}' in rule '{}'", field.field, rule.name));
             }
         }
         output.push_str(&format!("    {{ size_t start_{index} = parser->position;\n"));
@@ -280,6 +281,9 @@ fn c_local_name(element: &Element, index: usize) -> String {
 
 fn c_local_declaration(element: &Element, index: usize) -> String {
     if matches!(element, Element::Repeat { .. }) {
+        if matches!(element, Element::Repeat { label: Some(_), .. }) {
+            return format!("{} {}", c_field_type(element), c_local_name(element, index));
+        }
         return format!("size_t {}_count", c_local_name(element, index));
     }
     if let Some(child) = c_group_child(element) {
@@ -299,6 +303,8 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
         Element::Group { alternatives, .. } if c_group_child(element).is_some() => c_parse_statement(c_group_child(element).expect("group child checked"), index, alternative_index),
         Element::Group { alternatives, .. } => c_group_statement(alternatives, index, alternative_index),
+        Element::Repeat { element: child, max: Some(1), label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, true, alternative_index),
+        Element::Repeat { element: child, max: None, label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, false, alternative_index),
         Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{local}_count = 0; {{ size_t item_start_{index} = parser->position; {} if (parser->position != item_start_{index}) {local}_count = 1; else parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
         Element::Repeat { element: child, max: None, .. } => Ok(format!("{local}_count = 0; for (;;) {{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} {local}_count++; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C repetition requires a single-element group".to_owned())?, index)?)),
         _ => Err("unsupported C parser element".into()),
@@ -358,6 +364,29 @@ fn c_repeat_probe(element: &Element, index: usize) -> Result<String, String> {
     }
 }
 
+fn c_labeled_repeat_statement(element: &Element, index: usize, local: String, optional: bool, alternative_index: usize) -> Result<String, String> {
+    let child = c_repeat_child(element).ok_or_else(|| "C labeled quantifiers require a single-element group".to_owned())?;
+    let value_type = c_value_type(child);
+    let item = format!("captured_item_{index}");
+    let capacity = format!("parser->length - parser->position + 1");
+    let mut output = format!("{local}.present = false; ");
+    if optional {
+        output.push_str(&format!("{{ size_t item_start_{index} = parser->position; {value_type} {item}; bool matched_{index} = false; {} if (parser->position != item_start_{index}) {{ {local}.present = true; {local}.value = {item}; }} else parser->position = item_start_{index}; }}", c_capture_probe(child, index, &item)?));
+    } else {
+        output = format!("{local}.items = ({value_type} *)rdgen_arena_alloc(parser->arena, ({capacity}) * sizeof(*{local}.items)); {local}.length = 0; if ({local}.items == NULL) {{ rdgen_set_error(error, \"arena allocation failed\", parser->position); goto rdgen_alt_fail_{alternative_index}; }} for (;;) {{ size_t item_start_{index} = parser->position; {value_type} {item}; bool matched_{index} = false; {} if (!matched_{index} || parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} {local}.items[{local}.length++] = {item}; }}", c_capture_probe(child, index, &item)?);
+    }
+    Ok(output)
+}
+
+fn c_capture_probe(element: &Element, index: usize, item: &str) -> Result<String, String> {
+    match element {
+        Element::Literal { value, .. } => Ok(format!("if (rdgen_expect_literal(parser, {:?}, &{item})) matched_{index} = true; else parser->position = item_start_{index};", value)),
+        Element::Token { token, .. } => Ok(format!("size_t capture_end_{index} = parser->position; if (rdgen_scan_capture(parser, {:?}, &{item}, &capture_end_{index})) {{ parser->position = capture_end_{index}; matched_{index} = true; }} else parser->position = item_start_{index};", token)),
+        Element::Rule { rule, .. } => Ok(format!("{item} = rdgen_parse_{}(parser, error); if ({item} != NULL) matched_{index} = true; else parser->position = item_start_{index};", rule)),
+        _ => Err("C labeled quantifiers currently require a literal, terminal, or rule child".into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +438,8 @@ mod tests {
         let grammar = compile("grammar Start; start = items: { \"a\" } => Start(items: items);").unwrap();
         let generated = emit_ast(&grammar).unwrap();
         assert!(generated.contains("rdgen_token_list items;"));
+        let parser = emit_parser(&grammar).unwrap();
+        assert!(parser.contains("value_items.length++"));
     }
 
     #[test]
