@@ -571,7 +571,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"a\"); assert!(parser.parse().is_ok()); }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"a\"); assert!(parser.parse().is_ok()); let mut trailing = Parser::new(\"ab\"); let error = trailing.parse().unwrap_err(); assert_eq!(error.message, \"unexpected trailing input\"); assert_eq!(error.position, 1); }}\n",
                 generated.to_str().unwrap()
             ),
         )
