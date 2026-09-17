@@ -73,7 +73,9 @@ representable while annotations are added incrementally.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
-`TriviaSkipper` advances over whitespace/comments. Use
+`TriviaSkipper` advances over whitespace/comments. The C callback variants
+receive the source buffer length, so scanners and trivia handlers can operate
+on non-NUL-terminated input safely. Use
 `Parser::with_scanner_and_trivia` to provide both; `Parser::new` retains a
 deliberately non-scanning default for literal-only parser tests. The public
 `parse` method also rejects unconsumed non-trivia input.
