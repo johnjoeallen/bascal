@@ -767,6 +767,12 @@ fn validate_precedence(
     let names: std::collections::HashSet<&str> =
         rules.iter().map(|rule| rule.name.as_str()).collect();
     let mut seen = std::collections::HashSet::new();
+    let mut literals = std::collections::HashSet::new();
+    for rule in rules {
+        for alternative in &rule.alternatives {
+            collect_literal_values(&alternative.elements, &mut literals);
+        }
+    }
     for table in precedence {
         if !names.contains(table.rule.as_str()) {
             return Err(format!(
@@ -801,10 +807,38 @@ fn validate_precedence(
                         operator, table.rule
                     ));
                 }
+                if !literals.contains(operator.as_str()) {
+                    return Err(format!(
+                        "precedence operator {:?} in rule '{}' does not occur as a grammar literal",
+                        operator, table.rule
+                    ));
+                }
             }
         }
     }
     Ok(())
+}
+
+fn collect_literal_values(
+    elements: &[rdgen_ir::Element],
+    literals: &mut std::collections::HashSet<String>,
+) {
+    for element in elements {
+        match element {
+            rdgen_ir::Element::Literal { value, .. } => {
+                literals.insert(value.clone());
+            }
+            rdgen_ir::Element::Group { alternatives, .. } => {
+                for alternative in alternatives {
+                    collect_literal_values(alternative, literals);
+                }
+            }
+            rdgen_ir::Element::Repeat { element, .. } => {
+                collect_literal_values(std::slice::from_ref(element.as_ref()), literals);
+            }
+            rdgen_ir::Element::Rule { .. } | rdgen_ir::Element::Token { .. } => {}
+        }
+    }
 }
 
 fn validate_rule_names(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
@@ -982,7 +1016,7 @@ mod tests {
 
     #[test]
     fn parses_explicit_precedence_levels() {
-        let grammar = compile("grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";").unwrap();
+        let grammar = compile("grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom, ( \"+\" | \"-\" | \"^\" ); atom = \"x\";").unwrap();
         assert_eq!(grammar.precedence.len(), 1);
         assert_eq!(grammar.precedence[0].rule, "expr");
         assert_eq!(grammar.precedence[0].levels[0].operators, vec!["+", "-"]);
@@ -1006,7 +1040,7 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_precedence_tables() {
-        let error = compile("grammar Expr; precedence expr { left \"+\"; } precedence expr { left \"-\"; } expr = \"x\";").unwrap_err();
+        let error = compile("grammar Expr; precedence expr { left \"+\"; } precedence expr { left \"-\"; } expr = \"x\", ( \"+\" | \"-\" );").unwrap_err();
         assert!(error.contains("duplicate precedence table for rule 'expr'"));
     }
 
@@ -1019,7 +1053,7 @@ mod tests {
     #[test]
     fn rejects_duplicate_precedence_operators() {
         let error = compile(
-            "grammar Expr; precedence expr { left \"+\"; left \"+\"; } expr = \"x\";",
+            "grammar Expr; precedence expr { left \"+\"; left \"+\"; } expr = \"x\", \"+\";",
         )
         .unwrap_err();
         assert!(error.contains("duplicate precedence operator \"+\" in rule 'expr'"));
@@ -1032,6 +1066,17 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("precedence operator in rule 'expr' must not be empty"));
+    }
+
+    #[test]
+    fn rejects_precedence_operators_missing_from_grammar() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\"; } expr = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "precedence operator \"+\" in rule 'expr' does not occur as a grammar literal"
+        ));
     }
 
     #[test]

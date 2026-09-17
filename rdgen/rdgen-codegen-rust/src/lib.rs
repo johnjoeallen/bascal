@@ -709,7 +709,7 @@ mod tests {
     #[test]
     fn emits_typed_precedence_metadata() {
         let grammar = compile(
-            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";",
+            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom, { ( \"+\" | \"-\" | \"^\" ), atom }; atom = \"x\";",
         )
         .unwrap();
         let generated = emit(&grammar).unwrap();
@@ -724,7 +724,7 @@ mod tests {
     #[test]
     fn rejects_precedence_metadata_type_collisions() {
         let grammar = compile(
-            "grammar Bad; precedence expr { left \"+\"; } rdgen_precedence_level = \"x\"; expr = \"x\";",
+            "grammar Bad; precedence expr { left \"+\"; } rdgen_precedence_level = \"x\"; expr = \"x\", { \"+\", \"x\" };",
         )
         .unwrap();
         let error = emit(&grammar).unwrap_err();
@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn generated_precedence_metadata_is_readable_from_rust() {
         let grammar = compile(
-            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";",
+            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom, { ( \"+\" | \"-\" | \"^\" ), atom }; atom = \"x\";",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -903,7 +903,7 @@ mod tests {
     #[test]
     fn generated_precedence_climbing_loop_applies_binding_powers() {
         let grammar = compile(
-            "grammar Expr; precedence expr { left \"+\"; right \"^\"; } expr = atom; atom = \"1\";",
+            "grammar Expr; precedence expr { left \"+\"; right \"^\"; } expr = atom, { ( \"+\" | \"^\" ), atom }; atom = \"1\";",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
