@@ -617,4 +617,30 @@ mod tests {
         }
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
+
+    #[test]
+    fn generated_rust_parser_uses_literal_matcher_callback() {
+        let grammar = compile("grammar Start; start = \"IF\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-literal-callback");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn match_keyword(source: &str, position: usize, literal: &str) -> Option<usize> {{ let candidate = source.get(position..position + literal.len())?; candidate.eq_ignore_ascii_case(literal).then_some(position + literal.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"if\", missing_terminal, skip_no_trivia, match_keyword); assert!(parser.parse().is_ok()); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
 }
