@@ -1266,6 +1266,35 @@ mod tests {
     }
 
     #[test]
+    fn generated_program_accepts_all_bascal_file_prefixes() {
+        let grammar = compile(
+            "grammar Top; start program; lexical identifier = letter, { letter }; lexical line_comment = \"//\", { any_char_except_newline }; program = { file_item }; file_item = program_decl | library_decl | shared_decl | comment_stmt; program_decl = \"program\", identifier; library_decl = \"library\", identifier; shared_decl = \"shared\", identifier; comment_stmt = line_comment;",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("program-prefixes");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ for source in [\"program demo\", \"library demo\", \"shared demo\", \"// comment\\n\"] {{ let mut parser = Parser::with_scanner_and_trivia(source, scanner, trivia); parser.parse().unwrap(); }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_rust_parser_uses_terminal_and_trivia_callbacks() {
         let grammar = compile("grammar Start; start = item: digit => Start(item: item);").unwrap();
         let directory = tempfile::tempdir().unwrap();
