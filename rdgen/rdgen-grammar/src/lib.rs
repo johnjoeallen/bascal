@@ -904,6 +904,12 @@ mod tests {
     }
 
     #[test]
+    fn rejects_empty_precedence_tables() {
+        let error = compile("grammar Expr; precedence expr { } expr = \"x\";").unwrap_err();
+        assert!(error.contains("precedence table for rule 'expr' must contain at least one level"));
+    }
+
+    #[test]
     fn preserves_recovery_annotations_in_the_ir() {
         let grammar = compile("grammar Demo; statement = \"x\" => Statement() recover { sync \";\", \"}\"; skip_until_sync; }; ").unwrap();
         let recovery = grammar.rules[0].alternatives[0].recovery.as_ref().unwrap();
