@@ -334,13 +334,13 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
 
 fn c_group_child(element: &Element) -> Option<&Element> {
     match element {
-        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
+        Element::Group { .. } => c_group_atom(element),
         _ => None,
     }
 }
 
 fn c_group_supported(alternatives: &[Vec<Element>]) -> bool {
-    !alternatives.is_empty() && alternatives.iter().all(|alternative| !alternative.is_empty() && alternative.iter().all(is_simple_element))
+    !alternatives.is_empty() && alternatives.iter().all(|alternative| !alternative.is_empty() && alternative.iter().all(|element| c_group_atom(element).is_some()))
 }
 
 fn c_repeat_storage_child(element: &Element) -> &Element {
@@ -354,7 +354,7 @@ fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_in
         for (child_index, child) in alternative.iter().enumerate() {
             let child_name = format!("group_item_{index}_{group_index}_{child_index}");
             let failure = format!("group_ok_{index}_{group_index} = false");
-            match child {
+            match c_group_atom(child).ok_or_else(|| "C grouped alternatives require simple children".to_owned())? {
                 Element::Literal { value, .. } => output.push_str(&format!("rdgen_token {child_name}; if (group_ok_{index}_{group_index} && !rdgen_expect_literal(parser, {:?}, &{child_name})) {failure}; ", value)),
                 Element::Token { token, .. } => output.push_str(&format!("rdgen_token {child_name}; size_t group_end_{index}_{group_index}_{child_index} = parser->position; if (group_ok_{index}_{group_index} && (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{child_name}, &group_end_{index}_{group_index}_{child_index}) || group_end_{index}_{group_index}_{child_index} <= parser->position || group_end_{index}_{group_index}_{child_index} > parser->length)) {failure}; if (group_ok_{index}_{group_index}) parser->position = group_end_{index}_{group_index}_{child_index}; ", token)),
                 Element::Rule { rule, .. } => output.push_str(&format!("{} *{child_name} = NULL; if (group_ok_{index}_{group_index}) {{ {child_name} = rdgen_parse_{}(parser, error); if ({child_name} == NULL) {failure}; }} ", c_type_name(rule), rule)),
@@ -370,6 +370,14 @@ fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_in
 fn c_repeat_child(element: &Element) -> Option<&Element> {
     match element {
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
+        _ => None,
+    }
+}
+
+fn c_group_atom(element: &Element) -> Option<&Element> {
+    match element {
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => c_group_atom(&alternatives[0][0]),
+        Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. } => Some(element),
         _ => None,
     }
 }
@@ -467,6 +475,13 @@ mod tests {
     #[test]
     fn emits_single_element_grouped_consumption() {
         let grammar = compile("grammar Start; start = ( \"a\" ) => Start();").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
+    }
+
+    #[test]
+    fn emits_nested_single_element_groups() {
+        let grammar = compile("grammar Start; start = (( \"a\" )) => Start();").unwrap();
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
     }
