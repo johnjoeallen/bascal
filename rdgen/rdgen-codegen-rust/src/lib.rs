@@ -120,12 +120,25 @@ fn rust_type(element: &Element) -> String {
         Element::Repeat { element, .. } => {
             format!("Vec<{}>", rust_type(rust_repeat_child(element)))
         }
-        Element::Group { alternatives, .. }
-            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
-        {
-            rust_type(&alternatives[0][0])
+        Element::Group { alternatives, .. } if alternatives.len() == 1 => {
+            rust_group_type(&alternatives[0])
         }
         Element::Group { .. } => "()".into(),
+    }
+}
+
+fn rust_group_type(elements: &[Element]) -> String {
+    match elements {
+        [] => "()".into(),
+        [element] => rust_type(element),
+        elements => format!(
+            "({})",
+            elements
+                .iter()
+                .map(rust_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
     }
 }
 
@@ -351,6 +364,18 @@ fn emit_element_binding(
             return Err("parser emitter only supports optional and zero-or-more repetitions".into())
         }
         Element::Group { alternatives, .. } => {
+            if alternatives.len() == 1 && alternatives[0].len() > 1 {
+                let values = alternatives[0]
+                    .iter()
+                    .map(emit_element_parse)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .join(", ");
+                output.push_str(&format!(
+                    "{}let {} = {{ let group_attempt: Result<_, ParseError> = (|| {{ Ok(({})) }})(); match group_attempt {{ Ok(value) => value, Err(error) => return Err(error) }} }};\n",
+                    indent, variable, values
+                ));
+                return Ok(());
+            }
             if alternatives
                 .iter()
                 .any(|alternative| alternative.len() != 1)
@@ -790,6 +815,32 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"a\"); match parser.parse().unwrap() {{ Start::Start {{ pair }} => assert_eq!(pair.0, \"a\"), }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_rust_parser_captures_multi_element_group() {
+        let grammar = compile("grammar Start; start = pair: ( \"a\", \"b\" ) => Start(pair: pair);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-group-pair");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }} }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
