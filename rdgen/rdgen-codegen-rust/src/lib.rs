@@ -408,6 +408,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
+            + "    fn matches_terminator(&mut self, literal: &str) -> bool { let start = self.position; let mut first = true; for part in literal.split_whitespace() { if !first { self.skip_trivia(); } let Some(end) = (self.match_literal)(self.source, self.position, part) else { self.position = start; return false; }; self.position = end; first = false; } self.position = start; true }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
@@ -806,7 +807,7 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
                 output.push_str("self.skip_trivia(); if [");
                 output.push_str(&literals.join(", "));
                 output.push_str(
-                    "].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) { break; } ",
+                    "].iter().any(|literal| self.matches_terminator(literal)) { break; } ",
                 );
             }
             output.push_str(&format!("let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ ", emit_element_expression(child)?));
@@ -842,7 +843,7 @@ fn emit_repeat_terminator_guard(output: &mut String, terminators: &[String], ind
         .collect::<Vec<_>>();
     if !literals.is_empty() {
         output.push_str(&format!(
-            "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) {{ break; }}\n",
+            "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| self.matches_terminator(literal)) {{ break; }}\n",
             indent,
             indent,
             literals.join(", ")

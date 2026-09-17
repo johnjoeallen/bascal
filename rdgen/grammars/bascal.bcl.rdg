@@ -101,7 +101,7 @@ statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | select_case_stmt
                  | return_stmt | exit_stmt | continue_stmt
-                 | goto_stmt | gosub_stmt | try_stmt
+                 | goto_stmt | gosub_stmt | try_stmt | end_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
                  | assignment_or_expr_stmt ;
@@ -188,11 +188,11 @@ select_case_stmt = "select" , "case" , expr ,
                     "end" , "select" ;
 case_values      = case_value , { "," , case_value } ;
 case_value       = "is" , compare_op , expr | expr , [ "to" , expr ] ;
-try_stmt         = "try" , { statement } until { "catch", "finally", "end" } ,
+try_stmt         = "try" , { statement } until { "catch", "finally", "end try" } ,
                     [ "catch" , identifier , [ "(" , expr , { "," , expr } , ")" ] ,
                       "," , identifier , [ "," , identifier ] ,
-                      { statement } until { "finally", "end" } ] ,
-                    [ "finally" , { statement } until { "end" } ] , "end" , "try" ;
+                      { statement } until { "finally", "end try" } ] ,
+                    [ "finally" , { statement } until { "end try" } ] , "end" , "try" ;
 assignment_or_expr_stmt = [ "let" ] , expr ;
 
 (* ----- Expressions -----
