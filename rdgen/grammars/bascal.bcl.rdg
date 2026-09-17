@@ -88,6 +88,13 @@ typed_ident      = identifier ;
 
 statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | print_stmt | lprint_stmt | global_decl
+                 | open_stmt | line_input_stmt | input_stmt | write_stmt
+                 | seek_stmt | kill_stmt | name_stmt | close_stmt
+                 | data_stmt | read_stmt | restore_stmt
+                 | locate_stmt | color_stmt | swap_stmt
+                 | stop_stmt | cls_stmt | beep_stmt | system_stmt | clear_stmt
+                 | randomize_stmt | poke_stmt | out_stmt | width_stmt
+                 | erase_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | return_stmt | exit_stmt | continue_stmt
                  | goto_stmt | gosub_stmt | try_stmt | end_stmt
@@ -103,6 +110,33 @@ const_stmt       = "const" , identifier , "=" , expr ;
 print_stmt       = "print" , { print_token } ;
 lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } ;
 print_token      = "," | ";" | expr ;
+open_stmt        = "open" , expr , "for" ,
+                    ( "input" | "output" | "append" | "random" | "binary" ) ,
+                    "as" , "#" , expr , [ "len" , "=" , expr ] ;
+line_input_stmt  = "line" , "input" , "#" , expr , "," , expr ;
+input_stmt       = "input" , [ string_literal , ( ";" | "," ) ] ,
+                    expr , { "," , expr } ;
+write_stmt       = "write" , "#" , expr , [ "," , expr , { "," , expr } ] ;
+seek_stmt        = "seek" , "#" , expr , "," , expr ;
+kill_stmt        = "kill" , expr ;
+name_stmt        = "name" , expr , "as" , expr ;
+close_stmt       = "close" , "#" , expr ;
+data_stmt        = "data" , expr , { "," , expr } ;
+read_stmt        = "read" , expr , { "," , expr } ;
+restore_stmt     = "restore" , [ identifier ] ;
+locate_stmt      = "locate" , expr , "," , expr ;
+color_stmt       = "color" , expr , [ "," , expr ] ;
+swap_stmt        = "swap" , expr , "," , expr ;
+stop_stmt        = "stop" ;
+cls_stmt         = "cls" ;
+beep_stmt        = "beep" ;
+system_stmt      = "system" ;
+clear_stmt       = "clear" ;
+randomize_stmt   = "randomize" , [ expr ] ;
+poke_stmt        = "poke" , expr , "," , expr ;
+out_stmt         = "out" , expr , "," , expr ;
+width_stmt       = "width" , [ "#" , expr , "," ] , expr ;
+erase_stmt       = "erase" , identifier , { "," , identifier } ;
 return_stmt      = "return" , [ expr ] ;
 exit_stmt        = "exit" ;
 continue_stmt    = "continue" ;
