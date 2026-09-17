@@ -103,9 +103,11 @@ precedence expr {
 }
 ```
 
-The constructor must bind exactly `left`, `operator`, and `right`. The current
-Rust backend preserves this contract in generated metadata; automatic typed
-node construction from the annotation is still pending.
+The constructor must bind exactly `left`, `operator`, and `right`. The Rust
+backend emits the annotated constructor as a typed rule variant with boxed
+recursive operands and a `Token` operator field, and preserves the same
+contract in generated metadata. Constructing that variant from the generated
+precedence loop is still pending.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and

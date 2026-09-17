@@ -13,7 +13,15 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     output.push_str("pub struct Token(pub String);\n\n");
     for rule in &grammar.rules {
         validate_labeled_groups(&rule.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
-        emit_rule(&mut output, rule)?;
+        emit_rule(
+            &mut output,
+            rule,
+            grammar
+                .precedence
+                .iter()
+                .filter(|table| table.rule == rule.name)
+                .collect(),
+        )?;
     }
     Ok(output)
 }
@@ -45,7 +53,11 @@ fn validate_labeled_groups(elements: &[&Element]) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
+fn emit_rule(
+    output: &mut String,
+    rule: &Rule,
+    precedence: Vec<&rdgen_ir::PrecedenceTable>,
+) -> Result<(), String> {
     let enum_name = type_name(&rule.name);
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
@@ -84,6 +96,41 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             output.push_str(&format!("        {}: {},\n", generated_name, rust_type(element)));
         }
         output.push_str("    },\n");
+    }
+    for table in precedence {
+        for level in &table.levels {
+            let Some(constructor) = &level.constructor else {
+                continue;
+            };
+            let variant = type_name(&constructor.type_name.0);
+            if !variants.insert(variant.clone()) {
+                return Err(format!(
+                    "duplicate AST variant '{}' in rule '{}', including precedence constructors",
+                    variant, rule.name
+                ));
+            }
+            output.push_str(&format!("    {} {{\n", variant));
+            let mut field_names = std::collections::HashSet::new();
+            for field in &constructor.fields {
+                let generated_name = field_name(&field.field);
+                if !field_names.insert(generated_name.clone()) {
+                    return Err(format!(
+                        "precedence constructor fields '{}' collide after Rust escaping in rule '{}'",
+                        field.field, rule.name
+                    ));
+                }
+                let field_type = match field.source_label.as_str() {
+                    "left" | "right" => format!("Box<{}>", type_name(&rule.name)),
+                    "operator" => "Token".to_owned(),
+                    _ => unreachable!("precedence constructor validation guarantees roles"),
+                };
+                output.push_str(&format!(
+                    "        {}: {},\n",
+                    generated_name, field_type
+                ));
+            }
+            output.push_str("    },\n");
+        }
     }
     output.push_str("}\n\n");
     Ok(())
@@ -791,6 +838,57 @@ mod tests {
         assert!(generated.contains(
             "constructor_fields: &[RdgenPrecedenceField { field: \"left\", source_label: \"left\" }, RdgenPrecedenceField { field: \"operator\", source_label: \"operator\" }, RdgenPrecedenceField { field: \"right\", source_label: \"right\" }]"
         ));
+    }
+
+    #[test]
+    fn emits_typed_ast_variant_for_precedence_constructor() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("Binary {"));
+        assert!(generated.contains("left: Box<Expr>"));
+        assert!(generated.contains("operator: Token"));
+        assert!(generated.contains("right: Box<Expr>"));
+    }
+
+    #[test]
+    fn rejects_precedence_constructor_variant_collision() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = left: atom, operator: \"+\", right: atom => Binary(left: left, operator: operator, right: right); atom = \"x\";",
+        )
+        .unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("duplicate AST variant 'Binary'"));
+        assert!(error.contains("including precedence constructors"));
+    }
+
+    #[test]
+    fn emits_precedence_ast_declarations_that_compile() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("ast.rs");
+        let object = directory.path().join("ast.rlib");
+        std::fs::write(&source, emit_ast(&grammar).unwrap()).unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([
+                "--crate-name",
+                "rdgen_ast_fixture",
+                "--crate-type",
+                "lib",
+                source.to_str().unwrap(),
+                "-o",
+                object.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
     }
 
     #[test]
