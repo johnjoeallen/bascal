@@ -111,8 +111,8 @@ global_decl      = "global" , identifier ;
 dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
 dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
 const_stmt       = "const" , identifier , "=" , expr ;
-print_stmt       = "print" , { print_token } ;
-lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } ;
+print_stmt       = "print" , { print_token } until { "\n" } ;
+lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } until { "\n" } ;
 print_token      = "," | ";" | expr ;
 file_decl_stmt   = "file" , identifier , [ "as" , identifier ] , "=" ,
                     "open" , "(" , expr , ")" ,
@@ -127,7 +127,8 @@ open_stmt        = "open" , expr , "for" ,
                     ( "input" | "output" | "append" | "random" | "binary" ) ,
                     "as" , "#" , expr , [ "len" , "=" , expr ] ;
 line_input_stmt  = "line" , "input" , "#" , expr , "," , expr ;
-input_stmt       = "input" , [ string_literal , ( ";" | "," ) ] ,
+input_stmt       = "input" , "#" , expr , "," , expr , { "," , expr }
+                 | "input" , [ string_literal , ( ";" | "," ) ] ,
                     expr , { "," , expr } ;
 write_stmt       = "write" , "#" , expr , [ "," , expr , { "," , expr } ] ;
 seek_stmt        = "seek" , "#" , expr , "," , expr ;

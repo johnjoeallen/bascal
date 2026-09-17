@@ -140,7 +140,12 @@ impl<'a> Lexer<'a> {
             self.next_char();
             if ch == '\\' {
                 if let Some((_, escaped)) = self.current {
-                    value.push(escaped);
+                    value.push(match escaped {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        other => other,
+                    });
                     self.next_char();
                     continue;
                 }

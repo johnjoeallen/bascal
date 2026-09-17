@@ -825,16 +825,25 @@ fn emit_repeat_terminator_guard(output: &mut String, terminators: &[String], ind
     if terminators.is_empty() {
         return;
     }
-    output.push_str(&format!(
-        "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) {{ break; }}\n",
-        indent,
-        indent,
-        terminators
-            .iter()
-            .map(|terminator| format!("{:?}", terminator))
-            .collect::<Vec<_>>()
-            .join(", ")
-    ));
+    if terminators.iter().any(|terminator| terminator == "\n") {
+        output.push_str(&format!(
+            "{}if self.source[self.position..].starts_with('\\n') {{ break; }}\n",
+            indent
+        ));
+    }
+    let literals = terminators
+        .iter()
+        .filter(|terminator| terminator.as_str() != "\n")
+        .map(|terminator| format!("{:?}", terminator))
+        .collect::<Vec<_>>();
+    if !literals.is_empty() {
+        output.push_str(&format!(
+            "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) {{ break; }}\n",
+            indent,
+            indent,
+            literals.join(", ")
+        ));
+    }
 }
 
 fn element_variable(element: &Element, index: usize) -> String {
@@ -1354,6 +1363,33 @@ mod tests {
         if !compiler.status.success() {
             panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_repetition_stops_at_physical_line_end() {
+        let grammar = compile(
+            "grammar Lines; start line; line = \"print\", { item } until { \"\\n\" }; item = \"item\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("line-terminator");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(_: &str, _: usize, _: &str) -> Option<(Token, usize)> {{ None }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"print item item\\n\", scanner, trivia); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 
