@@ -12,9 +12,37 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str("pub struct Token(pub String);\n\n");
     for rule in &grammar.rules {
+        validate_labeled_groups(&rule.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
         emit_rule(&mut output, rule)?;
     }
     Ok(output)
+}
+
+fn validate_labeled_groups(elements: &[&Element]) -> Result<(), String> {
+    for element in elements {
+        match element {
+            Element::Group {
+                label: Some(label),
+                alternatives,
+                ..
+            } if alternatives.len() > 1 => {
+                return Err(format!(
+                    "Rust emitter does not yet support labeled group '{}' with alternatives",
+                    label
+                ));
+            }
+            Element::Group { alternatives, .. } => {
+                for alternative in alternatives {
+                    validate_labeled_groups(&alternative.iter().collect::<Vec<_>>())?;
+                }
+            }
+            Element::Repeat { element, .. } => {
+                validate_labeled_groups(&[element.as_ref()])?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
@@ -629,6 +657,13 @@ mod tests {
         assert!(generated.contains("let group_attempt = (|| -> Result<(), ParseError>"));
         assert!(generated.contains("self.expect_literal(\"a\")?"));
         assert!(generated.contains("self.expect_literal(\"b\")?"));
+    }
+
+    #[test]
+    fn rejects_labeled_group_alternatives_without_a_group_sum_type() {
+        let grammar = compile("grammar Start; start = choice: ( \"a\" | \"b\" ) => Start(choice: choice);").unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("does not yet support labeled group 'choice' with alternatives"));
     }
 
     #[test]
