@@ -826,7 +826,7 @@ fn emit_repeat_terminator_guard(output: &mut String, terminators: &[String], ind
         return;
     }
     output.push_str(&format!(
-        "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| self.source[self.position..].starts_with(literal)) {{ break; }}\n",
+        "{}self.skip_trivia();\n{}if [{}].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) {{ break; }}\n",
         indent,
         indent,
         terminators
@@ -1342,7 +1342,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(_: &str, _: usize, _: &str) -> Option<(Token, usize)> {{ None }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"begin item item end\", scanner, trivia); parser.parse().unwrap(); }}\n",
+                "include!({:?});\nfn scanner(_: &str, _: usize, _: &str) -> Option<(Token, usize)> {{ None }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len())?.eq_ignore_ascii_case(expected).then_some(position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"BEGIN item ITEM END\", scanner, trivia, literal); parser.parse().unwrap(); }}\n",
                 generated.to_str().unwrap()
             ),
         )
