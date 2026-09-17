@@ -142,6 +142,11 @@ fn c_field_type(element: &Element) -> String {
         Element::Repeat { element, .. } => {
             c_collection_name(c_repeat_storage_child(element), false)
         }
+        Element::Group { alternatives, .. }
+            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
+        {
+            c_field_type(&alternatives[0][0])
+        }
         Element::Group { .. } => "bool".into(),
     }
 }
@@ -157,6 +162,11 @@ fn c_value_type(element: &Element) -> String {
         } => c_collection_name(c_repeat_storage_child(element), true),
         Element::Repeat { element, .. } => {
             c_collection_name(c_repeat_storage_child(element), false)
+        }
+        Element::Group { alternatives, .. }
+            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
+        {
+            c_value_type(&alternatives[0][0])
         }
         Element::Group { .. } => "bool".into(),
     }
@@ -480,6 +490,11 @@ fn c_local_declaration(element: &Element, index: usize) -> String {
         }
         return String::new();
     }
+    if let Element::Group { label: Some(_), .. } = element {
+        if c_group_child(element).is_some() {
+            return format!("{} {}", c_field_type(element), c_local_name(element, index));
+        }
+    }
     if let Some(child) = c_group_child(element) {
         return c_local_declaration(child, index);
     }
@@ -506,13 +521,38 @@ fn c_parse_statement(
         Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
         Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
-        Element::Group { alternatives, .. } if c_group_child(element).is_some() => c_parse_statement(c_group_child(element).expect("group child checked"), index, alternative_index),
+        Element::Group { .. } if c_group_child(element).is_some() => {
+            c_parse_simple_statement(c_group_child(element).expect("group child checked"), &local, alternative_index, index)
+        }
         Element::Group { alternatives, .. } => c_group_statement(alternatives, index, alternative_index, &local),
         Element::Repeat { element: child, max: Some(1), label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, true, alternative_index),
         Element::Repeat { element: child, max: None, label: Some(_), .. } => c_labeled_repeat_statement(child, index, local, false, alternative_index),
         Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
         Element::Repeat { element: child, max: None, .. } => Ok(format!("for (;;) {{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C repetition requires a single-element group".to_owned())?, index)?)),
         _ => Err("unsupported C parser element".into()),
+    }
+}
+
+fn c_parse_simple_statement(
+    element: &Element,
+    local: &str,
+    alternative_index: usize,
+    index: usize,
+) -> Result<String, String> {
+    match element {
+        Element::Literal { value, .. } => Ok(format!(
+            "if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};",
+            value
+        )),
+        Element::Token { token, .. } => Ok(format!(
+            "{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}",
+            token
+        )),
+        Element::Rule { rule, .. } => Ok(format!(
+            "{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};",
+            rule
+        )),
+        _ => Err("C labeled singleton groups require a simple child".into()),
     }
 }
 
@@ -725,6 +765,37 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("bool value_pair_matched"));
         assert!(generated.contains("node->as.rdgen_start.pair = value_pair"));
+    }
+
+    #[test]
+    fn generated_c_parser_captures_labeled_single_element_group() {
+        let grammar = rdgen_grammar::compile("grammar Start; start = pair: ( \"a\" ) => Start(pair: pair);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-group-capture");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("a", 1, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    rdgen_start *node = rdgen_parse(&parser, &error);
+    return node != NULL && node->as.rdgen_start.pair.length == 1 && node->as.rdgen_start.pair.text[0] == 'a' ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 
     #[test]
