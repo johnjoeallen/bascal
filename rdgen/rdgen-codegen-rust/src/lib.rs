@@ -761,6 +761,21 @@ mod tests {
     }
 
     #[test]
+    fn emits_independent_precedence_apis_for_multiple_rules() {
+        let grammar = compile(
+            "grammar Expressions; precedence expr { left \"+\"; } precedence term { left \"*\"; } expr = \"x\", \"+\"; term = \"x\", \"*\";",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub const EXPR_PRECEDENCE"));
+        assert!(generated.contains("pub const TERM_PRECEDENCE"));
+        assert!(generated.contains("pub fn expr_binding_power(operator: &str)"));
+        assert!(generated.contains("pub fn term_binding_power(operator: &str)"));
+        assert!(generated.contains("pub fn parse_expr_precedence"));
+        assert!(generated.contains("pub fn parse_term_precedence"));
+    }
+
+    #[test]
     fn rejects_precedence_metadata_type_collisions() {
         let grammar = compile(
             "grammar Bad; precedence expr { left \"+\"; } rdgen_precedence_level = \"x\"; expr = \"x\", { \"+\", \"x\" };",
