@@ -695,4 +695,30 @@ mod tests {
         }
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
+
+    #[test]
+    fn generated_rust_parser_captures_optional_literals() {
+        let grammar = compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-optional");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut present = Parser::new(\"a\"); match present.parse().unwrap() {{ Start::Start {{ item: Some(token) }} => assert_eq!(token.0, \"a\"), Start::Start {{ item: None }} => panic!(), }} let mut absent = Parser::new(\"\"); match absent.parse().unwrap() {{ Start::Start {{ item: None }} => {{}}, Start::Start {{ item: Some(_) }} => panic!(), }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
 }
