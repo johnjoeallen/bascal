@@ -438,6 +438,9 @@ impl<'a> Parser<'a> {
             if token.is_empty() {
                 return Err(self.error("recovery sync literal must not be empty"));
             }
+            if sync_tokens.iter().any(|existing| existing == &token) {
+                return Err(self.error("recovery sync literals must be unique"));
+            }
             sync_tokens.push(token);
             if !self.accept_symbol(',') {
                 break;
@@ -944,6 +947,15 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("recovery sync literal must not be empty"));
+    }
+
+    #[test]
+    fn rejects_duplicate_recovery_sync_literals() {
+        let error = compile(
+            "grammar Bad; statement = \"x\" => Statement() recover { sync \";\", \";\"; skip_until_sync; };",
+        )
+        .unwrap_err();
+        assert!(error.contains("recovery sync literals must be unique"));
     }
 
     #[test]
