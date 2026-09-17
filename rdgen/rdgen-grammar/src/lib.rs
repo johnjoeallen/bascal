@@ -836,4 +836,14 @@ mod tests {
                 if label == "value" && rule == "number"
         ));
     }
+
+    #[test]
+    fn preserves_labels_on_group_and_repeat_elements() {
+        let grammar = compile(
+            "grammar Expr; expr = values: { value: atom } => Values(values: values); atom = \"x\";",
+        ).unwrap();
+        let element = &grammar.rules[0].alternatives[0].elements[0];
+        assert!(matches!(element, rdgen_ir::Element::Repeat { label: Some(label), .. } if label == "values"));
+        assert!(grammar.rules[0].alternatives[0].constructor.fields.iter().any(|field| field.source_label == "values"));
+    }
 }
