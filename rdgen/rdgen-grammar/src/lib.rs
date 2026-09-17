@@ -230,6 +230,7 @@ impl<'a> Parser<'a> {
         resolve_symbols(&mut rules)?;
         validate_constructors(&rules)?;
         reject_indirect_left_recursion(&rules)?;
+        validate_precedence(&precedence, &rules)?;
         Ok(rdgen_ir::Grammar {
             name,
             rules,
@@ -750,6 +751,36 @@ fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String
     Ok(())
 }
 
+fn validate_precedence(
+    precedence: &[rdgen_ir::PrecedenceTable],
+    rules: &[rdgen_ir::Rule],
+) -> Result<(), String> {
+    let names: std::collections::HashSet<&str> =
+        rules.iter().map(|rule| rule.name.as_str()).collect();
+    let mut seen = std::collections::HashSet::new();
+    for table in precedence {
+        if !names.contains(table.rule.as_str()) {
+            return Err(format!(
+                "precedence table references undefined rule '{}'",
+                table.rule
+            ));
+        }
+        if table.levels.is_empty() {
+            return Err(format!(
+                "precedence table for rule '{}' must contain at least one level",
+                table.rule
+            ));
+        }
+        if !seen.insert(table.rule.as_str()) {
+            return Err(format!(
+                "duplicate precedence table for rule '{}'",
+                table.rule
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn first_rule_names<'a>(
     elements: &'a [rdgen_ir::Element],
     names: &std::collections::HashSet<&'a str>,
@@ -858,6 +889,18 @@ mod tests {
             grammar.precedence[0].levels[1].associativity,
             rdgen_ir::Associativity::Right
         );
+    }
+
+    #[test]
+    fn rejects_precedence_for_unknown_rule() {
+        let error = compile("grammar Expr; precedence missing { left \"+\"; } expr = \"x\";").unwrap_err();
+        assert!(error.contains("precedence table references undefined rule 'missing'"));
+    }
+
+    #[test]
+    fn rejects_duplicate_precedence_tables() {
+        let error = compile("grammar Expr; precedence expr { left \"+\"; } precedence expr { left \"-\"; } expr = \"x\";").unwrap_err();
+        assert!(error.contains("duplicate precedence table for rule 'expr'"));
     }
 
     #[test]
