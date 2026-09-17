@@ -87,7 +87,10 @@ typed_ident      = identifier ;
 (* ----- Statements ----- *)
 
 top_level_statement = statement | end_stmt ;
-statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
+statement        = colon_statement | statement_core ;
+colon_statement  = label_stmt , statement
+                 | ( print_stmt | input_stmt ) , ":" , statement ;
+statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | print_stmt | lprint_stmt | global_decl
                  | open_stmt | line_input_stmt | input_stmt | write_stmt
                  | file_decl_stmt | field_stmt | get_stmt | put_stmt
@@ -101,7 +104,9 @@ statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | select_case_stmt
                  | return_stmt | exit_stmt | continue_stmt
-                 | goto_stmt | gosub_stmt | try_stmt | end_stmt
+                 | goto_stmt | gosub_stmt | on_error_goto_stmt | on_branch_stmt
+                 | resume_stmt | error_stmt | throw_stmt | option_base_stmt
+                 | try_stmt | end_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
                  | assignment_or_expr_stmt ;
@@ -161,6 +166,13 @@ exit_stmt        = "exit" ;
 continue_stmt    = "continue" ;
 goto_stmt        = "goto" , identifier ;
 gosub_stmt       = "gosub" , identifier ;
+on_error_goto_stmt = "on" , "error" , "goto" , ( identifier | "0" ) ;
+on_branch_stmt   = "on" , expr , ( "goto" | "gosub" ) , identifier ,
+                    { "," , identifier } ;
+resume_stmt      = "resume" , [ "next" | identifier ] ;
+error_stmt       = "error" , expr ;
+throw_stmt       = "throw" , [ expr ] ;
+option_base_stmt = "option" , "base" , expr ;
 end_stmt         = "end" ;
 
 if_stmt          = "if" , expr , "then" ,
