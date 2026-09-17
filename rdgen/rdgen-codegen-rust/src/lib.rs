@@ -591,4 +591,30 @@ mod tests {
             .unwrap()
             .success());
     }
+
+    #[test]
+    fn generated_rust_parser_uses_terminal_and_trivia_callbacks() {
+        let grammar = compile("grammar Start; start = item: digit => Start(item: item);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-callbacks");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scan_digit(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ if name != \"digit\" || !source[position..].starts_with(\"7\") {{ None }} else {{ Some((Token(\"7\".into()), position + 1)) }} }}\nfn skip_spaces(source: &str, position: usize) -> usize {{ source[position..].chars().take_while(|character| character.is_whitespace()).map(char::len_utf8).sum::<usize>() + position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\" 7\", scan_digit, skip_spaces); assert!(parser.parse().is_ok()); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
 }
