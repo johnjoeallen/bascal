@@ -1,6 +1,6 @@
 //! C backend for rdgen's arena-owned tagged-union AST representation.
 
-use rdgen_ir::{Element, Grammar, Rule};
+use rdgen_ir::{Element, Grammar, RecoveryStrategy, Rule};
 
 /// Emit the C declarations shared by generated parser code and consumers.
 pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
@@ -199,6 +199,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; rdgen_match_literal_fn match_literal; };\n"
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
             + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
+            + "static void rdgen_skip_until_sync(rdgen_parser *parser, const char *const *sync, size_t count) { while (parser->position < parser->length) { for (size_t index = 0; index < count; index++) { size_t length = strlen(sync[index]); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, sync[index], length) == 0) return; } parser->position++; } }\n"
             + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
             + "static bool rdgen_match_literal_default(const char *source, size_t position, const char *literal, size_t *end) { size_t length = strlen(literal); if (strncmp(source + position, literal, length) != 0) return false; *end = position + length; return true; }\n"
             + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { rdgen_skip(parser); size_t end = parser->position; if (parser->match_literal != NULL && parser->match_literal(parser->source, parser->position, literal, &end) && end > parser->position && end <= parser->length) { token->text = parser->source + parser->position; token->length = end - parser->position; parser->position = end; return true; } return false; }\n"
@@ -245,6 +246,12 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             output.push_str(&format!("        node->as.{variant}.{} = {};\n", c_field_name(&field.field), c_local_name_for_label(&alternative.elements, &field.source_label)));
         }
         output.push_str(&format!("        return node;\n    rdgen_alt_fail_{index}:\n        parser->position = start_{index};\n    }}\n"));
+    }
+    if let Some(recovery) = rule.alternatives.iter().find_map(|alternative| {
+        alternative.recovery.as_ref().filter(|point| matches!(point.strategy, RecoveryStrategy::SkipUntilSync))
+    }) {
+        let sync = recovery.sync_tokens.iter().map(|token| format!("{:?}", token)).collect::<Vec<_>>().join(", ");
+        output.push_str(&format!("    {{ const char *sync[] = {{{sync}}}; rdgen_skip_until_sync(parser, sync, {}); }}\n", recovery.sync_tokens.len()));
     }
     output.push_str(&format!("    rdgen_set_error(error, \"no alternative for {}\", parser->position);\n    return NULL;\n}}\n\n", rule.name));
     Ok(())
@@ -460,5 +467,14 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("group_start_0"));
         assert!(generated.contains("group_ok_0_1"));
+    }
+
+    #[test]
+    fn emits_skip_until_sync_recovery() {
+        let grammar = compile(
+            "grammar Statement; statement = \"ok\" => Statement() recover { sync \";\", \"}\"; skip_until_sync; };",
+        ).unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("rdgen_skip_until_sync(parser, sync, 2)"));
     }
 }
