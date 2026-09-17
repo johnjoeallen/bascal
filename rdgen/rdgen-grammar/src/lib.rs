@@ -786,6 +786,23 @@ fn validate_precedence(
                 table.rule
             ));
         }
+        let mut operators = std::collections::HashSet::new();
+        for level in &table.levels {
+            for operator in &level.operators {
+                if operator.is_empty() {
+                    return Err(format!(
+                        "precedence operator in rule '{}' must not be empty",
+                        table.rule
+                    ));
+                }
+                if !operators.insert(operator.as_str()) {
+                    return Err(format!(
+                        "duplicate precedence operator {:?} in rule '{}'",
+                        operator, table.rule
+                    ));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -997,6 +1014,24 @@ mod tests {
     fn rejects_empty_precedence_tables() {
         let error = compile("grammar Expr; precedence expr { } expr = \"x\";").unwrap_err();
         assert!(error.contains("precedence table for rule 'expr' must contain at least one level"));
+    }
+
+    #[test]
+    fn rejects_duplicate_precedence_operators() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\"; left \"+\"; } expr = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains("duplicate precedence operator \"+\" in rule 'expr'"));
+    }
+
+    #[test]
+    fn rejects_empty_precedence_operators() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"\"; } expr = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains("precedence operator in rule 'expr' must not be empty"));
     }
 
     #[test]

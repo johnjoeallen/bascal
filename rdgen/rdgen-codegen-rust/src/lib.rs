@@ -245,7 +245,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "pub type TriviaSkipper = fn(&str, usize) -> usize;\n\n"
             + "fn skip_no_trivia(_: &str, position: usize) -> usize { position }\n\n"
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
-            + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source[position..].starts_with(literal).then_some(position + literal.len()) }\n\n"
+            + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source.get(position..)?.starts_with(literal).then_some(position + literal.len()) }\n\n"
             + "#[allow(dead_code)]\n"
             + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError> }\n\n"
             + "#[allow(dead_code)]\n"
@@ -785,6 +785,58 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn match_keyword(source: &str, position: usize, literal: &str) -> Option<usize> {{ let candidate = source.get(position..position + literal.len())?; candidate.eq_ignore_ascii_case(literal).then_some(position + literal.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"if\", missing_terminal, skip_no_trivia, match_keyword); assert!(parser.parse().is_ok()); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_rust_parser_rejects_invalid_literal_matcher_offsets() {
+        let grammar = compile("grammar Start; start = \"x\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-invalid-literal-offset");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn invalid_matcher(_: &str, _: usize, _: &str) -> Option<usize> {{ Some(usize::MAX) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"x\", missing_terminal, skip_no_trivia, invalid_matcher); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 0); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_rust_parser_ignores_invalid_trivia_offsets() {
+        let grammar = compile("grammar Start; start = \"x\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-invalid-trivia-offset");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn invalid_trivia(_: &str, _: usize) -> usize {{ usize::MAX }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"y\", missing_terminal, invalid_trivia); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 0); }}\n",
                 generated.to_str().unwrap()
             ),
         )
