@@ -446,6 +446,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             "    pub fn parse_{}_precedence<T>(&mut self, minimum_binding_power: usize, parse_atom: fn(&mut Self) -> Result<T, ParseError>, parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>, combine: fn(T, Token, T) -> T) -> Result<T, ParseError> {{ self.parse_precedence_climbing_tokens(minimum_binding_power, parse_atom, parse_operator, {}_binding_power, combine) }}\n\n",
             table.rule, table.rule
         ));
+        if table.levels.iter().all(|level| level.constructor.is_some()) {
+            emit_precedence_ast_helper(&mut output, table)?;
+        }
     }
     for rule in &grammar.rules {
         emit_parser_rule(&mut output, rule)?;
@@ -456,6 +459,50 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     );
     output.push_str("}\n");
     Ok(output)
+}
+
+fn emit_precedence_ast_helper(
+    output: &mut String,
+    table: &rdgen_ir::PrecedenceTable,
+) -> Result<(), String> {
+    let rule_type = type_name(&table.rule);
+    let combine_name = format!("{}_precedence_combine", table.rule);
+    output.push_str(&format!(
+        "    fn {}(left: {}, operator: Token, right: {}) -> {} {{\n",
+        combine_name, rule_type, rule_type, rule_type
+    ));
+    output.push_str("        match operator.0.as_str() {\n");
+    for level in &table.levels {
+        let constructor = level
+            .constructor
+            .as_ref()
+            .expect("precedence AST helper requires constructors for every level");
+        let variant = type_name(&constructor.type_name.0);
+        for operator in &level.operators {
+            output.push_str(&format!("            {:?} => {}::{} {{\n", operator, rule_type, variant));
+            for field in &constructor.fields {
+                let value = match field.source_label.as_str() {
+                    "left" => "Box::new(left)".to_owned(),
+                    "operator" => "operator".to_owned(),
+                    "right" => "Box::new(right)".to_owned(),
+                    _ => unreachable!("precedence constructor validation guarantees roles"),
+                };
+                output.push_str(&format!(
+                    "                {}: {},\n",
+                    field_name(&field.field),
+                    value
+                ));
+            }
+            output.push_str("            },\n");
+        }
+    }
+    output.push_str("            other => unreachable!(\"unknown precedence operator {:?}\", other),\n");
+    output.push_str("        }\n    }\n\n");
+    output.push_str(&format!(
+        "    pub fn parse_{}_precedence_ast(&mut self, minimum_binding_power: usize, parse_atom: fn(&mut Self) -> Result<{}, ParseError>, parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>) -> Result<{}, ParseError> {{ self.parse_precedence_climbing_tokens(minimum_binding_power, parse_atom, parse_operator, {}_binding_power, {}) }}\n\n",
+        table.rule, rule_type, rule_type, table.rule, format!("Self::{}", combine_name)
+    ));
+    Ok(())
 }
 
 fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
@@ -889,6 +936,46 @@ mod tests {
         if !compiler.status.success() {
             panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
+    }
+
+    #[test]
+    fn generated_precedence_ast_helper_constructs_annotated_nodes() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("precedence-ast-helper");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn atom(parser: &mut Parser<'_>) -> Result<Expr, ParseError> {{ parser.expect_literal(\"x\")?; Ok(Expr::Alt1) }}\nfn operator(parser: &mut Parser<'_>) -> Result<Option<Token>, ParseError> {{ let start = parser.position; match parser.expect_literal(\"+\") {{ Ok(token) => Ok(Some(token)), Err(_) => {{ parser.position = start; Ok(None) }} }} }}\nfn main() {{ let mut parser = Parser::new(\"x+x\"); let value = parser.parse_expr_precedence_ast(0, atom, operator).unwrap(); match value {{ Expr::Binary {{ left, operator, right }} => {{ assert_eq!(operator.0, \"+\"); assert_eq!(*left, Expr::Alt1); assert_eq!(*right, Expr::Alt1); }}, _ => panic!(\"expected Binary\") }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn partial_precedence_constructors_keep_generic_api_only() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); right \"^\"; } expr = atom, { ( \"+\" | \"^\" ), atom }; atom = \"x\";",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub fn parse_expr_precedence<T>"));
+        assert!(!generated.contains("parse_expr_precedence_ast"));
     }
 
     #[test]
