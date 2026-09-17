@@ -307,14 +307,14 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
         "typedef struct rdgen_parser rdgen_parser;\n"
             .to_owned()
             + "typedef size_t (*rdgen_skip_trivia_fn)(const char *source, size_t position);\n"
-            + "typedef bool (*rdgen_scan_terminal_fn)(const char *source, size_t position, const char *name, rdgen_token *token, size_t *end);\n"
+            + "typedef bool (*rdgen_scan_terminal_fn)(const char *source, size_t position, size_t source_length, const char *name, rdgen_token *token, size_t *end);\n"
             + "typedef bool (*rdgen_match_literal_fn)(const char *source, size_t position, size_t source_length, const char *literal, size_t *end);\n"
             + "typedef struct rdgen_error { const char *message; size_t position; } rdgen_error;\n"
             + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; rdgen_match_literal_fn match_literal; };\n"
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
             + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
             + "static void rdgen_skip_until_sync(rdgen_parser *parser, const char *const *sync, size_t count) { while (parser->position < parser->length) { for (size_t index = 0; index < count; index++) { size_t length = strlen(sync[index]); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, sync[index], length) == 0) return; } parser->position++; } }\n"
-            + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
+            + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, parser->length, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
             + "static bool rdgen_match_literal_default(const char *source, size_t position, size_t source_length, const char *literal, size_t *end) { size_t length = strlen(literal); if (position > source_length || length > source_length - position || memcmp(source + position, literal, length) != 0) return false; *end = position + length; return true; }\n"
             + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { rdgen_skip(parser); size_t end = parser->position; if (parser->match_literal != NULL && parser->match_literal(parser->source, parser->position, parser->length, literal, &end) && end > parser->position && end <= parser->length) { token->text = parser->source + parser->position; token->length = end - parser->position; parser->position = end; return true; } return false; }\n"
             + "rdgen_parser rdgen_parser_init_with_literal_match(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal, rdgen_match_literal_fn match_literal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal, match_literal }; return parser; }\n"
@@ -519,7 +519,7 @@ fn c_parse_statement(
     let local = c_local_name(element, index);
     match element {
         Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
-        Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
+        Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, parser->length, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
         Element::Group { .. } if c_group_child(element).is_some() => {
             c_parse_simple_statement(c_group_child(element).expect("group child checked"), &local, alternative_index, index)
@@ -545,7 +545,7 @@ fn c_parse_simple_statement(
             value
         )),
         Element::Token { token, .. } => Ok(format!(
-            "{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}",
+            "{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, parser->length, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}",
             token
         )),
         Element::Rule { rule, .. } => Ok(format!(
@@ -592,7 +592,7 @@ fn c_group_statement(
             let failure = format!("group_ok_{index}_{group_index} = false");
             match c_group_atom(child).ok_or_else(|| "C grouped alternatives require simple children".to_owned())? {
                 Element::Literal { value, .. } => output.push_str(&format!("rdgen_token {child_name}; if (group_ok_{index}_{group_index} && !rdgen_expect_literal(parser, {:?}, &{child_name})) {failure}; ", value)),
-                Element::Token { token, .. } => output.push_str(&format!("rdgen_token {child_name}; size_t group_end_{index}_{group_index}_{child_index} = parser->position; if (group_ok_{index}_{group_index} && (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{child_name}, &group_end_{index}_{group_index}_{child_index}) || group_end_{index}_{group_index}_{child_index} <= parser->position || group_end_{index}_{group_index}_{child_index} > parser->length)) {failure}; if (group_ok_{index}_{group_index}) parser->position = group_end_{index}_{group_index}_{child_index}; ", token)),
+                Element::Token { token, .. } => output.push_str(&format!("rdgen_token {child_name}; size_t group_end_{index}_{group_index}_{child_index} = parser->position; if (group_ok_{index}_{group_index} && (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, parser->length, {:?}, &{child_name}, &group_end_{index}_{group_index}_{child_index}) || group_end_{index}_{group_index}_{child_index} <= parser->position || group_end_{index}_{group_index}_{child_index} > parser->length)) {failure}; if (group_ok_{index}_{group_index}) parser->position = group_end_{index}_{group_index}_{child_index}; ", token)),
                 Element::Rule { rule, .. } => output.push_str(&format!("{} *{child_name} = NULL; if (group_ok_{index}_{group_index}) {{ {child_name} = rdgen_parse_{}(parser, error); if ({child_name} == NULL) {failure}; }} ", c_type_name(rule), rule)),
                 _ => return Err("C grouped alternatives require simple children".into()),
             }
@@ -634,7 +634,7 @@ fn c_repeat_probe(element: &Element, index: usize) -> Result<String, String> {
     let item = format!("repeat_item_{index}");
     match element {
         Element::Literal { value, .. } => Ok(format!("rdgen_token {item}; if (!rdgen_expect_literal(parser, {:?}, &{item})) parser->position = item_start_{index};", value)),
-        Element::Token { token, .. } => Ok(format!("rdgen_token {item}; size_t repeat_end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{item}, &repeat_end_{index}) || repeat_end_{index} <= parser->position || repeat_end_{index} > parser->length) parser->position = item_start_{index}; else parser->position = repeat_end_{index};", token)),
+        Element::Token { token, .. } => Ok(format!("rdgen_token {item}; size_t repeat_end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, parser->length, {:?}, &{item}, &repeat_end_{index}) || repeat_end_{index} <= parser->position || repeat_end_{index} > parser->length) parser->position = item_start_{index}; else parser->position = repeat_end_{index};", token)),
         Element::Rule { rule, .. } => Ok(format!("{} *{item} = rdgen_parse_{}(parser, error); if ({item} == NULL) parser->position = item_start_{index};", c_type_name(rule), rule)),
         _ => Err("C repetitions currently require a literal, terminal, or rule child".into()),
     }
@@ -1036,10 +1036,10 @@ int main(void) {
 #include "generated.h"
 struct rdgen_arena { int unused; };
 void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
-bool scan_digit(const char *source, size_t position, const char *name, rdgen_token *token, size_t *end) {
-    if (name[0] != 'd' || name[1] != 'i' || name[2] != 'g' || name[3] != 'i' || name[4] != 't' || name[5] != '\0' || !isdigit((unsigned char)source[position])) return false;
+bool scan_digit(const char *source, size_t position, size_t source_length, const char *name, rdgen_token *token, size_t *end) {
+    if (position >= source_length || name[0] != 'd' || name[1] != 'i' || name[2] != 'g' || name[3] != 'i' || name[4] != 't' || name[5] != '\0' || !isdigit((unsigned char)source[position])) return false;
     size_t cursor = position + 1;
-    while (isalnum((unsigned char)source[cursor])) cursor++;
+    while (cursor < source_length && isalnum((unsigned char)source[cursor])) cursor++;
     token->text = source + position;
     token->length = cursor - position;
     *end = cursor;
