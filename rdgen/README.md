@@ -79,7 +79,8 @@ The grammar compiler rejects repetitions whose child can derive epsilon; this
 guarantees that generated repetition loops have a progress invariant.
 
 Precedence tables are retained in the shared IR and validated for defined rule
-targets, non-empty levels, non-empty operators, and duplicate operators. The
+targets, reachable operator literals, non-empty levels, non-empty operators,
+and duplicate operators. The
 Rust emitter exposes the validated levels as typed generated metadata and emits
 per-rule operator lookup functions returning the level and associativity. It
 also emits binding-power pairs for a conventional precedence-climbing loop:
