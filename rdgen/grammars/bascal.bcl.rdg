@@ -99,6 +99,7 @@ statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | randomize_stmt | poke_stmt | out_stmt | width_stmt
                  | erase_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
+                 | select_case_stmt
                  | return_stmt | exit_stmt | continue_stmt
                  | goto_stmt | gosub_stmt | try_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
@@ -157,7 +158,7 @@ gosub_stmt       = "gosub" , identifier ;
 end_stmt         = "end" ;
 
 if_stmt          = "if" , expr , "then" ,
-                    ( single_line_if_tail | block_if_tail ) ;
+                    ( block_if_tail | single_line_if_tail ) ;
 block_if_tail    = { statement } until { "elseif", "else", "end" } ,
                     ( "elseif" , expr , "then" , block_if_tail
                     | [ "else" , { statement } until { "end" } ] , "end" , "if" ) ;
@@ -172,6 +173,15 @@ while_stmt       = "while" , expr , { statement } until { "wend", "end" }
 do_stmt          = "do" , [ do_condition ] , { statement } until { "loop", "end" }
                    , ( "loop" , [ do_condition ] | "end" , [ "do" ] ) ;
 do_condition     = ( "while" | "until" ) , expr ;
+select_case_stmt = "select" , "case" , expr ,
+                    { "case" , case_values ,
+                      { statement } until { "case", "end" } }
+                    until { "case", "end" } ,
+                    [ "case" , "else" ,
+                      { statement } until { "end" } ] ,
+                    "end" , "select" ;
+case_values      = case_value , { "," , case_value } ;
+case_value       = "is" , compare_op , expr | expr , [ "to" , expr ] ;
 try_stmt         = "try" , { statement } until { "catch", "finally", "end" } ,
                     [ "catch" , identifier , { statement } until { "finally", "end" } ] ,
                     [ "finally" , { statement } until { "end" } ] , "end" , "try" ;

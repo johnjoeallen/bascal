@@ -116,9 +116,7 @@ consume those functions to select a grammar rule automatically, but it exposes
 operator, and combine callbacks. An operator callback returns `Ok(None)` and
 leaves the input position unchanged when no operator is present. Expression
 tables also generate `parse_<rule>_precedence`, which supplies that rule's
-binding-power lookup automatically. AST-producing grammar-rule integration is
-still pending; precedence must currently be represented by explicit layered
-grammar rules, as in the BASCAL fixture.
+binding-power lookup automatically.
 
 Precedence levels may carry an AST-constructor contract:
 
@@ -138,6 +136,15 @@ backend also emits `parse_<rule>_precedence_ast`. It accepts typed atom and
 operator callbacks and constructs the annotated variants directly. Tables
 with any unannotated level retain the generic `parse_<rule>_precedence` API;
 this avoids silently selecting a constructor for an incomplete AST contract.
+
+Repeated grammar bodies may declare their stopping literals explicitly:
+
+```text
+{ statement } until { "else", "end" }
+```
+
+The Rust emitter checks these literals after trivia skipping and before each
+iteration, so nested block productions do not consume their own terminators.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
