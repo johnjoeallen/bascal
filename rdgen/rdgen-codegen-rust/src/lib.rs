@@ -25,7 +25,10 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         let variant = variant_name(rule, alternative, index);
         if !variants.insert(variant.clone()) {
-            return Err(format!("duplicate AST variant '{}' in rule '{}'", variant, rule.name));
+            return Err(format!(
+                "duplicate AST variant '{}' in rule '{}'",
+                variant, rule.name
+            ));
         }
         output.push_str("    ");
         output.push_str(&variant);
@@ -36,8 +39,17 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         output.push_str(" {\n");
         for field in &alternative.constructor.fields {
             let element = find_labeled_element(&alternative.elements, &field.source_label)
-                .ok_or_else(|| format!("missing label '{}' in rule '{}'", field.source_label, rule.name))?;
-            output.push_str(&format!("        {}: {},\n", field_name(&field.field), rust_type(element)));
+                .ok_or_else(|| {
+                    format!(
+                        "missing label '{}' in rule '{}'",
+                        field.source_label, rule.name
+                    )
+                })?;
+            output.push_str(&format!(
+                "        {}: {},\n",
+                field_name(&field.field),
+                rust_type(element)
+            ));
         }
         output.push_str("    },\n");
     }
@@ -46,7 +58,8 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
 }
 
 fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) -> String {
-    if alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name {
+    if alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name
+    {
         format!("Alt{}", index + 1)
     } else {
         type_name(&alternative.constructor.type_name.0)
@@ -56,18 +69,34 @@ fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) 
 fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a Element> {
     for element in elements {
         match element {
-            Element::Rule { label: Some(name), .. }
-            | Element::Token { label: Some(name), .. }
-            | Element::Literal { label: Some(name), .. } if name == label => return Some(element),
-            Element::Group { label: Some(name), .. } if name == label => return Some(element),
-            Element::Repeat { label: Some(name), .. } if name == label => return Some(element),
+            Element::Rule {
+                label: Some(name), ..
+            }
+            | Element::Token {
+                label: Some(name), ..
+            }
+            | Element::Literal {
+                label: Some(name), ..
+            } if name == label => return Some(element),
+            Element::Group {
+                label: Some(name), ..
+            } if name == label => return Some(element),
+            Element::Repeat {
+                label: Some(name), ..
+            } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
-                    if let Some(found) = find_labeled_element(alternative, label) { return Some(found); }
+                    if let Some(found) = find_labeled_element(alternative, label) {
+                        return Some(found);
+                    }
                 }
             }
             Element::Repeat { element, .. } => {
-                if let Some(found) = find_labeled_element(std::slice::from_ref(element.as_ref()), label) { return Some(found); }
+                if let Some(found) =
+                    find_labeled_element(std::slice::from_ref(element.as_ref()), label)
+                {
+                    return Some(found);
+                }
             }
             _ => {}
         }
@@ -79,15 +108,25 @@ fn rust_type(element: &Element) -> String {
     match element {
         Element::Rule { rule, .. } => format!("Box<{}>", type_name(rule)),
         Element::Token { .. } | Element::Literal { .. } => "Token".into(),
-        Element::Repeat { element, max: Some(1), .. } => format!("Option<{}>", rust_type(rust_repeat_child(element))),
-        Element::Repeat { element, .. } => format!("Vec<{}>", rust_type(rust_repeat_child(element))),
+        Element::Repeat {
+            element,
+            max: Some(1),
+            ..
+        } => format!("Option<{}>", rust_type(rust_repeat_child(element))),
+        Element::Repeat { element, .. } => {
+            format!("Vec<{}>", rust_type(rust_repeat_child(element)))
+        }
         Element::Group { .. } => "()".into(),
     }
 }
 
 fn rust_repeat_child(element: &Element) -> &Element {
     match element {
-        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => &alternatives[0][0],
+        Element::Group { alternatives, .. }
+            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
+        {
+            &alternatives[0][0]
+        }
         _ => element,
     }
 }
@@ -96,15 +135,23 @@ fn type_name(name: &str) -> String {
     let mut result = String::new();
     for part in name.split('_') {
         let mut chars = part.chars();
-        if let Some(first) = chars.next() { result.extend(first.to_uppercase()); }
+        if let Some(first) = chars.next() {
+            result.extend(first.to_uppercase());
+        }
         result.extend(chars);
     }
-    if result.is_empty() { "Anonymous".into() } else { result }
+    if result.is_empty() {
+        "Anonymous".into()
+    } else {
+        result
+    }
 }
 
 fn field_name(name: &str) -> String {
     match name {
-        "type" | "match" | "ref" | "self" | "crate" | "super" | "mod" | "move" => format!("r#{}", name),
+        "type" | "match" | "ref" | "self" | "crate" | "super" | "mod" | "move" => {
+            format!("r#{}", name)
+        }
         _ => name.to_owned(),
     }
 }
@@ -118,7 +165,10 @@ pub fn emit(grammar: &Grammar) -> Result<String, String> {
 
 /// Emit parser control flow for the currently supported core element set.
 pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
-    let start = grammar.rules.first().ok_or_else(|| "grammar has no rules".to_owned())?;
+    let start = grammar
+        .rules
+        .first()
+        .ok_or_else(|| "grammar has no rules".to_owned())?;
     let mut output = String::from(
         "#[derive(Clone, Debug, PartialEq)]\n"
             .to_owned() + "pub struct ParseError { pub message: String, pub position: usize }\n\n"
@@ -128,7 +178,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "fn skip_no_trivia(_: &str, position: usize) -> usize { position }\n\n"
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
             + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source[position..].starts_with(literal).then_some(position + literal.len()) }\n\n"
+            + "#[allow(dead_code)]\n"
             + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher }\n\n"
+            + "#[allow(dead_code)]\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
@@ -154,16 +206,25 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "        }\n"
             + "    }\n",
     );
-    for rule in &grammar.rules { emit_parser_rule(&mut output, rule)?; }
+    for rule in &grammar.rules {
+        emit_parser_rule(&mut output, rule)?;
+    }
     output.push_str("}\n");
     Ok(output)
 }
 
 fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
-    output.push_str(&format!("    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n", rule.name, type_name(&rule.name)));
+    output.push_str(&format!(
+        "    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n",
+        rule.name,
+        type_name(&rule.name)
+    ));
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         output.push_str("        let start = self.position;\n");
-        output.push_str(&format!("        let attempt: Result<{}, ParseError> = (|| {{\n", type_name(&rule.name)));
+        output.push_str(&format!(
+            "        let attempt: Result<{}, ParseError> = (|| {{\n",
+            type_name(&rule.name)
+        ));
         for (index, element) in alternative.elements.iter().enumerate() {
             let variable = element_variable(element, index);
             emit_element_binding(output, element, &variable, "            ")?;
@@ -178,10 +239,23 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
     }
     if let Some(recovery) = rule.alternatives.iter().find_map(|alternative| {
-        (alternative.recovery.as_ref().is_some_and(|point| matches!(point.strategy, RecoveryStrategy::SkipUntilSync)))
-            .then(|| alternative.recovery.as_ref().expect("recovery point checked"))
+        (alternative
+            .recovery
+            .as_ref()
+            .is_some_and(|point| matches!(point.strategy, RecoveryStrategy::SkipUntilSync)))
+        .then(|| {
+            alternative
+                .recovery
+                .as_ref()
+                .expect("recovery point checked")
+        })
     }) {
-        let sync = recovery.sync_tokens.iter().map(|token| format!("{:?}", token)).collect::<Vec<_>>().join(", ");
+        let sync = recovery
+            .sync_tokens
+            .iter()
+            .map(|token| format!("{:?}", token))
+            .collect::<Vec<_>>()
+            .join(", ");
         output.push_str(&format!("        self.skip_until_sync(&[{}]);\n", sync));
     }
     output.push_str(&format!("        Err(ParseError {{ message: \"no alternative for {}\".into(), position: self.position }})\n", rule.name));
@@ -198,53 +272,124 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
     }
 }
 
-fn emit_element_binding(output: &mut String, element: &Element, variable: &str, indent: &str) -> Result<(), String> {
+fn emit_element_binding(
+    output: &mut String,
+    element: &Element,
+    variable: &str,
+    indent: &str,
+) -> Result<(), String> {
     match element {
-        Element::Repeat { element: child, max: None, .. } => {
+        Element::Repeat {
+            element: child,
+            max: None,
+            ..
+        } => {
             let child = simple_group_element(child.as_ref()).unwrap_or(child.as_ref());
             output.push_str(&format!("{}let mut {} = Vec::new();\n", indent, variable));
-            output.push_str(&format!("{}loop {{\n{}    let item_start = self.position;\n", indent, indent));
-            output.push_str(&format!("{}    let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n", indent, emit_element_parse(child)?));
+            output.push_str(&format!(
+                "{}loop {{\n{}    let item_start = self.position;\n",
+                indent, indent
+            ));
+            output.push_str(&format!(
+                "{}    let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n",
+                indent,
+                emit_element_parse(child)?
+            ));
             output.push_str(&format!("{}        Ok(item) => item,\n{}        Err(_) => {{ self.position = item_start; break; }}\n{}    }};\n", indent, indent, indent));
-            output.push_str(&format!("{}    if self.position == item_start {{ break; }}\n{}    {}.push(item);\n{} }}\n", indent, indent, variable, indent));
+            output.push_str(&format!(
+                "{}    if self.position == item_start {{ break; }}\n{}    {}.push(item);\n{} }}\n",
+                indent, indent, variable, indent
+            ));
             return Ok(());
         }
-        Element::Repeat { element: child, max: Some(1), .. } => {
+        Element::Repeat {
+            element: child,
+            max: Some(1),
+            ..
+        } => {
             let child = simple_group_element(child.as_ref()).unwrap_or(child.as_ref());
-            output.push_str(&format!("{}let {} = {{\n{}    let optional_start = self.position;\n", indent, variable, indent));
-            output.push_str(&format!("{}    match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n", indent, emit_element_parse(child)?));
+            output.push_str(&format!(
+                "{}let {} = {{\n{}    let optional_start = self.position;\n",
+                indent, variable, indent
+            ));
+            output.push_str(&format!(
+                "{}    match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{\n",
+                indent,
+                emit_element_parse(child)?
+            ));
             output.push_str(&format!("{}        Ok(value) => Some(value),\n{}        Err(_) => {{ self.position = optional_start; None }}\n{}    }}\n{} }};\n", indent, indent, indent, indent));
             return Ok(());
         }
-        Element::Repeat { .. } => return Err("parser emitter only supports optional and zero-or-more repetitions".into()),
+        Element::Repeat { .. } => {
+            return Err("parser emitter only supports optional and zero-or-more repetitions".into())
+        }
         Element::Group { alternatives, .. } => {
-            if alternatives.iter().any(|alternative| alternative.len() != 1) {
-                output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
+            if alternatives
+                .iter()
+                .any(|alternative| alternative.len() != 1)
+            {
+                output.push_str(&format!(
+                    "{}let {} = {};\n",
+                    indent,
+                    variable,
+                    emit_group_expression(element)?
+                ));
                 return Ok(());
             }
-            let first = alternatives.iter().find_map(|alternative| alternative.first());
+            let first = alternatives
+                .iter()
+                .find_map(|alternative| alternative.first());
             if first.is_none() {
-                output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
+                output.push_str(&format!(
+                    "{}let {} = {};\n",
+                    indent,
+                    variable,
+                    emit_group_expression(element)?
+                ));
                 return Ok(());
             }
             let first = first.expect("checked above");
             let expected_type = rust_type(first);
-            if alternatives.iter().any(|alternative| alternative.first().map_or(true, |element| rust_type(element) != expected_type)) {
-                output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_group_expression(element)?));
+            if alternatives.iter().any(|alternative| {
+                alternative
+                    .first()
+                    .map_or(true, |element| rust_type(element) != expected_type)
+            }) {
+                output.push_str(&format!(
+                    "{}let {} = {};\n",
+                    indent,
+                    variable,
+                    emit_group_expression(element)?
+                ));
                 return Ok(());
             }
-            output.push_str(&format!("{}let {} = {{\n{}    let group_result: Result<_, ParseError> = (|| {{\n", indent, variable, indent));
+            output.push_str(&format!(
+                "{}let {} = {{\n{}    let group_result: Result<_, ParseError> = (|| {{\n",
+                indent, variable, indent
+            ));
             for alternative in alternatives {
                 let child = &alternative[0];
-                output.push_str(&format!("{}        let group_start = self.position;\n", indent));
-                output.push_str(&format!("{}        let group_attempt = (|| -> Result<_, ParseError> {{ Ok({}) }})();\n", indent, emit_element_parse(child)?));
+                output.push_str(&format!(
+                    "{}        let group_start = self.position;\n",
+                    indent
+                ));
+                output.push_str(&format!(
+                    "{}        let group_attempt = (|| -> Result<_, ParseError> {{ Ok({}) }})();\n",
+                    indent,
+                    emit_element_parse(child)?
+                ));
                 output.push_str(&format!("{}        match group_attempt {{ Ok(value) => return Ok(value), Err(_) => self.position = group_start }}\n", indent));
             }
             output.push_str(&format!("{}        Err(ParseError {{ message: \"no grouped alternative\".into(), position: self.position }})\n{}    }})();\n{}    match group_result {{ Ok(value) => value, Err(error) => return Err(error) }}\n{} }};\n", indent, indent, indent, indent));
             return Ok(());
         }
         _ => {
-            output.push_str(&format!("{}let {} = {};\n", indent, variable, emit_element_parse(element)?));
+            output.push_str(&format!(
+                "{}let {} = {};\n",
+                indent,
+                variable,
+                emit_element_parse(element)?
+            ));
             return Ok(());
         }
     }
@@ -252,14 +397,22 @@ fn emit_element_binding(output: &mut String, element: &Element, variable: &str, 
 
 fn simple_group_element(element: &Element) -> Option<&Element> {
     match element {
-        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => Some(&alternatives[0][0]),
+        Element::Group { alternatives, .. }
+            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
+        {
+            Some(&alternatives[0][0])
+        }
         _ => Some(element),
     }
 }
 
 fn emit_group_expression(element: &Element) -> Result<String, String> {
-    let Element::Group { alternatives, .. } = element else { return Err("expected grouped element".into()) };
-    if alternatives.is_empty() { return Err("empty group".into()); }
+    let Element::Group { alternatives, .. } = element else {
+        return Err("expected grouped element".into());
+    };
+    if alternatives.is_empty() {
+        return Err("empty group".into());
+    }
     let mut output = String::from("{ let group_result: Result<(), ParseError> = (|| { ");
     for alternative in alternatives {
         output.push_str("let group_start = self.position; ");
@@ -297,18 +450,28 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
 
 fn element_variable(element: &Element, index: usize) -> String {
     let label = match element {
-        Element::Rule { label, .. } | Element::Token { label, .. } | Element::Literal { label, .. } => label.as_deref(),
+        Element::Rule { label, .. }
+        | Element::Token { label, .. }
+        | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
     };
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
 
 fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String, String> {
-    if alternative.constructor.fields.is_empty() { return Ok(String::new()); }
+    if alternative.constructor.fields.is_empty() {
+        return Ok(String::new());
+    }
     let mut output = String::from(" { ");
     for (index, field) in alternative.constructor.fields.iter().enumerate() {
-        if index > 0 { output.push_str(", "); }
-        output.push_str(&format!("{}: {}", field_name(&field.field), field_name(&field.source_label)));
+        if index > 0 {
+            output.push_str(", ");
+        }
+        output.push_str(&format!(
+            "{}: {}",
+            field_name(&field.field),
+            field_name(&field.source_label)
+        ));
     }
     output.push_str(" }");
     Ok(output)
@@ -344,16 +507,17 @@ mod tests {
         assert!(generated.contains("pub type TerminalScanner = fn(&str, usize, &str)"));
         assert!(generated.contains("pub type TriviaSkipper = fn(&str, usize) -> usize"));
         assert!(generated.contains("with_scanner_and_trivia"));
-        assert!(generated.contains("pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>"));
+        assert!(
+            generated.contains("pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>")
+        );
         assert!(generated.contains("with_lexical_config"));
         assert!(generated.contains("unexpected trailing input"));
     }
 
     #[test]
     fn emits_optional_and_repeated_simple_elements() {
-        let grammar = compile(
-            "grammar List; list = head: \"x\", { \"+\" } => List(head: head);",
-        ).unwrap();
+        let grammar =
+            compile("grammar List; list = head: \"x\", { \"+\" } => List(head: head);").unwrap();
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("let mut _element_1 = Vec::new()"));
         assert!(generated.contains("if self.position == item_start"));
@@ -361,7 +525,8 @@ mod tests {
 
     #[test]
     fn emits_labeled_repetition_fields() {
-        let grammar = compile("grammar List; list = items: { \"x\" } => List(items: items);").unwrap();
+        let grammar =
+            compile("grammar List; list = items: { \"x\" } => List(items: items);").unwrap();
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("items: Vec<Token>"));
         assert!(generated.contains("let mut items = Vec::new()"));
