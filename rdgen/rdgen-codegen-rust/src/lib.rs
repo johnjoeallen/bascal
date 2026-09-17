@@ -262,7 +262,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "        self.skip_trivia();\n"
             + "        if self.position <= self.source.len() && self.source.is_char_boundary(self.position) {\n"
             + "            if let Some(end) = (self.match_literal)(self.source, self.position, literal) {\n"
-            + "                if end <= self.source.len() && self.source.is_char_boundary(end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
+            + "                if end >= self.position && end <= self.source.len() && self.source.is_char_boundary(end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
             + "            }\n"
             + "        }\n"
             + "        let error = ParseError { message: format!(\"expected {:?}\", literal), position: self.position }; self.remember_error(&error); Err(error)\n"
@@ -811,6 +811,32 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn invalid_matcher(_: &str, _: usize, _: &str) -> Option<usize> {{ Some(usize::MAX) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"x\", missing_terminal, skip_no_trivia, invalid_matcher); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 0); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_rust_parser_rejects_backwards_literal_matcher_offsets() {
+        let grammar = compile("grammar Start; start = \"x\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-backwards-literal-offset");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn backwards_matcher(_: &str, position: usize, _: &str) -> Option<usize> {{ Some(position.saturating_sub(1)) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"x\", missing_terminal, skip_no_trivia, backwards_matcher); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 0); }}\n",
                 generated.to_str().unwrap()
             ),
         )

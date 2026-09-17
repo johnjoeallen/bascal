@@ -91,7 +91,10 @@ receive the source buffer length, so scanners and trivia handlers can operate
 on non-NUL-terminated input safely. Use
 `Parser::with_scanner_and_trivia` to provide both; `Parser::new` retains a
 deliberately non-scanning default for literal-only parser tests. The public
-`parse` method also rejects unconsumed non-trivia input.
+`parse` method also rejects unconsumed non-trivia input. Callback offsets are
+UTF-8 byte offsets and are accepted only when they remain within the source,
+advance the current position where advancement is required, and land on a
+character boundary.
 
 Alternatives can carry grammar-directed recovery metadata:
 
