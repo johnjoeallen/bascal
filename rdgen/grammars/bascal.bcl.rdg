@@ -44,7 +44,7 @@ lexical block_comment    = "/*" , { any_char } , "*/" ;
 program          = { file_item } ;
 file_item        = program_decl | library_decl | shared_decl
                  | require_decl | import_decl | subprogram
-                 | record_decl | statement ;
+                 | record_decl | top_level_statement ;
 
 program_decl     = "program" , identifier , [ "shared" , identifier ] ;
 library_decl     = "library" , identifier ;
@@ -86,6 +86,7 @@ typed_ident      = identifier ;
 
 (* ----- Statements ----- *)
 
+top_level_statement = statement | end_stmt ;
 statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | print_stmt | lprint_stmt | global_decl
                  | open_stmt | line_input_stmt | input_stmt | write_stmt
@@ -99,7 +100,7 @@ statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | erase_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | return_stmt | exit_stmt | continue_stmt
-                 | goto_stmt | gosub_stmt | try_stmt | end_stmt
+                 | goto_stmt | gosub_stmt | try_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
                  | assignment_or_expr_stmt ;

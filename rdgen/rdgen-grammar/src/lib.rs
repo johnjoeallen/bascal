@@ -1372,7 +1372,7 @@ mod tests {
         assert!(referenced_rules.contains(&"program_decl"));
         assert!(referenced_rules.contains(&"library_decl"));
         assert!(referenced_rules.contains(&"shared_decl"));
-        assert!(referenced_rules.contains(&"statement"));
+        assert!(referenced_rules.contains(&"top_level_statement"));
         let statement = grammar
             .rules
             .iter()
