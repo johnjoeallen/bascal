@@ -352,6 +352,16 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
         "    pub fn parse_precedence_climbing_tokens<T>(\n        &mut self,\n        minimum_binding_power: usize,\n        parse_atom: fn(&mut Self) -> Result<T, ParseError>,\n        parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>,\n        binding_power: fn(&str) -> Option<(usize, usize)>,\n        combine: fn(T, Token, T) -> T,\n    ) -> Result<T, ParseError> {\n        let mut left = match parse_atom(self) {\n            Ok(value) => value,\n            Err(error) => { self.remember_error(&error); return Err(error); }\n        };\n        loop {\n            let operator_start = self.position;\n            let Some(operator) = match parse_operator(self) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); return Err(error); }\n            } else {\n                self.position = operator_start;\n                break;\n            };\n            let Some((left_binding_power, right_binding_power)) = binding_power(&operator.0) else {\n                let error = ParseError { message: format!(\"unknown precedence operator {:?}\", operator.0), position: operator_start };\n                self.remember_error(&error);\n                return Err(error);\n            };\n            if left_binding_power < minimum_binding_power {\n                self.position = operator_start;\n                break;\n            }\n            let right = match self.parse_precedence_climbing_tokens(right_binding_power, parse_atom, parse_operator, binding_power, combine) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); return Err(error); }\n            };\n            left = combine(left, operator, right);\n        }\n        Ok(left)\n    }\n\n",
     );
     for table in &grammar.precedence {
+        if grammar
+            .rules
+            .iter()
+            .any(|rule| rule.name == format!("{}_precedence", table.rule))
+        {
+            return Err(format!(
+                "Rust precedence wrapper for rule '{}' collides with grammar rule '{}_precedence'",
+                table.rule, table.rule
+            ));
+        }
         output.push_str(&format!(
             "    pub fn parse_{}_precedence<T>(&mut self, minimum_binding_power: usize, parse_atom: fn(&mut Self) -> Result<T, ParseError>, parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>, combine: fn(T, Token, T) -> T) -> Result<T, ParseError> {{ self.parse_precedence_climbing_tokens(minimum_binding_power, parse_atom, parse_operator, {}_binding_power, combine) }}\n\n",
             table.rule, table.rule
@@ -742,6 +752,16 @@ mod tests {
         .unwrap();
         let error = emit(&grammar).unwrap_err();
         assert!(error.contains("collides with generated type 'RdgenPrecedenceLevel'"));
+    }
+
+    #[test]
+    fn rejects_precedence_wrapper_method_collisions() {
+        let grammar = compile(
+            "grammar Bad; precedence expr { left \"+\"; } expr = \"x\", \"+\"; expr_precedence = \"x\";",
+        )
+        .unwrap();
+        let error = emit(&grammar).unwrap_err();
+        assert!(error.contains("collides with grammar rule 'expr_precedence'"));
     }
 
     #[test]
