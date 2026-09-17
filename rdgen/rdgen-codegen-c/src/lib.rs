@@ -848,6 +848,56 @@ int main(void) {
     }
 
     #[test]
+    fn generated_c_parser_invokes_trivia_callback_before_literals() {
+        let grammar =
+            rdgen_grammar::compile("grammar Start; start = \"a\", \"b\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-trivia");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &source,
+            r#"
+#include <ctype.h>
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+size_t skip_spaces(const char *source, size_t position) {
+    while (source[position] != '\0' && isspace((unsigned char)source[position])) position++;
+    return position;
+}
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("a b", 3, &arena, skip_spaces, NULL);
+    rdgen_error error = { 0 };
+    return rdgen_parse(&parser, &error) != NULL ? 0 : 1;
+}
+"#,
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    #[test]
     fn generated_c_parser_captures_repeated_tokens() {
         let grammar = rdgen_grammar::compile(
             "grammar Start; start = items: { \"a\" } => Start(items: items);",
