@@ -236,7 +236,7 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
     }
     output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
     output.push_str(
-        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool }\n\n",
+        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool, pub left_binding_power: usize, pub right_binding_power: usize }\n\n",
     );
     let mut constants = std::collections::HashSet::new();
     for table in &grammar.precedence {
@@ -258,10 +258,15 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
                 .map(|operator| format!("{:?}", operator))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let (left_binding_power, right_binding_power) = table
+                .binding_powers(&level.operators[0])
+                .expect("precedence validation guarantees a declared operator");
             output.push_str(&format!(
-                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {} }},\n",
+                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {}, left_binding_power: {}, right_binding_power: {} }},\n",
                 operators,
-                matches!(level.associativity, rdgen_ir::Associativity::Right)
+                matches!(level.associativity, rdgen_ir::Associativity::Right),
+                left_binding_power,
+                right_binding_power
             ));
         }
         output.push_str("];\n");
@@ -270,8 +275,8 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
             table.rule, constant
         ));
         output.push_str(&format!(
-            "pub fn {}_binding_power(operator: &str) -> Option<(usize, usize)> {{ {}_precedence(operator).map(|(level, right_associative)| {{ let binding_power = level * 2 + 1; if right_associative {{ (binding_power, binding_power) }} else {{ (binding_power, binding_power + 1) }} }}) }}\n\n",
-            table.rule, table.rule
+            "pub fn {}_binding_power(operator: &str) -> Option<(usize, usize)> {{ {}_PRECEDENCE.iter().find_map(|spec| spec.operators.iter().any(|candidate| *candidate == operator).then_some((spec.left_binding_power, spec.right_binding_power))) }}\n\n",
+            table.rule, constant_name(&table.rule)
         ));
     }
     Ok(())
@@ -740,6 +745,8 @@ mod tests {
         assert!(generated.contains("pub const EXPR_PRECEDENCE"));
         assert!(generated.contains("operators: &[\"+\", \"-\"]"));
         assert!(generated.contains("right_associative: true"));
+        assert!(generated.contains("left_binding_power: 1, right_binding_power: 2"));
+        assert!(generated.contains("left_binding_power: 3, right_binding_power: 3"));
         assert!(generated.contains("pub fn expr_precedence(operator: &str)"));
         assert!(generated.contains("pub fn expr_binding_power(operator: &str)"));
     }
