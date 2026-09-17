@@ -37,6 +37,7 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             continue;
         }
         output.push_str(" {\n");
+        let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
             let element = find_labeled_element(&alternative.elements, &field.source_label)
                 .ok_or_else(|| {
@@ -45,11 +46,14 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
                         field.source_label, rule.name
                     )
                 })?;
-            output.push_str(&format!(
-                "        {}: {},\n",
-                field_name(&field.field),
-                rust_type(element)
-            ));
+            let generated_name = field_name(&field.field);
+            if !field_names.insert(generated_name.clone()) {
+                return Err(format!(
+                    "constructor fields '{}' collide after Rust escaping in rule '{}'",
+                    field.field, rule.name
+                ));
+            }
+            output.push_str(&format!("        {}: {},\n", generated_name, rust_type(element)));
         }
         output.push_str("    },\n");
     }
@@ -550,6 +554,17 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("r#type: Token"));
         assert!(generated.contains("Start::Start { r#type: r#type }"));
+    }
+
+    #[test]
+    fn preserves_case_distinct_rust_field_names() {
+        let grammar = compile(
+            "grammar Start; start = First: \"a\", first: \"b\" => Start(First: First, first: first);",
+        )
+        .unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("First: Token"));
+        assert!(generated.contains("first: Token"));
     }
 
     #[test]
