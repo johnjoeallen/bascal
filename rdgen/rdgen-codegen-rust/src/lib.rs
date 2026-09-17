@@ -409,16 +409,16 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
             + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source.get(position..)?.starts_with(literal).then_some(position + literal.len()) }\n\n"
             + "#[allow(dead_code)]\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError>, lexical_mode: bool }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError>, lexical_mode: bool, same_line_limit: Option<usize> }\n\n"
             + "#[allow(dead_code)]\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
             + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
-            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false } }\n"
+            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false, same_line_limit: None } }\n"
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
-            + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
+            + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); let next = self.same_line_limit.map_or(next, |limit| next.min(limit)); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn matches_terminator(&mut self, literal: &str) -> bool { let start = self.position; let mut first = true; for part in literal.split_whitespace() { if !first { self.skip_trivia(); } let Some(end) = (self.match_literal)(self.source, self.position, part) else { self.position = start; return false; }; self.position = end; first = false; } self.position = start; true }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
@@ -797,7 +797,7 @@ fn emit_group_value_expression(element: &Element) -> Result<String, String> {
 fn emit_element_expression(element: &Element) -> Result<String, String> {
     match element {
         Element::SameLine { element, .. } => Ok(format!(
-            "{{ let same_line_start = self.position; match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ Ok(value) => {{ if self.source[same_line_start..self.position].contains('\\n') {{ self.position = same_line_start; Err(ParseError {{ message: \"same-line element crossed newline\".into(), position: same_line_start }}) }} else {{ Ok(value) }} }}, Err(error) => Err(error) }} }}",
+            "{{ let same_line_start = self.position; let previous_same_line_limit = self.same_line_limit; let line_limit = self.source[same_line_start..].find('\\n').map(|offset| same_line_start + offset).unwrap_or(self.source.len()); self.same_line_limit = Some(previous_same_line_limit.map_or(line_limit, |limit| limit.min(line_limit))); let same_line_result = (|| -> Result<_, ParseError> {{ Ok({}) }})(); self.same_line_limit = previous_same_line_limit; match same_line_result {{ Ok(value) => Ok(value), Err(error) => Err(error) }} }}",
             emit_element_parse(element)?
         )),
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() > 1 => {
