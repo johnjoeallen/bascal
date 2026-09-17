@@ -384,6 +384,11 @@ impl<'a> Parser<'a> {
             self.expect_ident("line_end")?;
             return Ok(rdgen_ir::Element::LineEnd { span });
         }
+        if self.at_ident("newline") {
+            let span = self.current().span;
+            self.expect_ident("newline")?;
+            return Ok(rdgen_ir::Element::Newline { span });
+        }
         if self.accept_symbol('{') {
             let start = self.previous().span.start;
             let alternatives = self
@@ -679,7 +684,8 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
         | rdgen_ir::Element::Group { span, .. }
         | rdgen_ir::Element::SameLine { span, .. }
         | rdgen_ir::Element::Cut { span }
-        | rdgen_ir::Element::LineEnd { span } => *span,
+        | rdgen_ir::Element::LineEnd { span }
+        | rdgen_ir::Element::Newline { span } => *span,
     }
 }
 
@@ -701,6 +707,7 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
         }
         rdgen_ir::Element::Cut { .. } => false,
         rdgen_ir::Element::LineEnd { .. } => false,
+        rdgen_ir::Element::Newline { .. } => false,
         rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => false,
     }
 }
@@ -785,6 +792,7 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
+            rdgen_ir::Element::Newline { .. } => {}
         }
     }
 }
@@ -826,6 +834,7 @@ fn resolve_element(
         rdgen_ir::Element::SameLine { element, .. } => resolve_element(element, rule_names),
         rdgen_ir::Element::Cut { .. } => Ok(()),
         rdgen_ir::Element::LineEnd { .. } => Ok(()),
+        rdgen_ir::Element::Newline { .. } => Ok(()),
         rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => Ok(()),
     }
 }
@@ -1018,6 +1027,7 @@ fn collect_literal_values(
             }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
+            rdgen_ir::Element::Newline { .. } => {}
             rdgen_ir::Element::Rule { rule, .. } => {
                 collect_reachable_literals(rule, rules, visited, literals);
             }
@@ -1099,6 +1109,7 @@ fn first_rule_names<'a>(
             }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
+            rdgen_ir::Element::Newline { .. } => {}
             rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
         }
         if !nullable_element(element, nullable) || index + 1 == elements.len() {
@@ -1138,6 +1149,7 @@ fn nullable_element(
         rdgen_ir::Element::SameLine { element, .. } => nullable_element(element, nullable),
         rdgen_ir::Element::Cut { .. } => true,
         rdgen_ir::Element::LineEnd { .. } => false,
+        rdgen_ir::Element::Newline { .. } => false,
         rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
@@ -1569,6 +1581,15 @@ mod tests {
         assert!(matches!(
             grammar.rules[0].alternatives[0].elements.last(),
             Some(rdgen_ir::Element::LineEnd { .. })
+        ));
+    }
+
+    #[test]
+    fn parses_newline_as_a_builtin_element() {
+        let grammar = compile("grammar Lines; start = \"then\", newline, \"body\";").unwrap();
+        assert!(matches!(
+            grammar.rules[0].alternatives[0].elements[1],
+            rdgen_ir::Element::Newline { .. }
         ));
     }
 }

@@ -98,6 +98,10 @@ pub enum Element {
     LineEnd {
         span: Span,
     },
+    /// Consume one or more physical newlines, but never a `:` separator.
+    Newline {
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
