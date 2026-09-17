@@ -224,6 +224,16 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
     if grammar.precedence.is_empty() {
         return Ok(());
     }
+    if grammar
+        .rules
+        .iter()
+        .any(|rule| type_name(&rule.name) == "RdgenPrecedenceLevel")
+    {
+        return Err(
+            "Rust grammar rule name collides with generated type 'RdgenPrecedenceLevel'"
+                .to_owned(),
+        );
+    }
     output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
     output.push_str(
         "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool }\n\n",
@@ -696,6 +706,16 @@ mod tests {
         assert!(generated.contains("pub const EXPR_PRECEDENCE"));
         assert!(generated.contains("operators: &[\"+\", \"-\"]"));
         assert!(generated.contains("right_associative: true"));
+    }
+
+    #[test]
+    fn rejects_precedence_metadata_type_collisions() {
+        let grammar = compile(
+            "grammar Bad; precedence expr { left \"+\"; } rdgen_precedence_level = \"x\"; expr = \"x\";",
+        )
+        .unwrap();
+        let error = emit(&grammar).unwrap_err();
+        assert!(error.contains("collides with generated type 'RdgenPrecedenceLevel'"));
     }
 
     #[test]
