@@ -194,13 +194,16 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             .to_owned()
             + "typedef size_t (*rdgen_skip_trivia_fn)(const char *source, size_t position);\n"
             + "typedef bool (*rdgen_scan_terminal_fn)(const char *source, size_t position, const char *name, rdgen_token *token, size_t *end);\n"
+            + "typedef bool (*rdgen_match_literal_fn)(const char *source, size_t position, const char *literal, size_t *end);\n"
             + "typedef struct rdgen_error { const char *message; size_t position; } rdgen_error;\n"
-            + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; };\n"
+            + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; rdgen_match_literal_fn match_literal; };\n"
             + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
             + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
             + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
-            + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { size_t length = strlen(literal); rdgen_skip(parser); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, literal, length) == 0) { token->text = parser->source + parser->position; token->length = length; parser->position += length; return true; } return false; }\n"
-            + "rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal }; return parser; }\n\n"
+            + "static bool rdgen_match_literal_default(const char *source, size_t position, const char *literal, size_t *end) { size_t length = strlen(literal); if (strncmp(source + position, literal, length) != 0) return false; *end = position + length; return true; }\n"
+            + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { rdgen_skip(parser); size_t end = parser->position; if (parser->match_literal != NULL && parser->match_literal(parser->source, parser->position, literal, &end) && end > parser->position && end <= parser->length) { token->text = parser->source + parser->position; token->length = end - parser->position; parser->position = end; return true; } return false; }\n"
+            + "rdgen_parser rdgen_parser_init_with_literal_match(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal, rdgen_match_literal_fn match_literal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal, match_literal }; return parser; }\n"
+            + "rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { return rdgen_parser_init_with_literal_match(source, length, arena, skip_trivia, scan_terminal, rdgen_match_literal_default); }\n\n"
     ));
     for rule in &grammar.rules {
         output.push_str(&format!("static {} *rdgen_parse_{}(rdgen_parser *parser, rdgen_error *error);\n", c_type_name(&rule.name), rule.name));
@@ -412,6 +415,8 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("rdgen_parse_start"));
         assert!(generated.contains("rdgen_parser rdgen_parser_init"));
+        assert!(generated.contains("rdgen_match_literal_fn"));
+        assert!(generated.contains("rdgen_parser_init_with_literal_match"));
         assert!(generated.contains("rdgen_start *rdgen_parse("));
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
         assert!(generated.contains("node->as.rdgen_pair.left"));
