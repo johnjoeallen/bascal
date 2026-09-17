@@ -63,6 +63,7 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         let variant = variant_name(rule, alternative, index);
         output.push_str(&format!("        struct {{\n"));
+        let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
             let element = find_labeled_element(&alternative.elements, &field.source_label)
                 .ok_or_else(|| {
@@ -71,11 +72,14 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
                         field.source_label, rule.name
                     )
                 })?;
-            output.push_str(&format!(
-                "            {} {};\n",
-                c_field_type(element),
-                c_field_name(&field.field)
-            ));
+            let generated_name = c_field_name(&field.field);
+            if !field_names.insert(generated_name.clone()) {
+                return Err(format!(
+                    "constructor fields '{}' collide after C spelling in rule '{}'",
+                    field.field, rule.name
+                ));
+            }
+            output.push_str(&format!("            {} {};\n", c_field_type(element), generated_name));
         }
         output.push_str(&format!("        }} {variant};\n"));
     }
@@ -703,6 +707,16 @@ mod tests {
         let grammar = compile("grammar Start; start = struct: \"a\" => Start(struct: struct);").unwrap();
         let generated = emit_ast(&grammar).unwrap();
         assert!(generated.contains("rdgen_token field_struct;"));
+    }
+
+    #[test]
+    fn rejects_c_field_name_collisions_after_case_folding() {
+        let grammar = compile(
+            "grammar Start; start = First: \"a\", first: \"b\" => Start(First: First, first: first);",
+        )
+        .unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("collide after C spelling"));
     }
 
     #[test]
