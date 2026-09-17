@@ -79,9 +79,16 @@ fn rust_type(element: &Element) -> String {
     match element {
         Element::Rule { rule, .. } => format!("Box<{}>", type_name(rule)),
         Element::Token { .. } | Element::Literal { .. } => "Token".into(),
-        Element::Repeat { element, max: Some(1), .. } => format!("Option<{}>", rust_type(element)),
-        Element::Repeat { element, .. } => format!("Vec<{}>", rust_type(element)),
+        Element::Repeat { element, max: Some(1), .. } => format!("Option<{}>", rust_type(rust_repeat_child(element))),
+        Element::Repeat { element, .. } => format!("Vec<{}>", rust_type(rust_repeat_child(element))),
         Element::Group { .. } => "()".into(),
+    }
+}
+
+fn rust_repeat_child(element: &Element) -> &Element {
+    match element {
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => &alternatives[0][0],
+        _ => element,
     }
 }
 
@@ -350,6 +357,15 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("let mut element_1 = Vec::new()"));
         assert!(generated.contains("if self.position == item_start"));
+    }
+
+    #[test]
+    fn emits_labeled_repetition_fields() {
+        let grammar = compile("grammar List; list = items: { \"x\" } => List(items: items);").unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("items: Vec<Token>"));
+        assert!(generated.contains("let mut items = Vec::new()"));
+        assert!(generated.contains("List::List { items: items }"));
     }
 
     #[test]
