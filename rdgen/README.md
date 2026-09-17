@@ -106,8 +106,13 @@ precedence expr {
 The constructor must bind exactly `left`, `operator`, and `right`. The Rust
 backend emits the annotated constructor as a typed rule variant with boxed
 recursive operands and a `Token` operator field, and preserves the same
-contract in generated metadata. Constructing that variant from the generated
-precedence loop is still pending.
+contract in generated metadata.
+
+When every level in a precedence table has a constructor annotation, the Rust
+backend also emits `parse_<rule>_precedence_ast`. It accepts typed atom and
+operator callbacks and constructs the annotated variants directly. Tables
+with any unannotated level retain the generic `parse_<rule>_precedence` API;
+this avoids silently selecting a constructor for an incomplete AST contract.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
