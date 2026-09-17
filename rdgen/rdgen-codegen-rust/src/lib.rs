@@ -794,6 +794,35 @@ mod tests {
     }
 
     #[test]
+    fn generated_precedence_constructor_metadata_is_readable() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("precedence-constructor-metadata");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let level = &EXPR_PRECEDENCE[0]; assert_eq!(level.constructor_type, Some(\"Binary\")); assert_eq!(level.constructor_fields.len(), 3); assert_eq!(level.constructor_fields[0].field, \"left\"); assert_eq!(level.constructor_fields[0].source_label, \"left\"); assert_eq!(level.constructor_fields[1].field, \"operator\"); assert_eq!(level.constructor_fields[2].field, \"right\"); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn does_not_emit_precedence_api_without_a_table() {
         let grammar = compile("grammar Start; start = \"x\" => Start();").unwrap();
         let generated = emit(&grammar).unwrap();
