@@ -740,11 +740,12 @@ fn is_builtin_terminal(name: &str) -> bool {
 fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
     let names: std::collections::HashSet<&str> =
         rules.iter().map(|rule| rule.name.as_str()).collect();
+    let nullable = nullable_rules(rules);
     let mut graph = std::collections::HashMap::<&str, Vec<&str>>::new();
     for rule in rules {
         let mut first = Vec::new();
         for alternative in &rule.alternatives {
-            first_rule_names(&alternative.elements, &names, &mut first);
+            first_rule_names(&alternative.elements, &names, &nullable, &mut first);
         }
         graph.insert(rule.name.as_str(), first);
     }
@@ -801,6 +802,7 @@ fn validate_rule_names(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
 fn first_rule_names<'a>(
     elements: &'a [rdgen_ir::Element],
     names: &std::collections::HashSet<&'a str>,
+    nullable: &std::collections::HashSet<&'a str>,
     output: &mut Vec<&'a str>,
 ) {
     for (index, element) in elements.iter().enumerate() {
@@ -812,34 +814,61 @@ fn first_rule_names<'a>(
             }
             rdgen_ir::Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
-                    first_rule_names(alternative, names, output);
+                    first_rule_names(alternative, names, nullable, output);
                 }
             }
             rdgen_ir::Element::Repeat { element, .. } => {
-                first_rule_names(std::slice::from_ref(element.as_ref()), names, output);
+                first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
             }
             rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
         }
-        if !nullable_element(element) || index + 1 == elements.len() {
+        if !nullable_element(element, nullable) || index + 1 == elements.len() {
             break;
         }
     }
 }
 
-fn nullable_element(element: &rdgen_ir::Element) -> bool {
+fn nullable_rules<'a>(rules: &'a [rdgen_ir::Rule]) -> std::collections::HashSet<&'a str> {
+    let mut nullable = std::collections::HashSet::new();
+    loop {
+        let before = nullable.len();
+        for rule in rules {
+            if rule
+                .alternatives
+                .iter()
+                .any(|alternative| nullable_sequence(&alternative.elements, &nullable))
+            {
+                nullable.insert(rule.name.as_str());
+            }
+        }
+        if nullable.len() == before {
+            return nullable;
+        }
+    }
+}
+
+fn nullable_element(
+    element: &rdgen_ir::Element,
+    nullable: &std::collections::HashSet<&str>,
+) -> bool {
     match element {
         rdgen_ir::Element::Repeat { min, .. } => *min == 0,
         rdgen_ir::Element::Group { alternatives, .. } => alternatives
             .iter()
-            .any(|alternative| nullable_sequence(alternative)),
-        rdgen_ir::Element::Rule { .. }
+            .any(|alternative| nullable_sequence(alternative, nullable)),
+        rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
     }
 }
 
-fn nullable_sequence(elements: &[rdgen_ir::Element]) -> bool {
-    elements.iter().all(nullable_element)
+fn nullable_sequence(
+    elements: &[rdgen_ir::Element],
+    nullable: &std::collections::HashSet<&str>,
+) -> bool {
+    elements
+        .iter()
+        .all(|element| nullable_element(element, nullable))
 }
 
 fn find_cycle<'a>(
@@ -976,6 +1005,12 @@ mod tests {
             compile("grammar Bad; expr = [prefix] , expr | atom; prefix = \"p\"; atom = \"x\";")
                 .unwrap_err();
         assert!(error.contains("direct left recursion in rule 'expr'"));
+    }
+
+    #[test]
+    fn rejects_left_recursion_through_nullable_rule_reference() {
+        let error = compile("grammar Bad; expr = prefix, expr | atom; prefix = ε; atom = \"x\";").unwrap_err();
+        assert!(error.contains("left recursion through expr -> expr"));
     }
 
     #[test]
