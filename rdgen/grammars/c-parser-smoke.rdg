@@ -1,0 +1,4 @@
+grammar CParserSmoke;
+
+start = left: "a" , right: item => Pair(left: left, right: right) ;
+item = "b" => Item() ;

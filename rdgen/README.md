@@ -41,6 +41,16 @@ The C backend currently emits arena-compatible tagged-union declarations and
 is validated as C11. Its recursive-descent parser emitter will consume the
 same IR in a subsequent backend increment.
 
+The initial C parser slice can be exercised with the smoke grammar:
+
+```text
+cargo run -p rdgen -- rdgen/grammars/c-parser-smoke.rdg --emit-c-parser
+```
+
+It supports alternatives composed of literals, named terminals, and rule
+references with arena-backed AST construction and input-offset backtracking.
+Groups and repetitions are rejected until their C control flow is implemented.
+
 The Rust backend emits concrete typed AST declarations and parser control flow
 for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next

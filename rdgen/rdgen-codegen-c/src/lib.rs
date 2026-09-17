@@ -9,6 +9,7 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
             .to_owned()
             + "#ifndef RDGEN_AST_H\n#define RDGEN_AST_H\n\n"
             + "#include <stdbool.h>\n#include <stddef.h>\n\n"
+            + "#include <string.h>\n\n"
             + "typedef struct rdgen_token { const char *text; size_t length; } rdgen_token;\n"
             + "typedef struct rdgen_arena rdgen_arena;\n"
             + "void *rdgen_arena_alloc(rdgen_arena *arena, size_t size);\n\n",
@@ -31,7 +32,7 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     let name = c_type_name(&rule.name);
     output.push_str(&format!("typedef enum {name}_kind {{\n"));
     for (index, alternative) in rule.alternatives.iter().enumerate() {
-        output.push_str(&format!("    {name}_{}{}\n", name, variant_name(rule, alternative, index)));
+        output.push_str(&format!("    {name}_{}\n", variant_name(rule, alternative, index)));
         if index + 1 != rule.alternatives.len() {
             output.push_str(",");
         }
@@ -117,6 +118,98 @@ pub fn emit(grammar: &Grammar) -> Result<String, String> {
     emit_ast(grammar)
 }
 
+/// Emit a C parser for the currently supported simple alternative shape.
+///
+/// Groups and repetitions are intentionally rejected until their C control
+/// flow is implemented; silently treating them as empty productions would
+/// make the generated parser unsound.
+pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
+    let mut output = emit_ast(grammar)?;
+    let guard = "#endif /* RDGEN_AST_H */\n";
+    let end = output.rfind(guard).ok_or_else(|| "generated AST is missing its include guard".to_owned())?;
+    output.truncate(end);
+    output.push_str(&(
+        "typedef struct rdgen_parser rdgen_parser;\n"
+            .to_owned()
+            + "typedef size_t (*rdgen_skip_trivia_fn)(const char *source, size_t position);\n"
+            + "typedef bool (*rdgen_scan_terminal_fn)(const char *source, size_t position, const char *name, rdgen_token *token, size_t *end);\n"
+            + "typedef struct rdgen_error { const char *message; size_t position; } rdgen_error;\n"
+            + "struct rdgen_parser { const char *source; size_t length; size_t position; rdgen_arena *arena; rdgen_skip_trivia_fn skip_trivia; rdgen_scan_terminal_fn scan_terminal; };\n"
+            + "static void rdgen_set_error(rdgen_error *error, const char *message, size_t position) { if (error != NULL) { error->message = message; error->position = position; } }\n"
+            + "static void rdgen_skip(rdgen_parser *parser) { if (parser->skip_trivia != NULL) { size_t next = parser->skip_trivia(parser->source, parser->position); if (next >= parser->position && next <= parser->length) parser->position = next; } }\n"
+            + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { size_t length = strlen(literal); rdgen_skip(parser); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, literal, length) == 0) { token->text = parser->source + parser->position; token->length = length; parser->position += length; return true; } return false; }\n"
+            + "static rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal }; return parser; }\n\n"
+    ));
+    for rule in &grammar.rules {
+        output.push_str(&format!("static {} *rdgen_parse_{}(rdgen_parser *parser, rdgen_error *error);\n", c_type_name(&rule.name), rule.name));
+    }
+    output.push('\n');
+    for rule in &grammar.rules {
+        emit_c_parser_rule(&mut output, rule)?;
+    }
+    output.push_str("#endif /* RDGEN_AST_H */\n");
+    Ok(output)
+}
+
+fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
+    let name = c_type_name(&rule.name);
+    output.push_str(&format!("static {name} *rdgen_parse_{}(rdgen_parser *parser, rdgen_error *error) {{\n", rule.name));
+    for (index, alternative) in rule.alternatives.iter().enumerate() {
+        if alternative.elements.iter().any(|element| !is_simple_element(element)) {
+            return Err(format!("C parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
+        }
+        output.push_str(&format!("    {{ size_t start_{index} = parser->position;\n"));
+        for (element_index, element) in alternative.elements.iter().enumerate() {
+            output.push_str(&format!("        {};\n", c_local_declaration(element, element_index)));
+            output.push_str(&format!("        {}\n", c_parse_statement(element, element_index, index)?));
+        }
+        let variant = variant_name(rule, alternative, index);
+        output.push_str(&format!("        {name} *node = ({name} *)rdgen_arena_alloc(parser->arena, sizeof(*node));\n        if (node == NULL) {{ rdgen_set_error(error, \"arena allocation failed\", parser->position); return NULL; }}\n        node->kind = {name}_{variant};\n"));
+        for field in &alternative.constructor.fields {
+            output.push_str(&format!("        node->as.{variant}.{} = {};\n", c_field_name(&field.field), c_local_name_for_label(&alternative.elements, &field.source_label)));
+        }
+        output.push_str(&format!("        return node;\n    rdgen_alt_fail_{index}:\n        parser->position = start_{index};\n    }}\n"));
+    }
+    output.push_str(&format!("    rdgen_set_error(error, \"no alternative for {}\", parser->position);\n    return NULL;\n}}\n\n", rule.name));
+    Ok(())
+}
+
+fn is_simple_element(element: &Element) -> bool {
+    matches!(element, Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. })
+}
+
+fn c_local_name_for_label(elements: &[Element], label: &str) -> String {
+    elements.iter().enumerate().find_map(|(index, element)| match element {
+        Element::Rule { label: Some(name), .. }
+        | Element::Token { label: Some(name), .. }
+        | Element::Literal { label: Some(name), .. } if name == label => Some(c_local_name(element, index)),
+        _ => None,
+    }).unwrap_or_else(|| c_field_name(label))
+}
+
+fn c_local_name(element: &Element, index: usize) -> String {
+    match element {
+        Element::Rule { label: Some(label), .. }
+        | Element::Token { label: Some(label), .. }
+        | Element::Literal { label: Some(label), .. } => format!("value_{}", c_field_name(label)),
+        _ => format!("element_{index}"),
+    }
+}
+
+fn c_local_declaration(element: &Element, index: usize) -> String {
+    format!("{} {}", match element { Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)), _ => "rdgen_token".into() }, c_local_name(element, index))
+}
+
+fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) -> Result<String, String> {
+    let local = c_local_name(element, index);
+    match element {
+        Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
+        Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
+        Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
+        _ => Err("unsupported C parser element".into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +225,24 @@ mod tests {
         assert!(generated.contains("rdgen_expr * right;"));
         assert!(generated.contains("rdgen_token digit;"));
         assert!(generated.contains("rdgen_arena_alloc"));
+    }
+
+    #[test]
+    fn emits_backtracking_parser_for_simple_alternatives() {
+        let grammar = compile(
+            "grammar Start; start = left: \"a\", right: item => Pair(left: left, right: right); item = \"b\" => Item();",
+        ).unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("rdgen_parse_start"));
+        assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
+        assert!(generated.contains("node->as.rdgen_pair.left"));
+        assert!(generated.contains("rdgen_alt_fail_0:"));
+    }
+
+    #[test]
+    fn rejects_complex_elements_until_c_control_flow_exists() {
+        let grammar = compile("grammar Start; start = { \"a\" };").unwrap();
+        let error = emit_parser(&grammar).unwrap_err();
+        assert!(error.contains("does not yet support grouped or repeated elements"));
     }
 }
