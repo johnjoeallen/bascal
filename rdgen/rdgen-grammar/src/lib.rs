@@ -1387,6 +1387,14 @@ mod tests {
     }
 
     #[test]
+    fn parses_expression_assignments_and_record_literals() {
+        let grammar = compile(
+            "grammar Demo; start statement; statement = expr; expr = primary; primary = identifier, \"(\", [ expr ], \")\" | \"{\", field_init, \"}\" | identifier; field_init = identifier, \":\", expr; identifier = letter, { letter };",
+        );
+        assert!(grammar.is_ok(), "expression assignment fixture: {grammar:?}");
+    }
+
+    #[test]
     fn resolves_builtin_terminals_and_rejects_unknown_references() {
         let grammar = compile("grammar Demo; start = letter , missing; ").unwrap_err();
         assert!(grammar.contains("undefined rule or terminal 'missing'"));

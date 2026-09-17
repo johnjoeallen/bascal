@@ -89,6 +89,8 @@ typed_ident      = identifier ;
 statement        = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | print_stmt | lprint_stmt | global_decl
                  | open_stmt | line_input_stmt | input_stmt | write_stmt
+                 | file_decl_stmt | field_stmt | get_stmt | put_stmt
+                 | lset_stmt | rset_stmt
                  | seek_stmt | kill_stmt | name_stmt | close_stmt
                  | data_stmt | read_stmt | restore_stmt
                  | locate_stmt | color_stmt | swap_stmt
@@ -110,6 +112,15 @@ const_stmt       = "const" , identifier , "=" , expr ;
 print_stmt       = "print" , { print_token } ;
 lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } ;
 print_token      = "," | ";" | expr ;
+file_decl_stmt   = "file" , identifier , [ "as" , identifier ] , "=" ,
+                    "open" , "(" , expr , ")" ,
+                    [ "for" , ( "input" | "output" | "append" ) ] ;
+field_stmt       = "field" , "#" , expr , "," , expr , "as" , identifier ,
+                    { "," , expr , "as" , identifier } ;
+get_stmt         = "get" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
+put_stmt         = "put" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
+lset_stmt        = "lset" , identifier , "=" , expr ;
+rset_stmt        = "rset" , identifier , "=" , expr ;
 open_stmt        = "open" , expr , "for" ,
                     ( "input" | "output" | "append" | "random" | "binary" ) ,
                     "as" , "#" , expr , [ "len" , "=" , expr ] ;
@@ -163,7 +174,7 @@ do_condition     = ( "while" | "until" ) , expr ;
 try_stmt         = "try" , { statement } ,
                    [ "catch" , identifier , { statement } ] ,
                    [ "finally" , { statement } ] , "end" , "try" ;
-assignment_or_expr_stmt = [ "let" ] , identifier , [ "=" , expr ] ;
+assignment_or_expr_stmt = [ "let" ] , expr ;
 
 (* ----- Expressions -----
  * Precedence is represented explicitly in the IR rather than inferred by a
@@ -189,10 +200,14 @@ postfix_expr     = primary , { "." , identifier
 arg_list         = expr , { "," , expr } ;
 primary          = integer_literal | hex_literal | octal_literal
                  | float_literal | string_literal | "true" | "false"
-                 | ident_primary | "(" , expr , ")" ;
+                 | ident_primary | "(" , expr , ")"
+                 | "{" , record_lit_fields , "}"
+                 | "?" , "{" , record_lit_fields , "}" ;
 ident_primary    = identifier ,
                     ( "(" , [ arg_list ] , ")"
                     | "[" , expr , "]" | ε ) ;
+record_lit_fields = [ field_init , { "," , field_init } ] ;
+field_init       = identifier , ":" , expr ;
 
 (* Constructor annotations and recovery declarations are the next DSL
  * frontend milestone. Their intended IR forms are represented directly in
