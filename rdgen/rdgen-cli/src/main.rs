@@ -4,19 +4,20 @@ fn main() {
     let mut args = env::args_os();
     let _program = args.next();
     let Some(path) = args.next() else {
-        eprintln!("usage: rdgen <grammar.rdg> [--emit-rust]");
+        eprintln!("usage: rdgen <grammar.rdg> [--emit-rust|--emit-c]");
         process::exit(2);
     };
-    let emit_rust = match args.next().as_deref() {
-        None => false,
-        Some(flag) if flag == std::ffi::OsStr::new("--emit-rust") => true,
+    let emission = match args.next().as_deref() {
+        None => None,
+        Some(flag) if flag == std::ffi::OsStr::new("--emit-rust") => Some("rust"),
+        Some(flag) if flag == std::ffi::OsStr::new("--emit-c") => Some("c"),
         Some(_) => {
-            eprintln!("usage: rdgen <grammar.rdg> [--emit-rust]");
+            eprintln!("usage: rdgen <grammar.rdg> [--emit-rust|--emit-c]");
             process::exit(2);
         }
     };
     if args.next().is_some() {
-        eprintln!("usage: rdgen <grammar.rdg> [--emit-rust]");
+        eprintln!("usage: rdgen <grammar.rdg> [--emit-rust|--emit-c]");
         process::exit(2);
     }
     let source = match fs::read_to_string(&path) {
@@ -27,10 +28,17 @@ fn main() {
         }
     };
     match rdgen_grammar::compile(&source) {
-        Ok(grammar) if emit_rust => match rdgen_codegen_rust::emit(&grammar) {
+        Ok(grammar) if emission == Some("rust") => match rdgen_codegen_rust::emit(&grammar) {
             Ok(generated) => print!("{}", generated),
             Err(error) => {
                 eprintln!("rdgen: Rust backend: {}", error);
+                process::exit(1);
+            }
+        },
+        Ok(grammar) if emission == Some("c") => match rdgen_codegen_c::emit(&grammar) {
+            Ok(generated) => print!("{}", generated),
+            Err(error) => {
+                eprintln!("rdgen: C backend: {}", error);
                 process::exit(1);
             }
         },

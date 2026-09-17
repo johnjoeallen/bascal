@@ -8,6 +8,7 @@ description = "Recursive-descent parser generator"
 [dependencies]
 rdgen-grammar = { path = "../rdgen-grammar" }
 rdgen-codegen-rust = { path = "../rdgen-codegen-rust" }
+rdgen-codegen-c = { path = "../rdgen-codegen-c" }
 
 [[bin]]
 name = "rdgen"

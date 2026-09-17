@@ -10,6 +10,7 @@ members = [
     "rdgen/rdgen-ir",
     "rdgen/rdgen-grammar",
     "rdgen/rdgen-codegen-rust",
+    "rdgen/rdgen-codegen-c",
     "rdgen/rdgen-cli",
 ]
 resolver = "2"
