@@ -721,4 +721,33 @@ mod tests {
         }
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
+
+    #[test]
+    fn generated_rust_parser_applies_skip_until_sync_recovery() {
+        let grammar = compile(
+            "grammar Start; start = \"ok\" => Start() recover { sync \";\"; skip_until_sync; };",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-recovery");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"bad;ok\"); let error = parser.parse().unwrap_err(); assert_eq!(error.position, 3); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
 }
