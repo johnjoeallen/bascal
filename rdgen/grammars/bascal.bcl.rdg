@@ -111,8 +111,13 @@ global_decl      = "global" , identifier ;
 dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
 dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
 const_stmt       = "const" , identifier , "=" , expr ;
-print_stmt       = "print" , { print_token } until { "\n" } ;
-lprint_stmt      = "lprint" , [ "using" , expr , ";" ] , { print_token } until { "\n" } ;
+print_stmt       = "print" ,
+                    ( "#" , expr , "," , [ "using" , expr , ";" ]
+                    | "using" , expr , ";"
+                    | ε ) ,
+                    { print_token } until { "\n" } ;
+lprint_stmt      = "lprint" , [ "using" , expr , ";" ] ,
+                    { print_token } until { "\n" } ;
 print_token      = "," | ";" | expr ;
 file_decl_stmt   = "file" , identifier , [ "as" , identifier ] , "=" ,
                     "open" , "(" , expr , ")" ,
@@ -202,7 +207,7 @@ or_expr          = and_expr , { ( "or" | "||" ) , and_expr } ;
 and_expr         = not_expr , { ( "and" | "&&" ) , not_expr } ;
 not_expr         = "not" , not_expr | compare_expr ;
 compare_expr     = add_expr , { compare_op , add_expr } ;
-compare_op       = "=" | "<>" | "<" | ">" | "<=" | ">=" ;
+compare_op       = "<>" | "<=" | ">=" | "=" | "<" | ">" ;
 add_expr         = mod_expr , { ( "+" | "-" ) , mod_expr } ;
 mod_expr         = intdiv_expr , { "mod" , intdiv_expr } ;
 intdiv_expr      = mul_expr , { "\\" , mul_expr } ;
