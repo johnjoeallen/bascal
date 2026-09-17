@@ -181,7 +181,7 @@ option_base_stmt = "option" , "base" , expr ;
 end_stmt         = "end" ;
 
 if_stmt          = "if" , expr , "then" ,
-                    ( block_if_tail | single_line_if_tail ) ;
+                    ( newline , block_if_tail | same_line single_line_if_tail ) ;
 block_if_tail    = { statement } until { "elseif", "else", "end" } ,
                     ( "elseif" , expr , "then" , block_if_tail
                     | [ "else" , { statement } until { "end" } ] , "end" , "if" ) ;
