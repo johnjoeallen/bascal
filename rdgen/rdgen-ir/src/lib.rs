@@ -94,6 +94,10 @@ pub enum Element {
     Cut {
         span: Span,
     },
+    /// Consume a physical statement terminator (`:`, newline, or EOF).
+    LineEnd {
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

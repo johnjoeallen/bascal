@@ -211,6 +211,7 @@ fn rust_type(element: &Element) -> String {
         Element::Group { .. } => "()".into(),
         Element::SameLine { element, .. } => rust_type(element),
         Element::Cut { .. } => "()".into(),
+        Element::LineEnd { .. } => "()".into(),
     }
 }
 
@@ -420,6 +421,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); let next = self.same_line_limit.map_or(next, |limit| next.min(limit)); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
+            + "    fn expect_line_end(&mut self) -> Result<(), ParseError> { while self.position < self.source.len() && matches!(self.source.as_bytes()[self.position], b' ' | b'\\t' | b'\\r') { self.position += 1; } if self.position == self.source.len() { return Ok(()); } if self.source[self.position..].starts_with(':') { self.position += 1; return Ok(()); } if self.source[self.position..].starts_with('\\n') { self.position += 1; while self.position < self.source.len() && self.source[self.position..].starts_with('\\n') { self.position += 1; } return Ok(()); } let error = ParseError { message: \"expected statement terminator\".into(), position: self.position }; self.remember_error(&error); Err(error) }\n"
             + "    fn matches_terminator(&mut self, literal: &str) -> bool { let start = self.position; let mut first = true; for part in literal.split_whitespace() { if !first { self.skip_trivia(); } let Some(end) = (self.match_literal)(self.source, self.position, part) else { self.position = start; return false; }; self.position = end; first = false; } self.position = start; true }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
@@ -590,6 +592,7 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
         Element::SameLine { .. } => emit_element_expression(element),
         Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
+        Element::LineEnd { .. } => Ok("self.expect_line_end()?".into()),
         Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
     }
 }
@@ -844,6 +847,7 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
         Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
+        Element::LineEnd { .. } => Ok("self.expect_line_end()?".into()),
     }
 }
 
@@ -880,6 +884,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
         Element::SameLine { .. } => None,
         Element::Cut { .. } => None,
+        Element::LineEnd { .. } => None,
     };
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
@@ -1467,6 +1472,30 @@ mod tests {
         if !compiler.status.success() {
             panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_line_end_accepts_colon_newline_and_eof() {
+        let grammar = compile("grammar Lines; start = \"a\", line_end, \"b\", line_end | \"a\", line_end;").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("line-end");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ for source in [\"a:b\", \"a\\nb\"] {{ let mut parser = Parser::new(source); parser.parse().unwrap_or_else(|error| panic!(\"{{source:?}}: {{error:?}}\")); }} let mut eof = Parser::new(\"a\"); eof.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 

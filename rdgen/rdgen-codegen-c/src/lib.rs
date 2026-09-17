@@ -154,6 +154,7 @@ fn c_field_type(element: &Element) -> String {
         Element::Group { .. } => "bool".into(),
         Element::SameLine { element, .. } => c_field_type(element),
         Element::Cut { .. } => "bool".into(),
+        Element::LineEnd { .. } => "bool".into(),
     }
 }
 
@@ -177,6 +178,7 @@ fn c_value_type(element: &Element) -> String {
         Element::Group { .. } => "bool".into(),
         Element::SameLine { element, .. } => c_value_type(element),
         Element::Cut { .. } => "bool".into(),
+        Element::LineEnd { .. } => "bool".into(),
     }
 }
 
@@ -193,6 +195,7 @@ fn c_collection_key(element: &Element) -> String {
         Element::Group { .. } => "group".into(),
         Element::SameLine { element, .. } => c_collection_key(element),
         Element::Cut { .. } => "cut".into(),
+        Element::LineEnd { .. } => "line_end".into(),
     }
 }
 
@@ -452,6 +455,7 @@ fn is_c_supported_element(element: &Element) -> bool {
         Element::Group { alternatives, .. } => c_group_supported(alternatives),
         Element::SameLine { element, .. } => is_c_supported_element(element),
         Element::Cut { .. } => true,
+        Element::LineEnd { .. } => false,
     }
 }
 
