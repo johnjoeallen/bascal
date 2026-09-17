@@ -514,7 +514,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         type_name(&rule.name)
     ));
     if rule.lexical {
-        output.push_str("        let lexical_start = self.position;\n        self.skip_trivia();\n        let previous_lexical_mode = self.lexical_mode;\n        self.lexical_mode = true;\n");
+        output.push_str("        let lexical_start = self.position;\n        self.skip_trivia();\n        let lexical_token_start = self.position;\n        let previous_lexical_mode = self.lexical_mode;\n        self.lexical_mode = true;\n");
     }
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         if !rule.lexical {
@@ -536,7 +536,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         ));
         output.push_str("        })();\n");
         if rule.lexical {
-            output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; return Ok(value); }, Err(_) => self.position = lexical_start }\n");
+            output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; return Ok(value); }, Err(_) => self.position = lexical_token_start }\n");
         } else {
             output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
         }
@@ -1310,6 +1310,33 @@ mod tests {
         if !compiler.status.success() {
             panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_lexical_alternatives_restart_after_trivia() {
+        let grammar = compile(
+            "grammar Suffix; start start; lexical suffix = \"%\" | \"$\"; start = \"method\", suffix;",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("lexical-alternatives");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
         assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 
