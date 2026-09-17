@@ -145,6 +145,9 @@ Repeated grammar bodies may declare their stopping literals explicitly:
 
 The Rust emitter checks these literals after trivia skipping and before each
 iteration, so nested block productions do not consume their own terminators.
+The special `"\\n"` terminator stops a repetition at the physical end of the
+current source line before trivia skipping; this is useful for line-oriented
+productions such as BASIC `print` lists.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
