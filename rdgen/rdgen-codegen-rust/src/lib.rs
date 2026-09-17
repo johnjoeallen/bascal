@@ -1526,7 +1526,7 @@ mod tests {
     #[test]
     fn generated_line_end_can_follow_an_explicit_trailing_comment() {
         let grammar = compile(
-            "grammar Lines; start = \"a\", [ line_comment ], line_end; lexical line_comment = \"//\", { any_char_except_newline };",
+            "grammar Lines; start start; start = \"a\", comment: [ line_comment ], line_end => Statement(comment: comment); lexical line_comment = prefix: \"//\", chars: { any_char_except_newline } => LineComment(prefix: prefix, chars: chars);",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -1537,7 +1537,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let character = source.get(position..)?.chars().next()?; (name == \"any_char_except_newline\" && character != '\\n').then(|| (Token(character.to_string()), position + character.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ for source in [\"a // trailing\\n\", \"a:\"] {{ let mut parser = Parser::with_scanner_and_trivia(source, scanner, trivia); parser.parse().unwrap(); }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let character = source.get(position..)?.chars().next()?; (name == \"any_char_except_newline\" && character != '\\n').then(|| (Token(character.to_string()), position + character.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut commented = Parser::with_scanner_and_trivia(\"a // trailing\\n\", scanner, trivia); match commented.parse().unwrap() {{ Start::Statement {{ comment: Some(comment) }} => assert!(!format!(\"{{comment:?}}\").is_empty()), other => panic!(\"expected preserved comment, got {{other:?}}\") }} let mut colon = Parser::with_scanner_and_trivia(\"a:\", scanner, trivia); match colon.parse().unwrap() {{ Start::Statement {{ comment: None }} => {{}}, other => panic!(\"expected no comment, got {{other:?}}\") }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
