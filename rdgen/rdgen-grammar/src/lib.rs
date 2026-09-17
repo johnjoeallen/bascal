@@ -89,7 +89,10 @@ impl<'a> Lexer<'a> {
                 let end = start + 2;
                 self.next_char();
                 self.next_char();
-                tokens.push(Token { kind: TokenKind::Arrow, span: rdgen_ir::Span::new(start, end) });
+                tokens.push(Token {
+                    kind: TokenKind::Arrow,
+                    span: rdgen_ir::Span::new(start, end),
+                });
                 continue;
             }
             if "=,;|(){}[]:".contains(ch) {
@@ -244,16 +247,30 @@ impl<'a> Parser<'a> {
             let associativity = match self.ident()?.as_str() {
                 "left" => rdgen_ir::Associativity::Left,
                 "right" => rdgen_ir::Associativity::Right,
-                other => return Err(format!("unknown associativity '{}' at {}", other, self.previous().span.start)),
+                other => {
+                    return Err(format!(
+                        "unknown associativity '{}' at {}",
+                        other,
+                        self.previous().span.start
+                    ))
+                }
             };
             let mut operators = Vec::new();
             while self.starts_literal() {
-                operators.push(self.take_literal().expect("starts_literal guarantees a literal"));
+                operators.push(
+                    self.take_literal()
+                        .expect("starts_literal guarantees a literal"),
+                );
                 self.accept_symbol(',');
             }
-            if operators.is_empty() { return Err(self.error("precedence level requires an operator literal")); }
+            if operators.is_empty() {
+                return Err(self.error("precedence level requires an operator literal"));
+            }
             self.expect_symbol(';')?;
-            levels.push(rdgen_ir::PrecedenceLevel { operators, associativity });
+            levels.push(rdgen_ir::PrecedenceLevel {
+                operators,
+                associativity,
+            });
         }
         Ok(rdgen_ir::PrecedenceTable { rule, levels })
     }
@@ -278,7 +295,11 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        Ok(ParsedAlternative { elements, constructor, recovery })
+        Ok(ParsedAlternative {
+            elements,
+            constructor,
+            recovery,
+        })
     }
 
     fn sequence(&mut self) -> Result<Vec<rdgen_ir::Element>, String> {
@@ -303,7 +324,11 @@ impl<'a> Parser<'a> {
         };
         if self.accept_symbol('{') {
             let start = self.previous().span.start;
-            let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
+            let alternatives = self
+                .alternatives()?
+                .into_iter()
+                .map(|alternative| alternative.elements)
+                .collect();
             let end = self.expect_symbol('}')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
                 label,
@@ -319,7 +344,11 @@ impl<'a> Parser<'a> {
         }
         if self.accept_symbol('[') {
             let start = self.previous().span.start;
-            let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
+            let alternatives = self
+                .alternatives()?
+                .into_iter()
+                .map(|alternative| alternative.elements)
+                .collect();
             let end = self.expect_symbol(']')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
                 label,
@@ -342,11 +371,7 @@ impl<'a> Parser<'a> {
             }
         } else if let Some(value) = self.take_literal() {
             let span = self.previous().span;
-            rdgen_ir::Element::Literal {
-                label,
-                value,
-                span,
-            }
+            rdgen_ir::Element::Literal { label, value, span }
         } else if self.accept_symbol('(') {
             let start = self.previous().span.start;
             let alternatives = self
@@ -368,7 +393,11 @@ impl<'a> Parser<'a> {
 
     fn is_labeled_element(&self) -> bool {
         matches!(self.current().kind, TokenKind::Ident(_))
-            && self.tokens.get(self.position + 1).map(|token| token.kind == TokenKind::Symbol(':')) == Some(true)
+            && self
+                .tokens
+                .get(self.position + 1)
+                .map(|token| token.kind == TokenKind::Symbol(':'))
+                == Some(true)
     }
 
     fn parse_constructor(&mut self) -> Result<rdgen_ir::Constructor, String> {
@@ -385,7 +414,9 @@ impl<'a> Parser<'a> {
                     source_label,
                     span: rdgen_ir::Span::new(start, self.previous().span.end),
                 });
-                if self.accept_symbol(')') { break; }
+                if self.accept_symbol(')') {
+                    break;
+                }
                 self.expect_symbol(',')?;
             }
         }
@@ -399,8 +430,13 @@ impl<'a> Parser<'a> {
         self.expect_ident("sync")?;
         let mut sync_tokens = Vec::new();
         loop {
-            sync_tokens.push(self.take_literal().ok_or_else(|| self.error("recovery sync requires a literal"))?);
-            if !self.accept_symbol(',') { break; }
+            sync_tokens.push(
+                self.take_literal()
+                    .ok_or_else(|| self.error("recovery sync requires a literal"))?,
+            );
+            if !self.accept_symbol(',') {
+                break;
+            }
         }
         self.expect_symbol(';')?;
         let strategy_name = self.ident()?;
@@ -408,14 +444,26 @@ impl<'a> Parser<'a> {
             "skip_until_sync" => rdgen_ir::RecoveryStrategy::SkipUntilSync,
             "abort_rule" => rdgen_ir::RecoveryStrategy::AbortRule,
             "insert_token" => {
-                let token = self.take_literal().ok_or_else(|| self.error("insert_token requires a literal"))?;
+                let token = self
+                    .take_literal()
+                    .ok_or_else(|| self.error("insert_token requires a literal"))?;
                 rdgen_ir::RecoveryStrategy::InsertToken(token)
             }
-            other => return Err(format!("unknown recovery strategy '{}' at {}", other, self.previous().span.start)),
+            other => {
+                return Err(format!(
+                    "unknown recovery strategy '{}' at {}",
+                    other,
+                    self.previous().span.start
+                ))
+            }
         };
         self.expect_symbol(';')?;
         let end = self.expect_symbol('}')?.span.end;
-        Ok(rdgen_ir::RecoveryPoint { sync_tokens, strategy, span: rdgen_ir::Span::new(start, end) })
+        Ok(rdgen_ir::RecoveryPoint {
+            sync_tokens,
+            strategy,
+            span: rdgen_ir::Span::new(start, end),
+        })
     }
 
     fn starts_element(&self) -> bool {
@@ -428,7 +476,9 @@ impl<'a> Parser<'a> {
                 | TokenKind::Symbol('[')
         )
     }
-    fn starts_literal(&self) -> bool { matches!(self.current().kind, TokenKind::Literal(_)) }
+    fn starts_literal(&self) -> bool {
+        matches!(self.current().kind, TokenKind::Literal(_))
+    }
 
     fn current(&self) -> &Token {
         &self.tokens[self.position]
@@ -528,12 +578,14 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
 }
 
 fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
-    let Some(element) = elements.first() else { return false };
+    let Some(element) = elements.first() else {
+        return false;
+    };
     match element {
         rdgen_ir::Element::Rule { rule: name, .. } => name == rule,
-        rdgen_ir::Element::Group { alternatives, .. } => {
-            alternatives.iter().any(|alternative| starts_with_rule(alternative, rule))
-        }
+        rdgen_ir::Element::Group { alternatives, .. } => alternatives
+            .iter()
+            .any(|alternative| starts_with_rule(alternative, rule)),
         rdgen_ir::Element::Repeat { element, min, .. } => {
             starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
                 || (*min == 0 && starts_with_rule(&elements[1..], rule))
@@ -543,7 +595,8 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
 }
 
 fn resolve_symbols(rules: &mut [rdgen_ir::Rule]) -> Result<(), String> {
-    let rule_names: std::collections::HashSet<String> = rules.iter().map(|rule| rule.name.clone()).collect();
+    let rule_names: std::collections::HashSet<String> =
+        rules.iter().map(|rule| rule.name.clone()).collect();
     for rule in rules {
         for alternative in &mut rule.alternatives {
             for element in &mut alternative.elements {
@@ -562,16 +615,25 @@ fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
             let mut unique_labels = std::collections::HashSet::new();
             for label in &labels {
                 if !unique_labels.insert(label.as_str()) {
-                    return Err(format!("duplicate element label '{}' in rule '{}'", label, rule.name));
+                    return Err(format!(
+                        "duplicate element label '{}' in rule '{}'",
+                        label, rule.name
+                    ));
                 }
             }
             let mut fields = std::collections::HashSet::new();
             for binding in &alternative.constructor.fields {
                 if !fields.insert(binding.field.as_str()) {
-                    return Err(format!("duplicate constructor field '{}' in rule '{}'", binding.field, rule.name));
+                    return Err(format!(
+                        "duplicate constructor field '{}' in rule '{}'",
+                        binding.field, rule.name
+                    ));
                 }
                 if !unique_labels.contains(binding.source_label.as_str()) {
-                    return Err(format!("constructor field '{}' references unknown label '{}' in rule '{}'", binding.field, binding.source_label, rule.name));
+                    return Err(format!(
+                        "constructor field '{}' references unknown label '{}' in rule '{}'",
+                        binding.field, binding.source_label, rule.name
+                    ));
                 }
             }
         }
@@ -585,36 +647,62 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             rdgen_ir::Element::Rule { label, .. }
             | rdgen_ir::Element::Token { label, .. }
             | rdgen_ir::Element::Literal { label, .. } => {
-                if let Some(label) = label { labels.push(label.clone()); }
+                if let Some(label) = label {
+                    labels.push(label.clone());
+                }
             }
-            rdgen_ir::Element::Group { label, alternatives, .. } => {
-                if let Some(label) = label { labels.push(label.clone()); }
-                for alternative in alternatives { collect_labels(alternative, labels); }
+            rdgen_ir::Element::Group {
+                label,
+                alternatives,
+                ..
+            } => {
+                if let Some(label) = label {
+                    labels.push(label.clone());
+                }
+                for alternative in alternatives {
+                    collect_labels(alternative, labels);
+                }
             }
             rdgen_ir::Element::Repeat { label, element, .. } => {
-                if let Some(label) = label { labels.push(label.clone()); }
+                if let Some(label) = label {
+                    labels.push(label.clone());
+                }
                 collect_labels(std::slice::from_ref(element.as_ref()), labels)
             }
         }
     }
 }
 
-fn resolve_element(element: &mut rdgen_ir::Element, rule_names: &std::collections::HashSet<String>) -> Result<(), String> {
+fn resolve_element(
+    element: &mut rdgen_ir::Element,
+    rule_names: &std::collections::HashSet<String>,
+) -> Result<(), String> {
     match element {
         rdgen_ir::Element::Rule { rule, label, span } => {
             let name = rule.clone();
             let label = label.clone();
             let span = *span;
-            if rule_names.contains(&name) { return Ok(()); }
-            if is_builtin_terminal(&name) {
-                *element = rdgen_ir::Element::Token { label, token: name, span };
+            if rule_names.contains(&name) {
                 return Ok(());
             }
-            Err(format!("undefined rule or terminal '{}' at {}", name, span.start))
+            if is_builtin_terminal(&name) {
+                *element = rdgen_ir::Element::Token {
+                    label,
+                    token: name,
+                    span,
+                };
+                return Ok(());
+            }
+            Err(format!(
+                "undefined rule or terminal '{}' at {}",
+                name, span.start
+            ))
         }
         rdgen_ir::Element::Group { alternatives, .. } => {
             for alternative in alternatives {
-                for child in alternative { resolve_element(child, rule_names)?; }
+                for child in alternative {
+                    resolve_element(child, rule_names)?;
+                }
             }
             Ok(())
         }
@@ -624,15 +712,26 @@ fn resolve_element(element: &mut rdgen_ir::Element, rule_names: &std::collection
 }
 
 fn is_builtin_terminal(name: &str) -> bool {
-    matches!(name,
-        "letter" | "digit" | "hex_digit" | "java_ident_start" | "java_ident_part"
-        | "any_char" | "any_char_except_quote" | "any_char_except_newline"
-        | "any_char_except_slash" | "any_char_except_quote_or_open_brace_or_backslash"
-        | "any_char_except_slash_or_open_brace_or_backslash" | "text_block_char")
+    matches!(
+        name,
+        "letter"
+            | "digit"
+            | "hex_digit"
+            | "java_ident_start"
+            | "java_ident_part"
+            | "any_char"
+            | "any_char_except_quote"
+            | "any_char_except_newline"
+            | "any_char_except_slash"
+            | "any_char_except_quote_or_open_brace_or_backslash"
+            | "any_char_except_slash_or_open_brace_or_backslash"
+            | "text_block_char"
+    )
 }
 
 fn reject_indirect_left_recursion(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
-    let names: std::collections::HashSet<&str> = rules.iter().map(|rule| rule.name.as_str()).collect();
+    let names: std::collections::HashSet<&str> =
+        rules.iter().map(|rule| rule.name.as_str()).collect();
     let mut graph = std::collections::HashMap::<&str, Vec<&str>>::new();
     for rule in rules {
         let mut first = Vec::new();
@@ -659,24 +758,32 @@ fn first_rule_names<'a>(
     for (index, element) in elements.iter().enumerate() {
         match element {
             rdgen_ir::Element::Rule { rule, .. } => {
-                if names.contains(rule.as_str()) { output.push(rule.as_str()); }
+                if names.contains(rule.as_str()) {
+                    output.push(rule.as_str());
+                }
             }
             rdgen_ir::Element::Group { alternatives, .. } => {
-                for alternative in alternatives { first_rule_names(alternative, names, output); }
+                for alternative in alternatives {
+                    first_rule_names(alternative, names, output);
+                }
             }
             rdgen_ir::Element::Repeat { element, .. } => {
                 first_rule_names(std::slice::from_ref(element.as_ref()), names, output);
             }
             rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
         }
-        if !nullable_element(element) || index + 1 == elements.len() { break; }
+        if !nullable_element(element) || index + 1 == elements.len() {
+            break;
+        }
     }
 }
 
 fn nullable_element(element: &rdgen_ir::Element) -> bool {
     match element {
         rdgen_ir::Element::Repeat { min, .. } => *min == 0,
-        rdgen_ir::Element::Group { alternatives, .. } => alternatives.iter().any(|alternative| nullable_sequence(alternative)),
+        rdgen_ir::Element::Group { alternatives, .. } => alternatives
+            .iter()
+            .any(|alternative| nullable_sequence(alternative)),
         rdgen_ir::Element::Rule { .. }
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
@@ -695,11 +802,18 @@ fn find_cycle<'a>(
 ) -> Option<Vec<String>> {
     for next in graph.get(current).into_iter().flatten() {
         if *next == origin {
-            return Some(path.iter().chain(std::iter::once(next)).map(|name| (*name).to_owned()).collect());
+            return Some(
+                path.iter()
+                    .chain(std::iter::once(next))
+                    .map(|name| (*name).to_owned())
+                    .collect(),
+            );
         }
         if !path.contains(next) {
             path.push(next);
-            if let Some(cycle) = find_cycle(origin, next, graph, path) { return Some(cycle); }
+            if let Some(cycle) = find_cycle(origin, next, graph, path) {
+                return Some(cycle);
+            }
             path.pop();
         }
     }
@@ -740,7 +854,10 @@ mod tests {
         assert_eq!(grammar.precedence.len(), 1);
         assert_eq!(grammar.precedence[0].rule, "expr");
         assert_eq!(grammar.precedence[0].levels[0].operators, vec!["+", "-"]);
-        assert_eq!(grammar.precedence[0].levels[1].associativity, rdgen_ir::Associativity::Right);
+        assert_eq!(
+            grammar.precedence[0].levels[1].associativity,
+            rdgen_ir::Associativity::Right
+        );
     }
 
     #[test]
@@ -765,8 +882,19 @@ mod tests {
 
     #[test]
     fn rejects_left_recursion_hidden_behind_an_optional_prefix() {
-        let error = compile("grammar Bad; expr = [prefix] , expr | atom; prefix = \"p\"; atom = \"x\";").unwrap_err();
+        let error =
+            compile("grammar Bad; expr = [prefix] , expr | atom; prefix = \"p\"; atom = \"x\";")
+                .unwrap_err();
         assert!(error.contains("direct left recursion in rule 'expr'"));
+    }
+
+    #[test]
+    fn rejects_left_recursion_through_nullable_group_and_repetition() {
+        let error = compile(
+            "grammar Bad; a = ( [ b ] ) , \"x\" | \"a\" ; b = { c } , a | \"b\" ; c = \"c\" ;",
+        )
+        .unwrap_err();
+        assert!(error.contains("left recursion through a -> b -> a"));
     }
 
     #[test]
@@ -797,20 +925,26 @@ mod tests {
         assert!(grammar.contains("undefined rule or terminal 'missing'"));
 
         let grammar = compile("grammar Demo; start = letter , \"x\"; ").unwrap();
-        assert!(matches!(&grammar.rules[0].alternatives[0].elements[0], rdgen_ir::Element::Token { token, .. } if token == "letter"));
+        assert!(
+            matches!(&grammar.rules[0].alternatives[0].elements[0], rdgen_ir::Element::Token { token, .. } if token == "letter")
+        );
     }
 
     #[test]
     fn rejects_constructor_bindings_without_matching_element_labels() {
-        let error = compile("grammar Demo; start = value: \"x\" => Node(other: value2); ").unwrap_err();
+        let error =
+            compile("grammar Demo; start = value: \"x\" => Node(other: value2); ").unwrap_err();
         assert!(error.contains("constructor field 'other' references unknown label 'value2'"));
     }
 
     #[test]
     fn rejects_duplicate_element_and_constructor_labels() {
-        let duplicate_element = compile("grammar Demo; start = value: \"x\", value: \"y\"; ").unwrap_err();
+        let duplicate_element =
+            compile("grammar Demo; start = value: \"x\", value: \"y\"; ").unwrap_err();
         assert!(duplicate_element.contains("duplicate element label 'value'"));
-        let duplicate_field = compile("grammar Demo; start = value: \"x\" => Node(a: value, a: value); ").unwrap_err();
+        let duplicate_field =
+            compile("grammar Demo; start = value: \"x\" => Node(a: value, a: value); ")
+                .unwrap_err();
         assert!(duplicate_field.contains("duplicate constructor field 'a'"));
     }
 
@@ -841,9 +975,16 @@ mod tests {
     fn preserves_labels_on_group_and_repeat_elements() {
         let grammar = compile(
             "grammar Expr; expr = values: { value: atom } => Values(values: values); atom = \"x\";",
-        ).unwrap();
+        )
+        .unwrap();
         let element = &grammar.rules[0].alternatives[0].elements[0];
-        assert!(matches!(element, rdgen_ir::Element::Repeat { label: Some(label), .. } if label == "values"));
-        assert!(grammar.rules[0].alternatives[0].constructor.fields.iter().any(|field| field.source_label == "values"));
+        assert!(
+            matches!(element, rdgen_ir::Element::Repeat { label: Some(label), .. } if label == "values")
+        );
+        assert!(grammar.rules[0].alternatives[0]
+            .constructor
+            .fields
+            .iter()
+            .any(|field| field.source_label == "values"));
     }
 }
