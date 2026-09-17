@@ -10,3 +10,4 @@ rdgen-ir = { path = "../rdgen-ir" }
 
 [dev-dependencies]
 rdgen-grammar = { path = "../rdgen-grammar" }
+tempfile = "3"

@@ -547,4 +547,36 @@ mod tests {
             assert!(generated.contains("rdgen_arena_alloc"));
         }
     }
+
+    #[test]
+    fn generated_c_parser_executes_with_an_arena() {
+        let grammar = rdgen_grammar::compile("grammar Start; start = \"a\", \"b\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-smoke");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("ab", 2, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    rdgen_start *node = rdgen_parse(&parser, &error);
+    return node != NULL && node->kind == rdgen_start_rdgen_start ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args(["-std=c11", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        let run = std::process::Command::new(&binary).output().unwrap();
+        assert!(run.status.success());
+    }
 }

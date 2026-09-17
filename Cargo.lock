@@ -513,6 +513,7 @@ version = "0.1.0"
 dependencies = [
  "rdgen-grammar",
  "rdgen-ir",
+ "tempfile",
 ]
 
 [[package]]
