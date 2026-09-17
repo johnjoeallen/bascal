@@ -398,16 +398,16 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
             + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source.get(position..)?.starts_with(literal).then_some(position + literal.len()) }\n\n"
             + "#[allow(dead_code)]\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError> }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError>, lexical_mode: bool }\n\n"
             + "#[allow(dead_code)]\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
             + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
-            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None } }\n"
+            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false } }\n"
             + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
-            + "    fn skip_trivia(&mut self) { let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
+            + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
@@ -512,8 +512,13 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         rule.name,
         type_name(&rule.name)
     ));
+    if rule.lexical {
+        output.push_str("        let lexical_start = self.position;\n        self.skip_trivia();\n        let previous_lexical_mode = self.lexical_mode;\n        self.lexical_mode = true;\n");
+    }
     for (index, alternative) in rule.alternatives.iter().enumerate() {
-        output.push_str("        let start = self.position;\n");
+        if !rule.lexical {
+            output.push_str("        let start = self.position;\n");
+        }
         output.push_str(&format!(
             "        let attempt: Result<{}, ParseError> = (|| {{\n",
             type_name(&rule.name)
@@ -529,7 +534,14 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             emit_constructor_fields(alternative)?
         ));
         output.push_str("        })();\n");
-        output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
+        if rule.lexical {
+            output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; return Ok(value); }, Err(_) => self.position = lexical_start }\n");
+        } else {
+            output.push_str("        match attempt { Ok(value) => return Ok(value), Err(_) => self.position = start }\n");
+        }
+    }
+    if rule.lexical {
+        output.push_str("        self.lexical_mode = previous_lexical_mode;\n        self.position = lexical_start;\n");
     }
     if let Some(recovery) = rule.alternatives.iter().find_map(|alternative| {
         (alternative
@@ -1222,6 +1234,35 @@ mod tests {
             .status()
             .unwrap()
             .success());
+    }
+
+    #[test]
+    fn generated_lexical_rules_do_not_consume_trivia_between_characters() {
+        let grammar = compile(
+            "grammar Words; start main; lexical word = letter, { letter }; main = word, word;",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("lexical-rule");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; (name == \"letter\" && ch.is_ascii_alphabetic()).then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"ab cd\", scanner, trivia); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 
     #[test]

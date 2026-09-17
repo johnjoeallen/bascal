@@ -22,6 +22,15 @@ If omitted, rdgen retains the compatibility default of using the first rule.
 This is important for grammars that declare lexical rules before their
 syntactic start rule, as BASCAL does.
 
+Character-level lexical productions can be declared with `lexical`:
+
+```text
+lexical identifier = letter, { letter | digit };
+```
+
+The Rust backend disables trivia skipping while such a rule is consuming its
+characters, then restores the surrounding parser mode when the rule returns.
+
 [`grammars/distill.matcher.rdg`](grammars/distill.matcher.rdg) is a second
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
 and string literals, closures, chainable postfix expressions, ternaries, and

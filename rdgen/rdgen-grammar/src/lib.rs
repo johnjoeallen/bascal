@@ -202,6 +202,12 @@ impl<'a> Parser<'a> {
                 precedence.push(self.parse_precedence()?);
                 continue;
             }
+            let lexical = if self.at_ident("lexical") {
+                self.expect_ident("lexical")?;
+                true
+            } else {
+                false
+            };
             let start = self.current().span.start;
             let rule_name = self.ident()?;
             self.expect_symbol('=')?;
@@ -218,6 +224,7 @@ impl<'a> Parser<'a> {
             }
             rules.push(rdgen_ir::Rule {
                 name: rule_name.clone(),
+                lexical,
                 output: rdgen_ir::TypeName(rule_name.clone()),
                 alternatives: alternatives
                     .into_iter()
@@ -1332,11 +1339,12 @@ mod tests {
     #[test]
     fn accepts_explicit_start_rule_before_lexical_rules() {
         let grammar = compile(
-            "grammar Demo; start program; identifier = \"x\"; program = identifier;",
+            "grammar Demo; start program; lexical identifier = \"x\"; program = identifier;",
         )
         .unwrap();
         assert_eq!(grammar.start, "program");
         assert_eq!(grammar.rules[0].name, "identifier");
+        assert!(grammar.rules[0].lexical);
     }
 
     #[test]

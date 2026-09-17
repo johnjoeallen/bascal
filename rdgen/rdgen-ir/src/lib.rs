@@ -38,6 +38,7 @@ pub struct Token {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
     pub name: String,
+    pub lexical: bool,
     pub output: TypeName,
     pub alternatives: Vec<Alternative>,
     pub span: Span,

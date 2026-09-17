@@ -27,17 +27,17 @@ precedence expr {
 
 (* ----- Lexical terminals ----- *)
 
-identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;
-suffix           = "%" | "$" | "!" | "#" | "&" ;
-integer_literal  = digit , { digit } ;
-float_literal    = digit , { digit } , "." , digit , { digit } ;
-hex_literal      = "&" , ( "H" | "h" ) , { hex_digit } ;
-octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
-string_literal   = "\"" , { string_char } , "\"" ;
-string_char      = escaped_quote | any_char_except_quote ;
-escaped_quote    = "\\\"" | "\"\"" ;
-line_comment     = ( "'" | "//" ) , { any_char_except_newline } ;
-block_comment    = "/*" , { any_char } , "*/" ;
+lexical identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;
+lexical suffix           = "%" | "$" | "!" | "#" | "&" ;
+lexical integer_literal  = digit , { digit } ;
+lexical float_literal    = digit , { digit } , "." , digit , { digit } ;
+lexical hex_literal      = "&" , ( "H" | "h" ) , { hex_digit } ;
+lexical octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
+lexical string_literal   = "\"" , { string_char } , "\"" ;
+lexical string_char      = escaped_quote | any_char_except_quote ;
+lexical escaped_quote    = "\\\"" | "\"\"" ;
+lexical line_comment     = ( "'" | "//" ) , { any_char_except_newline } ;
+lexical block_comment    = "/*" , { any_char } , "*/" ;
 
 (* ----- Program and declarations ----- *)
 
