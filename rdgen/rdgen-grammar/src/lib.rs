@@ -227,6 +227,7 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, self.previous().span.end),
             });
         }
+        validate_rule_names(&rules)?;
         resolve_symbols(&mut rules)?;
         validate_constructors(&rules)?;
         reject_indirect_left_recursion(&rules)?;
@@ -781,6 +782,16 @@ fn validate_precedence(
     Ok(())
 }
 
+fn validate_rule_names(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
+    let mut names = std::collections::HashSet::new();
+    for rule in rules {
+        if !names.insert(rule.name.as_str()) {
+            return Err(format!("duplicate rule '{}'", rule.name));
+        }
+    }
+    Ok(())
+}
+
 fn first_rule_names<'a>(
     elements: &'a [rdgen_ir::Element],
     names: &std::collections::HashSet<&'a str>,
@@ -895,6 +906,12 @@ mod tests {
     fn rejects_precedence_for_unknown_rule() {
         let error = compile("grammar Expr; precedence missing { left \"+\"; } expr = \"x\";").unwrap_err();
         assert!(error.contains("precedence table references undefined rule 'missing'"));
+    }
+
+    #[test]
+    fn rejects_duplicate_rule_names() {
+        let error = compile("grammar Bad; item = \"a\"; item = \"b\";").unwrap_err();
+        assert!(error.contains("duplicate rule 'item'"));
     }
 
     #[test]
