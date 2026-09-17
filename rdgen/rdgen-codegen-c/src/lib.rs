@@ -268,6 +268,17 @@ fn c_field_name(name: &str) -> String {
     }
     if result.is_empty() {
         "field".into()
+    } else if matches!(
+        result.as_str(),
+        "auto" | "break" | "case" | "char" | "const" | "continue" | "default" | "do"
+            | "double" | "else" | "enum" | "extern" | "float" | "for" | "goto" | "if"
+            | "inline" | "int" | "long" | "register" | "restrict" | "return" | "short"
+            | "signed" | "sizeof" | "static" | "struct" | "switch" | "typedef" | "union"
+            | "unsigned" | "void" | "volatile" | "while" | "_Alignas" | "_Atomic"
+            | "_Bool" | "_Complex" | "_Generic" | "_Imaginary" | "_Noreturn" | "_Static_assert"
+            | "_Thread_local"
+    ) {
+        format!("field_{result}")
     } else {
         result
     }
@@ -685,6 +696,13 @@ mod tests {
         assert!(generated.contains("rdgen_expr * right;"));
         assert!(generated.contains("rdgen_token digit;"));
         assert!(generated.contains("rdgen_arena_alloc"));
+    }
+
+    #[test]
+    fn escapes_c_reserved_constructor_fields() {
+        let grammar = compile("grammar Start; start = struct: \"a\" => Start(struct: struct);").unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("rdgen_token field_struct;"));
     }
 
     #[test]
