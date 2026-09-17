@@ -43,8 +43,13 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
 fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     let name = c_type_name(&rule.name);
     output.push_str(&format!("typedef enum {name}_kind {{\n"));
+    let mut variants = std::collections::HashSet::new();
     for (index, alternative) in rule.alternatives.iter().enumerate() {
-        output.push_str(&format!("    {name}_{}\n", variant_name(rule, alternative, index)));
+        let variant = variant_name(rule, alternative, index);
+        if !variants.insert(variant.clone()) {
+            return Err(format!("duplicate C AST variant '{}' in rule '{}'", variant, rule.name));
+        }
+        output.push_str(&format!("    {name}_{variant}\n"));
         if index + 1 != rule.alternatives.len() {
             output.push_str(",");
         }
@@ -498,5 +503,12 @@ mod tests {
         ).unwrap();
         let error = emit_parser(&grammar).unwrap_err();
         assert!(error.contains("does not yet support AbortRule recovery"));
+    }
+
+    #[test]
+    fn rejects_duplicate_c_ast_variants() {
+        let grammar = compile("grammar Start; start = \"a\" => Same() | \"b\" => Same();").unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("duplicate C AST variant 'rdgen_same'"));
     }
 }
