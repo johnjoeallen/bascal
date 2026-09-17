@@ -36,8 +36,12 @@ lexical octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
 lexical string_literal   = "\"" , { string_char } , "\"" ;
 lexical string_char      = escaped_quote | any_char_except_quote ;
 lexical escaped_quote    = "\\\"" | "\"\"" ;
-lexical line_comment     = ( "'" | "//" ) , { any_char_except_newline } ;
-lexical block_comment    = "/*" , { any_char } , "*/" ;
+lexical line_comment     = prefix: "'" , body: { any_char_except_newline }
+                         => ApostropheComment(prefix: prefix, body: body)
+                         | prefix: "//" , body: { any_char_except_newline }
+                         => SlashComment(prefix: prefix, body: body) ;
+lexical block_comment    = opening: "/*" , body: { any_char } , closing: "*/"
+                         => BlockComment(opening: opening, body: body, closing: closing) ;
 
 (* ----- Program and declarations ----- *)
 
@@ -111,7 +115,8 @@ statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
                   * keyword-led statements are not consumed as bare calls. *)
                  | assignment_or_expr_stmt ;
 label_stmt       = identifier , ":" ;
-comment_stmt     = line_comment | block_comment ;
+comment_stmt     = raw: line_comment => Raw(comment: raw)
+                 | block: block_comment => BlockComment(comment: block) ;
 global_decl      = "global" , identifier ;
 dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
 dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
