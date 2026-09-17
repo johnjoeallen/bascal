@@ -31,6 +31,17 @@ lexical identifier = letter, { letter | digit };
 The Rust backend disables trivia skipping while such a rule is consuming its
 characters, then restores the surrounding parser mode when the rule returns.
 
+The current BASCAL syntax smoke probe is reproducible with:
+
+```text
+bash rdgen/scripts/probe-bascal-files.sh
+```
+
+It generates the BASCAL parser, supplies a minimal case-insensitive scanner
+and comment/whitespace skipper, and reports recognition for every `.bcl` file
+under the tutorial, examples, and fixture trees. It intentionally reports
+failure until the starter grammar covers the complete BASCAL statement set.
+
 [`grammars/distill.matcher.rdg`](grammars/distill.matcher.rdg) is a second
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
 and string literals, closures, chainable postfix expressions, ternaries, and
