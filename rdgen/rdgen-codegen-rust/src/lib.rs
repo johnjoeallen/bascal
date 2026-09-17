@@ -219,14 +219,15 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "pub type LiteralMatcher = fn(&str, usize, &str) -> Option<usize>;\n\n"
             + "fn match_literal(source: &str, position: usize, literal: &str) -> Option<usize> { source[position..].starts_with(literal).then_some(position + literal.len()) }\n\n"
             + "#[allow(dead_code)]\n"
-            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher }\n\n"
+            + "pub struct Parser<'a> { source: &'a str, position: usize, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher, best_error: Option<ParseError> }\n\n"
             + "#[allow(dead_code)]\n"
             + "impl<'a> Parser<'a> {\n"
             + "    pub fn new(source: &'a str) -> Self { Self::with_terminal_scanner(source, missing_terminal) }\n"
             + "    pub fn with_terminal_scanner(source: &'a str, scan_terminal: TerminalScanner) -> Self { Self::with_scanner_and_trivia(source, scan_terminal, skip_no_trivia) }\n"
             + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
-            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal } }\n"
-            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = self.parse_" + &start.name + "()?; self.skip_trivia(); if self.position != self.source.len() { return Err(ParseError { message: \"unexpected trailing input\".into(), position: self.position }); } Ok(value) }\n"
+            + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None } }\n"
+            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
+            + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { let next = (self.skip_trivia)(self.source, self.position); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
@@ -236,13 +237,13 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "                if end <= self.source.len() && self.source.is_char_boundary(end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
             + "            }\n"
             + "        }\n"
-            + "        Err(ParseError { message: format!(\"expected {:?}\", literal), position: self.position })\n"
+            + "        let error = ParseError { message: format!(\"expected {:?}\", literal), position: self.position }; self.remember_error(&error); Err(error)\n"
             + "    }\n"
             + "    fn expect_terminal(&mut self, name: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
             + "        match (self.scan_terminal)(self.source, self.position, name) {\n"
             + "            Some((token, end)) if end > self.position && end <= self.source.len() && self.source.is_char_boundary(self.position) && self.source.is_char_boundary(end) => { self.position = end; Ok(token) }\n"
-            + "            _ => Err(ParseError { message: format!(\"expected terminal {:?}\", name), position: self.position }),\n"
+            + "            _ => { let error = ParseError { message: format!(\"expected terminal {:?}\", name), position: self.position }; self.remember_error(&error); Err(error) },\n"
             + "        }\n"
             + "    }\n",
     );
@@ -298,7 +299,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             .join(", ");
         output.push_str(&format!("        self.skip_until_sync(&[{}]);\n", sync));
     }
-    output.push_str(&format!("        Err(ParseError {{ message: \"no alternative for {}\".into(), position: self.position }})\n", rule.name));
+    output.push_str(&format!("        let error = ParseError {{ message: \"no alternative for {}\".into(), position: self.position }}; self.remember_error(&error); Err(error)\n", rule.name));
     output.push_str("    }\n");
     Ok(())
 }
@@ -363,7 +364,20 @@ fn emit_element_binding(
         Element::Repeat { .. } => {
             return Err("parser emitter only supports optional and zero-or-more repetitions".into())
         }
-        Element::Group { alternatives, .. } => {
+        Element::Group {
+            label: Some(_),
+            alternatives,
+            ..
+        } => {
+            if alternatives.len() == 1 && alternatives[0].len() == 1 {
+                output.push_str(&format!(
+                    "{}let {} = {};\n",
+                    indent,
+                    variable,
+                    emit_element_parse(&alternatives[0][0])?
+                ));
+                return Ok(());
+            }
             if alternatives.len() == 1 && alternatives[0].len() > 1 {
                 let values = alternatives[0]
                     .iter()
@@ -376,6 +390,10 @@ fn emit_element_binding(
                 ));
                 return Ok(());
             }
+            output.push_str(&format!("{}let {} = {} ;\n", indent, variable, emit_group_expression(element)?));
+            return Ok(());
+        }
+        Element::Group { alternatives, .. } => {
             if alternatives
                 .iter()
                 .any(|alternative| alternative.len() != 1)
