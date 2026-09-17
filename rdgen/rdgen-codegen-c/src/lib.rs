@@ -79,6 +79,8 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
             Element::Rule { label: Some(name), .. }
             | Element::Token { label: Some(name), .. }
             | Element::Literal { label: Some(name), .. } if name == label => return Some(element),
+            Element::Group { label: Some(name), .. } if name == label => return Some(element),
+            Element::Repeat { label: Some(name), .. } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
                     if let Some(found) = find_labeled_element(alternative, label) { return Some(found); }
@@ -97,8 +99,8 @@ fn c_field_type(element: &Element) -> String {
     match element {
         Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)),
         Element::Token { .. } | Element::Literal { .. } => "rdgen_token".into(),
-        Element::Repeat { element, max: Some(1), .. } => c_collection_name(element, true),
-        Element::Repeat { element, .. } => c_collection_name(element, false),
+        Element::Repeat { element, max: Some(1), .. } => c_collection_name(c_repeat_storage_child(element), true),
+        Element::Repeat { element, .. } => c_collection_name(c_repeat_storage_child(element), false),
         Element::Group { .. } => "bool".into(),
     }
 }
@@ -107,8 +109,8 @@ fn c_value_type(element: &Element) -> String {
     match element {
         Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)),
         Element::Token { .. } | Element::Literal { .. } => "rdgen_token".into(),
-        Element::Repeat { element, max: Some(1), .. } => c_collection_name(element, true),
-        Element::Repeat { element, .. } => c_collection_name(element, false),
+        Element::Repeat { element, max: Some(1), .. } => c_collection_name(c_repeat_storage_child(element), true),
+        Element::Repeat { element, .. } => c_collection_name(c_repeat_storage_child(element), false),
         Element::Group { .. } => "bool".into(),
     }
 }
@@ -130,14 +132,15 @@ fn c_collection_name(element: &Element, optional: bool) -> String {
 fn emit_collection_types(output: &mut String, element: &Element, emitted: &mut std::collections::HashSet<String>) {
     match element {
         Element::Repeat { element: child, max: Some(1), .. } | Element::Repeat { element: child, max: None, .. } => {
-            emit_collection_types(output, child, emitted);
+            let value = c_repeat_storage_child(child);
+            emit_collection_types(output, value, emitted);
             let optional = matches!(element, Element::Repeat { max: Some(1), .. });
-            let name = c_collection_name(child, optional);
+            let name = c_collection_name(value, optional);
             if !emitted.insert(name.clone()) { return; }
             if optional {
-                output.push_str(&format!("typedef struct {{ bool present; {} value; }} {};\n", c_value_type(child), name));
+                output.push_str(&format!("typedef struct {{ bool present; {} value; }} {};\n", c_value_type(value), name));
             } else {
-                output.push_str(&format!("typedef struct {{ {} *items; size_t length; }} {};\n", c_value_type(child), name));
+                output.push_str(&format!("typedef struct {{ {} *items; size_t length; }} {};\n", c_value_type(value), name));
             }
         }
         Element::Group { alternatives, .. } => {
@@ -222,6 +225,11 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         if alternative.elements.iter().any(|element| !is_c_supported_element(element)) {
             return Err(format!("C parser emitter does not yet support grouped or repeated elements in rule '{}'", rule.name));
         }
+        for field in &alternative.constructor.fields {
+            if find_labeled_element(&alternative.elements, &field.source_label).is_some_and(|element| matches!(element, Element::Group { .. } | Element::Repeat { .. })) {
+                return Err(format!("C parser emitter does not yet bind grouped or repeated field '{}' in rule '{}'", field.field, rule.name));
+            }
+        }
         output.push_str(&format!("    {{ size_t start_{index} = parser->position;\n"));
         for (element_index, element) in alternative.elements.iter().enumerate() {
             output.push_str(&format!("        {};\n", c_local_declaration(element, element_index)));
@@ -263,7 +271,9 @@ fn c_local_name(element: &Element, index: usize) -> String {
     match element {
         Element::Rule { label: Some(label), .. }
         | Element::Token { label: Some(label), .. }
-        | Element::Literal { label: Some(label), .. } => format!("value_{}", c_field_name(label)),
+        | Element::Literal { label: Some(label), .. }
+        | Element::Group { label: Some(label), .. }
+        | Element::Repeat { label: Some(label), .. } => format!("value_{}", c_field_name(label)),
         _ => format!("element_{index}"),
     }
 }
@@ -304,6 +314,10 @@ fn c_group_child(element: &Element) -> Option<&Element> {
 
 fn c_group_supported(alternatives: &[Vec<Element>]) -> bool {
     !alternatives.is_empty() && alternatives.iter().all(|alternative| !alternative.is_empty() && alternative.iter().all(is_simple_element))
+}
+
+fn c_repeat_storage_child(element: &Element) -> &Element {
+    c_repeat_child(element).unwrap_or(element)
 }
 
 fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_index: usize) -> Result<String, String> {
@@ -388,6 +402,13 @@ mod tests {
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("element_0_count = 0"));
         assert!(generated.contains("for (;;)"));
+    }
+
+    #[test]
+    fn emits_named_collection_types_for_labeled_repetitions() {
+        let grammar = compile("grammar Start; start = items: { \"a\" } => Start(items: items);").unwrap();
+        let generated = emit_ast(&grammar).unwrap();
+        assert!(generated.contains("rdgen_token_list items;"));
     }
 
     #[test]

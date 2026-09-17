@@ -59,6 +59,8 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
             Element::Rule { label: Some(name), .. }
             | Element::Token { label: Some(name), .. }
             | Element::Literal { label: Some(name), .. } if name == label => return Some(element),
+            Element::Group { label: Some(name), .. } if name == label => return Some(element),
+            Element::Repeat { label: Some(name), .. } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
                     if let Some(found) = find_labeled_element(alternative, label) { return Some(found); }
@@ -244,7 +246,6 @@ fn emit_element_binding(output: &mut String, element: &Element, variable: &str, 
 fn simple_group_element(element: &Element) -> Option<&Element> {
     match element {
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => Some(&alternatives[0][0]),
-        Element::Group { .. } | Element::Repeat { .. } => None,
         _ => Some(element),
     }
 }
@@ -290,7 +291,7 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
 fn element_variable(element: &Element, index: usize) -> String {
     let label = match element {
         Element::Rule { label, .. } | Element::Token { label, .. } | Element::Literal { label, .. } => label.as_deref(),
-        Element::Group { .. } | Element::Repeat { .. } => None,
+        Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
     };
     label.map_or_else(|| format!("element_{}", index), field_name)
 }

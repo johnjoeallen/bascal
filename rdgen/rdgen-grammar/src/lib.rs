@@ -294,12 +294,21 @@ impl<'a> Parser<'a> {
     }
 
     fn element(&mut self) -> Result<rdgen_ir::Element, String> {
+        let label = if self.is_labeled_element() {
+            let label = self.ident()?;
+            self.expect_symbol(':')?;
+            Some(label)
+        } else {
+            None
+        };
         if self.accept_symbol('{') {
             let start = self.previous().span.start;
             let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
             let end = self.expect_symbol('}')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
+                label,
                 element: Box::new(rdgen_ir::Element::Group {
+                    label: None,
                     alternatives,
                     span: rdgen_ir::Span::new(start, end),
                 }),
@@ -313,7 +322,9 @@ impl<'a> Parser<'a> {
             let alternatives = self.alternatives()?.into_iter().map(|alternative| alternative.elements).collect();
             let end = self.expect_symbol(']')?.span.end;
             return Ok(rdgen_ir::Element::Repeat {
+                label,
                 element: Box::new(rdgen_ir::Element::Group {
+                    label: None,
                     alternatives,
                     span: rdgen_ir::Span::new(start, end),
                 }),
@@ -322,13 +333,6 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, end),
             });
         }
-        let label = if self.is_labeled_element() {
-            let label = self.ident()?;
-            self.expect_symbol(':')?;
-            Some(label)
-        } else {
-            None
-        };
         let base = if let Some(text) = self.take_ident() {
             let span = self.previous().span;
             rdgen_ir::Element::Rule {
@@ -352,6 +356,7 @@ impl<'a> Parser<'a> {
                 .collect();
             let end = self.expect_symbol(')')?.span.end;
             rdgen_ir::Element::Group {
+                label,
                 alternatives,
                 span: rdgen_ir::Span::new(start, end),
             }
@@ -582,10 +587,14 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             | rdgen_ir::Element::Literal { label, .. } => {
                 if let Some(label) = label { labels.push(label.clone()); }
             }
-            rdgen_ir::Element::Group { alternatives, .. } => {
+            rdgen_ir::Element::Group { label, alternatives, .. } => {
+                if let Some(label) = label { labels.push(label.clone()); }
                 for alternative in alternatives { collect_labels(alternative, labels); }
             }
-            rdgen_ir::Element::Repeat { element, .. } => collect_labels(std::slice::from_ref(element.as_ref()), labels),
+            rdgen_ir::Element::Repeat { label, element, .. } => {
+                if let Some(label) = label { labels.push(label.clone()); }
+                collect_labels(std::slice::from_ref(element.as_ref()), labels)
+            }
         }
     }
 }

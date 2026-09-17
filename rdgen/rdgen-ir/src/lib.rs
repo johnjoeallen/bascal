@@ -68,12 +68,14 @@ pub enum Element {
         span: Span,
     },
     Repeat {
+        label: Option<String>,
         element: Box<Element>,
         min: usize,
         max: Option<usize>,
         span: Span,
     },
     Group {
+        label: Option<String>,
         alternatives: Vec<Vec<Element>>,
         span: Span,
     },
