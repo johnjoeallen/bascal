@@ -525,8 +525,29 @@ fn emit_group_expression(element: &Element) -> Result<String, String> {
     Ok(output)
 }
 
+fn emit_group_value_expression(element: &Element) -> Result<String, String> {
+    let Element::Group { alternatives, .. } = element else {
+        return Err("expected grouped element".into());
+    };
+    if alternatives.len() != 1 || alternatives[0].len() < 2 {
+        return emit_group_expression(element);
+    }
+    let values = alternatives[0]
+        .iter()
+        .map(emit_element_parse)
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(format!(
+        "{{ let group_attempt: Result<_, ParseError> = (|| {{ Ok(({})) }})(); match group_attempt {{ Ok(value) => value, Err(error) => return Err(error) }} }}",
+        values
+    ))
+}
+
 fn emit_element_expression(element: &Element) -> Result<String, String> {
     match element {
+        Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() > 1 => {
+            emit_group_value_expression(element)
+        }
         Element::Group { .. } => emit_group_expression(element),
         Element::Repeat { element: child, max: None, .. } => {
             let mut output = String::from("{ let mut values = Vec::new(); loop { let item_start = self.position; ");
@@ -894,6 +915,32 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }} }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_rust_parser_captures_repeated_multi_element_groups() {
+        let grammar = compile("grammar Start; start = pairs: { ( \"a\", \"b\" ) } => Start(pairs: pairs);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-group-repeat");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abab\"); match parser.parse().unwrap() {{ Start::Start {{ pairs }} => {{ assert_eq!(pairs.len(), 2); assert_eq!(pairs[0].0.0, \"a\"); assert_eq!(pairs[1].1.0, \"b\"); }} }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
