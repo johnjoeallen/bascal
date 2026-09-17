@@ -75,6 +75,9 @@ dedicated group-sum type is added. Alternatives without
 constructor annotations receive stable `AltN` AST variants so grammars remain
 representable while annotations are added incrementally.
 
+The grammar compiler rejects repetitions whose child can derive epsilon; this
+guarantees that generated repetition loops have a progress invariant.
+
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
 `TriviaSkipper` advances over whitespace/comments. The C callback variants
