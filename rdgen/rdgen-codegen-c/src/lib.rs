@@ -242,7 +242,7 @@ fn is_c_supported_element(element: &Element) -> bool {
     match element {
         Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. } => true,
         Element::Repeat { element, .. } => c_repeat_child(element).is_some_and(is_simple_element),
-        Element::Group { .. } => c_group_child(element).is_some_and(is_simple_element),
+        Element::Group { alternatives, .. } => c_group_supported(alternatives),
     }
 }
 
@@ -275,6 +275,9 @@ fn c_local_declaration(element: &Element, index: usize) -> String {
     if let Some(child) = c_group_child(element) {
         return c_local_declaration(child, index);
     }
+    if matches!(element, Element::Group { .. }) {
+        return format!("bool {}_matched", c_local_name(element, index));
+    }
     format!("{} {}", match element { Element::Rule { rule, .. } => format!("{} *", c_type_name(rule)), _ => "rdgen_token".into() }, c_local_name(element, index))
 }
 
@@ -284,7 +287,8 @@ fn c_parse_statement(element: &Element, index: usize, alternative_index: usize) 
         Element::Literal { value, .. } => Ok(format!("if (!rdgen_expect_literal(parser, {:?}, &{local})) goto rdgen_alt_fail_{alternative_index};", value)),
         Element::Token { token, .. } => Ok(format!("{{ size_t end_{index} = parser->position; if (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{local}, &end_{index}) || end_{index} <= parser->position || end_{index} > parser->length) goto rdgen_alt_fail_{alternative_index}; parser->position = end_{index}; }}", token)),
         Element::Rule { rule, .. } => Ok(format!("{local} = rdgen_parse_{}(parser, error); if ({local} == NULL) goto rdgen_alt_fail_{alternative_index};", rule)),
-        Element::Group { .. } => c_parse_statement(c_group_child(element).ok_or_else(|| "C grouped elements require one simple child".to_owned())?, index, alternative_index),
+        Element::Group { alternatives, .. } if c_group_child(element).is_some() => c_parse_statement(c_group_child(element).expect("group child checked"), index, alternative_index),
+        Element::Group { alternatives, .. } => c_group_statement(alternatives, index, alternative_index),
         Element::Repeat { element: child, max: Some(1), .. } => Ok(format!("{local}_count = 0; {{ size_t item_start_{index} = parser->position; {} if (parser->position != item_start_{index}) {local}_count = 1; else parser->position = item_start_{index}; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C optional requires a single-element group".to_owned())?, index)?)),
         Element::Repeat { element: child, max: None, .. } => Ok(format!("{local}_count = 0; for (;;) {{ size_t item_start_{index} = parser->position; {} if (parser->position == item_start_{index}) {{ parser->position = item_start_{index}; break; }} {local}_count++; }}", c_repeat_probe(c_repeat_child(child).ok_or_else(|| "C repetition requires a single-element group".to_owned())?, index)?)),
         _ => Err("unsupported C parser element".into()),
@@ -296,6 +300,31 @@ fn c_group_child(element: &Element) -> Option<&Element> {
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() == 1 => alternatives[0].first(),
         _ => None,
     }
+}
+
+fn c_group_supported(alternatives: &[Vec<Element>]) -> bool {
+    !alternatives.is_empty() && alternatives.iter().all(|alternative| !alternative.is_empty() && alternative.iter().all(is_simple_element))
+}
+
+fn c_group_statement(alternatives: &[Vec<Element>], index: usize, alternative_index: usize) -> Result<String, String> {
+    let local = format!("element_{index}");
+    let mut output = format!("{local}_matched = false; do {{ size_t group_start_{index} = parser->position; ");
+    for (group_index, alternative) in alternatives.iter().enumerate() {
+        output.push_str(&format!("{{ parser->position = group_start_{index}; bool group_ok_{index}_{group_index} = true; "));
+        for (child_index, child) in alternative.iter().enumerate() {
+            let child_name = format!("group_item_{index}_{group_index}_{child_index}");
+            let failure = format!("group_ok_{index}_{group_index} = false");
+            match child {
+                Element::Literal { value, .. } => output.push_str(&format!("rdgen_token {child_name}; if (group_ok_{index}_{group_index} && !rdgen_expect_literal(parser, {:?}, &{child_name})) {failure}; ", value)),
+                Element::Token { token, .. } => output.push_str(&format!("rdgen_token {child_name}; size_t group_end_{index}_{group_index}_{child_index} = parser->position; if (group_ok_{index}_{group_index} && (parser->scan_terminal == NULL || !parser->scan_terminal(parser->source, parser->position, {:?}, &{child_name}, &group_end_{index}_{group_index}_{child_index}) || group_end_{index}_{group_index}_{child_index} <= parser->position || group_end_{index}_{group_index}_{child_index} > parser->length)) {failure}; if (group_ok_{index}_{group_index}) parser->position = group_end_{index}_{group_index}_{child_index}; ", token)),
+                Element::Rule { rule, .. } => output.push_str(&format!("{} *{child_name} = NULL; if (group_ok_{index}_{group_index}) {{ {child_name} = rdgen_parse_{}(parser, error); if ({child_name} == NULL) {failure}; }} ", c_type_name(rule), rule)),
+                _ => return Err("C grouped alternatives require simple children".into()),
+            }
+        }
+        output.push_str(&format!("if (group_ok_{index}_{group_index}) {{ {local}_matched = true; break; }} }} "));
+    }
+    output.push_str(&format!("}} while (0); if (!{local}_matched) goto rdgen_alt_fail_{alternative_index};"));
+    Ok(output)
 }
 
 fn c_repeat_child(element: &Element) -> Option<&Element> {
@@ -348,7 +377,7 @@ mod tests {
 
     #[test]
     fn rejects_complex_elements_until_c_control_flow_exists() {
-        let grammar = compile("grammar Start; start = ( \"a\" | \"b\" );").unwrap();
+        let grammar = compile("grammar Start; start = ( \"a\", [ \"b\" ] );").unwrap();
         let error = emit_parser(&grammar).unwrap_err();
         assert!(error.contains("does not yet support grouped or repeated elements"));
     }
@@ -366,5 +395,13 @@ mod tests {
         let grammar = compile("grammar Start; start = ( \"a\" ) => Start();").unwrap();
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
+    }
+
+    #[test]
+    fn emits_multi_element_group_alternatives() {
+        let grammar = compile("grammar Start; start = ( \"a\", \"b\" | \"c\", \"d\" ) => Start();").unwrap();
+        let generated = emit_parser(&grammar).unwrap();
+        assert!(generated.contains("group_start_0"));
+        assert!(generated.contains("group_ok_0_1"));
     }
 }
