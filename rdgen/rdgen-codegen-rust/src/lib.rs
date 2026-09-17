@@ -1372,6 +1372,33 @@ mod tests {
     }
 
     #[test]
+    fn generated_repetition_matches_multi_token_terminators() {
+        let grammar = compile(
+            "grammar Blocks; start block; block = \"begin\", { item } until { \"end try\" }, \"end\", \"try\"; item = \"item\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("multi-terminator");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(_: &str, _: usize, _: &str) -> Option<(Token, usize)> {{ None }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len())?.eq_ignore_ascii_case(expected).then_some(position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"begin item end\\ntry\", scanner, trivia, literal); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_repetition_stops_at_physical_line_end() {
         let grammar = compile(
             "grammar Lines; start line; line = \"print\", { item } until { \"\\n\" }; item = \"item\";",
