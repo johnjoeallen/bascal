@@ -432,10 +432,13 @@ impl<'a> Parser<'a> {
         self.expect_ident("sync")?;
         let mut sync_tokens = Vec::new();
         loop {
-            sync_tokens.push(
-                self.take_literal()
-                    .ok_or_else(|| self.error("recovery sync requires a literal"))?,
-            );
+            let token = self
+                .take_literal()
+                .ok_or_else(|| self.error("recovery sync requires a literal"))?;
+            if token.is_empty() {
+                return Err(self.error("recovery sync literal must not be empty"));
+            }
+            sync_tokens.push(token);
             if !self.accept_symbol(',') {
                 break;
             }
@@ -932,6 +935,15 @@ mod tests {
         let recovery = grammar.rules[0].alternatives[0].recovery.as_ref().unwrap();
         assert_eq!(recovery.sync_tokens, vec![";", "}"]);
         assert_eq!(recovery.strategy, rdgen_ir::RecoveryStrategy::SkipUntilSync);
+    }
+
+    #[test]
+    fn rejects_empty_recovery_sync_literals() {
+        let error = compile(
+            "grammar Bad; statement = \"x\" => Statement() recover { sync \"\"; skip_until_sync; };",
+        )
+        .unwrap_err();
+        assert!(error.contains("recovery sync literal must not be empty"));
     }
 
     #[test]
