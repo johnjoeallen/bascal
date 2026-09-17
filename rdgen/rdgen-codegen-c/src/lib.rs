@@ -185,6 +185,15 @@ pub fn emit(grammar: &Grammar) -> Result<String, String> {
 /// flow is implemented; silently treating them as empty productions would
 /// make the generated parser unsound.
 pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
+    for rule in &grammar.rules {
+        for alternative in &rule.alternatives {
+            if let Some(recovery) = &alternative.recovery {
+                if !matches!(recovery.strategy, RecoveryStrategy::SkipUntilSync) {
+                    return Err(format!("C parser emitter does not yet support {:?} recovery in rule '{}'", recovery.strategy, rule.name));
+                }
+            }
+        }
+    }
     let mut output = emit_ast(grammar)?;
     let guard = "#endif /* RDGEN_AST_H */\n";
     let end = output.rfind(guard).ok_or_else(|| "generated AST is missing its include guard".to_owned())?;
@@ -476,5 +485,14 @@ mod tests {
         ).unwrap();
         let generated = emit_parser(&grammar).unwrap();
         assert!(generated.contains("rdgen_skip_until_sync(parser, sync, 2)"));
+    }
+
+    #[test]
+    fn rejects_unimplemented_recovery_strategies() {
+        let grammar = compile(
+            "grammar Statement; statement = \"ok\" => Statement() recover { sync \";\"; abort_rule; };",
+        ).unwrap();
+        let error = emit_parser(&grammar).unwrap_err();
+        assert!(error.contains("does not yet support AbortRule recovery"));
     }
 }
