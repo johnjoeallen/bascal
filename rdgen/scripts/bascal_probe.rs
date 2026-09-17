@@ -7,7 +7,8 @@ fn scan_terminal(source: &str, position: usize, name: &str) -> Option<(Token, us
     let character = source.get(position..)?.chars().next()?;
     let accepted = match name {
         "letter" => character.is_ascii_alphabetic(),
-        "digit" | "hex_digit" => character.is_ascii_hexdigit(),
+        "digit" => character.is_ascii_digit(),
+        "hex_digit" => character.is_ascii_hexdigit(),
         "any_char" => true,
         "any_char_except_quote" => character != '"',
         "any_char_except_newline" => character != '\n',
