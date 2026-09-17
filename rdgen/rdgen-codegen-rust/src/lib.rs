@@ -215,8 +215,60 @@ fn field_name(name: &str) -> String {
 /// Emit a Rust parser from the resolved grammar IR.
 pub fn emit(grammar: &Grammar) -> Result<String, String> {
     let mut output = emit_ast(grammar)?;
+    emit_precedence_metadata(&mut output, grammar)?;
     output.push_str(&emit_parser(grammar)?);
     Ok(output)
+}
+
+fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<(), String> {
+    if grammar.precedence.is_empty() {
+        return Ok(());
+    }
+    output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
+    output.push_str(
+        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool }\n\n",
+    );
+    let mut constants = std::collections::HashSet::new();
+    for table in &grammar.precedence {
+        let constant = format!("{}_PRECEDENCE", constant_name(&table.rule));
+        if !constants.insert(constant.clone()) {
+            return Err(format!(
+                "duplicate generated precedence constant '{}'",
+                constant
+            ));
+        }
+        output.push_str(&format!(
+            "pub const {}: &[RdgenPrecedenceLevel] = &[\n",
+            constant
+        ));
+        for level in &table.levels {
+            let operators = level
+                .operators
+                .iter()
+                .map(|operator| format!("{:?}", operator))
+                .collect::<Vec<_>>()
+                .join(", ");
+            output.push_str(&format!(
+                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {} }},\n",
+                operators,
+                matches!(level.associativity, rdgen_ir::Associativity::Right)
+            ));
+        }
+        output.push_str("];\n\n");
+    }
+    Ok(())
+}
+
+fn constant_name(name: &str) -> String {
+    name.chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_uppercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// Emit parser control flow for the currently supported core element set.
@@ -631,6 +683,19 @@ mod tests {
         );
         assert!(generated.contains("with_lexical_config"));
         assert!(generated.contains("unexpected trailing input"));
+    }
+
+    #[test]
+    fn emits_typed_precedence_metadata() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub struct RdgenPrecedenceLevel"));
+        assert!(generated.contains("pub const EXPR_PRECEDENCE"));
+        assert!(generated.contains("operators: &[\"+\", \"-\"]"));
+        assert!(generated.contains("right_associative: true"));
     }
 
     #[test]

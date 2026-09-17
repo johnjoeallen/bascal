@@ -80,9 +80,10 @@ guarantees that generated repetition loops have a progress invariant.
 
 Precedence tables are retained in the shared IR and validated for defined rule
 targets, non-empty levels, non-empty operators, and duplicate operators. The
-Rust emitter does not yet consume those tables: expression precedence must
-currently be represented by explicit layered grammar rules, as in the BASCAL
-fixture. Precedence-climbing emission is the next parser-generation feature.
+Rust emitter exposes the validated levels as typed generated metadata, but does
+not yet use them for parser control flow: expression precedence must currently
+be represented by explicit layered grammar rules, as in the BASCAL fixture.
+Precedence-climbing emission is the next parser-generation feature.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
