@@ -89,8 +89,10 @@ consume those functions to select a grammar rule automatically, but it exposes
 `Parser::parse_precedence_climbing` so an emitter can provide typed atom,
 operator, and combine callbacks. An operator callback returns `Ok(None)` and
 leaves the input position unchanged when no operator is present. Expression
-precedence must currently be represented by explicit layered grammar rules, as
-in the BASCAL fixture.
+tables also generate `parse_<rule>_precedence`, which supplies that rule's
+binding-power lookup automatically. AST-producing grammar-rule integration is
+still pending; precedence must currently be represented by explicit layered
+grammar rules, as in the BASCAL fixture.
 
 Lexical policy is injected by the generated parser API rather than embedded in
 the grammar backend. `TerminalScanner` recognizes named terminals and
