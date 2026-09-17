@@ -794,16 +794,20 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
             ..
         } => {
             let mut output = String::from("{ let mut values = Vec::new(); loop { let item_start = self.position; ");
-            if !terminators.is_empty() {
+            if terminators.iter().any(|terminator| terminator == "\n") {
+                output.push_str("if self.source[self.position..].starts_with('\\n') { break; } ");
+            }
+            let literals = terminators
+                .iter()
+                .filter(|terminator| terminator.as_str() != "\n")
+                .map(|terminator| format!("{:?}", terminator))
+                .collect::<Vec<_>>();
+            if !literals.is_empty() {
                 output.push_str("self.skip_trivia(); if [");
+                output.push_str(&literals.join(", "));
                 output.push_str(
-                    &terminators
-                        .iter()
-                        .map(|terminator| format!("{:?}", terminator))
-                        .collect::<Vec<_>>()
-                        .join(", "),
+                    "].iter().any(|literal| (self.match_literal)(self.source, self.position, literal).is_some()) { break; } ",
                 );
-                output.push_str("].iter().any(|literal| self.source[self.position..].starts_with(literal)) { break; } ");
             }
             output.push_str(&format!("let item = match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ ", emit_element_expression(child)?));
             output.push_str("Ok(item) => item, Err(_) => { self.position = item_start; break; } }; ");

@@ -182,7 +182,7 @@ do_condition     = ( "while" | "until" ) , expr ;
 select_case_stmt = "select" , "case" , expr ,
                     { "case" , case_values ,
                       { statement } until { "case", "end" } }
-                    until { "case", "end" } ,
+                    until { "end" } ,
                     [ "case" , "else" ,
                       { statement } until { "end" } ] ,
                     "end" , "select" ;
