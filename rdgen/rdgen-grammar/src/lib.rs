@@ -1401,7 +1401,7 @@ mod tests {
         let statement = grammar
             .rules
             .iter()
-            .find(|rule| rule.name == "statement")
+            .find(|rule| rule.name == "statement_core")
             .unwrap();
         assert!(statement.alternatives.iter().any(|alternative| {
             matches!(
