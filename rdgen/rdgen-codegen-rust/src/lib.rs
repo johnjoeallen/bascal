@@ -1500,6 +1500,33 @@ mod tests {
     }
 
     #[test]
+    fn generated_statement_list_accepts_generic_colon_separators() {
+        let grammar = compile(
+            "grammar Statements; start program; program = { statement }; statement = \"a\", line_end | \"b\", line_end;",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("statement-list");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ for source in [\"a:b:a\\nb\", \"a:b\"] {{ let mut parser = Parser::new(source); parser.parse().unwrap_or_else(|error| panic!(\"{{source:?}}: {{error:?}}\")); }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_same_line_line_end_rejects_newline() {
         let grammar = compile("grammar Lines; start = \"a\", same_line line_end;").unwrap();
         let directory = tempfile::tempdir().unwrap();
