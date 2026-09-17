@@ -351,15 +351,22 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
                 rule.name
             ));
         }
-        output.push_str(&format!(
-            "    {{ size_t start_{index} = parser->position;\n"
-        ));
         let statements = alternative
             .elements
             .iter()
             .enumerate()
             .map(|(element_index, element)| c_parse_statement(element, element_index, index))
             .collect::<Result<Vec<_>, _>>()?;
+        let needs_failure_label = statements
+            .iter()
+            .any(|statement| statement.contains(&format!("goto rdgen_alt_fail_{index}")));
+        if needs_failure_label {
+            output.push_str(&format!(
+                "    {{ size_t start_{index} = parser->position;\n"
+            ));
+        } else {
+            output.push_str("    {\n");
+        }
         for (element_index, element) in alternative.elements.iter().enumerate() {
             let declaration = c_local_declaration(element, element_index);
             if !declaration.is_empty() {
@@ -377,10 +384,7 @@ fn emit_c_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             ));
         }
         output.push_str(&format!("        return node;\n"));
-        if statements
-            .iter()
-            .any(|statement| statement.contains(&format!("goto rdgen_alt_fail_{index}")))
-        {
+        if needs_failure_label {
             output.push_str(&format!(
                 "    rdgen_alt_fail_{index}:\n        parser->position = start_{index};\n"
             ));
