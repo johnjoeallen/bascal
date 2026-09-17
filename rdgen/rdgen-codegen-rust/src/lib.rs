@@ -236,7 +236,11 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
     }
     output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
     output.push_str(
-        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool, pub left_binding_power: usize, pub right_binding_power: usize, pub constructor_type: Option<&'static str> }\n\n",
+        "pub struct RdgenPrecedenceField { pub field: &'static str, pub source_label: &'static str }\n\n",
+    );
+    output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
+    output.push_str(
+        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool, pub left_binding_power: usize, pub right_binding_power: usize, pub constructor_type: Option<&'static str>, pub constructor_fields: &'static [RdgenPrecedenceField] }\n\n",
     );
     let mut constants = std::collections::HashSet::new();
     for table in &grammar.precedence {
@@ -265,13 +269,32 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
                 .constructor
                 .as_ref()
                 .map(|constructor| constructor.type_name.0.as_str());
+            let constructor_fields = level
+                .constructor
+                .as_ref()
+                .map(|constructor| {
+                    constructor
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            format!(
+                                "RdgenPrecedenceField {{ field: {:?}, source_label: {:?} }}",
+                                field.field, field.source_label
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .filter(|fields| !fields.is_empty())
+                .map_or_else(|| "&[]".to_owned(), |fields| format!("&[{}]", fields));
             output.push_str(&format!(
-                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {}, left_binding_power: {}, right_binding_power: {}, constructor_type: {:?} }},\n",
+                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {}, left_binding_power: {}, right_binding_power: {}, constructor_type: {:?}, constructor_fields: {} }},\n",
                 operators,
                 matches!(level.associativity, rdgen_ir::Associativity::Right),
                 left_binding_power,
                 right_binding_power,
-                constructor_type
+                constructor_type,
+                constructor_fields
             ));
         }
         output.push_str("];\n");
@@ -765,6 +788,9 @@ mod tests {
         .unwrap();
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("constructor_type: Some(\"Binary\")"));
+        assert!(generated.contains(
+            "constructor_fields: &[RdgenPrecedenceField { field: \"left\", source_label: \"left\" }, RdgenPrecedenceField { field: \"operator\", source_label: \"operator\" }, RdgenPrecedenceField { field: \"right\", source_label: \"right\" }]"
+        ));
     }
 
     #[test]
