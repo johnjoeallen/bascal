@@ -1,6 +1,9 @@
 include!(env!("RDGEN_GENERATED"));
 
 fn scan_terminal(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
+    if name == "any_char" && source.get(position..)?.starts_with("*/") {
+        return None;
+    }
     let character = source.get(position..)?.chars().next()?;
     let accepted = match name {
         "letter" => character.is_ascii_alphabetic(),
@@ -22,21 +25,6 @@ fn probe_match_literal(source: &str, position: usize, expected: &str) -> Option<
 
 fn skip_trivia(source: &str, mut position: usize) -> usize {
     loop {
-        if source
-            .get(position..)
-            .is_some_and(|rest| rest.starts_with("//") || rest.starts_with('\''))
-        {
-            position += source[position..]
-                .find('\n')
-                .unwrap_or(source.len() - position);
-            continue;
-        }
-        if source.get(position..).is_some_and(|rest| rest.starts_with("/*")) {
-            position += source[position..]
-                .find("*/")
-                .map_or(source.len() - position, |end| end + 2);
-            continue;
-        }
         let Some(character) = source.get(position..).and_then(|rest| rest.chars().next()) else {
             return position;
         };

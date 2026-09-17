@@ -1354,6 +1354,39 @@ mod tests {
     }
 
     #[test]
+    fn preserves_all_bascal_top_level_prefix_forms() {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let file_item = grammar
+            .rules
+            .iter()
+            .find(|rule| rule.name == "file_item")
+            .unwrap();
+        let referenced_rules = file_item
+            .alternatives
+            .iter()
+            .filter_map(|alternative| match alternative.elements.first() {
+                Some(rdgen_ir::Element::Rule { rule, .. }) => Some(rule.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(referenced_rules.contains(&"program_decl"));
+        assert!(referenced_rules.contains(&"library_decl"));
+        assert!(referenced_rules.contains(&"shared_decl"));
+        assert!(referenced_rules.contains(&"statement"));
+        let statement = grammar
+            .rules
+            .iter()
+            .find(|rule| rule.name == "statement")
+            .unwrap();
+        assert!(statement.alternatives.iter().any(|alternative| {
+            matches!(
+                alternative.elements.first(),
+                Some(rdgen_ir::Element::Rule { rule, .. }) if rule == "comment_stmt"
+            )
+        }));
+    }
+
+    #[test]
     fn resolves_builtin_terminals_and_rejects_unknown_references() {
         let grammar = compile("grammar Demo; start = letter , missing; ").unwrap_err();
         assert!(grammar.contains("undefined rule or terminal 'missing'"));
