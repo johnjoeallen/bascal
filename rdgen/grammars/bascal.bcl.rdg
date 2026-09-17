@@ -188,7 +188,7 @@ for_stmt         = "for" , typed_ident , "=" , expr ,
                     { statement } until { "end" } , "end" , [ same_line "for" ] ;
 while_stmt       = "while" , expr , { statement } until { "wend", "end" }
                    , ( "wend" | "end" , [ same_line "while" ] ) ;
-do_stmt          = "do" , [ do_condition ] , { statement } until { "loop", "end" }
+do_stmt          = "do" , [ same_line do_condition ] , { statement } until { "loop", "end" }
                    , ( "loop" , [ same_line do_condition ] | "end" , [ same_line "do" ] ) ;
 do_condition     = ( "while" | "until" ) , expr ;
 select_case_stmt = "select" , "case" , expr ,
