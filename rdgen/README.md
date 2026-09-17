@@ -68,8 +68,10 @@ for alternatives composed of literals, lexical terminals, and rule references.
 Each alternative is attempted with input-offset backtracking before the next
 alternative is tried. Optional and zero-or-more repetition, grouped
 alternatives, and nested groups/repetitions are emitted as recursive parser
-control flow. Grouped elements are currently unit-valued unless their
-contents are bound directly as constructor fields. Alternatives without
+control flow. Labeled singleton groups preserve the child type, and labeled
+single-alternative multi-element groups preserve their contents as Rust
+tuples. Labeled groups with multiple alternatives are rejected until a
+dedicated group-sum type is added. Alternatives without
 constructor annotations receive stable `AltN` AST variants so grammars remain
 representable while annotations are added incrementally.
 
