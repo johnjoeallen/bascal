@@ -790,6 +790,8 @@ int main(void) {
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
+                "-Wall",
+                "-Wextra",
                 source.to_str().unwrap(),
                 "-o",
                 binary.to_str().unwrap(),
@@ -834,6 +836,8 @@ int main(void) {
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
+                "-Wall",
+                "-Wextra",
                 source.to_str().unwrap(),
                 "-o",
                 binary.to_str().unwrap(),
@@ -879,6 +883,8 @@ int main(void) {
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
+                "-Wall",
+                "-Wextra",
                 source.to_str().unwrap(),
                 "-o",
                 binary.to_str().unwrap(),
@@ -924,6 +930,8 @@ int main(void) {
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
+                "-Wall",
+                "-Wextra",
                 source.to_str().unwrap(),
                 "-o",
                 binary.to_str().unwrap(),
@@ -972,6 +980,8 @@ int main(void) {
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
+                "-Wall",
+                "-Wextra",
                 source.to_str().unwrap(),
                 "-o",
                 binary.to_str().unwrap(),
