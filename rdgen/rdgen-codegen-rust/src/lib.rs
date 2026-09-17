@@ -47,6 +47,9 @@ fn validate_labeled_groups(elements: &[&Element]) -> Result<(), String> {
             Element::Repeat { element, .. } => {
                 validate_labeled_groups(&[element.as_ref()])?;
             }
+            Element::SameLine { element, .. } => {
+                validate_labeled_groups(&[element.as_ref()])?;
+            }
             _ => {}
         }
     }
@@ -177,6 +180,13 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
                     return Some(found);
                 }
             }
+            Element::SameLine { element, .. } => {
+                if let Some(found) =
+                    find_labeled_element(std::slice::from_ref(element.as_ref()), label)
+                {
+                    return Some(found);
+                }
+            }
             _ => {}
         }
     }
@@ -199,6 +209,7 @@ fn rust_type(element: &Element) -> String {
             rust_group_type(&alternatives[0])
         }
         Element::Group { .. } => "()".into(),
+        Element::SameLine { element, .. } => rust_type(element),
     }
 }
 
@@ -574,6 +585,7 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
+        Element::SameLine { .. } => emit_element_expression(element),
         Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
     }
 }
@@ -784,6 +796,10 @@ fn emit_group_value_expression(element: &Element) -> Result<String, String> {
 
 fn emit_element_expression(element: &Element) -> Result<String, String> {
     match element {
+        Element::SameLine { element, .. } => Ok(format!(
+            "{{ let same_line_start = self.position; match (|| -> Result<_, ParseError> {{ Ok({}) }})() {{ Ok(value) => {{ if self.source[same_line_start..self.position].contains('\\n') {{ self.position = same_line_start; Err(ParseError {{ message: \"same-line element crossed newline\".into(), position: same_line_start }}) }} else {{ Ok(value) }} }}, Err(error) => Err(error) }} }}",
+            emit_element_parse(element)?
+        )),
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() > 1 => {
             emit_group_value_expression(element)
         }
@@ -857,6 +873,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         | Element::Token { label, .. }
         | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
+        Element::SameLine { .. } => None,
     };
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
@@ -1328,6 +1345,33 @@ mod tests {
             &wrapper,
             format!(
                 "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); parser.parse().unwrap(); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_same_line_optional_stops_at_newline() {
+        let grammar = compile(
+            "grammar Lines; start start; start = \"return\", [ same_line expr ], \"end\"; expr = \"x\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("same-line");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut same = Parser::with_scanner_and_trivia(\"return x end\", missing_terminal, trivia); same.parse().unwrap(); let mut absent = Parser::with_scanner_and_trivia(\"return\\nend\", missing_terminal, trivia); absent.parse().unwrap(); }}\n",
                 generated.to_str().unwrap()
             ),
         )

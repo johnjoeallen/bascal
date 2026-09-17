@@ -42,6 +42,12 @@ and comment/whitespace skipper, and reports recognition for every `.bcl` file
 under the tutorial, examples, and fixture trees. It intentionally reports
 failure until the starter grammar covers the complete BASCAL statement set.
 
+Grammar elements may use `same_line element` to require that the element
+begin and end on the physical line where parsing starts. This is useful for
+newline-sensitive optional syntax such as BASCAL's optional `return`
+expression; the Rust backend restores the input position when the wrapped
+element crosses a newline.
+
 [`grammars/distill.matcher.rdg`](grammars/distill.matcher.rdg) is a second
 fixture for Distill’s matcher DSL. It exercises interpolation holes, regex
 and string literals, closures, chainable postfix expressions, ternaries, and

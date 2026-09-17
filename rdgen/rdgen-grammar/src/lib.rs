@@ -364,6 +364,16 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+        if self.at_ident("same_line") {
+            let start = self.current().span.start;
+            self.expect_ident("same_line")?;
+            let element = self.element()?;
+            let end = element_span(&element).end;
+            return Ok(rdgen_ir::Element::SameLine {
+                element: Box::new(element),
+                span: rdgen_ir::Span::new(start, end),
+            });
+        }
         if self.accept_symbol('{') {
             let start = self.previous().span.start;
             let alternatives = self
@@ -656,7 +666,8 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
         | rdgen_ir::Element::Token { span, .. }
         | rdgen_ir::Element::Literal { span, .. }
         | rdgen_ir::Element::Repeat { span, .. }
-        | rdgen_ir::Element::Group { span, .. } => *span,
+        | rdgen_ir::Element::Group { span, .. }
+        | rdgen_ir::Element::SameLine { span, .. } => *span,
     }
 }
 
@@ -672,6 +683,9 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
         rdgen_ir::Element::Repeat { element, min, .. } => {
             starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
                 || (*min == 0 && starts_with_rule(&elements[1..], rule))
+        }
+        rdgen_ir::Element::SameLine { element, .. } => {
+            starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
         }
         rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => false,
     }
@@ -752,6 +766,9 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
                 }
                 collect_labels(std::slice::from_ref(element.as_ref()), labels)
             }
+            rdgen_ir::Element::SameLine { element, .. } => {
+                collect_labels(std::slice::from_ref(element.as_ref()), labels)
+            }
         }
     }
 }
@@ -790,6 +807,7 @@ fn resolve_element(
             Ok(())
         }
         rdgen_ir::Element::Repeat { element, .. } => resolve_element(element, rule_names),
+        rdgen_ir::Element::SameLine { element, .. } => resolve_element(element, rule_names),
         rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => Ok(()),
     }
 }
@@ -977,6 +995,9 @@ fn collect_literal_values(
                     literals,
                 );
             }
+            rdgen_ir::Element::SameLine { element, .. } => {
+                collect_literal_values(std::slice::from_ref(element.as_ref()), rules, visited, literals);
+            }
             rdgen_ir::Element::Rule { rule, .. } => {
                 collect_reachable_literals(rule, rules, visited, literals);
             }
@@ -1053,6 +1074,9 @@ fn first_rule_names<'a>(
             rdgen_ir::Element::Repeat { element, .. } => {
                 first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
             }
+            rdgen_ir::Element::SameLine { element, .. } => {
+                first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
+            }
             rdgen_ir::Element::Literal { .. } | rdgen_ir::Element::Token { .. } => {}
         }
         if !nullable_element(element, nullable) || index + 1 == elements.len() {
@@ -1089,6 +1113,7 @@ fn nullable_element(
         rdgen_ir::Element::Group { alternatives, .. } => alternatives
             .iter()
             .any(|alternative| nullable_sequence(alternative, nullable)),
+        rdgen_ir::Element::SameLine { element, .. } => nullable_element(element, nullable),
         rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
@@ -1342,6 +1367,18 @@ mod tests {
         assert!(matches!(
             grammar.rules[0].alternatives[0].elements[1],
             rdgen_ir::Element::Repeat { max: Some(1), .. }
+        ));
+    }
+
+    #[test]
+    fn preserves_same_line_wrappers_in_the_ir() {
+        let grammar = compile("grammar Demo; start = \"return\", [ same_line expr ]; expr = \"x\";").unwrap();
+        let optional = &grammar.rules[0].alternatives[0].elements[1];
+        assert!(matches!(
+            optional,
+            rdgen_ir::Element::Repeat { element, max: Some(1), .. }
+                if matches!(element.as_ref(), rdgen_ir::Element::Group { alternatives, .. }
+                    if matches!(alternatives.first().and_then(|alternative| alternative.first()), Some(rdgen_ir::Element::SameLine { .. })))
         ));
     }
 

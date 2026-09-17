@@ -152,6 +152,7 @@ fn c_field_type(element: &Element) -> String {
             c_field_type(&alternatives[0][0])
         }
         Element::Group { .. } => "bool".into(),
+        Element::SameLine { element, .. } => c_field_type(element),
     }
 }
 
@@ -173,6 +174,7 @@ fn c_value_type(element: &Element) -> String {
             c_value_type(&alternatives[0][0])
         }
         Element::Group { .. } => "bool".into(),
+        Element::SameLine { element, .. } => c_value_type(element),
     }
 }
 
@@ -187,6 +189,7 @@ fn c_collection_key(element: &Element) -> String {
         } => format!("optional_{}", c_collection_key(element)),
         Element::Repeat { element, .. } => format!("list_{}", c_collection_key(element)),
         Element::Group { .. } => "group".into(),
+        Element::SameLine { element, .. } => c_collection_key(element),
     }
 }
 
@@ -242,6 +245,7 @@ fn emit_collection_types(
                 }
             }
         }
+        Element::SameLine { element, .. } => emit_collection_types(output, element, emitted),
         _ => {}
     }
 }
@@ -443,6 +447,7 @@ fn is_c_supported_element(element: &Element) -> bool {
         Element::Literal { .. } | Element::Token { .. } | Element::Rule { .. } => true,
         Element::Repeat { element, .. } => c_repeat_child(element).is_some_and(is_simple_element),
         Element::Group { alternatives, .. } => c_group_supported(alternatives),
+        Element::SameLine { element, .. } => is_c_supported_element(element),
     }
 }
 

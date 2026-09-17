@@ -82,6 +82,13 @@ pub enum Element {
         alternatives: Vec<Vec<Element>>,
         span: Span,
     },
+    /// Parse the wrapped element only when it remains on the physical line
+    /// where parsing starts.  This is primarily useful for optional grammar
+    /// elements whose absence is signalled by a newline.
+    SameLine {
+        element: Box<Element>,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
