@@ -51,7 +51,21 @@ fn main() {
             Ok(_) => println!("OK {path}"),
             Err(error) => {
                 failures += 1;
-                println!("FAIL {path}: {} at {}", error.message, error.position);
+                let position = error.position.min(source.len());
+                let line = source[..position].bytes().filter(|byte| *byte == b'\n').count() + 1;
+                let column = source[..position]
+                    .rsplit_once('\n')
+                    .map_or(position + 1, |(_, suffix)| suffix.len() + 1);
+                let line_text = source.lines().nth(line - 1).unwrap_or("").trim_end();
+                println!(
+                    "FAIL {path}: {} at {} (line {}, column {})\n      {}\n      {}^",
+                    error.message,
+                    error.position,
+                    line,
+                    column,
+                    line_text,
+                    " ".repeat(column.saturating_sub(1))
+                );
             }
         }
     }

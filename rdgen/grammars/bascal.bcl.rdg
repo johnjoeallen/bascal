@@ -205,7 +205,15 @@ try_stmt         = "try" , { statement } until { "catch", "finally", "end try" }
                       "," , identifier , [ "," , identifier ] ,
                       { statement } until { "finally", "end try" } ] ,
                     [ "finally" , { statement } until { "end try" } ] , "end" , "try" ;
-assignment_or_expr_stmt = [ "let" ] , expr ;
+assignment_or_expr_stmt = [ "let" ] ,
+                           ( mid_assign
+                           | assign_target , assignment_op , expr
+                           | expr
+                           ) ;
+assign_target       = postfix_expr ;
+assignment_op       = "=" | "+=" | "-=" | "*=" | "/=" ;
+mid_assign          = "mid" , "$" , "(" , expr , "," , expr
+                      , [ "," , expr ] , ")" , "=" , expr ;
 
 (* ----- Expressions -----
  * Precedence is represented explicitly in the IR rather than inferred by a
