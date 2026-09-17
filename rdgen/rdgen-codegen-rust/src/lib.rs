@@ -154,7 +154,13 @@ fn type_name(name: &str) -> String {
 
 fn field_name(name: &str) -> String {
     match name {
-        "type" | "match" | "ref" | "self" | "crate" | "super" | "mod" | "move" => {
+        "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" | "extern"
+        | "false" | "fn" | "for" | "if" | "impl" | "in" | "let" | "loop" | "match"
+        | "mod" | "move" | "mut" | "pub" | "ref" | "return" | "self" | "Self" | "static"
+        | "struct" | "super" | "trait" | "true" | "type" | "unsafe" | "use" | "where"
+        | "while" | "async" | "await" | "dyn" | "abstract" | "become" | "box" | "do"
+        | "final" | "macro" | "override" | "priv" | "typeof" | "unsized" | "virtual"
+        | "yield" | "try" => {
             format!("r#{}", name)
         }
         _ => name.to_owned(),
@@ -536,6 +542,14 @@ mod tests {
         assert!(generated.contains("items: Vec<Token>"));
         assert!(generated.contains("let mut items = Vec::new()"));
         assert!(generated.contains("List::List { items: items }"));
+    }
+
+    #[test]
+    fn escapes_rust_reserved_constructor_fields() {
+        let grammar = compile("grammar Start; start = type: \"a\" => Start(type: type);").unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("r#type: Token"));
+        assert!(generated.contains("Start::Start { r#type: r#type }"));
     }
 
     #[test]
