@@ -180,6 +180,18 @@ pub fn emit(grammar: &Grammar) -> Result<String, String> {
 
 /// Emit parser control flow for the currently supported core element set.
 pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
+    for rule in &grammar.rules {
+        for alternative in &rule.alternatives {
+            if let Some(recovery) = &alternative.recovery {
+                if !matches!(recovery.strategy, RecoveryStrategy::SkipUntilSync) {
+                    return Err(format!(
+                        "Rust parser emitter does not yet support {:?} recovery in rule '{}'",
+                        recovery.strategy, rule.name
+                    ));
+                }
+            }
+        }
+    }
     let start = grammar
         .rules
         .first()
@@ -592,6 +604,16 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("fn skip_until_sync(&mut self, sync: &[&str])"));
         assert!(generated.contains("self.skip_until_sync(&[\";\", \"}\"]);"));
+    }
+
+    #[test]
+    fn rejects_unimplemented_rust_recovery_strategies() {
+        let grammar = compile(
+            "grammar Statement; statement = \"ok\" => Statement() recover { sync \";\"; abort_rule; };",
+        )
+        .unwrap();
+        let error = emit_parser(&grammar).unwrap_err();
+        assert!(error.contains("Rust parser emitter does not yet support AbortRule recovery"));
     }
 
     #[test]
