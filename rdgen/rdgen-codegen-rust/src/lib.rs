@@ -699,6 +699,35 @@ mod tests {
     }
 
     #[test]
+    fn generated_precedence_metadata_is_readable_from_rust() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom; atom = \"x\";",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("precedence-metadata");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ assert_eq!(EXPR_PRECEDENCE.len(), 2); assert_eq!(EXPR_PRECEDENCE[0].operators, &[\"+\", \"-\"]); assert!(!EXPR_PRECEDENCE[0].right_associative); assert!(EXPR_PRECEDENCE[1].right_associative); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn emits_optional_and_repeated_simple_elements() {
         let grammar =
             compile("grammar List; list = head: \"x\", { \"+\" } => List(head: head);").unwrap();
