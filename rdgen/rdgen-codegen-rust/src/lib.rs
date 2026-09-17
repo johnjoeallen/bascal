@@ -300,7 +300,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         Element::Rule { label, .. } | Element::Token { label, .. } | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
     };
-    label.map_or_else(|| format!("element_{}", index), field_name)
+    label.map_or_else(|| format!("_element_{}", index), field_name)
 }
 
 fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String, String> {
@@ -355,7 +355,7 @@ mod tests {
             "grammar List; list = head: \"x\", { \"+\" } => List(head: head);",
         ).unwrap();
         let generated = emit(&grammar).unwrap();
-        assert!(generated.contains("let mut element_1 = Vec::new()"));
+        assert!(generated.contains("let mut _element_1 = Vec::new()"));
         assert!(generated.contains("if self.position == item_start"));
     }
 
