@@ -1041,6 +1041,40 @@ int main(void) {
     }
 
     #[test]
+    fn generated_c_parser_applies_skip_until_sync_recovery() {
+        let grammar = rdgen_grammar::compile(
+            "grammar Start; start = \"ok\" => Start() recover { sync \";\"; skip_until_sync; };",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-recovery");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("bad;ok", 6, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    if (rdgen_parse(&parser, &error) != NULL) return 1;
+    return error.position == 3 ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_c_parser_accepts_empty_repetition() {
         let grammar = rdgen_grammar::compile("grammar Start; start = items: { \"a\" } => Start(items: items);").unwrap();
         let directory = tempfile::tempdir().unwrap();
