@@ -956,6 +956,32 @@ mod tests {
     }
 
     #[test]
+    fn generated_rust_parser_captures_optional_multi_element_group() {
+        let grammar = compile("grammar Start; start = pair: [ ( \"a\", \"b\" ) ] => Start(pair: pair);").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("parser-group-optional");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair: Some(pair) }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }}, Start::Start {{ pair: None }} => panic!(), }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_rust_parser_applies_skip_until_sync_recovery() {
         let grammar = compile(
             "grammar Start; start = \"ok\" => Start() recover { sync \";\"; skip_until_sync; };",
