@@ -883,6 +883,37 @@ int main(void) {
     }
 
     #[test]
+    fn generated_c_parser_accepts_non_nul_terminated_input_buffer() {
+        let grammar = rdgen_grammar::compile("grammar Start; start = \"a\" => Start();").unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-bounded-input");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(&source, r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    const char source[] = { 'a' };
+    rdgen_parser parser = rdgen_parser_init(source, 1, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    return rdgen_parse(&parser, &error) != NULL ? 0 : 1;
+}
+"#).unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_c_parser_rejects_trailing_input_with_diagnostic() {
         let grammar = rdgen_grammar::compile("grammar Start; start = \"a\" => Start();").unwrap();
         let directory = tempfile::tempdir().unwrap();
