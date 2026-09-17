@@ -236,7 +236,7 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
     }
     output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
     output.push_str(
-        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool, pub left_binding_power: usize, pub right_binding_power: usize }\n\n",
+        "pub struct RdgenPrecedenceLevel { pub operators: &'static [&'static str], pub right_associative: bool, pub left_binding_power: usize, pub right_binding_power: usize, pub constructor_type: Option<&'static str> }\n\n",
     );
     let mut constants = std::collections::HashSet::new();
     for table in &grammar.precedence {
@@ -261,12 +261,17 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
             let (left_binding_power, right_binding_power) = table
                 .binding_powers(&level.operators[0])
                 .expect("precedence validation guarantees a declared operator");
+            let constructor_type = level
+                .constructor
+                .as_ref()
+                .map(|constructor| constructor.type_name.0.as_str());
             output.push_str(&format!(
-                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {}, left_binding_power: {}, right_binding_power: {} }},\n",
+                "    RdgenPrecedenceLevel {{ operators: &[{}], right_associative: {}, left_binding_power: {}, right_binding_power: {}, constructor_type: {:?} }},\n",
                 operators,
                 matches!(level.associativity, rdgen_ir::Associativity::Right),
                 left_binding_power,
-                right_binding_power
+                right_binding_power,
+                constructor_type
             ));
         }
         output.push_str("];\n");
@@ -747,8 +752,19 @@ mod tests {
         assert!(generated.contains("right_associative: true"));
         assert!(generated.contains("left_binding_power: 1, right_binding_power: 2"));
         assert!(generated.contains("left_binding_power: 3, right_binding_power: 3"));
+        assert!(generated.contains("constructor_type: None"));
         assert!(generated.contains("pub fn expr_precedence(operator: &str)"));
         assert!(generated.contains("pub fn expr_binding_power(operator: &str)"));
+    }
+
+    #[test]
+    fn emits_precedence_constructor_type_metadata() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("constructor_type: Some(\"Binary\")"));
     }
 
     #[test]

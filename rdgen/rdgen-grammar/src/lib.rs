@@ -233,6 +233,7 @@ impl<'a> Parser<'a> {
         validate_repetition_progress(&rules)?;
         reject_indirect_left_recursion(&rules)?;
         validate_precedence(&precedence, &rules)?;
+        validate_precedence_constructors(&precedence)?;
         Ok(rdgen_ir::Grammar {
             name,
             rules,
@@ -269,10 +270,16 @@ impl<'a> Parser<'a> {
             if operators.is_empty() {
                 return Err(self.error("precedence level requires an operator literal"));
             }
+            let constructor = if self.accept_arrow() {
+                Some(self.parse_constructor()?)
+            } else {
+                None
+            };
             self.expect_symbol(';')?;
             levels.push(rdgen_ir::PrecedenceLevel {
                 operators,
                 associativity,
+                constructor,
             });
         }
         Ok(rdgen_ir::PrecedenceTable { rule, levels })
@@ -825,6 +832,35 @@ fn validate_precedence(
     Ok(())
 }
 
+fn validate_precedence_constructors(
+    precedence: &[rdgen_ir::PrecedenceTable],
+) -> Result<(), String> {
+    for table in precedence {
+        for level in &table.levels {
+            let Some(constructor) = &level.constructor else {
+                continue;
+            };
+            let required = ["left", "operator", "right"];
+            if constructor.fields.len() != required.len()
+                || required.iter().any(|field| {
+                    constructor
+                        .fields
+                        .iter()
+                        .filter(|binding| binding.source_label == *field)
+                        .count()
+                        != 1
+                })
+            {
+                return Err(format!(
+                    "precedence constructor '{}' for rule '{}' must bind exactly left, operator, and right",
+                    constructor.type_name.0, table.rule
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn collect_reachable_literals(
     rule_name: &str,
     rules: &std::collections::HashMap<&str, &rdgen_ir::Rule>,
@@ -1056,6 +1092,21 @@ mod tests {
             grammar.precedence[0].levels[1].associativity,
             rdgen_ir::Associativity::Right
         );
+        assert!(grammar.precedence[0].levels[0].constructor.is_none());
+    }
+
+    #[test]
+    fn parses_precedence_constructor_annotations() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let constructor = grammar.precedence[0].levels[0]
+            .constructor
+            .as_ref()
+            .unwrap();
+        assert_eq!(constructor.type_name.0, "Binary");
+        assert_eq!(constructor.fields.len(), 3);
     }
 
     #[test]
@@ -1108,6 +1159,17 @@ mod tests {
         .unwrap_err();
         assert!(error.contains(
             "precedence operator \"+\" in rule 'expr' does not occur as a grammar literal"
+        ));
+    }
+
+    #[test]
+    fn rejects_incomplete_precedence_constructor_annotations() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\" => Binary(left: left); } expr = \"x\", \"+\";",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "precedence constructor 'Binary' for rule 'expr' must bind exactly left, operator, and right"
         ));
     }
 

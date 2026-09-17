@@ -127,6 +127,7 @@ pub struct PrecedenceTable {
 pub struct PrecedenceLevel {
     pub operators: Vec<String>,
     pub associativity: Associativity,
+    pub constructor: Option<Constructor>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -220,6 +221,7 @@ mod tests {
             levels: vec![PrecedenceLevel {
                 operators: vec!["PLUS".into(), "MINUS".into()],
                 associativity: Associativity::Left,
+                constructor: None,
             }],
         };
 
@@ -237,6 +239,7 @@ mod tests {
             levels: vec![PrecedenceLevel {
                 operators: vec!["POWER".into()],
                 associativity: Associativity::Right,
+                constructor: None,
             }],
         };
         assert_eq!(precedence.binding_powers("POWER"), Some((1, 1)));
