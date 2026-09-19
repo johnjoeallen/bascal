@@ -1,7 +1,7 @@
 # rdgen
 
 `rdgen` is a recursive-descent parser generator that emits idiomatic parser
-code and concrete typed AST nodes. It is designed as an alternative to ANTLR
+code and typed AST nodes. It is designed as an alternative to ANTLR
 for grammars where generated hand-written-style parsing logic and direct AST
 construction are preferable to a generic parse-tree runtime.
 
@@ -11,6 +11,10 @@ precedence tables into `rdgen-ir`; target-specific emitters consume that IR.
 Rust is currently the only completion target and the reference backend for
 BASCAL. The C emitter is retained as an experimental pressure test, but C++
 and GC-language backends are deferred until the Rust/BASCAL path is complete.
+
+The current BASCAL output remains a concrete typed AST while the semantic
+frontend is built incrementally. The target model, migration boundary, and
+validation split are documented in [SEMANTIC_FRONTEND.md](SEMANTIC_FRONTEND.md).
 
 The first grammar fixture is [`grammars/bascal.bcl.rdg`](grammars/bascal.bcl.rdg),
 derived from BASCAL grammar revision 5. The grammar frontend compiles it into
