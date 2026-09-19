@@ -16,6 +16,7 @@ The BASCAL frontend is being migrated incrementally: expression precedence
 layers now share one generated `Expr` output, while declaration and statement
 normalization remains in progress. The target model, migration boundary, and
 validation split are documented in [SEMANTIC_FRONTEND.md](SEMANTIC_FRONTEND.md).
+The staged implementation roadmap is in [RDGEN_PLAN.md](RDGEN_PLAN.md).
 
 The first grammar fixture is [`grammars/bascal.bcl.rdg`](grammars/bascal.bcl.rdg),
 derived from BASCAL grammar revision 5. The grammar frontend compiles it into

@@ -1,0 +1,296 @@
+# rdgen implementation plan
+
+`rdgen` is a recursive-descent parser generator for producing idiomatic,
+source-span-aware semantic frontends. BASCAL is the reference grammar and
+Rust is the current target backend. The generated frontend is intended to be
+usable by BASCAL's interpreter and by transpilers targeting BASIC, C, and JVM
+assembly.
+
+## Scope
+
+rdgen owns:
+
+- grammar compilation into a language-agnostic typed IR;
+- left-recursion diagnostics and precedence-climbing metadata;
+- generated recursive-descent parser control flow;
+- generated semantic AST construction;
+- source spans and parser diagnostics;
+- grammar-directed recovery and line-oriented statement termination.
+
+rdgen does not own name resolution, type checking, method dispatch, runtime
+evaluation, or target code generation. Those stages consume the resolved
+typed IR or semantic AST produced after parsing.
+
+## Design constraints
+
+### Semantic AST, not a parse tree
+
+The public generated AST must represent language concepts rather than grammar
+productions. Precedence layers, repetition wrappers, alternatives, optional
+fragments, and statement terminators are parser machinery unless they encode
+a real semantic concept.
+
+Expression nodes should converge on:
+
+```text
+Name
+IntegerLiteral
+FloatLiteral
+StringLiteral
+TextBlock
+Boolean
+Unary
+Binary
+Call
+Member
+Index
+RecordLiteral
+Closure
+```
+
+Declarations and statements should similarly expose semantic concepts such as
+`Program`, `Record`, `Function`, `Procedure`, `Method`, `Parameter`,
+`Assignment`, `If`, `For`, `While`, `Do`, `SelectCase`, and `Try`.
+
+Every semantic node must retain a source span. Operator tokens may retain a
+more precise operator span in addition to the enclosing expression span.
+
+### Concrete syntax remains line-oriented
+
+BASCAL uses both physical newline and `:` as statement terminators. The
+parser must preserve these distinctions:
+
+- labels consume their own colon;
+- colon chains become ordinary statement lists;
+- single-line `if` is selected by physical-line structure;
+- compact `then` and `else` bodies may contain colon-separated statements;
+- block headers, bodies, and terminators obey physical line boundaries;
+- comments remain available where BASCAL semantics require preservation.
+
+### Validation is separate from recognition
+
+The grammar recognizes syntax. A later semantic validation pass handles
+context-sensitive rules including:
+
+- valid placement of `&&` and `||`;
+- duplicate combined-record members;
+- invalid `byref` defaults;
+- method receiver and inline-record-method context;
+- array-reference versus call interpretation when semantic knowledge is
+  required.
+
+## Current implementation
+
+The current branch has these capabilities:
+
+- shared `rdgen-ir` for rules, alternatives, constructors, recovery points,
+  output types, and precedence tables;
+- Rust recursive-descent parser emission;
+- typed constructor fields and explicit semantic output declarations;
+- merged output enums for multiple concrete rules;
+- reserved `Identity(value: value)` constructors for parser-only forwarding;
+- source-span runtime types and lexical source-text retention;
+- line-end, newline, same-line, cut, and recovery primitives;
+- explicit BASCAL `Expr` output shared by precedence-layer rules;
+- `Binary(left, operator, right)` precedence metadata and generated AST
+  helpers;
+- BASCAL corpus recognition coverage.
+
+Recent milestones:
+
+- `d003141` — share BASCAL expression AST output;
+- `f44b2fe` — annotate BASCAL precedence binary nodes;
+- `c00684d` — use semantic output in precedence helpers.
+
+The generated BASCAL `Expr` is transitional. It no longer exposes
+`XorExpr`, `AddExpr`, `PostfixExpr`, or `Primary`, but it still contains
+parser-shaped repeated operator fields and provisional names that must be
+normalized.
+
+## Implementation sequence
+
+### 1. Finish output-type-aware IR and emitter behavior
+
+- Keep rule references typed through declared output types.
+- Ensure parser entry points return the start rule's declared output type.
+- Ensure precedence helpers return the declared output type.
+- Keep explicit zero-field constructors distinct from default constructors.
+- Reject ambiguous shared output declarations at grammar-compile time.
+- Add focused tests for output-type propagation through fields, parser rules,
+  start entry points, and precedence helpers.
+
+### 2. Define semantic constructor annotations
+
+Extend the grammar DSL and IR only where the parser needs semantic
+normalization. Candidate contracts include:
+
+- identity forwarding for parser-only rules;
+- binary repetition folding;
+- unary prefix construction;
+- call/member/index construction;
+- named statement-list and declaration constructors;
+- explicit normalization markers for compound assignment and `downto`.
+
+Constructor annotations must remain typed IR data. Backends must not infer
+semantic meaning from rule names or from generated syntax.
+
+### 3. Integrate precedence parsing without changing unary semantics
+
+The immediate technical problem is wiring BASCAL's `parse_expr` to generated
+precedence-climbing construction while preserving:
+
+```text
+-2^2 == -(2^2)
+```
+
+The solution must explicitly model:
+
+- the precedence atom;
+- prefix unary operators and their binding power;
+- postfix operators;
+- right-associative exponentiation;
+- operator token retention;
+- the shared semantic output type.
+
+Do not select `unary_expr` as a generic atom if that causes unary minus to
+consume exponentiation incorrectly. Add the required grammar/IR metadata for
+prefix and postfix behavior instead.
+
+The integration should produce `Expr::Binary` and `Expr::Unary` directly from
+the generated parser. A compatibility normalization pass may be used as an
+intermediate step, but it must not become the permanent consumer-facing API.
+
+### 4. Normalize expression leaves and postfix operations
+
+Replace provisional expression constructors with semantic nodes:
+
+- literal rules construct typed literal nodes while retaining spelling and
+  spans;
+- `true` and `false` normalize to BASCAL's selected runtime representation;
+- identifiers construct `Name`;
+- calls construct `Call`;
+- standalone member access constructs `Member`;
+- indexing constructs `Index`;
+- record literals construct `RecordLiteral`;
+- postfix chains are ordinary semantic nesting, not `Postfix` lists.
+
+Array-reference versus call ambiguity remains a semantic validation concern
+where the grammar cannot decide from syntax alone.
+
+### 5. Normalize assignments and control-flow syntax
+
+Make syntax-directed normalization explicit in the AST construction layer:
+
+- discard `let`;
+- convert `+=`, `-=`, `*=`, and `/=` to ordinary assignment plus a binary
+  expression, or record an explicit normalization marker where lvalue cloning
+  is not yet safe;
+- convert `downto` to `For` with an explicit step of `-1`;
+- preserve single-line and block `if` distinctions;
+- convert colon chains to ordinary statement lists with individual spans;
+- preserve labels and comments as required by BASCAL re-emission semantics.
+
+### 6. Shape declarations and records
+
+Move declarations from grammar wrappers to semantic nodes:
+
+- `Program` and file items;
+- records, fields, combined-record lists, and inline methods;
+- functions, procedures, fluent methods, and free-standing methods;
+- parameters, passing mode, array axes, defaults, and type references;
+- file declarations and other declaration-specific semantic forms.
+
+Context-sensitive receiver rules and duplicate combined members remain in the
+semantic validation pass.
+
+### 7. Shape statements and recovery
+
+Consolidate statement wrappers into semantic statement variants for:
+
+- assignment and expression statements;
+- I/O and runtime statements;
+- transfer and error-handling statements;
+- loops and conditional forms;
+- `select case`;
+- `try/catch/finally`;
+- labels and comments.
+
+Keep recovery points in the grammar and IR. Generated diagnostics should
+retain the furthest failure and source position while recovery remains
+explicit and target-backend-specific where necessary.
+
+### 8. Add source-span propagation
+
+Use parser byte offsets to construct spans for every semantic node. The span
+policy must define whether delimiters, keywords, and terminators are included
+for each node category. Add snapshots and direct AST assertions for:
+
+- literals and names;
+- nested expressions;
+- assignments;
+- colon-separated statements;
+- declarations and block constructs;
+- comments and preserved source text.
+
+### 9. Add semantic AST snapshots and validation fixtures
+
+Create representative BASCAL fixtures covering:
+
+- precedence and associativity;
+- unary minus versus exponentiation;
+- calls, members, and indexes;
+- records and methods;
+- compact statement chains;
+- comments and labels;
+- `downto`, compound assignment, and `let`;
+- error-handling and control-flow constructs.
+
+Snapshots should assert semantic shape and spans, not parser-production names.
+
+### 10. Keep recognition and regression gates green
+
+After every coherent parser or grammar change:
+
+1. add a focused regression test;
+2. run the relevant crate tests;
+3. run `bash rdgen/scripts/probe-bascal-files.sh` when grammar or parser
+   behavior changes;
+4. run `cargo test --workspace --offline`;
+5. run `cargo clippy --workspace --all-targets --offline`;
+6. run `git diff --check`;
+7. commit only green changes.
+
+The BASCAL corpus probe currently covers 83 `.bcl` files. A recognition
+regression must be narrowed or reverted before proceeding.
+
+## Backend order
+
+Rust remains the reference backend. Once the semantic IR and Rust emitter are
+stable:
+
+1. use C as the pressure-test backend for arena allocation and tagged unions;
+2. add C++ using the C strategy with optional RAII and `std::variant` choices;
+3. add Java, Go, C#, Kotlin, and Swift backends as their AST/error idioms are
+   specified;
+4. defer target-specific optimization and runtime integration until the
+   semantic frontend contract is stable.
+
+The IR must remain language-agnostic. SGDL is intentionally out of scope for
+the current implementation, but its future lowering should target the same
+parser-generation IR rather than introducing an EBNF-only semantic model.
+
+## Definition of completion
+
+The Rust/BASCAL parser work is complete when:
+
+- generated public AST nodes are semantic and source-span-aware;
+- no precedence-layer or parser-wrapper types leak into the public AST;
+- generated parsing constructs semantic expressions directly;
+- syntax-directed normalization is explicit and tested;
+- semantic validation has a defined diagnostic boundary;
+- all repository BASCAL files remain recognized;
+- semantic AST snapshots cover representative syntax;
+- the workspace tests and Clippy gates are green apart from documented
+  pre-existing warnings;
+- the generated AST is suitable as the frontend input to interpretation and
+  later transpilation stages.
