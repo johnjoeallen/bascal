@@ -67,10 +67,16 @@ record_decl      = "record" , identifier ,
                     [ "combines" , identifier , { "," , identifier } ] ,
                     { field_decl | inline_method } until { "end" } ,
                     "end" , "record" ;
-field_decl       = identifier , ":" , field_type ;
-field_type       = "string" , [ "(" , integer_literal , ")" ]
-                 | "int16" | "int" | "int32" | "float32" | "float64"
-                 | identifier ;
+field_decl       = name: identifier , ":" , field_type: field_type
+                   => FieldDeclaration(name: name, field_type: field_type) ;
+field_type       = "string" , capacity: [ "(" , integer_literal , ")" ]
+                   => StringType(capacity: capacity)
+                 | "int16" => Int16Type()
+                 | "int" => IntType()
+                 | "int32" => Int32Type()
+                 | "float32" => Float32Type()
+                 | "float64" => Float64Type()
+                 | record: identifier => RecordType(record: record) ;
 
 subprogram       = function: function_decl => Function(function: function)
                  | procedure: procedure_decl => Procedure(procedure: procedure)
@@ -93,12 +99,16 @@ inline_method    = "method" , name: identifier , "(" , parameters: [ param_list 
                    => InlineMethodDeclaration(name: name, parameters: parameters, result: result, body: body) ;
 return_type      = "integer" | "long" | "single" | "double" | "string"
                  | suffix ;
-param_list       = param , { "," , param } ;
-param            = [ "byref" | "byval" ] , typed_ident
-                   , [ array_axes ] , [ "=" , expr ]
-                   , [ "as" , identifier ] ;
-array_axes       = "(" , axis , { "," , axis } , ")" ;
-axis             = "?" | integer_literal ;
+param_list       = first: param , rest: { "," , param }
+                   => ParameterList(first: first, rest: rest) ;
+param            = [ "byref" | "byval" ] , name: typed_ident
+                   , axes: [ array_axes ] , default: [ "=" , expr ]
+                   , type_annotation: [ "as" , identifier ]
+                   => Parameter(name: name, axes: axes, default: default, type_annotation: type_annotation) ;
+array_axes       = "(" , first: axis , rest: { "," , axis } , ")"
+                   => ArrayAxes(first: first, rest: rest) ;
+axis             = "?" => InferredCapacity()
+                 | capacity: integer_literal => FixedCapacity(capacity: capacity) ;
 typed_ident      = identifier ;
 
 (* ----- Statements ----- *)
