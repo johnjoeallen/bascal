@@ -158,7 +158,7 @@ statement_core   = label: label_stmt => Label(label: label)
                  | try_stmt | end_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
-                 | assignment_or_expr_stmt ;
+                 | statement: assignment_or_expr_stmt => AssignmentOrExpression(statement: statement) ;
 label_stmt       = name: identifier , ":" => Label(name: name) ;
 comment_stmt     = raw: line_comment => Raw(comment: raw)
                  | block: block_comment => BlockComment(comment: block) ;
@@ -263,15 +263,21 @@ try_stmt         = "try" , { statement } until { "catch", "finally", "end try" }
                       "," , identifier , [ "," , identifier ] ,
                       { statement } until { "finally", "end try" } ] ,
                     [ "finally" , { statement } until { "end try" } ] , "end" , "try" ;
-assignment_or_expr_stmt = [ "let" ] ,
-                           ( mid_assign
-                           | assign_target , assignment_op , expr
-                           | expr
-                           ) ;
+assignment_or_expr_stmt = let_keyword: [ "let" ] , assignment: mid_assign
+                           => MidAssignment(let_keyword: let_keyword, assignment: assignment)
+                        | let_keyword: [ "let" ] , target: assign_target , operator: assignment_op , value: expr
+                           => Assignment(let_keyword: let_keyword, target: target, operator: operator, value: value)
+                        | let_keyword: [ "let" ] , value: expr
+                           => Expression(let_keyword: let_keyword, value: value) ;
 assign_target       = postfix_expr ;
-assignment_op       = "=" | "+=" | "-=" | "*=" | "/=" ;
-mid_assign          = "mid" , "$" , "(" , expr , "," , expr
-                      , [ "," , expr ] , ")" , "=" , expr ;
+assignment_op       = "=" => Assign()
+                    | "+=" => AddAssign()
+                    | "-=" => SubtractAssign()
+                    | "*=" => MultiplyAssign()
+                    | "/=" => DivideAssign() ;
+mid_assign          = "mid" , "$" , "(" , target: expr , "," , start: expr
+                      , length: [ "," , expr ] , ")" , "=" , value: expr
+                      => MidAssign(target: target, start: start, length: length, value: value) ;
 
 (* ----- Expressions -----
  * Precedence is represented explicitly in the IR rather than inferred by a
