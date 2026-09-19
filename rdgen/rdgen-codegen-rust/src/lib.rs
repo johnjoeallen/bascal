@@ -1544,6 +1544,8 @@ mod tests {
         assert!(generated.contains("pub enum FunctionDecl {\n    FunctionDeclaration {\n        name: Box<TypedIdent>,\n        parameters: Option<Box<ParamList>>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
         assert!(generated.contains("pub enum MethodDecl {\n    MethodDeclaration {\n        name: Box<Identifier>,\n        receiver: Box<Identifier>,\n        parameters: Option<Box<ParamList>>,\n        result: Option<(Token, Box<ReturnType>)>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
         assert!(generated.contains("pub enum FieldDecl {\n    FieldDeclaration {\n        name: Box<Identifier>,\n        field_type: Box<FieldType>,\n    },\n}"));
+        assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<Identifier>, Vec<(Token, Box<Identifier>)>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
+        assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n    },\n}"));
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
     }
 

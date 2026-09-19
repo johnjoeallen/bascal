@@ -63,10 +63,13 @@ shared_decl      = "shared" , name: identifier => SharedDeclaration(name: name) 
 require_decl     = "require" , path: identifier => RequireDeclaration(path: path) ;
 import_decl      = "import" , path: identifier => ImportDeclaration(path: path) ;
 
-record_decl      = "record" , identifier ,
-                    [ "combines" , identifier , { "," , identifier } ] ,
-                    { field_decl | inline_method } until { "end" } ,
-                    "end" , "record" ;
+record_decl      = "record" , name: identifier ,
+                    combines: [ "combines" , identifier , { "," , identifier } ] ,
+                    members: { record_member } until { "end" } ,
+                    "end" , "record"
+                    => RecordDeclaration(name: name, combines: combines, members: members) ;
+record_member    = field: field_decl => Field(field: field)
+                 | method: inline_method => InlineMethod(method: method) ;
 field_decl       = name: identifier , ":" , field_type: field_type
                    => FieldDeclaration(name: name, field_type: field_type) ;
 field_type       = "string" , capacity: [ "(" , integer_literal , ")" ]
