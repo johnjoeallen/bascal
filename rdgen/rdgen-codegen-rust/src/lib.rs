@@ -467,6 +467,11 @@ fn constant_name(name: &str) -> String {
 
 /// Emit parser control flow for the currently supported core element set.
 pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
+    let output_types = grammar
+        .rules
+        .iter()
+        .map(|rule| (rule.name.clone(), type_name(&rule.output.0)))
+        .collect::<std::collections::HashMap<_, _>>();
     for rule in &grammar.rules {
         for alternative in &rule.alternatives {
             if let Some(recovery) = &alternative.recovery {
@@ -549,7 +554,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             table.rule, table.rule
         ));
         if table.levels.iter().all(|level| level.constructor.is_some()) {
-            emit_precedence_ast_helper(&mut output, table)?;
+            emit_precedence_ast_helper(&mut output, table, &output_types)?;
         }
     }
     for rule in &grammar.rules {
@@ -566,8 +571,12 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
 fn emit_precedence_ast_helper(
     output: &mut String,
     table: &rdgen_ir::PrecedenceTable,
+    output_types: &std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
-    let rule_type = type_name(&table.rule);
+    let rule_type = output_types
+        .get(&table.rule)
+        .cloned()
+        .unwrap_or_else(|| type_name(&table.rule));
     let combine_name = format!("{}_precedence_combine", table.rule);
     output.push_str(&format!(
         "    fn {}(left: {}, operator: Token, right: {}) -> {} {{\n",
@@ -1184,6 +1193,18 @@ mod tests {
         assert!(generated.contains("left: Box<Expr>"));
         assert!(generated.contains("operator: Token"));
         assert!(generated.contains("right: Box<Expr>"));
+    }
+
+    #[test]
+    fn precedence_ast_helper_uses_declared_output_type() {
+        let grammar = compile(
+            "grammar Demo; start expr; output expr SemanticExpr; precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } expr = atom, \"+\", atom; atom = \"x\";",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("left: Box<SemanticExpr>"));
+        assert!(generated.contains("parse_expr_precedence_ast(&mut self, minimum_binding_power: usize, parse_atom: fn(&mut Self) -> Result<SemanticExpr, ParseError>"));
+        assert!(generated.contains("fn expr_precedence_combine(left: SemanticExpr, operator: Token, right: SemanticExpr) -> SemanticExpr"));
     }
 
     #[test]
