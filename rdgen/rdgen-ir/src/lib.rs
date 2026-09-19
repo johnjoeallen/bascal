@@ -89,6 +89,14 @@ pub enum Element {
         element: Box<Element>,
         span: Span,
     },
+    /// Parse `atom` and its trailing operators through the precedence table
+    /// declared for the enclosing rule, producing that rule's own output
+    /// type directly. Must be the sole element of its alternative.
+    Climb {
+        label: Option<String>,
+        atom: String,
+        span: Span,
+    },
     /// Commit the current ordered-choice alternative after the preceding
     /// discriminating input has matched.
     Cut {
@@ -144,12 +152,23 @@ pub enum RecoveryStrategy {
 pub struct PrecedenceTable {
     pub rule: String,
     pub levels: Vec<PrecedenceLevel>,
+    pub prefix_operators: Vec<PrefixOperator>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrecedenceLevel {
     pub operators: Vec<String>,
     pub associativity: Associativity,
+    pub constructor: Option<Constructor>,
+}
+
+/// A prefix operator whose operand is parsed through the same table's
+/// climbing loop, absorbing every operator at or above `binds_below`'s
+/// level but leaving weaker operators for the enclosing climb.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PrefixOperator {
+    pub operators: Vec<String>,
+    pub binds_below: String,
     pub constructor: Option<Constructor>,
 }
 
@@ -175,6 +194,14 @@ impl PrecedenceTable {
                     }
                 })
         })
+    }
+
+    /// The minimum binding power a prefix operator's operand-parse must use
+    /// so that only operators at or above `reference_operator`'s level are
+    /// absorbed into the operand.
+    pub fn prefix_operand_threshold(&self, reference_operator: &str) -> Option<usize> {
+        self.binding_powers(reference_operator)
+            .map(|(left_binding_power, _)| left_binding_power)
     }
 }
 
@@ -246,6 +273,7 @@ mod tests {
                 associativity: Associativity::Left,
                 constructor: None,
             }],
+            prefix_operators: Vec::new(),
         };
 
         assert_eq!(recovery.sync_tokens.len(), 2);
@@ -264,7 +292,37 @@ mod tests {
                 associativity: Associativity::Right,
                 constructor: None,
             }],
+            prefix_operators: Vec::new(),
         };
         assert_eq!(precedence.binding_powers("POWER"), Some((1, 1)));
+    }
+
+    #[test]
+    fn prefix_operand_threshold_matches_referenced_level_binding_power() {
+        let precedence = PrecedenceTable {
+            rule: "Expr".into(),
+            levels: vec![
+                PrecedenceLevel {
+                    operators: vec!["PLUS".into()],
+                    associativity: Associativity::Left,
+                    constructor: None,
+                },
+                PrecedenceLevel {
+                    operators: vec!["POWER".into()],
+                    associativity: Associativity::Right,
+                    constructor: None,
+                },
+            ],
+            prefix_operators: vec![PrefixOperator {
+                operators: vec!["MINUS".into()],
+                binds_below: "POWER".into(),
+                constructor: None,
+            }],
+        };
+        assert_eq!(
+            precedence.prefix_operand_threshold("POWER"),
+            Some(precedence.binding_powers("POWER").unwrap().0)
+        );
+        assert_eq!(precedence.prefix_operand_threshold("UNKNOWN"), None);
     }
 }

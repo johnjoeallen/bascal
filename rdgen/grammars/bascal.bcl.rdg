@@ -13,33 +13,27 @@ grammar Bascal;
 
 start program;
 
+(* Unary "not" and "-" are Pratt-style prefix operators: each `binds_below`
+ * clause names the tightest level its operand may absorb, so `not a = b`
+ * still reads as `not (a = b)` and `-2 ^ 2` still reads as `-(2 ^ 2)`. *)
 precedence expr {
     left "xor" => Binary(left: left, operator: operator, right: right);
     left "or", "||" => Binary(left: left, operator: operator, right: right);
     left "and", "&&" => Binary(left: left, operator: operator, right: right);
+    prefix "not" binds_below "=" => Unary(operator: operator, operand: operand);
     left "=", "<>", "<", ">", "<=", ">=" => Binary(left: left, operator: operator, right: right);
     left "+", "-" => Binary(left: left, operator: operator, right: right);
     left "mod" => Binary(left: left, operator: operator, right: right);
     left "\\" => Binary(left: left, operator: operator, right: right);
     left "*", "/" => Binary(left: left, operator: operator, right: right);
+    prefix "-" binds_below "^" => Unary(operator: operator, operand: operand);
     right "^" => Binary(left: left, operator: operator, right: right);
 }
 
-(* Expression precedence layers are parser machinery. They all return the
- * shared semantic Expr output; Identity annotations below forward values
- * across layers without exposing grammar-production enums. *)
+(* `expr` climbs the table above directly from `postfix_expr`; every other
+ * precedence layer that used to sit between them (xor/or/and/not/compare/
+ * add/mod/intdiv/mul/unary/pow) is now parser machinery the table replaces. *)
 output expr Expr;
-output xor_expr Expr;
-output or_expr Expr;
-output and_expr Expr;
-output not_expr Expr;
-output compare_expr Expr;
-output add_expr Expr;
-output mod_expr Expr;
-output intdiv_expr Expr;
-output mul_expr Expr;
-output unary_expr Expr;
-output pow_expr Expr;
 output postfix_expr Expr;
 output primary Expr;
 output ident_primary Expr;
@@ -384,48 +378,19 @@ mid_assign          = "mid" , "$" , "(" , target: expr , "," , start: expr
                       => MidAssign(target: target, start: start, length: length, value: value) ;
 
 (* ----- Expressions -----
- * Precedence is represented explicitly in the IR rather than inferred by a
- * backend. The order is xor < or/|| < and/&& < comparison < +/- < mod
- * < integer division < multiplication/division < unary - < ^ (right associative).
+ * Precedence is represented explicitly in the `precedence expr` table above
+ * rather than inferred by a backend or encoded as a rule ladder. `expr`
+ * climbs that table directly from `postfix_expr`; `compare_op` survives on
+ * its own because `case_value` below also spells `is <compare_op> value`.
  *)
 
-expr             = value: xor_expr => Identity(value: value) ;
-xor_expr         = first: or_expr , rest: { "xor" , or_expr }
-                   => Xor(first: first, rest: rest) ;
-or_expr          = first: and_expr , rest: { or_op , and_expr }
-                   => Or(first: first, rest: rest) ;
-or_op            = "or" => Or()
-                 | "||" => ShortCircuitOr() ;
-and_expr         = first: not_expr , rest: { and_op , not_expr }
-                   => And(first: first, rest: rest) ;
-and_op           = "and" => And()
-                 | "&&" => ShortCircuitAnd() ;
-not_expr         = "not" , operand: not_expr => Not(operand: operand)
-                 | value: compare_expr => Identity(value: value) ;
-compare_expr     = first: add_expr , rest: { compare_op , add_expr }
-                   => Compare(first: first, rest: rest) ;
+expr             = value: climb postfix_expr => Identity(value: value) ;
 compare_op       = "<>" => NotEqual()
                  | "<=" => LessOrEqual()
                  | ">=" => GreaterOrEqual()
                  | "=" => Equal()
                  | "<" => Less()
                  | ">" => Greater() ;
-add_expr         = first: mod_expr , rest: { add_op , mod_expr }
-                   => Add(first: first, rest: rest) ;
-add_op           = "+" => Add()
-                 | "-" => Subtract() ;
-mod_expr         = first: intdiv_expr , rest: { "mod" , intdiv_expr }
-                   => Mod(first: first, rest: rest) ;
-intdiv_expr      = first: mul_expr , rest: { "\\" , mul_expr }
-                   => IntegerDivide(first: first, rest: rest) ;
-mul_expr         = first: unary_expr , rest: { mul_op , unary_expr }
-                   => Multiply(first: first, rest: rest) ;
-mul_op           = "*" => Multiply()
-                 | "/" => Divide() ;
-unary_expr       = "-" , operand: unary_expr => Negate(operand: operand)
-                 | value: pow_expr => Identity(value: value) ;
-pow_expr         = base: postfix_expr , exponent: [ "^" , unary_expr ]
-                   => Power(base: base, exponent: exponent) ;
 postfix_expr     = base: primary , suffixes: { postfix_suffix }
                    => Postfix(base: base, suffixes: suffixes) ;
 postfix_suffix   = "." , member: identifier , arguments: [ "(" , [ arg_list ] , ")" ]

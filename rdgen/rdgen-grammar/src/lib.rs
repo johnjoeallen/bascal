@@ -275,6 +275,7 @@ impl<'a> Parser<'a> {
         reject_indirect_left_recursion(&rules)?;
         validate_precedence(&precedence, &rules)?;
         validate_precedence_constructors(&precedence)?;
+        validate_climb_elements(&rules, &precedence)?;
         let start = start.unwrap_or_else(|| {
             rules
                 .first()
@@ -298,7 +299,12 @@ impl<'a> Parser<'a> {
         let rule = self.ident()?;
         self.expect_symbol('{')?;
         let mut levels = Vec::new();
+        let mut prefix_operators = Vec::new();
         while !self.accept_symbol('}') {
+            if self.at_ident("prefix") {
+                prefix_operators.push(self.parse_prefix_operator()?);
+                continue;
+            }
             let associativity = match self.ident()?.as_str() {
                 "left" => rdgen_ir::Associativity::Left,
                 "right" => rdgen_ir::Associativity::Right,
@@ -333,7 +339,41 @@ impl<'a> Parser<'a> {
                 constructor,
             });
         }
-        Ok(rdgen_ir::PrecedenceTable { rule, levels })
+        Ok(rdgen_ir::PrecedenceTable {
+            rule,
+            levels,
+            prefix_operators,
+        })
+    }
+
+    fn parse_prefix_operator(&mut self) -> Result<rdgen_ir::PrefixOperator, String> {
+        self.expect_ident("prefix")?;
+        let mut operators = Vec::new();
+        while self.starts_literal() {
+            operators.push(
+                self.take_literal()
+                    .expect("starts_literal guarantees a literal"),
+            );
+            self.accept_symbol(',');
+        }
+        if operators.is_empty() {
+            return Err(self.error("prefix operator declaration requires an operator literal"));
+        }
+        self.expect_ident("binds_below")?;
+        let binds_below = self
+            .take_literal()
+            .ok_or_else(|| self.error("prefix operator declaration requires a binds_below operator literal"))?;
+        let constructor = if self.accept_arrow() {
+            Some(self.parse_constructor()?)
+        } else {
+            None
+        };
+        self.expect_symbol(';')?;
+        Ok(rdgen_ir::PrefixOperator {
+            operators,
+            binds_below,
+            constructor,
+        })
     }
 
     fn alternatives(&mut self) -> Result<Vec<ParsedAlternative>, String> {
@@ -390,6 +430,17 @@ impl<'a> Parser<'a> {
             let end = element_span(&element).end;
             return Ok(rdgen_ir::Element::SameLine {
                 element: Box::new(element),
+                span: rdgen_ir::Span::new(start, end),
+            });
+        }
+        if self.at_ident("climb") {
+            let start = self.current().span.start;
+            self.expect_ident("climb")?;
+            let atom = self.ident()?;
+            let end = self.previous().span.end;
+            return Ok(rdgen_ir::Element::Climb {
+                label,
+                atom,
                 span: rdgen_ir::Span::new(start, end),
             });
         }
@@ -702,6 +753,7 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
         | rdgen_ir::Element::Repeat { span, .. }
         | rdgen_ir::Element::Group { span, .. }
         | rdgen_ir::Element::SameLine { span, .. }
+        | rdgen_ir::Element::Climb { span, .. }
         | rdgen_ir::Element::Cut { span }
         | rdgen_ir::Element::LineEnd { span }
         | rdgen_ir::Element::Newline { span } => *span,
@@ -724,6 +776,7 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
         rdgen_ir::Element::SameLine { element, .. } => {
             starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
         }
+        rdgen_ir::Element::Climb { atom, .. } => atom == rule,
         rdgen_ir::Element::Cut { .. } => false,
         rdgen_ir::Element::LineEnd { .. } => false,
         rdgen_ir::Element::Newline { .. } => false,
@@ -817,6 +870,11 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             rdgen_ir::Element::SameLine { element, .. } => {
                 collect_labels(std::slice::from_ref(element.as_ref()), labels)
             }
+            rdgen_ir::Element::Climb { label, .. } => {
+                if let Some(label) = label {
+                    labels.push(label.clone());
+                }
+            }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
             rdgen_ir::Element::Newline { .. } => {}
@@ -859,6 +917,16 @@ fn resolve_element(
         }
         rdgen_ir::Element::Repeat { element, .. } => resolve_element(element, rule_names),
         rdgen_ir::Element::SameLine { element, .. } => resolve_element(element, rule_names),
+        rdgen_ir::Element::Climb { atom, span, .. } => {
+            if rule_names.contains(atom) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "climb references undefined atom rule '{}' at {}",
+                    atom, span.start
+                ))
+            }
+        }
         rdgen_ir::Element::Cut { .. } => Ok(()),
         rdgen_ir::Element::LineEnd { .. } => Ok(()),
         rdgen_ir::Element::Newline { .. } => Ok(()),
@@ -936,6 +1004,13 @@ fn validate_precedence(
                 table.rule
             ));
         }
+        // A climb-driven table *is* the sole declaration of its operators:
+        // there is no separate EBNF spelling left to cross-check against, so
+        // the "does this literal occur elsewhere" check only applies to
+        // tables whose rule still writes its own alternatives by hand.
+        let is_climb_driven = rule_map
+            .get(table.rule.as_str())
+            .is_some_and(|rule| is_sole_climb_rule(rule));
         let mut literals = std::collections::HashSet::new();
         let mut visited = std::collections::HashSet::new();
         collect_reachable_literals(
@@ -959,12 +1034,41 @@ fn validate_precedence(
                         operator, table.rule
                     ));
                 }
-                if !literals.contains(operator.as_str()) {
+                if !is_climb_driven && !literals.contains(operator.as_str()) {
                     return Err(format!(
                         "precedence operator {:?} in rule '{}' does not occur as a grammar literal",
                         operator, table.rule
                     ));
                 }
+            }
+        }
+        let mut prefix_operator_literals = std::collections::HashSet::new();
+        for prefix in &table.prefix_operators {
+            for operator in &prefix.operators {
+                if operator.is_empty() {
+                    return Err(format!(
+                        "prefix operator in rule '{}' must not be empty",
+                        table.rule
+                    ));
+                }
+                if !prefix_operator_literals.insert(operator.as_str()) {
+                    return Err(format!(
+                        "duplicate prefix operator {:?} in rule '{}'",
+                        operator, table.rule
+                    ));
+                }
+                if !is_climb_driven && !literals.contains(operator.as_str()) {
+                    return Err(format!(
+                        "prefix operator {:?} in rule '{}' does not occur as a grammar literal",
+                        operator, table.rule
+                    ));
+                }
+            }
+            if !operators.contains(prefix.binds_below.as_str()) {
+                return Err(format!(
+                    "prefix operator binds_below {:?} in rule '{}' does not name a declared precedence level operator",
+                    prefix.binds_below, table.rule
+                ));
             }
         }
     }
@@ -1005,8 +1109,91 @@ fn validate_precedence_constructors(
                 }
             }
         }
+        for prefix in &table.prefix_operators {
+            let Some(constructor) = &prefix.constructor else {
+                continue;
+            };
+            let required = ["operand", "operator"];
+            if constructor.fields.len() != required.len()
+                || required.iter().any(|field| {
+                    constructor
+                        .fields
+                        .iter()
+                        .filter(|binding| binding.source_label == *field)
+                        .count()
+                        != 1
+                })
+            {
+                return Err(format!(
+                    "prefix constructor '{}' for rule '{}' must bind exactly operand and operator",
+                    constructor.type_name.0, table.rule
+                ));
+            }
+            let mut field_names = std::collections::HashSet::new();
+            for field in &constructor.fields {
+                if !field_names.insert(field.field.as_str()) {
+                    return Err(format!(
+                        "prefix constructor '{}' for rule '{}' has duplicate output field '{}'",
+                        constructor.type_name.0, table.rule, field.field
+                    ));
+                }
+            }
+        }
     }
     Ok(())
+}
+
+fn is_sole_climb_rule(rule: &rdgen_ir::Rule) -> bool {
+    rule.alternatives.len() == 1
+        && rule.alternatives[0].elements.len() == 1
+        && matches!(
+            rule.alternatives[0].elements[0],
+            rdgen_ir::Element::Climb { .. }
+        )
+}
+
+fn validate_climb_elements(
+    rules: &[rdgen_ir::Rule],
+    precedence: &[rdgen_ir::PrecedenceTable],
+) -> Result<(), String> {
+    for rule in rules {
+        for alternative in &rule.alternatives {
+            let is_sole_climb = alternative.elements.len() == 1
+                && matches!(alternative.elements[0], rdgen_ir::Element::Climb { .. });
+            if is_sole_climb {
+                if !precedence.iter().any(|table| table.rule == rule.name) {
+                    return Err(format!(
+                        "rule '{}' uses climb but declares no precedence table",
+                        rule.name
+                    ));
+                }
+                continue;
+            }
+            if alternative_contains_climb(&alternative.elements) {
+                return Err(format!(
+                    "climb must be the sole element of its alternative in rule '{}'",
+                    rule.name
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn alternative_contains_climb(elements: &[rdgen_ir::Element]) -> bool {
+    elements.iter().any(|element| match element {
+        rdgen_ir::Element::Climb { .. } => true,
+        rdgen_ir::Element::Group { alternatives, .. } => alternatives
+            .iter()
+            .any(|alternative| alternative_contains_climb(alternative)),
+        rdgen_ir::Element::Repeat { element, .. } => {
+            alternative_contains_climb(std::slice::from_ref(element.as_ref()))
+        }
+        rdgen_ir::Element::SameLine { element, .. } => {
+            alternative_contains_climb(std::slice::from_ref(element.as_ref()))
+        }
+        _ => false,
+    })
 }
 
 fn collect_reachable_literals(
@@ -1057,6 +1244,9 @@ fn collect_literal_values(
             rdgen_ir::Element::Newline { .. } => {}
             rdgen_ir::Element::Rule { rule, .. } => {
                 collect_reachable_literals(rule, rules, visited, literals);
+            }
+            rdgen_ir::Element::Climb { atom, .. } => {
+                collect_reachable_literals(atom, rules, visited, literals);
             }
             rdgen_ir::Element::Token { .. } => {}
         }
@@ -1134,6 +1324,11 @@ fn first_rule_names<'a>(
             rdgen_ir::Element::SameLine { element, .. } => {
                 first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
             }
+            rdgen_ir::Element::Climb { atom, .. } => {
+                if names.contains(atom.as_str()) {
+                    output.push(atom.as_str());
+                }
+            }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
             rdgen_ir::Element::Newline { .. } => {}
@@ -1178,6 +1373,7 @@ fn nullable_element(
         rdgen_ir::Element::LineEnd { .. } => false,
         rdgen_ir::Element::Newline { .. } => false,
         rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
+        rdgen_ir::Element::Climb { atom, .. } => nullable.contains(atom.as_str()),
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
     }
@@ -1346,6 +1542,91 @@ mod tests {
         assert!(error.contains(
             "precedence constructor 'Binary' for rule 'expr' has duplicate output field 'left'"
         ));
+    }
+
+    #[test]
+    fn parses_prefix_operator_declarations() {
+        let grammar = compile(
+            "grammar Expr; precedence expr { \
+             prefix \"-\" binds_below \"^\" => Unary(operator: operator, operand: operand); \
+             right \"^\" => Binary(left: left, operator: operator, right: right); \
+             } expr = climb atom; atom = value: \"x\" => Identity(value: value) | \"-\", operand: atom => Identity(value: operand) | \"^\";",
+        );
+        // The atom rule references "-" and "^" via its own alternatives so both
+        // operators are reachable, independent of climb wiring correctness.
+        let grammar = grammar.unwrap();
+        let table = &grammar.precedence[0];
+        assert_eq!(table.prefix_operators.len(), 1);
+        assert_eq!(table.prefix_operators[0].operators, vec!["-".to_owned()]);
+        assert_eq!(table.prefix_operators[0].binds_below, "^");
+        let constructor = table.prefix_operators[0]
+            .constructor
+            .as_ref()
+            .expect("constructor annotation");
+        assert_eq!(constructor.type_name.0, "Unary");
+    }
+
+    #[test]
+    fn rejects_prefix_operator_binding_below_unknown_operator() {
+        let error = compile(
+            "grammar Expr; precedence expr { prefix \"-\" binds_below \"^\"; left \"+\"; } expr = \"x\", ( \"+\" | \"-\" | \"^\" );",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "prefix operator binds_below \"^\" in rule 'expr' does not name a declared precedence level operator"
+        ));
+    }
+
+    #[test]
+    fn rejects_incomplete_prefix_constructor_annotations() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\"; prefix \"-\" binds_below \"+\" => Unary(operand: operand); } expr = \"x\", ( \"+\" | \"-\" );",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "prefix constructor 'Unary' for rule 'expr' must bind exactly operand and operator"
+        ));
+    }
+
+    #[test]
+    fn parses_climb_element_wired_to_its_precedence_table() {
+        let grammar = compile(
+            "grammar Expr; start expr; output expr Value; output atom Value; \
+             precedence expr { left \"+\" => Binary(left: left, operator: operator, right: right); } \
+             expr = value: climb atom => Identity(value: value); atom = \"x\" | \"+\";",
+        )
+        .unwrap();
+        let rule = grammar
+            .rules
+            .iter()
+            .find(|rule| rule.name == "expr")
+            .expect("expr rule");
+        match &rule.alternatives[0].elements[0] {
+            rdgen_ir::Element::Climb { atom, label, .. } => {
+                assert_eq!(atom, "atom");
+                assert_eq!(label.as_deref(), Some("value"));
+            }
+            other => panic!("expected a climb element, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn rejects_climb_without_a_matching_precedence_table() {
+        let error = compile(
+            "grammar Expr; expr = value: climb atom => Identity(value: value); atom = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains("rule 'expr' uses climb but declares no precedence table"));
+    }
+
+    #[test]
+    fn rejects_climb_mixed_with_other_elements() {
+        let error = compile(
+            "grammar Expr; precedence expr { left \"+\"; } \
+             expr = value: climb atom, \"+\" => Identity(value: value); atom = \"x\";",
+        )
+        .unwrap_err();
+        assert!(error.contains("climb must be the sole element of its alternative in rule 'expr'"));
     }
 
     #[test]

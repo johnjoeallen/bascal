@@ -114,6 +114,9 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
             Element::Repeat {
                 label: Some(name), ..
             } if name == label => return Some(element),
+            Element::Climb {
+                label: Some(name), ..
+            } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
                     if let Some(found) = find_labeled_element(alternative, label) {
@@ -156,6 +159,7 @@ fn c_field_type(element: &Element) -> String {
         Element::Cut { .. } => "bool".into(),
         Element::LineEnd { .. } => "bool".into(),
         Element::Newline { .. } => "bool".into(),
+        Element::Climb { .. } => "bool".into(),
     }
 }
 
@@ -181,6 +185,7 @@ fn c_value_type(element: &Element) -> String {
         Element::Cut { .. } => "bool".into(),
         Element::LineEnd { .. } => "bool".into(),
         Element::Newline { .. } => "bool".into(),
+        Element::Climb { .. } => "bool".into(),
     }
 }
 
@@ -199,6 +204,7 @@ fn c_collection_key(element: &Element) -> String {
         Element::Cut { .. } => "cut".into(),
         Element::LineEnd { .. } => "line_end".into(),
         Element::Newline { .. } => "newline".into(),
+        Element::Climb { .. } => "climb".into(),
     }
 }
 
@@ -460,6 +466,7 @@ fn is_c_supported_element(element: &Element) -> bool {
         Element::Cut { .. } => true,
         Element::LineEnd { .. } => false,
         Element::Newline { .. } => false,
+        Element::Climb { .. } => false,
     }
 }
 

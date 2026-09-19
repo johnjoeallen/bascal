@@ -193,6 +193,46 @@ fn emit_rule(
             }
             output.push_str("    },\n");
         }
+        for prefix in &table.prefix_operators {
+            let Some(constructor) = &prefix.constructor else {
+                continue;
+            };
+            let variant = type_name(&constructor.type_name.0);
+            if !variants.insert(variant.clone()) {
+                if precedence_variants
+                    .get(&variant)
+                    .is_some_and(|fields| same_constructor_fields(fields, &constructor.fields))
+                {
+                    continue;
+                }
+                return Err(format!(
+                    "duplicate AST variant '{}' in rule '{}', including precedence constructors",
+                    variant, rule.name
+                ));
+            }
+            precedence_variants.insert(variant.clone(), constructor.fields.clone());
+            output.push_str(&format!("    {} {{\n", variant));
+            let mut field_names = std::collections::HashSet::new();
+            for field in &constructor.fields {
+                let generated_name = field_name(&field.field);
+                if !field_names.insert(generated_name.clone()) {
+                    return Err(format!(
+                        "prefix constructor fields '{}' collide after Rust escaping in rule '{}'",
+                        field.field, rule.name
+                    ));
+                }
+                let field_type = match field.source_label.as_str() {
+                    "operand" => format!("Box<{}>", type_name(&rule.output.0)),
+                    "operator" => "Token".to_owned(),
+                    _ => unreachable!("prefix constructor validation guarantees roles"),
+                };
+                output.push_str(&format!(
+                    "        {}: {},\n",
+                    generated_name, field_type
+                ));
+            }
+            output.push_str("    },\n");
+        }
     }
     output.push_str("}\n\n");
     Ok(())
@@ -240,6 +280,9 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
                 label: Some(name), ..
             } if name == label => return Some(element),
             Element::Repeat {
+                label: Some(name), ..
+            } if name == label => return Some(element),
+            Element::Climb {
                 label: Some(name), ..
             } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
@@ -292,6 +335,13 @@ fn rust_type(element: &Element, output_types: &std::collections::HashMap<String,
         }
         Element::Group { .. } => "()".into(),
         Element::SameLine { element, .. } => rust_type(element, output_types),
+        Element::Climb { atom, .. } => format!(
+            "Box<{}>",
+            output_types
+                .get(atom)
+                .cloned()
+                .unwrap_or_else(|| type_name(atom))
+        ),
         Element::Cut { .. } => "()".into(),
         Element::LineEnd { .. } => "()".into(),
         Element::Newline { .. } => "()".into(),
@@ -538,6 +588,9 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
     output.push_str(
         "    pub fn parse_precedence_climbing_tokens<T>(\n        &mut self,\n        minimum_binding_power: usize,\n        parse_atom: fn(&mut Self) -> Result<T, ParseError>,\n        parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>,\n        binding_power: fn(&str) -> Option<(usize, usize)>,\n        combine: fn(T, Token, T) -> T,\n    ) -> Result<T, ParseError> {\n        let mut left = match parse_atom(self) {\n            Ok(value) => value,\n            Err(error) => { self.remember_error(&error); return Err(error); }\n        };\n        loop {\n            let operator_start = self.position;\n            let Some(operator) = match parse_operator(self) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); return Err(error); }\n            } else {\n                self.position = operator_start;\n                break;\n            };\n            let Some((left_binding_power, right_binding_power)) = binding_power(&operator.0) else {\n                let error = ParseError { message: format!(\"unknown precedence operator {:?}\", operator.0), position: operator_start };\n                self.remember_error(&error);\n                return Err(error);\n            };\n            if left_binding_power < minimum_binding_power {\n                self.position = operator_start;\n                break;\n            }\n            let right = match self.parse_precedence_climbing_tokens(right_binding_power, parse_atom, parse_operator, binding_power, combine) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); return Err(error); }\n            };\n            left = combine(left, operator, right);\n        }\n        Ok(left)\n    }\n\n",
     );
+    output.push_str(
+        "    /// Like `parse_precedence_climbing_tokens`, but a failed right-hand\n    /// operand backtracks the whole trailing operator instead of propagating\n    /// the error, so an operator literal that turns out to introduce\n    /// something else entirely (for example a comment marker sharing a\n    /// leading character with a binary operator) is simply left unconsumed.\n    pub fn parse_precedence_climbing_tokens_backtracking<T>(\n        &mut self,\n        minimum_binding_power: usize,\n        parse_atom: fn(&mut Self) -> Result<T, ParseError>,\n        parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>,\n        binding_power: fn(&str) -> Option<(usize, usize)>,\n        combine: fn(T, Token, T) -> T,\n    ) -> Result<T, ParseError> {\n        let mut left = match parse_atom(self) {\n            Ok(value) => value,\n            Err(error) => { self.remember_error(&error); return Err(error); }\n        };\n        loop {\n            let operator_start = self.position;\n            let parsed_operator = match parse_operator(self) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); self.position = operator_start; break; }\n            };\n            let Some(operator) = parsed_operator else {\n                self.position = operator_start;\n                break;\n            };\n            let Some((left_binding_power, right_binding_power)) = binding_power(&operator.0) else {\n                self.position = operator_start;\n                break;\n            };\n            if left_binding_power < minimum_binding_power {\n                self.position = operator_start;\n                break;\n            }\n            let right = match self.parse_precedence_climbing_tokens_backtracking(right_binding_power, parse_atom, parse_operator, binding_power, combine) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); self.position = operator_start; break; }\n            };\n            left = combine(left, operator, right);\n        }\n        Ok(left)\n    }\n\n",
+    );
     for table in &grammar.precedence {
         if grammar
             .rules
@@ -555,10 +608,33 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
         ));
         if table.levels.iter().all(|level| level.constructor.is_some()) {
             emit_precedence_ast_helper(&mut output, table, &output_types)?;
+            if let Some(atom) = climb_atom_for_table(grammar, table) {
+                if grammar
+                    .rules
+                    .iter()
+                    .any(|rule| rule.name == format!("{}_operator", table.rule))
+                {
+                    return Err(format!(
+                        "Rust precedence wrapper for rule '{}' collides with grammar rule '{}_operator'",
+                        table.rule, table.rule
+                    ));
+                }
+                if grammar
+                    .rules
+                    .iter()
+                    .any(|rule| rule.name == format!("{}_climb_atom", table.rule))
+                {
+                    return Err(format!(
+                        "Rust precedence wrapper for rule '{}' collides with grammar rule '{}_climb_atom'",
+                        table.rule, table.rule
+                    ));
+                }
+                emit_precedence_climb_helpers(&mut output, table, atom, &output_types)?;
+            }
         }
     }
     for rule in &grammar.rules {
-        emit_parser_rule(&mut output, rule)?;
+        emit_parser_rule(&mut output, rule, grammar)?;
     }
     output = output.replace(
         "let Some(operator) = match parse_operator(self) {\n                Ok(value) => value,\n                Err(error) => { self.remember_error(&error); return Err(error); }\n            } else {",
@@ -616,7 +692,136 @@ fn emit_precedence_ast_helper(
     Ok(())
 }
 
-fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
+/// Find the atom rule a `climb` element uses for the precedence table
+/// matching `table.rule`, if any rule wires itself to that table.
+fn climb_atom_for_table<'a>(grammar: &'a Grammar, table: &rdgen_ir::PrecedenceTable) -> Option<&'a str> {
+    grammar
+        .rules
+        .iter()
+        .find(|rule| rule.name == table.rule)
+        .and_then(|rule| {
+            rule.alternatives.iter().find_map(|alternative| {
+                alternative.elements.iter().find_map(|element| match element {
+                    Element::Climb { atom, .. } => Some(atom.as_str()),
+                    _ => None,
+                })
+            })
+        })
+}
+
+/// Emit the operator matcher (and, when the table declares prefix operators,
+/// the prefix-aware atom wrapper) that a `climb` element needs to drive the
+/// table's precedence-climbing loop end to end.
+fn emit_precedence_climb_helpers(
+    output: &mut String,
+    table: &rdgen_ir::PrecedenceTable,
+    atom: &str,
+    output_types: &std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let rule_type = output_types
+        .get(&table.rule)
+        .cloned()
+        .unwrap_or_else(|| type_name(&table.rule));
+
+    // Longest literal first so overlapping spellings (e.g. "<" vs "<=") are
+    // never mismatched by a shorter prefix.
+    let mut operators: Vec<&str> = table
+        .levels
+        .iter()
+        .flat_map(|level| level.operators.iter().map(String::as_str))
+        .collect();
+    operators.sort_by_key(|operator| std::cmp::Reverse(operator.len()));
+
+    output.push_str(&format!(
+        "    fn parse_{}_operator(&mut self) -> Result<Option<Token>, ParseError> {{\n        let start = self.position;\n",
+        table.rule
+    ));
+    for operator in &operators {
+        output.push_str(&format!(
+            "        self.position = start;\n        if let Ok(token) = self.expect_literal({:?}) {{ return Ok(Some(token)); }}\n",
+            operator
+        ));
+    }
+    output.push_str("        self.position = start;\n        Ok(None)\n    }\n\n");
+
+    if table.prefix_operators.is_empty() {
+        return Ok(());
+    }
+
+    output.push_str(&format!(
+        "    fn parse_{}_climb_atom(&mut self) -> Result<{}, ParseError> {{\n        let start = self.position;\n",
+        table.rule, rule_type
+    ));
+    for prefix in &table.prefix_operators {
+        let threshold = table
+            .prefix_operand_threshold(&prefix.binds_below)
+            .expect("precedence validation guarantees binds_below names a declared level");
+        let Some(constructor) = &prefix.constructor else {
+            continue;
+        };
+        let variant = type_name(&constructor.type_name.0);
+        for operator in &prefix.operators {
+            output.push_str(&format!(
+                "        self.position = start;\n        if let Ok(operator_token) = self.expect_literal({:?}) {{\n",
+                operator
+            ));
+            output.push_str(&format!(
+                "            let operand = match self.parse_precedence_climbing_tokens_backtracking({}, Self::parse_{}_climb_atom, Self::parse_{}_operator, {}_binding_power, Self::{}_precedence_combine) {{ Ok(value) => value, Err(error) => return Err(error) }};\n",
+                threshold, table.rule, table.rule, table.rule, table.rule
+            ));
+            output.push_str(&format!("            return Ok({}::{} {{\n", rule_type, variant));
+            for field in &constructor.fields {
+                let value = match field.source_label.as_str() {
+                    "operand" => "Box::new(operand)".to_owned(),
+                    "operator" => "operator_token".to_owned(),
+                    _ => unreachable!("prefix constructor validation guarantees roles"),
+                };
+                output.push_str(&format!("                {}: {},\n", field_name(&field.field), value));
+            }
+            output.push_str("            });\n        }\n");
+        }
+    }
+    output.push_str("        self.position = start;\n");
+    output.push_str(&format!("        self.parse_{}()\n    }}\n\n", atom));
+    Ok(())
+}
+
+fn emit_climb_binding(
+    output: &mut String,
+    variable: &str,
+    rule_name: &str,
+    grammar: &Grammar,
+    indent: &str,
+) -> Result<(), String> {
+    let table = grammar
+        .precedence
+        .iter()
+        .find(|table| table.rule == rule_name)
+        .ok_or_else(|| {
+            format!(
+                "rule '{}' uses climb but declares no precedence table",
+                rule_name
+            )
+        })?;
+    let atom_fn = if table.prefix_operators.is_empty() {
+        let atom = climb_atom_for_table(grammar, table).ok_or_else(|| {
+            format!(
+                "climb in rule '{}' could not resolve its atom rule",
+                rule_name
+            )
+        })?;
+        format!("Self::parse_{}", atom)
+    } else {
+        format!("Self::parse_{}_climb_atom", rule_name)
+    };
+    output.push_str(&format!(
+        "{}let {} = Box::new(self.parse_precedence_climbing_tokens_backtracking(0, {}, Self::parse_{}_operator, {}_binding_power, Self::{}_precedence_combine)?);\n",
+        indent, variable, atom_fn, rule_name, rule_name, rule_name
+    ));
+    Ok(())
+}
+
+fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Result<(), String> {
     output.push_str(&format!(
         "    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n",
         rule.name,
@@ -636,6 +841,10 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         ));
         for (index, element) in alternative.elements.iter().enumerate() {
             let variable = element_variable(element, index);
+            if matches!(element, Element::Climb { .. }) {
+                emit_climb_binding(output, &variable, &rule.name, grammar, "            ")?;
+                continue;
+            }
             emit_element_binding(output, element, &variable, "            ")?;
         }
         let construction = if is_identity_constructor(alternative) {
@@ -703,6 +912,9 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::LineEnd { .. } => Ok("self.expect_line_end()?".into()),
         Element::Newline { .. } => Ok("self.expect_newline()?".into()),
         Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
+        Element::Climb { .. } => {
+            Err("climb elements may not be nested inside groups or repetitions".into())
+        }
     }
 }
 
@@ -964,6 +1176,9 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
         Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
         Element::LineEnd { .. } => Ok("self.expect_line_end()?".into()),
         Element::Newline { .. } => Ok("self.expect_newline()?".into()),
+        Element::Climb { .. } => {
+            Err("climb elements may not be nested inside groups or repetitions".into())
+        }
     }
 }
 
@@ -998,6 +1213,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         | Element::Token { label, .. }
         | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
+        Element::Climb { label, .. } => label.as_deref(),
         Element::SameLine { .. } => None,
         Element::Cut { .. } => None,
         Element::LineEnd { .. } => None,
@@ -1756,7 +1972,7 @@ fn main() {
     let debug = format!("{ast:?}");
     assert_eq!(debug.matches("Assignment {").count(), 2);
     assert!(debug.contains("continuation: Some"));
-    assert!(debug.contains("Add {"));
+    assert!(debug.contains("Binary {"));
     for text in ["x%", "y%", "2", "3", "4"] {
         assert!(debug.contains(&format!("Token(\"{}\")", text)), "missing {}: {}", text, debug);
     }
@@ -1948,20 +2164,25 @@ fn main() {
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Core {\n        core: Box<StatementCore>,\n        continuation: Option<(Token, Box<Statement>)>,\n    },\n}"));
         assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
-        assert!(generated.contains("pub enum Expr {\n    Xor {\n        first: Box<Expr>,\n        rest: Vec<(Token, Box<Expr>)>,\n    },"));
+        assert!(generated.contains("pub enum Expr {"));
         assert!(!generated.contains("pub enum XorExpr {"));
         assert!(!generated.contains("pub enum AddExpr {"));
         assert!(!generated.contains("pub enum PostfixExpr {"));
         assert!(!generated.contains("pub enum Primary {"));
+        assert!(!generated.contains("pub enum OrExpr {"));
+        assert!(!generated.contains("pub enum UnaryExpr {"));
+        assert!(!generated.contains("pub enum PowExpr {"));
         assert!(generated.contains("pub enum ReturnType {\n    Integer,\n    Long,\n    Single,\n    Double,\n    String,\n    Suffix {\n        value: Box<Suffix>,\n    },\n}"));
         assert!(generated.contains("pub enum CompareOp {\n    NotEqual,\n    LessOrEqual,\n    GreaterOrEqual,\n    Equal,\n    Less,\n    Greater,\n}"));
         assert!(!generated.lines().any(|line| {
             let trimmed = line.trim();
             trimmed.starts_with("Alt") && trimmed.ends_with(',')
         }));
-        assert!(generated.contains("    Or {\n        first: Box<Expr>,\n        rest: Vec<(Box<OrOp>, Box<Expr>)>,\n    },"));
         assert!(generated.contains("    Binary {\n        left: Box<Expr>,\n        operator: Token,\n        right: Box<Expr>,\n    },"));
+        assert!(generated.contains("    Unary {\n        operator: Token,\n        operand: Box<Expr>,\n    },"));
         assert!(generated.contains("constructor_type: Some(\"Binary\")"));
+        assert!(generated.contains("fn parse_expr_operator(&mut self)"));
+        assert!(generated.contains("fn parse_expr_climb_atom(&mut self)"));
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
         assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
@@ -2265,6 +2486,70 @@ fn main() {
             panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
         assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_climb_keeps_unary_minus_weaker_than_exponentiation() {
+        let grammar = compile(
+            "grammar Expr; start expr; output expr Val; output atom Val; \
+             precedence expr { \
+             left \"+\" => Binary(left: left, operator: operator, right: right); \
+             prefix \"-\" binds_below \"^\" => Unary(operator: operator, operand: operand); \
+             right \"^\" => Binary(left: left, operator: operator, right: right); \
+             } \
+             expr = value: climb atom => Identity(value: value); \
+             atom = value: \"2\" => Two() | value: \"3\" => Three();",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("climb-unary-minus");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\n{}",
+                generated.to_str().unwrap(),
+                r#"
+fn main() {
+    let mut negate_then_power = Parser::new("-2^2");
+    let value = negate_then_power.parse().unwrap();
+    assert_eq!(
+        format!("{value:?}"),
+        "Unary { operator: Token(\"-\"), operand: Binary { left: Two, operator: Token(\"^\"), right: Two } }"
+    );
+    let mut negate_then_add = Parser::new("-2+3");
+    let value = negate_then_add.parse().unwrap();
+    assert_eq!(
+        format!("{value:?}"),
+        "Binary { left: Unary { operator: Token(\"-\"), operand: Two }, operator: Token(\"+\"), right: Three }"
+    );
+    let mut right_assoc = Parser::new("2^3^2");
+    let value = right_assoc.parse().unwrap();
+    assert_eq!(
+        format!("{value:?}"),
+        "Binary { left: Two, operator: Token(\"^\"), right: Binary { left: Three, operator: Token(\"^\"), right: Two } }"
+    );
+}
+"#
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        let output = std::process::Command::new(&binary).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     #[test]

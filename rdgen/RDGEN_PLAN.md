@@ -94,18 +94,35 @@ The current branch has these capabilities:
 - explicit BASCAL `Expr` output shared by precedence-layer rules;
 - `Binary(left, operator, right)` precedence metadata and generated AST
   helpers;
-- BASCAL corpus recognition coverage.
+- a `climb <atom>` grammar element that wires a rule directly to its
+  `precedence` table, replacing the hand-written layer ladder;
+- `prefix <op> binds_below <op> => Constructor(...)` precedence-table
+  entries, generating a Pratt-style prefix-aware atom so `-2^2` still
+  parses as `-(2^2)` and `not a = b` as `not (a = b)`;
+- a backtracking precedence-climbing primitive
+  (`parse_precedence_climbing_tokens_backtracking`) used by `climb` so an
+  operator literal that turns out to introduce something else (e.g. a
+  comment marker sharing a leading character with an operator) is left
+  unconsumed instead of hard-failing the parse;
+- BASCAL corpus recognition coverage, now generated entirely from the
+  `climb`-driven `expr` rule.
 
 Recent milestones:
 
+- wired BASCAL's `expr` rule to `climb postfix_expr` against the
+  `precedence expr` table, deleting `xor_expr` through `pow_expr` and their
+  provisional `Xor`/`Or`/`And`/`Not`/`Compare`/`Add`/`Mod`/`IntegerDivide`/
+  `Multiply`/`Negate`/`Power`/`Postfix` constructors in favor of `Binary`
+  and `Unary`;
 - `d003141` — share BASCAL expression AST output;
 - `f44b2fe` — annotate BASCAL precedence binary nodes;
 - `c00684d` — use semantic output in precedence helpers.
 
-The generated BASCAL `Expr` is transitional. It no longer exposes
-`XorExpr`, `AddExpr`, `PostfixExpr`, or `Primary`, but it still contains
-parser-shaped repeated operator fields and provisional names that must be
-normalized.
+The generated BASCAL `Expr` now exposes only semantic nodes at the binary/
+unary layer (`Binary`, `Unary`) plus the leaf/postfix shapes
+(`Postfix`, `Member`, `CallOrArray`, `FileOrRecordIndex`, literals, `Name`,
+records). Leaf normalization (literals, calls, members, indexing) and
+declaration/statement shaping (steps 4 onward below) are still outstanding.
 
 ## Implementation sequence
 
