@@ -1554,6 +1554,9 @@ mod tests {
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Core {\n        core: Box<StatementCore>,\n        continuation: Option<(Token, Box<Statement>)>,\n    },\n}"));
         assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
+        assert!(generated.contains("pub enum Expr {\n    Expression {\n        value: Box<XorExpr>,\n    },\n}"));
+        assert!(generated.contains("pub enum OrExpr {\n    Or {\n        first: Box<AndExpr>,\n        rest: Vec<(Box<OrOp>, Box<AndExpr>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum Primary {\n    Float {\n        value: Box<FloatLiteral>,\n    },"));
     }
 
     #[test]
