@@ -773,6 +773,14 @@ fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
                     ));
                 }
             }
+            if alternative.constructor.type_name.0 == "Identity"
+                && alternative.constructor.fields.len() != 1
+            {
+                return Err(format!(
+                    "Identity constructor in rule '{}' must bind exactly one field",
+                    rule.name
+                ));
+            }
         }
     }
     Ok(())
@@ -1562,6 +1570,15 @@ mod tests {
         let error =
             compile("grammar Demo; start = value: \"x\" => Node(other: value2); ").unwrap_err();
         assert!(error.contains("constructor field 'other' references unknown label 'value2'"));
+    }
+
+    #[test]
+    fn rejects_identity_constructor_with_multiple_fields() {
+        let error = compile(
+            "grammar Demo; start wrapper; wrapper = left: \"a\", right: \"b\" => Identity(left: left, right: right);",
+        )
+        .unwrap_err();
+        assert!(error.contains("Identity constructor in rule 'wrapper' must bind exactly one field"));
     }
 
     #[test]

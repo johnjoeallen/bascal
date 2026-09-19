@@ -98,6 +98,9 @@ fn emit_rule(
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
     for (index, alternative) in rule.alternatives.iter().enumerate() {
+        if is_identity_constructor(alternative) {
+            continue;
+        }
         let variant = variant_name(rule, alternative, index);
         if !variants.insert(variant.clone()) {
             if rule.lexical && is_default_constructor(rule, alternative) {
@@ -190,6 +193,11 @@ fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) 
 
 fn is_default_constructor(rule: &Rule, alternative: &rdgen_ir::Alternative) -> bool {
     alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name
+}
+
+fn is_identity_constructor(alternative: &rdgen_ir::Alternative) -> bool {
+    alternative.constructor.type_name.0 == "Identity"
+        && alternative.constructor.fields.len() == 1
 }
 
 fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a Element> {
@@ -591,7 +599,9 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             let variable = element_variable(element, index);
             emit_element_binding(output, element, &variable, "            ")?;
         }
-        let construction = if rule.lexical && is_default_constructor(rule, alternative) {
+        let construction = if is_identity_constructor(alternative) {
+            field_name(&alternative.constructor.fields[0].source_label)
+        } else if rule.lexical && is_default_constructor(rule, alternative) {
             format!(
                 "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()), span: SourceSpan {{ start: lexical_token_start, end: self.position }} }}",
                 type_name(&rule.output.0)
@@ -1017,6 +1027,19 @@ mod tests {
         assert!(generated.contains("    Term {\n        value: Token,\n    },"));
         assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
         assert!(generated.contains("fn parse_term(&mut self) -> Result<Expr, ParseError>"));
+    }
+
+    #[test]
+    fn identity_constructor_forwards_a_shared_output_value() {
+        let grammar = compile(
+            "grammar Demo; start wrapper; output atom Expr; output wrapper Expr; wrapper = value: atom => Identity(value: value); atom = value: \"x\" => Name(value: value);",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert_eq!(generated.matches("pub enum Expr {").count(), 1);
+        assert!(generated.contains("    Name {\n        value: Token,\n    },"));
+        assert!(!generated.contains("Identity"));
+        assert!(generated.contains("Ok(value)"));
     }
 
     #[test]

@@ -34,8 +34,12 @@ lexical identifier = letter, { letter | digit };
 
 Grammar authors may declare the eventual output type separately from a parser
 rule with `output <rule> <type>;`. The directive is retained in `rdgen-ir` so
-multiple concrete productions can later feed one semantic AST type; current
-emitters still require each output type to have a single generated declaration.
+multiple concrete productions can feed one semantic AST type. The Rust emitter
+merges explicitly constructed alternatives into one enum. A rule that only
+forwards a value can use the reserved constructor `Identity(value: value)`;
+it contributes no public AST variant and returns the bound value directly.
+This is intended for parser-only forwarding rules while semantic constructors
+remain visible in the output enum.
 
 The Rust backend disables trivia skipping while such a rule is consuming its
 characters, then restores the surrounding parser mode when the rule returns.
