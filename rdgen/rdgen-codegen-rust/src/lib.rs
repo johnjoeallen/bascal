@@ -1558,6 +1558,8 @@ mod tests {
         assert!(generated.contains("pub enum OrExpr {\n    Or {\n        first: Box<AndExpr>,\n        rest: Vec<(Box<OrOp>, Box<AndExpr>)>,\n    },\n}"));
         assert!(generated.contains("pub enum Primary {\n    Float {\n        value: Box<FloatLiteral>,\n    },"));
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
+        assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
     }
 
     #[test]
