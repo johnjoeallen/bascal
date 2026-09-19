@@ -104,11 +104,19 @@ The current branch has these capabilities:
   operator literal that turns out to introduce something else (e.g. a
   comment marker sharing a leading character with an operator) is left
   unconsumed instead of hard-failing the parse;
+- a `fold(base, step)` grammar element: parses `base` once, then repeatedly
+  parses `step`, replacing `step`'s magic `base`-role constructor field
+  with the value accumulated so far each time. This is climb's postfix
+  counterpart: it is what makes `a.b.c()` nest as `Call(Member(Member(a,
+  b)), c)` instead of staying a flat `Vec` of suffixes;
 - BASCAL corpus recognition coverage, now generated entirely from the
-  `climb`-driven `expr` rule.
+  `climb`-driven `expr` rule and the `fold`-driven `postfix_expr` rule.
 
 Recent milestones:
 
+- wired BASCAL's `postfix_expr` rule to `fold(primary, postfix_suffix)`,
+  deleting the flat `Postfix(base, suffixes: Vec<Member>)` list in favor of
+  properly nested `Member`/`Call` chains;
 - normalized `primary`/`ident_primary` leaves: `CallOrArray`/`FileOrRecordIndex`
   renamed to `Call`/`Index`, float/integer/hex/octal/string literals renamed
   to `FloatLiteral`/`IntegerLiteral`/`HexLiteral`/`OctalLiteral`/
@@ -124,25 +132,23 @@ Recent milestones:
 - `c00684d` — use semantic output in precedence helpers.
 
 The generated BASCAL `Expr` now exposes semantic nodes at the binary/unary
-layer (`Binary`, `Unary`) and most leaves (`Name`, `Call`, `Index`,
-`*Literal`, `True`/`False`, `RecordLiteral`/`PartialRecordLiteral`). Two
-provisional shapes remain by necessity rather than oversight:
+layer (`Binary`, `Unary`), properly nested postfix chains (`Member`,
+`Call`), and most leaves (`Name`, `Call`, `Index`, `*Literal`, `True`/
+`False`, `RecordLiteral`/`PartialRecordLiteral`). Two small shapes remain
+provisional by necessity rather than oversight, both because ordinary
+alternatives (unlike precedence *levels*, which may deliberately share one
+constructor across many operators) cannot merge under one constructor name
+within a single rule in the C backend (which, unlike the Rust backend,
+neither merges rules by output type nor special-cases `Identity`, so it
+sees every "duplicate" within one rule, not just across rules):
 
-- `postfix_expr`'s `Postfix(base, suffixes: Vec<Member>)` is still a flat
-  list, not the nested `Member`/`Call` chain the design constraints call
-  for (`a.b.c()` should nest, not list) — rdgen has no repetition-fold
-  mechanism yet (a postfix counterpart to the `climb`/`precedence`
-  combine), so each suffix can't be told what its accumulated `base` is at
-  parse time. Needs the same kind of new IR/grammar mechanism `climb` added
-  for infix folding, scoped to postfix folding instead.
 - `primary`'s parenthesized-expression alternative keeps a `Parenthesized`
-  wrapper instead of forwarding via `Identity`, because a single rule may
-  only use the reserved `Identity` constructor once (two forwarding
-  alternatives collide on the same reserved variant name), and
-  `ident_primary`'s forwarding already claims it. `True`/`False` similarly
-  stayed as two variants rather than one shared `Boolean`, since ordinary
-  alternatives (unlike precedence *levels*) can't merge under one
-  constructor name in either backend.
+  wrapper instead of forwarding via `Identity`, because `primary` already
+  forwards `ident_primary` with `Identity` and the C backend rejects a
+  second `Identity` alternative in the same rule.
+- `True`/`False` stayed as two variants rather than one shared `Boolean`,
+  for the same reason applied to an ordinary (non-`Identity`) constructor
+  name.
 
 Declaration/statement shaping (steps 6-7 below) is still outstanding.
 

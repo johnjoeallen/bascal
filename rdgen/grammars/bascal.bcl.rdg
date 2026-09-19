@@ -35,6 +35,7 @@ precedence expr {
  * add/mod/intdiv/mul/unary/pow) is now parser machinery the table replaces. *)
 output expr Expr;
 output postfix_expr Expr;
+output postfix_suffix Expr;
 output primary Expr;
 output ident_primary Expr;
 
@@ -391,10 +392,13 @@ compare_op       = "<>" => NotEqual()
                  | "=" => Equal()
                  | "<" => Less()
                  | ">" => Greater() ;
-postfix_expr     = base: primary , suffixes: { postfix_suffix }
-                   => Postfix(base: base, suffixes: suffixes) ;
+(* postfix_suffix's `base` field is filled in by the fold below, not by any
+ * of its own elements: `a.b.c()` nests as Member(Member(a, b), c), rather
+ * than staying the flat Postfix(a, [b, c]) list a plain repetition would
+ * produce. *)
+postfix_expr     = value: fold(primary, postfix_suffix) => Identity(value: value) ;
 postfix_suffix   = "." , member: identifier , arguments: [ "(" , [ arg_list ] , ")" ]
-                   => Member(member: member, arguments: arguments) ;
+                   => Member(base: base, member: member, arguments: arguments) ;
 arg_list         = first: expr , rest: { "," , expr }
                    => Arguments(first: first, rest: rest) ;
 (* Literal, name, call, and index alternatives forward the shared Expr

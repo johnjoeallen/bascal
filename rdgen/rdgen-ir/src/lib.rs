@@ -97,6 +97,15 @@ pub enum Element {
         atom: String,
         span: Span,
     },
+    /// Parse `base` once, then repeatedly parse `step`, each time replacing
+    /// `step`'s magic `base`-role constructor field with the value
+    /// accumulated so far. `base` and `step` must share an output type.
+    Fold {
+        label: Option<String>,
+        base: String,
+        step: String,
+        span: Span,
+    },
     /// Commit the current ordered-choice alternative after the preceding
     /// discriminating input has matched.
     Cut {

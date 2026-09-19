@@ -444,6 +444,21 @@ impl<'a> Parser<'a> {
                 span: rdgen_ir::Span::new(start, end),
             });
         }
+        if self.at_ident("fold") {
+            let start = self.current().span.start;
+            self.expect_ident("fold")?;
+            self.expect_symbol('(')?;
+            let base = self.ident()?;
+            self.expect_symbol(',')?;
+            let step = self.ident()?;
+            let end = self.expect_symbol(')')?.span.end;
+            return Ok(rdgen_ir::Element::Fold {
+                label,
+                base,
+                step,
+                span: rdgen_ir::Span::new(start, end),
+            });
+        }
         if self.at_ident("cut") {
             let span = self.current().span;
             self.expect_ident("cut")?;
@@ -754,6 +769,7 @@ fn element_span(element: &rdgen_ir::Element) -> rdgen_ir::Span {
         | rdgen_ir::Element::Group { span, .. }
         | rdgen_ir::Element::SameLine { span, .. }
         | rdgen_ir::Element::Climb { span, .. }
+        | rdgen_ir::Element::Fold { span, .. }
         | rdgen_ir::Element::Cut { span }
         | rdgen_ir::Element::LineEnd { span }
         | rdgen_ir::Element::Newline { span } => *span,
@@ -777,6 +793,7 @@ fn starts_with_rule(elements: &[rdgen_ir::Element], rule: &str) -> bool {
             starts_with_rule(std::slice::from_ref(element.as_ref()), rule)
         }
         rdgen_ir::Element::Climb { atom, .. } => atom == rule,
+        rdgen_ir::Element::Fold { base, .. } => base == rule,
         rdgen_ir::Element::Cut { .. } => false,
         rdgen_ir::Element::LineEnd { .. } => false,
         rdgen_ir::Element::Newline { .. } => false,
@@ -798,7 +815,9 @@ fn resolve_symbols(rules: &mut [rdgen_ir::Rule]) -> Result<(), String> {
 }
 
 fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
+    let fold_step_names = collect_fold_step_names(rules);
     for rule in rules {
+        let is_fold_step = fold_step_names.contains(rule.name.as_str());
         for alternative in &rule.alternatives {
             let mut labels = Vec::new();
             collect_labels(&alternative.elements, &mut labels);
@@ -819,7 +838,8 @@ fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
                         binding.field, rule.name
                     ));
                 }
-                if !unique_labels.contains(binding.source_label.as_str()) {
+                let is_magic_fold_base = is_fold_step && binding.source_label == "base";
+                if !is_magic_fold_base && !unique_labels.contains(binding.source_label.as_str()) {
                     return Err(format!(
                         "constructor field '{}' references unknown label '{}' in rule '{}'",
                         binding.field, binding.source_label, rule.name
@@ -870,7 +890,7 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             rdgen_ir::Element::SameLine { element, .. } => {
                 collect_labels(std::slice::from_ref(element.as_ref()), labels)
             }
-            rdgen_ir::Element::Climb { label, .. } => {
+            rdgen_ir::Element::Climb { label, .. } | rdgen_ir::Element::Fold { label, .. } => {
                 if let Some(label) = label {
                     labels.push(label.clone());
                 }
@@ -880,6 +900,20 @@ fn collect_labels(elements: &[rdgen_ir::Element], labels: &mut Vec<String>) {
             rdgen_ir::Element::Newline { .. } => {}
         }
     }
+}
+
+fn collect_fold_step_names(rules: &[rdgen_ir::Rule]) -> std::collections::HashSet<String> {
+    let mut steps = std::collections::HashSet::new();
+    for rule in rules {
+        for alternative in &rule.alternatives {
+            for element in &alternative.elements {
+                if let rdgen_ir::Element::Fold { step, .. } = element {
+                    steps.insert(step.clone());
+                }
+            }
+        }
+    }
+    steps
 }
 
 fn resolve_element(
@@ -926,6 +960,21 @@ fn resolve_element(
                     atom, span.start
                 ))
             }
+        }
+        rdgen_ir::Element::Fold { base, step, span, .. } => {
+            if !rule_names.contains(base) {
+                return Err(format!(
+                    "fold references undefined base rule '{}' at {}",
+                    base, span.start
+                ));
+            }
+            if !rule_names.contains(step) {
+                return Err(format!(
+                    "fold references undefined step rule '{}' at {}",
+                    step, span.start
+                ));
+            }
+            Ok(())
         }
         rdgen_ir::Element::Cut { .. } => Ok(()),
         rdgen_ir::Element::LineEnd { .. } => Ok(()),
@@ -1248,6 +1297,10 @@ fn collect_literal_values(
             rdgen_ir::Element::Climb { atom, .. } => {
                 collect_reachable_literals(atom, rules, visited, literals);
             }
+            rdgen_ir::Element::Fold { base, step, .. } => {
+                collect_reachable_literals(base, rules, visited, literals);
+                collect_reachable_literals(step, rules, visited, literals);
+            }
             rdgen_ir::Element::Token { .. } => {}
         }
     }
@@ -1329,6 +1382,11 @@ fn first_rule_names<'a>(
                     output.push(atom.as_str());
                 }
             }
+            rdgen_ir::Element::Fold { base, .. } => {
+                if names.contains(base.as_str()) {
+                    output.push(base.as_str());
+                }
+            }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
             rdgen_ir::Element::Newline { .. } => {}
@@ -1374,6 +1432,7 @@ fn nullable_element(
         rdgen_ir::Element::Newline { .. } => false,
         rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
         rdgen_ir::Element::Climb { atom, .. } => nullable.contains(atom.as_str()),
+        rdgen_ir::Element::Fold { base, .. } => nullable.contains(base.as_str()),
         | rdgen_ir::Element::Token { .. }
         | rdgen_ir::Element::Literal { .. } => false,
     }
@@ -1627,6 +1686,61 @@ mod tests {
         )
         .unwrap_err();
         assert!(error.contains("climb must be the sole element of its alternative in rule 'expr'"));
+    }
+
+    #[test]
+    fn parses_fold_element_and_allows_its_step_a_magic_base_field() {
+        let grammar = compile(
+            "grammar Postfix; start expr; output expr Val; output suffix Val; \
+             expr = value: fold(atom, suffix) => Identity(value: value); \
+             atom = \"x\" => Atom(); \
+             suffix = \".\" , member: \"y\" => Member(base: base, member: member);",
+        )
+        .unwrap();
+        let rule = grammar
+            .rules
+            .iter()
+            .find(|rule| rule.name == "expr")
+            .expect("expr rule");
+        match &rule.alternatives[0].elements[0] {
+            rdgen_ir::Element::Fold { base, step, label, .. } => {
+                assert_eq!(base, "atom");
+                assert_eq!(step, "suffix");
+                assert_eq!(label.as_deref(), Some("value"));
+            }
+            other => panic!("expected a fold element, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn rejects_fold_referencing_an_undefined_base_rule() {
+        let error = compile(
+            "grammar Postfix; expr = value: fold(missing, suffix) => Identity(value: value); \
+             suffix = \".\" , member: \"y\" => Member(base: base, member: member);",
+        )
+        .unwrap_err();
+        assert!(error.contains("fold references undefined base rule 'missing'"));
+    }
+
+    #[test]
+    fn rejects_fold_referencing_an_undefined_step_rule() {
+        let error = compile(
+            "grammar Postfix; expr = value: fold(atom, missing) => Identity(value: value); \
+             atom = \"x\" => Atom();",
+        )
+        .unwrap_err();
+        assert!(error.contains("fold references undefined step rule 'missing'"));
+    }
+
+    #[test]
+    fn rejects_a_magic_base_field_outside_a_registered_fold_step() {
+        let error = compile(
+            "grammar Postfix; start = \".\" , member: \"y\" => Member(base: base, member: member);",
+        )
+        .unwrap_err();
+        assert!(error.contains(
+            "constructor field 'base' references unknown label 'base' in rule 'start'"
+        ));
     }
 
     #[test]

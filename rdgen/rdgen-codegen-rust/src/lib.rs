@@ -134,13 +134,21 @@ fn emit_rule(
         output.push_str(" {\n");
         let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
-            let element = find_labeled_element(&alternative.elements, &field.source_label)
-                .ok_or_else(|| {
-                    format!(
+            let element = find_labeled_element(&alternative.elements, &field.source_label);
+            // A fold step's magic `base`-role field is filled in externally
+            // by the fold loop, not by any of this alternative's own
+            // elements, so it has no labeled element to look up: its type
+            // is simply this rule's own (shared) output type.
+            let field_type = match element {
+                Some(element) => rust_type(element, output_types),
+                None if field.source_label == "base" => format!("Option<Box<{}>>", type_name(&rule.output.0)),
+                None => {
+                    return Err(format!(
                         "missing label '{}' in rule '{}'",
                         field.source_label, rule.name
-                    )
-                })?;
+                    ))
+                }
+            };
             let generated_name = field_name(&field.field);
             if !field_names.insert(generated_name.clone()) {
                 return Err(format!(
@@ -148,7 +156,7 @@ fn emit_rule(
                     field.field, rule.name
                 ));
             }
-            output.push_str(&format!("        {}: {},\n", generated_name, rust_type(element, output_types)));
+            output.push_str(&format!("        {}: {},\n", generated_name, field_type));
         }
         output.push_str("    },\n");
     }
@@ -285,6 +293,9 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
             Element::Climb {
                 label: Some(name), ..
             } if name == label => return Some(element),
+            Element::Fold {
+                label: Some(name), ..
+            } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
                     if let Some(found) = find_labeled_element(alternative, label) {
@@ -341,6 +352,13 @@ fn rust_type(element: &Element, output_types: &std::collections::HashMap<String,
                 .get(atom)
                 .cloned()
                 .unwrap_or_else(|| type_name(atom))
+        ),
+        Element::Fold { base, .. } => format!(
+            "Box<{}>",
+            output_types
+                .get(base)
+                .cloned()
+                .unwrap_or_else(|| type_name(base))
         ),
         Element::Cut { .. } => "()".into(),
         Element::LineEnd { .. } => "()".into(),
@@ -633,6 +651,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             }
         }
     }
+    emit_fold_apply_base_helpers(&mut output, grammar, &output_types)?;
     for rule in &grammar.rules {
         emit_parser_rule(&mut output, rule, grammar)?;
     }
@@ -821,6 +840,121 @@ fn emit_climb_binding(
     Ok(())
 }
 
+fn emit_fold_binding(output: &mut String, variable: &str, base: &str, step: &str, indent: &str) {
+    output.push_str(&format!(
+        "{indent}let {variable} = Box::new({{\n\
+{indent}    let mut fold_accumulator = self.parse_{base}()?;\n\
+{indent}    loop {{\n\
+{indent}        let fold_item_start = self.position;\n\
+{indent}        match self.parse_{step}() {{\n\
+{indent}            Ok(step_value) => {{ fold_accumulator = Self::parse_{step}_apply_fold_base(step_value, fold_accumulator); }}\n\
+{indent}            Err(_) => {{ self.position = fold_item_start; break; }}\n\
+{indent}        }}\n\
+{indent}    }}\n\
+{indent}    fold_accumulator\n\
+{indent}}});\n",
+        indent = indent, variable = variable, base = base, step = step
+    ));
+}
+
+/// Emit `parse_{step}_apply_fold_base`, which rebuilds a `step` rule's parsed
+/// value with its magic `base`-role field replaced by the fold accumulator,
+/// for every step rule any `fold` element references.
+fn emit_fold_apply_base_helpers(
+    output: &mut String,
+    grammar: &Grammar,
+    output_types: &std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let mut step_names: Vec<&str> = Vec::new();
+    for rule in &grammar.rules {
+        for alternative in &rule.alternatives {
+            for element in &alternative.elements {
+                if let Element::Fold { step, .. } = element {
+                    if !step_names.contains(&step.as_str()) {
+                        step_names.push(step.as_str());
+                    }
+                }
+            }
+        }
+    }
+    for step in step_names {
+        let step_rule = grammar
+            .rules
+            .iter()
+            .find(|rule| rule.name == step)
+            .ok_or_else(|| format!("fold references undefined step rule '{}'", step))?;
+        if grammar
+            .rules
+            .iter()
+            .any(|rule| rule.name == format!("{}_apply_fold_base", step))
+        {
+            return Err(format!(
+                "Rust fold wrapper for step '{}' collides with grammar rule '{}_apply_fold_base'",
+                step, step
+            ));
+        }
+        let value_type = output_types
+            .get(step)
+            .cloned()
+            .unwrap_or_else(|| type_name(step));
+        output.push_str(&format!(
+            "    fn parse_{}_apply_fold_base(value: {}, incoming_base: {}) -> {} {{\n        match value {{\n",
+            step, value_type, value_type, value_type
+        ));
+        // `value` is typed as the whole shared output enum (it is merged
+        // with every other rule sharing that `output` type), so the match
+        // must be exhaustive over that enum, not just over `step`'s own
+        // alternatives. Only `step`'s alternatives can ever declare a magic
+        // `base`-role field (grammar validation guarantees that), so a
+        // trailing wildcard safely covers every other variant unchanged.
+        for (index, alternative) in step_rule.alternatives.iter().enumerate() {
+            let has_base_field = alternative
+                .constructor
+                .fields
+                .iter()
+                .any(|field| field.source_label == "base");
+            if !has_base_field {
+                continue;
+            }
+            let variant = variant_name(step_rule, alternative, index);
+            let pattern_fields = alternative
+                .constructor
+                .fields
+                .iter()
+                .map(|field| {
+                    let name = field_name(&field.field);
+                    if field.source_label == "base" {
+                        format!("{}: _", name)
+                    } else {
+                        name
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let rebuild_fields = alternative
+                .constructor
+                .fields
+                .iter()
+                .map(|field| {
+                    let name = field_name(&field.field);
+                    if field.source_label == "base" {
+                        format!("{}: Some(Box::new(incoming_base))", name)
+                    } else {
+                        name
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            output.push_str(&format!(
+                "            {}::{} {{ {} }} => {}::{} {{ {} }},\n",
+                value_type, variant, pattern_fields, value_type, variant, rebuild_fields
+            ));
+        }
+        output.push_str("            other => other,\n        }\n    }\n\n");
+    }
+    Ok(())
+}
+
 fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Result<(), String> {
     output.push_str(&format!(
         "    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n",
@@ -843,6 +977,10 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
             let variable = element_variable(element, index);
             if matches!(element, Element::Climb { .. }) {
                 emit_climb_binding(output, &variable, &rule.name, grammar, "            ")?;
+                continue;
+            }
+            if let Element::Fold { base, step, .. } = element {
+                emit_fold_binding(output, &variable, base, step, "            ");
                 continue;
             }
             emit_element_binding(output, element, &variable, "            ")?;
@@ -914,6 +1052,9 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Group { .. } | Element::Repeat { .. } => emit_element_expression(element),
         Element::Climb { .. } => {
             Err("climb elements may not be nested inside groups or repetitions".into())
+        }
+        Element::Fold { .. } => {
+            Err("fold elements may not be nested inside groups or repetitions".into())
         }
     }
 }
@@ -1179,6 +1320,9 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
         Element::Climb { .. } => {
             Err("climb elements may not be nested inside groups or repetitions".into())
         }
+        Element::Fold { .. } => {
+            Err("fold elements may not be nested inside groups or repetitions".into())
+        }
     }
 }
 
@@ -1213,7 +1357,7 @@ fn element_variable(element: &Element, index: usize) -> String {
         | Element::Token { label, .. }
         | Element::Literal { label, .. } => label.as_deref(),
         Element::Group { label, .. } | Element::Repeat { label, .. } => label.as_deref(),
-        Element::Climb { label, .. } => label.as_deref(),
+        Element::Climb { label, .. } | Element::Fold { label, .. } => label.as_deref(),
         Element::SameLine { .. } => None,
         Element::Cut { .. } => None,
         Element::LineEnd { .. } => None,
@@ -1231,11 +1375,17 @@ fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String
         if index > 0 {
             output.push_str(", ");
         }
-        output.push_str(&format!(
-            "{}: {}",
-            field_name(&field.field),
+        // A fold step's magic `base`-role field isn't bound by any of this
+        // alternative's own elements: it starts as `None` and is filled in
+        // by the fold loop once the accumulated base is known.
+        let is_magic_fold_base = field.source_label == "base"
+            && find_labeled_element(&alternative.elements, &field.source_label).is_none();
+        let value = if is_magic_fold_base {
+            "None".to_owned()
+        } else {
             field_name(&field.source_label)
-        ));
+        };
+        output.push_str(&format!("{}: {}", field_name(&field.field), value));
     }
     output.push_str(" }");
     Ok(output)
@@ -2530,6 +2680,62 @@ fn main() {
     assert_eq!(
         format!("{value:?}"),
         "Binary { left: Two, operator: Token(\"^\"), right: Binary { left: Three, operator: Token(\"^\"), right: Two } }"
+    );
+}
+"#
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        let output = std::process::Command::new(&binary).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn generated_fold_nests_postfix_chains_instead_of_listing_them() {
+        let grammar = compile(
+            "grammar Postfix; start expr; output expr Val; output atom Val; output suffix Val; \
+             expr = value: fold(atom, suffix) => Identity(value: value); \
+             atom = \"a\" => Atom(); \
+             suffix = \".\" , member: letter => Member(base: base, member: member);",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("fold-postfix-chain");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\n{}",
+                generated.to_str().unwrap(),
+                r#"
+fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
+    let ch = source.get(position..)?.chars().next()?;
+    (name == "letter" && ch.is_ascii_alphabetic()).then(|| (Token(ch.to_string()), position + ch.len_utf8()))
+}
+fn main() {
+    let mut single = Parser::with_terminal_scanner("a", scanner);
+    let value = single.parse().unwrap();
+    assert_eq!(format!("{value:?}"), "Atom");
+
+    let mut chain = Parser::with_terminal_scanner("a.b.c", scanner);
+    let value = chain.parse().unwrap();
+    assert_eq!(
+        format!("{value:?}"),
+        "Member { base: Some(Member { base: Some(Atom), member: Token(\"b\") }), member: Token(\"c\") }"
     );
 }
 "#

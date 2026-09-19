@@ -65,13 +65,21 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         output.push_str(&format!("        struct {{\n"));
         let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
-            let element = find_labeled_element(&alternative.elements, &field.source_label)
-                .ok_or_else(|| {
-                    format!(
+            let element = find_labeled_element(&alternative.elements, &field.source_label);
+            // A fold step's magic `base`-role field is filled in externally
+            // by the fold loop, not by any of this alternative's own
+            // elements, so it has no labeled element to look up: it is
+            // simply a (nullable) pointer to this rule's own type.
+            let field_type = match element {
+                Some(element) => c_field_type(element),
+                None if field.source_label == "base" => format!("{} *", name),
+                None => {
+                    return Err(format!(
                         "missing label '{}' in rule '{}'",
                         field.source_label, rule.name
-                    )
-                })?;
+                    ))
+                }
+            };
             let generated_name = c_field_name(&field.field);
             if !field_names.insert(generated_name.clone()) {
                 return Err(format!(
@@ -79,7 +87,7 @@ fn emit_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
                     field.field, rule.name
                 ));
             }
-            output.push_str(&format!("            {} {};\n", c_field_type(element), generated_name));
+            output.push_str(&format!("            {} {};\n", field_type, generated_name));
         }
         output.push_str(&format!("        }} {variant};\n"));
     }
@@ -115,6 +123,9 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
                 label: Some(name), ..
             } if name == label => return Some(element),
             Element::Climb {
+                label: Some(name), ..
+            } if name == label => return Some(element),
+            Element::Fold {
                 label: Some(name), ..
             } if name == label => return Some(element),
             Element::Group { alternatives, .. } => {
@@ -160,6 +171,7 @@ fn c_field_type(element: &Element) -> String {
         Element::LineEnd { .. } => "bool".into(),
         Element::Newline { .. } => "bool".into(),
         Element::Climb { .. } => "bool".into(),
+        Element::Fold { .. } => "bool".into(),
     }
 }
 
@@ -186,6 +198,7 @@ fn c_value_type(element: &Element) -> String {
         Element::LineEnd { .. } => "bool".into(),
         Element::Newline { .. } => "bool".into(),
         Element::Climb { .. } => "bool".into(),
+        Element::Fold { .. } => "bool".into(),
     }
 }
 
@@ -205,6 +218,7 @@ fn c_collection_key(element: &Element) -> String {
         Element::LineEnd { .. } => "line_end".into(),
         Element::Newline { .. } => "newline".into(),
         Element::Climb { .. } => "climb".into(),
+        Element::Fold { .. } => "fold".into(),
     }
 }
 
@@ -467,6 +481,7 @@ fn is_c_supported_element(element: &Element) -> bool {
         Element::LineEnd { .. } => false,
         Element::Newline { .. } => false,
         Element::Climb { .. } => false,
+        Element::Fold { .. } => false,
     }
 }
 
