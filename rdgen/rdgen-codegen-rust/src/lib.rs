@@ -1482,6 +1482,56 @@ mod tests {
     }
 
     #[test]
+    fn generated_bascal_parser_recognizes_the_repository_corpus() {
+        fn collect_bcl_files(directory: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    collect_bcl_files(&path, files);
+                } else if path.extension().is_some_and(|extension| extension == "bcl") {
+                    files.push(path);
+                }
+            }
+        }
+
+        let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let binary = directory.path().join("bascal-probe");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .env("RDGEN_GENERATED", &generated)
+            .args([
+                "--crate-name",
+                "rdgen_bascal_probe",
+                repository
+                    .join("rdgen/scripts/bascal_probe.rs")
+                    .to_str()
+                    .unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+
+        let mut files = Vec::new();
+        for directory in ["tutorial", "examples", "tests/fixtures"] {
+            collect_bcl_files(&repository.join(directory), &mut files);
+        }
+        files.sort();
+        assert_eq!(files.len(), 83, "update the corpus expectation deliberately");
+        let output = std::process::Command::new(&binary).args(&files).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
     fn generated_line_end_accepts_colon_newline_and_eof() {
         let grammar = compile("grammar Lines; start = \"a\", line_end, \"b\", line_end | \"a\", line_end;").unwrap();
         let directory = tempfile::tempdir().unwrap();
