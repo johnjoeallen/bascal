@@ -32,6 +32,11 @@ Character-level lexical productions can be declared with `lexical`:
 lexical identifier = letter, { letter | digit };
 ```
 
+Grammar authors may declare the eventual output type separately from a parser
+rule with `output <rule> <type>;`. The directive is retained in `rdgen-ir` so
+multiple concrete productions can later feed one semantic AST type; current
+emitters still require each output type to have a single generated declaration.
+
 The Rust backend disables trivia skipping while such a rule is consuming its
 characters, then restores the surrounding parser mode when the rule returns.
 

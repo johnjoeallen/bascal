@@ -192,6 +192,7 @@ impl<'a> Parser<'a> {
         self.expect_symbol(';')?;
         let mut rules = Vec::new();
         let mut precedence = Vec::new();
+        let mut outputs = Vec::new();
         let mut start = None;
         while !self.at_eof() {
             if self.is_start_directive() {
@@ -205,6 +206,17 @@ impl<'a> Parser<'a> {
             }
             if self.at_ident("precedence") {
                 precedence.push(self.parse_precedence()?);
+                continue;
+            }
+            if self.at_ident("output") {
+                self.expect_ident("output")?;
+                let rule = self.ident()?;
+                let output = self.ident()?;
+                self.expect_symbol(';')?;
+                if outputs.iter().any(|(candidate, _)| candidate == &rule) {
+                    return Err(self.error("duplicate output declaration"));
+                }
+                outputs.push((rule, rdgen_ir::TypeName(output)));
                 continue;
             }
             let lexical = if self.at_ident("lexical") {
@@ -248,6 +260,13 @@ impl<'a> Parser<'a> {
                     .collect(),
                 span: rdgen_ir::Span::new(start, self.previous().span.end),
             });
+        }
+        for (rule_name, output) in outputs {
+            let rule = rules
+                .iter_mut()
+                .find(|rule| rule.name == rule_name)
+                .ok_or_else(|| format!("output declaration names unknown rule '{}'", rule_name))?;
+            rule.output = output;
         }
         validate_rule_names(&rules)?;
         resolve_symbols(&mut rules)?;
@@ -1443,6 +1462,27 @@ mod tests {
         assert_eq!(grammar.start, "program");
         assert_eq!(grammar.rules[0].name, "identifier");
         assert!(grammar.rules[0].lexical);
+    }
+
+    #[test]
+    fn preserves_explicit_semantic_output_types() {
+        let grammar = compile(
+            "grammar Demo; output atom Expr; output term Expr; atom = \"a\"; term = \"b\";",
+        )
+        .unwrap();
+        assert_eq!(grammar.rules[0].output, rdgen_ir::TypeName("Expr".into()));
+        assert_eq!(grammar.rules[1].output, rdgen_ir::TypeName("Expr".into()));
+    }
+
+    #[test]
+    fn rejects_duplicate_or_unknown_semantic_output_types() {
+        let duplicate = compile(
+            "grammar Demo; output atom Expr; output atom Other; atom = \"a\";",
+        )
+        .unwrap_err();
+        assert!(duplicate.contains("duplicate output declaration"));
+        let unknown = compile("grammar Demo; output missing Expr; atom = \"a\";").unwrap_err();
+        assert!(unknown.contains("unknown rule 'missing'"));
     }
 
     #[test]
