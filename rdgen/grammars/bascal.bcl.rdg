@@ -160,7 +160,7 @@ statement_core   = label: label_stmt => Label(label: label)
                  | for_statement: for_stmt => For(for_statement: for_statement)
                  | while_statement: while_stmt => While(while_statement: while_statement)
                  | do_statement: do_stmt => Do(do_statement: do_statement)
-                 | select_case_stmt
+                 | select_case: select_case_stmt => SelectCase(select_case: select_case)
                  | return_statement: return_stmt => Return(return_statement: return_statement)
                  | exit: exit_stmt => Exit(exit: exit)
                  | continue_statement: continue_stmt => Continue(continue_statement: continue_statement)
@@ -172,7 +172,8 @@ statement_core   = label: label_stmt => Label(label: label)
                  | error: error_stmt => Error(error: error)
                  | throw: throw_stmt => Throw(throw: throw)
                  | option_base: option_base_stmt => OptionBase(option_base: option_base)
-                 | try_stmt | end: end_stmt => End(end: end)
+                 | try_statement: try_stmt => Try(try_statement: try_statement)
+                 | end: end_stmt => End(end: end)
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
                  | statement: assignment_or_expr_stmt => AssignmentOrExpression(statement: statement) ;
@@ -311,20 +312,27 @@ do_terminator    = "loop" , post_condition: [ same_line do_condition ]
 do_condition     = kind: do_condition_kind , value: expr => Condition(kind: kind, value: value) ;
 do_condition_kind = "while" => While()
                   | "until" => Until() ;
-select_case_stmt = "select" , "case" , expr ,
-                    { "case" , case_values ,
-                      { statement } until { "case", "end" } }
-                    until { "end" } ,
-                    [ "case" , "else" ,
-                      { statement } until { "end" } ] ,
-                    "end" , "select" ;
-case_values      = case_value , { "," , case_value } ;
-case_value       = "is" , compare_op , expr | expr , [ "to" , expr ] ;
-try_stmt         = "try" , { statement } until { "catch", "finally", "end try" } ,
-                    [ "catch" , identifier , [ "(" , expr , { "," , expr } , ")" ] ,
-                      "," , identifier , [ "," , identifier ] ,
-                      { statement } until { "finally", "end try" } ] ,
-                    [ "finally" , { statement } until { "end try" } ] , "end" , "try" ;
+select_case_stmt = "select" , "case" , selector: expr ,
+                    cases: { case_clause } until { "end" } ,
+                    else_body: [ "case" , "else" , { statement } until { "end" } ] ,
+                    "end" , "select"
+                    => SelectCase(selector: selector, cases: cases, else_body: else_body) ;
+case_clause      = "case" , values: case_values , body: { statement } until { "case", "end" }
+                    => Case(values: values, body: body) ;
+case_values      = first: case_value , rest: { "," , case_value }
+                    => CaseValues(first: first, rest: rest) ;
+case_value       = "is" , operator: compare_op , value: expr
+                    => Comparison(operator: operator, value: value)
+                 | first: expr , range_end: [ "to" , expr ]
+                    => ValueOrRange(first: first, range_end: range_end) ;
+try_stmt         = "try" , body: { statement } until { "catch", "finally", "end try" } ,
+                    catch_clause: [ catch_clause ] , finally_clause: [ "finally" , { statement } until { "end try" } ] ,
+                    "end" , "try"
+                    => Try(body: body, catch_clause: catch_clause, finally_clause: finally_clause) ;
+catch_clause     = "catch" , error: identifier , filters: [ "(" , expr , { "," , expr } , ")" ] ,
+                    "," , line: identifier , source: [ "," , identifier ] ,
+                    body: { statement } until { "finally", "end try" }
+                    => Catch(error: error, filters: filters, line: line, source: source, body: body) ;
 assignment_or_expr_stmt = let_keyword: [ "let" ] , assignment: mid_assign
                            => MidAssignment(let_keyword: let_keyword, assignment: assignment)
                         | let_keyword: [ "let" ] , target: assign_target , operator: assignment_op , value: expr

@@ -1565,6 +1565,8 @@ mod tests {
         assert!(generated.contains("pub enum IfStmt {\n    If {\n        condition: Box<Expr>,\n        tail: Box<IfTail>,\n    },\n}"));
         assert!(generated.contains("pub enum ForStmt {\n    For {\n        variable: Box<TypedIdent>,\n        start: Box<Expr>,\n        bounds: Box<ForBounds>,\n        body: Vec<Box<Statement>>,\n        qualifier: Option<Token>,\n    },\n}"));
         assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n    },\n}"));
+        assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n    },\n}"));
     }
 
     #[test]
