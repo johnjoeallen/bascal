@@ -31,7 +31,7 @@ lexical identifier = letter, { letter | digit };
 The Rust backend disables trivia skipping while such a rule is consuming its
 characters, then restores the surrounding parser mode when the rule returns.
 
-The current BASCAL syntax smoke probe is reproducible with:
+The BASCAL corpus recognition probe is reproducible with:
 
 ```text
 bash rdgen/scripts/probe-bascal-files.sh
@@ -39,8 +39,10 @@ bash rdgen/scripts/probe-bascal-files.sh
 
 It generates the BASCAL parser, supplies a minimal case-insensitive scanner
 and comment/whitespace skipper, and reports recognition for every `.bcl` file
-under the tutorial, examples, and fixture trees. It intentionally reports
-failure until the starter grammar covers the complete BASCAL statement set.
+under the tutorial, examples, and fixture trees. The generated parser currently
+recognizes all 83 corpus files. The same check is an automated
+`rdgen-codegen-rust` regression test, so changes to the grammar or Rust emitter
+cannot silently reduce repository syntax coverage.
 
 Grammar elements may use `same_line element` to require that the element
 begin and end on the physical line where parsing starts. This is useful for
@@ -102,9 +104,12 @@ alternatives, and nested groups/repetitions are emitted as recursive parser
 control flow. Labeled singleton groups preserve the child type, and labeled
 single-alternative multi-element groups preserve their contents as Rust
 tuples. Labeled groups with multiple alternatives are rejected until a
-dedicated group-sum type is added. Alternatives without
-constructor annotations receive stable `AltN` AST variants so grammars remain
-representable while annotations are added incrementally.
+dedicated group-sum type is added. Alternatives without constructor
+annotations receive stable `AltN` AST variants so grammars remain representable
+while annotations are added incrementally. The BASCAL grammar has complete
+recognition coverage but is still in that incremental AST-shaping phase:
+comments preserve their concrete payloads; most declarations, statements, and
+expressions retain provisional variants.
 
 The grammar compiler rejects repetitions whose child can derive epsilon; this
 guarantees that generated repetition loops have a progress invariant.

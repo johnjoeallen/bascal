@@ -252,6 +252,6 @@ ident_primary    = identifier ,
 record_lit_fields = [ field_init , { "," , field_init } ] ;
 field_init       = identifier , ":" , expr ;
 
-(* Constructor annotations and recovery declarations are the next DSL
- * frontend milestone. Their intended IR forms are represented directly in
- * rdgen-ir::Constructor and rdgen-ir::RecoveryPoint. *)
+(* Constructor annotations and recovery declarations are supported by the DSL.
+ * This grammar is being converted from provisional AltN variants to named
+ * BASCAL AST nodes incrementally, beginning with preserved comment payloads. *)
