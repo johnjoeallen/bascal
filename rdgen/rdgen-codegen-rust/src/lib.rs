@@ -1541,6 +1541,8 @@ mod tests {
         assert!(generated.contains("Statement {\n        statement: Box<TopLevelStatement>,\n    }"));
         assert!(generated.contains("pub enum ProgramDecl {\n    ProgramDeclaration {\n        name: Box<Identifier>,\n        shared: Option<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum RequireDecl {\n    RequireDeclaration {\n        path: Box<Identifier>,\n    },\n}"));
+        assert!(generated.contains("pub enum FunctionDecl {\n    FunctionDeclaration {\n        name: Box<TypedIdent>,\n        parameters: Option<Box<ParamList>>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
+        assert!(generated.contains("pub enum MethodDecl {\n    MethodDeclaration {\n        name: Box<Identifier>,\n        receiver: Box<Identifier>,\n        parameters: Option<Box<ParamList>>,\n        result: Option<(Token, Box<ReturnType>)>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
     }
 
     #[test]

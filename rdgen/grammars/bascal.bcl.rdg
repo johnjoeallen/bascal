@@ -72,19 +72,25 @@ field_type       = "string" , [ "(" , integer_literal , ")" ]
                  | "int16" | "int" | "int32" | "float32" | "float64"
                  | identifier ;
 
-subprogram       = function_decl | procedure_decl | fluent_method_decl
-                 | method_decl ;
-function_decl    = "function" , typed_ident , "(" , [ param_list ] , ")"
-                   , { statement } until { "end" } , "end" , "function" ;
-procedure_decl   = "procedure" , identifier , "(" , [ param_list ] , ")"
-                   , { statement } until { "end" } , "end" , "procedure" ;
-fluent_method_decl = "fluent" , method_decl ;
-method_decl      = "method" , identifier , "[" , identifier , "]"
-                   , "(" , [ param_list ] , ")" , [ ":" , return_type ]
-                   , { statement } until { "end" } , "end" , "method" ;
-inline_method    = "method" , identifier , "(" , [ param_list ] , ")"
-                   , [ ":" , return_type ] , { statement } until { "end" }
-                   , "end" , "method" ;
+subprogram       = function: function_decl => Function(function: function)
+                 | procedure: procedure_decl => Procedure(procedure: procedure)
+                 | method: fluent_method_decl => FluentMethod(method: method)
+                 | method: method_decl => Method(method: method) ;
+function_decl    = "function" , name: typed_ident , "(" , parameters: [ param_list ] , ")"
+                   , body: { statement } until { "end" } , "end" , "function"
+                   => FunctionDeclaration(name: name, parameters: parameters, body: body) ;
+procedure_decl   = "procedure" , name: identifier , "(" , parameters: [ param_list ] , ")"
+                   , body: { statement } until { "end" } , "end" , "procedure"
+                   => ProcedureDeclaration(name: name, parameters: parameters, body: body) ;
+fluent_method_decl = "fluent" , method: method_decl => FluentMethod(method: method) ;
+method_decl      = "method" , name: identifier , "[" , receiver: identifier , "]"
+                   , "(" , parameters: [ param_list ] , ")" , result: [ ":" , return_type ]
+                   , body: { statement } until { "end" } , "end" , "method"
+                   => MethodDeclaration(name: name, receiver: receiver, parameters: parameters, result: result, body: body) ;
+inline_method    = "method" , name: identifier , "(" , parameters: [ param_list ] , ")"
+                   , result: [ ":" , return_type ] , body: { statement } until { "end" }
+                   , "end" , "method"
+                   => InlineMethodDeclaration(name: name, parameters: parameters, result: result, body: body) ;
 return_type      = "integer" | "long" | "single" | "double" | "string"
                  | suffix ;
 param_list       = param , { "," , param } ;
