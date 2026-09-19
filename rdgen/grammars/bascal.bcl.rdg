@@ -125,7 +125,9 @@ statement_core   = label: label_stmt => Label(label: label)
                  | comment: comment_stmt => Comment(comment: comment)
                  | dim: dim_stmt => Dim(dim: dim)
                  | constant: const_stmt => Const(constant: constant)
-                 | print_stmt | lprint_stmt | global: global_decl => Global(global: global)
+                 | print: print_stmt => Print(print: print)
+                 | lprint: lprint_stmt => Lprint(lprint: lprint)
+                 | global: global_decl => Global(global: global)
                  | open: open_stmt => Open(open: open)
                  | line_input: line_input_stmt => LineInput(line_input: line_input)
                  | input: input_stmt => Input(input: input)
@@ -186,14 +188,19 @@ dim_stmt         = ( "dim" | "declare" ) , first: dim_item , rest: { "," , dim_i
 dim_item         = name: typed_ident , axes: [ array_axes ] , type_annotation: [ "as" , identifier ]
                    => DimItem(name: name, axes: axes, type_annotation: type_annotation) ;
 const_stmt       = "const" , name: identifier , "=" , value: expr => Const(name: name, value: value) ;
-print_stmt       = "print" ,
-                    ( "#" , expr , "," , [ "using" , expr , ";" ]
-                    | "using" , expr , ";"
-                    | ε ) ,
-                    { print_token } until { "\n" } ;
-lprint_stmt      = "lprint" , [ "using" , expr , ";" ] ,
-                    { print_token } until { "\n" } ;
-print_token      = "," | ";" | expr ;
+print_stmt       = "print" , destination: print_destination ,
+                    tokens: { print_token } until { "\n" }
+                    => Print(destination: destination, tokens: tokens) ;
+print_destination = "#" , channel: expr , "," , using: [ "using" , expr , ";" ]
+                    => Channel(channel: channel, using: using)
+                 | "using" , format: expr , ";" => Using(format: format)
+                 | ε => Standard() ;
+lprint_stmt      = "lprint" , using: [ "using" , expr , ";" ] ,
+                    tokens: { print_token } until { "\n" }
+                    => Lprint(using: using, tokens: tokens) ;
+print_token      = "," => Comma()
+                 | ";" => Semicolon()
+                 | value: expr => Expression(value: value) ;
 file_decl_stmt   = "file" , name: identifier , record_type: [ "as" , identifier ] , "=" ,
                     "open" , "(" , path: expr , ")" , mode: [ "for" , file_mode ]
                     => FileDeclaration(name: name, record_type: record_type, path: path, mode: mode) ;

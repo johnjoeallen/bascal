@@ -68,6 +68,9 @@ fn emit_rule(
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         let variant = variant_name(rule, alternative, index);
         if !variants.insert(variant.clone()) {
+            if rule.lexical && is_default_constructor(rule, alternative) {
+                continue;
+            }
             return Err(format!(
                 "duplicate AST variant '{}' in rule '{}'",
                 variant, rule.name
@@ -75,6 +78,10 @@ fn emit_rule(
         }
         output.push_str("    ");
         output.push_str(&variant);
+        if rule.lexical && is_default_constructor(rule, alternative) {
+            output.push_str(" {\n        text: Token,\n    },\n");
+            continue;
+        }
         if alternative.constructor.fields.is_empty() {
             output.push_str(",\n");
             continue;
@@ -140,12 +147,17 @@ fn emit_rule(
 }
 
 fn variant_name(rule: &Rule, alternative: &rdgen_ir::Alternative, index: usize) -> String {
-    if alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name
-    {
+    if rule.lexical && is_default_constructor(rule, alternative) {
+        "Token".to_owned()
+    } else if is_default_constructor(rule, alternative) {
         format!("Alt{}", index + 1)
     } else {
         type_name(&alternative.constructor.type_name.0)
     }
+}
+
+fn is_default_constructor(rule: &Rule, alternative: &rdgen_ir::Alternative) -> bool {
+    alternative.constructor.fields.is_empty() && alternative.constructor.type_name.0 == rule.name
 }
 
 fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a Element> {
@@ -546,12 +558,20 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             let variable = element_variable(element, index);
             emit_element_binding(output, element, &variable, "            ")?;
         }
-        output.push_str(&format!(
-            "            Ok({}::{}{})\n",
-            type_name(&rule.name),
-            variant_name(rule, alternative, index),
-            emit_constructor_fields(alternative)?
-        ));
+        let construction = if rule.lexical && is_default_constructor(rule, alternative) {
+            format!(
+                "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()) }}",
+                type_name(&rule.name)
+            )
+        } else {
+            format!(
+                "{}::{}{}",
+                type_name(&rule.name),
+                variant_name(rule, alternative, index),
+                emit_constructor_fields(alternative)?
+            )
+        };
+        output.push_str(&format!("            Ok({})\n", construction));
         output.push_str("        })();\n");
         if rule.lexical {
             output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { self.lexical_mode = previous_lexical_mode; return Err(error); } self.position = lexical_token_start } }\n");
@@ -1353,6 +1373,33 @@ mod tests {
     }
 
     #[test]
+    fn generated_default_lexical_rule_preserves_its_source_text() {
+        let grammar = compile(
+            "grammar Words; start start; lexical identifier = letter, { letter | digit }; start = name: identifier => Start(name: name);",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("lexical-text");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(_: &str, position: usize) -> usize {{ position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"Name42\", scanner, trivia); match parser.parse().unwrap() {{ Start::Start {{ name }} => match *name {{ Identifier::Token {{ text }} => assert_eq!(text.0, \"Name42\"), }}, }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_lexical_alternatives_restart_after_trivia() {
         let grammar = compile(
             "grammar Suffix; start start; lexical suffix = \"%\" | \"$\"; start = \"method\", suffix;",
@@ -1567,6 +1614,8 @@ mod tests {
         assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n    },\n}"));
         assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n    },\n}"));
         assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum Identifier {\n    Token {\n        text: Token,\n    },\n}"));
+        assert!(generated.contains("pub enum PrintStmt {\n    Print {\n        destination: Box<PrintDestination>,\n        tokens: Vec<Box<PrintToken>>,\n    },\n}"));
     }
 
     #[test]
