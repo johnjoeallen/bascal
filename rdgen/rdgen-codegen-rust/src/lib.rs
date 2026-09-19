@@ -1526,6 +1526,67 @@ fn main() {
     }
 
     #[test]
+    fn generated_bascal_parser_retains_expression_and_colon_chain_structure() {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("bascal-expression");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\n{}",
+                generated.to_str().unwrap(),
+                r#"
+fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
+    let ch = source.get(position..)?.chars().next()?;
+    let accepted = match name {
+        "letter" => ch.is_ascii_alphabetic(),
+        "digit" => ch.is_ascii_digit(),
+        "hex_digit" => ch.is_ascii_hexdigit(),
+        "any_char" => true,
+        "any_char_except_quote" => ch != '"',
+        "any_char_except_newline" => ch != '\n',
+        _ => false,
+    };
+    accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8()))
+}
+fn trivia(source: &str, mut position: usize) -> usize {
+    while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {
+        position += source[position..].chars().next().unwrap().len_utf8();
+    }
+    position
+}
+fn literal(source: &str, position: usize, expected: &str) -> Option<usize> {
+    source.get(position..)?.get(..expected.len())
+        .filter(|candidate| candidate.eq_ignore_ascii_case(expected))
+        .map(|_| position + expected.len())
+}
+fn main() {
+    let mut parser = Parser::with_lexical_config("x% = 2 + 3 : y% = 4\n", scanner, trivia, literal);
+    let ast = parser.parse().unwrap();
+    let debug = format!("{ast:?}");
+    assert_eq!(debug.matches("Assignment {").count(), 2);
+    assert!(debug.contains("continuation: Some"));
+    assert!(debug.contains("Add {"));
+    for text in ["x%", "y%", "2", "3", "4"] {
+        assert!(debug.contains(&format!("Token(\"{}\")", text)), "missing {}: {}", text, debug);
+    }
+}
+"#
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
     fn generated_same_line_optional_stops_at_newline() {
         let grammar = compile(
             "grammar Lines; start start; start = \"return\", value: [ same_line expr ], \"end\" => Start(value: value); expr = \"x\";",

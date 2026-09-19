@@ -116,7 +116,7 @@ array_axes       = "(" , first: axis , rest: { "," , axis } , ")"
                    => ArrayAxes(first: first, rest: rest) ;
 axis             = "?" => InferredCapacity()
                  | capacity: integer_literal => FixedCapacity(capacity: capacity) ;
-typed_ident      = identifier ;
+typed_ident      = value: identifier => TypedIdentifier(value: value) ;
 
 (* ----- Statements ----- *)
 
@@ -350,7 +350,7 @@ assignment_or_expr_stmt = let_keyword: [ "let" ] , assignment: mid_assign
                            => Assignment(let_keyword: let_keyword, target: target, operator: operator, value: value)
                         | let_keyword: [ "let" ] , value: expr
                            => Expression(let_keyword: let_keyword, value: value) ;
-assign_target       = postfix_expr ;
+assign_target       = value: postfix_expr => Target(value: value) ;
 assignment_op       = "=" => Assign()
                     | "+=" => AddAssign()
                     | "-=" => SubtractAssign()
