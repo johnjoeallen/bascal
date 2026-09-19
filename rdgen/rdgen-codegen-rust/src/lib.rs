@@ -1795,6 +1795,10 @@ fn main() {
         assert!(generated.contains("pub enum Expr {\n    Expression {\n        value: Box<XorExpr>,\n    },\n}"));
         assert!(generated.contains("pub enum ReturnType {\n    Integer,\n    Long,\n    Single,\n    Double,\n    String,\n    Suffix {\n        value: Box<Suffix>,\n    },\n}"));
         assert!(generated.contains("pub enum CompareOp {\n    NotEqual,\n    LessOrEqual,\n    GreaterOrEqual,\n    Equal,\n    Less,\n    Greater,\n}"));
+        assert!(!generated.lines().any(|line| {
+            let trimmed = line.trim();
+            trimmed.starts_with("Alt") && trimmed.ends_with(',')
+        }));
         assert!(generated.contains("pub enum OrExpr {\n    Or {\n        first: Box<AndExpr>,\n        rest: Vec<(Box<OrOp>, Box<AndExpr>)>,\n    },\n}"));
         assert!(generated.contains("pub enum Primary {\n    Float {\n        value: Box<FloatLiteral>,\n    },"));
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
