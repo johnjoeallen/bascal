@@ -46,10 +46,15 @@ lexical block_comment    = opening: "/*" , body: { any_char } , closing: "*/"
 
 (* ----- Program and declarations ----- *)
 
-program          = { file_item } ;
-file_item        = program_decl | library_decl | shared_decl
-                 | require_decl | import_decl | subprogram
-                 | record_decl | top_level_statement ;
+program          = items: { file_item } => File(items: items) ;
+file_item        = declaration: program_decl => ProgramDeclaration(declaration: declaration)
+                 | declaration: library_decl => LibraryDeclaration(declaration: declaration)
+                 | declaration: shared_decl => SharedDeclaration(declaration: declaration)
+                 | declaration: require_decl => RequireDeclaration(declaration: declaration)
+                 | declaration: import_decl => ImportDeclaration(declaration: declaration)
+                 | subprogram: subprogram => Subprogram(subprogram: subprogram)
+                 | record: record_decl => Record(record: record)
+                 | statement: top_level_statement => Statement(statement: statement) ;
 
 program_decl     = "program" , identifier , [ "shared" , identifier ] ;
 library_decl     = "library" , identifier ;

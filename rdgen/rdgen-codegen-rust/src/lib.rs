@@ -1532,6 +1532,16 @@ mod tests {
     }
 
     #[test]
+    fn emits_named_bascal_program_boundary_nodes() {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub enum Program {\n    File {\n        items: Vec<Box<FileItem>>,\n    },\n}"));
+        assert!(generated.contains("ProgramDeclaration {\n        declaration: Box<ProgramDecl>,\n    }"));
+        assert!(generated.contains("LibraryDeclaration {\n        declaration: Box<LibraryDecl>,\n    }"));
+        assert!(generated.contains("Statement {\n        statement: Box<TopLevelStatement>,\n    }"));
+    }
+
+    #[test]
     fn generated_line_end_accepts_colon_newline_and_eof() {
         let grammar = compile("grammar Lines; start = \"a\", line_end, \"b\", line_end | \"a\", line_end;").unwrap();
         let directory = tempfile::tempdir().unwrap();
