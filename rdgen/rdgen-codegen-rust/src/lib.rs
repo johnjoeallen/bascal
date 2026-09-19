@@ -15,7 +15,14 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     output.push_str("pub struct SourceSpan { pub start: usize, pub end: usize }\n\n");
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str("pub struct Spanned<T> { pub span: SourceSpan, pub value: T }\n\n");
+    let mut output_rules = std::collections::HashMap::new();
     for rule in &grammar.rules {
+        if let Some(previous) = output_rules.insert(rule.output.0.clone(), rule.name.clone()) {
+            return Err(format!(
+                "Rust emitter does not yet support shared output type '{}' for rules '{}' and '{}'",
+                rule.output.0, previous, rule.name
+            ));
+        }
         validate_labeled_groups(&rule.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
         emit_rule(
             &mut output,
@@ -65,7 +72,7 @@ fn emit_rule(
     rule: &Rule,
     precedence: Vec<&rdgen_ir::PrecedenceTable>,
 ) -> Result<(), String> {
-    let enum_name = type_name(&rule.name);
+    let enum_name = type_name(&rule.output.0);
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
@@ -134,7 +141,7 @@ fn emit_rule(
                     ));
                 }
                 let field_type = match field.source_label.as_str() {
-                    "left" | "right" => format!("Box<{}>", type_name(&rule.name)),
+                    "left" | "right" => format!("Box<{}>", type_name(&rule.output.0)),
                     "operator" => "Token".to_owned(),
                     _ => unreachable!("precedence constructor validation guarantees roles"),
                 };
@@ -545,7 +552,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
     output.push_str(&format!(
         "    fn parse_{}(&mut self) -> Result<{}, ParseError> {{\n",
         rule.name,
-        type_name(&rule.name)
+        type_name(&rule.output.0)
     ));
     output.push_str("        let previous_commit = self.committed;\n        self.committed = false;\n");
     if rule.lexical {
@@ -557,7 +564,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         }
         output.push_str(&format!(
             "        let attempt: Result<{}, ParseError> = (|| {{\n",
-            type_name(&rule.name)
+            type_name(&rule.output.0)
         ));
         for (index, element) in alternative.elements.iter().enumerate() {
             let variable = element_variable(element, index);
@@ -566,12 +573,12 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         let construction = if rule.lexical && is_default_constructor(rule, alternative) {
             format!(
                 "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()), span: SourceSpan {{ start: lexical_token_start, end: self.position }} }}",
-                type_name(&rule.name)
+                type_name(&rule.output.0)
             )
         } else {
             format!(
                 "{}::{}{}",
-                type_name(&rule.name),
+                type_name(&rule.output.0),
                 variant_name(rule, alternative, index),
                 emit_constructor_fields(alternative)?
             )
@@ -962,6 +969,29 @@ mod tests {
         assert!(generated.contains("digit: Token"));
         assert!(generated.contains("pub struct SourceSpan { pub start: usize, pub end: usize }"));
         assert!(generated.contains("pub struct Spanned<T> { pub span: SourceSpan, pub value: T }"));
+    }
+
+    #[test]
+    fn emits_declared_rule_output_type() {
+        let grammar = compile(
+            "grammar Demo; start atom; output atom Expr; atom = value: \"x\" => Name(value: value);",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("pub enum Expr {"));
+        assert!(!generated.contains("pub enum Atom {"));
+        assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
+        assert!(generated.contains("Ok(Expr::Name { value: value })"));
+    }
+
+    #[test]
+    fn rejects_shared_output_until_variants_are_merged() {
+        let grammar = compile(
+            "grammar Demo; start atom; output atom Expr; output term Expr; atom = \"a\"; term = \"b\";",
+        )
+        .unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("shared output type 'Expr'"));
     }
 
     #[test]
