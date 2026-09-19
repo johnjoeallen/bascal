@@ -33,9 +33,10 @@ lexical integer_literal  = digit , { digit } ;
 lexical float_literal    = digit , { digit } , "." , digit , { digit } ;
 lexical hex_literal      = "&" , ( "H" | "h" ) , { hex_digit } ;
 lexical octal_literal    = "&" , ( "O" | "o" ) , { digit } ;
-lexical string_literal   = "\"" , { string_char } , "\"" ;
-lexical string_char      = escaped_quote | any_char_except_quote ;
-lexical escaped_quote    = "\\\"" | "\"\"" ;
+(* Match bcc's current lexer exactly: it has no string escape handling.
+ * The proposed backslash/doubled-quote extension belongs in a later grammar
+ * revision once the reference lexer adopts it. *)
+lexical string_literal   = "\"" , { any_char_except_quote } , "\"" ;
 lexical line_comment     = prefix: "'" , body: { any_char_except_newline }
                          => ApostropheComment(prefix: prefix, body: body)
                          | prefix: "//" , body: { any_char_except_newline }
