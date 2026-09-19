@@ -126,8 +126,14 @@ statement_core   = label: label_stmt => Label(label: label)
                  | dim: dim_stmt => Dim(dim: dim)
                  | constant: const_stmt => Const(constant: constant)
                  | print_stmt | lprint_stmt | global: global_decl => Global(global: global)
-                 | open_stmt | line_input_stmt | input_stmt | write_stmt
-                 | file_decl_stmt | field_stmt | get_stmt | put_stmt
+                 | open: open_stmt => Open(open: open)
+                 | line_input: line_input_stmt => LineInput(line_input: line_input)
+                 | input: input_stmt => Input(input: input)
+                 | write: write_stmt => Write(write: write)
+                 | file_declaration: file_decl_stmt => FileDeclaration(file_declaration: file_declaration)
+                 | field: field_stmt => Field(field: field)
+                 | get: get_stmt => Get(get: get)
+                 | put: put_stmt => Put(put: put)
                  | lset: lset_stmt => Lset(lset: lset)
                  | rset: rset_stmt => Rset(rset: rset)
                  | seek: seek_stmt => Seek(seek: seek)
@@ -184,25 +190,42 @@ print_stmt       = "print" ,
 lprint_stmt      = "lprint" , [ "using" , expr , ";" ] ,
                     { print_token } until { "\n" } ;
 print_token      = "," | ";" | expr ;
-file_decl_stmt   = "file" , identifier , [ "as" , identifier ] , "=" ,
-                    "open" , "(" , expr , ")" ,
-                    [ "for" , ( "input" | "output" | "append" ) ] ;
-field_stmt       = "field" , "#" , expr , "," , expr , "as" , identifier ,
-                    { "," , expr , "as" , identifier } ;
-get_stmt         = "get" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
-put_stmt         = "put" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
+file_decl_stmt   = "file" , name: identifier , record_type: [ "as" , identifier ] , "=" ,
+                    "open" , "(" , path: expr , ")" , mode: [ "for" , file_mode ]
+                    => FileDeclaration(name: name, record_type: record_type, path: path, mode: mode) ;
+file_mode         = "input" => Input()
+                 | "output" => Output()
+                 | "append" => Append() ;
+field_stmt       = "field" , "#" , channel: expr , "," , first: field_binding ,
+                    rest: { "," , field_binding }
+                    => Field(channel: channel, first: first, rest: rest) ;
+field_binding    = length: expr , "as" , name: identifier
+                    => Binding(length: length, name: name) ;
+get_stmt         = "get" , "#" , channel: expr , position: [ "," , [ expr ] , [ "," , expr ] ]
+                    => Get(channel: channel, position: position) ;
+put_stmt         = "put" , "#" , channel: expr , position: [ "," , [ expr ] , [ "," , expr ] ]
+                    => Put(channel: channel, position: position) ;
 lset_stmt        = "lset" , target: identifier , "=" , value: expr
                    => Lset(target: target, value: value) ;
 rset_stmt        = "rset" , target: identifier , "=" , value: expr
                    => Rset(target: target, value: value) ;
-open_stmt        = "open" , expr , "for" ,
-                    ( "input" | "output" | "append" | "random" | "binary" ) ,
-                    "as" , "#" , expr , [ "len" , "=" , expr ] ;
-line_input_stmt  = "line" , "input" , "#" , expr , "," , expr ;
-input_stmt       = "input" , "#" , expr , "," , expr , { "," , expr }
-                 | "input" , [ string_literal , ( ";" | "," ) ] ,
-                    expr , { "," , expr } ;
-write_stmt       = "write" , "#" , expr , [ "," , expr , { "," , expr } ] ;
+open_stmt        = "open" , path: expr , "for" , mode: open_mode ,
+                    "as" , "#" , channel: expr , length: [ "len" , "=" , expr ]
+                    => Open(path: path, mode: mode, channel: channel, length: length) ;
+open_mode         = "input" => Input()
+                 | "output" => Output()
+                 | "append" => Append()
+                 | "random" => Random()
+                 | "binary" => Binary() ;
+line_input_stmt  = "line" , "input" , "#" , channel: expr , "," , target: expr
+                    => LineInput(channel: channel, target: target) ;
+input_stmt       = "input" , "#" , channel: expr , "," , first: expr , rest: { "," , expr }
+                    => ChannelInput(channel: channel, first: first, rest: rest)
+                 | "input" , prompt: [ string_literal , ( ";" | "," ) ] ,
+                    first: expr , rest: { "," , expr }
+                    => ConsoleInput(prompt: prompt, first: first, rest: rest) ;
+write_stmt       = "write" , "#" , channel: expr , values: [ "," , expr , { "," , expr } ]
+                    => Write(channel: channel, values: values) ;
 seek_stmt        = "seek" , channel: expr , "," , position: expr
                    => Seek(channel: channel, position: position) ;
 kill_stmt        = "kill" , path: expr => Kill(path: path) ;

@@ -1560,6 +1560,8 @@ mod tests {
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
         assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
+        assert!(generated.contains("pub enum OpenStmt {\n    Open {\n        path: Box<Expr>,\n        mode: Box<OpenMode>,\n        channel: Box<Expr>,\n        length: Option<(Token, Token, Box<Expr>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum FieldBinding {\n    Binding {\n        length: Box<Expr>,\n        name: Box<Identifier>,\n    },\n}"));
     }
 
     #[test]
