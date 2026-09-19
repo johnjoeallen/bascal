@@ -29,11 +29,10 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     for (output_name, rules) in output_groups {
         let mut merged = rules[0].clone();
         if rules.len() > 1 {
-            if rules.iter().any(|rule| {
-                rule.alternatives
-                    .iter()
-                    .any(|alternative| alternative.constructor.fields.is_empty())
-            }) {
+            if rules
+                .iter()
+                .any(|rule| rule.alternatives.iter().any(|alternative| is_default_constructor(rule, alternative)))
+            {
                 return Err(format!(
                     "shared output type '{}' requires explicit constructors on every alternative",
                     output_name
@@ -1040,6 +1039,17 @@ mod tests {
         assert!(generated.contains("    Name {\n        value: Token,\n    },"));
         assert!(!generated.contains("Identity"));
         assert!(generated.contains("Ok(value)"));
+    }
+
+    #[test]
+    fn merges_explicit_zero_field_variants_for_shared_output_types() {
+        let grammar = compile(
+            "grammar Demo; start atom; output atom Expr; output flag Expr; atom = \"a\" => Atom(); flag = \"b\" => Flag();",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("    Atom,\n"));
+        assert!(generated.contains("    Flag,\n"));
     }
 
     #[test]
