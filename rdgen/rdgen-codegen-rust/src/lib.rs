@@ -1539,6 +1539,8 @@ mod tests {
         assert!(generated.contains("ProgramDeclaration {\n        declaration: Box<ProgramDecl>,\n    }"));
         assert!(generated.contains("LibraryDeclaration {\n        declaration: Box<LibraryDecl>,\n    }"));
         assert!(generated.contains("Statement {\n        statement: Box<TopLevelStatement>,\n    }"));
+        assert!(generated.contains("pub enum ProgramDecl {\n    ProgramDeclaration {\n        name: Box<Identifier>,\n        shared: Option<(Token, Box<Identifier>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum RequireDecl {\n    RequireDeclaration {\n        path: Box<Identifier>,\n    },\n}"));
     }
 
     #[test]

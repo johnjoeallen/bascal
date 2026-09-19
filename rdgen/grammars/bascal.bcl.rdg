@@ -56,11 +56,12 @@ file_item        = declaration: program_decl => ProgramDeclaration(declaration: 
                  | record: record_decl => Record(record: record)
                  | statement: top_level_statement => Statement(statement: statement) ;
 
-program_decl     = "program" , identifier , [ "shared" , identifier ] ;
-library_decl     = "library" , identifier ;
-shared_decl      = "shared" , identifier ;
-require_decl     = "require" , identifier ;
-import_decl      = "import" , identifier ;
+program_decl     = "program" , name: identifier , shared: [ "shared" , identifier ]
+                   => ProgramDeclaration(name: name, shared: shared) ;
+library_decl     = "library" , name: identifier => LibraryDeclaration(name: name) ;
+shared_decl      = "shared" , name: identifier => SharedDeclaration(name: name) ;
+require_decl     = "require" , path: identifier => RequireDeclaration(path: path) ;
+import_decl      = "import" , path: identifier => ImportDeclaration(path: path) ;
 
 record_decl      = "record" , identifier ,
                     [ "combines" , identifier , { "," , identifier } ] ,
@@ -121,10 +122,10 @@ statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
 label_stmt       = identifier , ":" ;
 comment_stmt     = raw: line_comment => Raw(comment: raw)
                  | block: block_comment => BlockComment(comment: block) ;
-global_decl      = "global" , identifier ;
+global_decl      = "global" , name: identifier => GlobalDeclaration(name: name) ;
 dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
 dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
-const_stmt       = "const" , identifier , "=" , expr ;
+const_stmt       = "const" , name: identifier , "=" , value: expr => Const(name: name, value: value) ;
 print_stmt       = "print" ,
                     ( "#" , expr , "," , [ "using" , expr , ";" ]
                     | "using" , expr , ";"
