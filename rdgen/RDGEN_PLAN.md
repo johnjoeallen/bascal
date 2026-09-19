@@ -109,6 +109,11 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- normalized `primary`/`ident_primary` leaves: `CallOrArray`/`FileOrRecordIndex`
+  renamed to `Call`/`Index`, float/integer/hex/octal/string literals renamed
+  to `FloatLiteral`/`IntegerLiteral`/`HexLiteral`/`OctalLiteral`/
+  `StringLiteral`, and the redundant `Identifier(...)` wrapper around
+  `ident_primary` dropped in favor of forwarding it with `Identity`;
 - wired BASCAL's `expr` rule to `climb postfix_expr` against the
   `precedence expr` table, deleting `xor_expr` through `pow_expr` and their
   provisional `Xor`/`Or`/`And`/`Not`/`Compare`/`Add`/`Mod`/`IntegerDivide`/
@@ -118,11 +123,28 @@ Recent milestones:
 - `f44b2fe` — annotate BASCAL precedence binary nodes;
 - `c00684d` — use semantic output in precedence helpers.
 
-The generated BASCAL `Expr` now exposes only semantic nodes at the binary/
-unary layer (`Binary`, `Unary`) plus the leaf/postfix shapes
-(`Postfix`, `Member`, `CallOrArray`, `FileOrRecordIndex`, literals, `Name`,
-records). Leaf normalization (literals, calls, members, indexing) and
-declaration/statement shaping (steps 4 onward below) are still outstanding.
+The generated BASCAL `Expr` now exposes semantic nodes at the binary/unary
+layer (`Binary`, `Unary`) and most leaves (`Name`, `Call`, `Index`,
+`*Literal`, `True`/`False`, `RecordLiteral`/`PartialRecordLiteral`). Two
+provisional shapes remain by necessity rather than oversight:
+
+- `postfix_expr`'s `Postfix(base, suffixes: Vec<Member>)` is still a flat
+  list, not the nested `Member`/`Call` chain the design constraints call
+  for (`a.b.c()` should nest, not list) — rdgen has no repetition-fold
+  mechanism yet (a postfix counterpart to the `climb`/`precedence`
+  combine), so each suffix can't be told what its accumulated `base` is at
+  parse time. Needs the same kind of new IR/grammar mechanism `climb` added
+  for infix folding, scoped to postfix folding instead.
+- `primary`'s parenthesized-expression alternative keeps a `Parenthesized`
+  wrapper instead of forwarding via `Identity`, because a single rule may
+  only use the reserved `Identity` constructor once (two forwarding
+  alternatives collide on the same reserved variant name), and
+  `ident_primary`'s forwarding already claims it. `True`/`False` similarly
+  stayed as two variants rather than one shared `Boolean`, since ordinary
+  alternatives (unlike precedence *levels*) can't merge under one
+  constructor name in either backend.
+
+Declaration/statement shaping (steps 6-7 below) is still outstanding.
 
 ## Implementation sequence
 

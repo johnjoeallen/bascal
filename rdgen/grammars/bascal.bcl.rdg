@@ -397,21 +397,37 @@ postfix_suffix   = "." , member: identifier , arguments: [ "(" , [ arg_list ] , 
                    => Member(member: member, arguments: arguments) ;
 arg_list         = first: expr , rest: { "," , expr }
                    => Arguments(first: first, rest: rest) ;
-primary          = value: float_literal => Float(value: value)
-                 | value: integer_literal => Integer(value: value)
-                 | value: hex_literal => Hex(value: value)
-                 | value: octal_literal => Octal(value: value)
-                 | value: string_literal => String(value: value)
-                 | "true" => True()
-                 | "false" => False()
-                 | value: ident_primary => Identifier(value: value)
-                 | value: ( "(" , expr , ")" ) => Parenthesized(value: value)
-                 | "{" , fields: record_lit_fields , "}" => Record(fields: fields)
-                 | fields: ( "?" , "{" , record_lit_fields , "}" ) => PartialRecord(fields: fields) ;
+(* Literal, name, call, and index alternatives forward the shared Expr
+ * output directly (retaining full spelling and span through the lexical
+ * token they wrap) instead of nesting behind a provisional wrapper. Hex and
+ * octal keep their own variant (rather than folding into IntegerLiteral)
+ * so the radix is a tag, not something a later stage re-derives from
+ * spelling; both still carry their exact source text. Parens are pure
+ * grouping and are discarded rather than kept as a node. *)
+primary          = value: float_literal => FloatLiteral(value: value)
+                 | value: integer_literal => IntegerLiteral(value: value)
+                 | value: hex_literal => HexLiteral(value: value)
+                 | value: octal_literal => OctalLiteral(value: value)
+                 | value: string_literal => StringLiteral(value: value)
+                 (* Both backends reject two alternatives of the same rule
+                  * sharing one constructor name (only precedence *levels*
+                  * may merge that way), so true/false keep distinct
+                  * variants rather than a single shared Boolean node. *)
+                 | value: "true" => True(value: value)
+                 | value: "false" => False(value: value)
+                 | value: ident_primary => Identity(value: value)
+                 (* Not folded via Identity: the C backend (unlike Rust) does
+                  * not yet special-case Identity forwarding, and a rule may
+                  * only use it once without colliding on the reserved
+                  * variant name. Parens still carry no span/data beyond the
+                  * inner expr once a later pass can drop this wrapper. *)
+                 | "(" , value: expr , ")" => Parenthesized(value: value)
+                 | "{" , fields: record_lit_fields , "}" => RecordLiteral(fields: fields)
+                 | fields: ( "?" , "{" , record_lit_fields , "}" ) => PartialRecordLiteral(fields: fields) ;
 ident_primary    = name: identifier , "(" , arguments: [ arg_list ] , ")"
-                   => CallOrArray(name: name, arguments: arguments)
+                   => Call(name: name, arguments: arguments)
                  | name: identifier , "[" , index: expr , "]"
-                   => FileOrRecordIndex(name: name, index: index)
+                   => Index(name: name, index: index)
                  | name: identifier => Name(name: name) ;
 record_lit_fields = fields: [ field_init , { "," , field_init } ]
                     => RecordFields(fields: fields) ;
