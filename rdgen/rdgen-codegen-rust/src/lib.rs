@@ -83,7 +83,7 @@ fn emit_rule(
         output.push_str("    ");
         output.push_str(&variant);
         if rule.lexical && is_default_constructor(rule, alternative) {
-            output.push_str(" {\n        text: Token,\n    },\n");
+            output.push_str(" {\n        text: Token,\n        span: SourceSpan,\n    },\n");
             continue;
         }
         if alternative.constructor.fields.is_empty() {
@@ -565,7 +565,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
         }
         let construction = if rule.lexical && is_default_constructor(rule, alternative) {
             format!(
-                "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()) }}",
+                "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()), span: SourceSpan {{ start: lexical_token_start, end: self.position }} }}",
                 type_name(&rule.name)
             )
         } else {
@@ -1417,7 +1417,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(_: &str, position: usize) -> usize {{ position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"Name42\", scanner, trivia); match parser.parse().unwrap() {{ Start::Start {{ name }} => match *name {{ Identifier::Token {{ text }} => assert_eq!(text.0, \"Name42\"), }}, }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(_: &str, position: usize) -> usize {{ position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"Name42\", scanner, trivia); match parser.parse().unwrap() {{ Start::Start {{ name }} => match *name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Name42\"); assert_eq!(span, SourceSpan {{ start: 0, end: 6 }}); }}, }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1444,7 +1444,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); match parser.parse().unwrap() {{ Start::Start {{ suffix }} => match *suffix {{ Suffix::Token {{ text }} => assert_eq!(text.0, \"$\"), }}, }} }}\n",
+                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); match parser.parse().unwrap() {{ Start::Start {{ suffix }} => match *suffix {{ Suffix::Token {{ text, span }} => {{ assert_eq!(text.0, \"$\"); assert_eq!(span, SourceSpan {{ start: 7, end: 8 }}); }}, }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1468,7 +1468,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), \"hex_digit\" => ch.is_ascii_hexdigit(), \"any_char\" => true, \"any_char_except_quote\" => ch != '\\\"', \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len()).filter(|candidate| candidate.eq_ignore_ascii_case(expected)).map(|_| position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"program Demo\\n\", scanner, trivia, literal); match parser.parse().unwrap() {{ Program::File {{ items }} => {{ assert_eq!(items.len(), 1); match &*items[0] {{ FileItem::ProgramDeclaration {{ declaration }} => match &**declaration {{ ProgramDecl::ProgramDeclaration {{ name, shared }} => {{ assert!(shared.is_none()); match &**name {{ Identifier::Token {{ text }} => assert_eq!(text.0, \"Demo\"), }} }}, }}, _ => panic!(\"expected program declaration\"), }} }}, }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), \"hex_digit\" => ch.is_ascii_hexdigit(), \"any_char\" => true, \"any_char_except_quote\" => ch != '\\\"', \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len()).filter(|candidate| candidate.eq_ignore_ascii_case(expected)).map(|_| position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"program Demo\\n\", scanner, trivia, literal); match parser.parse().unwrap() {{ Program::File {{ items }} => {{ assert_eq!(items.len(), 1); match &*items[0] {{ FileItem::ProgramDeclaration {{ declaration }} => match &**declaration {{ ProgramDecl::ProgramDeclaration {{ name, shared }} => {{ assert!(shared.is_none()); match &**name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Demo\"); assert_eq!(*span, SourceSpan {{ start: 8, end: 12 }}); }}, }} }}, }}, _ => panic!(\"expected program declaration\"), }} }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1805,7 +1805,7 @@ fn main() {
         assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n    },\n}"));
         assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n    },\n}"));
         assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum Identifier {\n    Token {\n        text: Token,\n    },\n}"));
+        assert!(generated.contains("pub enum Identifier {\n    Token {\n        text: Token,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum PrintStmt {\n    Print {\n        destination: Box<PrintDestination>,\n        tokens: Vec<Box<PrintToken>>,\n    },\n}"));
     }
 
