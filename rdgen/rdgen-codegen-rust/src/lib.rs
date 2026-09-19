@@ -593,7 +593,7 @@ fn emit_element_parse(element: &Element) -> Result<String, String> {
         Element::Literal { value, .. } => Ok(format!("self.expect_literal({:?})?", value)),
         Element::Token { token, .. } => Ok(format!("self.expect_terminal({:?})?", token)),
         Element::Rule { rule, .. } => Ok(format!("Box::new(self.parse_{}()?)", rule)),
-        Element::SameLine { .. } => emit_element_expression(element),
+        Element::SameLine { .. } => Ok(format!("({})?", emit_element_expression(element)?)),
         Element::Cut { .. } => Ok("{ self.committed = true; () }".into()),
         Element::LineEnd { .. } => Ok("self.expect_line_end()?".into()),
         Element::Newline { .. } => Ok("self.expect_newline()?".into()),
@@ -808,7 +808,7 @@ fn emit_group_value_expression(element: &Element) -> Result<String, String> {
 fn emit_element_expression(element: &Element) -> Result<String, String> {
     match element {
         Element::SameLine { element, .. } => Ok(format!(
-            "{{ let same_line_start = self.position; let previous_same_line_limit = self.same_line_limit; let line_limit = self.source[same_line_start..].find('\\n').map(|offset| same_line_start + offset).unwrap_or(self.source.len()); self.same_line_limit = Some(previous_same_line_limit.map_or(line_limit, |limit| limit.min(line_limit))); let same_line_result = (|| -> Result<_, ParseError> {{ Ok({}) }})(); self.same_line_limit = previous_same_line_limit; match same_line_result {{ Ok(value) => Ok(value), Err(error) => Err(error) }} }}",
+            "{{ let same_line_start = self.position; let previous_same_line_limit = self.same_line_limit; let line_limit = self.source[same_line_start..].find('\\n').map(|offset| same_line_start + offset).unwrap_or(self.source.len()); self.same_line_limit = Some(previous_same_line_limit.map_or(line_limit, |limit| limit.min(line_limit))); let same_line_result = (|| -> Result<_, ParseError> {{ Ok({}) }})(); self.same_line_limit = previous_same_line_limit; same_line_result }}",
             emit_element_parse(element)?
         )),
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() > 1 => {
@@ -1377,7 +1377,7 @@ mod tests {
     #[test]
     fn generated_same_line_optional_stops_at_newline() {
         let grammar = compile(
-            "grammar Lines; start start; start = \"return\", [ same_line expr ], \"end\"; expr = \"x\";",
+            "grammar Lines; start start; start = \"return\", value: [ same_line expr ], \"end\" => Start(value: value); expr = \"x\";",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -1547,6 +1547,8 @@ mod tests {
         assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<Identifier>, Vec<(Token, Box<Identifier>)>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
         assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n    },\n}"));
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Core {\n        core: Box<StatementCore>,\n        continuation: Option<(Token, Box<Statement>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
     }
 
     #[test]

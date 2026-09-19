@@ -116,18 +116,39 @@ typed_ident      = identifier ;
 
 (* ----- Statements ----- *)
 
-top_level_statement = statement | end_stmt ;
-statement        = label_stmt | statement_core , [ ":" , statement ] ;
-statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
-                 | print_stmt | lprint_stmt | global_decl
+top_level_statement = statement: statement => Statement(statement: statement)
+                    | end: end_stmt => End(end: end) ;
+statement        = label: label_stmt => Label(label: label)
+                 | core: statement_core , continuation: [ ":" , statement ]
+                   => Core(core: core, continuation: continuation) ;
+statement_core   = label: label_stmt => Label(label: label)
+                 | comment: comment_stmt => Comment(comment: comment)
+                 | dim: dim_stmt => Dim(dim: dim)
+                 | constant: const_stmt => Const(constant: constant)
+                 | print_stmt | lprint_stmt | global: global_decl => Global(global: global)
                  | open_stmt | line_input_stmt | input_stmt | write_stmt
                  | file_decl_stmt | field_stmt | get_stmt | put_stmt
-                 | lset_stmt | rset_stmt
-                 | seek_stmt | kill_stmt | name_stmt | close_stmt
-                 | data_stmt | read_stmt | restore_stmt
-                 | locate_stmt | color_stmt | swap_stmt
-                 | stop_stmt | cls_stmt | beep_stmt | system_stmt | clear_stmt
-                 | randomize_stmt | poke_stmt | out_stmt | width_stmt
+                 | lset: lset_stmt => Lset(lset: lset)
+                 | rset: rset_stmt => Rset(rset: rset)
+                 | seek: seek_stmt => Seek(seek: seek)
+                 | kill: kill_stmt => Kill(kill: kill)
+                 | rename: name_stmt => Rename(rename: rename)
+                 | close: close_stmt => Close(close: close)
+                 | data: data_stmt => Data(data: data)
+                 | read: read_stmt => Read(read: read)
+                 | restore: restore_stmt => Restore(restore: restore)
+                 | locate: locate_stmt => Locate(locate: locate)
+                 | color: color_stmt => Color(color: color)
+                 | swap: swap_stmt => Swap(swap: swap)
+                 | stop: stop_stmt => Stop(stop: stop)
+                 | cls: cls_stmt => Cls(cls: cls)
+                 | beep: beep_stmt => Beep(beep: beep)
+                 | system: system_stmt => System(system: system)
+                 | clear: clear_stmt => Clear(clear: clear)
+                 | randomize: randomize_stmt => Randomize(randomize: randomize)
+                 | poke: poke_stmt => Poke(poke: poke)
+                 | out: out_stmt => Out(out: out)
+                 | width_stmt
                  | erase_stmt
                  | if_stmt | for_stmt | while_stmt | do_stmt
                  | select_case_stmt
@@ -138,12 +159,14 @@ statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
                  (* assignment_or_expr_stmt remains the final fallback so
                   * keyword-led statements are not consumed as bare calls. *)
                  | assignment_or_expr_stmt ;
-label_stmt       = identifier , ":" ;
+label_stmt       = name: identifier , ":" => Label(name: name) ;
 comment_stmt     = raw: line_comment => Raw(comment: raw)
                  | block: block_comment => BlockComment(comment: block) ;
 global_decl      = "global" , name: identifier => GlobalDeclaration(name: name) ;
-dim_stmt         = ( "dim" | "declare" ) , dim_item , { "," , dim_item } ;
-dim_item         = typed_ident , [ array_axes ] , [ "as" , identifier ] ;
+dim_stmt         = ( "dim" | "declare" ) , first: dim_item , rest: { "," , dim_item }
+                   => Dim(first: first, rest: rest) ;
+dim_item         = name: typed_ident , axes: [ array_axes ] , type_annotation: [ "as" , identifier ]
+                   => DimItem(name: name, axes: axes, type_annotation: type_annotation) ;
 const_stmt       = "const" , name: identifier , "=" , value: expr => Const(name: name, value: value) ;
 print_stmt       = "print" ,
                     ( "#" , expr , "," , [ "using" , expr , ";" ]
@@ -160,8 +183,10 @@ field_stmt       = "field" , "#" , expr , "," , expr , "as" , identifier ,
                     { "," , expr , "as" , identifier } ;
 get_stmt         = "get" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
 put_stmt         = "put" , "#" , expr , [ "," , [ expr ] , [ "," , expr ] ] ;
-lset_stmt        = "lset" , identifier , "=" , expr ;
-rset_stmt        = "rset" , identifier , "=" , expr ;
+lset_stmt        = "lset" , target: identifier , "=" , value: expr
+                   => Lset(target: target, value: value) ;
+rset_stmt        = "rset" , target: identifier , "=" , value: expr
+                   => Rset(target: target, value: value) ;
 open_stmt        = "open" , expr , "for" ,
                     ( "input" | "output" | "append" | "random" | "binary" ) ,
                     "as" , "#" , expr , [ "len" , "=" , expr ] ;
@@ -170,24 +195,28 @@ input_stmt       = "input" , "#" , expr , "," , expr , { "," , expr }
                  | "input" , [ string_literal , ( ";" | "," ) ] ,
                     expr , { "," , expr } ;
 write_stmt       = "write" , "#" , expr , [ "," , expr , { "," , expr } ] ;
-seek_stmt        = "seek" , "#" , expr , "," , expr ;
-kill_stmt        = "kill" , expr ;
-name_stmt        = "name" , expr , "as" , expr ;
-close_stmt       = "close" , "#" , expr ;
-data_stmt        = "data" , expr , { "," , expr } ;
-read_stmt        = "read" , expr , { "," , expr } ;
-restore_stmt     = "restore" , [ same_line identifier ] ;
-locate_stmt      = "locate" , expr , "," , expr ;
-color_stmt       = "color" , expr , [ "," , expr ] ;
-swap_stmt        = "swap" , expr , "," , expr ;
-stop_stmt        = "stop" ;
-cls_stmt         = "cls" ;
-beep_stmt        = "beep" ;
-system_stmt      = "system" ;
-clear_stmt       = "clear" ;
-randomize_stmt   = "randomize" , [ same_line expr ] ;
-poke_stmt        = "poke" , expr , "," , expr ;
-out_stmt         = "out" , expr , "," , expr ;
+seek_stmt        = "seek" , channel: expr , "," , position: expr
+                   => Seek(channel: channel, position: position) ;
+kill_stmt        = "kill" , path: expr => Kill(path: path) ;
+name_stmt        = "name" , source: expr , "as" , destination: expr
+                   => Rename(source: source, destination: destination) ;
+close_stmt       = "close" , "#" , channel: expr => Close(channel: channel) ;
+data_stmt        = "data" , first: expr , rest: { "," , expr } => Data(first: first, rest: rest) ;
+read_stmt        = "read" , first: expr , rest: { "," , expr } => Read(first: first, rest: rest) ;
+restore_stmt     = "restore" , target: [ same_line identifier ] => Restore(target: target) ;
+locate_stmt      = "locate" , row: expr , "," , column: expr
+                   => Locate(row: row, column: column) ;
+color_stmt       = "color" , foreground: expr , background: [ "," , expr ]
+                   => Color(foreground: foreground, background: background) ;
+swap_stmt        = "swap" , left: expr , "," , right: expr => Swap(left: left, right: right) ;
+stop_stmt        = "stop" => Stop() ;
+cls_stmt         = "cls" => Cls() ;
+beep_stmt        = "beep" => Beep() ;
+system_stmt      = "system" => System() ;
+clear_stmt       = "clear" => Clear() ;
+randomize_stmt   = "randomize" , seed: [ same_line expr ] => Randomize(seed: seed) ;
+poke_stmt        = "poke" , address: expr , "," , value: expr => Poke(address: address, value: value) ;
+out_stmt         = "out" , port: expr , "," , value: expr => Out(port: port, value: value) ;
 width_stmt       = "width" , [ "#" , expr , "," ] , expr ;
 erase_stmt       = "erase" , identifier , { "," , identifier } ;
 return_stmt      = "return" , [ same_line expr ] ;
