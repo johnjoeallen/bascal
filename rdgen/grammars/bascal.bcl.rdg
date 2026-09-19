@@ -91,9 +91,7 @@ typed_ident      = identifier ;
 (* ----- Statements ----- *)
 
 top_level_statement = statement | end_stmt ;
-statement        = colon_statement | statement_core ;
-colon_statement  = label_stmt , statement
-                 | ( print_stmt | input_stmt ) , ":" , statement ;
+statement        = label_stmt | statement_core , [ ":" , statement ] ;
 statement_core   = label_stmt | comment_stmt | dim_stmt | const_stmt
                  | print_stmt | lprint_stmt | global_decl
                  | open_stmt | line_input_stmt | input_stmt | write_stmt
@@ -185,8 +183,8 @@ if_stmt          = "if" , expr , "then" ,
 block_if_tail    = { statement } until { "elseif", "else", "end" } ,
                     ( "elseif" , expr , "then" , block_if_tail
                     | [ "else" , { statement } until { "end" } ] , "end" , "if" ) ;
-single_line_if_tail = statement , { ":" , statement }
-                     , [ "else" , statement , { ":" , statement } ] ;
+single_line_if_tail = same_line statement , { same_line statement }
+                     , [ "else" , same_line statement , { same_line statement } ] ;
 for_stmt         = "for" , typed_ident , "=" , expr ,
                     ( "to" , expr , [ "step" , expr ]
                     | "downto" , expr ) ,

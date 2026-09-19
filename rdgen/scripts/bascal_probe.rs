@@ -21,7 +21,128 @@ fn scan_terminal(source: &str, position: usize, name: &str) -> Option<(Token, us
 
 fn probe_match_literal(source: &str, position: usize, expected: &str) -> Option<usize> {
     let candidate = source.get(position..)?.get(..expected.len())?;
-    candidate.eq_ignore_ascii_case(expected).then_some(position + expected.len())
+    if !candidate.eq_ignore_ascii_case(expected) {
+        return None;
+    }
+    let end = position + expected.len();
+    if is_bascal_keyword(expected)
+        && source
+            .get(end..)
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|character| {
+                character.is_ascii_alphanumeric()
+                    || matches!(character, '_' | '.' | '$' | '%' | '!' | '#' | '&')
+            })
+    {
+        return None;
+    }
+    Some(end)
+}
+
+fn is_bascal_keyword(word: &str) -> bool {
+    matches!(
+        word.to_ascii_lowercase().as_str(),
+        "and"
+            | "append"
+            | "as"
+            | "base"
+            | "beep"
+            | "binary"
+            | "byref"
+            | "byval"
+            | "case"
+            | "catch"
+            | "clear"
+            | "close"
+            | "cls"
+            | "color"
+            | "combines"
+            | "const"
+            | "continue"
+            | "data"
+            | "declare"
+            | "dim"
+            | "do"
+            | "double"
+            | "downto"
+            | "else"
+            | "elseif"
+            | "end"
+            | "erase"
+            | "error"
+            | "exit"
+            | "false"
+            | "field"
+            | "file"
+            | "finally"
+            | "fluent"
+            | "for"
+            | "function"
+            | "get"
+            | "global"
+            | "gosub"
+            | "goto"
+            | "if"
+            | "import"
+            | "input"
+            | "integer"
+            | "is"
+            | "kill"
+            | "let"
+            | "library"
+            | "line"
+            | "locate"
+            | "long"
+            | "loop"
+            | "lprint"
+            | "lset"
+            | "method"
+            | "mod"
+            | "name"
+            | "next"
+            | "not"
+            | "on"
+            | "open"
+            | "option"
+            | "or"
+            | "out"
+            | "output"
+            | "poke"
+            | "print"
+            | "procedure"
+            | "program"
+            | "put"
+            | "random"
+            | "randomize"
+            | "read"
+            | "record"
+            | "require"
+            | "restore"
+            | "resume"
+            | "return"
+            | "rset"
+            | "seek"
+            | "select"
+            | "shared"
+            | "single"
+            | "step"
+            | "stop"
+            | "string"
+            | "swap"
+            | "system"
+            | "then"
+            | "throw"
+            | "to"
+            | "true"
+            | "try"
+            | "until"
+            | "using"
+            | "wend"
+            | "while"
+            | "width"
+            | "write"
+            | "xor"
+    )
 }
 
 fn skip_trivia(source: &str, mut position: usize) -> usize {
