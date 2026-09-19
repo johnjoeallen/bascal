@@ -11,14 +11,16 @@ generation to rdgen.
 
 ## Current inventory
 
-The current Rust emitter generates a typed concrete AST, not yet the target
-semantic AST.
+The current Rust emitter still generates a mixed AST, but BASCAL expressions
+now use one shared `Expr` output type. The first migration step removes the
+public precedence-layer enums; expression constructors still need a later
+normalization pass to become the final `Unary`/`Binary`/`Call` shape.
 
 | Current category | Examples | Classification | Migration |
 | --- | --- | --- | --- |
 | File and declaration wrappers | `Program::File`, `FileItem`, `RecordDecl`, `FunctionDecl` | Mostly semantic, but wrapped by grammar rules | Retain their language concepts; remove routing-only wrappers. |
 | Statement wrappers | `Statement`, `StatementCore`, `TopLevelStatement` | Parser artifacts | Emit one semantic statement enum and parser-owned statement-list logic. |
-| Expression layers | `Expr`, `XorExpr`, `OrExpr`, `AddExpr`, `PostfixExpr`, `Primary` | Parser artifacts | Construct a single `Expr` semantic enum directly. |
+| Expression layers | `XorExpr`, `OrExpr`, `AddExpr`, `PostfixExpr`, `Primary` are now hidden; `Expr` contains their current constructors | Transitional semantic output | Fold operator repetitions and rename remaining parser-shaped constructors to the target `Unary`/`Binary`/`Call`/`Member`/`Index` nodes. |
 | Lexical rules | `Identifier::Token`, `IntegerLiteral::Token`, comments | Provisional concrete payloads | Retain spelling and add source spans; convert only where a semantic literal value is required. |
 | Named operators and modes | `AddOp`, `OpenMode`, `BranchKind` | Mixed | Operator and mode are semantic enums; their parser-rule wrappers are not. |
 | Default alternatives | `AltN` | Provisional | Replace with explicit semantic constructors or reject them for the semantic frontend. |

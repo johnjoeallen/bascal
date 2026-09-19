@@ -12,8 +12,9 @@ Rust is currently the only completion target and the reference backend for
 BASCAL. The C emitter is retained as an experimental pressure test, but C++
 and GC-language backends are deferred until the Rust/BASCAL path is complete.
 
-The current BASCAL output remains a concrete typed AST while the semantic
-frontend is built incrementally. The target model, migration boundary, and
+The BASCAL frontend is being migrated incrementally: expression precedence
+layers now share one generated `Expr` output, while declaration and statement
+normalization remains in progress. The target model, migration boundary, and
 validation split are documented in [SEMANTIC_FRONTEND.md](SEMANTIC_FRONTEND.md).
 
 The first grammar fixture is [`grammars/bascal.bcl.rdg`](grammars/bascal.bcl.rdg),

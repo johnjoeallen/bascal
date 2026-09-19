@@ -15,6 +15,11 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     output.push_str("pub struct SourceSpan { pub start: usize, pub end: usize }\n\n");
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str("pub struct Spanned<T> { pub span: SourceSpan, pub value: T }\n\n");
+    let output_types = grammar
+        .rules
+        .iter()
+        .map(|rule| (rule.name.clone(), type_name(&rule.output.0)))
+        .collect::<std::collections::HashMap<_, _>>();
     let mut output_groups: Vec<(String, Vec<&Rule>)> = Vec::new();
     for rule in &grammar.rules {
         if let Some((_, rules)) = output_groups
@@ -52,6 +57,7 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
                 .iter()
                 .filter(|table| rules.iter().any(|rule| table.rule == rule.name))
                 .collect(),
+            &output_types,
         )?;
     }
     Ok(output)
@@ -91,6 +97,7 @@ fn emit_rule(
     output: &mut String,
     rule: &Rule,
     precedence: Vec<&rdgen_ir::PrecedenceTable>,
+    output_types: &std::collections::HashMap<String, String>,
 ) -> Result<(), String> {
     let enum_name = type_name(&rule.output.0);
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
@@ -137,7 +144,7 @@ fn emit_rule(
                     field.field, rule.name
                 ));
             }
-            output.push_str(&format!("        {}: {},\n", generated_name, rust_type(element)));
+            output.push_str(&format!("        {}: {},\n", generated_name, rust_type(element, output_types)));
         }
         output.push_str("    },\n");
     }
@@ -244,38 +251,44 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
     None
 }
 
-fn rust_type(element: &Element) -> String {
+fn rust_type(element: &Element, output_types: &std::collections::HashMap<String, String>) -> String {
     match element {
-        Element::Rule { rule, .. } => format!("Box<{}>", type_name(rule)),
+        Element::Rule { rule, .. } => format!(
+            "Box<{}>",
+            output_types
+                .get(rule)
+                .cloned()
+                .unwrap_or_else(|| type_name(rule))
+        ),
         Element::Token { .. } | Element::Literal { .. } => "Token".into(),
         Element::Repeat {
             element,
             max: Some(1),
             ..
-        } => format!("Option<{}>", rust_type(rust_repeat_child(element))),
+        } => format!("Option<{}>", rust_type(rust_repeat_child(element), output_types)),
         Element::Repeat { element, .. } => {
-            format!("Vec<{}>", rust_type(rust_repeat_child(element)))
+            format!("Vec<{}>", rust_type(rust_repeat_child(element), output_types))
         }
         Element::Group { alternatives, .. } if alternatives.len() == 1 => {
-            rust_group_type(&alternatives[0])
+            rust_group_type(&alternatives[0], output_types)
         }
         Element::Group { .. } => "()".into(),
-        Element::SameLine { element, .. } => rust_type(element),
+        Element::SameLine { element, .. } => rust_type(element, output_types),
         Element::Cut { .. } => "()".into(),
         Element::LineEnd { .. } => "()".into(),
         Element::Newline { .. } => "()".into(),
     }
 }
 
-fn rust_group_type(elements: &[Element]) -> String {
+fn rust_group_type(elements: &[Element], output_types: &std::collections::HashMap<String, String>) -> String {
     match elements {
         [] => "()".into(),
-        [element] => rust_type(element),
+        [element] => rust_type(element, output_types),
         elements => format!(
             "({})",
             elements
                 .iter()
-                .map(rust_type)
+                .map(|element| rust_type(element, output_types))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -471,7 +484,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    pub fn with_scanner_and_trivia(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper) -> Self { Self::with_lexical_config(source, scan_terminal, skip_trivia, match_literal) }\n"
             + "    pub fn with_lexical_config(source: &'a str, scan_terminal: TerminalScanner, skip_trivia: TriviaSkipper, match_literal: LiteralMatcher) -> Self { Self { source, position: 0, scan_terminal, skip_trivia, match_literal, best_error: None, lexical_mode: false, same_line_limit: None, committed: false } }\n"
             + "    pub fn source_span(&self, start: usize, end: usize) -> Option<SourceSpan> { (start <= end && end <= self.source.len() && self.source.is_char_boundary(start) && self.source.is_char_boundary(end)).then_some(SourceSpan { start, end }) }\n"
-            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.name) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
+            + "    pub fn parse(&mut self) -> Result<" + &type_name(&start.output.0) + ", ParseError> { let value = match self.parse_" + &start.name + "() { Ok(value) => value, Err(error) => return Err(self.best_error.take().unwrap_or(error)) }; self.skip_trivia(); if self.position != self.source.len() { let error = ParseError { message: \"unexpected trailing input\".into(), position: self.position }; self.remember_error(&error); return Err(self.best_error.take().unwrap_or(error)); } Ok(value) }\n"
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); let next = self.same_line_limit.map_or(next, |limit| next.min(limit)); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn expect_line_end(&mut self) -> Result<(), ParseError> { while self.position < self.source.len() && matches!(self.source.as_bytes()[self.position], b' ' | b'\\t' | b'\\r') && self.same_line_limit.map_or(true, |limit| self.position < limit) { self.position += 1; } if self.same_line_limit.is_some_and(|limit| limit < self.source.len() && self.position >= limit) { let error = ParseError { message: \"expected same-line statement terminator\".into(), position: self.position }; self.remember_error(&error); return Err(error); } if self.position == self.source.len() { return Ok(()); } if self.source[self.position..].starts_with(':') { self.position += 1; return Ok(()); } if self.source[self.position..].starts_with('\\n') { self.position += 1; while self.position < self.source.len() && self.source[self.position..].starts_with('\\n') { self.position += 1; } return Ok(()); } let error = ParseError { message: \"expected statement terminator\".into(), position: self.position }; self.remember_error(&error); Err(error) }\n"
@@ -599,7 +612,10 @@ fn emit_parser_rule(output: &mut String, rule: &Rule) -> Result<(), String> {
             emit_element_binding(output, element, &variable, "            ")?;
         }
         let construction = if is_identity_constructor(alternative) {
-            field_name(&alternative.constructor.fields[0].source_label)
+            format!(
+                "*{}",
+                field_name(&alternative.constructor.fields[0].source_label)
+            )
         } else if rule.lexical && is_default_constructor(rule, alternative) {
             format!(
                 "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()), span: SourceSpan {{ start: lexical_token_start, end: self.position }} }}",
@@ -771,11 +787,12 @@ fn emit_element_binding(
                 return Ok(());
             }
             let first = first.expect("checked above");
-            let expected_type = rust_type(first);
+            let output_types = std::collections::HashMap::new();
+            let expected_type = rust_type(first, &output_types);
             if alternatives.iter().any(|alternative| {
                 alternative
                     .first()
-                    .map_or(true, |element| rust_type(element) != expected_type)
+                    .map_or(true, |element| rust_type(element, &output_types) != expected_type)
             }) {
                 output.push_str(&format!(
                     "{}let {} = {};\n",
@@ -1024,6 +1041,7 @@ mod tests {
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
         assert!(generated.contains("    Atom {\n        value: Token,\n    },"));
         assert!(generated.contains("    Term {\n        value: Token,\n    },"));
+        assert!(generated.contains("    Atom {\n        value: Token,\n    },"));
         assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
         assert!(generated.contains("fn parse_term(&mut self) -> Result<Expr, ParseError>"));
     }
@@ -1038,7 +1056,18 @@ mod tests {
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
         assert!(generated.contains("    Name {\n        value: Token,\n    },"));
         assert!(!generated.contains("Identity"));
-        assert!(generated.contains("Ok(value)"));
+        assert!(generated.contains("Ok(*value)"));
+    }
+
+    #[test]
+    fn shared_output_fields_use_the_declared_output_type() {
+        let grammar = compile(
+            "grammar Demo; start wrapper; output wrapper Expr; output atom Expr; wrapper = value: atom => Wrapper(value: value); atom = value: \"x\" => Name(value: value);",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("value: Box<Expr>"));
+        assert!(generated.contains("pub fn parse(&mut self) -> Result<Expr, ParseError>"));
     }
 
     #[test]
@@ -1880,15 +1909,18 @@ fn main() {
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Core {\n        core: Box<StatementCore>,\n        continuation: Option<(Token, Box<Statement>)>,\n    },\n}"));
         assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
-        assert!(generated.contains("pub enum Expr {\n    Expression {\n        value: Box<XorExpr>,\n    },\n}"));
+        assert!(generated.contains("pub enum Expr {\n    Xor {\n        first: Box<Expr>,\n        rest: Vec<(Token, Box<Expr>)>,\n    },"));
+        assert!(!generated.contains("pub enum XorExpr {"));
+        assert!(!generated.contains("pub enum AddExpr {"));
+        assert!(!generated.contains("pub enum PostfixExpr {"));
+        assert!(!generated.contains("pub enum Primary {"));
         assert!(generated.contains("pub enum ReturnType {\n    Integer,\n    Long,\n    Single,\n    Double,\n    String,\n    Suffix {\n        value: Box<Suffix>,\n    },\n}"));
         assert!(generated.contains("pub enum CompareOp {\n    NotEqual,\n    LessOrEqual,\n    GreaterOrEqual,\n    Equal,\n    Less,\n    Greater,\n}"));
         assert!(!generated.lines().any(|line| {
             let trimmed = line.trim();
             trimmed.starts_with("Alt") && trimmed.ends_with(',')
         }));
-        assert!(generated.contains("pub enum OrExpr {\n    Or {\n        first: Box<AndExpr>,\n        rest: Vec<(Box<OrOp>, Box<AndExpr>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum Primary {\n    Float {\n        value: Box<FloatLiteral>,\n    },"));
+        assert!(generated.contains("    Or {\n        first: Box<Expr>,\n        rest: Vec<(Box<OrOp>, Box<Expr>)>,\n    },"));
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
         assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));

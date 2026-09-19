@@ -25,6 +25,25 @@ precedence expr {
     right "^";
 }
 
+(* Expression precedence layers are parser machinery. They all return the
+ * shared semantic Expr output; Identity annotations below forward values
+ * across layers without exposing grammar-production enums. *)
+output expr Expr;
+output xor_expr Expr;
+output or_expr Expr;
+output and_expr Expr;
+output not_expr Expr;
+output compare_expr Expr;
+output add_expr Expr;
+output mod_expr Expr;
+output intdiv_expr Expr;
+output mul_expr Expr;
+output unary_expr Expr;
+output pow_expr Expr;
+output postfix_expr Expr;
+output primary Expr;
+output ident_primary Expr;
+
 (* ----- Lexical terminals ----- *)
 
 lexical identifier       = ( letter | "_" ) , { letter | digit | "_" | "." } , [ suffix ] ;
@@ -370,7 +389,7 @@ mid_assign          = "mid" , "$" , "(" , target: expr , "," , start: expr
  * < integer division < multiplication/division < unary - < ^ (right associative).
  *)
 
-expr             = value: xor_expr => Expression(value: value) ;
+expr             = value: xor_expr => Identity(value: value) ;
 xor_expr         = first: or_expr , rest: { "xor" , or_expr }
                    => Xor(first: first, rest: rest) ;
 or_expr          = first: and_expr , rest: { or_op , and_expr }
@@ -382,7 +401,7 @@ and_expr         = first: not_expr , rest: { and_op , not_expr }
 and_op           = "and" => And()
                  | "&&" => ShortCircuitAnd() ;
 not_expr         = "not" , operand: not_expr => Not(operand: operand)
-                 | value: compare_expr => Compare(value: value) ;
+                 | value: compare_expr => Identity(value: value) ;
 compare_expr     = first: add_expr , rest: { compare_op , add_expr }
                    => Compare(first: first, rest: rest) ;
 compare_op       = "<>" => NotEqual()
@@ -404,7 +423,7 @@ mul_expr         = first: unary_expr , rest: { mul_op , unary_expr }
 mul_op           = "*" => Multiply()
                  | "/" => Divide() ;
 unary_expr       = "-" , operand: unary_expr => Negate(operand: operand)
-                 | value: pow_expr => Power(value: value) ;
+                 | value: pow_expr => Identity(value: value) ;
 pow_expr         = base: postfix_expr , exponent: [ "^" , unary_expr ]
                    => Power(base: base, exponent: exponent) ;
 postfix_expr     = base: primary , suffixes: { postfix_suffix }
