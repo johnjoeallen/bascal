@@ -15,22 +15,43 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     output.push_str("pub struct SourceSpan { pub start: usize, pub end: usize }\n\n");
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str("pub struct Spanned<T> { pub span: SourceSpan, pub value: T }\n\n");
-    let mut output_rules = std::collections::HashMap::new();
+    let mut output_groups: Vec<(String, Vec<&Rule>)> = Vec::new();
     for rule in &grammar.rules {
-        if let Some(previous) = output_rules.insert(rule.output.0.clone(), rule.name.clone()) {
-            return Err(format!(
-                "Rust emitter does not yet support shared output type '{}' for rules '{}' and '{}'",
-                rule.output.0, previous, rule.name
-            ));
+        if let Some((_, rules)) = output_groups
+            .iter_mut()
+            .find(|(output, _)| output == &rule.output.0)
+        {
+            rules.push(rule);
+        } else {
+            output_groups.push((rule.output.0.clone(), vec![rule]));
         }
-        validate_labeled_groups(&rule.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
+    }
+    for (output_name, rules) in output_groups {
+        let mut merged = rules[0].clone();
+        if rules.len() > 1 {
+            if rules.iter().any(|rule| {
+                rule.alternatives
+                    .iter()
+                    .any(|alternative| alternative.constructor.fields.is_empty())
+            }) {
+                return Err(format!(
+                    "shared output type '{}' requires explicit constructors on every alternative",
+                    output_name
+                ));
+            }
+            merged.alternatives = rules
+                .iter()
+                .flat_map(|rule| rule.alternatives.iter().cloned())
+                .collect();
+        }
+        validate_labeled_groups(&merged.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
         emit_rule(
             &mut output,
-            rule,
+            &merged,
             grammar
                 .precedence
                 .iter()
-                .filter(|table| table.rule == rule.name)
+                .filter(|table| rules.iter().any(|rule| table.rule == rule.name))
                 .collect(),
         )?;
     }
@@ -985,13 +1006,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_shared_output_until_variants_are_merged() {
+    fn merges_explicit_variants_for_shared_output_types() {
         let grammar = compile(
-            "grammar Demo; start atom; output atom Expr; output term Expr; atom = \"a\"; term = \"b\";",
+            "grammar Demo; start atom; output atom Expr; output term Expr; atom = value: \"a\" => Atom(value: value); term = value: \"b\" => Term(value: value);",
         )
         .unwrap();
-        let error = emit_ast(&grammar).unwrap_err();
-        assert!(error.contains("shared output type 'Expr'"));
+        let generated = emit(&grammar).unwrap();
+        assert_eq!(generated.matches("pub enum Expr {").count(), 1);
+        assert!(generated.contains("    Atom {\n        value: Token,\n    },"));
+        assert!(generated.contains("    Term {\n        value: Token,\n    },"));
+        assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
+        assert!(generated.contains("fn parse_term(&mut self) -> Result<Expr, ParseError>"));
     }
 
     #[test]
