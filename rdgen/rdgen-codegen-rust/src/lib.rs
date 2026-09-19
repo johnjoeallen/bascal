@@ -103,6 +103,10 @@ fn emit_rule(
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
+    let mut precedence_variants: std::collections::HashMap<
+        String,
+        Vec<rdgen_ir::FieldBinding>,
+    > = std::collections::HashMap::new();
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         if is_identity_constructor(alternative) {
             continue;
@@ -155,11 +159,18 @@ fn emit_rule(
             };
             let variant = type_name(&constructor.type_name.0);
             if !variants.insert(variant.clone()) {
+                if precedence_variants
+                    .get(&variant)
+                    .is_some_and(|fields| same_constructor_fields(fields, &constructor.fields))
+                {
+                    continue;
+                }
                 return Err(format!(
                     "duplicate AST variant '{}' in rule '{}', including precedence constructors",
                     variant, rule.name
                 ));
             }
+            precedence_variants.insert(variant.clone(), constructor.fields.clone());
             output.push_str(&format!("    {} {{\n", variant));
             let mut field_names = std::collections::HashSet::new();
             for field in &constructor.fields {
@@ -204,6 +215,13 @@ fn is_default_constructor(rule: &Rule, alternative: &rdgen_ir::Alternative) -> b
 fn is_identity_constructor(alternative: &rdgen_ir::Alternative) -> bool {
     alternative.constructor.type_name.0 == "Identity"
         && alternative.constructor.fields.len() == 1
+}
+
+fn same_constructor_fields(left: &[rdgen_ir::FieldBinding], right: &[rdgen_ir::FieldBinding]) -> bool {
+    left.len() == right.len()
+        && left.iter().zip(right).all(|(left, right)| {
+            left.field == right.field && left.source_label == right.source_label
+        })
 }
 
 fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a Element> {
@@ -1921,6 +1939,8 @@ fn main() {
             trimmed.starts_with("Alt") && trimmed.ends_with(',')
         }));
         assert!(generated.contains("    Or {\n        first: Box<Expr>,\n        rest: Vec<(Box<OrOp>, Box<Expr>)>,\n    },"));
+        assert!(generated.contains("    Binary {\n        left: Box<Expr>,\n        operator: Token,\n        right: Box<Expr>,\n    },"));
+        assert!(generated.contains("constructor_type: Some(\"Binary\")"));
         assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
         assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));

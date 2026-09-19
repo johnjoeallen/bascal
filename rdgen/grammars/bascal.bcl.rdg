@@ -14,15 +14,15 @@ grammar Bascal;
 start program;
 
 precedence expr {
-    left "xor";
-    left "or", "||";
-    left "and", "&&";
-    left "=", "<>", "<", ">", "<=", ">=";
-    left "+", "-";
-    left "mod";
-    left "\\";
-    left "*", "/";
-    right "^";
+    left "xor" => Binary(left: left, operator: operator, right: right);
+    left "or", "||" => Binary(left: left, operator: operator, right: right);
+    left "and", "&&" => Binary(left: left, operator: operator, right: right);
+    left "=", "<>", "<", ">", "<=", ">=" => Binary(left: left, operator: operator, right: right);
+    left "+", "-" => Binary(left: left, operator: operator, right: right);
+    left "mod" => Binary(left: left, operator: operator, right: right);
+    left "\\" => Binary(left: left, operator: operator, right: right);
+    left "*", "/" => Binary(left: left, operator: operator, right: right);
+    right "^" => Binary(left: left, operator: operator, right: right);
 }
 
 (* Expression precedence layers are parser machinery. They all return the
