@@ -72,14 +72,18 @@ record_member    = field: field_decl => Field(field: field)
                  | method: inline_method => InlineMethod(method: method) ;
 field_decl       = name: identifier , ":" , field_type: field_type
                    => FieldDeclaration(name: name, field_type: field_type) ;
-field_type       = "string" , capacity: [ "(" , integer_literal , ")" ]
-                   => StringType(capacity: capacity)
+field_type       = "string" , capacity: [ "(" , integer_literal , ")" ] , alignment: [ string_align ]
+                   => StringType(capacity: capacity, alignment: alignment)
                  | "int16" => Int16Type()
                  | "int" => IntType()
                  | "int32" => Int32Type()
                  | "float32" => Float32Type()
                  | "float64" => Float64Type()
                  | record: identifier => RecordType(record: record) ;
+string_align     = "lpad" => LeftPad()
+                 | "left" => Left()
+                 | "rpad" => RightPad()
+                 | "right" => Right() ;
 
 subprogram       = function: function_decl => Function(function: function)
                  | procedure: procedure_decl => Procedure(procedure: procedure)

@@ -1402,7 +1402,7 @@ mod tests {
     #[test]
     fn generated_lexical_alternatives_restart_after_trivia() {
         let grammar = compile(
-            "grammar Suffix; start start; lexical suffix = \"%\" | \"$\"; start = \"method\", suffix;",
+            "grammar Suffix; start start; lexical suffix = \"%\" | \"$\"; start = \"method\", suffix: suffix => Start(suffix: suffix);",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -1413,8 +1413,107 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); parser.parse().unwrap(); }}\n",
+                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); match parser.parse().unwrap() {{ Start::Start {{ suffix }} => match *suffix {{ Suffix::Token {{ text }} => assert_eq!(text.0, \"$\"), }}, }} }}\n",
                 generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_bascal_parser_preserves_named_declaration_ast_fields() {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("bascal-ast");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), \"hex_digit\" => ch.is_ascii_hexdigit(), \"any_char\" => true, \"any_char_except_quote\" => ch != '\\\"', \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len()).filter(|candidate| candidate.eq_ignore_ascii_case(expected)).map(|_| position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"program Demo\\n\", scanner, trivia, literal); match parser.parse().unwrap() {{ Program::File {{ items }} => {{ assert_eq!(items.len(), 1); match &*items[0] {{ FileItem::ProgramDeclaration {{ declaration }} => match &**declaration {{ ProgramDecl::ProgramDeclaration {{ name, shared }} => {{ assert!(shared.is_none()); match &**name {{ Identifier::Token {{ text }} => assert_eq!(text.0, \"Demo\"), }} }}, }}, _ => panic!(\"expected program declaration\"), }} }}, }} }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    #[test]
+    fn generated_bascal_parser_retains_comments_and_record_string_alignment() {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("bascal-comment-and-record");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\n{}",
+                generated.to_str().unwrap(),
+                r#"
+fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
+    if name == "any_char" && source.get(position..)?.starts_with("*/") {
+        return None;
+    }
+    let ch = source.get(position..)?.chars().next()?;
+    let accepted = match name {
+        "letter" => ch.is_ascii_alphabetic(),
+        "digit" => ch.is_ascii_digit(),
+        "hex_digit" => ch.is_ascii_hexdigit(),
+        "any_char" => true,
+        "any_char_except_quote" => ch != '"',
+        "any_char_except_newline" => ch != '\n',
+        _ => false,
+    };
+    accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8()))
+}
+fn trivia(source: &str, mut position: usize) -> usize {
+    while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {
+        position += source[position..].chars().next().unwrap().len_utf8();
+    }
+    position
+}
+fn literal(source: &str, position: usize, expected: &str) -> Option<usize> {
+    source.get(position..)?.get(..expected.len())
+        .filter(|candidate| candidate.eq_ignore_ascii_case(expected))
+        .map(|_| position + expected.len())
+}
+fn main() {
+    let source = "// retained\nrecord R\ntitle: string(12) right\nend record\n";
+    let mut parser = Parser::with_lexical_config(source, scanner, trivia, literal);
+    let Program::File { items } = parser.parse().unwrap();
+    assert_eq!(items.len(), 2);
+
+    let FileItem::Statement { statement } = &*items[0] else { panic!("expected top-level comment") };
+    let TopLevelStatement::Statement { statement } = &**statement else { panic!("expected statement") };
+    let Statement::Core { core, .. } = &**statement else { panic!("expected core statement") };
+    let StatementCore::Comment { comment } = &**core else { panic!("expected comment") };
+    let CommentStmt::Raw { comment } = &**comment else { panic!("expected raw comment") };
+    let LineComment::SlashComment { prefix, body } = &**comment else { panic!("expected slash comment") };
+    assert_eq!(prefix.0, "//");
+    assert_eq!(body.iter().map(|token| token.0.as_str()).collect::<String>(), " retained");
+
+    let FileItem::Record { record } = &*items[1] else { panic!("expected record declaration") };
+    let RecordDecl::RecordDeclaration { members, .. } = &**record else { panic!("expected record declaration") };
+    let RecordMember::Field { field } = &*members[0] else { panic!("expected record field") };
+    let FieldDecl::FieldDeclaration { field_type, .. } = &**field else { panic!("expected field declaration") };
+    let FieldType::StringType { alignment, .. } = &**field_type else { panic!("expected string field type") };
+    assert!(matches!(alignment.as_deref(), Some(StringAlign::Right {})));
+}
+"#
             ),
         )
         .unwrap();
