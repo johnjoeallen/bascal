@@ -811,6 +811,11 @@ fn emit_element_expression(element: &Element) -> Result<String, String> {
             "{{ let same_line_start = self.position; let previous_same_line_limit = self.same_line_limit; let line_limit = self.source[same_line_start..].find('\\n').map(|offset| same_line_start + offset).unwrap_or(self.source.len()); self.same_line_limit = Some(previous_same_line_limit.map_or(line_limit, |limit| limit.min(line_limit))); let same_line_result = (|| -> Result<_, ParseError> {{ Ok({}) }})(); self.same_line_limit = previous_same_line_limit; same_line_result }}",
             emit_element_parse(element)?
         )),
+        Element::Group { alternatives, .. }
+            if alternatives.len() == 1 && alternatives[0].len() == 1 =>
+        {
+            emit_element_parse(&alternatives[0][0])
+        }
         Element::Group { alternatives, .. } if alternatives.len() == 1 && alternatives[0].len() > 1 => {
             emit_group_value_expression(element)
         }
@@ -2130,7 +2135,10 @@ mod tests {
 
     #[test]
     fn generated_rust_parser_captures_optional_multi_element_group() {
-        let grammar = compile("grammar Start; start = pair: [ ( \"a\", \"b\" ) ] => Start(pair: pair);").unwrap();
+        let grammar = compile(
+            "grammar Start; start = pair: [ ( \"a\", inner: [ \"b\" ], \"c\" ) ] => Start(pair: pair);",
+        )
+        .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -2139,7 +2147,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair: Some(pair) }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }}, Start::Start {{ pair: None }} => panic!(), }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abc\"); match parser.parse().unwrap() {{ Start::Start {{ pair: Some(pair) }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.unwrap().0, \"b\"); assert_eq!(pair.2.0, \"c\"); }}, Start::Start {{ pair: None }} => panic!(), }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
