@@ -1562,6 +1562,9 @@ mod tests {
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
         assert!(generated.contains("pub enum OpenStmt {\n    Open {\n        path: Box<Expr>,\n        mode: Box<OpenMode>,\n        channel: Box<Expr>,\n        length: Option<(Token, Token, Box<Expr>)>,\n    },\n}"));
         assert!(generated.contains("pub enum FieldBinding {\n    Binding {\n        length: Box<Expr>,\n        name: Box<Identifier>,\n    },\n}"));
+        assert!(generated.contains("pub enum IfStmt {\n    If {\n        condition: Box<Expr>,\n        tail: Box<IfTail>,\n    },\n}"));
+        assert!(generated.contains("pub enum ForStmt {\n    For {\n        variable: Box<TypedIdent>,\n        start: Box<Expr>,\n        bounds: Box<ForBounds>,\n        body: Vec<Box<Statement>>,\n        qualifier: Option<Token>,\n    },\n}"));
+        assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n    },\n}"));
     }
 
     #[test]

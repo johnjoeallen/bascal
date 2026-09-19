@@ -156,7 +156,10 @@ statement_core   = label: label_stmt => Label(label: label)
                  | out: out_stmt => Out(out: out)
                  | width: width_stmt => Width(width: width)
                  | erase: erase_stmt => Erase(erase: erase)
-                 | if_stmt | for_stmt | while_stmt | do_stmt
+                 | if_statement: if_stmt => If(if_statement: if_statement)
+                 | for_statement: for_stmt => For(for_statement: for_statement)
+                 | while_statement: while_stmt => While(while_statement: while_statement)
+                 | do_statement: do_stmt => Do(do_statement: do_statement)
                  | select_case_stmt
                  | return_statement: return_stmt => Return(return_statement: return_statement)
                  | exit: exit_stmt => Exit(exit: exit)
@@ -274,22 +277,40 @@ throw_stmt       = "throw" , value: [ same_line expr ] => Throw(value: value) ;
 option_base_stmt = "option" , "base" , value: expr => OptionBase(value: value) ;
 end_stmt         = "end" => End() ;
 
-if_stmt          = "if" , expr , "then" ,
-                    ( newline , block_if_tail | same_line single_line_if_tail ) ;
-block_if_tail    = { statement } until { "elseif", "else", "end" } ,
-                    ( "elseif" , expr , "then" , block_if_tail
-                    | [ "else" , { statement } until { "end" } ] , "end" , "if" ) ;
-single_line_if_tail = same_line statement , { same_line statement }
-                     , [ "else" , same_line statement , { same_line statement } ] ;
-for_stmt         = "for" , typed_ident , "=" , expr ,
-                    ( "to" , expr , [ "step" , expr ]
-                    | "downto" , expr ) ,
-                    { statement } until { "end" } , "end" , [ same_line "for" ] ;
-while_stmt       = "while" , expr , { statement } until { "wend", "end" }
-                   , ( "wend" | "end" , [ same_line "while" ] ) ;
-do_stmt          = "do" , [ same_line do_condition ] , { statement } until { "loop", "end" }
-                   , ( "loop" , [ same_line do_condition ] | "end" , [ same_line "do" ] ) ;
-do_condition     = ( "while" | "until" ) , expr ;
+if_stmt          = "if" , condition: expr , "then" , tail: if_tail
+                   => If(condition: condition, tail: tail) ;
+if_tail          = newline , tail: block_if_tail => Block(tail: tail)
+                 | tail: ( same_line single_line_if_tail ) => SingleLine(tail: tail) ;
+block_if_tail    = then_body: { statement } until { "elseif", "else", "end" } ,
+                    continuation: if_block_continuation
+                    => BlockIf(then_body: then_body, continuation: continuation) ;
+if_block_continuation = "elseif" , condition: expr , "then" , tail: block_if_tail
+                    => ElseIf(condition: condition, tail: tail)
+                 | else_body: [ "else" , { statement } until { "end" } ] , "end" , "if"
+                    => End(else_body: else_body) ;
+single_line_if_tail = first: ( same_line statement ) , rest: { ( same_line statement ) }
+                     , else_clause: [ "else" , ( same_line statement ) , { ( same_line statement ) } ]
+                     => SingleLineIf(first: first, rest: rest, else_clause: else_clause) ;
+for_stmt         = "for" , variable: typed_ident , "=" , start: expr , bounds: for_bounds ,
+                    body: { statement } until { "end" } , "end" , qualifier: [ same_line "for" ]
+                    => For(variable: variable, start: start, bounds: bounds, body: body, qualifier: qualifier) ;
+for_bounds       = "to" , limit: expr , step: [ "step" , expr ]
+                    => To(limit: limit, step: step)
+                 | "downto" , limit: expr => Downto(limit: limit) ;
+while_stmt       = "while" , condition: expr , body: { statement } until { "wend", "end" }
+                   , terminator: while_terminator
+                   => While(condition: condition, body: body, terminator: terminator) ;
+while_terminator = "wend" => Wend()
+                 | "end" , qualifier: [ same_line "while" ] => End(qualifier: qualifier) ;
+do_stmt          = "do" , pre_condition: [ same_line do_condition ] , body: { statement } until { "loop", "end" }
+                   , terminator: do_terminator
+                   => Do(pre_condition: pre_condition, body: body, terminator: terminator) ;
+do_terminator    = "loop" , post_condition: [ same_line do_condition ]
+                    => Loop(post_condition: post_condition)
+                 | "end" , qualifier: [ same_line "do" ] => End(qualifier: qualifier) ;
+do_condition     = kind: do_condition_kind , value: expr => Condition(kind: kind, value: value) ;
+do_condition_kind = "while" => While()
+                  | "until" => Until() ;
 select_case_stmt = "select" , "case" , expr ,
                     { "case" , case_values ,
                       { statement } until { "case", "end" } }
