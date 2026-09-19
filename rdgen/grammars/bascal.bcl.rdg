@@ -104,8 +104,12 @@ inline_method    = "method" , name: identifier , "(" , parameters: [ param_list 
                    , result: [ ":" , return_type ] , body: { statement } until { "end" }
                    , "end" , "method"
                    => InlineMethodDeclaration(name: name, parameters: parameters, result: result, body: body) ;
-return_type      = "integer" | "long" | "single" | "double" | "string"
-                 | suffix ;
+return_type      = "integer" => Integer()
+                 | "long" => Long()
+                 | "single" => Single()
+                 | "double" => Double()
+                 | "string" => String()
+                 | value: suffix => Suffix(value: value) ;
 param_list       = first: param , rest: { "," , param }
                    => ParameterList(first: first, rest: rest) ;
 param            = [ "byref" | "byval" ] , name: typed_ident
@@ -381,7 +385,12 @@ not_expr         = "not" , operand: not_expr => Not(operand: operand)
                  | value: compare_expr => Compare(value: value) ;
 compare_expr     = first: add_expr , rest: { compare_op , add_expr }
                    => Compare(first: first, rest: rest) ;
-compare_op       = "<>" | "<=" | ">=" | "=" | "<" | ">" ;
+compare_op       = "<>" => NotEqual()
+                 | "<=" => LessOrEqual()
+                 | ">=" => GreaterOrEqual()
+                 | "=" => Equal()
+                 | "<" => Less()
+                 | ">" => Greater() ;
 add_expr         = first: mod_expr , rest: { add_op , mod_expr }
                    => Add(first: first, rest: rest) ;
 add_op           = "+" => Add()
