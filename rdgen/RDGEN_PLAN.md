@@ -114,6 +114,16 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- step 7 (statements and recovery) audited against the checklist: `If`/
+  `For`/`While`/`Do`/`SelectCase`/`Try` and the ~48 other `statement_core`
+  variants (I/O, transfer, error-handling, labels, comments, ...) already
+  match the design's target statement list — each is its own named rule
+  with every matched element bound to a field, no discarded groups found
+  (the same audit method that caught `param`'s missing passing mode in
+  step 6 found nothing comparable here). No grammar changes from this
+  step; recovery points (`recover { sync ...; ...; }`) remain unused by
+  BASCAL's own grammar, same as before — the IR/codegen support exists and
+  is tested, but nothing in this grammar exercises it yet;
 - step 6 (declarations and records) audited against the checklist: most of
   the section (`Program`/file items, `RecordDeclaration`, `FunctionDeclaration`/
   `ProcedureDeclaration`/`MethodDeclaration`, `Parameter`'s axes/default/
