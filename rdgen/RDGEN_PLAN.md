@@ -114,6 +114,21 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- started step 5 (assignments/control-flow normalization): `let` is now
+  matched and discarded rather than threaded through as an `Option<Token>`
+  field on every `assignment_or_expr_stmt` alternative; `assignment_op`
+  collapsed from five zero-field tags (`Assign`/`AddAssign`/...) into one
+  `lexical` rule retaining the matched token directly, matching how
+  `Binary`/`Unary` already carry their operator; and colon chains
+  (`statement`) are now a flat `Line(first, rest: Vec<StatementCore>)`
+  list instead of a right-nested `Core(core, continuation: Option<(Token,
+  Box<Statement>)>)` cons chain. `downto`-to-`For`-with-step-`-1` is not
+  done: it requires fabricating an AST node with no source span (a literal
+  `-1`) that no token in the input corresponds to, which needs a new
+  "constant value" constructor role rdgen doesn't have yet — left as
+  `Downto(limit)` rather than force it through a mechanism that doesn't
+  exist. Single-line/block `if` and label/comment preservation were
+  already satisfied by the existing grammar, nothing to change there;
 - wired BASCAL's `postfix_expr` rule to `fold(primary, postfix_suffix)`,
   deleting the flat `Postfix(base, suffixes: Vec<Member>)` list in favor of
   properly nested `Member`/`Call` chains;

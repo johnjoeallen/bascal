@@ -140,9 +140,12 @@ typed_ident      = value: identifier => TypedIdentifier(value: value) ;
 
 top_level_statement = statement: statement => Statement(statement: statement)
                     | end: end_stmt => End(end: end) ;
+(* A colon chain is an ordinary statement list, not a right-nested
+ * continuation: "a=1 : b=2 : c=3" is Line(a=1, [b=2, c=3]), not
+ * Core(a=1, Some(Core(b=2, Some(Core(c=3, None))))). *)
 statement        = label: label_stmt => Label(label: label)
-                 | core: statement_core , continuation: [ ":" , statement ]
-                   => Core(core: core, continuation: continuation) ;
+                 | first: statement_core , rest: { ":" , statement_core }
+                   => Line(first: first, rest: rest) ;
 statement_core   = label: label_stmt => Label(label: label)
                  | comment: comment_stmt => Comment(comment: comment)
                  | dim: dim_stmt => Dim(dim: dim)
@@ -362,18 +365,25 @@ catch_clause     = "catch" , error: identifier , filters: [ "(" , expr , { "," ,
                     "," , line: identifier , source: [ "," , identifier ] ,
                     body: { statement } until { "finally", "end try" }
                     => Catch(error: error, filters: filters, line: line, source: source, body: body) ;
-assignment_or_expr_stmt = let_keyword: [ "let" ] , assignment: mid_assign
-                           => MidAssignment(let_keyword: let_keyword, assignment: assignment)
-                        | let_keyword: [ "let" ] , target: assign_target , operator: assignment_op , value: expr
-                           => Assignment(let_keyword: let_keyword, target: target, operator: operator, value: value)
-                        | let_keyword: [ "let" ] , value: expr
-                           => Expression(let_keyword: let_keyword, value: value) ;
+(* `let` is optional BASCOM-compatibility noise with no semantic weight of
+ * its own, so it is matched and discarded rather than threaded through the
+ * AST as a field every consumer would have to ignore. *)
+assignment_or_expr_stmt = [ "let" ] , assignment: mid_assign
+                           => MidAssignment(assignment: assignment)
+                        | [ "let" ] , target: assign_target , operator: assignment_op , value: expr
+                           => Assignment(target: target, operator: operator, value: value)
+                        | [ "let" ] , value: expr
+                           => Expression(value: value) ;
 assign_target       = value: postfix_expr => Target(value: value) ;
-assignment_op       = "=" => Assign()
-                    | "+=" => AddAssign()
-                    | "-=" => SubtractAssign()
-                    | "*=" => MultiplyAssign()
-                    | "/=" => DivideAssign() ;
+(* Retained as the plain matched token (not a tagged Assign/AddAssign/...
+ * enum) so a later pass can distinguish "=" from "+=" etc. by spelling
+ * without a name-per-operator zoo, matching how Binary/Unary already
+ * retain their operator token directly. Compound assignment is deliberately
+ * left as this marker rather than eagerly expanded to an ordinary
+ * assignment plus a binary expression: doing that safely requires knowing
+ * the target has no side effects to duplicate, which is semantic
+ * knowledge the grammar does not have. *)
+lexical assignment_op = "=" | "+=" | "-=" | "*=" | "/=" ;
 mid_assign          = "mid" , "$" , "(" , target: expr , "," , start: expr
                       , length: [ "," , expr ] , ")" , "=" , value: expr
                       => MidAssign(target: target, start: start, length: length, value: value) ;

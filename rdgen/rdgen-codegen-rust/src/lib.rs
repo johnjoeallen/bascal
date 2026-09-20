@@ -2052,8 +2052,8 @@ fn main() {
 
     let FileItem::Statement { statement } = &*items[0] else { panic!("expected top-level comment") };
     let TopLevelStatement::Statement { statement } = &**statement else { panic!("expected statement") };
-    let Statement::Core { core, .. } = &**statement else { panic!("expected core statement") };
-    let StatementCore::Comment { comment } = &**core else { panic!("expected comment") };
+    let Statement::Line { first, .. } = &**statement else { panic!("expected a statement line") };
+    let StatementCore::Comment { comment } = &**first else { panic!("expected comment") };
     let CommentStmt::Raw { comment } = &**comment else { panic!("expected raw comment") };
     let LineComment::SlashComment { prefix, body } = &**comment else { panic!("expected slash comment") };
     assert_eq!(prefix.0, "//");
@@ -2121,7 +2121,8 @@ fn main() {
     let ast = parser.parse().unwrap();
     let debug = format!("{ast:?}");
     assert_eq!(debug.matches("Assignment {").count(), 2);
-    assert!(debug.contains("continuation: Some"));
+    assert!(debug.contains("Line {"));
+    assert!(debug.contains("rest: ["));
     assert!(debug.contains("Binary {"));
     for text in ["x%", "y%", "2", "3", "4"] {
         assert!(debug.contains(&format!("Token(\"{}\")", text)), "missing {}: {}", text, debug);
@@ -2312,7 +2313,7 @@ fn main() {
         assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<Identifier>, Vec<(Token, Box<Identifier>)>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
         assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n    },\n}"));
         assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Core {\n        core: Box<StatementCore>,\n        continuation: Option<(Token, Box<Statement>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Line {\n        first: Box<StatementCore>,\n        rest: Vec<(Token, Box<StatementCore>)>,\n    },\n}"));
         assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
         assert!(generated.contains("pub enum Expr {"));
         assert!(!generated.contains("pub enum XorExpr {"));
@@ -2333,7 +2334,7 @@ fn main() {
         assert!(generated.contains("constructor_type: Some(\"Binary\")"));
         assert!(generated.contains("fn parse_expr_operator(&mut self)"));
         assert!(generated.contains("fn parse_expr_climb_atom(&mut self)"));
-        assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        let_keyword: Option<Token>,\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        let_keyword: Option<Token>,\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
+        assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
         assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
         assert!(generated.contains("pub enum OpenStmt {\n    Open {\n        path: Box<Expr>,\n        mode: Box<OpenMode>,\n        channel: Box<Expr>,\n        length: Option<(Token, Token, Box<Expr>)>,\n    },\n}"));
