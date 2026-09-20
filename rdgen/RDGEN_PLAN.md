@@ -134,6 +134,9 @@ Recent milestones:
 - promoted parsed typed-array declarations onto `ResolvedProgram`; JVM now
   consumes that resolver-owned semantic metadata rather than reading the
   legacy program's parser-populated side table directly;
+- promoted typed array references (rank, indices, and `sizeof` axes) onto
+  `ResolvedProgram` as well, keeping JVM array-use code on the same resolved
+  metadata boundary;
 - resolver now retains each function's recursively declared `global` names,
   keyed by resolved function identity; C and JVM emission consume that
   metadata when allocating/sharing program-wide storage, eliminating their

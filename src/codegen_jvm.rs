@@ -182,6 +182,7 @@ pub(crate) fn generate(
         class_name.clone(),
         resolved.function_global_declarations.clone(),
         resolved.typed_array_declarations.clone(),
+        resolved.typed_array_references.clone(),
     )?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
@@ -2613,6 +2614,7 @@ impl JvmContext {
         class_name: String,
         function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
         typed_array_declarations: Vec<crate::ast::TypedArrayDecl>,
+        typed_array_references: Vec<crate::ast::TypedArrayRef>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
@@ -2681,7 +2683,7 @@ impl JvmContext {
             arrays,
             array_slots: BTreeMap::new(),
             array_aliases: BTreeMap::new(),
-            array_refs: program.typed_array_refs.clone(),
+            array_refs: typed_array_references,
             constants,
             local_count: next_slot,
             initializer_start: 1,
