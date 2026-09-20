@@ -176,7 +176,12 @@ pub(crate) fn generate(
     let program = &resolved.program;
     let class_name = class_name_for(program);
     let functions = function_table(&program.functions);
-    let context = JvmContext::build(program, functions.clone(), class_name.clone())?;
+    let context = JvmContext::build(
+        program,
+        functions.clone(),
+        class_name.clone(),
+        resolved.function_global_declarations.clone(),
+    )?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
     emit_array_initializers(&context, &mut body).map_err(|message| vec![unsupported(&message)])?;
@@ -2481,6 +2486,7 @@ struct JvmContext {
     /// `JvmContext::emit_byref_writebacks`. Empty for `main`'s own context
     /// (top-level code has no parameters).
     byref_scalar_params: Vec<(usize, Variable)>,
+    function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     /// Base local slot for this function's own fixed pool of scratch slots,
     /// used to build `byref` scalar-argument wrapper arrays at its call
     /// sites (see `emit_call_arguments`). Sized once, in `for_function`, to
@@ -2604,6 +2610,7 @@ impl JvmContext {
         program: &Program,
         functions: HashMap<String, FunctionSig>,
         class_name: String,
+        function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
@@ -2685,6 +2692,7 @@ impl JvmContext {
             needs_input,
             needs_inkey,
             byref_scalar_params: Vec::new(),
+            function_global_declarations,
             byref_scratch_base,
         })
     }
@@ -2762,7 +2770,12 @@ impl JvmContext {
             &mut constants,
             &parent.functions,
         );
-        for name in collect_global_names(&function.body) {
+        for name in parent
+            .function_global_declarations
+            .get(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
+            .into_iter()
+            .flatten()
+        {
             if let Some(variable) = parent.variables.get(&variable_key(&name)) {
                 variables.insert(variable_key(&name), *variable);
             }
@@ -2817,6 +2830,7 @@ impl JvmContext {
             needs_input: parent.needs_input,
             needs_inkey: parent.needs_inkey,
             byref_scalar_params,
+            function_global_declarations: parent.function_global_declarations.clone(),
             byref_scratch_base,
         }
     }
@@ -3135,50 +3149,6 @@ fn collect_array_declarations(statements: &[Stmt], arrays: &mut BTreeMap<String,
             _ => {}
         }
     }
-}
-
-fn collect_global_names(statements: &[Stmt]) -> Vec<BasicIdent> {
-    let mut names = Vec::new();
-    fn visit(statements: &[Stmt], names: &mut Vec<BasicIdent>) {
-        for statement in statements {
-            match &statement.kind {
-                Statement::GlobalDecl(name) => names.push(name.clone()),
-                Statement::If {
-                    then_body,
-                    else_body,
-                    ..
-                } => {
-                    visit(then_body, names);
-                    visit(else_body, names);
-                }
-                Statement::For { body, .. }
-                | Statement::While { body, .. }
-                | Statement::Do { body, .. } => visit(body, names),
-                Statement::SelectCase {
-                    cases, else_body, ..
-                } => {
-                    for case in cases {
-                        visit(&case.body, names);
-                    }
-                    visit(else_body, names);
-                }
-                Statement::TryCatch {
-                    try_body,
-                    catch,
-                    finally_body,
-                } => {
-                    visit(try_body, names);
-                    if let Some(catch) = catch {
-                        visit(&catch.body, names);
-                    }
-                    visit(finally_body, names);
-                }
-                _ => {}
-            }
-        }
-    }
-    visit(statements, &mut names);
-    names
 }
 
 fn variable_key(ident: &BasicIdent) -> String {
