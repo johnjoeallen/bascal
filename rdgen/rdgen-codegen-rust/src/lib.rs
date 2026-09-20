@@ -994,6 +994,14 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
             // Prefixed to avoid colliding with a grammar field also named
             // "start" (e.g. `for_stmt`'s loop-start expression), which
             // would otherwise shadow this inside the closure below.
+            //
+            // Deliberately does *not* skip trivia first (unlike the
+            // lexical case below): some builtin elements (`newline`,
+            // `same_line`) are only meaningful because trivia is *not*
+            // eagerly skipped ahead of them, so a non-lexical rule's span
+            // can start slightly before its first real token when that
+            // token is preceded by skippable trivia the rule itself never
+            // explicitly consumes before reaching it.
             output.push_str("        let rdgen_span_start = self.position;\n");
         }
         output.push_str(&format!(
@@ -2176,6 +2184,284 @@ fn main() {
             .unwrap();
         assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
         assert!(std::process::Command::new(&binary).status().unwrap().success());
+    }
+
+    /// Shared lexical callbacks matching bascal.bcl.rdg's terminal/trivia/
+    /// literal contract, for the snapshot-style fixture tests below.
+    const BASCAL_LEXICAL_HELPERS: &str = r#"
+fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
+    let ch = source.get(position..)?.chars().next()?;
+    let accepted = match name {
+        "letter" => ch.is_ascii_alphabetic(),
+        "digit" => ch.is_ascii_digit(),
+        "hex_digit" => ch.is_ascii_hexdigit(),
+        "any_char" => true,
+        "any_char_except_quote" => ch != '"',
+        "any_char_except_newline" => ch != '\n',
+        _ => false,
+    };
+    accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8()))
+}
+fn trivia(source: &str, mut position: usize) -> usize {
+    while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {
+        position += source[position..].chars().next().unwrap().len_utf8();
+    }
+    position
+}
+fn literal(source: &str, position: usize, expected: &str) -> Option<usize> {
+    source.get(position..)?.get(..expected.len())
+        .filter(|candidate| candidate.eq_ignore_ascii_case(expected))
+        .map(|_| position + expected.len())
+}
+fn nth_core(program: &Program, index: usize) -> StatementCore {
+    let Program::File { items, .. } = program;
+    let FileItem::Statement { statement, .. } = items[index].as_ref() else { panic!("expected a top-level statement item") };
+    let TopLevelStatement::Statement { statement, .. } = statement.as_ref() else { panic!("expected a statement") };
+    let Statement::Line { first, .. } = statement.as_ref() else { panic!("expected a statement line") };
+    (**first).clone()
+}
+"#;
+
+    fn compile_bascal_fixture(source_body: &str, harness_main: &str, binary_name: &str) {
+        let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join(binary_name);
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\n{}\nfn main() {{\n    let source = {:?};\n    let mut parser = Parser::with_lexical_config(source, scanner, trivia, literal);\n    let program = parser.parse().unwrap();\n{}\n}}\n",
+                generated.to_str().unwrap(),
+                BASCAL_LEXICAL_HELPERS,
+                source_body,
+                harness_main,
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        let output = std::process::Command::new(&binary).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn snapshot_precedence_associativity_and_unary_vs_exponent() {
+        compile_bascal_fixture(
+            "a% = 1 + 2 * 3\nb% = -2 ^ 2\nc% = 2 ^ 3 ^ 2\n",
+            r#"
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 0) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Binary { left, operator, right, span } = *value else { panic!("expected top-level +") };
+    assert_eq!(operator.0, "+");
+    // start is 4, not 5: a non-lexical rule's span starts where its own
+    // alternative attempt began, before any of its elements have had a
+    // chance to skip the trivia preceding them (see the comment on
+    // rdgen_span_start in emit_parser_rule). Here that's the space right
+    // after "=", one byte before the "1" the expression actually starts at.
+    assert_eq!(span, SourceSpan { start: 4, end: 14 });
+    assert!(matches!(*left, Expr::IntegerLiteral { .. }));
+    let Expr::Binary { operator, .. } = *right else { panic!("expected nested *, got tighter binding on the right") };
+    assert_eq!(operator.0, "*");
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 1) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Unary { operator, operand, .. } = *value else { panic!("expected -2^2 to be Unary, not Binary(-2, ^, 2)") };
+    assert_eq!(operator.0, "-");
+    assert!(matches!(*operand, Expr::Binary { .. }), "operand of unary minus should itself be 2^2");
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 2) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Binary { right, .. } = *value else { panic!("expected top-level ^") };
+    assert!(matches!(*right, Expr::Binary { .. }), "^ should be right-associative: 2^(3^2)");
+"#,
+            "snapshot-precedence",
+        );
+    }
+
+    #[test]
+    fn snapshot_calls_members_and_indexes() {
+        compile_bascal_fixture(
+            // A space before "." is deliberate: `identifier` itself allows
+            // "." as a continuation character (for dotted require/import
+            // paths), so a bare "obj.field" lexes as one identifier token
+            // and never reaches postfix_suffix at all. Only whitespace
+            // before the "." lets member access be tried.
+            "c% = f(1, 2)\nd% = obj .field\ne% = table(3)\ng% = matrix[3]\n",
+            r#"
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 0) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Call { name, arguments, .. } = *value else { panic!("expected a call") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "f");
+    let ArgList::Arguments { first, rest, .. } = *arguments.unwrap() else { panic!("expected arguments") };
+    assert!(matches!(*first, Expr::IntegerLiteral { .. }));
+    assert_eq!(rest.len(), 1);
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 1) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Member { base, member, arguments, .. } = *value.clone() else { panic!("expected member access, got {:?}", value) };
+    let Identifier::Token { text, .. } = member.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "field");
+    assert!(arguments.is_none());
+    assert!(matches!(base.unwrap().as_ref(), Expr::Name { .. }));
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 2) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    // Array-reference versus call is a semantic decision the grammar
+    // cannot make from syntax alone, so `table(3)` is a Call like `f(1, 2)`
+    // rather than a distinct node - only bracket syntax parses as Index.
+    let Expr::Call { name, .. } = *value else { panic!("expected table(3) to parse as a call") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "table");
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 3) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { value, .. } = *statement else { panic!("expected assignment") };
+    let Expr::Index { name, index, .. } = *value else { panic!("expected bracket syntax to parse as Index") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "matrix");
+    assert!(matches!(*index, Expr::IntegerLiteral { .. }));
+"#,
+            "snapshot-calls-members-indexes",
+        );
+    }
+
+    #[test]
+    fn snapshot_records_and_methods() {
+        compile_bascal_fixture(
+            "record Point\n    x: int\n    y: int\n    method reset()\n    end method\nend record\n",
+            r#"
+    let Program::File { items, .. } = &program;
+    let FileItem::Record { record, .. } = items[0].as_ref() else { panic!("expected a record declaration item") };
+    let RecordDecl::RecordDeclaration { name, combines, members, .. } = record.as_ref() else { panic!("expected a record declaration") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "Point");
+    assert!(combines.is_none());
+    assert_eq!(members.len(), 3);
+
+    let RecordMember::Field { field, .. } = members[0].as_ref() else { panic!("expected a field member") };
+    let FieldDecl::FieldDeclaration { name, field_type, .. } = field.as_ref() else { panic!("expected a field declaration") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "x");
+    assert!(matches!(field_type.as_ref(), FieldType::IntType { .. }));
+
+    let RecordMember::InlineMethod { method, .. } = members[2].as_ref() else { panic!("expected an inline method member") };
+    let InlineMethod::InlineMethodDeclaration { name, parameters, body, .. } = method.as_ref() else { panic!("expected an inline method declaration") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "reset");
+    assert!(parameters.is_none());
+    assert!(body.is_empty());
+"#,
+            "snapshot-records-and-methods",
+        );
+    }
+
+    #[test]
+    fn snapshot_compact_statement_chains_comments_and_labels() {
+        compile_bascal_fixture(
+            "start:\n' a label appears above\nf% = 1 : g% = 2\n",
+            r#"
+    let Program::File { items, .. } = &program;
+    assert_eq!(items.len(), 3);
+
+    let FileItem::Statement { statement, .. } = items[0].as_ref() else { panic!("expected a top-level statement item") };
+    let TopLevelStatement::Statement { statement, .. } = statement.as_ref() else { panic!("expected a statement") };
+    let Statement::Label { label, .. } = statement.as_ref() else { panic!("expected a bare label line") };
+    let LabelStmt::Label { name, .. } = label.as_ref() else { panic!("expected a label") };
+    let Identifier::Token { text, .. } = name.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "start");
+
+    let FileItem::Statement { statement, .. } = items[1].as_ref() else { panic!("expected a top-level statement item") };
+    let TopLevelStatement::Statement { statement, .. } = statement.as_ref() else { panic!("expected a statement") };
+    let core = nth_core(&program, 1);
+    let StatementCore::Comment { comment, .. } = core else { panic!("expected a comment line") };
+    let CommentStmt::Raw { comment, .. } = *comment else { panic!("expected a line comment") };
+    let LineComment::ApostropheComment { body, .. } = *comment else { panic!("expected an apostrophe comment") };
+    assert_eq!(body.iter().map(|token| token.0.as_str()).collect::<String>(), " a label appears above");
+    let _ = statement;
+
+    let StatementCore::AssignmentOrExpression { .. } = nth_core(&program, 2) else { panic!("expected the first item of the compact chain") };
+    let FileItem::Statement { statement, .. } = items[2].as_ref() else { panic!("expected a top-level statement item") };
+    let TopLevelStatement::Statement { statement, .. } = statement.as_ref() else { panic!("expected a statement") };
+    let Statement::Line { first, rest, .. } = statement.as_ref() else { panic!("expected a compact statement line") };
+    assert!(matches!(first.as_ref(), StatementCore::AssignmentOrExpression { .. }));
+    assert_eq!(rest.len(), 1);
+    assert!(matches!(rest[0].1.as_ref(), StatementCore::AssignmentOrExpression { .. }));
+"#,
+            "snapshot-compact-chains-comments-labels",
+        );
+    }
+
+    #[test]
+    fn snapshot_downto_compound_assignment_and_let() {
+        compile_bascal_fixture(
+            "let h% = 5\nh% += 1\nfor i% = 10 downto 1\n    j% = i%\nend for\n",
+            r#"
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 0) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { target, operator, value, .. } = *statement else { panic!("expected an assignment (let is discarded, not a separate node)") };
+    let AssignTarget::Target { value: target_value, .. } = *target else { panic!("expected assignment target") };
+    assert!(matches!(*target_value, Expr::Name { .. }));
+    let AssignmentOp::Token { text, .. } = *operator else { panic!("expected assignment operator token") };
+    assert_eq!(text.0, "=");
+    assert!(matches!(*value, Expr::IntegerLiteral { .. }));
+
+    let StatementCore::AssignmentOrExpression { statement, .. } = nth_core(&program, 1) else { panic!("expected assignment") };
+    let AssignmentOrExprStmt::Assignment { operator, .. } = *statement else { panic!("expected an assignment") };
+    let AssignmentOp::Token { text, .. } = *operator else { panic!("expected assignment operator token") };
+    // += is retained as its own spelling (a marker), not eagerly expanded
+    // to an ordinary assignment plus a Binary("+") - the grammar has no
+    // way to know whether duplicating the target is safe.
+    assert_eq!(text.0, "+=");
+
+    let StatementCore::For { for_statement, .. } = nth_core(&program, 2) else { panic!("expected a for statement") };
+    let ForStmt::For { bounds, .. } = *for_statement else { panic!("expected for-statement fields") };
+    let ForBounds::Downto { limit, .. } = *bounds else { panic!("expected downto bounds") };
+    assert!(matches!(*limit, Expr::IntegerLiteral { .. }));
+"#,
+            "snapshot-downto-compound-let",
+        );
+    }
+
+    #[test]
+    fn snapshot_error_handling_and_control_flow() {
+        compile_bascal_fixture(
+            "while x% < 10\n    x% = x% + 1\nwend\ntry\n    throw 5\ncatch e, ln\n    print \"caught\"\nend try\n",
+            r#"
+    let StatementCore::While { while_statement, .. } = nth_core(&program, 0) else { panic!("expected a while statement") };
+    let WhileStmt::While { condition, body, terminator, .. } = *while_statement else { panic!("expected while-statement fields") };
+    assert!(matches!(*condition, Expr::Binary { .. }));
+    assert_eq!(body.len(), 1);
+    assert!(matches!(*terminator, WhileTerminator::Wend { .. }));
+
+    let StatementCore::Try { try_statement, .. } = nth_core(&program, 1) else { panic!("expected a try statement") };
+    let TryStmt::Try { body, catch_clause, finally_clause, .. } = *try_statement else { panic!("expected try-statement fields") };
+    assert_eq!(body.len(), 1);
+    let Statement::Line { first, .. } = body[0].as_ref() else { panic!("expected a statement line") };
+    assert!(matches!(first.as_ref(), StatementCore::Throw { .. }));
+    assert!(finally_clause.is_none());
+    let CatchClause::Catch { error, line, source, body, .. } = *catch_clause.unwrap() else { panic!("expected a catch clause") };
+    let Identifier::Token { text, .. } = error.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "e");
+    let Identifier::Token { text, .. } = line.as_ref() else { panic!("expected identifier token") };
+    assert_eq!(text.0, "ln");
+    assert!(source.is_none());
+    assert_eq!(body.len(), 1);
+    let Statement::Line { first, .. } = body[0].as_ref() else { panic!("expected a statement line") };
+    assert!(matches!(first.as_ref(), StatementCore::Print { .. }));
+"#,
+            "snapshot-error-handling-control-flow",
+        );
     }
 
     #[test]

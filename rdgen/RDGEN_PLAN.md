@@ -116,9 +116,48 @@ The current branch has these capabilities:
   annotation needed), bracketing parser positions around each alternative's
   parse; every generated output-type enum also gets an inherent `span(&self)
   -> SourceSpan` method so precedence/prefix/fold combine logic can read a
-  child node's span generically without matching on every variant by name.
+  child node's span generically without matching on every variant by name;
+- semantic AST snapshot coverage: six compile-and-run tests in
+  rdgen-codegen-rust, one per step-9 category, parsing representative
+  BASCAL source through the real bascal.bcl.rdg grammar and asserting
+  both node shape and span correctness (not parser-production names).
 
 Recent milestones:
+
+- step 9 (semantic AST snapshots): added
+  `snapshot_precedence_associativity_and_unary_vs_exponent`,
+  `snapshot_calls_members_and_indexes`, `snapshot_records_and_methods`,
+  `snapshot_compact_statement_chains_comments_and_labels`,
+  `snapshot_downto_compound_assignment_and_let`, and
+  `snapshot_error_handling_and_control_flow` to rdgen-codegen-rust,
+  covering every category the plan lists. Implemented as inline
+  compile-and-run tests (matching the existing `generated_bascal_parser_*`
+  convention already used throughout this file) rather than a new
+  external fixture-file-plus-golden-snapshot system, since introducing
+  file-based snapshot infrastructure wasn't otherwise needed and every
+  other rdgen test already lives this way.
+
+  Writing these against the real grammar (not a toy one) surfaced two
+  genuine pre-existing quirks worth knowing about, not new regressions:
+
+  - `identifier`'s own lexical rule allows `.` as a continuation
+    character (for dotted require/import paths), so a bare `obj.field`
+    lexes as *one* identifier token and never reaches `postfix_suffix` -
+    member access is only reachable when whitespace precedes the `.`
+    (`obj .field`). Not fixed here: resolving it needs a lexing-priority
+    decision (dotted identifiers vs. member access) beyond this step's
+    scope.
+  - non-lexical rules' spans can start slightly before their first real
+    token when preceded by skippable trivia the rule itself never
+    explicitly consumes before reaching it (documented in
+    `emit_parser_rule`, where `rdgen_span_start` is captured). A tempting
+    fix - skip trivia before capturing the span start - was tried and
+    reverted: it silently broke `if_tail`'s block-vs-single-line
+    detection, which depends on trivia *not* being eagerly skipped ahead
+    of the `newline` builtin element. Corpus recognition caught this
+    immediately (`cargo test -p rdgen-codegen-rust` regressed from 0 to
+    83 corpus failures), which is exactly why that gate stays in the loop
+    on every change, not just BASCAL-specific edits.
 
 - step 8 (source-span propagation), Rust backend only: every generated
   struct-like variant (ordinary alternatives, zero-field tags, precedence
