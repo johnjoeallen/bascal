@@ -131,6 +131,9 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- resolver now retains each function's recursively declared `global` names,
+  keyed by resolved function identity; C emission consumes that metadata when
+  allocating file-scope storage and suppressing shadowing locals;
 - moved C's fixed-array-bound constant analysis into `ResolvedProgram`:
   `resolver::resolve` now retains direct top-level integer `const` values
   under their case-insensitive name/suffix keys, and `codegen_c` consumes

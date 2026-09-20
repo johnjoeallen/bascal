@@ -2840,10 +2840,8 @@ pub(crate) fn generate(
     for statement in &program.statements {
         collect_vars_in_statement(statement, &mut numeric_vars, &mut string_vars);
     }
-    for func in &program.functions {
-        let mut globals = Vec::new();
-        collect_global_decl_idents(&func.body, &mut globals);
-        for ident in &globals {
+    for globals in resolved.function_global_declarations.values() {
+        for ident in globals {
             register_var(ident, &mut numeric_vars, &mut string_vars);
         }
     }
@@ -2960,6 +2958,7 @@ pub(crate) fn generate(
             &data_labels,
             &try_reachable,
             &top_level_const_names,
+            resolved.function_global_declarations.get(&fn_key(&func.name)).map(Vec::as_slice).unwrap_or(&[]),
         )
         .map_err(|message| vec![unsupported(&message)])?;
     }
@@ -3477,6 +3476,7 @@ fn emit_function_def(
     data_labels: &HashMap<String, usize>,
     try_reachable: &HashSet<(String, Option<TypeSuffix>)>,
     top_level_const_names: &BTreeSet<String>,
+    global_idents: &[BasicIdent],
 ) -> Result<(), String> {
     let is_try_reachable = try_reachable.contains(&fn_key(&func.name));
     let mut numeric_locals = BTreeMap::new();
@@ -3484,8 +3484,6 @@ fn emit_function_def(
     for stmt in &func.body {
         collect_vars_in_statement(stmt, &mut numeric_locals, &mut string_locals);
     }
-    let mut global_idents = Vec::new();
-    collect_global_decl_idents(&func.body, &mut global_idents);
     let global_keys: BTreeSet<String> = global_idents
         .iter()
         .map(|ident| c_var_name(ident, effective_suffix(ident.suffix)))

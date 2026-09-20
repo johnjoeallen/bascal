@@ -39,6 +39,7 @@ pub struct ResolvedProgram {
     /// expression uses.  C needs this fact to declare fixed-size arrays;
     /// it must not rediscover declarations while transpiling.
     pub top_level_integer_constants: HashMap<(String, Option<TypeSuffix>), i64>,
+    pub function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
     /// Lowercase names of every procedure named as an `on error goto`
@@ -89,6 +90,11 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     };
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
     let top_level_integer_constants = collect_top_level_integer_constants(&program.statements);
+    let function_global_declarations = program.functions.iter().map(|function| {
+        let mut declarations = Vec::new();
+        collect_global_declarations(&function.body, &mut declarations);
+        ((function.name.name.to_ascii_lowercase(), function.name.suffix), declarations)
+    }).collect();
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
 
     Ok(ResolvedProgram {
@@ -96,10 +102,24 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
         record_buffer_names,
         const_info,
         top_level_integer_constants,
+        function_global_declarations,
         top_level_array_ranks,
         error_handler_procedures,
         uses_catch_source_var,
     })
+}
+
+fn collect_global_declarations(statements: &[Stmt], out: &mut Vec<BasicIdent>) {
+    for statement in statements {
+        match &statement.kind {
+            Statement::GlobalDecl(name) => out.push(name.clone()),
+            Statement::If { then_body, else_body, .. } => { collect_global_declarations(then_body, out); collect_global_declarations(else_body, out); }
+            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => collect_global_declarations(body, out),
+            Statement::SelectCase { cases, else_body, .. } => { for case in cases { collect_global_declarations(&case.body, out); } collect_global_declarations(else_body, out); }
+            Statement::TryCatch { try_body, catch, finally_body } => { collect_global_declarations(try_body, out); if let Some(catch) = catch { collect_global_declarations(&catch.body, out); } collect_global_declarations(finally_body, out); }
+            _ => {}
+        }
+    }
 }
 
 /// Integer literal values of direct top-level `const` declarations.  The C
