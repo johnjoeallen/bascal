@@ -203,10 +203,10 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(basic)
         }
         Target::C => {
-            let generated = codegen_c::generate(&resolved.program, Target::C)?;
+            let generated = codegen_c::generate(&resolved, Target::C)?;
             Ok(generated.app)
         }
-        Target::Jvm => codegen_jvm::generate(&resolved.program),
+        Target::Jvm => codegen_jvm::generate(&resolved),
         // Phase 4 of RETRO_BASIC_SUPPORT_PROMPT.md: reuses `codegen_c.rs`
         // exactly like `Target::C` above, just under the C64/`cc65`
         // `CDialectProfile` -- Phase 3's `validate_capabilities` (run
@@ -219,7 +219,7 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         // invocations -- this function only ever produces the
         // intermediate C text, never a binary, for any target.
         Target::C64 => {
-            let generated = codegen_c::generate(&resolved.program, Target::C64)?;
+            let generated = codegen_c::generate(&resolved, Target::C64)?;
             Ok(generated.app)
         }
     }

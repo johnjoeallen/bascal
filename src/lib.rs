@@ -14,6 +14,11 @@ pub mod records;
 pub mod resolver;
 mod scalar_builtins;
 
+/// Source-span-aware semantic AST generated from `bascal.bcl.rdg` at build
+/// time.  It remains parallel to the legacy frontend until the pipeline can
+/// consume its typed IR directly.
+pub mod rdgen_frontend;
+
 mod driver;
 
 #[doc(inline)]

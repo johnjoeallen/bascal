@@ -168,7 +168,12 @@ use crate::ast::{
 };
 use crate::diagnostics::{Diagnostic, SourcePos};
 
-pub(crate) fn generate(program: &Program) -> Result<String, Vec<Diagnostic>> {
+/// Transpile a resolver-owned typed program.  JVM emission must not bypass
+/// the resolver boundary by accepting a raw AST directly.
+pub(crate) fn generate(
+    resolved: &crate::resolver::ResolvedProgram,
+) -> Result<String, Vec<Diagnostic>> {
+    let program = &resolved.program;
     let class_name = class_name_for(program);
     let functions = function_table(&program.functions);
     let context = JvmContext::build(program, functions.clone(), class_name.clone())?;

@@ -2793,7 +2793,15 @@ pub(crate) struct GeneratedC {
 /// implemented" diagnostic first). Threading `target` through here now,
 /// ahead of Phase 4 actually needing it, keeps this signature change from
 /// happening twice.
-pub(crate) fn generate(program: &Program, target: Target) -> Result<GeneratedC, Vec<Diagnostic>> {
+/// Transpile a resolver-owned typed program.  C emission currently reads the
+/// semantic AST through this boundary; subsequent migrations move its
+/// remaining whole-program facts out of local AST scans and onto
+/// `ResolvedProgram` as well.
+pub(crate) fn generate(
+    resolved: &crate::resolver::ResolvedProgram,
+    target: Target,
+) -> Result<GeneratedC, Vec<Diagnostic>> {
+    let program = &resolved.program;
     let dialect = CDialectProfile::for_target(target);
     validate_capabilities(program, &dialect)?;
 
@@ -9562,7 +9570,7 @@ mod dialect_tests {
             lower::lower(program).unwrap_or_else(|d| panic!("should lower: {d:?}"));
         let resolved =
             resolver::resolve(program).unwrap_or_else(|d| panic!("should resolve: {d:?}"));
-        generate(&resolved.program, target)
+        generate(&resolved, target)
             .unwrap_or_else(|d| panic!("should generate: {d:?}"))
             .app
     }
@@ -9662,7 +9670,7 @@ mod dialect_tests {
             lower::lower(program).unwrap_or_else(|d| panic!("should lower: {d:?}"));
         let resolved =
             resolver::resolve(program).unwrap_or_else(|d| panic!("should resolve: {d:?}"));
-        match generate(&resolved.program, target) {
+        match generate(&resolved, target) {
             Ok(_) => panic!("should be rejected by Phase 3"),
             Err(diagnostics) => diagnostics,
         }

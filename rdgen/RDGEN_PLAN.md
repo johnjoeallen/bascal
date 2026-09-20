@@ -131,6 +131,21 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- made `ResolvedProgram` the sole backend entry point: `codegen_basic`,
+  `codegen_c`, and `codegen_jvm` now all accept it rather than a bare
+  legacy `Program`, and the driver passes the resolver result unchanged to
+  each target. C and JVM still have local AST scans to migrate into the
+  resolver, but they can no longer be invoked on an unresolved AST;
+- integrated the generated Rust frontend into `bcc`'s build: root `build.rs`
+  compiles `rdgen/grammars/bascal.bcl.rdg` and emits the parser into Cargo's
+  `OUT_DIR`; `src/rdgen_frontend.rs` includes that output, supplies the
+  BASCAL terminal/trivia/case-insensitive-literal callbacks, and exposes a
+  `parse` entry point with a direct smoke test. This is intentionally a
+  parallel frontend, not an adapter to the legacy `ast::Program`: adapting
+  it there would discard the generated source spans and semantic AST shape,
+  then leave the existing backends re-inferring source types. The next
+  pipeline migration must instead make the resolver and backends consume a
+  resolved typed form derived from this AST;
 - closed the step 5 `downto` gap: added constant constructor fields to
   the grammar DSL (`step: -1`, a bare signed integer literal in
   constructor position instead of a label) so `for_bounds`'s `downto`

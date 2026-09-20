@@ -96,6 +96,8 @@ version = "0.99.69"
 dependencies = [
  "clap 4.6.6",
  "krakatau2",
+ "rdgen-codegen-rust",
+ "rdgen-grammar",
  "tempfile",
 ]
 
