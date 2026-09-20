@@ -137,6 +137,8 @@ Recent milestones:
 - promoted typed array references (rank, indices, and `sizeof` axes) onto
   `ResolvedProgram` as well, keeping JVM array-use code on the same resolved
   metadata boundary;
+- promoted driver-loaded COMMON blocks onto `ResolvedProgram`; BASIC emission
+  now consumes the resolved metadata instead of a mutable program side table;
 - resolver now retains each function's recursively declared `global` names,
   keyed by resolved function identity; C and JVM emission consume that
   metadata when allocating/sharing program-wide storage, eliminating their

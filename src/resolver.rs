@@ -21,6 +21,9 @@ pub struct ResolvedProgram {
     /// Typed array uses, including rank and `sizeof` axes, retained for
     /// backends after parser state is no longer their input boundary.
     pub typed_array_references: Vec<TypedArrayRef>,
+    /// COMMON blocks loaded by the driver before resolution, retained as
+    /// backend input rather than read from the mutable legacy program.
+    pub common_blocks: Vec<CommonBlock>,
     /// Lowercase BASIC names of every record/file `FIELD` buffer variable.
     /// Structurally global — the per-procedure name allocator must never
     /// localize one (this is the fact the "FIELD buffer re-namespaced per
@@ -106,6 +109,7 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     Ok(ResolvedProgram {
         typed_array_declarations: program.typed_arrays.clone(),
         typed_array_references: program.typed_array_refs.clone(),
+        common_blocks: program.common.clone(),
         program,
         record_buffer_names,
         const_info,
