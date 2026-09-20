@@ -114,6 +114,19 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- step 6 (declarations and records) audited against the checklist: most of
+  the section (`Program`/file items, `RecordDeclaration`, `FunctionDeclaration`/
+  `ProcedureDeclaration`/`MethodDeclaration`, `Parameter`'s axes/default/
+  type_annotation, `FileDeclaration`) was already in target shape — real,
+  named semantic nodes, not grammar wrappers. Found and fixed the two
+  actual gaps: `param`'s `[ "byref" | "byval" ]` was matched but never
+  bound to a field, silently discarding the passing mode entirely, now
+  captured via a `passing_mode` tagged rule (mirroring `string_align`/
+  `file_mode`'s existing pattern for "which literal matched"); and
+  `record_decl`'s inline `combines: [...]` list is now a named
+  `combined_record_list` (`first`/`rest`) sub-rule instead of an ad hoc
+  3-tuple, matching the `first`/`rest` convention used everywhere else in
+  the grammar (`dim_stmt`, `param_list`, `array_axes`, ...);
 - started step 5 (assignments/control-flow normalization): `let` is now
   matched and discarded rather than threaded through as an `Option<Token>`
   field on every `assignment_or_expr_stmt` alternative; `assignment_op`

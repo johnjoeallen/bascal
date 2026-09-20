@@ -78,10 +78,12 @@ require_decl     = "require" , path: identifier => RequireDeclaration(path: path
 import_decl      = "import" , path: identifier => ImportDeclaration(path: path) ;
 
 record_decl      = "record" , name: identifier ,
-                    combines: [ "combines" , identifier , { "," , identifier } ] ,
+                    combines: [ "combines" , combined_record_list ] ,
                     members: { record_member } until { "end" } ,
                     "end" , "record"
                     => RecordDeclaration(name: name, combines: combines, members: members) ;
+combined_record_list = first: identifier , rest: { "," , identifier }
+                    => CombinedRecordList(first: first, rest: rest) ;
 record_member    = field: field_decl => Field(field: field)
                  | method: inline_method => InlineMethod(method: method) ;
 field_decl       = name: identifier , ":" , field_type: field_type
@@ -126,10 +128,14 @@ return_type      = "integer" => Integer()
                  | value: suffix => Suffix(value: value) ;
 param_list       = first: param , rest: { "," , param }
                    => ParameterList(first: first, rest: rest) ;
-param            = [ "byref" | "byval" ] , name: typed_ident
+(* The passing mode was previously matched but not bound to any field,
+ * silently discarding byref/byval instead of exposing it. *)
+param            = mode: [ passing_mode ] , name: typed_ident
                    , axes: [ array_axes ] , default: [ "=" , expr ]
                    , type_annotation: [ "as" , identifier ]
-                   => Parameter(name: name, axes: axes, default: default, type_annotation: type_annotation) ;
+                   => Parameter(mode: mode, name: name, axes: axes, default: default, type_annotation: type_annotation) ;
+passing_mode     = "byref" => ByRef()
+                 | "byval" => ByVal() ;
 array_axes       = "(" , first: axis , rest: { "," , axis } , ")"
                    => ArrayAxes(first: first, rest: rest) ;
 axis             = "?" => InferredCapacity()

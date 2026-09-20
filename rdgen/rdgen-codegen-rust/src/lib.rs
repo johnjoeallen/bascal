@@ -2310,9 +2310,11 @@ fn main() {
         assert!(generated.contains("pub enum FunctionDecl {\n    FunctionDeclaration {\n        name: Box<TypedIdent>,\n        parameters: Option<Box<ParamList>>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
         assert!(generated.contains("pub enum MethodDecl {\n    MethodDeclaration {\n        name: Box<Identifier>,\n        receiver: Box<Identifier>,\n        parameters: Option<Box<ParamList>>,\n        result: Option<(Token, Box<ReturnType>)>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
         assert!(generated.contains("pub enum FieldDecl {\n    FieldDeclaration {\n        name: Box<Identifier>,\n        field_type: Box<FieldType>,\n    },\n}"));
-        assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<Identifier>, Vec<(Token, Box<Identifier>)>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
+        assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<CombinedRecordList>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
+        assert!(generated.contains("pub enum CombinedRecordList {\n    CombinedRecordList {\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
         assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n    },\n}"));
-        assert!(generated.contains("pub enum Param {\n    Parameter {\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum Param {\n    Parameter {\n        mode: Option<Box<PassingMode>>,\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum PassingMode {\n    ByRef,\n    ByVal,\n}"));
         assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Line {\n        first: Box<StatementCore>,\n        rest: Vec<(Token, Box<StatementCore>)>,\n    },\n}"));
         assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
         assert!(generated.contains("pub enum Expr {"));
