@@ -103,6 +103,7 @@ fn emit_rule(
     output.push_str("#[derive(Clone, Debug, PartialEq)]\n");
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
+    let mut spanned_variants: Vec<String> = Vec::new();
     let mut precedence_variants: std::collections::HashMap<
         String,
         Vec<rdgen_ir::FieldBinding>,
@@ -125,12 +126,12 @@ fn emit_rule(
         output.push_str(&variant);
         if rule.lexical && is_default_constructor(rule, alternative) {
             output.push_str(" {\n        text: Token,\n        span: SourceSpan,\n    },\n");
+            spanned_variants.push(variant);
             continue;
         }
-        if alternative.constructor.fields.is_empty() {
-            output.push_str(",\n");
-            continue;
-        }
+        // Every constructed node (anything reaching this point is neither
+        // Identity-forwarded nor a lexical default token) carries its own
+        // span, even when it has no other fields.
         output.push_str(" {\n");
         let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
@@ -158,7 +159,14 @@ fn emit_rule(
             }
             output.push_str(&format!("        {}: {},\n", generated_name, field_type));
         }
-        output.push_str("    },\n");
+        if !field_names.insert("span".to_owned()) {
+            return Err(format!(
+                "constructor field 'span' is reserved for the generated node span in rule '{}'",
+                rule.name
+            ));
+        }
+        output.push_str("        span: SourceSpan,\n    },\n");
+        spanned_variants.push(variant);
     }
     for table in precedence {
         for level in &table.levels {
@@ -199,7 +207,8 @@ fn emit_rule(
                     generated_name, field_type
                 ));
             }
-            output.push_str("    },\n");
+            output.push_str("        span: SourceSpan,\n    },\n");
+            spanned_variants.push(variant);
         }
         for prefix in &table.prefix_operators {
             let Some(constructor) = &prefix.constructor else {
@@ -239,10 +248,20 @@ fn emit_rule(
                     generated_name, field_type
                 ));
             }
-            output.push_str("    },\n");
+            output.push_str("        span: SourceSpan,\n    },\n");
+            spanned_variants.push(variant);
         }
     }
     output.push_str("}\n\n");
+    output.push_str(&format!("impl {} {{\n", enum_name));
+    output.push_str("    pub fn span(&self) -> SourceSpan {\n        match self {\n");
+    for variant in &spanned_variants {
+        output.push_str(&format!(
+            "            {}::{} {{ span, .. }} => *span,\n",
+            enum_name, variant
+        ));
+    }
+    output.push_str("        }\n    }\n}\n\n");
     Ok(())
 }
 
@@ -677,6 +696,7 @@ fn emit_precedence_ast_helper(
         "    fn {}(left: {}, operator: Token, right: {}) -> {} {{\n",
         combine_name, rule_type, rule_type, rule_type
     ));
+    output.push_str("        let node_span = SourceSpan { start: left.span().start, end: right.span().end };\n");
     output.push_str("        match operator.0.as_str() {\n");
     for level in &table.levels {
         let constructor = level
@@ -699,7 +719,7 @@ fn emit_precedence_ast_helper(
                     value
                 ));
             }
-            output.push_str("            },\n");
+            output.push_str("                span: node_span,\n            },\n");
         }
     }
     output.push_str("            other => unreachable!(\"unknown precedence operator {:?}\", other),\n");
@@ -788,6 +808,7 @@ fn emit_precedence_climb_helpers(
                 "            let operand = match self.parse_precedence_climbing_tokens_backtracking({}, Self::parse_{}_climb_atom, Self::parse_{}_operator, {}_binding_power, Self::{}_precedence_combine) {{ Ok(value) => value, Err(error) => return Err(error) }};\n",
                 threshold, table.rule, table.rule, table.rule, table.rule
             ));
+            output.push_str("            let node_span = SourceSpan { start, end: operand.span().end };\n");
             output.push_str(&format!("            return Ok({}::{} {{\n", rule_type, variant));
             for field in &constructor.fields {
                 let value = match field.source_label.as_str() {
@@ -797,7 +818,7 @@ fn emit_precedence_climb_helpers(
                 };
                 output.push_str(&format!("                {}: {},\n", field_name(&field.field), value));
             }
-            output.push_str("            });\n        }\n");
+            output.push_str("                span: node_span,\n            });\n        }\n");
         }
     }
     output.push_str("        self.position = start;\n");
@@ -945,9 +966,12 @@ fn emit_fold_apply_base_helpers(
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
+            // `original_span` only ever covered the step's own elements
+            // (e.g. just ".member"); the folded node's span must start
+            // where the accumulated base started instead.
             output.push_str(&format!(
-                "            {}::{} {{ {} }} => {}::{} {{ {} }},\n",
-                value_type, variant, pattern_fields, value_type, variant, rebuild_fields
+                "            {value_type}::{variant} {{ {pattern_fields}, span: original_span }} => {{\n                let node_span = SourceSpan {{ start: incoming_base.span().start, end: original_span.end }};\n                {value_type}::{variant} {{ {rebuild_fields}, span: node_span }}\n            }},\n",
+                value_type = value_type, variant = variant, pattern_fields = pattern_fields, rebuild_fields = rebuild_fields
             ));
         }
         output.push_str("            other => other,\n        }\n    }\n\n");
@@ -967,7 +991,10 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
     }
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         if !rule.lexical {
-            output.push_str("        let start = self.position;\n");
+            // Prefixed to avoid colliding with a grammar field also named
+            // "start" (e.g. `for_stmt`'s loop-start expression), which
+            // would otherwise shadow this inside the closure below.
+            output.push_str("        let rdgen_span_start = self.position;\n");
         }
         output.push_str(&format!(
             "        let attempt: Result<{}, ParseError> = (|| {{\n",
@@ -985,22 +1012,32 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
             }
             emit_element_binding(output, element, &variable, "            ")?;
         }
-        let construction = if is_identity_constructor(alternative) {
+        let is_identity = is_identity_constructor(alternative);
+        let is_lexical_default = rule.lexical && is_default_constructor(rule, alternative);
+        if !is_identity && !is_lexical_default {
+            // Every constructed node gets its own span; Identity forwards an
+            // existing node instead of building a new one, and the lexical
+            // default (raw token) case already computes its own span above.
+            output.push_str("            let rdgen_span_end = self.position;\n");
+        }
+        let construction = if is_identity {
             format!(
                 "*{}",
                 field_name(&alternative.constructor.fields[0].source_label)
             )
-        } else if rule.lexical && is_default_constructor(rule, alternative) {
+        } else if is_lexical_default {
             format!(
                 "{}::Token {{ text: Token(self.source[lexical_token_start..self.position].to_owned()), span: SourceSpan {{ start: lexical_token_start, end: self.position }} }}",
                 type_name(&rule.output.0)
             )
         } else {
+            let span_start = if rule.lexical { "lexical_token_start" } else { "rdgen_span_start" };
+            let span_expr = format!("SourceSpan {{ start: {}, end: rdgen_span_end }}", span_start);
             format!(
                 "{}::{}{}",
                 type_name(&rule.output.0),
                 variant_name(rule, alternative, index),
-                emit_constructor_fields(alternative)?
+                emit_constructor_fields(alternative, &span_expr)?
             )
         };
         output.push_str(&format!("            Ok({})\n", construction));
@@ -1008,7 +1045,7 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
         if rule.lexical {
             output.push_str("        match attempt { Ok(value) => { self.lexical_mode = previous_lexical_mode; self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { self.lexical_mode = previous_lexical_mode; return Err(error); } self.position = lexical_token_start } }\n");
         } else {
-            output.push_str("        match attempt { Ok(value) => { self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { return Err(error); } self.position = start } }\n");
+            output.push_str("        match attempt { Ok(value) => { self.committed = previous_commit; return Ok(value); }, Err(error) => { if self.committed { return Err(error); } self.position = rdgen_span_start } }\n");
         }
     }
     if rule.lexical {
@@ -1366,15 +1403,9 @@ fn element_variable(element: &Element, index: usize) -> String {
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
 
-fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String, String> {
-    if alternative.constructor.fields.is_empty() {
-        return Ok(String::new());
-    }
+fn emit_constructor_fields(alternative: &rdgen_ir::Alternative, span_expr: &str) -> Result<String, String> {
     let mut output = String::from(" { ");
-    for (index, field) in alternative.constructor.fields.iter().enumerate() {
-        if index > 0 {
-            output.push_str(", ");
-        }
+    for field in &alternative.constructor.fields {
         // A fold step's magic `base`-role field isn't bound by any of this
         // alternative's own elements: it starts as `None` and is filled in
         // by the fold loop once the accumulated base is known.
@@ -1385,9 +1416,9 @@ fn emit_constructor_fields(alternative: &rdgen_ir::Alternative) -> Result<String
         } else {
             field_name(&field.source_label)
         };
-        output.push_str(&format!("{}: {}", field_name(&field.field), value));
+        output.push_str(&format!("{}: {}, ", field_name(&field.field), value));
     }
-    output.push_str(" }");
+    output.push_str(&format!("span: {} }}", span_expr));
     Ok(output)
 }
 
@@ -1421,7 +1452,7 @@ mod tests {
         assert!(generated.contains("pub enum Expr {"));
         assert!(!generated.contains("pub enum Atom {"));
         assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
-        assert!(generated.contains("Ok(Expr::Name { value: value })"));
+        assert!(generated.contains("Ok(Expr::Name { value: value, span: SourceSpan { start: rdgen_span_start, end: rdgen_span_end } })"));
     }
 
     #[test]
@@ -1432,9 +1463,8 @@ mod tests {
         .unwrap();
         let generated = emit(&grammar).unwrap();
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
-        assert!(generated.contains("    Atom {\n        value: Token,\n    },"));
-        assert!(generated.contains("    Term {\n        value: Token,\n    },"));
-        assert!(generated.contains("    Atom {\n        value: Token,\n    },"));
+        assert!(generated.contains("    Atom {\n        value: Token,\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("    Term {\n        value: Token,\n        span: SourceSpan,\n    },"));
         assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
         assert!(generated.contains("fn parse_term(&mut self) -> Result<Expr, ParseError>"));
     }
@@ -1447,7 +1477,7 @@ mod tests {
         .unwrap();
         let generated = emit(&grammar).unwrap();
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
-        assert!(generated.contains("    Name {\n        value: Token,\n    },"));
+        assert!(generated.contains("    Name {\n        value: Token,\n        span: SourceSpan,\n    },"));
         assert!(!generated.contains("Identity"));
         assert!(generated.contains("Ok(*value)"));
     }
@@ -1470,8 +1500,8 @@ mod tests {
         )
         .unwrap();
         let generated = emit(&grammar).unwrap();
-        assert!(generated.contains("    Atom,\n"));
-        assert!(generated.contains("    Flag,\n"));
+        assert!(generated.contains("    Atom {\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("    Flag {\n        span: SourceSpan,\n    },"));
     }
 
     #[test]
@@ -1506,7 +1536,7 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("pub struct Parser<'a>"));
         assert!(generated.contains("self.expect_literal(\"0\")?"));
-        assert!(generated.contains("Ok(Number::Number { digit: digit })"));
+        assert!(generated.contains("Ok(Number::Number { digit: digit, span: SourceSpan { start: rdgen_span_start, end: rdgen_span_end } })"));
         assert!(generated.contains("pub type TerminalScanner = fn(&str, usize, &str)"));
         assert!(generated.contains("pub type TriviaSkipper = fn(&str, usize) -> usize"));
         assert!(generated.contains("with_scanner_and_trivia"));
@@ -1625,7 +1655,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn atom(parser: &mut Parser<'_>) -> Result<Expr, ParseError> {{ parser.expect_literal(\"x\")?; Ok(Expr::Alt1) }}\nfn operator(parser: &mut Parser<'_>) -> Result<Option<Token>, ParseError> {{ let start = parser.position; match parser.expect_literal(\"+\") {{ Ok(token) => Ok(Some(token)), Err(_) => {{ parser.position = start; Ok(None) }} }} }}\nfn main() {{ let mut parser = Parser::new(\"x+x\"); let value = parser.parse_expr_precedence_ast(0, atom, operator).unwrap(); match value {{ Expr::Binary {{ left, operator, right }} => {{ assert_eq!(operator.0, \"+\"); assert_eq!(*left, Expr::Alt1); assert_eq!(*right, Expr::Alt1); }}, _ => panic!(\"expected Binary\") }} }}\n",
+                "include!({:?});\nfn atom(parser: &mut Parser<'_>) -> Result<Expr, ParseError> {{ let start = parser.position; parser.expect_literal(\"x\")?; Ok(Expr::Alt1 {{ span: SourceSpan {{ start, end: parser.position }} }}) }}\nfn operator(parser: &mut Parser<'_>) -> Result<Option<Token>, ParseError> {{ let start = parser.position; match parser.expect_literal(\"+\") {{ Ok(token) => Ok(Some(token)), Err(_) => {{ parser.position = start; Ok(None) }} }} }}\nfn main() {{ let mut parser = Parser::new(\"x+x\"); let value = parser.parse_expr_precedence_ast(0, atom, operator).unwrap(); match value {{ Expr::Binary {{ left, operator, right, .. }} => {{ assert_eq!(operator.0, \"+\"); assert!(matches!(*left, Expr::Alt1 {{ .. }})); assert!(matches!(*right, Expr::Alt1 {{ .. }})); }}, _ => panic!(\"expected Binary\") }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1754,6 +1784,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_a_constructor_field_named_span() {
+        let grammar =
+            compile("grammar Start; start = value: \"x\" => Start(span: value);").unwrap();
+        let error = emit_ast(&grammar).unwrap_err();
+        assert!(error.contains("constructor field 'span' is reserved for the generated node span in rule 'start'"));
+    }
+
+    #[test]
     fn generated_precedence_metadata_is_readable_from_rust() {
         let grammar = compile(
             "grammar Expr; precedence expr { left \"+\", \"-\"; right \"^\"; } expr = atom, { ( \"+\" | \"-\" | \"^\" ), atom }; atom = \"x\";",
@@ -1798,7 +1836,7 @@ mod tests {
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("items: Vec<Token>"));
         assert!(generated.contains("let mut items = Vec::new()"));
-        assert!(generated.contains("List::List { items: items }"));
+        assert!(generated.contains("List::List { items: items, span: SourceSpan { start: rdgen_span_start, end: rdgen_span_end } }"));
     }
 
     #[test]
@@ -1806,7 +1844,7 @@ mod tests {
         let grammar = compile("grammar Start; start = type: \"a\" => Start(type: type);").unwrap();
         let generated = emit(&grammar).unwrap();
         assert!(generated.contains("r#type: Token"));
-        assert!(generated.contains("Start::Start { r#type: r#type }"));
+        assert!(generated.contains("Start::Start { r#type: r#type, span: SourceSpan { start: rdgen_span_start, end: rdgen_span_end } }"));
     }
 
     #[test]
@@ -1840,8 +1878,8 @@ mod tests {
     fn synthesizes_unique_variants_for_unannotated_alternatives() {
         let grammar = compile("grammar Suffix; suffix = \"%\" | \"$\";").unwrap();
         let generated = emit_ast(&grammar).unwrap();
-        assert!(generated.contains("Alt1,"));
-        assert!(generated.contains("Alt2,"));
+        assert!(generated.contains("Alt1 {\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("Alt2 {\n        span: SourceSpan,\n    },"));
     }
 
     #[test]
@@ -1939,7 +1977,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(_: &str, position: usize) -> usize {{ position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"Name42\", scanner, trivia); match parser.parse().unwrap() {{ Start::Start {{ name }} => match *name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Name42\"); assert_eq!(span, SourceSpan {{ start: 0, end: 6 }}); }}, }}, }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(_: &str, position: usize) -> usize {{ position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"Name42\", scanner, trivia); match parser.parse().unwrap() {{ Start::Start {{ name, .. }} => match *name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Name42\"); assert_eq!(span, SourceSpan {{ start: 0, end: 6 }}); }}, }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1966,7 +2004,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); match parser.parse().unwrap() {{ Start::Start {{ suffix }} => match *suffix {{ Suffix::Token {{ text, span }} => {{ assert_eq!(text.0, \"$\"); assert_eq!(span, SourceSpan {{ start: 7, end: 8 }}); }}, }}, }} }}\n",
+                "include!({:?});\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut parser = Parser::with_scanner_and_trivia(\"method $\", missing_terminal, trivia); match parser.parse().unwrap() {{ Start::Start {{ suffix, .. }} => match *suffix {{ Suffix::Token {{ text, span }} => {{ assert_eq!(text.0, \"$\"); assert_eq!(span, SourceSpan {{ start: 7, end: 8 }}); }}, }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -1990,7 +2028,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), \"hex_digit\" => ch.is_ascii_hexdigit(), \"any_char\" => true, \"any_char_except_quote\" => ch != '\\\"', \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len()).filter(|candidate| candidate.eq_ignore_ascii_case(expected)).map(|_| position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"program Demo\\n\", scanner, trivia, literal); match parser.parse().unwrap() {{ Program::File {{ items }} => {{ assert_eq!(items.len(), 1); match &*items[0] {{ FileItem::ProgramDeclaration {{ declaration }} => match &**declaration {{ ProgramDecl::ProgramDeclaration {{ name, shared }} => {{ assert!(shared.is_none()); match &**name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Demo\"); assert_eq!(*span, SourceSpan {{ start: 8, end: 12 }}); }}, }} }}, }}, _ => panic!(\"expected program declaration\"), }} }}, }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let ch = source.get(position..)?.chars().next()?; let accepted = match name {{ \"letter\" => ch.is_ascii_alphabetic(), \"digit\" => ch.is_ascii_digit(), \"hex_digit\" => ch.is_ascii_hexdigit(), \"any_char\" => true, \"any_char_except_quote\" => ch != '\\\"', \"any_char_except_newline\" => ch != '\\n', _ => false }}; accepted.then(|| (Token(ch.to_string()), position + ch.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn literal(source: &str, position: usize, expected: &str) -> Option<usize> {{ source.get(position..)?.get(..expected.len()).filter(|candidate| candidate.eq_ignore_ascii_case(expected)).map(|_| position + expected.len()) }}\nfn main() {{ let mut parser = Parser::with_lexical_config(\"program Demo\\n\", scanner, trivia, literal); match parser.parse().unwrap() {{ Program::File {{ items, .. }} => {{ assert_eq!(items.len(), 1); match &*items[0] {{ FileItem::ProgramDeclaration {{ declaration, .. }} => match &**declaration {{ ProgramDecl::ProgramDeclaration {{ name, shared, .. }} => {{ assert!(shared.is_none()); match &**name {{ Identifier::Token {{ text, span }} => {{ assert_eq!(text.0, \"Demo\"); assert_eq!(*span, SourceSpan {{ start: 8, end: 12 }}); }}, }} }}, }}, _ => panic!(\"expected program declaration\"), }} }}, }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -2047,24 +2085,24 @@ fn literal(source: &str, position: usize, expected: &str) -> Option<usize> {
 fn main() {
     let source = "// retained\nrecord R\ntitle: string(12) right\nend record\n";
     let mut parser = Parser::with_lexical_config(source, scanner, trivia, literal);
-    let Program::File { items } = parser.parse().unwrap();
+    let Program::File { items, .. } = parser.parse().unwrap();
     assert_eq!(items.len(), 2);
 
-    let FileItem::Statement { statement } = &*items[0] else { panic!("expected top-level comment") };
-    let TopLevelStatement::Statement { statement } = &**statement else { panic!("expected statement") };
+    let FileItem::Statement { statement, .. } = &*items[0] else { panic!("expected top-level comment") };
+    let TopLevelStatement::Statement { statement, .. } = &**statement else { panic!("expected statement") };
     let Statement::Line { first, .. } = &**statement else { panic!("expected a statement line") };
-    let StatementCore::Comment { comment } = &**first else { panic!("expected comment") };
-    let CommentStmt::Raw { comment } = &**comment else { panic!("expected raw comment") };
-    let LineComment::SlashComment { prefix, body } = &**comment else { panic!("expected slash comment") };
+    let StatementCore::Comment { comment, .. } = &**first else { panic!("expected comment") };
+    let CommentStmt::Raw { comment, .. } = &**comment else { panic!("expected raw comment") };
+    let LineComment::SlashComment { prefix, body, .. } = &**comment else { panic!("expected slash comment") };
     assert_eq!(prefix.0, "//");
     assert_eq!(body.iter().map(|token| token.0.as_str()).collect::<String>(), " retained");
 
-    let FileItem::Record { record } = &*items[1] else { panic!("expected record declaration") };
+    let FileItem::Record { record, .. } = &*items[1] else { panic!("expected record declaration") };
     let RecordDecl::RecordDeclaration { members, .. } = &**record else { panic!("expected record declaration") };
-    let RecordMember::Field { field } = &*members[0] else { panic!("expected record field") };
+    let RecordMember::Field { field, .. } = &*members[0] else { panic!("expected record field") };
     let FieldDecl::FieldDeclaration { field_type, .. } = &**field else { panic!("expected field declaration") };
     let FieldType::StringType { alignment, .. } = &**field_type else { panic!("expected string field type") };
-    assert!(matches!(alignment.as_deref(), Some(StringAlign::Right {})));
+    assert!(matches!(alignment.as_deref(), Some(StringAlign::Right { .. })));
 }
 "#
             ),
@@ -2301,22 +2339,22 @@ fn main() {
     fn emits_named_bascal_program_boundary_nodes() {
         let grammar = compile(include_str!("../../grammars/bascal.bcl.rdg")).unwrap();
         let generated = emit(&grammar).unwrap();
-        assert!(generated.contains("pub enum Program {\n    File {\n        items: Vec<Box<FileItem>>,\n    },\n}"));
-        assert!(generated.contains("ProgramDeclaration {\n        declaration: Box<ProgramDecl>,\n    }"));
-        assert!(generated.contains("LibraryDeclaration {\n        declaration: Box<LibraryDecl>,\n    }"));
-        assert!(generated.contains("Statement {\n        statement: Box<TopLevelStatement>,\n    }"));
-        assert!(generated.contains("pub enum ProgramDecl {\n    ProgramDeclaration {\n        name: Box<Identifier>,\n        shared: Option<(Token, Box<Identifier>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum RequireDecl {\n    RequireDeclaration {\n        path: Box<Identifier>,\n    },\n}"));
-        assert!(generated.contains("pub enum FunctionDecl {\n    FunctionDeclaration {\n        name: Box<TypedIdent>,\n        parameters: Option<Box<ParamList>>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
-        assert!(generated.contains("pub enum MethodDecl {\n    MethodDeclaration {\n        name: Box<Identifier>,\n        receiver: Box<Identifier>,\n        parameters: Option<Box<ParamList>>,\n        result: Option<(Token, Box<ReturnType>)>,\n        body: Vec<Box<Statement>>,\n    },\n}"));
-        assert!(generated.contains("pub enum FieldDecl {\n    FieldDeclaration {\n        name: Box<Identifier>,\n        field_type: Box<FieldType>,\n    },\n}"));
-        assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<CombinedRecordList>)>,\n        members: Vec<Box<RecordMember>>,\n    },\n}"));
-        assert!(generated.contains("pub enum CombinedRecordList {\n    CombinedRecordList {\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n    },\n}"));
-        assert!(generated.contains("pub enum Param {\n    Parameter {\n        mode: Option<Box<PassingMode>>,\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum PassingMode {\n    ByRef,\n    ByVal,\n}"));
-        assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n    },\n    Line {\n        first: Box<StatementCore>,\n        rest: Vec<(Token, Box<StatementCore>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n    },\n}"));
+        assert!(generated.contains("pub enum Program {\n    File {\n        items: Vec<Box<FileItem>>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("ProgramDeclaration {\n        declaration: Box<ProgramDecl>,\n        span: SourceSpan,\n    }"));
+        assert!(generated.contains("LibraryDeclaration {\n        declaration: Box<LibraryDecl>,\n        span: SourceSpan,\n    }"));
+        assert!(generated.contains("Statement {\n        statement: Box<TopLevelStatement>,\n        span: SourceSpan,\n    }"));
+        assert!(generated.contains("pub enum ProgramDecl {\n    ProgramDeclaration {\n        name: Box<Identifier>,\n        shared: Option<(Token, Box<Identifier>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum RequireDecl {\n    RequireDeclaration {\n        path: Box<Identifier>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum FunctionDecl {\n    FunctionDeclaration {\n        name: Box<TypedIdent>,\n        parameters: Option<Box<ParamList>>,\n        body: Vec<Box<Statement>>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum MethodDecl {\n    MethodDeclaration {\n        name: Box<Identifier>,\n        receiver: Box<Identifier>,\n        parameters: Option<Box<ParamList>>,\n        result: Option<(Token, Box<ReturnType>)>,\n        body: Vec<Box<Statement>>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum FieldDecl {\n    FieldDeclaration {\n        name: Box<Identifier>,\n        field_type: Box<FieldType>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum RecordDecl {\n    RecordDeclaration {\n        name: Box<Identifier>,\n        combines: Option<(Token, Box<CombinedRecordList>)>,\n        members: Vec<Box<RecordMember>>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum CombinedRecordList {\n    CombinedRecordList {\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum RecordMember {\n    Field {\n        field: Box<FieldDecl>,\n        span: SourceSpan,\n    },\n    InlineMethod {\n        method: Box<InlineMethod>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum Param {\n    Parameter {\n        mode: Option<Box<PassingMode>>,\n        name: Box<TypedIdent>,\n        axes: Option<Box<ArrayAxes>>,\n        default: Option<(Token, Box<Expr>)>,\n        type_annotation: Option<(Token, Box<Identifier>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum PassingMode {\n    ByRef {\n        span: SourceSpan,\n    },\n    ByVal {\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum Statement {\n    Label {\n        label: Box<LabelStmt>,\n        span: SourceSpan,\n    },\n    Line {\n        first: Box<StatementCore>,\n        rest: Vec<(Token, Box<StatementCore>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum CloseStmt {\n    Close {\n        channel: Box<Expr>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum Expr {"));
         assert!(!generated.contains("pub enum XorExpr {"));
         assert!(!generated.contains("pub enum AddExpr {"));
@@ -2325,29 +2363,29 @@ fn main() {
         assert!(!generated.contains("pub enum OrExpr {"));
         assert!(!generated.contains("pub enum UnaryExpr {"));
         assert!(!generated.contains("pub enum PowExpr {"));
-        assert!(generated.contains("pub enum ReturnType {\n    Integer,\n    Long,\n    Single,\n    Double,\n    String,\n    Suffix {\n        value: Box<Suffix>,\n    },\n}"));
-        assert!(generated.contains("pub enum CompareOp {\n    NotEqual,\n    LessOrEqual,\n    GreaterOrEqual,\n    Equal,\n    Less,\n    Greater,\n}"));
+        assert!(generated.contains("pub enum ReturnType {\n    Integer {\n        span: SourceSpan,\n    },\n    Long {\n        span: SourceSpan,\n    },\n    Single {\n        span: SourceSpan,\n    },\n    Double {\n        span: SourceSpan,\n    },\n    String {\n        span: SourceSpan,\n    },\n    Suffix {\n        value: Box<Suffix>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum CompareOp {\n    NotEqual {\n        span: SourceSpan,\n    },\n    LessOrEqual {\n        span: SourceSpan,\n    },\n    GreaterOrEqual {\n        span: SourceSpan,\n    },\n    Equal {\n        span: SourceSpan,\n    },\n    Less {\n        span: SourceSpan,\n    },\n    Greater {\n        span: SourceSpan,\n    },\n}"));
         assert!(!generated.lines().any(|line| {
             let trimmed = line.trim();
             trimmed.starts_with("Alt") && trimmed.ends_with(',')
         }));
-        assert!(generated.contains("    Binary {\n        left: Box<Expr>,\n        operator: Token,\n        right: Box<Expr>,\n    },"));
-        assert!(generated.contains("    Unary {\n        operator: Token,\n        operand: Box<Expr>,\n    },"));
+        assert!(generated.contains("    Binary {\n        left: Box<Expr>,\n        operator: Token,\n        right: Box<Expr>,\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("    Unary {\n        operator: Token,\n        operand: Box<Expr>,\n        span: SourceSpan,\n    },"));
         assert!(generated.contains("constructor_type: Some(\"Binary\")"));
         assert!(generated.contains("fn parse_expr_operator(&mut self)"));
         assert!(generated.contains("fn parse_expr_climb_atom(&mut self)"));
-        assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        assignment: Box<MidAssign>,\n    },\n    Assignment {\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n    },"));
-        assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n    },\n}"));
-        assert!(generated.contains("pub enum OpenStmt {\n    Open {\n        path: Box<Expr>,\n        mode: Box<OpenMode>,\n        channel: Box<Expr>,\n        length: Option<(Token, Token, Box<Expr>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum FieldBinding {\n    Binding {\n        length: Box<Expr>,\n        name: Box<Identifier>,\n    },\n}"));
-        assert!(generated.contains("pub enum IfStmt {\n    If {\n        condition: Box<Expr>,\n        tail: Box<IfTail>,\n    },\n}"));
-        assert!(generated.contains("pub enum ForStmt {\n    For {\n        variable: Box<TypedIdent>,\n        start: Box<Expr>,\n        bounds: Box<ForBounds>,\n        body: Vec<Box<Statement>>,\n        qualifier: Option<Token>,\n    },\n}"));
-        assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n    },\n}"));
-        assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n    },\n}"));
-        assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n    },\n}"));
+        assert!(generated.contains("pub enum AssignmentOrExprStmt {\n    MidAssignment {\n        assignment: Box<MidAssign>,\n        span: SourceSpan,\n    },\n    Assignment {\n        target: Box<AssignTarget>,\n        operator: Box<AssignmentOp>,\n        value: Box<Expr>,\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("pub enum OnBranchStmt {\n    OnBranch {\n        selector: Box<Expr>,\n        branch: Box<BranchKind>,\n        first: Box<Identifier>,\n        rest: Vec<(Token, Box<Identifier>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum ResumeStmt {\n    Resume {\n        target: Option<Box<ResumeTarget>>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum OpenStmt {\n    Open {\n        path: Box<Expr>,\n        mode: Box<OpenMode>,\n        channel: Box<Expr>,\n        length: Option<(Token, Token, Box<Expr>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum FieldBinding {\n    Binding {\n        length: Box<Expr>,\n        name: Box<Identifier>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum IfStmt {\n    If {\n        condition: Box<Expr>,\n        tail: Box<IfTail>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum ForStmt {\n    For {\n        variable: Box<TypedIdent>,\n        start: Box<Expr>,\n        bounds: Box<ForBounds>,\n        body: Vec<Box<Statement>>,\n        qualifier: Option<Token>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum Identifier {\n    Token {\n        text: Token,\n        span: SourceSpan,\n    },\n}"));
-        assert!(generated.contains("pub enum PrintStmt {\n    Print {\n        destination: Box<PrintDestination>,\n        tokens: Vec<Box<PrintToken>>,\n    },\n}"));
+        assert!(generated.contains("pub enum PrintStmt {\n    Print {\n        destination: Box<PrintDestination>,\n        tokens: Vec<Box<PrintToken>>,\n        span: SourceSpan,\n    },\n}"));
     }
 
     #[test]
@@ -2490,7 +2528,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let character = source.get(position..)?.chars().next()?; (name == \"any_char_except_newline\" && character != '\\n').then(|| (Token(character.to_string()), position + character.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut commented = Parser::with_scanner_and_trivia(\"a // trailing\\n\", scanner, trivia); match commented.parse().unwrap() {{ Start::Statement {{ comment: Some(comment) }} => assert!(!format!(\"{{comment:?}}\").is_empty()), other => panic!(\"expected preserved comment, got {{other:?}}\") }} let mut colon = Parser::with_scanner_and_trivia(\"a:\", scanner, trivia); match colon.parse().unwrap() {{ Start::Statement {{ comment: None }} => {{}}, other => panic!(\"expected no comment, got {{other:?}}\") }} }}\n",
+                "include!({:?});\nfn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {{ let character = source.get(position..)?.chars().next()?; (name == \"any_char_except_newline\" && character != '\\n').then(|| (Token(character.to_string()), position + character.len_utf8())) }}\nfn trivia(source: &str, mut position: usize) -> usize {{ while source.get(position..).and_then(|rest| rest.chars().next()).is_some_and(char::is_whitespace) {{ position += source[position..].chars().next().unwrap().len_utf8(); }} position }}\nfn main() {{ let mut commented = Parser::with_scanner_and_trivia(\"a // trailing\\n\", scanner, trivia); match commented.parse().unwrap() {{ Start::Statement {{ comment: Some(comment), .. }} => assert!(!format!(\"{{comment:?}}\").is_empty()), other => panic!(\"expected preserved comment, got {{other:?}}\") }} let mut colon = Parser::with_scanner_and_trivia(\"a:\", scanner, trivia); match colon.parse().unwrap() {{ Start::Statement {{ comment: None, .. }} => {{}}, other => panic!(\"expected no comment, got {{other:?}}\") }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -2668,22 +2706,30 @@ fn main() {
 fn main() {
     let mut negate_then_power = Parser::new("-2^2");
     let value = negate_then_power.parse().unwrap();
-    assert_eq!(
-        format!("{value:?}"),
-        "Unary { operator: Token(\"-\"), operand: Binary { left: Two, operator: Token(\"^\"), right: Two } }"
-    );
+    assert_eq!(value.span(), SourceSpan { start: 0, end: 4 });
+    let Val::Unary { operator, operand, .. } = &value else { panic!("expected Unary, got {value:?}") };
+    assert_eq!(operator.0, "-");
+    assert_eq!(operand.span(), SourceSpan { start: 1, end: 4 });
+    let Val::Binary { left, right, .. } = operand.as_ref() else { panic!("expected Binary, got {operand:?}") };
+    assert!(matches!(left.as_ref(), Val::Two { .. }));
+    assert_eq!(left.span(), SourceSpan { start: 1, end: 2 });
+    assert_eq!(right.span(), SourceSpan { start: 3, end: 4 });
+
     let mut negate_then_add = Parser::new("-2+3");
     let value = negate_then_add.parse().unwrap();
-    assert_eq!(
-        format!("{value:?}"),
-        "Binary { left: Unary { operator: Token(\"-\"), operand: Two }, operator: Token(\"+\"), right: Three }"
-    );
+    assert_eq!(value.span(), SourceSpan { start: 0, end: 4 });
+    let Val::Binary { left, operator, right, .. } = &value else { panic!("expected Binary, got {value:?}") };
+    assert_eq!(operator.0, "+");
+    assert!(matches!(left.as_ref(), Val::Unary { .. }));
+    assert_eq!(left.span(), SourceSpan { start: 0, end: 2 });
+    assert_eq!(right.span(), SourceSpan { start: 3, end: 4 });
+
     let mut right_assoc = Parser::new("2^3^2");
     let value = right_assoc.parse().unwrap();
-    assert_eq!(
-        format!("{value:?}"),
-        "Binary { left: Two, operator: Token(\"^\"), right: Binary { left: Three, operator: Token(\"^\"), right: Two } }"
-    );
+    assert_eq!(value.span(), SourceSpan { start: 0, end: 5 });
+    let Val::Binary { left, right, .. } = &value else { panic!("expected Binary, got {value:?}") };
+    assert_eq!(left.span(), SourceSpan { start: 0, end: 1 });
+    assert_eq!(right.span(), SourceSpan { start: 2, end: 5 });
 }
 "#
             ),
@@ -2732,14 +2778,19 @@ fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> 
 fn main() {
     let mut single = Parser::with_terminal_scanner("a", scanner);
     let value = single.parse().unwrap();
-    assert_eq!(format!("{value:?}"), "Atom");
+    assert!(matches!(value, Val::Atom { .. }));
+    assert_eq!(value.span(), SourceSpan { start: 0, end: 1 });
 
     let mut chain = Parser::with_terminal_scanner("a.b.c", scanner);
     let value = chain.parse().unwrap();
-    assert_eq!(
-        format!("{value:?}"),
-        "Member { base: Some(Member { base: Some(Atom), member: Token(\"b\") }), member: Token(\"c\") }"
-    );
+    assert_eq!(value.span(), SourceSpan { start: 0, end: 5 });
+    let Val::Member { base, member, .. } = &value else { panic!("expected Member, got {value:?}") };
+    assert_eq!(member.0, "c");
+    let base = base.as_ref().unwrap();
+    assert_eq!(base.span(), SourceSpan { start: 0, end: 3 });
+    let Val::Member { base: inner_base, member, .. } = base.as_ref() else { panic!("expected Member, got {base:?}") };
+    assert_eq!(member.0, "b");
+    assert_eq!(inner_base.as_ref().unwrap().span(), SourceSpan { start: 0, end: 1 });
 }
 "#
             ),
@@ -2902,7 +2953,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"xxx\"); let value = parser.parse().unwrap(); match value {{ Items::Start {{ values }} => assert_eq!(values.len(), 3), }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"xxx\"); let value = parser.parse().unwrap(); match value {{ Items::Start {{ values, .. }} => assert_eq!(values.len(), 3), }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -2954,7 +3005,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut present = Parser::new(\"a\"); match present.parse().unwrap() {{ Start::Start {{ item: Some(token) }} => assert_eq!(token.0, \"a\"), Start::Start {{ item: None }} => panic!(), }} let mut absent = Parser::new(\"\"); match absent.parse().unwrap() {{ Start::Start {{ item: None }} => {{}}, Start::Start {{ item: Some(_) }} => panic!(), }} }}\n",
+                "include!({:?});\nfn main() {{ let mut present = Parser::new(\"a\"); match present.parse().unwrap() {{ Start::Start {{ item: Some(token), .. }} => assert_eq!(token.0, \"a\"), Start::Start {{ item: None, .. }} => panic!(), }} let mut absent = Parser::new(\"\"); match absent.parse().unwrap() {{ Start::Start {{ item: None, .. }} => {{}}, Start::Start {{ item: Some(_), .. }} => panic!(), }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -2980,7 +3031,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"a\"); match parser.parse().unwrap() {{ Start::Start {{ pair }} => assert_eq!(pair.0, \"a\"), }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"a\"); match parser.parse().unwrap() {{ Start::Start {{ pair, .. }} => assert_eq!(pair.0, \"a\"), }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -3006,7 +3057,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }} }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"ab\"); match parser.parse().unwrap() {{ Start::Start {{ pair, .. }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.0, \"b\"); }} }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -3032,7 +3083,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abab\"); match parser.parse().unwrap() {{ Start::Start {{ pairs }} => {{ assert_eq!(pairs.len(), 2); assert_eq!(pairs[0].0.0, \"a\"); assert_eq!(pairs[1].1.0, \"b\"); }} }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abab\"); match parser.parse().unwrap() {{ Start::Start {{ pairs, .. }} => {{ assert_eq!(pairs.len(), 2); assert_eq!(pairs[0].0.0, \"a\"); assert_eq!(pairs[1].1.0, \"b\"); }} }} }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -3061,7 +3112,7 @@ fn main() {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abc\"); match parser.parse().unwrap() {{ Start::Start {{ pair: Some(pair) }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.unwrap().0, \"b\"); assert_eq!(pair.2.0, \"c\"); }}, Start::Start {{ pair: None }} => panic!(), }} }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"abc\"); match parser.parse().unwrap() {{ Start::Start {{ pair: Some(pair), .. }} => {{ assert_eq!(pair.0.0, \"a\"); assert_eq!(pair.1.unwrap().0, \"b\"); assert_eq!(pair.2.0, \"c\"); }}, Start::Start {{ pair: None, .. }} => panic!(), }} }}\n",
                 generated.to_str().unwrap()
             ),
         )

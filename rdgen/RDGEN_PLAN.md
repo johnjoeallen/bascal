@@ -110,9 +110,47 @@ The current branch has these capabilities:
   counterpart: it is what makes `a.b.c()` nest as `Call(Member(Member(a,
   b)), c)` instead of staying a flat `Vec` of suffixes;
 - BASCAL corpus recognition coverage, now generated entirely from the
-  `climb`-driven `expr` rule and the `fold`-driven `postfix_expr` rule.
+  `climb`-driven `expr` rule and the `fold`-driven `postfix_expr` rule;
+- automatic source-span propagation (Rust backend): every constructed
+  non-lexical node gets a `span: SourceSpan` field for free (no grammar
+  annotation needed), bracketing parser positions around each alternative's
+  parse; every generated output-type enum also gets an inherent `span(&self)
+  -> SourceSpan` method so precedence/prefix/fold combine logic can read a
+  child node's span generically without matching on every variant by name.
 
 Recent milestones:
+
+- step 8 (source-span propagation), Rust backend only: every generated
+  struct-like variant (ordinary alternatives, zero-field tags, precedence
+  `Binary`, prefix `Unary`) now carries a `span: SourceSpan`; lexical
+  default token variants already had one. `Identity`-forwarded values
+  don't get a new span (they forward the child's). `climb`'s precedence
+  combine function computes `Binary`/`Unary` spans from the left/right (or
+  operator start/operand end) children's own spans via the new `.span()`
+  method; `fold`'s `apply_fold_base` widens the step's own (too-narrow,
+  e.g. just ".member") span to start where the accumulated base started.
+  A real bug surfaced and got fixed along the way: the span-tracking local
+  variable was originally named plain `start`, which silently shadowed
+  grammar fields also named `start` (`for_stmt`'s loop-start expression,
+  `mid_assign`'s start offset) inside the same closure scope, corrupting
+  their values; renamed to `rdgen_span_start`/`rdgen_span_end` to avoid
+  colliding with any user-chosen field name. `span` itself is now a
+  reserved constructor field name, rejected at compile time if a grammar
+  author tries to bind it explicitly. The C backend is untouched — it has
+  no span support at all, matching its existing gap with `climb`/`fold`;
+  its own test suite doesn't exercise spans so nothing broke.
+
+  Span policy (the plan asks this be defined explicitly): a node's span
+  covers everything its own alternative consumes, start to finish — the
+  position before its first element is attempted through the position
+  after its last element succeeds. Leading and trailing keywords/literals
+  that are part of the alternative are included (e.g. `record_decl`'s span
+  runs from `record` through the closing `record` keyword, not just the
+  name), because they're ordinary elements like any other, parsed inside
+  the same bracketed region. Nothing is trimmed or re-derived after the
+  fact. Delimiters that are *not* part of the alternative at all (a
+  `,` separating repeated items) naturally fall inside the enclosing
+  repetition's own span the same way, not a per-item one.
 
 - step 7 (statements and recovery) audited against the checklist: `If`/
   `For`/`While`/`Do`/`SelectCase`/`Try` and the ~48 other `statement_core`
