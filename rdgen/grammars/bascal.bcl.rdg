@@ -333,9 +333,12 @@ single_line_if_tail = first: ( same_line statement ) , rest: { ( same_line state
 for_stmt         = "for" , variable: typed_ident , "=" , start: expr , bounds: for_bounds ,
                     body: { statement } until { "end" } , "end" , qualifier: [ same_line "for" ]
                     => For(variable: variable, start: start, bounds: bounds, body: body, qualifier: qualifier) ;
+(* `downto`'s step is implied, not written, so it is a constant field
+ * rather than something parsed: -1 has no source token of its own, unlike
+ * `to`'s optional `step` expression. *)
 for_bounds       = "to" , limit: expr , step: [ "step" , expr ]
                     => To(limit: limit, step: step)
-                 | "downto" , limit: expr => Downto(limit: limit) ;
+                 | "downto" , limit: expr => Downto(limit: limit, step: -1) ;
 while_stmt       = "while" , condition: expr , body: { statement } until { "wend", "end" }
                    , terminator: while_terminator
                    => While(condition: condition, body: body, terminator: terminator) ;

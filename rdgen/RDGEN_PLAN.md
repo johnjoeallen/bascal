@@ -120,10 +120,34 @@ The current branch has these capabilities:
 - semantic AST snapshot coverage: six compile-and-run tests in
   rdgen-codegen-rust, one per step-9 category, parsing representative
   BASCAL source through the real bascal.bcl.rdg grammar and asserting
-  both node shape and span correctness (not parser-production names).
+  both node shape and span correctness (not parser-production names);
+- constant constructor fields: `field: -1` binds a fixed integer directly
+  in a constructor, for values a grammar alternative implies but never
+  consumes a token for. Typed `i64`/`int64_t` in the two backends; cannot
+  be forwarded through `Identity` (there is no element behind it to
+  forward). Closes the `downto` gap from step 5: `ForBounds::Downto` now
+  carries `step: -1` alongside `limit`, instead of leaving callers to
+  infer the implied step on their own.
 
 Recent milestones:
 
+- closed the step 5 `downto` gap: added constant constructor fields to
+  the grammar DSL (`step: -1`, a bare signed integer literal in
+  constructor position instead of a label) so `for_bounds`'s `downto`
+  alternative can carry `step: -1` explicitly (`i64`), the same way `to`
+  carries its own (real, parsed) `step` expression. The two `step` fields
+  intentionally stay different types (`Option<Box<Expr>>` for `to`, plain
+  `i64` for `downto`) rather than forcing one shape: fabricating a real
+  `Expr::IntegerLiteral` subtree for the constant would require rdgen to
+  know BASCAL's own literal-node shape, which breaks the backend-agnostic
+  "IR data only, no inferred semantics" rule everything else here follows.
+  A consumer already discriminates `To` vs `Downto`; now it just never has
+  to know `-1` is implied by `Downto` rather than parsed. Extended the
+  lexer (a new `Number` token kind), grammar validation (constant fields
+  skip the "field references unknown label" check; rejected inside
+  `Identity`, which has nothing to forward such a field from), and both
+  backends' constructor-field type/value emission (Rust: `i64`; C: needed
+  a new `<stdint.h>` include for `int64_t`) to support it;
 - step 9 (semantic AST snapshots): added
   `snapshot_precedence_associativity_and_unary_vs_exponent`,
   `snapshot_calls_members_and_indexes`, `snapshot_records_and_methods`,
@@ -222,13 +246,12 @@ Recent milestones:
   `Binary`/`Unary` already carry their operator; and colon chains
   (`statement`) are now a flat `Line(first, rest: Vec<StatementCore>)`
   list instead of a right-nested `Core(core, continuation: Option<(Token,
-  Box<Statement>)>)` cons chain. `downto`-to-`For`-with-step-`-1` is not
-  done: it requires fabricating an AST node with no source span (a literal
-  `-1`) that no token in the input corresponds to, which needs a new
-  "constant value" constructor role rdgen doesn't have yet — left as
-  `Downto(limit)` rather than force it through a mechanism that doesn't
-  exist. Single-line/block `if` and label/comment preservation were
-  already satisfied by the existing grammar, nothing to change there;
+  Box<Statement>)>)` cons chain. `downto`-to-`For`-with-step-`-1` was left
+  undone at this point (rdgen had no way to fabricate a constructor field
+  with no source token yet) - closed later via constant constructor
+  fields, see the milestone above. Single-line/block `if` and label/
+  comment preservation were already satisfied by the existing grammar,
+  nothing to change there;
 - wired BASCAL's `postfix_expr` rule to `fold(primary, postfix_suffix)`,
   deleting the flat `Postfix(base, suffixes: Vec<Member>)` list in favor of
   properly nested `Member`/`Call` chains;

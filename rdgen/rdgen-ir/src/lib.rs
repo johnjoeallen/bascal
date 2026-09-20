@@ -131,6 +131,12 @@ pub struct Constructor {
 pub struct FieldBinding {
     pub field: String,
     pub source_label: String,
+    /// When set, this field is not sourced from any parsed element or
+    /// magic role: its value is this fixed integer, spliced into the
+    /// generated code verbatim. `source_label` is unused (empty) in this
+    /// case. Used for values a grammar alternative implies but never
+    /// consumes a token for (e.g. `downto`'s implicit step of -1).
+    pub constant: Option<i64>,
     pub span: Span,
 }
 
@@ -257,6 +263,7 @@ mod tests {
                 fields: vec![FieldBinding {
                     field: "name".into(),
                     source_label: "name".into(),
+                    constant: None,
                     span: Span::new(8, 18),
                 }],
             },

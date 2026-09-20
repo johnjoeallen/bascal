@@ -11,6 +11,9 @@ pub fn compile(source: &str) -> Result<rdgen_ir::Grammar, String> {
 enum TokenKind {
     Ident(String),
     Literal(String),
+    /// An integer constant, for constructor fields whose value is a fixed
+    /// number rather than a label (e.g. `step: -1`).
+    Number(i64),
     Symbol(char),
     Arrow,
     Epsilon,
@@ -75,6 +78,26 @@ impl<'a> Lexer<'a> {
             }
             if ch == '"' || ch == '\'' {
                 tokens.push(self.literal()?);
+                continue;
+            }
+            if ch.is_ascii_digit() || (ch == '-' && self.peek_char().is_some_and(|next| next.is_ascii_digit())) {
+                let mut end = start + ch.len_utf8();
+                self.next_char();
+                while let Some((index, part)) = self.current {
+                    if !part.is_ascii_digit() {
+                        break;
+                    }
+                    end = index + part.len_utf8();
+                    self.next_char();
+                }
+                let text = &self.source[start..end];
+                let value = text
+                    .parse::<i64>()
+                    .map_err(|_| format!("invalid integer constant {:?} at {}", text, start))?;
+                tokens.push(Token {
+                    kind: TokenKind::Number(value),
+                    span: rdgen_ir::Span::new(start, end),
+                });
                 continue;
             }
             if ch == 'ε' {
@@ -580,10 +603,15 @@ impl<'a> Parser<'a> {
             loop {
                 let field = self.ident()?;
                 self.expect_symbol(':')?;
-                let source_label = self.ident()?;
+                let (source_label, constant) = if let Some(value) = self.take_number() {
+                    (String::new(), Some(value))
+                } else {
+                    (self.ident()?, None)
+                };
                 fields.push(rdgen_ir::FieldBinding {
                     field,
                     source_label,
+                    constant,
                     span: rdgen_ir::Span::new(start, self.previous().span.end),
                 });
                 if self.accept_symbol(')') {
@@ -720,6 +748,15 @@ impl<'a> Parser<'a> {
             None
         }
     }
+    fn take_number(&mut self) -> Option<i64> {
+        if let TokenKind::Number(value) = &self.current().kind {
+            let value = *value;
+            self.position += 1;
+            Some(value)
+        } else {
+            None
+        }
+    }
     fn accept_epsilon(&mut self) -> bool {
         if matches!(self.current().kind, TokenKind::Epsilon) {
             self.position += 1;
@@ -839,20 +876,29 @@ fn validate_constructors(rules: &[rdgen_ir::Rule]) -> Result<(), String> {
                     ));
                 }
                 let is_magic_fold_base = is_fold_step && binding.source_label == "base";
-                if !is_magic_fold_base && !unique_labels.contains(binding.source_label.as_str()) {
+                if binding.constant.is_none()
+                    && !is_magic_fold_base
+                    && !unique_labels.contains(binding.source_label.as_str())
+                {
                     return Err(format!(
                         "constructor field '{}' references unknown label '{}' in rule '{}'",
                         binding.field, binding.source_label, rule.name
                     ));
                 }
             }
-            if alternative.constructor.type_name.0 == "Identity"
-                && alternative.constructor.fields.len() != 1
-            {
-                return Err(format!(
-                    "Identity constructor in rule '{}' must bind exactly one field",
-                    rule.name
-                ));
+            if alternative.constructor.type_name.0 == "Identity" {
+                if alternative.constructor.fields.len() != 1 {
+                    return Err(format!(
+                        "Identity constructor in rule '{}' must bind exactly one field",
+                        rule.name
+                    ));
+                }
+                if alternative.constructor.fields[0].constant.is_some() {
+                    return Err(format!(
+                        "Identity constructor in rule '{}' cannot forward a constant field",
+                        rule.name
+                    ));
+                }
             }
         }
     }
@@ -1741,6 +1787,28 @@ mod tests {
         assert!(error.contains(
             "constructor field 'base' references unknown label 'base' in rule 'start'"
         ));
+    }
+
+    #[test]
+    fn parses_a_constant_integer_constructor_field() {
+        let grammar = compile(
+            "grammar Bounds; start = \"downto\" , limit: \"x\" => Downto(limit: limit, step: -1);",
+        )
+        .unwrap();
+        let rule = &grammar.rules[0];
+        let field = &rule.alternatives[0].constructor.fields[1];
+        assert_eq!(field.field, "step");
+        assert_eq!(field.constant, Some(-1));
+        assert_eq!(field.source_label, "");
+    }
+
+    #[test]
+    fn rejects_identity_forwarding_a_constant_field() {
+        let error = compile(
+            "grammar Bounds; start = \"x\" => Identity(value: -1);",
+        )
+        .unwrap_err();
+        assert!(error.contains("Identity constructor in rule 'start' cannot forward a constant field"));
     }
 
     #[test]

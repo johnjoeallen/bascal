@@ -135,19 +135,25 @@ fn emit_rule(
         output.push_str(" {\n");
         let mut field_names = std::collections::HashSet::new();
         for field in &alternative.constructor.fields {
-            let element = find_labeled_element(&alternative.elements, &field.source_label);
             // A fold step's magic `base`-role field is filled in externally
             // by the fold loop, not by any of this alternative's own
             // elements, so it has no labeled element to look up: its type
-            // is simply this rule's own (shared) output type.
-            let field_type = match element {
-                Some(element) => rust_type(element, output_types),
-                None if field.source_label == "base" => format!("Option<Box<{}>>", type_name(&rule.output.0)),
-                None => {
-                    return Err(format!(
-                        "missing label '{}' in rule '{}'",
-                        field.source_label, rule.name
-                    ))
+            // is simply this rule's own (shared) output type. A constant
+            // field isn't sourced from any element either: it's a fixed
+            // integer the grammar author wrote directly in the constructor.
+            let field_type = if field.constant.is_some() {
+                "i64".to_owned()
+            } else {
+                let element = find_labeled_element(&alternative.elements, &field.source_label);
+                match element {
+                    Some(element) => rust_type(element, output_types),
+                    None if field.source_label == "base" => format!("Option<Box<{}>>", type_name(&rule.output.0)),
+                    None => {
+                        return Err(format!(
+                            "missing label '{}' in rule '{}'",
+                            field.source_label, rule.name
+                        ))
+                    }
                 }
             };
             let generated_name = field_name(&field.field);
@@ -1419,7 +1425,9 @@ fn emit_constructor_fields(alternative: &rdgen_ir::Alternative, span_expr: &str)
         // by the fold loop once the accumulated base is known.
         let is_magic_fold_base = field.source_label == "base"
             && find_labeled_element(&alternative.elements, &field.source_label).is_none();
-        let value = if is_magic_fold_base {
+        let value = if let Some(constant) = field.constant {
+            constant.to_string()
+        } else if is_magic_fold_base {
             "None".to_owned()
         } else {
             field_name(&field.source_label)
@@ -1797,6 +1805,46 @@ mod tests {
             compile("grammar Start; start = value: \"x\" => Start(span: value);").unwrap();
         let error = emit_ast(&grammar).unwrap_err();
         assert!(error.contains("constructor field 'span' is reserved for the generated node span in rule 'start'"));
+    }
+
+    #[test]
+    fn emits_a_constant_integer_constructor_field() {
+        let grammar = compile(
+            "grammar Bounds; start = \"downto\" , limit: \"x\" => Downto(limit: limit, step: -1);",
+        )
+        .unwrap();
+        let generated = emit(&grammar).unwrap();
+        assert!(generated.contains("Downto {\n        limit: Token,\n        step: i64,\n        span: SourceSpan,\n    },"));
+        assert!(generated.contains("step: -1,"));
+    }
+
+    #[test]
+    fn generated_constant_integer_field_round_trips_through_the_parser() {
+        let grammar = compile(
+            "grammar Bounds; start = \"downto\" , limit: \"x\" => Downto(limit: limit, step: -1);",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let generated = directory.path().join("generated.rs");
+        let wrapper = directory.path().join("main.rs");
+        let binary = directory.path().join("constant-field");
+        std::fs::write(&generated, emit(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &wrapper,
+            format!(
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"downtox\"); let Start::Downto {{ step, .. }} = parser.parse().unwrap(); assert_eq!(step, -1); }}\n",
+                generated.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("rustc")
+            .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary).status().unwrap().success());
     }
 
     #[test]
@@ -2426,8 +2474,11 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
 
     let StatementCore::For { for_statement, .. } = nth_core(&program, 2) else { panic!("expected a for statement") };
     let ForStmt::For { bounds, .. } = *for_statement else { panic!("expected for-statement fields") };
-    let ForBounds::Downto { limit, .. } = *bounds else { panic!("expected downto bounds") };
+    let ForBounds::Downto { limit, step, .. } = *bounds else { panic!("expected downto bounds") };
     assert!(matches!(*limit, Expr::IntegerLiteral { .. }));
+    // downto's step is implied by the keyword itself, not written, so it's
+    // exposed as a constant -1 rather than left for a later pass to infer.
+    assert_eq!(step, -1);
 "#,
             "snapshot-downto-compound-let",
         );
