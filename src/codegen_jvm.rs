@@ -181,6 +181,7 @@ pub(crate) fn generate(
         functions.clone(),
         class_name.clone(),
         resolved.function_global_declarations.clone(),
+        resolved.typed_array_declarations.clone(),
     )?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
@@ -2611,6 +2612,7 @@ impl JvmContext {
         functions: HashMap<String, FunctionSig>,
         class_name: String,
         function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
+        typed_array_declarations: Vec<crate::ast::TypedArrayDecl>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
@@ -2621,7 +2623,7 @@ impl JvmContext {
             &mut constants,
             &functions,
         );
-        for array in &program.typed_arrays {
+        for array in &typed_array_declarations {
             arrays.insert(
                 variable_key(&array.name),
                 ArrayShape {

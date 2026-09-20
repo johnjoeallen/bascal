@@ -131,6 +131,9 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- promoted parsed typed-array declarations onto `ResolvedProgram`; JVM now
+  consumes that resolver-owned semantic metadata rather than reading the
+  legacy program's parser-populated side table directly;
 - resolver now retains each function's recursively declared `global` names,
   keyed by resolved function identity; C and JVM emission consume that
   metadata when allocating/sharing program-wide storage, eliminating their

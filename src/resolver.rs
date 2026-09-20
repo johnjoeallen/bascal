@@ -15,6 +15,9 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// backend re-derives them.
 pub struct ResolvedProgram {
     pub program: Program,
+    /// Typed top-level array declarations preserved for backends that need
+    /// element type and dimension expressions after resolution.
+    pub typed_array_declarations: Vec<TypedArrayDecl>,
     /// Lowercase BASIC names of every record/file `FIELD` buffer variable.
     /// Structurally global — the per-procedure name allocator must never
     /// localize one (this is the fact the "FIELD buffer re-namespaced per
@@ -98,6 +101,7 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
 
     Ok(ResolvedProgram {
+        typed_array_declarations: program.typed_arrays.clone(),
         program,
         record_buffer_names,
         const_info,
