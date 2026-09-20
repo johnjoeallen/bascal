@@ -131,6 +131,12 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- moved C's fixed-array-bound constant analysis into `ResolvedProgram`:
+  `resolver::resolve` now retains direct top-level integer `const` values
+  under their case-insensitive name/suffix keys, and `codegen_c` consumes
+  that fact for both top-level and function-local array declarations. This
+  removes one backend AST rescan while keeping the existing rule intact:
+  only literal integer top-level constants can establish C's fixed bounds;
 - made `ResolvedProgram` the sole backend entry point: `codegen_basic`,
   `codegen_c`, and `codegen_jvm` now all accept it rather than a bare
   legacy `Program`, and the driver passes the resolver result unchanged to

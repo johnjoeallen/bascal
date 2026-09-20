@@ -34,6 +34,11 @@ pub struct ResolvedProgram {
     /// needs to declare a real, correctly-typed symbol (`--target c`/
     /// `jvm`).
     pub const_info: HashMap<String, ConstInfo>,
+    /// Integer literal values of top-level `const` declarations, keyed by
+    /// the same case-insensitive name/suffix identity an array-bound
+    /// expression uses.  C needs this fact to declare fixed-size arrays;
+    /// it must not rediscover declarations while transpiling.
+    pub top_level_integer_constants: HashMap<(String, Option<TypeSuffix>), i64>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
     /// Lowercase names of every procedure named as an `on error goto`
@@ -83,16 +88,47 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
             .collect()
     };
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
+    let top_level_integer_constants = collect_top_level_integer_constants(&program.statements);
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
 
     Ok(ResolvedProgram {
         program,
         record_buffer_names,
         const_info,
+        top_level_integer_constants,
         top_level_array_ranks,
         error_handler_procedures,
         uses_catch_source_var,
     })
+}
+
+/// Integer literal values of direct top-level `const` declarations.  The C
+/// backend uses these only when resolving fixed array bounds: a C array
+/// declaration cannot use a runtime value.  Nested declarations deliberately
+/// stay out of this map because they are not global constants.
+fn collect_top_level_integer_constants(
+    statements: &[Stmt],
+) -> HashMap<(String, Option<TypeSuffix>), i64> {
+    statements
+        .iter()
+        .filter_map(|statement| {
+            let Statement::Const { name, value } = &statement.kind else {
+                return None;
+            };
+            let value = match value {
+                Expr::Integer(value) => *value,
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                } => match expr.as_ref() {
+                    Expr::Integer(value) => -*value,
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            Some(((name.name.to_ascii_lowercase(), name.suffix), value))
+        })
+        .collect()
 }
 
 /// Every `const NAME = value` declaration reachable in `statements` --
@@ -2576,6 +2612,24 @@ mod legacy_form_tests {
             "method capitalize$[string]()\nreturn self$\nend method\nmethod pad$[string](n%)\nreturn self$\nend method\ns$ = name$.capitalize().pad(2)\nend\n",
         );
         assert!(validate(&program).is_ok(), "{:?}", validate(&program));
+    }
+
+    #[test]
+    fn resolved_program_retains_top_level_integer_constants_for_backends() {
+        let resolved = resolve(parse("const capacity = 12\nconst offset = -3\nend\n"))
+            .expect("constants should resolve");
+        assert_eq!(
+            resolved
+                .top_level_integer_constants
+                .get(&("capacity".to_string(), Some(TypeSuffix::Integer))),
+            Some(&12)
+        );
+        assert_eq!(
+            resolved
+                .top_level_integer_constants
+                .get(&("offset".to_string(), Some(TypeSuffix::Integer))),
+            Some(&-3)
+        );
     }
 
     #[test]

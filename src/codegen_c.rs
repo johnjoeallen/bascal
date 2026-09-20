@@ -1862,39 +1862,6 @@ fn collect_on_error_handler_ids_into(statements: &[Stmt], ids: &mut HashMap<Stri
 
 /// Renders one `DATA` item's literal text as a quoted C string -- `READ`
 /// converts it to its target variable's actual type at read time (`atoi`/
-/// Every top-level `const` in `statements` whose value is a plain integer
-/// literal (`const n% = 5`) or its negation (`const n% = -5`) -- real
-/// BASCAL `const`s aren't compile-time-folded anywhere else in this
-/// codebase (see `Statement::Const`'s own handling in `emit_statement`,
-/// which just codegens it as an ordinary assignment), but a `dim`'s own
-/// array-bound expression needs an actual compile-time integer, since a
-/// real C array's size has to be one -- this is the one place that
-/// integer value gets recovered. Keyed the same way `fn_key`/`var_key`
-/// already do (lowercased name, suffix), matching how a `dim`'s size
-/// expression -- a bare `Expr::Ident` -- would reference it.
-fn collect_top_level_int_consts(statements: &[Stmt]) -> HashMap<(String, Option<TypeSuffix>), i64> {
-    let mut consts = HashMap::new();
-    for statement in statements {
-        if let Statement::Const { name, value } = &**statement {
-            let literal = match value {
-                Expr::Integer(n) => Some(*n),
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr,
-                } => match expr.as_ref() {
-                    Expr::Integer(n) => Some(-n),
-                    _ => None,
-                },
-                _ => None,
-            };
-            if let Some(n) = literal {
-                consts.insert((name.name.to_ascii_lowercase(), name.suffix), n);
-            }
-        }
-    }
-    consts
-}
-
 /// The C variable name of every top-level `const`, regardless of its
 /// value's shape (unlike `collect_top_level_int_consts`, which only
 /// tracks the integer-literal-valued subset `dim`'s own array-bound
@@ -2816,8 +2783,8 @@ pub(crate) fn generate(
 
     let (funcs, methods) =
         build_function_table(&program.functions).map_err(|message| vec![unsupported(&message)])?;
-    let int_consts = collect_top_level_int_consts(&program.statements);
-    let arrays = collect_array_declarations(&program.statements, &int_consts)
+    let int_consts = &resolved.top_level_integer_constants;
+    let arrays = collect_array_declarations(&program.statements, int_consts)
         .map_err(|message| vec![unsupported(&message)])?;
     let mut functions = FunctionTable {
         funcs,
@@ -2974,7 +2941,7 @@ pub(crate) fn generate(
         // threading through any of those). Every other function still
         // uses the shared, un-extended `functions` table -- cheap to
         // check, since most functions have no array parameter at all.
-        let local_arrays = collect_array_declarations(&func.body, &int_consts)
+        let local_arrays = collect_array_declarations(&func.body, int_consts)
             .map_err(|message| vec![unsupported(&message)])?;
         has_dynamic_arrays |= local_arrays.values().any(|info| info.dynamic);
         let scoped_table = function_scoped_table(&functions, sig, &local_arrays);
