@@ -1421,7 +1421,10 @@ fn collect_semantic_scalar_declarations(
                 SemanticValueType::Integer => TypeSuffix::Integer,
                 SemanticValueType::Long => TypeSuffix::Long,
                 SemanticValueType::Single => TypeSuffix::Single,
-                SemanticValueType::Double => TypeSuffix::Double,
+                // Unsuffixed decimal CONSTs follow BASCAL's single-
+                // precision default; semantic expression typing uses
+                // `Double` as its widened arithmetic representation.
+                SemanticValueType::Double => TypeSuffix::Single,
                 _ => match &value.kind {
                     ExpressionKind::Literal(text) if text.starts_with('"') => TypeSuffix::String,
                     ExpressionKind::Literal(text) if text.parse::<i64>().is_ok() => TypeSuffix::Integer,
