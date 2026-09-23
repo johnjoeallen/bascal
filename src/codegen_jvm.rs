@@ -816,10 +816,10 @@ fn collect_semantic_field_vars(
     Ok(fields)
 }
 
-/// Add scalar declarations retained by the semantic IR. The legacy AST
-/// collector remains the compatibility path for assignments and implicit
-/// variables, while explicit `DIM` declarations are sourced from semantic
-/// nodes when available.
+/// Add scalar declarations represented by the semantic IR.  The legacy AST
+/// collector remains the compatibility path for backend-specific byref-call
+/// output inference; ordinary declaration sites are sourced here so JVM
+/// emission does not re-infer their types from parser-era statements.
 fn collect_semantic_scalar_declarations(
     module: &crate::semantic_ir::SemanticModule,
     declarations: &mut BTreeMap<String, JvmType>,
@@ -843,7 +843,16 @@ fn collect_semantic_scalar_declarations(
         statements: &[crate::semantic_ir::SemanticStatement],
         declarations: &mut BTreeMap<String, JvmType>,
     ) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
+        use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
+        fn register_target(
+            expression: &crate::semantic_ir::Expression,
+            declarations: &mut BTreeMap<String, JvmType>,
+        ) {
+            if let ExpressionKind::Name(name) = &expression.kind {
+                let ident = BasicIdent::parse(name);
+                declarations.insert(variable_key(&ident), type_for_ident(&ident));
+            }
+        }
         for statement in statements {
             match &statement.kind {
                 Kind::Dim(items) => {
@@ -856,9 +865,21 @@ fn collect_semantic_scalar_declarations(
                         }
                     }
                 }
+                Kind::Assignment { target, .. } | Kind::MidAssign { target, .. } => {
+                    register_target(target, declarations);
+                }
+                Kind::Input { targets, .. } => {
+                    for target in targets {
+                        register_target(target, declarations);
+                    }
+                }
+                Kind::For { variable, body, .. } => {
+                    let ident = BasicIdent::parse(variable);
+                    declarations.insert(variable_key(&ident), type_for_ident(&ident));
+                    visit(body, declarations);
+                }
                 Kind::Line(body)
                 | Kind::While { body, .. }
-                | Kind::For { body, .. }
                 | Kind::Do { body, .. } => visit(body, declarations),
                 Kind::If { then_body, else_body, .. } => {
                     visit(then_body, declarations);
@@ -873,6 +894,14 @@ fn collect_semantic_scalar_declarations(
                 Kind::Try { body, catch, finally_body } => {
                     visit(body, declarations);
                     if let Some(catch) = catch {
+                        let error = BasicIdent::parse(&catch.error);
+                        let line = BasicIdent::parse(&catch.line);
+                        declarations.insert(variable_key(&error), type_for_ident(&error));
+                        declarations.insert(variable_key(&line), type_for_ident(&line));
+                        if let Some(source) = &catch.source {
+                            let source = BasicIdent::parse(source);
+                            declarations.insert(variable_key(&source), JvmType::String);
+                        }
                         visit(&catch.body, declarations);
                     }
                     visit(finally_body, declarations);
