@@ -478,7 +478,6 @@ impl CodeGenerator {
             .semantic_module
             .as_ref()
             .map(semantic_top_level_array_ranks)
-            .filter(|ranks| !ranks.is_empty())
             .unwrap_or_else(|| resolved.top_level_array_ranks.clone());
         self.top_level_dim_types = resolved
             .semantic_module
@@ -489,7 +488,6 @@ impl CodeGenerator {
             .semantic_module
             .as_ref()
             .map(semantic_record_buffer_names)
-            .filter(|names| !names.is_empty())
             .unwrap_or_else(|| resolved.record_buffer_names.clone());
         let mut functions = Vec::new();
         for f in &program.functions {
