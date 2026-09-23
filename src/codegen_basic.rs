@@ -469,7 +469,11 @@ impl CodeGenerator {
                 .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
                 .collect()
         };
-        let param_capacities = infer_array_param_capacities(program, &mut self.diagnostics);
+        let param_capacities = infer_array_param_capacities(
+            program,
+            resolved.semantic_module.as_ref(),
+            &mut self.diagnostics,
+        );
         let top_level_array_ranks = resolved
             .semantic_module
             .as_ref()
@@ -3626,6 +3630,7 @@ fn resolve_call_arg_bound(
 /// diagnostic exists.
 fn infer_array_param_capacities(
     program: &Program,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> HashMap<String, Vec<Vec<i64>>> {
     let function_names: HashSet<String> = program
@@ -3643,6 +3648,11 @@ fn infer_array_param_capacities(
     collect_consts(&program.statements, &mut consts);
     for f in &program.functions {
         collect_consts(&f.body, &mut consts);
+    }
+    if let Some(module) = semantic_module {
+        for (name, value) in module.top_level_integer_constants() {
+            consts.insert(name, vec![Expr::Integer(value)]);
+        }
     }
 
     let mut top_level_dim_sizes = HashMap::new();

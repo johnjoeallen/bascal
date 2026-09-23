@@ -1335,6 +1335,18 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_integer_constants_for_compile_time_consumers() {
+        let module = parse_and_adapt(
+            "const base = 10\nconst doubled = base * 2\nconst adjusted = -doubled + 3\ndim values%(adjusted)\n",
+        )
+        .unwrap();
+        let values = module.top_level_integer_constants();
+        assert_eq!(values.get("base"), Some(&10));
+        assert_eq!(values.get("doubled"), Some(&20));
+        assert_eq!(values.get("adjusted"), Some(&-17));
+    }
+
+    #[test]
     fn generated_frontend_entry_point_returns_semantic_module() {
         let module = parse_and_adapt("value% = 1\n").unwrap();
         assert_eq!(module.statements.len(), 1);
