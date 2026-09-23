@@ -25,43 +25,6 @@ pub(crate) const BASIC_BUILTINS: &[&str] = &[
     "mki", "mkl", "mks", "mkd", "cvi", "cvl", "cvs", "cvd",
 ];
 
-fn semantic_top_level_array_ranks(module: &crate::semantic_ir::SemanticModule) -> HashMap<String, usize> {
-    let mut ranks = HashMap::new();
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], ranks: &mut HashMap<String, usize>) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Dim(declarations) => {
-                    for declaration in declarations.iter().filter(|declaration| declaration.array_axes > 0) {
-                        ranks.insert(declaration.name.to_ascii_lowercase(), declaration.array_axes);
-                    }
-                }
-                Kind::Line(body) => visit(body, ranks),
-                Kind::If { then_body, else_body, .. } => {
-                    visit(then_body, ranks);
-                    visit(else_body, ranks);
-                }
-                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, ranks),
-                Kind::SelectCase { cases, else_body, .. } => {
-                    for case in cases { visit(&case.body, ranks); }
-                    visit(else_body, ranks);
-                }
-                Kind::Try { body, catch, finally_body } => {
-                    visit(body, ranks);
-                    if let Some(catch) = catch { visit(&catch.body, ranks); }
-                    visit(finally_body, ranks);
-                }
-                _ => {}
-            }
-        }
-    }
-    // This fact is deliberately limited to module-level declarations. Local
-    // callable `DIM`s are analyzed separately by `FunctionInfo` and must not
-    // change the global array namespace used by top-level emission.
-    visit(&module.statements, &mut ranks);
-    ranks
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -477,7 +440,7 @@ impl CodeGenerator {
         let top_level_array_ranks = resolved
             .semantic_module
             .as_ref()
-            .map(semantic_top_level_array_ranks)
+            .map(crate::semantic_ir::SemanticModule::top_level_array_ranks)
             .unwrap_or_else(|| resolved.top_level_array_ranks.clone());
         self.top_level_dim_types = resolved
             .semantic_module

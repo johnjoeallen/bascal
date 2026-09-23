@@ -335,6 +335,49 @@ impl SemanticModule {
         names
     }
 
+    /// Return module-scope array names and ranks, including declarations
+    /// nested in top-level control-flow bodies. Callable-local arrays are
+    /// excluded because backends analyze each callable scope separately.
+    pub fn top_level_array_ranks(&self) -> HashMap<String, usize> {
+        fn visit(statements: &[SemanticStatement], ranks: &mut HashMap<String, usize>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Dim(declarations) => {
+                        for declaration in declarations.iter().filter(|declaration| declaration.array_axes > 0) {
+                            ranks.insert(declaration.name.to_ascii_lowercase(), declaration.array_axes);
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, ranks),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, ranks);
+                        visit(else_body, ranks);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, ranks);
+                        }
+                        visit(else_body, ranks);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, ranks);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, ranks);
+                        }
+                        visit(finally_body, ranks);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut ranks = HashMap::new();
+        visit(&self.statements, &mut ranks);
+        ranks
+    }
+
     /// Evaluate integer-valued module-scope constants for compile-time
     /// consumers such as fixed array bounds. Runtime constant bindings remain
     /// variables; this fact table is only an optimization/validation aid.
