@@ -3706,9 +3706,18 @@ pub(crate) fn generate(
     for statement in &program.statements {
         collect_vars_in_statement(statement, &mut numeric_vars, &mut string_vars);
     }
-    for globals in resolved.function_global_declarations.values() {
-        for ident in globals {
-            register_var(ident, &mut numeric_vars, &mut string_vars);
+    if let Some(scopes) = resolved.semantic_name_scopes.as_ref() {
+        for globals in scopes.callable_globals.values() {
+            for name in globals {
+                let ident = BasicIdent::parse(name);
+                register_var(&ident, &mut numeric_vars, &mut string_vars);
+            }
+        }
+    } else {
+        for globals in resolved.function_global_declarations.values() {
+            for ident in globals {
+                register_var(ident, &mut numeric_vars, &mut string_vars);
+            }
         }
     }
     if let Some(module) = resolved.semantic_module.as_ref() {
@@ -3840,7 +3849,7 @@ pub(crate) fn generate(
             &data_labels,
             &try_reachable,
             &top_level_const_names,
-            resolved.function_global_declarations.get(&fn_key(&func.name)).map(Vec::as_slice).unwrap_or(&[]),
+            &resolved.callable_globals(&func.name),
             resolved.semantic_module.as_ref().and_then(|module| semantic_callable_body(module, func)),
         )
         .map_err(|message| vec![unsupported(&message)])?;

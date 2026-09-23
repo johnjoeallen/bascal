@@ -21,6 +21,8 @@ pub struct ResolvedProgram {
     /// mode used by legacy callers and tests until every entry point is
     /// routed through the generated frontend.
     pub semantic_module: Option<crate::semantic_ir::SemanticModule>,
+    /// Generated semantic name-visibility facts used by backend allocators.
+    pub semantic_name_scopes: Option<crate::semantic_ir::SemanticNameScopes>,
     /// Typed top-level array declarations preserved for backends that need
     /// element type and dimension expressions after resolution.
     pub typed_array_declarations: Vec<TypedArrayDecl>,
@@ -71,6 +73,20 @@ pub struct ResolvedProgram {
 }
 
 impl ResolvedProgram {
+    pub(crate) fn callable_globals(&self, function: &BasicIdent) -> Vec<BasicIdent> {
+        let key = function.as_basic().to_ascii_lowercase();
+        if let Some(names) = self
+            .semantic_name_scopes
+            .as_ref()
+            .and_then(|scopes| scopes.callable_globals.get(&key))
+        {
+            return names.iter().map(|name| BasicIdent::parse(name)).collect();
+        }
+        self.function_global_declarations
+            .get(&(function.name.to_ascii_lowercase(), function.suffix))
+            .cloned()
+            .unwrap_or_default()
+    }
 }
 
 /// A single `const`'s declared type and value -- see
@@ -120,12 +136,27 @@ pub fn resolve_with_semantic(
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
     let top_level_integer_constants = collect_top_level_integer_constants(&program.statements);
     let top_level_const_c_names = crate::codegen_c::collect_top_level_const_c_names(&program.statements);
-    let function_global_declarations = program.functions.iter().map(|function| {
+    let mut function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>> = program.functions.iter().map(|function| {
         let mut declarations = Vec::new();
         collect_global_declarations(&function.body, &mut declarations);
         ((function.name.name.to_ascii_lowercase(), function.name.suffix), declarations)
     }).collect();
     let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
+
+    let semantic_name_scopes = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::name_scopes);
+    if let Some(scopes) = semantic_name_scopes.as_ref() {
+        for function in &program.functions {
+            let key = (function.name.name.to_ascii_lowercase(), function.name.suffix);
+            if let Some(names) = scopes.callable_globals.get(&function.name.as_basic().to_ascii_lowercase()) {
+                function_global_declarations.insert(
+                    key,
+                    names.iter().map(|name| BasicIdent::parse(name)).collect(),
+                );
+            }
+        }
+    }
 
     Ok(ResolvedProgram {
         typed_array_declarations: program.typed_arrays.clone(),
@@ -133,6 +164,7 @@ pub fn resolve_with_semantic(
         common_blocks: program.common.clone(),
         program,
         semantic_module,
+        semantic_name_scopes,
         record_buffer_names,
         const_info,
         top_level_integer_constants,

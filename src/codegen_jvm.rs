@@ -184,6 +184,7 @@ pub(crate) fn generate(
         resolved.typed_array_declarations.clone(),
         resolved.typed_array_references.clone(),
         resolved.semantic_module.as_ref(),
+        resolved.semantic_name_scopes.clone(),
     )?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
@@ -2851,6 +2852,7 @@ struct JvmContext {
     initializer_start: usize,
     functions: HashMap<String, FunctionSig>,
     semantic_module: Option<crate::semantic_ir::SemanticModule>,
+    semantic_name_scopes: Option<crate::semantic_ir::SemanticNameScopes>,
     class_name: String,
     condition_label: Cell<usize>,
     initialize_static: bool,
@@ -3010,6 +3012,7 @@ impl JvmContext {
         typed_array_declarations: Vec<crate::ast::TypedArrayDecl>,
         typed_array_references: Vec<crate::ast::TypedArrayRef>,
         semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+        semantic_name_scopes: Option<crate::semantic_ir::SemanticNameScopes>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
@@ -3110,6 +3113,7 @@ impl JvmContext {
             initializer_start: 1,
             functions,
             semantic_module: semantic_module.cloned(),
+            semantic_name_scopes,
             class_name,
             condition_label: Cell::new(0),
             initialize_static: true,
@@ -3242,12 +3246,22 @@ impl JvmContext {
                 semantic_callable_body = Some(body_module);
             }
         }
-        for name in parent
-            .function_global_declarations
-            .get(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
-            .into_iter()
-            .flatten()
-        {
+        let semantic_globals = parent.semantic_name_scopes.as_ref().and_then(|scopes| {
+            scopes
+                .callable_globals
+                .get(&function.name.as_basic().to_ascii_lowercase())
+                .cloned()
+        });
+        let global_names = semantic_globals
+            .map(|names| names.into_iter().map(|name| BasicIdent::parse(&name)).collect())
+            .unwrap_or_else(|| {
+                parent
+                    .function_global_declarations
+                    .get(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
+                    .cloned()
+                    .unwrap_or_default()
+            });
+        for name in global_names {
             if let Some(variable) = parent.variables.get(&variable_key(&name)) {
                 variables.insert(variable_key(&name), *variable);
             }
@@ -3298,6 +3312,7 @@ impl JvmContext {
             initializer_start,
             functions: parent.functions.clone(),
             semantic_module: parent.semantic_module.clone(),
+            semantic_name_scopes: parent.semantic_name_scopes.clone(),
             class_name: parent.class_name.clone(),
             condition_label: Cell::new(0),
             initialize_static: false,

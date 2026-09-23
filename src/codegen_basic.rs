@@ -438,7 +438,16 @@ impl CodeGenerator {
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
         // later functions cannot collide with earlier ones either.
-        let mut taken = collect_program_names(program);
+        let mut taken = resolved
+            .semantic_name_scopes
+            .as_ref()
+            .map(|scopes| scopes.global_names.iter().cloned().collect())
+            .unwrap_or_else(|| collect_program_names(program));
+        for block in &resolved.common_blocks {
+            for variable in &block.vars {
+                taken.insert(variable.name.as_basic().to_ascii_lowercase());
+            }
+        }
         let known_callables: HashSet<String> = if let Some(module) = resolved.semantic_module.as_ref() {
             module
                 .callables

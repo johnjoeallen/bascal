@@ -4,6 +4,8 @@
 //! is the first destination for semantic nodes produced by rdgen; later
 //! adapters add declarations, statements, expressions, and resolver facts.
 
+use std::collections::{BTreeSet, HashMap};
+
 use crate::rdgen_frontend::{self, SourceSpan};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,7 +18,29 @@ pub struct SemanticModule {
     pub statements: Vec<SemanticStatement>,
 }
 
+/// Name visibility facts derived from the generated semantic module.  This is
+/// deliberately a fact table rather than a backend-specific symbol table:
+/// code generators can use it for collision checks without re-walking parser
+/// nodes or re-inferring names from emitted syntax.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SemanticNameScopes {
+    pub global_names: BTreeSet<String>,
+    pub callable_globals: HashMap<String, BTreeSet<String>>,
+}
+
 impl SemanticModule {
+    pub fn name_scopes(&self) -> SemanticNameScopes {
+        let mut scopes = SemanticNameScopes::default();
+        collect_semantic_statements(&self.statements, &mut scopes.global_names);
+        for callable in &self.callables {
+            let key = callable.name.to_ascii_lowercase();
+            let mut globals = BTreeSet::new();
+            collect_semantic_global_declarations(&callable.body, &mut globals);
+            scopes.callable_globals.insert(key, globals);
+        }
+        scopes
+    }
+
     /// Merge a dependency module ahead of this module's executable content.
     /// This mirrors the driver's legacy dependency order while preserving the
     /// root module header and source span.
@@ -160,6 +184,168 @@ impl SemanticModule {
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+fn collect_semantic_expression(expression: &Expression, names: &mut BTreeSet<String>) {
+    match &expression.kind {
+        ExpressionKind::Name(name) => {
+            names.insert(name.to_ascii_lowercase());
+        }
+        ExpressionKind::Call { name, arguments } => {
+            names.insert(name.to_ascii_lowercase());
+            for argument in arguments { collect_semantic_expression(argument, names); }
+        }
+        ExpressionKind::Index { name, index } => {
+            names.insert(name.to_ascii_lowercase());
+            collect_semantic_expression(index, names);
+        }
+        ExpressionKind::Member { base, arguments, .. } => {
+            if let Some(base) = base { collect_semantic_expression(base, names); }
+            if let Some(arguments) = arguments {
+                for argument in arguments { collect_semantic_expression(argument, names); }
+            }
+        }
+        ExpressionKind::Parenthesized(inner) | ExpressionKind::Unary { operand: inner, .. } => {
+            collect_semantic_expression(inner, names);
+        }
+        ExpressionKind::Binary { left, right, .. } => {
+            collect_semantic_expression(left, names);
+            collect_semantic_expression(right, names);
+        }
+        ExpressionKind::RecordLiteral(fields) | ExpressionKind::PartialRecordLiteral(fields) => {
+            for field in fields { collect_semantic_expression(&field.value, names); }
+        }
+        ExpressionKind::Literal(_) | ExpressionKind::Boolean(_) => {}
+    }
+}
+
+fn collect_semantic_statements(
+    statements: &[SemanticStatement],
+    names: &mut BTreeSet<String>,
+) {
+    for statement in statements {
+        match &statement.kind {
+            SemanticStatementKind::Line(body) => collect_semantic_statements(body, names),
+            SemanticStatementKind::Assignment { target, value, .. } => {
+                collect_semantic_expression(target, names);
+                collect_semantic_expression(value, names);
+            }
+            SemanticStatementKind::MidAssign { target, start, length, value } => {
+                collect_semantic_expression(target, names);
+                collect_semantic_expression(start, names);
+                if let Some(length) = length { collect_semantic_expression(length, names); }
+                collect_semantic_expression(value, names);
+            }
+            SemanticStatementKind::Expression(expression)
+            | SemanticStatementKind::Error(expression)
+            | SemanticStatementKind::OptionBase(expression)
+            | SemanticStatementKind::Kill(expression)
+            | SemanticStatementKind::Close(expression) => collect_semantic_expression(expression, names),
+            SemanticStatementKind::If { condition, then_body, else_body, .. } => {
+                collect_semantic_expression(condition, names);
+                collect_semantic_statements(then_body, names);
+                collect_semantic_statements(else_body, names);
+            }
+            SemanticStatementKind::While { condition, body } => {
+                collect_semantic_expression(condition, names);
+                collect_semantic_statements(body, names);
+            }
+            SemanticStatementKind::For { variable, start, bounds, body } => {
+                names.insert(variable.to_ascii_lowercase());
+                collect_semantic_expression(start, names);
+                match bounds {
+                    ForBounds::To { limit, step } => {
+                        collect_semantic_expression(limit, names);
+                        if let Some(step) = step { collect_semantic_expression(step, names); }
+                    }
+                    ForBounds::Downto { limit, .. } => collect_semantic_expression(limit, names),
+                }
+                collect_semantic_statements(body, names);
+            }
+            SemanticStatementKind::Do { pre_condition, post_condition, body } => {
+                for condition in pre_condition.iter().chain(post_condition.iter()) {
+                    collect_semantic_expression(&condition.value, names);
+                }
+                collect_semantic_statements(body, names);
+            }
+            SemanticStatementKind::SelectCase { selector, cases, else_body } => {
+                collect_semantic_expression(selector, names);
+                for case in cases {
+                    for value in &case.values {
+                        match value {
+                            CaseValue::Comparison { value, .. } => collect_semantic_expression(value, names),
+                            CaseValue::Value { first, range_end, .. } => {
+                                collect_semantic_expression(first, names);
+                                if let Some(end) = range_end { collect_semantic_expression(end, names); }
+                            }
+                        }
+                    }
+                    collect_semantic_statements(&case.body, names);
+                }
+                collect_semantic_statements(else_body, names);
+            }
+            SemanticStatementKind::Try { body, catch, finally_body } => {
+                collect_semantic_statements(body, names);
+                if let Some(catch) = catch { collect_semantic_statements(&catch.body, names); }
+                collect_semantic_statements(finally_body, names);
+            }
+            SemanticStatementKind::Return(ReturnValue::Value(value))
+            | SemanticStatementKind::Throw(ThrowValue::Value(value)) => collect_semantic_expression(value, names),
+            SemanticStatementKind::OnBranch { selector, .. } => collect_semantic_expression(selector, names),
+            SemanticStatementKind::Erase(_) | SemanticStatementKind::Label(_) | SemanticStatementKind::Goto(_)
+            | SemanticStatementKind::Gosub(_) | SemanticStatementKind::Resume(_)
+            | SemanticStatementKind::OnErrorGoto(_) | SemanticStatementKind::Return(ReturnValue::Default)
+            | SemanticStatementKind::Throw(ThrowValue::Bare) | SemanticStatementKind::Exit
+            | SemanticStatementKind::Continue | SemanticStatementKind::Comment { .. }
+            | SemanticStatementKind::Unsupported | SemanticStatementKind::Stop
+            | SemanticStatementKind::Clear | SemanticStatementKind::Cls
+            | SemanticStatementKind::Beep | SemanticStatementKind::System => {}
+            SemanticStatementKind::Dim(declarations) => {
+                for declaration in declarations { names.insert(declaration.name.to_ascii_lowercase()); }
+            }
+            SemanticStatementKind::Const { name, value } => {
+                names.insert(name.name.to_ascii_lowercase());
+                collect_semantic_expression(value, names);
+            }
+            SemanticStatementKind::Global(name) => {
+                names.insert(name.name.to_ascii_lowercase());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_semantic_global_declarations(
+    statements: &[SemanticStatement],
+    globals: &mut BTreeSet<String>,
+) {
+    for statement in statements {
+        match &statement.kind {
+            SemanticStatementKind::Global(name) => {
+                globals.insert(name.name.to_ascii_lowercase());
+            }
+            SemanticStatementKind::Line(body)
+            | SemanticStatementKind::While { body, .. }
+            | SemanticStatementKind::For { body, .. }
+            | SemanticStatementKind::Do { body, .. } => {
+                collect_semantic_global_declarations(body, globals);
+            }
+            SemanticStatementKind::If { then_body, else_body, .. } => {
+                collect_semantic_global_declarations(then_body, globals);
+                collect_semantic_global_declarations(else_body, globals);
+            }
+            SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                for case in cases { collect_semantic_global_declarations(&case.body, globals); }
+                collect_semantic_global_declarations(else_body, globals);
+            }
+            SemanticStatementKind::Try { body, catch, finally_body } => {
+                collect_semantic_global_declarations(body, globals);
+                if let Some(catch) = catch { collect_semantic_global_declarations(&catch.body, globals); }
+                collect_semantic_global_declarations(finally_body, globals);
+            }
+            _ => {}
         }
     }
 }
@@ -999,6 +1185,20 @@ mod tests {
         root.prepend_dependency(first);
         let paths: Vec<_> = root.dependencies.iter().map(|dependency| dependency.path.as_str()).collect();
         assert_eq!(paths, ["firstDep", "secondDep", "rootDep"]);
+    }
+
+    #[test]
+    fn name_scopes_retain_global_and_callable_visibility() {
+        let module = parse_and_adapt(
+            "shared% = 1\nfunction work%()\nglobal shared%\nlocal% = shared%\nreturn local%\nend function\n",
+        )
+        .unwrap();
+        let scopes = module.name_scopes();
+        assert!(scopes.global_names.contains("shared%"));
+        assert!(scopes
+            .callable_globals
+            .get("work%")
+            .is_some_and(|names| names.contains("shared%") && !names.contains("local%")));
     }
 
     #[test]
