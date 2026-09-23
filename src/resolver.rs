@@ -48,20 +48,24 @@ pub struct ResolvedProgram {
     /// that resolve an AST without the semantic module; semantic backends
     /// read constant names, types, and values from the typed IR instead.
     pub const_info: HashMap<String, ConstInfo>,
-    /// Integer literal values of top-level `const` declarations, keyed by
-    /// the same case-insensitive name/suffix identity an array-bound
-    /// expression uses.  C needs this fact to declare fixed-size arrays;
-    /// it must not rediscover declarations while transpiling.
+    /// AST-only compatibility cache of integer-valued top-level `const`
+    /// declarations, keyed by the same case-insensitive name/suffix identity
+    /// an array-bound expression uses. Semantic compilation reads this fact
+    /// from the typed IR instead.
     pub top_level_integer_constants: HashMap<(String, Option<TypeSuffix>), i64>,
-    /// C identifiers of top-level constants, retained so C function emission
-    /// does not rescan the legacy statement tree to avoid local collisions.
+    /// AST-only compatibility cache of C identifiers for top-level constants.
+    /// Semantic C emission derives this set from the typed IR.
     pub top_level_const_c_names: BTreeSet<String>,
+    /// AST-only compatibility cache of procedure globals. Semantic backends
+    /// use `semantic_name_scopes` when the typed IR is available.
     pub function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
-    /// Lowercase names of every procedure named as an `on error goto`
-    /// target — proven by [`validate`] to never fall through, so codegen
-    /// must not append an implicit trailing RETURN for one.
+    /// AST-only compatibility cache of lowercase names of every procedure
+    /// named as an `on error goto` target. Semantic backends use the typed
+    /// IR's error-handler target facts; the validation invariant is that
+    /// these procedures never fall through, so codegen must not append an
+    /// implicit trailing RETURN for one.
     pub error_handler_procedures: HashSet<String>,
     /// Whether any `catch` binds the optional third (source-filename)
     /// variable — gates all of codegen_basic's per-statement source-file
