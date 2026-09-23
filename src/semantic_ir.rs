@@ -1528,6 +1528,16 @@ mod tests {
     }
 
     #[test]
+    fn error_handler_targets_preserve_scope_and_source_order() {
+        let module = parse_and_adapt(
+            "on error goto first\non error goto second\nprocedure handler()\non error goto third\nend procedure\n",
+        )
+        .unwrap();
+        assert_eq!(module.top_level_error_handler_targets(), ["first", "second"]);
+        assert_eq!(module.error_handler_targets(), ["first", "second", "third"]);
+    }
+
+    #[test]
     fn dependency_merge_preserves_left_to_right_order() {
         let mut root = parse_and_adapt("root% = 1\n").unwrap();
         let first = parse_and_adapt("first% = 1\n").unwrap();
