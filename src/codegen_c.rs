@@ -2587,6 +2587,87 @@ fn semantic_data_labels(
     (items, labels)
 }
 
+fn render_semantic_data_item(
+    expression: &crate::semantic_ir::Expression,
+) -> Result<String, String> {
+    use crate::semantic_ir::ExpressionKind;
+    match &expression.kind {
+        ExpressionKind::Literal(value) if value.starts_with('"') => Ok(value.clone()),
+        ExpressionKind::Literal(value)
+            if value.parse::<i64>().is_ok() || value.parse::<f64>().is_ok() =>
+        {
+            Ok(format!("\"{value}\""))
+        }
+        ExpressionKind::Unary { operator, operand } if operator == "-" => {
+            match &operand.kind {
+                ExpressionKind::Literal(value)
+                    if value.parse::<i64>().is_ok() || value.parse::<f64>().is_ok() =>
+                {
+                    Ok(format!("\"-{value}\""))
+                }
+                _ => Err(
+                    "DATA items aren't supported by the minimal C backend yet -- only literal numbers and strings are"
+                        .to_string(),
+                ),
+            }
+        }
+        _ => Err(
+            "DATA items aren't supported by the minimal C backend yet -- only literal numbers and strings are"
+                .to_string(),
+        ),
+    }
+}
+
+fn collect_semantic_data_items(
+    module: &crate::semantic_ir::SemanticModule,
+) -> Result<Vec<String>, String> {
+    fn visit(
+        statements: &[crate::semantic_ir::SemanticStatement],
+        items: &mut Vec<String>,
+    ) -> Result<(), String> {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Data(values) => {
+                    for value in values {
+                        items.push(render_semantic_data_item(value)?);
+                    }
+                }
+                Kind::Line(body)
+                | Kind::While { body, .. }
+                | Kind::For { body, .. }
+                | Kind::Do { body, .. } => visit(body, items)?,
+                Kind::If { then_body, else_body, .. } => {
+                    visit(then_body, items)?;
+                    visit(else_body, items)?;
+                }
+                Kind::SelectCase { cases, else_body, .. } => {
+                    for case in cases {
+                        visit(&case.body, items)?;
+                    }
+                    visit(else_body, items)?;
+                }
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, items)?;
+                    if let Some(catch) = catch {
+                        visit(&catch.body, items)?;
+                    }
+                    visit(finally_body, items)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    let mut items = Vec::new();
+    visit(&module.statements, &mut items)?;
+    for callable in &module.callables {
+        visit(&callable.body, &mut items)?;
+    }
+    Ok(items)
+}
+
 fn collect_data_items_and_labels_into(
     statements: &[Stmt],
     items: &mut Vec<String>,
@@ -3887,14 +3968,23 @@ pub(crate) fn generate(
     } else {
         collect_on_error_handler_ids(&program.statements)
     };
-    let (data_items, mut data_labels) = collect_data_items_and_labels(program)
+    let (legacy_data_items, legacy_data_labels) = collect_data_items_and_labels(program)
         .map_err(|message| vec![unsupported(&message)])?;
-    if let Some(module) = resolved.semantic_module.as_ref() {
-        let (semantic_item_count, semantic_labels) = semantic_data_labels(module);
-        if semantic_item_count == data_items.len() {
-            data_labels.extend(semantic_labels);
+    let (data_items, data_labels) = if let Some(module) = resolved.semantic_module.as_ref() {
+        let semantic_data_items = collect_semantic_data_items(module)
+            .map_err(|message| vec![unsupported(&message)])?;
+        let (_, semantic_data_labels) = semantic_data_labels(module);
+        let labels_complete = legacy_data_labels
+            .keys()
+            .all(|label| semantic_data_labels.contains_key(label));
+        if semantic_data_items.len() == legacy_data_items.len() && labels_complete {
+            (semantic_data_items, semantic_data_labels)
+        } else {
+            (legacy_data_items, legacy_data_labels)
         }
-    }
+    } else {
+        (legacy_data_items, legacy_data_labels)
+    };
     let raise_site_count = resolved
         .semantic_module
         .as_ref()
