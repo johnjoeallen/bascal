@@ -3818,10 +3818,9 @@ pub(crate) struct GeneratedC {
 /// implemented" diagnostic first). Threading `target` through here now,
 /// ahead of Phase 4 actually needing it, keeps this signature change from
 /// happening twice.
-/// Transpile a resolver-owned typed program.  C emission currently reads the
-/// semantic AST through this boundary; subsequent migrations move its
-/// remaining whole-program facts out of local AST scans and onto
-/// `ResolvedProgram` as well.
+/// Transpile a resolver-owned typed program. C emission consumes semantic IR
+/// facts when available and retains local AST scans only for compatibility
+/// callers that do not provide the semantic module.
 pub(crate) fn generate(
     resolved: &crate::resolver::ResolvedProgram,
     target: Target,
