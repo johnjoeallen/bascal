@@ -1394,7 +1394,7 @@ fn collect_semantic_scalar_declarations(
         numeric: &mut BTreeMap<String, &'static str>,
         strings: &mut BTreeSet<String>,
     ) {
-        use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
+        use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind, SemanticValueType};
         fn register_target(
             expression: &crate::semantic_ir::Expression,
             numeric: &mut BTreeMap<String, &'static str>,
@@ -1406,6 +1406,31 @@ fn collect_semantic_scalar_declarations(
                 }
                 let ident = BasicIdent::parse(name);
                 register_var(&ident, numeric, strings);
+            }
+        }
+        fn const_ident(
+            name: &str,
+            value: &crate::semantic_ir::Expression,
+        ) -> BasicIdent {
+            let parsed = BasicIdent::parse(name);
+            if parsed.suffix.is_some() {
+                return parsed;
+            }
+            let suffix = match value.value_type {
+                SemanticValueType::String => TypeSuffix::String,
+                SemanticValueType::Integer => TypeSuffix::Integer,
+                SemanticValueType::Long => TypeSuffix::Long,
+                SemanticValueType::Single => TypeSuffix::Single,
+                SemanticValueType::Double => TypeSuffix::Double,
+                _ => match &value.kind {
+                    ExpressionKind::Literal(text) if text.starts_with('"') => TypeSuffix::String,
+                    ExpressionKind::Literal(text) if text.parse::<i64>().is_ok() => TypeSuffix::Integer,
+                    _ => TypeSuffix::Single,
+                },
+            };
+            BasicIdent {
+                name: parsed.name,
+                suffix: Some(suffix),
             }
         }
         for statement in statements {
@@ -1461,8 +1486,8 @@ fn collect_semantic_scalar_declarations(
                     register_var(&ident, numeric, strings);
                     visit(body, numeric, strings);
                 }
-                Kind::Const { name, .. } => {
-                    let ident = BasicIdent::parse(&name.name);
+                Kind::Const { name, value } => {
+                    let ident = const_ident(&name.name, value);
                     register_var(&ident, numeric, strings);
                 }
                 Kind::Line(body)
