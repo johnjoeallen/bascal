@@ -1768,7 +1768,16 @@ impl JvmEmitter<'_> {
                     "JVM bare THROW is only supported inside a JVM catch handler".to_string(),
                 );
             }
-            Statement::Dim { .. } | Statement::Const { .. } => Ok(()),
+            Statement::Dim { .. } => Ok(()),
+            Statement::Const { name, value } => {
+                let variable = self.context.variable(name)?;
+                match variable.ty {
+                    JvmType::String => emit_string_expr(value, out, self.context)?,
+                    JvmType::Numeric(ty) => emit_numeric_expr_as(value, ty, out, self.context)?,
+                }
+                emit_store(variable, out, self.context);
+                Ok(())
+            }
             Statement::Open {
                 mode: OpenMode::Random,
                 file,
@@ -3159,6 +3168,14 @@ impl JvmContext {
     fn for_function(function: &FunctionDef, parent: &Self) -> Self {
         let mut variables = BTreeMap::new();
         let mut next_slot = 0;
+        // Top-level CONST bindings are immutable source variables, but remain
+        // file-scope storage so callable bodies can read them without
+        // substituting their initializer expression at every use site.
+        for key in parent.constants.keys() {
+            if let Some(variable) = parent.variables.get(key) {
+                variables.insert(key.clone(), *variable);
+            }
+        }
         if let Some(suffix) = function.receiver {
             let self_ident = BasicIdent {
                 name: "self".to_string(),
@@ -3377,12 +3394,21 @@ impl JvmContext {
     }
 
     fn variable(&self, ident: &BasicIdent) -> Result<Variable, String> {
-        self.variables
-            .get(&variable_key(ident))
-            .copied()
-            .ok_or_else(|| {
-                format!("`{ident}` must be assigned or declared before use under --target jvm")
-            })
+        if let Some(variable) = self.variables.get(&variable_key(ident)).copied() {
+            return Ok(variable);
+        }
+        // A CONST declaration may be referenced with or without the
+        // inferred type suffix. Preserve the source binding's single storage
+        // slot rather than treating the suffixed reference as a new scalar.
+        if let Some(key) = self.constants.keys().find(|key| {
+            key.trim_end_matches(|ch| matches!(ch, '%' | '$' | '!' | '#' | '&'))
+                == ident.name.to_ascii_lowercase()
+        }) {
+            if let Some(variable) = self.variables.get(key).copied() {
+                return Ok(variable);
+            }
+        }
+        Err(format!("`{ident}` must be assigned or declared before use under --target jvm"))
     }
 
     fn constant(&self, ident: &BasicIdent) -> Option<&Expr> {
@@ -3572,6 +3598,7 @@ fn collect_scalar_declarations(
                 }
             }
             Statement::Const { name, value } => {
+                declarations.insert(variable_key(name), type_for_const_expr(value, name));
                 constants.insert(variable_key(name), value.clone());
             }
             Statement::If {
@@ -3689,6 +3716,31 @@ fn type_for_ident(ident: &BasicIdent) -> JvmType {
         // Doubles are a safe widening internal representation for BASCAL's
         // default single-precision scalar until a later precision pass.
         TypeSuffix::Single | TypeSuffix::Double => JvmType::Numeric(NumericType::Double),
+    }
+}
+
+fn type_for_const_expr(expr: &Expr, name: &BasicIdent) -> JvmType {
+    match expr {
+        Expr::String(_) => JvmType::String,
+        Expr::Integer(value) if i32::try_from(*value).is_ok() => JvmType::Numeric(NumericType::Int),
+        Expr::Integer(_) => JvmType::Numeric(NumericType::Long),
+        Expr::Float(_) => JvmType::Numeric(NumericType::Double),
+        Expr::Unary { expr, .. } => type_for_const_expr(expr, name),
+        Expr::Binary { left, op, right } => match op {
+            BinaryOp::Div | BinaryOp::Pow => JvmType::Numeric(NumericType::Double),
+            BinaryOp::IntDiv | BinaryOp::Mod | BinaryOp::And | BinaryOp::Or | BinaryOp::Xor => {
+                JvmType::Numeric(NumericType::Long)
+            }
+            _ => match (type_for_const_expr(left, name), type_for_const_expr(right, name)) {
+                (JvmType::String, _) | (_, JvmType::String) => JvmType::String,
+                (JvmType::Numeric(NumericType::Double), _)
+                | (_, JvmType::Numeric(NumericType::Double)) => JvmType::Numeric(NumericType::Double),
+                (JvmType::Numeric(NumericType::Long), _)
+                | (_, JvmType::Numeric(NumericType::Long)) => JvmType::Numeric(NumericType::Long),
+                _ => JvmType::Numeric(NumericType::Int),
+            },
+        },
+        _ => type_for_ident(name),
     }
 }
 
@@ -3943,9 +3995,6 @@ fn emit_string_expr(expr: &Expr, out: &mut String, context: &JvmContext) -> Resu
                  (Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;\n",
             );
             Ok(())
-        }
-        Expr::Ident(name) if context.constant(name).is_some() => {
-            emit_string_expr(context.constant(name).expect("checked above"), out, context)
         }
         Expr::Ident(name) => {
             let variable = context.variable(name)?;
@@ -4338,9 +4387,6 @@ fn emit_numeric_expr(
             Ok(NumericType::Double)
         }
         Expr::Float(_) => Err("non-finite numeric literals are not supported by the JVM backend".to_string()),
-        Expr::Ident(name) if context.constant(name).is_some() => {
-            emit_numeric_expr(context.constant(name).expect("checked above"), out, context)
-        }
         Expr::Ident(name) => {
             let variable = context.variable(name)?;
             let JvmType::Numeric(ty) = variable.ty else {
@@ -4495,7 +4541,6 @@ fn infer_numeric_type(expr: &Expr, context: &JvmContext) -> Result<NumericType, 
         Expr::Integer(_) => Ok(NumericType::Long),
         Expr::Float(value) if value.is_finite() => Ok(NumericType::Double),
         Expr::Float(_) => Err("non-finite numeric literals are not supported by the JVM backend".to_string()),
-        Expr::Ident(name) if context.constant(name).is_some() => infer_numeric_type(context.constant(name).expect("checked above"), context),
         Expr::Ident(name) => match context.variable(name)?.ty {
             JvmType::Numeric(ty) => Ok(ty),
             JvmType::String => Err(format!("`{name}` is a string, not numeric")),
