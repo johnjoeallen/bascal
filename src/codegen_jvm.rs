@@ -4734,6 +4734,18 @@ mod tests {
     }
 
     #[test]
+    fn jvm_generation_materializes_const_storage_for_callable_reads() {
+        let source = "const limit = 3\nfunction readLimit%()\nreturn limit\nend function\nprint readLimit%()\nend\n";
+        let parsed = crate::parse_source("const_storage.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve(program).unwrap();
+        let output = super::generate(&resolved).unwrap();
+        assert!(output.contains(".field public static"), "{output}");
+        assert!(output.contains("putstatic"), "{output}");
+        assert!(output.contains("getstatic"), "{output}");
+    }
+
+    #[test]
     fn semantic_array_declarations_preserve_jvm_shapes() {
         let module = crate::semantic_ir::parse_and_adapt("dim values%(10, 20)\n").unwrap();
         let mut arrays = std::collections::BTreeMap::new();
