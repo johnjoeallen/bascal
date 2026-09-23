@@ -3874,7 +3874,16 @@ pub(crate) fn generate(
     // top-level pass ever assigns raise-site IDs (`ON ERROR GOTO`/
     // `RESUME`/`ERROR` are rejected outright inside a function/procedure
     // body -- see `Statement::OnErrorGoto`'s own arm in `emit_statement`).
-    let on_error_handler_ids = collect_on_error_handler_ids(&program.statements);
+    let on_error_handler_ids = if let Some(module) = resolved.semantic_module.as_ref() {
+        module
+            .top_level_error_handler_targets()
+            .into_iter()
+            .enumerate()
+            .map(|(id, name)| (name.to_ascii_lowercase(), id))
+            .collect()
+    } else {
+        collect_on_error_handler_ids(&program.statements)
+    };
     let (data_items, mut data_labels) = collect_data_items_and_labels(program)
         .map_err(|message| vec![unsupported(&message)])?;
     if let Some(module) = resolved.semantic_module.as_ref() {

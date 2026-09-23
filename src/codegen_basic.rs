@@ -570,7 +570,15 @@ impl CodeGenerator {
             ));
         }
         self.functions = functions;
-        self.error_handler_procedures = resolved.error_handler_procedures.clone();
+        self.error_handler_procedures = if let Some(module) = resolved.semantic_module.as_ref() {
+            module
+                .error_handler_targets()
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect()
+        } else {
+            resolved.error_handler_procedures.clone()
+        };
         self.top_level_array_ranks = top_level_array_ranks;
         self.record_buffer_names = record_buffer_names;
         if let Some(module) = resolved.semantic_module.as_ref() {

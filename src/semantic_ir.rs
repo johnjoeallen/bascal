@@ -132,6 +132,87 @@ impl SemanticModule {
         types
     }
 
+    /// Return named `ON ERROR GOTO` targets in source order. Numeric disable
+    /// sentinels are intentionally omitted.
+    pub fn error_handler_targets(&self) -> Vec<String> {
+        fn visit(statements: &[SemanticStatement], targets: &mut Vec<String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::OnErrorGoto(ErrorHandlerTarget::Label(target)) => {
+                        if !targets.iter().any(|name| name.eq_ignore_ascii_case(&target.name)) {
+                            targets.push(target.name.clone());
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, targets),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, targets);
+                        visit(else_body, targets);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, targets);
+                        }
+                        visit(else_body, targets);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, targets);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, targets);
+                        }
+                        visit(finally_body, targets);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut targets = Vec::new();
+        visit(&self.statements, &mut targets);
+        for callable in &self.callables {
+            visit(&callable.body, &mut targets);
+        }
+        targets
+    }
+
+    /// Return named error-handler targets in module scope only.
+    pub fn top_level_error_handler_targets(&self) -> Vec<String> {
+        let mut targets = Vec::new();
+        fn visit(statements: &[SemanticStatement], targets: &mut Vec<String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::OnErrorGoto(ErrorHandlerTarget::Label(target)) => {
+                        if !targets.iter().any(|name| name.eq_ignore_ascii_case(&target.name)) {
+                            targets.push(target.name.clone());
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, targets),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, targets);
+                        visit(else_body, targets);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases { visit(&case.body, targets); }
+                        visit(else_body, targets);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, targets);
+                        if let Some(catch) = catch { visit(&catch.body, targets); }
+                        visit(finally_body, targets);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        visit(&self.statements, &mut targets);
+        targets
+    }
+
     /// Return immutable bindings declared in module scope, excluding
     /// callable-local constants.
     pub fn top_level_const_names(&self) -> BTreeSet<String> {
