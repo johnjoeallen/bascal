@@ -139,35 +139,6 @@ fn semantic_body_array_ranks(body: &[crate::semantic_ir::SemanticStatement]) -> 
     ranks
 }
 
-fn semantic_body_globals(body: &[crate::semantic_ir::SemanticStatement]) -> HashSet<String> {
-    let mut globals = HashSet::new();
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], globals: &mut HashSet<String>) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Global(name) => { globals.insert(name.name.to_ascii_lowercase()); }
-                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, globals),
-                Kind::If { then_body, else_body, .. } => {
-                    visit(then_body, globals);
-                    visit(else_body, globals);
-                }
-                Kind::SelectCase { cases, else_body, .. } => {
-                    for case in cases { visit(&case.body, globals); }
-                    visit(else_body, globals);
-                }
-                Kind::Try { body, catch, finally_body } => {
-                    visit(body, globals);
-                    if let Some(catch) = catch { visit(&catch.body, globals); }
-                    visit(finally_body, globals);
-                }
-                _ => {}
-            }
-        }
-    }
-    visit(body, &mut globals);
-    globals
-}
-
 /// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
 /// compiles to a native BASIC `FOR ... NEXT` block, so leaving it is just
 /// BASIC's own `EXIT FOR` -- no label involved, unlike `while`/`do`, which
@@ -483,6 +454,13 @@ impl CodeGenerator {
             });
             let semantic_body = semantic_callable.map(|callable| callable.body.clone());
             let semantic_param_ranks = semantic_callable.map(|callable| callable.parameters.iter().map(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes)).collect());
+            let semantic_globals = semantic_callable.and_then(|_| {
+                resolved
+                    .semantic_name_scopes
+                    .as_ref()
+                    .and_then(|scopes| scopes.callable_globals.get(&f.name.as_basic().to_ascii_lowercase()))
+                    .map(|globals| globals.iter().cloned().collect())
+            });
             functions.push(FunctionInfo::from_def(
                 f,
                 &mut taken,
@@ -491,6 +469,7 @@ impl CodeGenerator {
                 capacities,
                 semantic_param_ranks,
                 semantic_body,
+                semantic_globals,
             ));
         }
         self.functions = functions;
@@ -2687,6 +2666,7 @@ impl FunctionInfo {
         mut param_capacities: Vec<Vec<i64>>,
         semantic_param_ranks: Option<Vec<Option<usize>>>,
         semantic_body: Option<Vec<crate::semantic_ir::SemanticStatement>>,
+        semantic_globals: Option<HashSet<String>>,
     ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
         let mut params: Vec<(Param, BasicIdent)> = function
@@ -2754,7 +2734,7 @@ impl FunctionInfo {
         let local_dim_types = semantic_body.as_ref().map(|body| semantic_body_dim_types(body)).unwrap_or_default();
         let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
-        let globals = semantic_body.as_ref().map(|body| semantic_body_globals(body)).unwrap_or_else(|| collect_globals(&function.body));
+        let globals = semantic_globals.unwrap_or_else(|| collect_globals(&function.body));
         Self {
             source_name: function.name.clone(),
             stem: stem.clone(),
