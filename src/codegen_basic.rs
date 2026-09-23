@@ -3650,7 +3650,7 @@ fn infer_array_param_capacities(
         collect_consts(&f.body, &mut consts);
     }
     if let Some(module) = semantic_module {
-        for (name, value) in module.top_level_integer_constants() {
+        for (name, value) in module.integer_constants() {
             consts.insert(name, vec![Expr::Integer(value)]);
         }
     }

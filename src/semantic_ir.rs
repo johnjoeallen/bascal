@@ -204,6 +204,19 @@ impl SemanticModule {
         values
     }
 
+    /// Evaluate integer constants in module scope and in every callable body.
+    /// Callable-local names are included for backend analyses that inspect a
+    /// callable's fixed array capacities.
+    pub fn integer_constants(&self) -> HashMap<String, i64> {
+        let mut values = self.top_level_integer_constants();
+        for callable in &self.callables {
+            let mut body = self.clone();
+            body.statements = callable.body.clone();
+            values.extend(body.top_level_integer_constants());
+        }
+        values
+    }
+
     pub fn name_scopes(&self) -> SemanticNameScopes {
         let mut scopes = SemanticNameScopes::default();
         collect_semantic_statements(&self.statements, &mut scopes.global_names);
@@ -1337,13 +1350,14 @@ mod tests {
     #[test]
     fn evaluates_integer_constants_for_compile_time_consumers() {
         let module = parse_and_adapt(
-            "const base = 10\nconst doubled = base * 2\nconst adjusted = -doubled + 3\ndim values%(adjusted)\n",
+            "const base = 10\nconst doubled = base * 2\nconst adjusted = -doubled + 3\nfunction size%()\nconst local = 7\nreturn local\nend function\ndim values%(adjusted)\n",
         )
         .unwrap();
-        let values = module.top_level_integer_constants();
+        let values = module.integer_constants();
         assert_eq!(values.get("base"), Some(&10));
         assert_eq!(values.get("doubled"), Some(&20));
         assert_eq!(values.get("adjusted"), Some(&-17));
+        assert_eq!(values.get("local"), Some(&7));
     }
 
     #[test]
