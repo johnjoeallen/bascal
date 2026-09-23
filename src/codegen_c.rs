@@ -1440,39 +1440,33 @@ fn collect_semantic_scalar_declarations(
             match &statement.kind {
                 Kind::Dim(items) => {
                     for item in items {
-                        if item.array_axes > 0 || item.type_annotation.is_none() {
+                        if item.array_axes > 0 {
                             continue;
                         }
-                        let base = BasicIdent { name: item.name.clone(), suffix: None };
+                        let base = BasicIdent::parse(&item.name);
+                        let annotation = item.type_annotation.as_deref().map(str::to_ascii_uppercase);
+                        let suffix = match (base.suffix, annotation.as_deref()) {
+                            (Some(suffix), _) => Some(suffix),
+                            (None, Some("STRING")) => Some(TypeSuffix::String),
+                            (None, Some("INTEGER" | "INT16")) => Some(TypeSuffix::Integer),
+                            (None, Some("LONG" | "INT32")) => Some(TypeSuffix::Long),
+                            (None, Some("SINGLE" | "FLOAT32")) => Some(TypeSuffix::Single),
+                            (None, Some("DOUBLE" | "FLOAT64")) => Some(TypeSuffix::Double),
+                            (None, _) => None,
+                        };
+                        let Some(suffix) = suffix else {
+                            continue;
+                        };
                         for suffix in [TypeSuffix::Integer, TypeSuffix::Long, TypeSuffix::Single, TypeSuffix::Double, TypeSuffix::String] {
                             let key = c_var_name(&base, suffix);
                             numeric.remove(&key);
                             strings.remove(&key);
                         }
-                        let semantic_suffix = crate::semantic_ir::SemanticValueType::from_suffix(item.name.chars().last());
-                        let annotation = item.type_annotation.as_deref().map(str::to_ascii_uppercase);
-                        match (semantic_suffix, annotation.as_deref()) {
-                            (crate::semantic_ir::SemanticValueType::String, _)
-                            | (_, Some("STRING")) => {
-                                let key = c_var_name(&base, TypeSuffix::String);
-                                strings.insert(key);
-                            }
-                            (crate::semantic_ir::SemanticValueType::Integer | crate::semantic_ir::SemanticValueType::Long, _)
-                            | (_, Some("INTEGER" | "INT16" | "LONG" | "INT32")) => {
-                                let key = c_var_name(&base, TypeSuffix::Integer);
-                                numeric.insert(key, "int");
-                            }
-                            (crate::semantic_ir::SemanticValueType::Single, _)
-                            | (_, Some("SINGLE" | "FLOAT32")) => {
-                                let key = c_var_name(&base, TypeSuffix::Single);
-                                numeric.insert(key, "float");
-                            }
-                            (crate::semantic_ir::SemanticValueType::Double, _)
-                            | (_, Some("DOUBLE" | "FLOAT64")) => {
-                                let key = c_var_name(&base, TypeSuffix::Double);
-                                numeric.insert(key, "double");
-                            }
-                            _ => {}
+                        let key = c_var_name(&base, suffix);
+                        if suffix == TypeSuffix::String {
+                            strings.insert(key);
+                        } else if let Some((c_type, _)) = numeric_c_type(suffix) {
+                            numeric.insert(key, c_type);
                         }
                     }
                 }
