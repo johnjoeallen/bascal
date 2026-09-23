@@ -1394,7 +1394,20 @@ fn collect_semantic_scalar_declarations(
         numeric: &mut BTreeMap<String, &'static str>,
         strings: &mut BTreeSet<String>,
     ) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
+        use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
+        fn register_target(
+            expression: &crate::semantic_ir::Expression,
+            numeric: &mut BTreeMap<String, &'static str>,
+            strings: &mut BTreeSet<String>,
+        ) {
+            if let ExpressionKind::Name(name) = &expression.kind {
+                if name.contains('.') {
+                    return;
+                }
+                let ident = BasicIdent::parse(name);
+                register_var(&ident, numeric, strings);
+            }
+        }
         for statement in statements {
             match &statement.kind {
                 Kind::Dim(items) => {
@@ -1435,9 +1448,25 @@ fn collect_semantic_scalar_declarations(
                         }
                     }
                 }
+                Kind::Assignment { target, .. } | Kind::MidAssign { target, .. } => {
+                    register_target(target, numeric, strings);
+                }
+                Kind::Input { targets, .. } => {
+                    for target in targets {
+                        register_target(target, numeric, strings);
+                    }
+                }
+                Kind::For { variable, body, .. } => {
+                    let ident = BasicIdent::parse(variable);
+                    register_var(&ident, numeric, strings);
+                    visit(body, numeric, strings);
+                }
+                Kind::Const { name, .. } => {
+                    let ident = BasicIdent::parse(&name.name);
+                    register_var(&ident, numeric, strings);
+                }
                 Kind::Line(body)
                 | Kind::While { body, .. }
-                | Kind::For { body, .. }
                 | Kind::Do { body, .. } => visit(body, numeric, strings),
                 Kind::If { then_body, else_body, .. } => {
                     visit(then_body, numeric, strings);
@@ -1452,6 +1481,14 @@ fn collect_semantic_scalar_declarations(
                 Kind::Try { body, catch, finally_body } => {
                     visit(body, numeric, strings);
                     if let Some(catch) = catch {
+                        let error = BasicIdent::parse(&catch.error);
+                        let line = BasicIdent::parse(&catch.line);
+                        register_var(&error, numeric, strings);
+                        register_var(&line, numeric, strings);
+                        if let Some(source) = &catch.source {
+                            let source = BasicIdent::parse(source);
+                            register_var(&source, numeric, strings);
+                        }
                         visit(&catch.body, numeric, strings);
                     }
                     visit(finally_body, numeric, strings);
