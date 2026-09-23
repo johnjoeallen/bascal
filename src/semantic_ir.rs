@@ -73,6 +73,46 @@ impl SemanticModule {
         names
     }
 
+    /// Return immutable bindings declared in module scope, excluding
+    /// callable-local constants.
+    pub fn top_level_const_names(&self) -> BTreeSet<String> {
+        fn visit(statements: &[SemanticStatement], names: &mut BTreeSet<String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Const { name, .. } => {
+                        names.insert(name.name.clone());
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, names),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, names);
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, names);
+                        }
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, names);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, names);
+                        }
+                        visit(finally_body, names);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut names = BTreeSet::new();
+        visit(&self.statements, &mut names);
+        names
+    }
+
     pub fn name_scopes(&self) -> SemanticNameScopes {
         let mut scopes = SemanticNameScopes::default();
         collect_semantic_statements(&self.statements, &mut scopes.global_names);
@@ -1190,6 +1230,13 @@ mod tests {
         assert_eq!(
             module.const_names(),
             ["branch$", "limit%", "local&"]
+                .into_iter()
+                .map(String::from)
+                .collect()
+        );
+        assert_eq!(
+            module.top_level_const_names(),
+            ["branch$", "limit%"]
                 .into_iter()
                 .map(String::from)
                 .collect()

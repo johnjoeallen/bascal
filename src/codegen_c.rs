@@ -3655,7 +3655,27 @@ pub(crate) fn generate(
             sig.try_result = true;
         }
     }
-    let top_level_const_names = if resolved.top_level_const_c_names.is_empty() {
+    let top_level_const_names = if let Some(module) = resolved.semantic_module.as_ref() {
+        module
+            .top_level_const_names()
+            .into_iter()
+            .map(|name| {
+                let ident = BasicIdent::parse(&name);
+                let suffix = resolved
+                    .const_info
+                    .get(&ident.name.to_ascii_lowercase())
+                    .map(|info| info.suffix)
+                    .or(ident.suffix);
+                c_var_name(
+                    &BasicIdent {
+                        name: ident.name,
+                        suffix,
+                    },
+                    effective_suffix(suffix),
+                )
+            })
+            .collect()
+    } else if resolved.top_level_const_c_names.is_empty() {
         collect_top_level_const_c_names(&program.statements)
     } else {
         resolved.top_level_const_c_names.clone()
