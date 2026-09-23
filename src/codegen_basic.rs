@@ -60,29 +60,6 @@ mod tests {
     }
 }
 
-fn semantic_top_level_dim_types(module: &crate::semantic_ir::SemanticModule) -> HashMap<String, String> {
-    let mut types = HashMap::new();
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], types: &mut HashMap<String, String>) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Dim(items) => for item in items {
-                    if item.type_annotation.is_some() {
-                        types.insert(item.name.to_ascii_lowercase(), item.type_annotation.clone().unwrap());
-                    }
-                },
-                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, types),
-                Kind::If { then_body, else_body, .. } => { visit(then_body, types); visit(else_body, types); }
-                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, types); } visit(else_body, types); }
-                Kind::Try { body, catch, finally_body } => { visit(body, types); if let Some(catch) = catch { visit(&catch.body, types); } visit(finally_body, types); }
-                _ => {}
-            }
-        }
-    }
-    visit(&module.statements, &mut types);
-    types
-}
-
 /// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
 /// compiles to a native BASIC `FOR ... NEXT` block, so leaving it is just
 /// BASIC's own `EXIT FOR` -- no label involved, unlike `while`/`do`, which
@@ -323,7 +300,7 @@ impl CodeGenerator {
         self.top_level_dim_types = resolved
             .semantic_module
             .as_ref()
-            .map(semantic_top_level_dim_types)
+            .map(crate::semantic_ir::SemanticModule::top_level_dim_types)
             .unwrap_or_default();
         let record_buffer_names = resolved
             .semantic_module

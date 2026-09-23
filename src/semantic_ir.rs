@@ -378,6 +378,50 @@ impl SemanticModule {
         ranks
     }
 
+    /// Return scalar DIM type annotations in module scope, including
+    /// declarations nested in top-level control-flow bodies.
+    pub fn top_level_dim_types(&self) -> HashMap<String, String> {
+        fn visit(statements: &[SemanticStatement], types: &mut HashMap<String, String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Dim(items) => {
+                        for item in items {
+                            if let Some(annotation) = &item.type_annotation {
+                                types.insert(item.name.to_ascii_lowercase(), annotation.clone());
+                            }
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, types),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, types);
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, types);
+                        }
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, types);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, types);
+                        }
+                        visit(finally_body, types);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut types = HashMap::new();
+        visit(&self.statements, &mut types);
+        types
+    }
+
     /// Return every BASIC FIELD buffer name in module and callable scopes.
     pub fn record_buffer_names(&self) -> HashSet<String> {
         fn visit(statements: &[SemanticStatement], names: &mut HashSet<String>) {
