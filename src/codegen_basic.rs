@@ -279,7 +279,7 @@ pub struct CodeGenerator {
     record_buffer_names: HashSet<String>,
     // Every `const`'s generated BASIC variable name (see `const_var_name`),
     // keyed by lowercase base name (never a suffix -- see
-    // `resolver::ConstInfo`'s own doc comment for why a reference never
+    // resolver AST compatibility metadata for why a reference never
     // carries one either). `ident()` returns this instead of a camelCased
     // rendering of the source name: real BASCOM rejects any identifier
     // containing an underscore outright, even used only as an assignment
@@ -2319,7 +2319,7 @@ impl CodeGenerator {
             // name only (never `source_key`, which includes a suffix): a
             // const's type suffix isn't part of its identity, and a
             // reference is never written with one anyway (see
-            // `resolver::ConstInfo`'s own doc comment). Checked before the
+            // resolver AST compatibility metadata). Checked before the
             // current_function branch below, same as record_buffer_names
             // above.
             return generated.clone();
@@ -4532,7 +4532,7 @@ pub(crate) fn sanitize_symbol(value: &str) -> String {
 /// -- by `allocate_unique` checking the result against `taken`, not by
 /// this function.
 /// The generated BASIC variable name for the const named `base_name`
-/// (lowercase, no suffix -- see `resolver::ConstInfo`'s own doc comment):
+/// (lowercase, no suffix; CONST bindings are globally keyed by bare name):
 /// `CONST` followed by every underscore-separated word of the const's own
 /// name, uppercased and run together -- so `HELLO_MSG` becomes
 /// `CONSTHELLOMSG`, with no underscore anywhere in the result. Real BASCOM

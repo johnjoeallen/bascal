@@ -44,12 +44,9 @@ pub struct ResolvedProgram {
     /// whole identity). `reject_duplicate_consts` (part of `validate`)
     /// guarantees this key is unique program-wide before `resolve` ever
     /// builds this map, so whichever declaration is found first/last here
-    /// doesn't matter. `--target basic`/`fbc` uses this to inline every
-    /// reference to its literal value directly (see `codegen_basic.rs`'s
-    /// `render_const_literal`/`ident`) instead of emitting a runtime
-    /// variable -- the type is kept on hand for whichever backend still
-    /// needs to declare a real, correctly-typed symbol (`--target c`/
-    /// `jvm`).
+    /// doesn't matter. This is resolver compatibility metadata for callers
+    /// that resolve an AST without the semantic module; semantic backends
+    /// read constant names, types, and values from the typed IR instead.
     pub const_info: HashMap<String, ConstInfo>,
     /// Integer literal values of top-level `const` declarations, keyed by
     /// the same case-insensitive name/suffix identity an array-bound
@@ -89,11 +86,11 @@ impl ResolvedProgram {
     }
 }
 
-/// A single `const`'s declared type and value -- see
-/// `ResolvedProgram::const_info`'s own field comment for how it's keyed
-/// and why both target-specific rendering strategies (fold to a literal,
-/// or declare a real typed symbol) need the type kept alongside the value
-/// rather than just a bare `HashSet<String>` of names.
+/// Resolver compatibility metadata for one AST `const` declaration.
+///
+/// Semantic compilation keeps the resolved constant facts in the typed IR;
+/// this structure remains for AST-only callers and resolver diagnostics.
+/// The keying convention is documented on `ResolvedProgram::const_info`.
 pub struct ConstInfo {
     pub suffix: TypeSuffix,
     pub value: Expr,
