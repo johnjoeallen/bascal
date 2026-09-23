@@ -574,14 +574,18 @@ impl CodeGenerator {
         self.top_level_array_ranks = top_level_array_ranks;
         self.record_buffer_names = record_buffer_names;
         if let Some(module) = resolved.semantic_module.as_ref() {
-            for name in module.const_names() {
+            for (name, value_type) in module.const_types() {
                 let ident = BasicIdent::parse(&name);
-                let suffix = resolved
-                    .const_info
-                    .get(&ident.name.to_ascii_lowercase())
-                    .map(|info| info.suffix)
-                    .or(ident.suffix)
-                    .unwrap_or(TypeSuffix::Single);
+                let value_type = match value_type {
+                    crate::semantic_ir::SemanticValueType::Double => {
+                        crate::semantic_ir::SemanticValueType::Single
+                    }
+                    value_type => value_type,
+                };
+                let suffix = ident
+                    .suffix
+                    .or_else(|| value_type.suffix().and_then(TypeSuffix::from_char))
+                    .unwrap_or(TypeSuffix::Integer);
                 let generated = BasicIdent {
                     name: const_var_name(&ident.name),
                     suffix: Some(suffix),

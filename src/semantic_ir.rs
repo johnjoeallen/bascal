@@ -4,7 +4,7 @@
 //! is the first destination for semantic nodes produced by rdgen; later
 //! adapters add declarations, statements, expressions, and resolver facts.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::rdgen_frontend::{self, SourceSpan};
 
@@ -71,6 +71,65 @@ impl SemanticModule {
             visit(&callable.body, &mut names);
         }
         names
+    }
+
+    /// Return every immutable binding with its resolved value type.  CONST
+    /// declarations normally omit a source suffix, so the type is taken from
+    /// the typed initializer expression; an unresolved initializer retains
+    /// BASCAL's integer default.
+    pub fn const_types(&self) -> BTreeMap<String, SemanticValueType> {
+        fn visit(
+            statements: &[SemanticStatement],
+            types: &mut BTreeMap<String, SemanticValueType>,
+        ) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Const { name, value } => {
+                        let suffix = name.name.chars().last().and_then(|character| {
+                            SemanticValueType::from_suffix(Some(character)).suffix()
+                        });
+                        let value_type = suffix
+                            .map(|character| SemanticValueType::from_suffix(Some(character)))
+                            .unwrap_or(match value.value_type {
+                                SemanticValueType::Unknown | SemanticValueType::Boolean => {
+                                    SemanticValueType::Integer
+                                }
+                                value_type => value_type,
+                            });
+                        types.insert(name.name.clone(), value_type);
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, types),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, types);
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, types);
+                        }
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, types);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, types);
+                        }
+                        visit(finally_body, types);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut types = BTreeMap::new();
+        visit(&self.statements, &mut types);
+        for callable in &self.callables {
+            visit(&callable.body, &mut types);
+        }
+        types
     }
 
     /// Return immutable bindings declared in module scope, excluding
@@ -1345,6 +1404,13 @@ mod tests {
                 .map(String::from)
                 .collect()
         );
+    }
+
+    #[test]
+    fn const_types_infer_unsuffixed_initializer_types() {
+        let module = parse_and_adapt("const count = 10\nconst label = \"ready\"\n").unwrap();
+        assert_eq!(module.const_types().get("count"), Some(&SemanticValueType::Integer));
+        assert_eq!(module.const_types().get("label"), Some(&SemanticValueType::String));
     }
 
     #[test]

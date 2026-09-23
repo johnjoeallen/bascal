@@ -3745,7 +3745,19 @@ pub(crate) fn generate(
             .into_iter()
             .map(|name| {
                 let ident = BasicIdent::parse(&name);
-                let suffix = ident.suffix;
+                let suffix = ident.suffix.or_else(|| {
+                    module
+                        .const_types()
+                        .get(&name)
+                        .map(|value_type| match value_type {
+                            crate::semantic_ir::SemanticValueType::Double => {
+                                crate::semantic_ir::SemanticValueType::Single
+                            }
+                            value_type => *value_type,
+                        })
+                        .and_then(|value_type| value_type.suffix())
+                        .and_then(TypeSuffix::from_char)
+                });
                 c_var_name(
                     &BasicIdent {
                         name: ident.name,
