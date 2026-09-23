@@ -569,14 +569,34 @@ impl CodeGenerator {
         self.error_handler_procedures = resolved.error_handler_procedures.clone();
         self.top_level_array_ranks = top_level_array_ranks;
         self.record_buffer_names = record_buffer_names;
-        for (name, info) in &resolved.const_info {
-            let generated = BasicIdent {
-                name: const_var_name(name),
-                suffix: Some(info.suffix),
+        if let Some(module) = resolved.semantic_module.as_ref() {
+            for name in module.const_names() {
+                let ident = BasicIdent::parse(&name);
+                let suffix = resolved
+                    .const_info
+                    .get(&ident.name.to_ascii_lowercase())
+                    .map(|info| info.suffix)
+                    .or(ident.suffix)
+                    .unwrap_or(TypeSuffix::Single);
+                let generated = BasicIdent {
+                    name: const_var_name(&ident.name),
+                    suffix: Some(suffix),
+                }
+                .as_basic();
+                taken.insert(generated.to_ascii_lowercase());
+                self.const_var_names
+                    .insert(ident.name.to_ascii_lowercase(), generated);
             }
-            .as_basic();
-            taken.insert(generated.to_ascii_lowercase());
-            self.const_var_names.insert(name.clone(), generated);
+        } else {
+            for (name, info) in &resolved.const_info {
+                let generated = BasicIdent {
+                    name: const_var_name(name),
+                    suffix: Some(info.suffix),
+                }
+                .as_basic();
+                taken.insert(generated.to_ascii_lowercase());
+                self.const_var_names.insert(name.clone(), generated);
+            }
         }
         *self.taken_names.borrow_mut() = taken;
 

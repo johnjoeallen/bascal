@@ -29,6 +29,50 @@ pub struct SemanticNameScopes {
 }
 
 impl SemanticModule {
+    /// Return every immutable binding represented by the semantic module.
+    /// Names retain their source type suffix; callers can therefore construct
+    /// backend storage without consulting parser-era declaration nodes.
+    pub fn const_names(&self) -> BTreeSet<String> {
+        fn visit(statements: &[SemanticStatement], names: &mut BTreeSet<String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Const { name, .. } => {
+                        names.insert(name.name.clone());
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, names),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, names);
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, names);
+                        }
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, names);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, names);
+                        }
+                        visit(finally_body, names);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut names = BTreeSet::new();
+        visit(&self.statements, &mut names);
+        for callable in &self.callables {
+            visit(&callable.body, &mut names);
+        }
+        names
+    }
+
     pub fn name_scopes(&self) -> SemanticNameScopes {
         let mut scopes = SemanticNameScopes::default();
         collect_semantic_statements(&self.statements, &mut scopes.global_names);
@@ -1135,6 +1179,21 @@ mod tests {
         assert!(matches!(constant[0].kind, SemanticStatementKind::Const { ref name, .. } if name.name == "limit%"));
         let SemanticStatementKind::Line(global) = &module.statements[3].kind else { panic!() };
         assert!(matches!(global[0].kind, SemanticStatementKind::Global(ref name) if name.name == "shared%"));
+    }
+
+    #[test]
+    fn const_names_include_nested_and_callable_bindings() {
+        let module = parse_and_adapt(
+            "const limit% = 10\nif ready% then\nconst branch$ = \"ok\"\nend if\nprocedure work()\nconst local& = 1\nend procedure\n",
+        )
+        .unwrap();
+        assert_eq!(
+            module.const_names(),
+            ["branch$", "limit%", "local&"]
+                .into_iter()
+                .map(String::from)
+                .collect()
+        );
     }
 
     #[test]
