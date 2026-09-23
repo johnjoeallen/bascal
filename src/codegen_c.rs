@@ -3633,20 +3633,34 @@ pub(crate) fn generate(
         resolved.semantic_module.as_ref(),
     )
     .map_err(|message| vec![unsupported(&message)])?;
-    let int_consts = &resolved.top_level_integer_constants;
+    let mut int_consts = resolved.top_level_integer_constants.clone();
+    if let Some(module) = resolved.semantic_module.as_ref() {
+        for (name, value) in module.top_level_integer_constants() {
+            let ident = BasicIdent::parse(&name);
+            let key = ident.name.to_ascii_lowercase();
+            int_consts.insert((key.clone(), ident.suffix), value);
+            if let Some(suffix) = resolved
+                .const_info
+                .get(&key)
+                .map(|info| info.suffix)
+            {
+                int_consts.insert((key, Some(suffix)), value);
+            }
+        }
+    }
     let mut arrays = if resolved.typed_array_declarations.is_empty() {
         if let Some(module) = resolved.semantic_module.as_ref() {
             let semantic_arrays = collect_semantic_array_declarations(module);
             if semantic_arrays.is_empty() {
-                collect_array_declarations(&program.statements, int_consts)
+                collect_array_declarations(&program.statements, &int_consts)
             } else {
                 Ok(semantic_arrays)
             }
         } else {
-            collect_array_declarations(&program.statements, int_consts)
+            collect_array_declarations(&program.statements, &int_consts)
         }
     } else {
-        collect_typed_array_declarations(&resolved.typed_array_declarations, int_consts)
+        collect_typed_array_declarations(&resolved.typed_array_declarations, &int_consts)
     }
     .map_err(|message| vec![unsupported(&message)])?;
     if let Some(module) = resolved.semantic_module.as_ref() {
@@ -3852,7 +3866,7 @@ pub(crate) fn generate(
         // threading through any of those). Every other function still
         // uses the shared, un-extended `functions` table -- cheap to
         // check, since most functions have no array parameter at all.
-        let mut local_arrays = collect_array_declarations(&func.body, int_consts)
+        let mut local_arrays = collect_array_declarations(&func.body, &int_consts)
             .map_err(|message| vec![unsupported(&message)])?;
         if let Some(module) = resolved.semantic_module.as_ref() {
             if let Some(body) = semantic_callable_body(module, func) {
@@ -10627,12 +10641,14 @@ mod dialect_tests {
     #[test]
     fn c_generation_resolves_semantic_const_array_bounds() {
         let source = "const capacity = 10\ndim values%(capacity)\nend\n";
+        let semantic_source = "const capacity = 20\ndim values%(capacity)\nend\n";
         let program = parse_source("semantic_const_array.bcl".to_string(), source).unwrap();
         let lower::Lowered { program, .. } = lower::lower(program).unwrap();
         let mut resolved = resolver::resolve(program).unwrap();
-        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
         let output = generate(&resolved, Target::C).unwrap().app;
-        assert!(output.contains("bv_i_values[11]"), "{output}");
+        assert!(output.contains("bv_i_values[21]"), "{output}");
+        assert!(!output.contains("bv_i_values[11]"), "{output}");
     }
 
     #[test]
