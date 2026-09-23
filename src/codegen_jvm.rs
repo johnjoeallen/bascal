@@ -3063,6 +3063,23 @@ impl JvmContext {
         );
         if let Some(module) = semantic_module {
             collect_semantic_scalar_declarations(module, &mut declarations);
+            let const_types = module.const_types();
+            for name in module.top_level_const_names() {
+                let mut ident = BasicIdent::parse(&name);
+                if ident.suffix.is_none() {
+                    ident.suffix = const_types
+                        .get(&name)
+                        .and_then(|value_type| value_type.suffix())
+                        .and_then(TypeSuffix::from_char);
+                }
+                let ty = const_types
+                    .get(&name)
+                    .copied()
+                    .map(jvm_type_for_semantic_value)
+                    .unwrap_or_else(|| type_for_ident(&ident));
+                declarations.insert(variable_key(&ident), ty);
+                constant_names.insert(variable_key(&ident));
+            }
         }
         for array in &typed_array_declarations {
             arrays.insert(
@@ -3697,6 +3714,20 @@ fn type_for_ident(ident: &BasicIdent) -> JvmType {
         // Doubles are a safe widening internal representation for BASCAL's
         // default single-precision scalar until a later precision pass.
         TypeSuffix::Single | TypeSuffix::Double => JvmType::Numeric(NumericType::Double),
+    }
+}
+
+fn jvm_type_for_semantic_value(value_type: crate::semantic_ir::SemanticValueType) -> JvmType {
+    match value_type {
+        crate::semantic_ir::SemanticValueType::String => JvmType::String,
+        crate::semantic_ir::SemanticValueType::Integer => JvmType::Numeric(NumericType::Int),
+        crate::semantic_ir::SemanticValueType::Long => JvmType::Numeric(NumericType::Long),
+        crate::semantic_ir::SemanticValueType::Single
+        | crate::semantic_ir::SemanticValueType::Double => {
+            JvmType::Numeric(NumericType::Double)
+        }
+        crate::semantic_ir::SemanticValueType::Boolean
+        | crate::semantic_ir::SemanticValueType::Unknown => JvmType::Numeric(NumericType::Int),
     }
 }
 
