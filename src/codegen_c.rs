@@ -1491,6 +1491,23 @@ fn collect_semantic_scalar_declarations(
                 }
                 Kind::Const { name, value } => {
                     let ident = const_ident(&name.name, value);
+                    if BasicIdent::parse(&name.name).suffix.is_none() {
+                        let base = BasicIdent {
+                            name: ident.name.clone(),
+                            suffix: None,
+                        };
+                        for suffix in [
+                            TypeSuffix::Integer,
+                            TypeSuffix::Long,
+                            TypeSuffix::Single,
+                            TypeSuffix::Double,
+                            TypeSuffix::String,
+                        ] {
+                            let key = c_var_name(&base, suffix);
+                            numeric.remove(&key);
+                            strings.remove(&key);
+                        }
+                    }
                     register_var(&ident, numeric, strings);
                 }
                 Kind::Line(body)
@@ -10910,6 +10927,18 @@ mod dialect_tests {
         let output = generate(&resolved, Target::C).unwrap().app;
         assert!(output.contains("bv_i_values[21]"), "{output}");
         assert!(!output.contains("bv_i_values[11]"), "{output}");
+    }
+
+    #[test]
+    fn c_generation_uses_one_semantic_storage_type_for_unsuffixed_const() {
+        let source = "const capacity = 10\nprint capacity\nend\n";
+        let program = parse_source("semantic_const_storage.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(output.contains("static int bv_i_capacity"), "{output}");
+        assert!(!output.contains("bv_f_capacity"), "{output}");
     }
 
     #[test]
