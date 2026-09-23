@@ -33,7 +33,7 @@ mod tests {
             "function f%()\ndim text as string\nend function\n",
         )
         .expect("semantic callable declaration parses");
-        let types = super::semantic_body_dim_types(&module.callables[0].body);
+        let types = module.callables[0].dim_types();
         assert_eq!(types.get("text").map(String::as_str), Some("string"));
     }
 
@@ -81,62 +81,6 @@ fn semantic_top_level_dim_types(module: &crate::semantic_ir::SemanticModule) -> 
     }
     visit(&module.statements, &mut types);
     types
-}
-
-fn semantic_body_dim_types(body: &[crate::semantic_ir::SemanticStatement]) -> HashMap<String, String> {
-    let mut types = HashMap::new();
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], types: &mut HashMap<String, String>) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Dim(items) => for item in items {
-                    if let Some(annotation) = &item.type_annotation {
-                        types.insert(item.name.to_ascii_lowercase(), annotation.clone());
-                    }
-                },
-                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, types),
-                Kind::If { then_body, else_body, .. } => { visit(then_body, types); visit(else_body, types); }
-                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, types); } visit(else_body, types); }
-                Kind::Try { body, catch, finally_body } => { visit(body, types); if let Some(catch) = catch { visit(&catch.body, types); } visit(finally_body, types); }
-                _ => {}
-            }
-        }
-    }
-    visit(body, &mut types);
-    types
-}
-
-fn semantic_body_array_ranks(body: &[crate::semantic_ir::SemanticStatement]) -> HashMap<String, usize> {
-    let mut ranks = HashMap::new();
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], ranks: &mut HashMap<String, usize>) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Dim(declarations) => {
-                    for declaration in declarations.iter().filter(|declaration| declaration.array_axes > 0) {
-                        ranks.insert(declaration.name.to_ascii_lowercase(), declaration.array_axes);
-                    }
-                }
-                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, ranks),
-                Kind::If { then_body, else_body, .. } => {
-                    visit(then_body, ranks);
-                    visit(else_body, ranks);
-                }
-                Kind::SelectCase { cases, else_body, .. } => {
-                    for case in cases { visit(&case.body, ranks); }
-                    visit(else_body, ranks);
-                }
-                Kind::Try { body, catch, finally_body } => {
-                    visit(body, ranks);
-                    if let Some(catch) = catch { visit(&catch.body, ranks); }
-                    visit(finally_body, ranks);
-                }
-                _ => {}
-            }
-        }
-    }
-    visit(body, &mut ranks);
-    ranks
 }
 
 /// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
@@ -452,7 +396,8 @@ impl CodeGenerator {
                             })
                     })
             });
-            let semantic_body = semantic_callable.map(|callable| callable.body.clone());
+            let semantic_array_ranks = semantic_callable.map(crate::semantic_ir::CallableSignature::array_ranks);
+            let semantic_dim_types = semantic_callable.map(crate::semantic_ir::CallableSignature::dim_types);
             let semantic_param_ranks = semantic_callable.map(|callable| callable.parameters.iter().map(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes)).collect());
             let semantic_globals = semantic_callable.and_then(|_| {
                 resolved
@@ -468,7 +413,8 @@ impl CodeGenerator {
                 &mut self.diagnostics,
                 capacities,
                 semantic_param_ranks,
-                semantic_body,
+                semantic_array_ranks,
+                semantic_dim_types,
                 semantic_globals,
             ));
         }
@@ -2665,7 +2611,8 @@ impl FunctionInfo {
         diagnostics: &mut Vec<Diagnostic>,
         mut param_capacities: Vec<Vec<i64>>,
         semantic_param_ranks: Option<Vec<Option<usize>>>,
-        semantic_body: Option<Vec<crate::semantic_ir::SemanticStatement>>,
+        semantic_array_ranks: Option<HashMap<String, usize>>,
+        semantic_dim_types: Option<HashMap<String, String>>,
         semantic_globals: Option<HashSet<String>>,
     ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
@@ -2730,8 +2677,8 @@ impl FunctionInfo {
             param_bound_vars.insert(0, Vec::new());
             param_capacities.insert(0, Vec::new());
         }
-        let local_array_ranks = semantic_body.as_ref().map(|body| semantic_body_array_ranks(body)).unwrap_or_else(|| dim_ranks_in_body(&function.body));
-        let local_dim_types = semantic_body.as_ref().map(|body| semantic_body_dim_types(body)).unwrap_or_default();
+        let local_array_ranks = semantic_array_ranks.unwrap_or_else(|| dim_ranks_in_body(&function.body));
+        let local_dim_types = semantic_dim_types.unwrap_or_default();
         let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
         let globals = semantic_globals.unwrap_or_else(|| collect_globals(&function.body));

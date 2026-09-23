@@ -922,6 +922,91 @@ pub enum RecordFieldType {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CallableSignature { pub kind: CallableKind, pub name: String, pub name_span: SourceSpan, pub result_type: Option<String>, pub receiver: Option<String>, pub receiver_span: Option<SourceSpan>, pub parameters: Vec<Parameter>, pub body: Vec<SemanticStatement>, pub span: SourceSpan }
+impl CallableSignature {
+    /// Return array ranks declared in this callable, including nested blocks.
+    pub fn array_ranks(&self) -> HashMap<String, usize> {
+        fn visit(statements: &[SemanticStatement], ranks: &mut HashMap<String, usize>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Dim(items) => {
+                        for item in items.iter().filter(|item| item.array_axes > 0) {
+                            ranks.insert(item.name.to_ascii_lowercase(), item.array_axes);
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, ranks),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, ranks);
+                        visit(else_body, ranks);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, ranks);
+                        }
+                        visit(else_body, ranks);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, ranks);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, ranks);
+                        }
+                        visit(finally_body, ranks);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut ranks = HashMap::new();
+        visit(&self.body, &mut ranks);
+        ranks
+    }
+
+    /// Return scalar DIM type annotations declared in this callable.
+    pub fn dim_types(&self) -> HashMap<String, String> {
+        fn visit(statements: &[SemanticStatement], types: &mut HashMap<String, String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Dim(items) => {
+                        for item in items {
+                            if let Some(annotation) = &item.type_annotation {
+                                types.insert(item.name.to_ascii_lowercase(), annotation.clone());
+                            }
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, types),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, types);
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, types);
+                        }
+                        visit(else_body, types);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, types);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, types);
+                        }
+                        visit(finally_body, types);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut types = HashMap::new();
+        visit(&self.body, &mut types);
+        types
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CallableKind { Function, Procedure, Method, FluentMethod, InlineMethod }
 #[derive(Clone, Debug, PartialEq, Eq)]
