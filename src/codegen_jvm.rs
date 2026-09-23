@@ -3139,9 +3139,12 @@ impl JvmContext {
                         || program.functions.iter().any(|f| program_uses_inkey(&f.body)),
                 )
             });
-        let needs_inkey = semantic_needs_inkey
-            || program_uses_inkey(&program.statements)
-            || program.functions.iter().any(|f| program_uses_inkey(&f.body));
+        let needs_inkey = if semantic_module.is_some() {
+            semantic_needs_inkey
+        } else {
+            program_uses_inkey(&program.statements)
+                || program.functions.iter().any(|f| program_uses_inkey(&f.body))
+        };
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
