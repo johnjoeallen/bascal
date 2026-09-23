@@ -160,7 +160,7 @@
 //! byte-for-byte unchanged) carries no dead bytecode for it.
 
 use std::cell::Cell;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::ast::{
     BasicIdent, BinaryOp, CaseValue, Expr, FunctionDef, OpenMode, ParamMode, PrintToken, Program,
@@ -2885,7 +2885,7 @@ struct JvmContext {
     array_slots: BTreeMap<String, usize>,
     array_aliases: BTreeMap<String, String>,
     array_refs: Vec<crate::ast::TypedArrayRef>,
-    constants: HashMap<String, Expr>,
+    constant_names: BTreeSet<String>,
     local_count: usize,
     initializer_start: usize,
     functions: HashMap<String, FunctionSig>,
@@ -3053,12 +3053,12 @@ impl JvmContext {
         semantic_name_scopes: Option<crate::semantic_ir::SemanticNameScopes>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
-        let mut constants = HashMap::new();
+        let mut constant_names = BTreeSet::new();
         let mut arrays = BTreeMap::new();
         collect_scalar_declarations(
             &program.statements,
             &mut declarations,
-            &mut constants,
+            &mut constant_names,
             &functions,
         );
         if let Some(module) = semantic_module {
@@ -3146,7 +3146,7 @@ impl JvmContext {
             array_slots: BTreeMap::new(),
             array_aliases: BTreeMap::new(),
             array_refs: typed_array_references,
-            constants,
+            constant_names,
             local_count: next_slot,
             initializer_start: 1,
             functions,
@@ -3171,7 +3171,7 @@ impl JvmContext {
         // Top-level CONST bindings are immutable source variables, but remain
         // file-scope storage so callable bodies can read them without
         // substituting their initializer expression at every use site.
-        for key in parent.constants.keys() {
+        for key in &parent.constant_names {
             if let Some(variable) = parent.variables.get(key) {
                 variables.insert(key.clone(), *variable);
             }
@@ -3239,12 +3239,12 @@ impl JvmContext {
         }
         let initializer_start = next_slot;
         let mut declarations = BTreeMap::new();
-        let mut constants = parent.constants.clone();
+        let mut constant_names = parent.constant_names.clone();
         let mut semantic_callable_body = None;
         collect_scalar_declarations(
             &function.body,
             &mut declarations,
-            &mut constants,
+            &mut constant_names,
             &parent.functions,
         );
         if let Some(module) = parent.semantic_module.as_ref() {
@@ -3353,7 +3353,7 @@ impl JvmContext {
             array_slots,
             array_aliases,
             array_refs: parent.array_refs.clone(),
-            constants,
+            constant_names,
             local_count: next_slot,
             initializer_start,
             functions: parent.functions.clone(),
@@ -3400,7 +3400,7 @@ impl JvmContext {
         // A CONST declaration may be referenced with or without the
         // inferred type suffix. Preserve the source binding's single storage
         // slot rather than treating the suffixed reference as a new scalar.
-        if let Some(key) = self.constants.keys().find(|key| {
+        if let Some(key) = self.constant_names.iter().find(|key| {
             key.trim_end_matches(|ch| matches!(ch, '%' | '$' | '!' | '#' | '&'))
                 == ident.name.to_ascii_lowercase()
         }) {
@@ -3409,22 +3409,6 @@ impl JvmContext {
             }
         }
         Err(format!("`{ident}` must be assigned or declared before use under --target jvm"))
-    }
-
-    fn constant(&self, ident: &BasicIdent) -> Option<&Expr> {
-        self.constants.get(&variable_key(ident)).or_else(|| {
-            // Required libraries may declare an inferred constant with a
-            // typed internal suffix while the importing source refers to it
-            // suffixlessly. Resolve that reference by the stable source name
-            // and retain the declaration's inferred value/type.
-            let name = ident.name.to_ascii_lowercase();
-            self.constants
-                .iter()
-                .find(|(key, _)| {
-                    key.trim_end_matches(|ch| matches!(ch, '%' | '$' | '!' | '#' | '&')) == name
-                })
-                .map(|(_, value)| value)
-        })
     }
 
     fn function(&self, ident: &BasicIdent) -> Option<FunctionSig> {
@@ -3440,11 +3424,8 @@ impl JvmContext {
                         && (name.name.eq_ignore_ascii_case("inkey")
                             || name.name.eq_ignore_ascii_case("date")))
                     || self
-                        .constant(name)
-                        .is_some_and(|value| self.is_string_expr(value))
-                    || self
-                        .variables
-                        .get(&variable_key(name))
+                        .variable(name)
+                        .ok()
                         .is_some_and(|var| matches!(var.ty, JvmType::String))
             }
             Expr::Binary {
@@ -3554,7 +3535,7 @@ impl JvmContext {
 fn collect_scalar_declarations(
     statements: &[Stmt],
     declarations: &mut BTreeMap<String, JvmType>,
-    constants: &mut HashMap<String, Expr>,
+    constant_names: &mut BTreeSet<String>,
     functions: &HashMap<String, FunctionSig>,
 ) {
     for statement in statements {
@@ -3599,29 +3580,29 @@ fn collect_scalar_declarations(
             }
             Statement::Const { name, value } => {
                 declarations.insert(variable_key(name), type_for_const_expr(value, name));
-                constants.insert(variable_key(name), value.clone());
+                constant_names.insert(variable_key(name));
             }
             Statement::If {
                 then_body,
                 else_body,
                 ..
             } => {
-                collect_scalar_declarations(then_body, declarations, constants, functions);
-                collect_scalar_declarations(else_body, declarations, constants, functions);
+                collect_scalar_declarations(then_body, declarations, constant_names, functions);
+                collect_scalar_declarations(else_body, declarations, constant_names, functions);
             }
             Statement::For { var, body, .. } => {
                 declarations.insert(variable_key(var), type_for_ident(var));
-                collect_scalar_declarations(body, declarations, constants, functions);
+                collect_scalar_declarations(body, declarations, constant_names, functions);
             }
             Statement::While { body, .. } | Statement::Do { body, .. } => {
-                collect_scalar_declarations(body, declarations, constants, functions);
+                collect_scalar_declarations(body, declarations, constant_names, functions);
             }
             Statement::TryCatch {
                 try_body,
                 catch,
                 finally_body,
             } => {
-                collect_scalar_declarations(try_body, declarations, constants, functions);
+                collect_scalar_declarations(try_body, declarations, constant_names, functions);
                 if let Some(catch) = catch {
                     declarations
                         .insert(variable_key(&catch.err_var), type_for_ident(&catch.err_var));
@@ -3630,17 +3611,17 @@ fn collect_scalar_declarations(
                     if let Some(source_var) = &catch.source_var {
                         declarations.insert(variable_key(source_var), JvmType::String);
                     }
-                    collect_scalar_declarations(&catch.body, declarations, constants, functions);
+                    collect_scalar_declarations(&catch.body, declarations, constant_names, functions);
                 }
-                collect_scalar_declarations(finally_body, declarations, constants, functions);
+                collect_scalar_declarations(finally_body, declarations, constant_names, functions);
             }
             Statement::SelectCase {
                 cases, else_body, ..
             } => {
                 for case in cases {
-                    collect_scalar_declarations(&case.body, declarations, constants, functions);
+                    collect_scalar_declarations(&case.body, declarations, constant_names, functions);
                 }
-                collect_scalar_declarations(else_body, declarations, constants, functions);
+                collect_scalar_declarations(else_body, declarations, constant_names, functions);
             }
             _ => {}
         }
