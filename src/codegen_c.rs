@@ -10852,6 +10852,19 @@ mod dialect_tests {
     }
 
     #[test]
+    fn c_generation_prefers_complete_semantic_data_literals() {
+        let source = "dim value%\nread value%\nend\ndata 10\n";
+        let semantic_source = "dim value%\nread value%\nend\ndata 20\n";
+        let program = parse_source("semantic_data_precedence.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(output.contains("\"20\""), "{output}");
+        assert!(!output.contains("\"10\""), "{output}");
+    }
+
+    #[test]
     fn c_generation_requests_runtime_for_semantic_close() {
         let source = "close #1\nend\n";
         let parsed = parse_source("semantic_close.bcl".to_string(), source).unwrap();
