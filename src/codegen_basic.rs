@@ -3649,13 +3649,17 @@ fn infer_array_param_capacities(
         .collect();
 
     let mut consts = HashMap::new();
-    collect_consts(&program.statements, &mut consts);
-    for f in &program.functions {
-        collect_consts(&f.body, &mut consts);
-    }
     if let Some(module) = semantic_module {
         for (name, value) in module.integer_constants() {
-            consts.insert(name, vec![Expr::Integer(value)]);
+            consts.insert(name.clone(), vec![Expr::Integer(value)]);
+            if !name.ends_with(['$', '%', '&', '!', '#']) {
+                consts.insert(format!("{name}%"), vec![Expr::Integer(value)]);
+            }
+        }
+    } else {
+        collect_consts(&program.statements, &mut consts);
+        for f in &program.functions {
+            collect_consts(&f.body, &mut consts);
         }
     }
 
