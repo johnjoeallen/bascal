@@ -3106,13 +3106,10 @@ impl JvmContext {
             collect_semantic_array_declarations(module, &mut arrays);
         }
         let mut field_vars = if let Some(module) = semantic_module {
-            let semantic_fields = collect_semantic_field_vars(module)
-                .map_err(|message| vec![unsupported(&message)])?;
-            if semantic_fields.is_empty() {
-                None
-            } else {
-                Some(semantic_fields)
-            }
+            Some(
+                collect_semantic_field_vars(module)
+                    .map_err(|message| vec![unsupported(&message)])?,
+            )
         } else {
             None
         };
