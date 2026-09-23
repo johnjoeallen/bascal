@@ -3701,12 +3701,11 @@ pub(crate) fn generate(
             let ident = BasicIdent::parse(&name);
             let key = ident.name.to_ascii_lowercase();
             int_consts.insert((key.clone(), ident.suffix), value);
-            if let Some(suffix) = resolved
-                .const_info
-                .get(&key)
-                .map(|info| info.suffix)
-            {
-                int_consts.insert((key, Some(suffix)), value);
+            if ident.suffix.is_none() {
+                // An unsuffixed integer CONST has BASCAL's default integer
+                // type; preserve that resolved binding for typed array
+                // bounds without consulting resolver-era ConstInfo.
+                int_consts.insert((key, Some(TypeSuffix::Integer)), value);
             }
         }
     }
@@ -3746,11 +3745,7 @@ pub(crate) fn generate(
             .into_iter()
             .map(|name| {
                 let ident = BasicIdent::parse(&name);
-                let suffix = resolved
-                    .const_info
-                    .get(&ident.name.to_ascii_lowercase())
-                    .map(|info| info.suffix)
-                    .or(ident.suffix);
+                let suffix = ident.suffix;
                 c_var_name(
                     &BasicIdent {
                         name: ident.name,
