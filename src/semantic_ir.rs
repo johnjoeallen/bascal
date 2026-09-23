@@ -4,7 +4,7 @@
 //! is the first destination for semantic nodes produced by rdgen; later
 //! adapters add declarations, statements, expressions, and resolver facts.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::rdgen_frontend::{self, SourceSpan};
 
@@ -376,6 +376,75 @@ impl SemanticModule {
         let mut ranks = HashMap::new();
         visit(&self.statements, &mut ranks);
         ranks
+    }
+
+    /// Return every BASIC FIELD buffer name in module and callable scopes.
+    pub fn record_buffer_names(&self) -> HashSet<String> {
+        fn visit(statements: &[SemanticStatement], names: &mut HashSet<String>) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Field { bindings, .. } => {
+                        names.extend(bindings.iter().map(|binding| binding.name.to_ascii_lowercase()));
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, names),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, names);
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, names);
+                        }
+                        visit(else_body, names);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, names);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, names);
+                        }
+                        visit(finally_body, names);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut names = HashSet::new();
+        visit(&self.statements, &mut names);
+        for callable in &self.callables {
+            visit(&callable.body, &mut names);
+        }
+        names
+    }
+
+    /// Whether any CATCH binding captures a source filename.
+    pub fn uses_catch_source_var(&self) -> bool {
+        fn visit(statements: &[SemanticStatement]) -> bool {
+            statements.iter().any(|statement| match &statement.kind {
+                SemanticStatementKind::Try { body, catch, finally_body } => {
+                    catch.as_ref().is_some_and(|binding| binding.source.is_some())
+                        || visit(body)
+                        || catch.as_ref().is_some_and(|binding| visit(&binding.body))
+                        || visit(finally_body)
+                }
+                SemanticStatementKind::Line(body)
+                | SemanticStatementKind::While { body, .. }
+                | SemanticStatementKind::For { body, .. }
+                | SemanticStatementKind::Do { body, .. } => visit(body),
+                SemanticStatementKind::If { then_body, else_body, .. } => {
+                    visit(then_body) || visit(else_body)
+                }
+                SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                    cases.iter().any(|case| visit(&case.body)) || visit(else_body)
+                }
+                _ => false,
+            })
+        }
+
+        visit(&self.statements) || self.callables.iter().any(|callable| visit(&callable.body))
     }
 
     /// Evaluate integer-valued module-scope constants for compile-time

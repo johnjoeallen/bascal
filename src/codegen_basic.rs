@@ -106,43 +106,6 @@ fn semantic_body_dim_types(body: &[crate::semantic_ir::SemanticStatement]) -> Ha
     types
 }
 
-fn semantic_record_buffer_names(module: &crate::semantic_ir::SemanticModule) -> HashSet<String> {
-    let mut names = HashSet::new();
-    fn visit(statement: &crate::semantic_ir::SemanticStatement, names: &mut HashSet<String>) {
-        use crate::semantic_ir::SemanticStatementKind;
-        match &statement.kind {
-            SemanticStatementKind::Line(items) => items.iter().for_each(|item| visit(item, names)),
-            SemanticStatementKind::Field { bindings, .. } => bindings.iter().for_each(|binding| { names.insert(binding.name.to_ascii_lowercase()); }),
-            SemanticStatementKind::If { then_body, else_body, .. } => { then_body.iter().for_each(|item| visit(item, names)); else_body.iter().for_each(|item| visit(item, names)); }
-            SemanticStatementKind::While { body, .. } | SemanticStatementKind::For { body, .. } | SemanticStatementKind::Do { body, .. } => body.iter().for_each(|item| visit(item, names)),
-            SemanticStatementKind::SelectCase { cases, else_body, .. } => { cases.iter().flat_map(|case| case.body.iter()).for_each(|item| visit(item, names)); else_body.iter().for_each(|item| visit(item, names)); }
-            SemanticStatementKind::Try { body, catch, finally_body } => { body.iter().for_each(|item| visit(item, names)); if let Some(catch) = catch { catch.body.iter().for_each(|item| visit(item, names)); } finally_body.iter().for_each(|item| visit(item, names)); }
-            _ => {}
-        }
-    }
-    module.statements.iter().for_each(|statement| visit(statement, &mut names));
-    for callable in &module.callables {
-        callable.body.iter().for_each(|statement| visit(statement, &mut names));
-    }
-    names
-}
-
-fn semantic_uses_catch_source_var(module: &crate::semantic_ir::SemanticModule) -> bool {
-    fn visit(statement: &crate::semantic_ir::SemanticStatement) -> bool {
-        use crate::semantic_ir::SemanticStatementKind;
-        match &statement.kind {
-            SemanticStatementKind::Try { body, catch, finally_body } => catch.as_ref().is_some_and(|value| value.source.is_some()) || body.iter().any(visit) || catch.as_ref().is_some_and(|value| value.body.iter().any(visit)) || finally_body.iter().any(visit),
-            SemanticStatementKind::Line(items) => items.iter().any(visit),
-            SemanticStatementKind::If { then_body, else_body, .. } => then_body.iter().any(visit) || else_body.iter().any(visit),
-            SemanticStatementKind::While { body, .. } | SemanticStatementKind::For { body, .. } | SemanticStatementKind::Do { body, .. } => body.iter().any(visit),
-            SemanticStatementKind::SelectCase { cases, else_body, .. } => cases.iter().any(|case| case.body.iter().any(visit)) || else_body.iter().any(visit),
-            _ => false,
-        }
-    }
-    module.statements.iter().any(visit)
-        || module.callables.iter().any(|callable| callable.body.iter().any(visit))
-}
-
 fn semantic_body_array_ranks(body: &[crate::semantic_ir::SemanticStatement]) -> HashMap<String, usize> {
     let mut ranks = HashMap::new();
     fn visit(statements: &[crate::semantic_ir::SemanticStatement], ranks: &mut HashMap<String, usize>) {
@@ -396,7 +359,7 @@ impl CodeGenerator {
         self.needs_source_lookup = resolved
             .semantic_module
             .as_ref()
-            .map(semantic_uses_catch_source_var)
+            .map(crate::semantic_ir::SemanticModule::uses_catch_source_var)
             .unwrap_or(resolved.uses_catch_source_var);
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
@@ -450,7 +413,7 @@ impl CodeGenerator {
         let record_buffer_names = resolved
             .semantic_module
             .as_ref()
-            .map(semantic_record_buffer_names)
+            .map(crate::semantic_ir::SemanticModule::record_buffer_names)
             .unwrap_or_else(|| resolved.record_buffer_names.clone());
         let mut functions = Vec::new();
         for f in &program.functions {
