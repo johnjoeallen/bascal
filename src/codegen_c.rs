@@ -3895,7 +3895,11 @@ pub(crate) fn generate(
             data_labels.extend(semantic_labels);
         }
     }
-    let raise_site_count = count_raise_sites(&program.statements);
+    let raise_site_count = resolved
+        .semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::top_level_raise_site_count)
+        .unwrap_or_else(|| count_raise_sites(&program.statements));
 
     // `emit_raise_block`'s own switch table: named `ON ERROR GOTO` targets
     // first (sorted by id, matching `on_error_handler_ids`), then one
@@ -3904,7 +3908,11 @@ pub(crate) fn generate(
     // `emit_statement` assigns `ctx.try_id` in -- see `ErrorDataCtx`'s own
     // doc comment for why a `try`'s id is always `on_error_handler_ids.
     // len() + <its position among try/catch blocks>`.
-    let try_catch_count = count_try_catch_blocks(&program.statements);
+    let try_catch_count = resolved
+        .semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::top_level_try_catch_count)
+        .unwrap_or_else(|| count_try_catch_blocks(&program.statements));
     let dispatch_labels: Vec<String> = {
         let mut sorted: Vec<(&String, &usize)> = on_error_handler_ids.iter().collect();
         sorted.sort_by_key(|(_, id)| **id);

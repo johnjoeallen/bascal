@@ -213,6 +213,63 @@ impl SemanticModule {
         targets
     }
 
+    /// Count top-level raise sites used by the C runtime dispatch table.
+    pub fn top_level_raise_site_count(&self) -> usize {
+        fn count(statements: &[SemanticStatement]) -> usize {
+            statements.iter().map(|statement| {
+                let self_count = usize::from(matches!(
+                    &statement.kind,
+                    SemanticStatementKind::Throw(_)
+                        | SemanticStatementKind::Open {
+                            mode: OpenMode { kind: OpenModeKind::Input | OpenModeKind::Random | OpenModeKind::Binary, .. },
+                            ..
+                        }
+                ));
+                let nested = match &statement.kind {
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => count(body),
+                    SemanticStatementKind::If { then_body, else_body, .. } => count(then_body) + count(else_body),
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        cases.iter().map(|case| count(&case.body)).sum::<usize>() + count(else_body)
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        count(body) + catch.as_ref().map_or(0, |catch| count(&catch.body)) + count(finally_body)
+                    }
+                    _ => 0,
+                };
+                self_count + nested
+            }).sum()
+        }
+        count(&self.statements)
+    }
+
+    /// Count top-level TRY/CATCH blocks in source order.
+    pub fn top_level_try_catch_count(&self) -> usize {
+        fn count(statements: &[SemanticStatement]) -> usize {
+            statements.iter().map(|statement| {
+                let self_count = usize::from(matches!(&statement.kind, SemanticStatementKind::Try { .. }));
+                let nested = match &statement.kind {
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => count(body),
+                    SemanticStatementKind::If { then_body, else_body, .. } => count(then_body) + count(else_body),
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        cases.iter().map(|case| count(&case.body)).sum::<usize>() + count(else_body)
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        count(body) + catch.as_ref().map_or(0, |catch| count(&catch.body)) + count(finally_body)
+                    }
+                    _ => 0,
+                };
+                self_count + nested
+            }).sum()
+        }
+        count(&self.statements)
+    }
+
     /// Return immutable bindings declared in module scope, excluding
     /// callable-local constants.
     pub fn top_level_const_names(&self) -> BTreeSet<String> {
@@ -1535,6 +1592,13 @@ mod tests {
         .unwrap();
         assert_eq!(module.top_level_error_handler_targets(), ["first", "second"]);
         assert_eq!(module.error_handler_targets(), ["first", "second", "third"]);
+    }
+
+    #[test]
+    fn dispatch_counts_cover_semantic_throw_and_try_nodes() {
+        let module = parse_and_adapt("try\nthrow\nend try\n").unwrap();
+        assert_eq!(module.top_level_raise_site_count(), 1);
+        assert_eq!(module.top_level_try_catch_count(), 1);
     }
 
     #[test]
