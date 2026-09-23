@@ -113,6 +113,97 @@ impl SemanticModule {
         names
     }
 
+    /// Evaluate integer-valued module-scope constants for compile-time
+    /// consumers such as fixed array bounds. Runtime constant bindings remain
+    /// variables; this fact table is only an optimization/validation aid.
+    pub fn top_level_integer_constants(&self) -> HashMap<String, i64> {
+        fn eval(
+            expression: &Expression,
+            definitions: &HashMap<String, Expression>,
+            depth: u8,
+        ) -> Option<i64> {
+            if depth > 32 {
+                return None;
+            }
+            match &expression.kind {
+                ExpressionKind::Literal(value) => value.parse().ok(),
+                ExpressionKind::Unary { operator, operand } if operator == "-" => {
+                    eval(operand, definitions, depth + 1).map(|value| -value)
+                }
+                ExpressionKind::Binary { left, operator, right } => {
+                    let left = eval(left, definitions, depth + 1)?;
+                    let right = eval(right, definitions, depth + 1)?;
+                    match operator.as_str() {
+                        "+" => left.checked_add(right),
+                        "-" => left.checked_sub(right),
+                        "*" => left.checked_mul(right),
+                        "/" if right != 0 => Some(left / right),
+                        _ => None,
+                    }
+                }
+                ExpressionKind::Name(name) => {
+                    let key = name.to_ascii_lowercase();
+                    definitions.get(&key).and_then(|value| eval(value, definitions, depth + 1))
+                }
+                _ => None,
+            }
+        }
+
+        fn collect(
+            statements: &[SemanticStatement],
+            definitions: &mut HashMap<String, Expression>,
+        ) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Const { name, value } => {
+                        definitions.insert(name.name.to_ascii_lowercase(), value.clone());
+                        let bare = name
+                            .name
+                            .trim_end_matches(['$', '%', '&', '!', '#'])
+                            .to_ascii_lowercase();
+                        definitions.entry(bare).or_insert_with(|| value.clone());
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => collect(body, definitions),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        collect(then_body, definitions);
+                        collect(else_body, definitions);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            collect(&case.body, definitions);
+                        }
+                        collect(else_body, definitions);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        collect(body, definitions);
+                        if let Some(catch) = catch {
+                            collect(&catch.body, definitions);
+                        }
+                        collect(finally_body, definitions);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut definitions = HashMap::new();
+        collect(&self.statements, &mut definitions);
+        let mut values = HashMap::new();
+        for name in definitions.keys() {
+            if let Some(value) = eval(
+                definitions.get(name).expect("definition key exists"),
+                &definitions,
+                0,
+            ) {
+                values.insert(name.clone(), value);
+            }
+        }
+        values
+    }
+
     pub fn name_scopes(&self) -> SemanticNameScopes {
         let mut scopes = SemanticNameScopes::default();
         collect_semantic_statements(&self.statements, &mut scopes.global_names);

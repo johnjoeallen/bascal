@@ -2238,7 +2238,12 @@ fn collect_typed_array_declarations(
 fn collect_semantic_array_declarations(
     module: &crate::semantic_ir::SemanticModule,
 ) -> ArrayTable {
-    fn visit(statements: &[crate::semantic_ir::SemanticStatement], arrays: &mut ArrayTable) {
+    let consts = module.top_level_integer_constants();
+    fn visit(
+        statements: &[crate::semantic_ir::SemanticStatement],
+        consts: &HashMap<String, i64>,
+        arrays: &mut ArrayTable,
+    ) {
         use crate::semantic_ir::{DimAxis, SemanticStatementKind as Kind};
         for statement in statements {
             match &statement.kind {
@@ -2272,7 +2277,11 @@ fn collect_semantic_array_declarations(
                             .dimensions
                             .iter()
                             .map(|axis| match axis {
-                                DimAxis::Fixed(value) => value.parse::<i64>().unwrap_or(0),
+                                DimAxis::Fixed(value) => value
+                                    .parse::<i64>()
+                                    .ok()
+                                    .or_else(|| consts.get(&value.to_ascii_lowercase()).copied())
+                                    .unwrap_or(0),
                                 DimAxis::Inferred => 0,
                             })
                             .collect::<Vec<_>>();
@@ -2285,16 +2294,16 @@ fn collect_semantic_array_declarations(
                         });
                     }
                 }
-                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, arrays),
-                Kind::If { then_body, else_body, .. } => { visit(then_body, arrays); visit(else_body, arrays); }
-                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, arrays); } visit(else_body, arrays); }
-                Kind::Try { body, catch, finally_body } => { visit(body, arrays); if let Some(catch) = catch { visit(&catch.body, arrays); } visit(finally_body, arrays); }
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, consts, arrays),
+                Kind::If { then_body, else_body, .. } => { visit(then_body, consts, arrays); visit(else_body, consts, arrays); }
+                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, consts, arrays); } visit(else_body, consts, arrays); }
+                Kind::Try { body, catch, finally_body } => { visit(body, consts, arrays); if let Some(catch) = catch { visit(&catch.body, consts, arrays); } visit(finally_body, consts, arrays); }
                 _ => {}
             }
         }
     }
     let mut arrays = ArrayTable::new();
-    visit(&module.statements, &mut arrays);
+    visit(&module.statements, &consts, &mut arrays);
     arrays
 }
 
@@ -10613,6 +10622,17 @@ mod dialect_tests {
         let output = generate(&resolved, Target::C).unwrap().app;
         assert!(output.contains("bv_i_values[21]"), "{output}");
         assert!(!output.contains("bv_i_values[11]"), "{output}");
+    }
+
+    #[test]
+    fn c_generation_resolves_semantic_const_array_bounds() {
+        let source = "const capacity = 10\ndim values%(capacity)\nend\n";
+        let program = parse_source("semantic_const_array.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(output.contains("bv_i_values[11]"), "{output}");
     }
 
     #[test]
