@@ -2538,6 +2538,66 @@ fn collect_data_items_and_labels(
     Ok((items, labels))
 }
 
+/// Inspect the legacy AST only for DATA pool shape. When semantic DATA
+/// expressions are available, their rendered values are authoritative; this
+/// compatibility probe must therefore avoid interpreting legacy expressions.
+fn collect_data_shape(program: &Program) -> (usize, HashMap<String, usize>) {
+    fn collect(
+        statements: &[Stmt],
+        item_count: &mut usize,
+        labels: &mut HashMap<String, usize>,
+    ) {
+        for statement in statements {
+            match &statement.kind {
+                Statement::Data(values) => *item_count += values.len(),
+                Statement::Label(name) => {
+                    labels.insert(name.to_ascii_lowercase(), *item_count);
+                }
+                Statement::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect(then_body, item_count, labels);
+                    collect(else_body, item_count, labels);
+                }
+                Statement::For { body, .. }
+                | Statement::While { body, .. }
+                | Statement::Do { body, .. } => collect(body, item_count, labels),
+                Statement::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        collect(&case.body, item_count, labels);
+                    }
+                    collect(else_body, item_count, labels);
+                }
+                Statement::TryCatch {
+                    try_body,
+                    catch,
+                    finally_body,
+                    ..
+                } => {
+                    collect(try_body, item_count, labels);
+                    if let Some(catch) = catch {
+                        collect(&catch.body, item_count, labels);
+                    }
+                    collect(finally_body, item_count, labels);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut item_count = 0;
+    let mut labels = HashMap::new();
+    collect(&program.statements, &mut item_count, &mut labels);
+    for function in &program.functions {
+        collect(&function.body, &mut item_count, &mut labels);
+    }
+    (item_count, labels)
+}
+
 fn semantic_data_labels(
     module: &crate::semantic_ir::SemanticModule,
 ) -> (usize, HashMap<String, usize>) {
@@ -3968,22 +4028,23 @@ pub(crate) fn generate(
     } else {
         collect_on_error_handler_ids(&program.statements)
     };
-    let (legacy_data_items, legacy_data_labels) = collect_data_items_and_labels(program)
-        .map_err(|message| vec![unsupported(&message)])?;
     let (data_items, data_labels) = if let Some(module) = resolved.semantic_module.as_ref() {
         let semantic_data_items = collect_semantic_data_items(module)
             .map_err(|message| vec![unsupported(&message)])?;
         let (_, semantic_data_labels) = semantic_data_labels(module);
+        let (legacy_data_count, legacy_data_labels) = collect_data_shape(program);
         let labels_complete = legacy_data_labels
             .keys()
             .all(|label| semantic_data_labels.contains_key(label));
-        if semantic_data_items.len() == legacy_data_items.len() && labels_complete {
+        if semantic_data_items.len() == legacy_data_count && labels_complete {
             (semantic_data_items, semantic_data_labels)
         } else {
-            (legacy_data_items, legacy_data_labels)
+            collect_data_items_and_labels(program)
+                .map_err(|message| vec![unsupported(&message)])?
         }
     } else {
-        (legacy_data_items, legacy_data_labels)
+        collect_data_items_and_labels(program)
+            .map_err(|message| vec![unsupported(&message)])?
     };
     let raise_site_count = resolved
         .semantic_module
