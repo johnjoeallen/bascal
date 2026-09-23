@@ -3442,58 +3442,6 @@ fn collect_global_decl_idents(body: &[Stmt], out: &mut Vec<BasicIdent>) {
     }
 }
 
-fn semantic_module_has_statement(
-    module: &crate::semantic_ir::SemanticModule,
-    predicate: impl Fn(&crate::semantic_ir::SemanticStatementKind) -> bool + Copy,
-) -> bool {
-    fn visit(
-        statements: &[crate::semantic_ir::SemanticStatement],
-        predicate: impl Fn(&crate::semantic_ir::SemanticStatementKind) -> bool + Copy,
-    ) -> bool {
-        statements.iter().any(|statement| {
-            if predicate(&statement.kind) {
-                return true;
-            }
-            use crate::semantic_ir::SemanticStatementKind as Kind;
-            match &statement.kind {
-                Kind::Line(body)
-                | Kind::While { body, .. }
-                | Kind::For { body, .. }
-                | Kind::Do { body, .. } => visit(body, predicate),
-                Kind::If {
-                    then_body,
-                    else_body,
-                    ..
-                } => visit(then_body, predicate) || visit(else_body, predicate),
-                Kind::SelectCase {
-                    cases, else_body, ..
-                } => {
-                    cases.iter().any(|case| visit(&case.body, predicate))
-                        || visit(else_body, predicate)
-                }
-                Kind::Try {
-                    body,
-                    catch,
-                    finally_body,
-                } => {
-                    visit(body, predicate)
-                        || catch
-                            .as_ref()
-                            .is_some_and(|binding| visit(&binding.body, predicate))
-                        || visit(finally_body, predicate)
-                }
-                _ => false,
-            }
-        })
-    }
-
-    visit(&module.statements, predicate)
-        || module
-            .callables
-            .iter()
-            .any(|callable| visit(&callable.body, predicate))
-}
-
 fn semantic_expression_uses_call(
     expression: &crate::semantic_ir::Expression,
     name: &str,
@@ -3825,7 +3773,7 @@ pub(crate) fn generate(
 
     let mut legacy_error_diagnostics = Vec::new();
     let semantic_has_classic_error = resolved.semantic_module.as_ref().map(|module| {
-        semantic_module_has_statement(module, |kind| {
+        module.has_statement(|kind| {
             matches!(
                 kind,
                 crate::semantic_ir::SemanticStatementKind::OnErrorGoto(_)
@@ -4239,28 +4187,28 @@ pub(crate) fn generate(
     let needs_color = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(kind, crate::semantic_ir::SemanticStatementKind::Color { .. })
         }))
         .unwrap_or_else(|| program_uses_color(program));
     let needs_input = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(kind, crate::semantic_ir::SemanticStatementKind::Input { .. })
         }))
         .unwrap_or_else(|| program_uses_input(program));
     let needs_mid_assign = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(kind, crate::semantic_ir::SemanticStatementKind::MidAssign { .. })
         }))
         .unwrap_or_else(|| program_uses_mid_assign(program));
     let needs_stop_or_system = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(
                 kind,
                 crate::semantic_ir::SemanticStatementKind::Stop
@@ -4276,7 +4224,7 @@ pub(crate) fn generate(
         || resolved
             .semantic_module
             .as_ref()
-            .map(|module| semantic_module_has_statement(module, |kind| {
+            .map(|module| module.has_statement(|kind| {
                 matches!(
                     kind,
                     crate::semantic_ir::SemanticStatementKind::Write { .. }
@@ -4301,14 +4249,14 @@ pub(crate) fn generate(
     let needs_randomize = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(kind, crate::semantic_ir::SemanticStatementKind::Randomize(_))
         }))
         .unwrap_or_else(|| program_uses_randomize(program));
     let needs_randomize_time = resolved
         .semantic_module
         .as_ref()
-        .map(|module| semantic_module_has_statement(module, |kind| {
+        .map(|module| module.has_statement(|kind| {
             matches!(
                 kind,
                 crate::semantic_ir::SemanticStatementKind::Randomize(

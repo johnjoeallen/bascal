@@ -491,6 +491,46 @@ impl SemanticModule {
         visit(&self.statements) || self.callables.iter().any(|callable| visit(&callable.body))
     }
 
+    /// Whether a statement matching `predicate` occurs anywhere in the module,
+    /// including callable bodies and nested control-flow blocks.
+    pub fn has_statement(
+        &self,
+        predicate: impl Fn(&SemanticStatementKind) -> bool + Copy,
+    ) -> bool {
+        fn visit(
+            statements: &[SemanticStatement],
+            predicate: impl Fn(&SemanticStatementKind) -> bool + Copy,
+        ) -> bool {
+            statements.iter().any(|statement| {
+                if predicate(&statement.kind) {
+                    return true;
+                }
+                match &statement.kind {
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, predicate),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, predicate) || visit(else_body, predicate)
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        cases.iter().any(|case| visit(&case.body, predicate))
+                            || visit(else_body, predicate)
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, predicate)
+                            || catch.as_ref().is_some_and(|binding| visit(&binding.body, predicate))
+                            || visit(finally_body, predicate)
+                    }
+                    _ => false,
+                }
+            })
+        }
+
+        visit(&self.statements, predicate)
+            || self.callables.iter().any(|callable| visit(&callable.body, predicate))
+    }
+
     /// Evaluate integer-valued module-scope constants for compile-time
     /// consumers such as fixed array bounds. Runtime constant bindings remain
     /// variables; this fact table is only an optimization/validation aid.
