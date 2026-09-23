@@ -3157,6 +3157,7 @@ impl JvmContext {
             .map(|sig| sig.byref_scalar_positions.len())
             .max()
             .unwrap_or(0);
+        let has_semantic_name_scopes = semantic_name_scopes.is_some();
         Ok(Self {
             variables,
             arrays,
@@ -3177,7 +3178,11 @@ impl JvmContext {
             needs_input,
             needs_inkey,
             byref_scalar_params: Vec::new(),
-            function_global_declarations,
+            function_global_declarations: if has_semantic_name_scopes {
+                HashMap::new()
+            } else {
+                function_global_declarations
+            },
             byref_scratch_base,
         })
     }
