@@ -604,14 +604,25 @@ impl CodeGenerator {
                     .insert(ident.name.to_ascii_lowercase(), generated);
             }
         } else {
-            for (name, info) in &resolved.const_info {
+            // Compatibility path for callers that construct a resolved
+            // legacy AST without a semantic module.  Recover only the
+            // binding names/types from the AST declaration walk; normal
+            // driver compilation uses the semantic branch above.
+            let mut legacy_consts = HashMap::new();
+            collect_consts(&program.statements, &mut legacy_consts);
+            for function in &program.functions {
+                collect_consts(&function.body, &mut legacy_consts);
+            }
+            for name in legacy_consts.keys() {
+                let ident = BasicIdent::parse(name);
                 let generated = BasicIdent {
-                    name: const_var_name(name),
-                    suffix: Some(info.suffix),
+                    name: const_var_name(&ident.name),
+                    suffix: ident.suffix,
                 }
                 .as_basic();
                 taken.insert(generated.to_ascii_lowercase());
-                self.const_var_names.insert(name.clone(), generated);
+                self.const_var_names
+                    .insert(ident.name.to_ascii_lowercase(), generated);
             }
         }
         *self.taken_names.borrow_mut() = taken;
