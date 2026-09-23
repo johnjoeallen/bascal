@@ -3697,7 +3697,7 @@ pub(crate) fn generate(
     .map_err(|message| vec![unsupported(&message)])?;
     let mut int_consts = resolved.top_level_integer_constants.clone();
     if let Some(module) = resolved.semantic_module.as_ref() {
-        for (name, value) in module.top_level_integer_constants() {
+        for (name, value) in module.integer_constants() {
             let ident = BasicIdent::parse(&name);
             let key = ident.name.to_ascii_lowercase();
             int_consts.insert((key.clone(), ident.suffix), value);
@@ -10685,6 +10685,19 @@ mod dialect_tests {
         resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
         let output = generate(&resolved, Target::C).unwrap().app;
         assert!(output.contains("bv_i_values[11]"), "{output}");
+    }
+
+    #[test]
+    fn c_generation_resolves_callable_semantic_const_array_bounds() {
+        let source = "function f%()\nconst capacity = 10\ndim values%(capacity)\nreturn values%(1)\nend function\nend\n";
+        let semantic_source = "function f%()\nconst capacity = 20\ndim values%(capacity)\nreturn values%(1)\nend function\nend\n";
+        let program = parse_source("semantic_callable_const_array.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(output.contains("bv_i_values[21]"), "{output}");
+        assert!(!output.contains("bv_i_values[11]"), "{output}");
     }
 
     #[test]
