@@ -4004,7 +4004,11 @@ pub(crate) fn generate(
     file_io.helper_defs = function_view.helper_defs;
     file_io.helper_protos = function_view.helper_protos;
 
-    let gosub_count = count_gosubs(&program.statements);
+    let gosub_count = resolved
+        .semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::top_level_gosub_count)
+        .unwrap_or_else(|| count_gosubs(&program.statements));
     let mut gosub_id: usize = 0;
     let mut ctx = ErrorDataCtx {
         handler_ids: &on_error_handler_ids,

@@ -270,6 +270,31 @@ impl SemanticModule {
         count(&self.statements)
     }
 
+    /// Count top-level GOSUB statements in source traversal order.
+    pub fn top_level_gosub_count(&self) -> usize {
+        fn count(statements: &[SemanticStatement]) -> usize {
+            statements.iter().map(|statement| {
+                let self_count = usize::from(matches!(&statement.kind, SemanticStatementKind::Gosub(_)));
+                let nested = match &statement.kind {
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => count(body),
+                    SemanticStatementKind::If { then_body, else_body, .. } => count(then_body) + count(else_body),
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        cases.iter().map(|case| count(&case.body)).sum::<usize>() + count(else_body)
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        count(body) + catch.as_ref().map_or(0, |catch| count(&catch.body)) + count(finally_body)
+                    }
+                    _ => 0,
+                };
+                self_count + nested
+            }).sum()
+        }
+        count(&self.statements)
+    }
+
     /// Return immutable bindings declared in module scope, excluding
     /// callable-local constants.
     pub fn top_level_const_names(&self) -> BTreeSet<String> {
@@ -1599,6 +1624,12 @@ mod tests {
         let module = parse_and_adapt("try\nthrow\nend try\n").unwrap();
         assert_eq!(module.top_level_raise_site_count(), 1);
         assert_eq!(module.top_level_try_catch_count(), 1);
+    }
+
+    #[test]
+    fn gosub_count_traverses_top_level_control_flow() {
+        let module = parse_and_adapt("if ready% then\ngosub target\nend if\n").unwrap();
+        assert_eq!(module.top_level_gosub_count(), 1);
     }
 
     #[test]
