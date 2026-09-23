@@ -3695,7 +3695,11 @@ pub(crate) fn generate(
         resolved.semantic_module.as_ref(),
     )
     .map_err(|message| vec![unsupported(&message)])?;
-    let mut int_consts = resolved.top_level_integer_constants.clone();
+    let mut int_consts = if resolved.semantic_module.is_some() {
+        HashMap::new()
+    } else {
+        resolved.top_level_integer_constants.clone()
+    };
     if let Some(module) = resolved.semantic_module.as_ref() {
         for (name, value) in module.integer_constants() {
             let ident = BasicIdent::parse(&name);
