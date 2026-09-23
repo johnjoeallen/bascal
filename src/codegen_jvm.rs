@@ -175,7 +175,7 @@ pub(crate) fn generate(
 ) -> Result<String, Vec<Diagnostic>> {
     let program = &resolved.program;
     let class_name = class_name_for(program);
-    let functions = function_table(&program.functions);
+    let functions = function_table(&program.functions, resolved.semantic_module.as_ref());
     let context = JvmContext::build(
         program,
         functions.clone(),
@@ -183,6 +183,7 @@ pub(crate) fn generate(
         resolved.function_global_declarations.clone(),
         resolved.typed_array_declarations.clone(),
         resolved.typed_array_references.clone(),
+        resolved.semantic_module.as_ref(),
     )?;
     let mut body = String::new();
     context.emit_initializers(&mut body);
@@ -774,6 +775,114 @@ fn collect_field_vars(
     Ok(())
 }
 
+fn collect_semantic_field_vars(
+    module: &crate::semantic_ir::SemanticModule,
+) -> Result<BTreeMap<String, JvmFieldVar>, String> {
+    fn visit(
+        statements: &[crate::semantic_ir::SemanticStatement],
+        out: &mut BTreeMap<String, JvmFieldVar>,
+    ) -> Result<(), String> {
+        use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
+        for statement in statements {
+            match &statement.kind {
+                Kind::Field { channel, bindings } => {
+                    let ExpressionKind::Literal(channel) = &channel.kind else {
+                        return Err("FIELD's channel number must be a literal under --target jvm".to_string());
+                    };
+                    let channel = channel.parse::<i64>().map_err(|_| "FIELD's channel number must be a literal under --target jvm".to_string())?;
+                    let mut offset = 0i64;
+                    for binding in bindings {
+                        let ExpressionKind::Literal(width) = &binding.length.kind else {
+                            return Err("FIELD's field widths must be literal under --target jvm".to_string());
+                        };
+                        let width = width.parse::<i64>().map_err(|_| "FIELD's field widths must be literal under --target jvm".to_string())?;
+                        out.insert(binding.name.to_ascii_lowercase(), JvmFieldVar { channel, offset, width });
+                        offset += width;
+                    }
+                }
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, out)?,
+                Kind::If { then_body, else_body, .. } => { visit(then_body, out)?; visit(else_body, out)?; }
+                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, out)?; } visit(else_body, out)?; }
+                Kind::Try { body, catch, finally_body } => { visit(body, out)?; if let Some(catch) = catch { visit(&catch.body, out)?; } visit(finally_body, out)?; }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    let mut fields = BTreeMap::new();
+    visit(&module.statements, &mut fields)?;
+    for callable in &module.callables { visit(&callable.body, &mut fields)?; }
+    Ok(fields)
+}
+
+/// Add scalar declarations retained by the semantic IR. The legacy AST
+/// collector remains the compatibility path for assignments and implicit
+/// variables, while explicit `DIM` declarations are sourced from semantic
+/// nodes when available.
+fn collect_semantic_scalar_declarations(
+    module: &crate::semantic_ir::SemanticModule,
+    declarations: &mut BTreeMap<String, JvmType>,
+) {
+    fn declaration_type(name: &str, annotation: Option<&str>) -> JvmType {
+        let semantic = crate::semantic_ir::SemanticValueType::from_suffix(name.chars().last());
+        match semantic {
+            crate::semantic_ir::SemanticValueType::String => JvmType::String,
+            crate::semantic_ir::SemanticValueType::Integer => JvmType::Numeric(NumericType::Int),
+            crate::semantic_ir::SemanticValueType::Long => JvmType::Numeric(NumericType::Long),
+            crate::semantic_ir::SemanticValueType::Single | crate::semantic_ir::SemanticValueType::Double => JvmType::Numeric(NumericType::Double),
+            _ => match annotation.map(str::to_ascii_uppercase).as_deref() {
+                Some("STRING") => JvmType::String,
+                Some("INTEGER") | Some("INT16") => JvmType::Numeric(NumericType::Int),
+                Some("LONG") | Some("INT32") => JvmType::Numeric(NumericType::Long),
+                _ => JvmType::Numeric(NumericType::Double),
+            },
+        }
+    }
+    fn visit(
+        statements: &[crate::semantic_ir::SemanticStatement],
+        declarations: &mut BTreeMap<String, JvmType>,
+    ) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(items) => {
+                    for item in items {
+                        if item.array_axes == 0 {
+                            declarations.insert(
+                                item.name.to_ascii_lowercase(),
+                                declaration_type(&item.name, item.type_annotation.as_deref()),
+                            );
+                        }
+                    }
+                }
+                Kind::Line(body)
+                | Kind::While { body, .. }
+                | Kind::For { body, .. }
+                | Kind::Do { body, .. } => visit(body, declarations),
+                Kind::If { then_body, else_body, .. } => {
+                    visit(then_body, declarations);
+                    visit(else_body, declarations);
+                }
+                Kind::SelectCase { cases, else_body, .. } => {
+                    for case in cases {
+                        visit(&case.body, declarations);
+                    }
+                    visit(else_body, declarations);
+                }
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, declarations);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, declarations);
+                    }
+                    visit(finally_body, declarations);
+                }
+                _ => {}
+            }
+        }
+    }
+    visit(&module.statements, declarations);
+}
+
 /// Whether `statements` (recursing into every block form) contains any
 /// `OPEN ... FOR RANDOM` -- decides whether `generate()` declares/
 /// initializes `bccFiles`/`bccBufs`/`bccRecLen` at all, so a program that
@@ -868,6 +977,166 @@ fn program_uses_inkey(statements: &[Stmt]) -> bool {
     found
 }
 
+fn semantic_runtime_features(module: &crate::semantic_ir::SemanticModule) -> (bool, bool, bool) {
+    fn expression_uses_name(expression: &crate::semantic_ir::Expression, name: &str) -> bool {
+        use crate::semantic_ir::ExpressionKind;
+        match &expression.kind {
+            ExpressionKind::Name(value) => value.eq_ignore_ascii_case(name),
+            ExpressionKind::Call { arguments, .. } => arguments.iter().any(|arg| expression_uses_name(arg, name)),
+            ExpressionKind::Index { index, .. } => expression_uses_name(index, name),
+            ExpressionKind::Member { base, arguments, .. } => {
+                base.as_deref().is_some_and(|base| expression_uses_name(base, name))
+                    || arguments.as_deref().is_some_and(|args| args.iter().any(|arg| expression_uses_name(arg, name)))
+            }
+            ExpressionKind::Parenthesized(inner) | ExpressionKind::Unary { operand: inner, .. } => expression_uses_name(inner, name),
+            ExpressionKind::Binary { left, right, .. } => expression_uses_name(left, name) || expression_uses_name(right, name),
+            ExpressionKind::RecordLiteral(fields) | ExpressionKind::PartialRecordLiteral(fields) => fields.iter().any(|field| expression_uses_name(&field.value, name)),
+            ExpressionKind::Literal(_) | ExpressionKind::Boolean(_) => false,
+        }
+    }
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], flags: &mut (bool, bool, bool)) {
+        use crate::semantic_ir::{OpenModeKind, SemanticStatementKind as Kind};
+        for statement in statements {
+            match &statement.kind {
+                Kind::Input { source, targets } => {
+                    if matches!(source, crate::semantic_ir::InputSource::Channel(_)) {
+                        flags.0 = true;
+                    }
+                    flags.1 = true;
+                    if matches!(source, crate::semantic_ir::InputSource::Channel(expression) if expression_uses_name(expression, "inkey"))
+                        || targets.iter().any(|target| expression_uses_name(target, "inkey"))
+                    {
+                        flags.2 = true;
+                    }
+                }
+                Kind::Open { mode, .. } if mode.kind == OpenModeKind::Random => flags.0 = true,
+                Kind::Field { bindings, .. } => {
+                    flags.0 = true;
+                    flags.2 |= bindings.iter().any(|binding| expression_uses_name(&binding.length, "inkey"));
+                }
+                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(channel, "inkey")
+                        || position.as_ref().is_some_and(|position| {
+                            position.position.as_ref().is_some_and(|value| expression_uses_name(value, "inkey"))
+                                || position.record.as_ref().is_some_and(|value| expression_uses_name(value, "inkey"))
+                        });
+                }
+                Kind::Assignment { target, value, .. } | Kind::MidAssign { target, value, .. } => {
+                    flags.2 |= expression_uses_name(target, "inkey") || expression_uses_name(value, "inkey");
+                }
+                Kind::Expression(expression) | Kind::Error(expression) => {
+                    flags.2 |= expression_uses_name(expression, "inkey");
+                }
+                Kind::If { condition, then_body, else_body, .. } => {
+                    flags.2 |= expression_uses_name(condition, "inkey");
+                    visit(then_body, flags);
+                    visit(else_body, flags);
+                }
+                Kind::While { condition, body } => {
+                    flags.2 |= expression_uses_name(condition, "inkey");
+                    visit(body, flags);
+                }
+                Kind::For { start, body, .. } => {
+                    flags.2 |= expression_uses_name(start, "inkey");
+                    visit(body, flags);
+                }
+                Kind::SelectCase { selector, cases, else_body } => {
+                    flags.2 |= expression_uses_name(selector, "inkey");
+                    for case in cases { visit(&case.body, flags); }
+                    visit(else_body, flags);
+                }
+                Kind::Return(crate::semantic_ir::ReturnValue::Value(expression))
+                | Kind::Throw(crate::semantic_ir::ThrowValue::Value(expression)) => {
+                    flags.2 |= expression_uses_name(expression, "inkey");
+                }
+                Kind::Print { tokens, .. } | Kind::Lprint { tokens, .. } => {
+                    flags.2 |= tokens.iter().any(|token| match token {
+                        crate::semantic_ir::PrintToken::Expression(expression) => expression_uses_name(expression, "inkey"),
+                        _ => false,
+                    });
+                }
+                Kind::Open { path, channel, length, .. } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(path, "inkey")
+                        || expression_uses_name(channel, "inkey")
+                        || length.as_ref().is_some_and(|length| expression_uses_name(length, "inkey"));
+                }
+                Kind::Write { channel, values } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(channel, "inkey")
+                        || matches!(values, crate::semantic_ir::WriteValues::Values(values) if values.iter().any(|value| expression_uses_name(value, "inkey")));
+                }
+                Kind::Seek { channel, position } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(channel, "inkey") || expression_uses_name(position, "inkey");
+                }
+                Kind::Locate { row, column } => {
+                    flags.2 |= expression_uses_name(row, "inkey") || expression_uses_name(column, "inkey");
+                }
+                Kind::Color { foreground, background } => {
+                    flags.2 |= expression_uses_name(foreground, "inkey")
+                        || background.as_ref().is_some_and(|value| expression_uses_name(value, "inkey"));
+                }
+                Kind::Width { channel, value } => {
+                    flags.2 |= channel.as_ref().is_some_and(|channel| expression_uses_name(channel, "inkey"))
+                        || expression_uses_name(value, "inkey");
+                }
+                Kind::Rename { source, destination } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(source, "inkey") || expression_uses_name(destination, "inkey");
+                }
+                Kind::Kill(expression) => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(expression, "inkey");
+                }
+                Kind::Close(expression) => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(expression, "inkey");
+                }
+                Kind::Data(values) | Kind::Read(values) => {
+                    flags.2 |= values.iter().any(|value| expression_uses_name(value, "inkey"));
+                }
+                Kind::Swap { left, right } => {
+                    flags.2 |= expression_uses_name(left, "inkey") || expression_uses_name(right, "inkey");
+                }
+                Kind::Poke { address, value } | Kind::Out { port: address, value } => {
+                    flags.2 |= expression_uses_name(address, "inkey") || expression_uses_name(value, "inkey");
+                }
+                Kind::LineInput { channel, target } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(channel, "inkey") || expression_uses_name(target, "inkey");
+                }
+                Kind::FileDeclaration { path, .. } => {
+                    flags.0 = true;
+                    flags.2 |= expression_uses_name(path, "inkey");
+                }
+                Kind::Lset { value, .. } | Kind::Rset { value, .. } => {
+                    flags.2 |= expression_uses_name(value, "inkey");
+                }
+                Kind::Do { pre_condition, post_condition, body } => {
+                    flags.2 |= pre_condition
+                        .iter()
+                        .chain(post_condition.iter())
+                        .any(|condition| expression_uses_name(&condition.value, "inkey"));
+                    visit(body, flags);
+                }
+                Kind::Line(body) => visit(body, flags),
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, flags);
+                    if let Some(catch) = catch { visit(&catch.body, flags); }
+                    visit(finally_body, flags);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut flags = (false, false, false);
+    visit(&module.statements, &mut flags);
+    for callable in &module.callables { visit(&callable.body, &mut flags); }
+    flags
+}
+
 fn function_key(name: &BasicIdent) -> String {
     format!(
         "{}{}",
@@ -884,6 +1153,50 @@ fn descriptor(ty: JvmType) -> &'static str {
         JvmType::Numeric(NumericType::Long) => "J",
         JvmType::Numeric(NumericType::Double) => "D",
     }
+}
+
+fn collect_semantic_array_declarations(
+    module: &crate::semantic_ir::SemanticModule,
+    arrays: &mut BTreeMap<String, ArrayShape>,
+) {
+    fn element_type(name: &str, annotation: Option<&str>) -> JvmType {
+        match name.chars().last() {
+            Some('$') => JvmType::String,
+            Some('%') => JvmType::Numeric(NumericType::Int),
+            Some('&') => JvmType::Numeric(NumericType::Long),
+            Some('!') | Some('#') => JvmType::Numeric(NumericType::Double),
+            _ => match annotation.map(str::to_ascii_uppercase).as_deref() {
+                Some("STRING") => JvmType::String,
+                Some("LONG") | Some("INT32") => JvmType::Numeric(NumericType::Long),
+                Some("INTEGER") | Some("INT16") => JvmType::Numeric(NumericType::Int),
+                _ => JvmType::Numeric(NumericType::Double),
+            },
+        }
+    }
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], arrays: &mut BTreeMap<String, ArrayShape>) {
+        use crate::semantic_ir::{DimAxis, SemanticStatementKind as Kind};
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(items) => for item in items.iter().filter(|item| item.array_axes > 0) {
+                    if item.dimensions.iter().any(|axis| matches!(axis, DimAxis::Inferred)) {
+                        continue;
+                    }
+                    let dimensions = item.dimensions.iter().map(|axis| match axis {
+                        DimAxis::Fixed(value) => Expr::Integer(value.parse().unwrap_or(0)),
+                        DimAxis::Inferred => unreachable!("inferred dimensions are filtered above"),
+                    }).collect();
+                    let ident = BasicIdent { name: item.name.clone(), suffix: None };
+                    arrays.insert(variable_key(&ident), ArrayShape { element: element_type(&item.name, item.type_annotation.as_deref()), dimensions });
+                },
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, arrays),
+                Kind::If { then_body, else_body, .. } => { visit(then_body, arrays); visit(else_body, arrays); }
+                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, arrays); } visit(else_body, arrays); }
+                Kind::Try { body, catch, finally_body } => { visit(body, arrays); if let Some(catch) = catch { visit(&catch.body, arrays); } visit(finally_body, arrays); }
+                _ => {}
+            }
+        }
+    }
+    visit(&module.statements, arrays);
 }
 
 fn array_load_opcode(ty: JvmType) -> &'static str {
@@ -1011,10 +1324,76 @@ fn emit_byref_call_writebacks(
     }
 }
 
-fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
+fn function_table(
+    functions: &[FunctionDef],
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+) -> HashMap<String, FunctionSig> {
     functions
         .iter()
         .map(|function| {
+            let semantic_callable = semantic_module.and_then(|module| {
+                module
+                    .callables
+                    .iter()
+                    .find(|callable| callable.name.eq_ignore_ascii_case(&function.name.as_basic()))
+                    .filter(|callable| callable.receiver.is_some() == function.receiver.is_some())
+                    .filter(|callable| {
+                        let Some(receiver) = callable.receiver.as_deref() else { return true; };
+                        match function.receiver {
+                            Some(TypeSuffix::Integer) => receiver.eq_ignore_ascii_case("integer"),
+                            Some(TypeSuffix::Long) => receiver.eq_ignore_ascii_case("long"),
+                            Some(TypeSuffix::Single) => receiver.eq_ignore_ascii_case("single"),
+                            Some(TypeSuffix::Double) => receiver.eq_ignore_ascii_case("double"),
+                            Some(TypeSuffix::String) => receiver.eq_ignore_ascii_case("string"),
+                            None => true,
+                        }
+                    })
+                    .filter(|callable| {
+                        use crate::semantic_ir::CallableKind;
+                        match (function.receiver.is_some(), function.is_procedure, callable.kind) {
+                            (true, false, CallableKind::Method | CallableKind::FluentMethod | CallableKind::InlineMethod) => true,
+                            (false, true, CallableKind::Procedure) => true,
+                            (false, false, CallableKind::Function) => true,
+                            _ => false,
+                        }
+                    })
+                    .filter(|callable| callable.parameters.len() == function.params.len())
+                    .filter(|callable| {
+                        callable.result_type.as_deref().map_or(function.is_procedure, |result| {
+                            !function.is_procedure
+                                && match function.name.suffix {
+                                    Some(TypeSuffix::Integer) => result == "%",
+                                    Some(TypeSuffix::Long) => result == "&",
+                                    Some(TypeSuffix::Single) => result == "!",
+                                    Some(TypeSuffix::Double) => result == "#",
+                                    Some(TypeSuffix::String) => result == "$",
+                                    None => false,
+                                }
+                        })
+                    })
+                    .filter(|callable| {
+                        callable
+                            .parameters
+                            .iter()
+                            .zip(&function.params)
+                            .all(|(semantic, legacy)| {
+                                (semantic.array_axes > 0) == legacy.axes.is_some()
+                                    && semantic.type_suffix.as_deref().map_or(true, |suffix| {
+                                        legacy
+                                            .name
+                                            .suffix
+                                            .map_or(false, |legacy_suffix| suffix == legacy_suffix.to_string())
+                                    })
+                                    && semantic.passing.map_or(true, |passing| {
+                                        matches!(passing, crate::semantic_ir::Passing::ByRef)
+                                            == (legacy.mode == ParamMode::ByRef)
+                                    })
+                            })
+                    })
+            });
+            let semantic_param = |position: usize| {
+                semantic_callable.and_then(|callable| callable.parameters.get(position))
+            };
             (
                 function_key(&function.name),
                 FunctionSig {
@@ -1028,11 +1407,12 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                         })
                         .into_iter()
                         .chain(
-                            function
-                                .params
-                                .iter()
-                                .filter(|param| param.axes.is_none())
-                                .map(|param| type_for_ident(&param.name)),
+                            function.params.iter().enumerate().filter_map(|(position, param)| {
+                                let is_array = semantic_param(position)
+                                    .is_some_and(|parameter| parameter.array_axes > 0)
+                                    || param.axes.is_some();
+                                (!is_array).then(|| type_for_ident(&param.name))
+                            }),
                         )
                         .collect(),
                     array_params: function
@@ -1040,11 +1420,16 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                         .iter()
                         .enumerate()
                         .filter_map(|(position, param)| {
-                            param.axes.as_ref().map(|axes| JvmArrayParam {
+                            let rank = semantic_param(position)
+                                .and_then(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes))
+                                .or_else(|| param.axes.as_ref().map(Vec::len));
+                            rank.map(|rank| JvmArrayParam {
                                 position,
                                 element: type_for_ident(&param.name),
-                                rank: axes.len(),
-                                by_ref: param.mode == ParamMode::ByRef,
+                                rank,
+                                by_ref: semantic_param(position)
+                                    .and_then(|parameter| parameter.passing)
+                                    .map_or(param.mode == ParamMode::ByRef, |passing| matches!(passing, crate::semantic_ir::Passing::ByRef)),
                             })
                         })
                         .collect(),
@@ -1052,7 +1437,15 @@ fn function_table(functions: &[FunctionDef]) -> HashMap<String, FunctionSig> {
                         .params
                         .iter()
                         .enumerate()
-                        .filter(|(_, param)| param.axes.is_none() && param.mode == ParamMode::ByRef)
+                        .filter(|(position, param)| {
+                            let is_array = semantic_param(*position)
+                                .is_some_and(|parameter| parameter.array_axes > 0)
+                                || param.axes.is_some();
+                            let by_ref = semantic_param(*position)
+                                .and_then(|parameter| parameter.passing)
+                                .map_or(param.mode == ParamMode::ByRef, |passing| matches!(passing, crate::semantic_ir::Passing::ByRef));
+                            !is_array && by_ref
+                        })
                         .map(|(position, _)| position)
                         .collect(),
                     source_param_count: function.params.len(),
@@ -2457,6 +2850,7 @@ struct JvmContext {
     local_count: usize,
     initializer_start: usize,
     functions: HashMap<String, FunctionSig>,
+    semantic_module: Option<crate::semantic_ir::SemanticModule>,
     class_name: String,
     condition_label: Cell<usize>,
     initialize_static: bool,
@@ -2615,6 +3009,7 @@ impl JvmContext {
         function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
         typed_array_declarations: Vec<crate::ast::TypedArrayDecl>,
         typed_array_references: Vec<crate::ast::TypedArrayRef>,
+        semantic_module: Option<&crate::semantic_ir::SemanticModule>,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut declarations = BTreeMap::new();
         let mut constants = HashMap::new();
@@ -2625,6 +3020,9 @@ impl JvmContext {
             &mut constants,
             &functions,
         );
+        if let Some(module) = semantic_module {
+            collect_semantic_scalar_declarations(module, &mut declarations);
+        }
         for array in &typed_array_declarations {
             arrays.insert(
                 variable_key(&array.name),
@@ -2635,30 +3033,53 @@ impl JvmContext {
             );
         }
         if arrays.is_empty() {
-            collect_array_declarations(&program.statements, &mut arrays);
+            if let Some(module) = semantic_module {
+                collect_semantic_array_declarations(module, &mut arrays);
+            }
+            if arrays.is_empty() {
+                collect_array_declarations(&program.statements, &mut arrays);
+            }
         }
-        let mut field_vars = BTreeMap::new();
-        collect_field_vars(&program.statements, &mut field_vars)
-            .map_err(|message| vec![unsupported(&message)])?;
-        for function in &program.functions {
-            collect_field_vars(&function.body, &mut field_vars)
+        if let Some(module) = semantic_module {
+            collect_semantic_array_declarations(module, &mut arrays);
+        }
+        let mut field_vars = if let Some(module) = semantic_module {
+            let semantic_fields = collect_semantic_field_vars(module)
                 .map_err(|message| vec![unsupported(&message)])?;
+            if semantic_fields.is_empty() {
+                None
+            } else {
+                Some(semantic_fields)
+            }
+        } else {
+            None
+        };
+        if field_vars.is_none() {
+            let mut legacy_fields = BTreeMap::new();
+            collect_field_vars(&program.statements, &mut legacy_fields)
+                .map_err(|message| vec![unsupported(&message)])?;
+            for function in &program.functions {
+                collect_field_vars(&function.body, &mut legacy_fields)
+                    .map_err(|message| vec![unsupported(&message)])?;
+            }
+            field_vars = Some(legacy_fields);
         }
-        let needs_file_io = program_uses_random_open(&program.statements)
-            || program
-                .functions
-                .iter()
-                .any(|f| program_uses_random_open(&f.body));
-        let needs_input = program_uses_input(&program.statements)
-            || program
-                .functions
-                .iter()
-                .any(|f| program_uses_input(&f.body));
-        let needs_inkey = program_uses_inkey(&program.statements)
-            || program
-                .functions
-                .iter()
-                .any(|f| program_uses_inkey(&f.body));
+        let field_vars = field_vars.expect("field layout selection always initializes a map");
+        let (needs_file_io, needs_input, semantic_needs_inkey) = semantic_module
+            .map(semantic_runtime_features)
+            .unwrap_or_else(|| {
+                (
+                    program_uses_random_open(&program.statements)
+                        || program.functions.iter().any(|f| program_uses_random_open(&f.body)),
+                    program_uses_input(&program.statements)
+                        || program.functions.iter().any(|f| program_uses_input(&f.body)),
+                    program_uses_inkey(&program.statements)
+                        || program.functions.iter().any(|f| program_uses_inkey(&f.body)),
+                )
+            });
+        let needs_inkey = semantic_needs_inkey
+            || program_uses_inkey(&program.statements)
+            || program.functions.iter().any(|f| program_uses_inkey(&f.body));
         let mut next_slot = 1;
         let variables = declarations
             .into_iter()
@@ -2688,6 +3109,7 @@ impl JvmContext {
             local_count: next_slot,
             initializer_start: 1,
             functions,
+            semantic_module: semantic_module.cloned(),
             class_name,
             condition_label: Cell::new(0),
             initialize_static: true,
@@ -2768,12 +3190,58 @@ impl JvmContext {
         let initializer_start = next_slot;
         let mut declarations = BTreeMap::new();
         let mut constants = parent.constants.clone();
+        let mut semantic_callable_body = None;
         collect_scalar_declarations(
             &function.body,
             &mut declarations,
             &mut constants,
             &parent.functions,
         );
+        if let Some(module) = parent.semantic_module.as_ref() {
+            let semantic_callable = module.callables.iter().find(|callable| {
+                callable.name.eq_ignore_ascii_case(&function.name.as_basic())
+                    && callable.receiver.is_some() == function.receiver.is_some()
+                    && callable.parameters.len() == function.params.len()
+                    && match (function.receiver.is_some(), function.is_procedure, callable.kind) {
+                        (true, false, crate::semantic_ir::CallableKind::Method
+                            | crate::semantic_ir::CallableKind::FluentMethod
+                            | crate::semantic_ir::CallableKind::InlineMethod)
+                        | (false, true, crate::semantic_ir::CallableKind::Procedure)
+                        | (false, false, crate::semantic_ir::CallableKind::Function) => true,
+                        _ => false,
+                    }
+                    && callable.parameters.iter().zip(&function.params).all(|(semantic, legacy)| {
+                        (semantic.array_axes > 0) == legacy.axes.is_some()
+                            && semantic.type_suffix.as_deref().map_or(true, |suffix| {
+                                legacy
+                                    .name
+                                    .suffix
+                                    .map_or(false, |legacy_suffix| suffix == legacy_suffix.to_string())
+                            })
+                            && semantic.passing.map_or(true, |passing| {
+                                matches!(passing, crate::semantic_ir::Passing::ByRef)
+                                    == (legacy.mode == ParamMode::ByRef)
+                            })
+                    })
+                    && callable.result_type.as_deref().map_or(function.is_procedure, |result| {
+                        !function.is_procedure
+                            && match function.name.suffix {
+                                Some(TypeSuffix::Integer) => result == "%",
+                                Some(TypeSuffix::Long) => result == "&",
+                                Some(TypeSuffix::Single) => result == "!",
+                                Some(TypeSuffix::Double) => result == "#",
+                                Some(TypeSuffix::String) => result == "$",
+                                None => false,
+                            }
+                    })
+            });
+            if let Some(callable) = semantic_callable {
+                let mut body_module = module.clone();
+                body_module.statements = callable.body.clone();
+                collect_semantic_scalar_declarations(&body_module, &mut declarations);
+                semantic_callable_body = Some(body_module);
+            }
+        }
         for name in parent
             .function_global_declarations
             .get(&(function.name.name.to_ascii_lowercase(), function.name.suffix))
@@ -2797,6 +3265,9 @@ impl JvmContext {
             variables.insert(key, variable);
         }
         let mut arrays = parent.arrays.clone();
+        if let Some(body_module) = semantic_callable_body {
+            collect_semantic_array_declarations(&body_module, &mut arrays);
+        }
         let array_slots = parameter_array_slots;
         let array_aliases = parent.array_aliases.clone();
         for param in function.params.iter().filter(|param| param.axes.is_some()) {
@@ -2826,6 +3297,7 @@ impl JvmContext {
             local_count: next_slot,
             initializer_start,
             functions: parent.functions.clone(),
+            semantic_module: parent.semantic_module.clone(),
             class_name: parent.class_name.clone(),
             condition_label: Cell::new(0),
             initialize_static: false,
@@ -4104,4 +4576,98 @@ fn ends_with_end(statements: &[Stmt]) -> bool {
 
 fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::error(SourcePos::new("<target>", 1, 1), message.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::semantic_runtime_features;
+
+    #[test]
+    fn semantic_sequential_file_operations_request_file_runtime() {
+        let module = crate::semantic_ir::parse_and_adapt(
+            "file scores = open(path$) for input\nwrite #1, value%\n",
+        )
+        .expect("semantic frontend accepts sequential file operations");
+        assert!(semantic_runtime_features(&module).0);
+    }
+
+    #[test]
+    fn semantic_file_mutation_operations_request_file_runtime() {
+        let module = crate::semantic_ir::parse_and_adapt(
+            "seek 1, 4\nkill path$\nname old$ as new$\n",
+        )
+        .expect("semantic file mutation statements parse");
+        assert!(semantic_runtime_features(&module).0);
+    }
+
+    #[test]
+    fn semantic_callable_file_operations_request_file_runtime() {
+        let module = crate::semantic_ir::parse_and_adapt(
+            "procedure close_file()\nclose #1\nend procedure\n",
+        )
+        .expect("semantic callable file statements parse");
+        assert!(semantic_runtime_features(&module).0);
+    }
+
+    #[test]
+    fn jvm_generation_uses_semantic_suffixless_string_dim() {
+        let source = "dim text as string\nend\n";
+        let parsed = crate::parse_source("semantic_dim.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = super::generate(&resolved).unwrap();
+        assert!(output.contains("Ljava/lang/String;"), "{output}");
+    }
+
+    #[test]
+    fn jvm_generation_uses_semantic_callable_string_dim() {
+        let source = "function f%()\ndim text as string\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source("semantic_callable_dim.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = super::generate(&resolved).unwrap();
+        assert!(output.contains("Ljava/lang/String;"), "{output}");
+    }
+
+    #[test]
+    fn jvm_generation_prefers_semantic_array_capacity_over_legacy_shape() {
+        let source = "dim values%(10)\nend\n";
+        let semantic_source = "dim values%(20)\nend\n";
+        let parsed = crate::parse_source("semantic_array_precedence.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::generate(&resolved).unwrap();
+        assert!(output.contains("ldc 20"), "{output}");
+        assert!(!output.contains("ldc 10"), "{output}");
+    }
+
+    #[test]
+    fn semantic_array_declarations_preserve_jvm_shapes() {
+        let module = crate::semantic_ir::parse_and_adapt("dim values%(10, 20)\n").unwrap();
+        let mut arrays = std::collections::BTreeMap::new();
+        super::collect_semantic_array_declarations(&module, &mut arrays);
+        assert_eq!(arrays["values%"].dimensions, [crate::ast::Expr::Integer(10), crate::ast::Expr::Integer(20)]);
+        let inferred = crate::semantic_ir::parse_and_adapt("dim dynamic%(?)\n").unwrap();
+        let mut inferred_arrays = std::collections::BTreeMap::new();
+        super::collect_semantic_array_declarations(&inferred, &mut inferred_arrays);
+        assert!(inferred_arrays.is_empty());
+    }
+
+    #[test]
+    fn semantic_callable_array_declarations_preserve_jvm_shapes() {
+        let module = crate::semantic_ir::parse_and_adapt(
+            "function f%()\ndim values%(10)\nreturn 0\nend function\n",
+        )
+        .unwrap();
+        let mut arrays = std::collections::BTreeMap::new();
+        super::collect_semantic_array_declarations(&module, &mut arrays);
+        assert!(arrays.is_empty());
+        let mut body_module = module.clone();
+        body_module.statements = module.callables[0].body.clone();
+        super::collect_semantic_array_declarations(&body_module, &mut arrays);
+        assert_eq!(arrays["values%"].dimensions, [crate::ast::Expr::Integer(10)]);
+    }
 }

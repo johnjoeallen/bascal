@@ -14,7 +14,13 @@ use crate::diagnostics::{Diagnostic, SourcePos};
 /// other callers there); `resolve` just runs them once, up front, so no
 /// backend re-derives them.
 pub struct ResolvedProgram {
-    pub program: Program,
+    pub(crate) program: Program,
+    /// Generated semantic frontend output retained during backend migration.
+    /// `Some` is the normal driver path and is the authoritative typed-IR
+    /// input for migrated backend facts; `None` is an explicit compatibility
+    /// mode used by legacy callers and tests until every entry point is
+    /// routed through the generated frontend.
+    pub semantic_module: Option<crate::semantic_ir::SemanticModule>,
     /// Typed top-level array declarations preserved for backends that need
     /// element type and dimension expressions after resolution.
     pub typed_array_declarations: Vec<TypedArrayDecl>,
@@ -48,6 +54,9 @@ pub struct ResolvedProgram {
     /// expression uses.  C needs this fact to declare fixed-size arrays;
     /// it must not rediscover declarations while transpiling.
     pub top_level_integer_constants: HashMap<(String, Option<TypeSuffix>), i64>,
+    /// C identifiers of top-level constants, retained so C function emission
+    /// does not rescan the legacy statement tree to avoid local collisions.
+    pub top_level_const_c_names: BTreeSet<String>,
     pub function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>>,
     /// Declared rank of every top-level array, lowercase name -> rank.
     pub top_level_array_ranks: HashMap<String, usize>,
@@ -59,6 +68,9 @@ pub struct ResolvedProgram {
     /// variable — gates all of codegen_basic's per-statement source-file
     /// tracking.
     pub uses_catch_source_var: bool,
+}
+
+impl ResolvedProgram {
 }
 
 /// A single `const`'s declared type and value -- see
@@ -74,6 +86,14 @@ pub struct ConstInfo {
 /// Validate `program`, then compute the whole-program facts codegen needs.
 /// Returns the owned program wrapped in a [`ResolvedProgram`].
 pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
+    resolve_with_semantic(program, None)
+}
+
+/// Resolve a legacy AST while retaining the generated semantic frontend module.
+pub fn resolve_with_semantic(
+    program: Program,
+    semantic_module: Option<crate::semantic_ir::SemanticModule>,
+) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     validate(&program)?;
 
     let error_handler_procedures = error_handler_targets(&program)
@@ -99,6 +119,7 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     };
     let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
     let top_level_integer_constants = collect_top_level_integer_constants(&program.statements);
+    let top_level_const_c_names = crate::codegen_c::collect_top_level_const_c_names(&program.statements);
     let function_global_declarations = program.functions.iter().map(|function| {
         let mut declarations = Vec::new();
         collect_global_declarations(&function.body, &mut declarations);
@@ -111,9 +132,11 @@ pub fn resolve(program: Program) -> Result<ResolvedProgram, Vec<Diagnostic>> {
         typed_array_references: program.typed_array_refs.clone(),
         common_blocks: program.common.clone(),
         program,
+        semantic_module,
         record_buffer_names,
         const_info,
         top_level_integer_constants,
+        top_level_const_c_names,
         function_global_declarations,
         top_level_array_ranks,
         error_handler_procedures,
@@ -2629,6 +2652,15 @@ mod legacy_form_tests {
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
         assert!(msgs[0].contains("SELECT CASE"), "{}", msgs[0]);
         assert!(msgs[0].contains("ON ... GOTO"), "{}", msgs[0]);
+    }
+
+    #[test]
+    fn resolve_with_semantic_retains_generated_module() {
+        let source = "print value%\nend\n";
+        let program = parse(source);
+        let semantic = crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
+        let resolved = resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
+        assert!(resolved.semantic_module.is_some());
     }
 
     #[test]

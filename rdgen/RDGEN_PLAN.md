@@ -131,6 +131,13 @@ The current branch has these capabilities:
 
 Recent milestones:
 
+- made the legacy AST backing `ResolvedProgram` private. Backends and driver
+  code use a crate-internal compatibility view while their remaining AST
+  consumers are migrated, giving the generated semantic frontend one
+  controlled replacement boundary rather than a public escape hatch;
+- began the semantic-to-resolved adapter with span-preserving module headers
+  and `require`/`import` declarations in `semantic_ir`, directly from
+  `rdgen_frontend::Program` and without a legacy-AST round trip;
 - promoted parsed typed-array declarations onto `ResolvedProgram`; JVM now
   consumes that resolver-owned semantic metadata rather than reading the
   legacy program's parser-populated side table directly;
@@ -325,6 +332,41 @@ Declaration/statement shaping (steps 6-7 below) is still outstanding.
 
 ## Implementation sequence
 
+### 0. Migrate the compiler pipeline onto the generated semantic frontend
+
+The generated `rdgen_frontend::Program` must become the parser output for the
+new pipeline; it must not be converted back into `ast::Program`, because that
+would discard source spans and reintroduce parser-era type inference. The
+migration proceeds through a new resolved typed IR:
+
+1. add a semantic-to-resolved declaration adapter for program headers,
+   dependencies, records, and callable signatures, retaining generated spans;
+2. add typed expression and statement adapters, with resolution facts attached
+   as fields rather than recomputed by backends;
+3. migrate each backend from `ResolvedProgram::legacy_program()` to those
+   resolved fields, deleting the compatibility accessor only after no caller
+   remains;
+4. switch the driver to the generated frontend and retain legacy-parser
+   differential fixtures until corpus and diagnostic equivalence are proven.
+
+The legacy compatibility view is deliberately private as of the initial
+migration commit, so no public API can grow around it during this transition.
+
+The adapter now also retains typed control-transfer targets, assignment and
+comparison operators, input provenance, optional throw/return/randomize/write
+payloads, and source spans for generated names and punctuation. This keeps
+backend consumers on semantic IR data rather than requiring syntax recovery.
+
+The current adapter tests also cover declaration spans, record literals,
+control-transfer targets, and omitted-versus-present optional statement
+payloads. These are compatibility guards for the eventual backend migration;
+they are not invitations for backends to reconstruct syntax from tokens.
+
+Declaration and control-reference nodes now retain generated source spans,
+including record fields, callable parameters, file declarations, labels,
+`restore`, `goto`, `gosub`, and `catch` bindings. File modes and loop/input
+choices are represented as typed enums at the semantic boundary.
+
 ### 1. Finish output-type-aware IR and emitter behavior
 
 - Keep rule references typed through declared output types.
@@ -496,6 +538,39 @@ the current implementation, but its future lowering should target the same
 parser-generation IR rather than introducing an EBNF-only semantic model.
 
 ## Definition of completion
+
+### Adapter coverage milestone
+
+The generated BASCAL frontend now has an adapter boundary for declarations,
+expressions, control flow, error handling, file and console I/O, data/read/
+restore, and terminal statements. `semantic_ir::parse_and_adapt` is the
+canonical source-to-typed-IR entry point; downstream stages consume its
+resolved semantic payloads rather than re-inferencing syntax from generated
+nodes.
+
+### Next integration stages (59–68)
+
+The next tranche is intentionally backend-facing:
+
+59. attach the generated semantic module to the resolver pipeline;
+60. define generated-to-resolved diagnostic conversion;
+61. migrate driver legacy-form diagnostics to semantic IR;
+62. migrate generated-name conflict checks;
+63. migrate the BASIC backend's declaration facts;
+64. migrate BASIC statement emission incrementally;
+65. migrate C backend declaration and type facts;
+66. migrate JVM backend declaration and type facts;
+67. add generated-versus-legacy differential fixtures at driver boundaries;
+68. remove `ResolvedProgram::legacy_program()` after all consumers are gone.
+
+Stages 59–68 cannot be completed by adapter-only edits: the current driver,
+BASIC, C, and JVM backends still call the private legacy compatibility view.
+That is the remaining implementation blocker; the next work should proceed
+backend-by-backend with differential tests after each migration slice.
+
+Stages 59 and 60 are now complete: `ResolvedProgram` retains an optional
+generated semantic module, and generated parser failures have a compiler
+`Diagnostic` conversion helper. Stages 61–68 remain backend-facing work.
 
 The Rust/BASCAL parser work is complete when:
 

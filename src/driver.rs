@@ -11,7 +11,7 @@ use crate::codegen::{self, CodeGenerator};
 use crate::diagnostics::{self, Diagnostic};
 use crate::lexer::{self, Lexer, TokenKind};
 use crate::parser::Parser;
-use crate::{ast, codegen_c, codegen_jvm, lower, resolver};
+use crate::{ast, codegen_c, codegen_jvm, lower, resolver, semantic_ir};
 
 pub use crate::codegen::Target;
 
@@ -85,7 +85,8 @@ pub fn compile_source(
         program,
         synthesized_buffer_names,
     } = lower::lower(program)?;
-    let resolved = resolver::resolve(program)?;
+    let semantic_module = semantic_ir::parse_and_adapt(source).ok();
+    let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
     print_legacy_form_warnings(&resolved.program);
     let conflicts = codegen::check_generated_name_conflicts(&resolved.program);
     if !conflicts.is_empty() {
@@ -184,7 +185,18 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         program,
         synthesized_buffer_names,
     } = lower::lower(program)?;
-    let resolved = resolver::resolve(program)?;
+    // Keep the generated semantic frontend attached for the ordinary file
+    // compilation path too.  A legacy parser acceptance that the generated
+    // frontend does not yet recognize remains an explicit compatibility
+    // fallback; it must not prevent the legacy backend pipeline from
+    // compiling an otherwise valid source file.
+    let semantic_module = load_semantic_module_recursive(
+        input,
+        true,
+        options,
+        &mut HashSet::new(),
+    );
+    let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
     print_legacy_form_warnings(&resolved.program);
     match options.target {
         Target::Basic => {
@@ -195,6 +207,23 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(basic)
         }
         Target::Fbc => {
+            if resolved
+                .semantic_module
+                .as_ref()
+                .is_some_and(crate::semantic_ir::SemanticModule::contains_try)
+            {
+                return Err(vec![Diagnostic::error(
+                    diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+                    "`try`/`catch` is permanently unsupported with --target fbc; fbc's \
+                     `RESUME`/`RESUME NEXT` cannot resume at an arbitrary later line the \
+                     way `RESUME <lineno>` does under real BASCOM (verified: fbc's parser \
+                     rejects `RESUME <lineno>`/`RESUME <label>` outright under every `-lang` \
+                     dialect, and the obvious GOSUB-plus-`RESUME NEXT` workaround crashes at \
+                     runtime with fbc's own \"illegal resume\" error -- see GitHub issue #153 \
+                     for the full investigation). Use `--target basic` (verified against real \
+                     BASCOM) or `on error goto`/`resume` for a program that must build under fbc.",
+                )]);
+            }
             reject_fbc_incompatible_constructs(&resolved.program)?;
             let basic = CodeGenerator::new()
                 .with_line_numbers(options.line_numbers)
@@ -536,6 +565,33 @@ pub(crate) fn load_program_recursive(
     merged.functions.extend(program.functions);
     merged.records.extend(program.records);
     Ok(merged)
+}
+
+/// Load generated semantic modules in the same dependency order as the
+/// legacy AST loader.  Semantic backend facts must include required library
+/// declarations; adapting only the root file would make callable and record
+/// lookup depend on whether the caller used `compile_source` or `compile_file`.
+fn load_semantic_module_recursive(
+    input: &Path,
+    _is_root: bool,
+    options: &CompileOptions,
+    visited: &mut HashSet<PathBuf>,
+) -> Option<semantic_ir::SemanticModule> {
+    let input = normalize_path(input);
+    if !visited.insert(input.clone()) {
+        return None;
+    }
+    let source = fs::read_to_string(&input).ok()?;
+    let mut module = semantic_ir::parse_and_adapt(&source).ok()?;
+    let dependencies = module.dependencies.clone();
+    // Each dependency is prepended, so walk the declarations backwards to
+    // retain the legacy loader's left-to-right sibling order.
+    for dependency in dependencies.into_iter().rev() {
+        let path = resolve_required_symbol(&dependency.path, &input, options).ok()?;
+        let dependency = load_semantic_module_recursive(&path, false, options, visited)?;
+        module.prepend_dependency(dependency);
+    }
+    Some(module)
 }
 
 pub(crate) fn load_shared_file(

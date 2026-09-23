@@ -25,6 +25,223 @@ pub(crate) const BASIC_BUILTINS: &[&str] = &[
     "mki", "mkl", "mks", "mkd", "cvi", "cvl", "cvs", "cvd",
 ];
 
+fn semantic_top_level_array_ranks(module: &crate::semantic_ir::SemanticModule) -> HashMap<String, usize> {
+    let mut ranks = HashMap::new();
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], ranks: &mut HashMap<String, usize>) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(declarations) => {
+                    for declaration in declarations.iter().filter(|declaration| declaration.array_axes > 0) {
+                        ranks.insert(declaration.name.to_ascii_lowercase(), declaration.array_axes);
+                    }
+                }
+                Kind::Line(body) => visit(body, ranks),
+                Kind::If { then_body, else_body, .. } => {
+                    visit(then_body, ranks);
+                    visit(else_body, ranks);
+                }
+                Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, ranks),
+                Kind::SelectCase { cases, else_body, .. } => {
+                    for case in cases { visit(&case.body, ranks); }
+                    visit(else_body, ranks);
+                }
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, ranks);
+                    if let Some(catch) = catch { visit(&catch.body, ranks); }
+                    visit(finally_body, ranks);
+                }
+                _ => {}
+            }
+        }
+    }
+    // This fact is deliberately limited to module-level declarations. Local
+    // callable `DIM`s are analyzed separately by `FunctionInfo` and must not
+    // change the global array namespace used by top-level emission.
+    visit(&module.statements, &mut ranks);
+    ranks
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn semantic_callable_dim_types_are_retained() {
+        let module = crate::semantic_ir::parse_and_adapt(
+            "function f%()\ndim text as string\nend function\n",
+        )
+        .expect("semantic callable declaration parses");
+        let types = super::semantic_body_dim_types(&module.callables[0].body);
+        assert_eq!(types.get("text").map(String::as_str), Some("string"));
+    }
+
+    #[test]
+    fn basic_generation_uses_semantic_suffixless_string_dim() {
+        let source = "dim text as string\nend\n";
+        let parsed = crate::parse_source("semantic_dim.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM text AS STRING"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_uses_semantic_callable_string_dim() {
+        let source = "function f%()\ndim text as string\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source("semantic_dim.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains(" AS STRING"), "{output}");
+    }
+}
+
+fn semantic_top_level_dim_types(module: &crate::semantic_ir::SemanticModule) -> HashMap<String, String> {
+    let mut types = HashMap::new();
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], types: &mut HashMap<String, String>) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(items) => for item in items {
+                    if item.type_annotation.is_some() {
+                        types.insert(item.name.to_ascii_lowercase(), item.type_annotation.clone().unwrap());
+                    }
+                },
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, types),
+                Kind::If { then_body, else_body, .. } => { visit(then_body, types); visit(else_body, types); }
+                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, types); } visit(else_body, types); }
+                Kind::Try { body, catch, finally_body } => { visit(body, types); if let Some(catch) = catch { visit(&catch.body, types); } visit(finally_body, types); }
+                _ => {}
+            }
+        }
+    }
+    visit(&module.statements, &mut types);
+    types
+}
+
+fn semantic_body_dim_types(body: &[crate::semantic_ir::SemanticStatement]) -> HashMap<String, String> {
+    let mut types = HashMap::new();
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], types: &mut HashMap<String, String>) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(items) => for item in items {
+                    if let Some(annotation) = &item.type_annotation {
+                        types.insert(item.name.to_ascii_lowercase(), annotation.clone());
+                    }
+                },
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, types),
+                Kind::If { then_body, else_body, .. } => { visit(then_body, types); visit(else_body, types); }
+                Kind::SelectCase { cases, else_body, .. } => { for case in cases { visit(&case.body, types); } visit(else_body, types); }
+                Kind::Try { body, catch, finally_body } => { visit(body, types); if let Some(catch) = catch { visit(&catch.body, types); } visit(finally_body, types); }
+                _ => {}
+            }
+        }
+    }
+    visit(body, &mut types);
+    types
+}
+
+fn semantic_record_buffer_names(module: &crate::semantic_ir::SemanticModule) -> HashSet<String> {
+    let mut names = HashSet::new();
+    fn visit(statement: &crate::semantic_ir::SemanticStatement, names: &mut HashSet<String>) {
+        use crate::semantic_ir::SemanticStatementKind;
+        match &statement.kind {
+            SemanticStatementKind::Line(items) => items.iter().for_each(|item| visit(item, names)),
+            SemanticStatementKind::Field { bindings, .. } => bindings.iter().for_each(|binding| { names.insert(binding.name.to_ascii_lowercase()); }),
+            SemanticStatementKind::If { then_body, else_body, .. } => { then_body.iter().for_each(|item| visit(item, names)); else_body.iter().for_each(|item| visit(item, names)); }
+            SemanticStatementKind::While { body, .. } | SemanticStatementKind::For { body, .. } | SemanticStatementKind::Do { body, .. } => body.iter().for_each(|item| visit(item, names)),
+            SemanticStatementKind::SelectCase { cases, else_body, .. } => { cases.iter().flat_map(|case| case.body.iter()).for_each(|item| visit(item, names)); else_body.iter().for_each(|item| visit(item, names)); }
+            SemanticStatementKind::Try { body, catch, finally_body } => { body.iter().for_each(|item| visit(item, names)); if let Some(catch) = catch { catch.body.iter().for_each(|item| visit(item, names)); } finally_body.iter().for_each(|item| visit(item, names)); }
+            _ => {}
+        }
+    }
+    module.statements.iter().for_each(|statement| visit(statement, &mut names));
+    for callable in &module.callables {
+        callable.body.iter().for_each(|statement| visit(statement, &mut names));
+    }
+    names
+}
+
+fn semantic_uses_catch_source_var(module: &crate::semantic_ir::SemanticModule) -> bool {
+    fn visit(statement: &crate::semantic_ir::SemanticStatement) -> bool {
+        use crate::semantic_ir::SemanticStatementKind;
+        match &statement.kind {
+            SemanticStatementKind::Try { body, catch, finally_body } => catch.as_ref().is_some_and(|value| value.source.is_some()) || body.iter().any(visit) || catch.as_ref().is_some_and(|value| value.body.iter().any(visit)) || finally_body.iter().any(visit),
+            SemanticStatementKind::Line(items) => items.iter().any(visit),
+            SemanticStatementKind::If { then_body, else_body, .. } => then_body.iter().any(visit) || else_body.iter().any(visit),
+            SemanticStatementKind::While { body, .. } | SemanticStatementKind::For { body, .. } | SemanticStatementKind::Do { body, .. } => body.iter().any(visit),
+            SemanticStatementKind::SelectCase { cases, else_body, .. } => cases.iter().any(|case| case.body.iter().any(visit)) || else_body.iter().any(visit),
+            _ => false,
+        }
+    }
+    module.statements.iter().any(visit)
+        || module.callables.iter().any(|callable| callable.body.iter().any(visit))
+}
+
+fn semantic_body_array_ranks(body: &[crate::semantic_ir::SemanticStatement]) -> HashMap<String, usize> {
+    let mut ranks = HashMap::new();
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], ranks: &mut HashMap<String, usize>) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(declarations) => {
+                    for declaration in declarations.iter().filter(|declaration| declaration.array_axes > 0) {
+                        ranks.insert(declaration.name.to_ascii_lowercase(), declaration.array_axes);
+                    }
+                }
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, ranks),
+                Kind::If { then_body, else_body, .. } => {
+                    visit(then_body, ranks);
+                    visit(else_body, ranks);
+                }
+                Kind::SelectCase { cases, else_body, .. } => {
+                    for case in cases { visit(&case.body, ranks); }
+                    visit(else_body, ranks);
+                }
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, ranks);
+                    if let Some(catch) = catch { visit(&catch.body, ranks); }
+                    visit(finally_body, ranks);
+                }
+                _ => {}
+            }
+        }
+    }
+    visit(body, &mut ranks);
+    ranks
+}
+
+fn semantic_body_globals(body: &[crate::semantic_ir::SemanticStatement]) -> HashSet<String> {
+    let mut globals = HashSet::new();
+    fn visit(statements: &[crate::semantic_ir::SemanticStatement], globals: &mut HashSet<String>) {
+        use crate::semantic_ir::SemanticStatementKind as Kind;
+        for statement in statements {
+            match &statement.kind {
+                Kind::Global(name) => { globals.insert(name.name.to_ascii_lowercase()); }
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => visit(body, globals),
+                Kind::If { then_body, else_body, .. } => {
+                    visit(then_body, globals);
+                    visit(else_body, globals);
+                }
+                Kind::SelectCase { cases, else_body, .. } => {
+                    for case in cases { visit(&case.body, globals); }
+                    visit(else_body, globals);
+                }
+                Kind::Try { body, catch, finally_body } => {
+                    visit(body, globals);
+                    if let Some(catch) = catch { visit(&catch.body, globals); }
+                    visit(finally_body, globals);
+                }
+                _ => {}
+            }
+        }
+    }
+    visit(body, &mut globals);
+    globals
+}
+
 /// What a bare `exit` resolves to, tracked per enclosing loop. `for`/`next`
 /// compiles to a native BASIC `FOR ... NEXT` block, so leaving it is just
 /// BASIC's own `EXIT FOR` -- no label involved, unlike `while`/`do`, which
@@ -95,6 +312,7 @@ pub struct CodeGenerator {
     // auto-injects its bounds at the call site so the callee's own
     // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
+    top_level_dim_types: HashMap<String, String>,
     // Lowercase names of every procedure named as an `on error goto` target
     // somewhere in the program. resolver::validate has already proven each
     // one contains no `return` and never falls off the end (every path
@@ -157,6 +375,7 @@ struct FunctionInfo {
     /// Declared rank of every array this function DIMs locally, lowercase
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
+    local_dim_types: HashMap<String, String>,
     /// Frozen per-axis bound text for every array DIMed locally within this
     /// function. RefCell because it's populated lazily as DIM statements
     /// are generated, through a shared `&FunctionInfo` reference -- same
@@ -188,6 +407,7 @@ impl CodeGenerator {
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
+            top_level_dim_types: HashMap::new(),
             error_handler_procedures: HashSet::new(),
             try_handler_stack: Vec::new(),
             needs_source_lookup: false,
@@ -210,36 +430,136 @@ impl CodeGenerator {
         resolved: &crate::resolver::ResolvedProgram,
     ) -> Result<String, Vec<Diagnostic>> {
         let program = &resolved.program;
-        self.needs_source_lookup = resolved.uses_catch_source_var;
+        self.needs_source_lookup = resolved
+            .semantic_module
+            .as_ref()
+            .map(semantic_uses_catch_source_var)
+            .unwrap_or(resolved.uses_catch_source_var);
         // Seed the name registry with every variable visible at global scope.
         // Function params/results are registered as each FunctionInfo is built so
         // later functions cannot collide with earlier ones either.
         let mut taken = collect_program_names(program);
-        let known_callables: HashSet<String> = program
-            .functions
-            .iter()
-            .map(|f| f.name.name.to_ascii_lowercase())
-            .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
-            .collect();
+        let known_callables: HashSet<String> = if let Some(module) = resolved.semantic_module.as_ref() {
+            module
+                .callables
+                .iter()
+                .flat_map(|callable| {
+                    let typed = callable.name.to_ascii_lowercase();
+                    let base = typed
+                        .trim_end_matches(['$', '%', '&', '!', '#'])
+                        .to_string();
+                    [typed, base].into_iter()
+                })
+                .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
+                .collect()
+        } else {
+            program
+                .functions
+                .iter()
+                .map(|f| f.name.name.to_ascii_lowercase())
+                .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
+                .collect()
+        };
         let param_capacities = infer_array_param_capacities(program, &mut self.diagnostics);
+        let top_level_array_ranks = resolved
+            .semantic_module
+            .as_ref()
+            .map(semantic_top_level_array_ranks)
+            .filter(|ranks| !ranks.is_empty())
+            .unwrap_or_else(|| resolved.top_level_array_ranks.clone());
+        self.top_level_dim_types = resolved
+            .semantic_module
+            .as_ref()
+            .map(semantic_top_level_dim_types)
+            .unwrap_or_default();
+        let record_buffer_names = resolved
+            .semantic_module
+            .as_ref()
+            .map(semantic_record_buffer_names)
+            .filter(|names| !names.is_empty())
+            .unwrap_or_else(|| resolved.record_buffer_names.clone());
         let mut functions = Vec::new();
         for f in &program.functions {
             let capacities = param_capacities
                 .get(&f.name.name.to_ascii_lowercase())
                 .cloned()
                 .unwrap_or_default();
+            let semantic_callable = resolved.semantic_module.as_ref().and_then(|module| {
+                module
+                    .callables
+                    .iter()
+                    .find(|callable| callable.name.eq_ignore_ascii_case(&f.name.as_basic()))
+                    .filter(|callable| callable.receiver.is_some() == f.receiver.is_some())
+                    .filter(|callable| {
+                        let Some(receiver) = callable.receiver.as_deref() else { return true; };
+                        match f.receiver {
+                            Some(TypeSuffix::Integer) => receiver.eq_ignore_ascii_case("integer"),
+                            Some(TypeSuffix::Long) => receiver.eq_ignore_ascii_case("long"),
+                            Some(TypeSuffix::Single) => receiver.eq_ignore_ascii_case("single"),
+                            Some(TypeSuffix::Double) => receiver.eq_ignore_ascii_case("double"),
+                            Some(TypeSuffix::String) => receiver.eq_ignore_ascii_case("string"),
+                            None => true,
+                        }
+                    })
+                    .filter(|callable| {
+                        use crate::semantic_ir::CallableKind;
+                        match (f.receiver.is_some(), f.is_procedure, callable.kind) {
+                            (true, false, CallableKind::Method | CallableKind::FluentMethod | CallableKind::InlineMethod) => true,
+                            (false, true, CallableKind::Procedure) => true,
+                            (false, false, CallableKind::Function) => true,
+                            _ => false,
+                        }
+                    })
+                    .filter(|callable| callable.parameters.len() == f.params.len())
+                    .filter(|callable| {
+                        callable.result_type.as_deref().map_or(f.is_procedure, |result| {
+                            !f.is_procedure
+                                && match f.name.suffix {
+                                    Some(TypeSuffix::Integer) => result == "%",
+                                    Some(TypeSuffix::Long) => result == "&",
+                                    Some(TypeSuffix::Single) => result == "!",
+                                    Some(TypeSuffix::Double) => result == "#",
+                                    Some(TypeSuffix::String) => result == "$",
+                                    None => false,
+                                }
+                        })
+                    })
+                    .filter(|callable| {
+                        callable
+                            .parameters
+                            .iter()
+                            .zip(&f.params)
+                            .all(|(semantic, legacy)| {
+                                (semantic.array_axes > 0) == legacy.axes.is_some()
+                                    && semantic.type_suffix.as_deref().map_or(true, |suffix| {
+                                        legacy
+                                            .name
+                                            .suffix
+                                            .map_or(false, |legacy_suffix| suffix == legacy_suffix.to_string())
+                                    })
+                                    && semantic.passing.map_or(true, |passing| {
+                                        matches!(passing, crate::semantic_ir::Passing::ByRef)
+                                            == (legacy.mode == ParamMode::ByRef)
+                                    })
+                            })
+                    })
+            });
+            let semantic_body = semantic_callable.map(|callable| callable.body.clone());
+            let semantic_param_ranks = semantic_callable.map(|callable| callable.parameters.iter().map(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes)).collect());
             functions.push(FunctionInfo::from_def(
                 f,
                 &mut taken,
                 &known_callables,
                 &mut self.diagnostics,
                 capacities,
+                semantic_param_ranks,
+                semantic_body,
             ));
         }
         self.functions = functions;
         self.error_handler_procedures = resolved.error_handler_procedures.clone();
-        self.top_level_array_ranks = resolved.top_level_array_ranks.clone();
-        self.record_buffer_names = resolved.record_buffer_names.clone();
+        self.top_level_array_ranks = top_level_array_ranks;
+        self.record_buffer_names = record_buffer_names;
         for (name, info) in &resolved.const_info {
             let generated = BasicIdent {
                 name: const_var_name(name),
@@ -436,11 +756,18 @@ impl CodeGenerator {
                 sizes,
             } => {
                 let base = self.ident(name, current_function);
+                let type_clause = name.suffix.is_none().then(|| {
+                    current_function
+                        .map(|function| function.local_dim_types.get(&name.as_basic().to_ascii_lowercase()))
+                        .unwrap_or_else(|| self.top_level_dim_types.get(&name.as_basic().to_ascii_lowercase()))
+                }).flatten()
+                    .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
+                    .unwrap_or_default();
                 if sizes.is_empty() {
                     if *is_array {
-                        self.line(&format!("DIM {base}()"));
+                        self.line(&format!("DIM {base}(){type_clause}"));
                     } else {
-                        self.line(&format!("DIM {base}"));
+                        self.line(&format!("DIM {base}{type_clause}"));
                     }
                 } else {
                     let mut rendered = Vec::new();
@@ -449,7 +776,7 @@ impl CodeGenerator {
                         self.lines(prelude);
                         rendered.push(val);
                     }
-                    self.line(&format!("DIM {base}({})", rendered.join(", ")));
+                    self.line(&format!("DIM {base}({}){type_clause}", rendered.join(", ")));
 
                     // Every DIMed array's bounds get frozen here -- a
                     // literal bound needs no extra line, but a non-literal
@@ -2378,6 +2705,8 @@ impl FunctionInfo {
         known_callables: &HashSet<String>,
         diagnostics: &mut Vec<Diagnostic>,
         mut param_capacities: Vec<Vec<i64>>,
+        semantic_param_ranks: Option<Vec<Option<usize>>>,
+        semantic_body: Option<Vec<crate::semantic_ir::SemanticStatement>>,
     ) -> Self {
         let stem = sanitize_symbol(&function.name.name);
         let mut params: Vec<(Param, BasicIdent)> = function
@@ -2390,7 +2719,22 @@ impl FunctionInfo {
                 (param.clone(), lowered)
             })
             .collect();
-        let mut param_ranks = infer_param_ranks(function, known_callables, diagnostics);
+        // Generated callable metadata is authoritative only when it covers
+        // the complete legacy parameter list.  Keeping the legacy inference
+        // fallback for an incomplete adapter result prevents a truncated
+        // semantic vector from dropping parameters or misaligning the
+        // per-parameter bound-variable and capacity vectors.
+        let inferred_param_ranks = infer_param_ranks(function, known_callables, diagnostics);
+        let mut param_ranks = semantic_param_ranks
+            .filter(|ranks| ranks.len() == function.params.len())
+            .map(|semantic| {
+                semantic
+                    .into_iter()
+                    .zip(inferred_param_ranks.iter().copied())
+                    .map(|(semantic, inferred)| semantic.or(inferred))
+                    .collect()
+            })
+            .unwrap_or(inferred_param_ranks);
         let mut param_bound_vars: Vec<Vec<String>> = function
             .params
             .iter()
@@ -2426,10 +2770,11 @@ impl FunctionInfo {
             param_bound_vars.insert(0, Vec::new());
             param_capacities.insert(0, Vec::new());
         }
-        let local_array_ranks = dim_ranks_in_body(&function.body);
+        let local_array_ranks = semantic_body.as_ref().map(|body| semantic_body_array_ranks(body)).unwrap_or_else(|| dim_ranks_in_body(&function.body));
+        let local_dim_types = semantic_body.as_ref().map(|body| semantic_body_dim_types(body)).unwrap_or_default();
         let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
-        let globals = collect_globals(&function.body);
+        let globals = semantic_body.as_ref().map(|body| semantic_body_globals(body)).unwrap_or_else(|| collect_globals(&function.body));
         Self {
             source_name: function.name.clone(),
             stem: stem.clone(),
@@ -2440,6 +2785,7 @@ impl FunctionInfo {
             param_bound_vars,
             param_capacities,
             local_array_ranks,
+            local_dim_types,
             local_array_bounds: RefCell::new(HashMap::new()),
             is_procedure: function.is_procedure,
             receiver: function.receiver,

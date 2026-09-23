@@ -12,6 +12,7 @@ mod lower;
 pub mod parser;
 pub mod records;
 pub mod resolver;
+pub mod semantic_ir;
 mod scalar_builtins;
 
 /// Source-span-aware semantic AST generated from `bascal.bcl.rdg` at build
