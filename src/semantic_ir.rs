@@ -464,6 +464,54 @@ impl SemanticModule {
         names
     }
 
+    /// Return the DATA item count and label offsets in module and callable order.
+    pub fn data_label_offsets(&self) -> (usize, HashMap<String, usize>) {
+        fn visit(
+            statements: &[SemanticStatement],
+            items: &mut usize,
+            labels: &mut HashMap<String, usize>,
+        ) {
+            for statement in statements {
+                match &statement.kind {
+                    SemanticStatementKind::Data(values) => *items += values.len(),
+                    SemanticStatementKind::Label(name) => {
+                        labels.insert(name.name.to_ascii_lowercase(), *items);
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body, items, labels),
+                    SemanticStatementKind::If { then_body, else_body, .. } => {
+                        visit(then_body, items, labels);
+                        visit(else_body, items, labels);
+                    }
+                    SemanticStatementKind::SelectCase { cases, else_body, .. } => {
+                        for case in cases {
+                            visit(&case.body, items, labels);
+                        }
+                        visit(else_body, items, labels);
+                    }
+                    SemanticStatementKind::Try { body, catch, finally_body } => {
+                        visit(body, items, labels);
+                        if let Some(catch) = catch {
+                            visit(&catch.body, items, labels);
+                        }
+                        visit(finally_body, items, labels);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut items = 0;
+        let mut labels = HashMap::new();
+        visit(&self.statements, &mut items, &mut labels);
+        for callable in &self.callables {
+            visit(&callable.body, &mut items, &mut labels);
+        }
+        (items, labels)
+    }
+
     /// Whether any CATCH binding captures a source filename.
     pub fn uses_catch_source_var(&self) -> bool {
         fn visit(statements: &[SemanticStatement]) -> bool {

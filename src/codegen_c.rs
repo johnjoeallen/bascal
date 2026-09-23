@@ -2609,55 +2609,6 @@ fn collect_data_shape(program: &Program) -> (usize, HashMap<String, usize>) {
     (item_count, labels)
 }
 
-fn semantic_data_labels(
-    module: &crate::semantic_ir::SemanticModule,
-) -> (usize, HashMap<String, usize>) {
-    fn collect(
-        statements: &[crate::semantic_ir::SemanticStatement],
-        items: &mut usize,
-        labels: &mut HashMap<String, usize>,
-    ) {
-        use crate::semantic_ir::SemanticStatementKind as Kind;
-        for statement in statements {
-            match &statement.kind {
-                Kind::Data(values) => *items += values.len(),
-                Kind::Label(name) => {
-                    labels.insert(name.name.to_ascii_lowercase(), *items);
-                }
-                Kind::Line(body)
-                | Kind::While { body, .. }
-                | Kind::For { body, .. }
-                | Kind::Do { body, .. } => collect(body, items, labels),
-                Kind::If { then_body, else_body, .. } => {
-                    collect(then_body, items, labels);
-                    collect(else_body, items, labels);
-                }
-                Kind::SelectCase { cases, else_body, .. } => {
-                    for case in cases {
-                        collect(&case.body, items, labels);
-                    }
-                    collect(else_body, items, labels);
-                }
-                Kind::Try { body, catch, finally_body } => {
-                    collect(body, items, labels);
-                    if let Some(catch) = catch {
-                        collect(&catch.body, items, labels);
-                    }
-                    collect(finally_body, items, labels);
-                }
-                _ => {}
-            }
-        }
-    }
-    let mut items = 0;
-    let mut labels = HashMap::new();
-    collect(&module.statements, &mut items, &mut labels);
-    for callable in &module.callables {
-        collect(&callable.body, &mut items, &mut labels);
-    }
-    (items, labels)
-}
-
 fn render_semantic_data_item(
     expression: &crate::semantic_ir::Expression,
 ) -> Result<String, String> {
@@ -3989,7 +3940,7 @@ pub(crate) fn generate(
     let (data_items, data_labels) = if let Some(module) = resolved.semantic_module.as_ref() {
         let semantic_data_items = collect_semantic_data_items(module)
             .map_err(|message| vec![unsupported(&message)])?;
-        let (_, semantic_data_labels) = semantic_data_labels(module);
+        let (_, semantic_data_labels) = module.data_label_offsets();
         let (legacy_data_count, legacy_data_labels) = collect_data_shape(program);
         let labels_complete = legacy_data_labels
             .keys()
