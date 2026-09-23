@@ -3067,10 +3067,14 @@ impl JvmContext {
             for name in module.top_level_const_names() {
                 let mut ident = BasicIdent::parse(&name);
                 if ident.suffix.is_none() {
-                    ident.suffix = const_types
+                    if let Some(suffix) = const_types
                         .get(&name)
                         .and_then(|value_type| value_type.suffix())
-                        .and_then(TypeSuffix::from_char);
+                        .and_then(TypeSuffix::from_char)
+                    {
+                        declarations.remove(&variable_key(&ident));
+                        ident.suffix = Some(suffix);
+                    }
                 }
                 let ty = const_types
                     .get(&name)
@@ -4760,6 +4764,17 @@ mod tests {
         assert!(output.contains(".field public static"), "{output}");
         assert!(output.contains("putstatic"), "{output}");
         assert!(output.contains("getstatic"), "{output}");
+    }
+
+    #[test]
+    fn jvm_generation_replaces_legacy_unsuffixed_const_slot_with_semantic_slot() {
+        let source = "const limit = 3\nprint limit\nend\n";
+        let parsed = crate::parse_source("semantic_const_slot.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
+        let output = super::generate(&resolved).unwrap();
+        assert_eq!(output.matches(".field public static g").count(), 1, "{output}");
     }
 
     #[test]
