@@ -8210,3 +8210,104 @@ Iteration 1208 keeps formatting changes scoped to the new C regression code.
 
 Iteration 1209 records this checkpoint; complete typed-IR-only codegen remains
 open.
+
+Iteration 1210 traces C typed `RESTORE` dispatch at module scope.
+
+Iteration 1211 traces C typed `RESTORE` dispatch at callable scope.
+
+Iteration 1212 checks nested control-flow statement coverage in the C backend.
+
+Iteration 1213 identifies nested `RESTORE` as an AST fallback gap.
+
+Iteration 1214 traces the existing typed `DATA` label offset table.
+
+Iteration 1215 confirms nested `RESTORE` needs no source-name resolution.
+
+Iteration 1216 confirms the label table stores resolved lowercase names.
+
+Iteration 1217 threads typed `DATA` offsets into the nested body emitter.
+
+Iteration 1218 threads typed `DATA` offsets through nested `DO` emission.
+
+Iteration 1219 threads typed `DATA` offsets through nested `IF` emission.
+
+Iteration 1220 threads typed `DATA` offsets through nested `WHILE` emission.
+
+Iteration 1221 threads typed `DATA` offsets through nested `FOR` emission.
+
+Iteration 1222 threads typed `DATA` offsets through nested `SELECT CASE` emission.
+
+Iteration 1223 preserves label offsets through recursive nested blocks.
+
+Iteration 1224 emits the typed `RESTORE` cursor assignment in nested blocks.
+
+Iteration 1225 preserves bare `RESTORE` as a reset to cursor zero.
+
+Iteration 1226 preserves unsupported-label failure as a declined typed emission.
+
+Iteration 1227 adds module nested `RESTORE` regression coverage.
+
+Iteration 1228 makes the AST and typed label offsets intentionally differ.
+
+Iteration 1229 verifies the module cursor uses the typed label offset.
+
+Iteration 1230 verifies the module cursor does not use the AST label offset.
+
+Iteration 1231 verifies the typed `DATA` payload remains authoritative.
+
+Iteration 1232 adds callable nested `RESTORE` regression coverage.
+
+Iteration 1233 verifies callable nested emission uses the typed label offset.
+
+Iteration 1234 verifies callable nested emission rejects the AST offset.
+
+Iteration 1235 checks the callable symbol name in emitted C output.
+
+Iteration 1236 checks module `RESTORE` remains unchanged.
+
+Iteration 1237 checks callable root `RESTORE` remains unchanged.
+
+Iteration 1238 checks nested `RESTORE` inside `WHILE` uses typed IR.
+
+Iteration 1239 checks array, expression, and file-I/O emitter state is unchanged.
+
+Iteration 1240 checks the new data-label dependency is passed by reference.
+
+Iteration 1241 checks no backend re-infers a `RESTORE` target from source syntax.
+
+Iteration 1242 checks no generated target text is parsed to resolve labels.
+
+Iteration 1243 checks resolver and typed-IR contracts remain unchanged.
+
+Iteration 1244 refreshes Graphify after the nested emitter dependency change.
+
+Iteration 1245 runs the focused module `RESTORE` test successfully.
+
+Iteration 1246 runs the focused callable `RESTORE` test successfully.
+
+Iteration 1247 runs `cargo check --locked` successfully.
+
+Iteration 1248 runs all 1,162 library tests successfully.
+
+Iteration 1249 runs all 19 CLI tests successfully.
+
+Iteration 1250 runs all 11 DOSBox conformance tests successfully.
+
+Iteration 1251 runs all 51 example tests successfully.
+
+Iteration 1252 runs all 110 JVM conformance tests successfully.
+
+Iteration 1253 runs the language conformance test successfully.
+
+Iteration 1254 runs all 11 general-purpose record tests successfully.
+
+Iteration 1255 runs all 40 record-method tests successfully.
+
+Iteration 1256 confirms the doctest target passes.
+
+Iteration 1257 runs `git diff --check` successfully.
+
+Iteration 1258 verifies Graphify output remains generated and untracked.
+
+Iteration 1259 records this checkpoint; complete typed-IR-only codegen remains
+open.

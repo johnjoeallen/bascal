@@ -7064,6 +7064,7 @@ fn emit_c_semantic_do(
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
@@ -7127,6 +7128,7 @@ fn emit_c_semantic_do(
         supports_float,
         arrays,
         functions,
+        data_labels,
         file_io,
         &mut staged_continue_stack,
         declaration_scope,
@@ -7262,6 +7264,7 @@ fn emit_c_semantic_for_body(
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
@@ -7294,6 +7297,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     loop_continue_stack,
                     declaration_scope,
@@ -7327,6 +7331,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     loop_continue_stack,
                     declaration_scope,
@@ -7347,6 +7352,7 @@ fn emit_c_semantic_for_body(
                         supports_float,
                         arrays,
                         functions,
+                        data_labels,
                         file_io,
                         loop_continue_stack,
                         declaration_scope,
@@ -7378,6 +7384,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     loop_continue_stack,
                     declaration_scope,
@@ -7404,6 +7411,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     loop_continue_stack,
                     declaration_scope,
@@ -7435,6 +7443,7 @@ fn emit_c_semantic_for_body(
                     temp_counter,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     None,
                     supports_float,
@@ -7460,6 +7469,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     arrays,
                     functions,
+                    data_labels,
                     file_io,
                     None,
                     loop_continue_stack,
@@ -7528,6 +7538,16 @@ fn emit_c_semantic_for_body(
             // Compiled C arrays have fixed storage; ERASE has no runtime
             // effect in this backend.
             Kind::Erase(_) => {}
+            Kind::Restore(target) => {
+                let cursor = target
+                    .as_ref()
+                    .and_then(|target| data_labels.get(&target.name.to_ascii_lowercase()).copied())
+                    .or_else(|| target.is_none().then_some(0));
+                let Some(cursor) = cursor else {
+                    return false;
+                };
+                out.push_str(&format!("    bcc_data_ptr = {cursor};\n"));
+            }
             // DATA items are collected into the program-wide pool before
             // block emission, including callable and nested block bodies.
             Kind::Data(_) => {}
@@ -7822,6 +7842,7 @@ fn emit_c_semantic_select_case_in_loop(
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
     loop_continue_stack: &mut Vec<Option<String>>,
@@ -7975,6 +7996,7 @@ fn emit_c_semantic_select_case_in_loop(
             supports_float,
             arrays,
             functions,
+            data_labels,
             file_io,
             loop_continue_stack,
             declaration_scope,
@@ -7996,6 +8018,7 @@ fn emit_c_semantic_select_case_in_loop(
             supports_float,
             arrays,
             functions,
+            data_labels,
             file_io,
             loop_continue_stack,
             declaration_scope,
@@ -8024,6 +8047,7 @@ fn emit_c_semantic_if_block(
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
     loop_continue_stack: &mut Vec<Option<String>>,
@@ -8054,6 +8078,7 @@ fn emit_c_semantic_if_block(
         supports_float,
         arrays,
         functions,
+        data_labels,
         file_io,
         &mut staged_loop_stack,
         declaration_scope,
@@ -8074,6 +8099,7 @@ fn emit_c_semantic_if_block(
             supports_float,
             arrays,
             functions,
+            data_labels,
             file_io,
             &mut staged_loop_stack,
             declaration_scope,
@@ -8101,6 +8127,7 @@ fn emit_c_semantic_while_block(
     supports_float: bool,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
     loop_continue_stack: &mut Vec<Option<String>>,
@@ -8132,6 +8159,7 @@ fn emit_c_semantic_while_block(
         supports_float,
         arrays,
         functions,
+        data_labels,
         file_io,
         &mut staged_loop_stack,
         declaration_scope,
@@ -8164,6 +8192,7 @@ fn emit_c_semantic_for(
     temp_counter: &mut usize,
     arrays: &ArrayTable,
     functions: &FunctionMap,
+    data_labels: &HashMap<String, usize>,
     file_io: &mut FileIoLayout,
     methods: Option<&HashMap<(TypeSuffix, String), FnSig>>,
     supports_float: bool,
@@ -8255,6 +8284,7 @@ fn emit_c_semantic_for(
         supports_float,
         arrays,
         functions,
+        data_labels,
         file_io,
         &mut loop_continue_stack,
         declaration_scope,
@@ -10868,6 +10898,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
+                            &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
                             &mut ctx.loop_continue_stack,
@@ -10889,6 +10920,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
+                            &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
                             &mut ctx.loop_continue_stack,
@@ -10924,6 +10956,7 @@ pub(crate) fn generate(
                             &mut temp_counter,
                             &functions.arrays,
                             &functions.funcs,
+                            &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
                             functions.dialect.supports_float,
@@ -10947,6 +10980,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
+                            &data_labels,
                             &mut file_io,
                             &mut ctx.loop_continue_stack,
                             semantic_declarations,
@@ -10969,6 +11003,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             &functions.arrays,
                             &functions.funcs,
+                            &data_labels,
                             &mut file_io,
                             Some(&functions.methods),
                             &mut ctx.loop_continue_stack,
@@ -12464,6 +12499,7 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                         &functions.arrays,
                         &functions.funcs,
+                        data_labels,
                         file_io,
                         Some(&functions.methods),
                         &mut ctx.loop_continue_stack,
@@ -12486,6 +12522,7 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                         &functions.arrays,
                         &functions.funcs,
+                        data_labels,
                         file_io,
                         Some(&functions.methods),
                         &mut ctx.loop_continue_stack,
@@ -12505,6 +12542,7 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                         &functions.arrays,
                         &functions.funcs,
+                        data_labels,
                         file_io,
                         Some(&functions.methods),
                         &mut ctx.loop_continue_stack,
@@ -12526,6 +12564,7 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                         &functions.arrays,
                         &functions.funcs,
+                        data_labels,
                         file_io,
                         &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
@@ -12556,9 +12595,10 @@ fn emit_function_def(
                             needs_math,
                             needs_string,
                             temp_counter,
-                            &functions.arrays,
-                            &functions.funcs,
-                            file_io,
+                        &functions.arrays,
+                        &functions.funcs,
+                        data_labels,
+                        file_io,
                             Some(&functions.methods),
                             functions.dialect.supports_float,
                             semantic_body.unwrap_or(&[]),
@@ -25772,6 +25812,80 @@ mod dialect_tests {
         assert!(
             output.contains("\"9\""),
             "semantic DATA sequence missing: {output}"
+        );
+    }
+
+    #[test]
+    fn c_nested_semantic_restore_uses_typed_data_label() {
+        let ast_source = "data 1\noldMark:\nwhile false\nrestore oldMark\nwend\nend\n";
+        let semantic_source = "data 8\ndata 9\noldMark:\nwhile false\nrestore oldMark\nwend\nend\n";
+        let parsed = parse_source("c_nested_semantic_restore.bcl".to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_nested_semantic_restore.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        let main = output
+            .split("int main(void) {")
+            .nth(1)
+            .unwrap()
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            main.contains("bcc_data_ptr = 2;"),
+            "typed nested RESTORE offset missing: {main}"
+        );
+        assert!(
+            !main.contains("bcc_data_ptr = 1;"),
+            "AST nested RESTORE replaced typed IR: {main}"
+        );
+        assert!(
+            output.contains("\"8\"") && output.contains("\"9\""),
+            "typed DATA payload missing: {output}"
+        );
+    }
+
+    #[test]
+    fn c_callable_nested_semantic_restore_uses_typed_data_label() {
+        let ast_source = "data 1\noldMark:\nprocedure worker()\nwhile false\nrestore oldMark\nwend\nend procedure\nworker()\nend\n";
+        let semantic_source = "data 8\ndata 9\noldMark:\nprocedure worker()\nwhile false\nrestore oldMark\nwend\nend procedure\nworker()\nend\n";
+        let parsed = parse_source(
+            "c_callable_nested_semantic_restore.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_callable_nested_semantic_restore.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        let worker = output
+            .split("void bf_i_worker(void) {")
+            .nth(1)
+            .unwrap_or_else(|| panic!("generated worker missing: {output}"))
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            worker.contains("bcc_data_ptr = 2;"),
+            "typed nested callable RESTORE offset missing: {worker}"
+        );
+        assert!(
+            !worker.contains("bcc_data_ptr = 1;"),
+            "AST nested callable RESTORE replaced typed IR: {worker}"
         );
     }
 
