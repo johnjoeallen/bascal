@@ -178,8 +178,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
 
     // Load generated semantic metadata before resolving the root's shared
     // header so its typed declaration is authoritative for COMMON lookup.
-    // Compatibility AST header handling remains available only when
-    // generated semantic parsing fails.
+    // The ordinary file path requires semantic parsing to succeed; codegen
+    // backends receive the resolved typed IR with AST source locations and
+    // compatibility metadata.
     let mut semantic_warnings = Vec::new();
     let semantic_module = load_semantic_module_recursive(
         input,
@@ -202,11 +203,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
         synthesized_buffer_names,
         lowered_record_files,
     } = lower::lower(program)?;
-    // Keep the generated semantic frontend attached for the ordinary file
-    // compilation path too.  A legacy parser acceptance that the generated
-    // frontend does not yet recognize remains an explicit compatibility
-    // fallback; it must not prevent the legacy backend pipeline from
-    // compiling an otherwise valid source file.
+    // Keep generated semantic IR attached throughout ordinary file
+    // compilation so each codegen backend receives the resolved typed module
+    // used for shared-header and dependency analysis.
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;

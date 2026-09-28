@@ -8724,3 +8724,120 @@ Iteration 1457 records that full typed-IR-only codegen remains open.
 Iteration 1458 verifies the diff before commit.
 
 Iteration 1459 records completion of this 50-iteration checkpoint.
+
+Iteration 1460 resumes the typed-IR migration audit at the compiler driver.
+
+Iteration 1461 queries Graphify for the driver-to-backend call path.
+
+Iteration 1462 traces `compile_source` from parsing through typed-IR resolution.
+
+Iteration 1463 confirms `compile_source` attaches generated semantic IR before
+resolution.
+
+Iteration 1464 confirms `compile_source` passes the resolved program to the
+BASIC codegen backend.
+
+Iteration 1465 traces `compile_file` from recursive source loading through
+resolution.
+
+Iteration 1466 confirms `compile_file` loads the semantic module dependency
+graph.
+
+Iteration 1467 confirms dependency order is retained when semantic modules are
+merged.
+
+Iteration 1468 confirms shared-header lookup uses semantic module metadata.
+
+Iteration 1469 confirms record-file metadata is attached after AST lowering.
+
+Iteration 1470 confirms `compile_file` resolves with the generated semantic
+module attached.
+
+Iteration 1471 confirms the BASIC target receives the resolved program.
+
+Iteration 1472 confirms the FBC target receives the resolved program.
+
+Iteration 1473 confirms the C target receives the resolved program.
+
+Iteration 1474 confirms the C64 target receives the resolved program.
+
+Iteration 1475 confirms the JVM target receives the resolved program.
+
+Iteration 1476 finds stale driver comments describing a semantic-parse
+compatibility fallback.
+
+Iteration 1477 verifies semantic parse failure propagates from the ordinary
+file-loading path.
+
+Iteration 1478 verifies the ordinary driver path does not dispatch an
+unresolved AST to codegen.
+
+Iteration 1479 updates the driver comments to state the typed-IR requirement.
+
+Iteration 1480 documents the AST's remaining source-location and compatibility
+metadata role.
+
+Iteration 1481 confirms the change does not alter driver behavior.
+
+Iteration 1482 selects the all-target scalar DIM regression for focused
+validation.
+
+Iteration 1483 runs the all-target scalar DIM driver regression successfully.
+
+Iteration 1484 confirms BASIC receives typed scalar declaration metadata.
+
+Iteration 1485 confirms C receives typed scalar declaration metadata.
+
+Iteration 1486 confirms C64 receives supported typed scalar declaration
+metadata.
+
+Iteration 1487 confirms JVM receives typed scalar declaration metadata.
+
+Iteration 1488 confirms the existing regression covers callable scalar DIM
+separately.
+
+Iteration 1489 confirms required-library semantic modules remain part of the
+resolved typed module.
+
+Iteration 1490 confirms shared-file compatibility parsing remains isolated to
+shared-file classification.
+
+Iteration 1491 confirms driver target selection does not strip semantic IR.
+
+Iteration 1492 confirms codegen backends continue to receive one shared
+`ResolvedProgram`.
+
+Iteration 1493 confirms no backend-specific driver re-resolution is present.
+
+Iteration 1494 confirms this slice changes driver comments only.
+
+Iteration 1495 checks the changed driver source for accidental edits.
+
+Iteration 1496 checks the updated iteration sequence.
+
+Iteration 1497 checks whitespace with `git diff --check`.
+
+Iteration 1498 records focused all-target driver validation.
+
+Iteration 1499 records the driver’s typed-IR handoff path.
+
+Iteration 1500 records the BASIC backend handoff.
+
+Iteration 1501 records the C and C64 backend handoffs.
+
+Iteration 1502 records the JVM backend handoff.
+
+Iteration 1503 confirms this slice introduces no typed-IR contract change.
+
+Iteration 1504 confirms the full typed-IR-only codegen migration remains open.
+
+Iteration 1505 identifies nested C `ON GOSUB` as a remaining typed-dispatch
+candidate requiring shared site-ID state.
+
+Iteration 1506 defers nested C `ON GOSUB` pending complete state-flow analysis.
+
+Iteration 1507 inspects the final driver-comment diff.
+
+Iteration 1508 prepares the driver audit checkpoint for commit.
+
+Iteration 1509 records completion of this 50-iteration checkpoint.
