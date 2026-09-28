@@ -8841,3 +8841,109 @@ Iteration 1507 inspects the final driver-comment diff.
 Iteration 1508 prepares the driver audit checkpoint for commit.
 
 Iteration 1509 records completion of this 50-iteration checkpoint.
+
+Iteration 1510 audits the C semantic nested-block dispatcher after `ON GOTO`.
+
+Iteration 1511 traces nested C block emission through `emit_c_semantic_for_body`.
+
+Iteration 1512 confirms typed `ON GOSUB` is absent from nested C block dispatch.
+
+Iteration 1513 traces top-level GOSUB site counting in typed IR.
+
+Iteration 1514 confirms site IDs are allocated in semantic source traversal
+order.
+
+Iteration 1515 traces top-level semantic `ON GOSUB` emission.
+
+Iteration 1516 traces AST GOSUB fallback through the shared site counter.
+
+Iteration 1517 identifies transactional ID rollback as a requirement when a
+typed block declines.
+
+Iteration 1518 introduces `CSemanticGosubState` for the total and next site ID.
+
+Iteration 1519 threads shared GOSUB state into nested C semantic emission.
+
+Iteration 1520 threads GOSUB state through nested `IF` blocks.
+
+Iteration 1521 threads GOSUB state through nested `WHILE` blocks.
+
+Iteration 1522 threads GOSUB state through nested `FOR` blocks.
+
+Iteration 1523 threads GOSUB state through nested `DO` blocks.
+
+Iteration 1524 threads GOSUB state through nested `SELECT CASE` blocks.
+
+Iteration 1525 preserves state through recursively nested semantic lines.
+
+Iteration 1526 emits nested typed `ON GOSUB` selector expressions as C switches.
+
+Iteration 1527 emits one shared site ID for each typed branch target.
+
+Iteration 1528 emits nested return labels for each typed branch target.
+
+Iteration 1529 dispatches typed `RETURN` through the shared GOSUB stack.
+
+Iteration 1530 stages GOSUB state with C `DO` block output.
+
+Iteration 1531 stages GOSUB state with C `IF` block output.
+
+Iteration 1532 stages GOSUB state with C `WHILE` block output.
+
+Iteration 1533 stages GOSUB state with C `FOR` block output.
+
+Iteration 1534 stages GOSUB state with C `SELECT CASE` block output.
+
+Iteration 1535 commits staged site IDs only when typed block emission succeeds.
+
+Iteration 1536 restores the site counter before aligned AST fallback.
+
+Iteration 1537 preserves the existing top-level C GOSUB site ordering.
+
+Iteration 1538 uses a zero-site context for callable block emission, where
+GOSUB is resolver-rejected.
+
+Iteration 1539 adds nested typed `ON GOSUB` emission coverage for C.
+
+Iteration 1540 adds nested typed `ON GOSUB` emission coverage for C64.
+
+Iteration 1541 verifies typed selectors replace stale AST selectors.
+
+Iteration 1542 verifies typed branch targets replace stale AST targets.
+
+Iteration 1543 verifies both nested site IDs reach the return dispatcher.
+
+Iteration 1544 adds a fallback regression with nested `RANDOMIZE`.
+
+Iteration 1545 verifies fallback AST `ON GOSUB` reuses site ID zero.
+
+Iteration 1546 verifies the following typed GOSUB receives site ID one.
+
+Iteration 1547 verifies the return dispatcher contains exactly the emitted
+site IDs.
+
+Iteration 1548 adds a C conformance fixture for nested typed `ON GOSUB`.
+
+Iteration 1549 runs the C fixture through GCC and verifies its output.
+
+Iteration 1550 runs both focused C codegen regressions successfully.
+
+Iteration 1551 refreshes Graphify after the C emitter state-flow change.
+
+Iteration 1552 runs all 1,169 library tests successfully.
+
+Iteration 1553 runs all 19 CLI tests successfully.
+
+Iteration 1554 runs all 12 DOSBox and C target tests successfully.
+
+Iteration 1555 runs all 51 example tests successfully.
+
+Iteration 1556 runs all 110 JVM conformance tests successfully.
+
+Iteration 1557 runs the language conformance test successfully.
+
+Iteration 1558 runs all 11 general-purpose record tests and 40 record-method
+tests successfully.
+
+Iteration 1559 records completion of this 50-iteration checkpoint; typed-IR-
+only codegen migration remains open.

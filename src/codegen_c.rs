@@ -7053,6 +7053,12 @@ fn emit_c_semantic_print(
     emitted
 }
 
+#[derive(Clone, Copy)]
+struct CSemanticGosubState {
+    total: usize,
+    next: usize,
+}
+
 fn emit_c_semantic_do(
     pre_condition: Option<&crate::semantic_ir::LoopCondition>,
     post_condition: Option<&crate::semantic_ir::LoopCondition>,
@@ -7069,12 +7075,14 @@ fn emit_c_semantic_do(
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     let mut staged_out = String::new();
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
     let mut staged_continue_stack = loop_continue_stack.clone();
+    let mut staged_gosub = *gosub;
     fn guard(
         condition: &crate::semantic_ir::LoopCondition,
         out: &mut String,
@@ -7133,6 +7141,7 @@ fn emit_c_semantic_do(
         &mut staged_continue_stack,
         declaration_scope,
         callable,
+        &mut staged_gosub,
     ) {
         return false;
     }
@@ -7158,6 +7167,7 @@ fn emit_c_semantic_do(
     *needs_string = staged_string;
     *temp_counter = staged_counter;
     *loop_continue_stack = staged_continue_stack;
+    *gosub = staged_gosub;
     true
 }
 
@@ -7269,6 +7279,7 @@ fn emit_c_semantic_for_body(
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     use crate::semantic_ir::SemanticStatementKind as Kind;
     for statement in statements {
@@ -7302,6 +7313,7 @@ fn emit_c_semantic_for_body(
                     loop_continue_stack,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7336,6 +7348,7 @@ fn emit_c_semantic_for_body(
                     loop_continue_stack,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7357,6 +7370,7 @@ fn emit_c_semantic_for_body(
                         loop_continue_stack,
                         declaration_scope,
                         callable,
+                        gosub,
                     ) {
                         return false;
                     }
@@ -7389,6 +7403,7 @@ fn emit_c_semantic_for_body(
                     loop_continue_stack,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7416,6 +7431,7 @@ fn emit_c_semantic_for_body(
                     loop_continue_stack,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7449,6 +7465,7 @@ fn emit_c_semantic_for_body(
                     supports_float,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7475,6 +7492,7 @@ fn emit_c_semantic_for_body(
                     loop_continue_stack,
                     declaration_scope,
                     callable,
+                    gosub,
                 ) {
                     return false;
                 }
@@ -7558,7 +7576,7 @@ fn emit_c_semantic_for_body(
             )),
             Kind::OnBranch {
                 selector,
-                branch: crate::semantic_ir::BranchKind::Goto,
+                branch,
                 targets,
             } => {
                 let Some((selector, is_float)) = render_c_semantic_numeric_expression_context(
@@ -7572,14 +7590,25 @@ fn emit_c_semantic_for_body(
                 };
                 let selector = coerce_numeric(selector, is_float, false, needs_math);
                 out.push_str(&format!("    switch ({selector}) {{\n"));
+                let is_gosub = matches!(branch, crate::semantic_ir::BranchKind::Gosub);
+                let mut resume_ids = Vec::new();
                 for (index, target) in targets.iter().enumerate() {
+                    out.push_str(&format!("    case {}: ", index + 1));
+                    if is_gosub {
+                        let id = gosub.next;
+                        gosub.next += 1;
+                        resume_ids.push(id);
+                        out.push_str(&format!("bcc_gosub_stack[bcc_gosub_sp++] = {id}; "));
+                    }
                     out.push_str(&format!(
-                        "    case {}: goto bcc_lbl_{};\n",
-                        index + 1,
+                        "goto bcc_lbl_{};\n",
                         target.name.to_ascii_lowercase()
                     ));
                 }
                 out.push_str("    default: break;\n    }\n");
+                for id in resume_ids {
+                    out.push_str(&format!("    bcc_ret_{id}:;\n"));
+                }
             }
             // DATA items are collected into the program-wide pool before
             // block emission, including callable and nested block bodies.
@@ -7840,6 +7869,15 @@ fn emit_c_semantic_for_body(
                 }
             }
             Kind::Return(crate::semantic_ir::ReturnValue::Default)
+                if gosub.total > 0 && callable.is_none() =>
+            {
+                out.push_str("    switch (bcc_gosub_stack[--bcc_gosub_sp]) {\n");
+                for id in 0..gosub.total {
+                    out.push_str(&format!("    case {id}: goto bcc_ret_{id};\n"));
+                }
+                out.push_str("    }\n");
+            }
+            Kind::Return(crate::semantic_ir::ReturnValue::Default)
                 if callable.is_some_and(|sig| sig.is_void) =>
             {
                 let sig = callable.expect("guarded callable RETURN");
@@ -7881,6 +7919,7 @@ fn emit_c_semantic_select_case_in_loop(
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     use crate::semantic_ir::{CaseValue, ComparisonOperator};
     let is_string_selector = selector.value_type == crate::semantic_ir::SemanticValueType::String;
@@ -7900,6 +7939,7 @@ fn emit_c_semantic_select_case_in_loop(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
+    let mut staged_gosub = *gosub;
     let selector_name = format!("bt_sel_{staged_counter}");
     staged_counter += 1;
     let matched = format!("bt_sel_match_{staged_counter}");
@@ -8034,6 +8074,7 @@ fn emit_c_semantic_select_case_in_loop(
             loop_continue_stack,
             declaration_scope,
             callable,
+            &mut staged_gosub,
         ) {
             return false;
         }
@@ -8056,6 +8097,7 @@ fn emit_c_semantic_select_case_in_loop(
             loop_continue_stack,
             declaration_scope,
             callable,
+            &mut staged_gosub,
         ) {
             return false;
         }
@@ -8066,6 +8108,7 @@ fn emit_c_semantic_select_case_in_loop(
     *needs_math = staged_math;
     *needs_string = staged_string;
     *temp_counter = staged_counter;
+    *gosub = staged_gosub;
     true
 }
 
@@ -8086,10 +8129,12 @@ fn emit_c_semantic_if_block(
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
+    let mut staged_gosub = *gosub;
     let mut staged_loop_stack = loop_continue_stack.clone();
     let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
         condition,
@@ -8116,6 +8161,7 @@ fn emit_c_semantic_if_block(
         &mut staged_loop_stack,
         declaration_scope,
         callable,
+        &mut staged_gosub,
     ) {
         return false;
     }
@@ -8137,6 +8183,7 @@ fn emit_c_semantic_if_block(
             &mut staged_loop_stack,
             declaration_scope,
             callable,
+            &mut staged_gosub,
         ) {
             return false;
         }
@@ -8147,6 +8194,7 @@ fn emit_c_semantic_if_block(
     *needs_string = staged_string;
     *temp_counter = staged_counter;
     *loop_continue_stack = staged_loop_stack;
+    *gosub = staged_gosub;
     true
 }
 
@@ -8166,10 +8214,12 @@ fn emit_c_semantic_while_block(
     loop_continue_stack: &mut Vec<Option<String>>,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter;
+    let mut staged_gosub = *gosub;
     let mut staged_loop_stack = loop_continue_stack.clone();
     let Some((condition, _)) = render_c_semantic_numeric_expression_with_methods(
         condition,
@@ -8197,6 +8247,7 @@ fn emit_c_semantic_while_block(
         &mut staged_loop_stack,
         declaration_scope,
         callable,
+        &mut staged_gosub,
     ) {
         return false;
     }
@@ -8207,6 +8258,7 @@ fn emit_c_semantic_while_block(
     *needs_string = staged_string;
     *temp_counter = staged_counter;
     *loop_continue_stack = staged_loop_stack;
+    *gosub = staged_gosub;
     true
 }
 
@@ -8231,6 +8283,7 @@ fn emit_c_semantic_for(
     supports_float: bool,
     declaration_scope: &[crate::semantic_ir::SemanticStatement],
     callable: Option<&FnSig>,
+    gosub: &mut CSemanticGosubState,
 ) -> bool {
     use crate::semantic_ir::ForBounds;
     let ident = BasicIdent::parse(variable);
@@ -8242,6 +8295,7 @@ fn emit_c_semantic_for(
     let mut staged_math = *needs_math;
     let mut staged_string = *needs_string;
     let mut staged_counter = *temp_counter + 1;
+    let mut staged_gosub = *gosub;
     let Some((start_text, start_is_float)) = render_c_semantic_numeric_expression_with_methods(
         start,
         &mut staged_math,
@@ -8322,6 +8376,7 @@ fn emit_c_semantic_for(
         &mut loop_continue_stack,
         declaration_scope,
         callable,
+        &mut staged_gosub,
     ) {
         return false;
     }
@@ -8357,6 +8412,7 @@ fn emit_c_semantic_for(
     *needs_math = staged_math;
     *needs_string = staged_string;
     *temp_counter = staged_counter;
+    *gosub = staged_gosub;
     true
 }
 
@@ -10812,7 +10868,10 @@ pub(crate) fn generate(
         .as_ref()
         .map(crate::semantic_ir::SemanticModule::top_level_gosub_count)
         .unwrap_or_else(|| count_gosubs(&program.statements));
-    let mut gosub_id: usize = 0;
+    let mut gosub = CSemanticGosubState {
+        total: gosub_count,
+        next: 0,
+    };
     let mut ctx = ErrorDataCtx {
         handler_ids: &on_error_handler_ids,
         dispatch_labels: &dispatch_labels,
@@ -10836,6 +10895,7 @@ pub(crate) fn generate(
         .map(|module| module.statements.as_slice())
         .unwrap_or(&[]);
     for (index, statement) in program.statements.iter().enumerate() {
+        let gosub_checkpoint = gosub;
         let semantic_emitted = semantic_statements
             .as_ref()
             .and_then(|statements| statements[index])
@@ -10937,6 +10997,7 @@ pub(crate) fn generate(
                             &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
+                            &mut gosub,
                         );
                     }
                     Kind::While {
@@ -10959,6 +11020,7 @@ pub(crate) fn generate(
                             &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
+                            &mut gosub,
                         );
                     }
                     Kind::For {
@@ -10995,6 +11057,7 @@ pub(crate) fn generate(
                             functions.dialect.supports_float,
                             semantic_declarations,
                             None,
+                            &mut gosub,
                         );
                     }
                     Kind::Do {
@@ -11018,6 +11081,7 @@ pub(crate) fn generate(
                             &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
+                            &mut gosub,
                         );
                     }
                     Kind::SelectCase {
@@ -11042,6 +11106,7 @@ pub(crate) fn generate(
                             &mut ctx.loop_continue_stack,
                             semantic_declarations,
                             None,
+                            &mut gosub,
                         );
                     }
                     Kind::Assignment {
@@ -11277,8 +11342,8 @@ pub(crate) fn generate(
                         ));
                     }
                     Kind::Gosub(target) => {
-                        let id = gosub_id;
-                        gosub_id += 1;
+                        let id = gosub.next;
+                        gosub.next += 1;
                         body.push_str(&format!("    bcc_gosub_stack[bcc_gosub_sp++] = {id};\n"));
                         body.push_str(&format!(
                             "    goto bcc_lbl_{};\n",
@@ -11304,13 +11369,13 @@ pub(crate) fn generate(
                         };
                         let selector = coerce_numeric(selector, is_float, false, &mut needs_math);
                         body.push_str(&format!("    switch ({selector}) {{\n"));
-                        let gosub = matches!(branch, crate::semantic_ir::BranchKind::Gosub);
+                        let is_gosub = matches!(branch, crate::semantic_ir::BranchKind::Gosub);
                         let mut resume_ids = Vec::new();
                         for (index, target) in targets.iter().enumerate() {
                             body.push_str(&format!("    case {}: ", index + 1));
-                            if gosub {
-                                let id = gosub_id;
-                                gosub_id += 1;
+                            if is_gosub {
+                                let id = gosub.next;
+                                gosub.next += 1;
                                 resume_ids.push(id);
                                 body.push_str(&format!("bcc_gosub_stack[bcc_gosub_sp++] = {id}; "));
                             }
@@ -11324,9 +11389,9 @@ pub(crate) fn generate(
                             body.push_str(&format!("    bcc_ret_{id}:;\n"));
                         }
                     }
-                    Kind::Return(crate::semantic_ir::ReturnValue::Default) if gosub_count > 0 => {
+                    Kind::Return(crate::semantic_ir::ReturnValue::Default) if gosub.total > 0 => {
                         body.push_str("    switch (bcc_gosub_stack[--bcc_gosub_sp]) {\n");
-                        for id in 0..gosub_count {
+                        for id in 0..gosub.total {
                             body.push_str(&format!("    case {id}: goto bcc_ret_{id};\n"));
                         }
                         body.push_str("    }\n");
@@ -11390,6 +11455,7 @@ pub(crate) fn generate(
                 true
             });
         if !semantic_emitted {
+            gosub = gosub_checkpoint;
             emit_statement(
                 statement,
                 &mut body,
@@ -11399,8 +11465,8 @@ pub(crate) fn generate(
                 &functions,
                 None,
                 &mut file_io,
-                gosub_count,
-                &mut gosub_id,
+                gosub.total,
+                &mut gosub.next,
                 &mut ctx,
             )
             .map_err(|message| vec![unsupported(&message)])?;
@@ -12448,6 +12514,7 @@ fn emit_function_def(
     // file-scope globals reachable from anywhere -- `RESTORE <label>`
     // there needs the real label table to resolve correctly.
     let mut unused_gosub_id: usize = 0;
+    let mut callable_gosub = CSemanticGosubState { total: 0, next: 0 };
     let mut ctx = ErrorDataCtx {
         handler_ids,
         dispatch_labels: &[],
@@ -12538,6 +12605,7 @@ fn emit_function_def(
                         &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
+                        &mut callable_gosub,
                     ),
                     Kind::If {
                         condition,
@@ -12561,6 +12629,7 @@ fn emit_function_def(
                         &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
+                        &mut callable_gosub,
                     ),
                     Kind::While {
                         condition,
@@ -12581,6 +12650,7 @@ fn emit_function_def(
                         &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
+                        &mut callable_gosub,
                     ),
                     Kind::Do {
                         pre_condition,
@@ -12602,6 +12672,7 @@ fn emit_function_def(
                         &mut ctx.loop_continue_stack,
                         semantic_body.unwrap_or(&[]),
                         Some(sig),
+                        &mut callable_gosub,
                     ),
                     Kind::For {
                         variable,
@@ -12636,6 +12707,7 @@ fn emit_function_def(
                             functions.dialect.supports_float,
                             semantic_body.unwrap_or(&[]),
                             Some(sig),
+                            &mut callable_gosub,
                         )
                     }
                     Kind::Field { channel, bindings } => {
@@ -26241,6 +26313,82 @@ mod dialect_tests {
         assert!(
             !output.contains("bcc_lbl_olda:"),
             "AST ON targets replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn c_nested_semantic_on_gosub_uses_shared_site_ids() {
+        let ast_source = "if 1 then\non 1 goto oldA, oldB\nend if\nend\noldA:\nend\noldB:\nend\n";
+        let semantic_source =
+            "if 1 then\non 2 gosub newA, newB\nend if\nend\nnewA:\nreturn\nnewB:\nreturn\n";
+        let program =
+            parse_source("c_nested_semantic_on_gosub.bcl".to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_nested_semantic_on_gosub.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        for target in [Target::C, Target::C64] {
+            let output = generate(&resolved, target).unwrap().app;
+            assert!(
+                output.contains("switch (2) {"),
+                "nested typed ON selector missing for {target:?}: {output}"
+            );
+            assert!(
+                output.contains("case 1: bcc_gosub_stack[bcc_gosub_sp++] = 0; goto bcc_lbl_newa;"),
+                "first nested typed ON GOSUB arm missing for {target:?}: {output}"
+            );
+            assert!(
+                output.contains("case 2: bcc_gosub_stack[bcc_gosub_sp++] = 1; goto bcc_lbl_newb;"),
+                "second nested typed ON GOSUB arm missing for {target:?}: {output}"
+            );
+            assert!(
+                output.contains("case 0: goto bcc_ret_0;")
+                    && output.contains("case 1: goto bcc_ret_1;"),
+                "nested typed GOSUB return dispatch missing for {target:?}: {output}"
+            );
+            assert!(
+                !output.contains("bcc_lbl_olda:"),
+                "AST branch targets replaced nested typed IR for {target:?}: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn c_nested_on_gosub_ast_fallback_restores_shared_site_ids() {
+        let filename = "c_nested_on_gosub_fallback.bcl";
+        let ast_source =
+            "if 1 then\non 1 gosub target\nrandomize\nend if\ngosub target\nend\ntarget:\nreturn\n";
+        let semantic_source =
+            "if 1 then\non 2 gosub target\nrandomize\nend if\ngosub target\nend\ntarget:\nreturn\n";
+        let program = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap());
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(
+            output.contains("case 1: bcc_gosub_stack[bcc_gosub_sp++] = 0; goto bcc_lbl_target;"),
+            "declined typed IF did not fall back to AST ON GOSUB: {output}"
+        );
+        assert!(
+            output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 1;\n    goto bcc_lbl_target;"),
+            "typed following GOSUB did not continue the shared site IDs: {output}"
+        );
+        assert!(
+            output.contains("case 0: goto bcc_ret_0;")
+                && output.contains("case 1: goto bcc_ret_1;"),
+            "return dispatch does not cover emitted GOSUB sites: {output}"
+        );
+        assert!(
+            !output.contains("case 2: goto bcc_ret_2;"),
+            "declined typed IF consumed GOSUB site IDs: {output}"
         );
     }
 
