@@ -1167,16 +1167,38 @@ fn apply_field_statement(
              through {BCC_MAX_CHANNELS}"
         ));
     }
-    let mut entries = Vec::with_capacity(fields.len());
-    let mut offset = 0u32;
-    for (width_expr, var) in fields {
-        let Expr::Integer(width) = width_expr else {
+    let mut typed_fields = Vec::with_capacity(fields.len());
+    for (width, name) in fields {
+        let Expr::Integer(width) = width else {
             return Err(
                 "a `FIELD` width must be a literal integer -- the minimal C backend needs to \
                  know the record layout at compile time"
                     .to_string(),
             );
         };
+        typed_fields.push((*width, name.clone()));
+    }
+    apply_field_layout(*ch, &typed_fields, record_type, string_fields, field_types, layout)
+}
+
+fn apply_field_layout(
+    channel: i64,
+    fields: &[(i64, BasicIdent)],
+    record_type: &Option<String>,
+    string_fields: &Option<Vec<bool>>,
+    field_types: &Option<Vec<RecordFieldType>>,
+    layout: &mut FileIoLayout,
+) -> Result<(), String> {
+    layout.used = true;
+    if !(1..=BCC_MAX_CHANNELS).contains(&channel) {
+        return Err(format!(
+            "file channel #{channel} is out of range -- the minimal C backend supports channels 1 \
+             through {BCC_MAX_CHANNELS}"
+        ));
+    }
+    let mut entries = Vec::with_capacity(fields.len());
+    let mut offset = 0u32;
+    for (width, var) in fields {
         if var.suffix != Some(TypeSuffix::String) {
             return Err(format!(
                 "`FIELD` variable `{var}` must be a string (`$`) -- real MBASIC/BASCOM's \
@@ -1222,10 +1244,10 @@ fn apply_field_statement(
         });
         offset += width;
     }
-    if layout.channel_fields.contains_key(ch) {
-        *layout.channel_generation.entry(*ch).or_insert(0) += 1;
+    if layout.channel_fields.contains_key(&channel) {
+        *layout.channel_generation.entry(channel).or_insert(0) += 1;
     } else {
-        layout.channel_generation.entry(*ch).or_insert(0);
+        layout.channel_generation.entry(channel).or_insert(0);
     }
     let inferred_layout = layout
         .known_record_layouts
@@ -1238,7 +1260,7 @@ fn apply_field_statement(
             }
         }
     }
-    layout.channel_fields.insert(*ch, entries);
+    layout.channel_fields.insert(channel, entries);
     // Only ever the literal `record_type` this `FIELD` statement itself
     // declared -- never `inferred_layout`'s name. A raw, hand-written
     // `FIELD` that happens to match a declared record type's byte widths
@@ -1247,7 +1269,9 @@ fn apply_field_statement(
     // produced it: its buffers are real, user-visible BASIC variables, and
     // `emit_get_or_put`/`Statement::Lset` both gate the typed DSL PUT
     // helper path on this map alone.
-    layout.channel_record_type.insert(*ch, record_type.clone());
+    layout
+        .channel_record_type
+        .insert(channel, record_type.clone());
     Ok(())
 }
 
@@ -1274,10 +1298,12 @@ fn apply_semantic_field_statement(
         let Ok(width) = width.parse::<i64>() else {
             return false;
         };
-        fields.push((Expr::Integer(width), BasicIdent::parse(&binding.name)));
+        let mut name = BasicIdent::parse(&binding.name);
+        name.suffix = Some(TypeSuffix::String);
+        fields.push((width, name));
     }
-    apply_field_statement(
-        &Expr::Integer(channel),
+    apply_field_layout(
+        channel,
         &fields,
         &None,
         &None,

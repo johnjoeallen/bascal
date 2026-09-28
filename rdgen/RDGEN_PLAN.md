@@ -9389,3 +9389,303 @@ Iteration 1758 stages the BASIC backend and plan, commits the slice, and verifie
 
 Iteration 1759 completes this 150-iteration checkpoint; typed-IR-only codegen migration
     remains open.
+
+Iteration 1760 refreshes Graphify before a cross-backend codegen audit.
+
+Iteration 1761 queries for remaining typed-IR consumers across BASIC, C, and JVM.
+
+Iteration 1762 identifies C semantic FIELD layout as a bounded migration slice.
+
+Iteration 1763 traces semantic FIELD dispatch into C file-layout state.
+
+Iteration 1764 inspects the implementation before changing the backend.
+
+Iteration 1765 confirms `FieldBinding` retains names, widths, and suffix metadata.
+
+Iteration 1766 finds semantic FIELD setup constructing synthetic AST expressions.
+
+Iteration 1767 traces the legacy FIELD adapter into shared layout mutation.
+
+Iteration 1768 confirms channel validation precedes field width validation.
+
+Iteration 1769 confirms field widths must be literal integers for C layout.
+
+Iteration 1770 confirms field buffers require string suffixes.
+
+Iteration 1771 confirms field widths respect fixed C string storage capacity.
+
+Iteration 1772 confirms field offsets accumulate in source declaration order.
+
+Iteration 1773 confirms repeated channel layouts advance generation counters.
+
+Iteration 1774 confirms known record shape inference keys by width sequence.
+
+Iteration 1775 confirms explicit string-field metadata takes precedence.
+
+Iteration 1776 confirms raw FIELD does not acquire record DSL helper ownership.
+
+Iteration 1777 confirms semantic and legacy paths share channel layout state.
+
+Iteration 1778 confirms callable prepass and module output use that state.
+
+Iteration 1779 confirms C64 uses the same C emitter layout implementation.
+
+Iteration 1780 keeps record DSL lowering outside this backend-local change.
+
+Iteration 1781 confirms resolver diagnostics already validate semantic field facts.
+
+Iteration 1782 confirms no typed IR contract extension is required.
+
+Iteration 1783 plans integer layout inputs shared by both FIELD adapters.
+
+Iteration 1784 retains the AST adapter for legacy source compatibility.
+
+Iteration 1785 keeps target-specific storage constraints in C codegen.
+
+Iteration 1786 checks existing raw layout regression coverage.
+
+Iteration 1787 checks source-order mixed record layout regression coverage.
+
+Iteration 1788 checks invalid semantic FIELD regression coverage.
+
+Iteration 1789 records the C/C64 FIELD adaptation gap.
+
+Iteration 1790 preserves the AST adapter's channel parsing behavior.
+
+Iteration 1791 preserves channel range diagnostic ordering for AST FIELD.
+
+Iteration 1792 converts literal AST widths to integer layout inputs.
+
+Iteration 1793 retains AST field identifiers for C name mangling.
+
+Iteration 1794 introduces `apply_field_layout` as the shared layout routine.
+
+Iteration 1795 accepts an integer channel in the shared layout routine.
+
+Iteration 1796 accepts integer field widths in the shared layout routine.
+
+Iteration 1797 keeps field identifiers as explicit layout inputs.
+
+Iteration 1798 retains channel range validation in the shared routine.
+
+Iteration 1799 retains string suffix validation in the shared routine.
+
+Iteration 1800 retains the fixed buffer capacity guard in the shared routine.
+
+Iteration 1801 retains byte-offset accumulation in the shared routine.
+
+Iteration 1802 retains per-channel generation updates in the shared routine.
+
+Iteration 1803 retains known width-shape lookup in the shared routine.
+
+Iteration 1804 retains inferred string-field metadata behavior.
+
+Iteration 1805 retains explicit field type metadata behavior.
+
+Iteration 1806 retains raw FIELD record-type ownership behavior.
+
+Iteration 1807 updates `FileIoLayout.used` through the shared routine.
+
+Iteration 1808 preserves diagnostics for computed AST channel values.
+
+Iteration 1809 preserves diagnostics for computed AST width values.
+
+Iteration 1810 removes duplicate layout mutation between adapters.
+
+Iteration 1811 removes synthetic integer AST expressions from semantic FIELD setup.
+
+Iteration 1812 removes synthetic width AST expressions from semantic FIELD setup.
+
+Iteration 1813 validates semantic channel literals before layout mutation.
+
+Iteration 1814 validates semantic widths before layout mutation.
+
+Iteration 1815 validates semantic `type_suffix` before layout mutation.
+
+Iteration 1816 sets the BASIC identifier suffix from typed FIELD metadata.
+
+Iteration 1817 passes typed field widths and names directly into shared layout.
+
+Iteration 1818 keeps semantic string binding diagnostics unchanged.
+
+Iteration 1819 reviews the refactor for source-order and generation regressions.
+
+Iteration 1820 runs the raw semantic FIELD layout regression.
+
+Iteration 1821 verifies the semantic field buffer appears in generated C.
+
+Iteration 1822 verifies the stale AST field buffer is absent from generated C.
+
+Iteration 1823 verifies semantic FIELD bindings feed generated GET calls.
+
+Iteration 1824 verifies callable prepass and module emission share FIELD state.
+
+Iteration 1825 verifies semantic field width reaches the generated record buffer.
+
+Iteration 1826 runs the mixed record DSL and raw FIELD ordering regression.
+
+Iteration 1827 verifies field generations preserve source order.
+
+Iteration 1828 runs the unsuffixed semantic FIELD diagnostic regression.
+
+Iteration 1829 verifies non-string typed bindings retain their diagnostic.
+
+Iteration 1830 checks generated C output rather than emitter success alone.
+
+Iteration 1831 passes all focused semantic FIELD layout tests.
+
+Iteration 1832 confirms C64 shares the C emitter layout core.
+
+Iteration 1833 checks legacy FIELD tests for channel range behavior.
+
+Iteration 1834 checks legacy FIELD tests for width validation behavior.
+
+Iteration 1835 confirms AST validation order is preserved after extraction.
+
+Iteration 1836 confirms semantic conversion rejects malformed facts before mutation.
+
+Iteration 1837 checks for accidental fixture or generated-file changes.
+
+Iteration 1838 passes `git diff --check` on the source changes.
+
+Iteration 1839 runs the full locked Cargo test suite.
+
+Iteration 1840 passes all 1,170 library tests.
+
+Iteration 1841 passes all 19 CLI tests.
+
+Iteration 1842 passes all 12 DOSBox and C target tests.
+
+Iteration 1843 passes all 51 example tests.
+
+Iteration 1844 passes all 110 JVM conformance tests.
+
+Iteration 1845 passes the language conformance test.
+
+Iteration 1846 passes all 11 general-purpose record tests.
+
+Iteration 1847 passes all 40 record-method tests.
+
+Iteration 1848 completes all test groups with no failures.
+
+Iteration 1849 records successful full-suite validation.
+
+Iteration 1850 refreshes Graphify after the C helper extraction.
+
+Iteration 1851 confirms the updated code graph contains 4,171 nodes.
+
+Iteration 1852 confirms Graphify records the changed C call relationships.
+
+Iteration 1853 confirms Graphify output remains excluded from the commit.
+
+Iteration 1854 audits BASIC label rendering after the preceding checkpoint.
+
+Iteration 1855 confirms semantic BASIC references bypass synthetic AST expressions.
+
+Iteration 1856 audits BASIC no-argument method statement dispatch.
+
+Iteration 1857 confirms semantic method emission handles typed receivers.
+
+Iteration 1858 audits JVM statement dispatch for target support boundaries.
+
+Iteration 1859 confirms JVM `GOSUB` remains explicitly unsupported.
+
+Iteration 1860 leaves the JVM language support contract unchanged.
+
+Iteration 1861 confirms the driver still passes the resolved program to backends.
+
+Iteration 1862 confirms C storage uses typed FIELD suffix metadata.
+
+Iteration 1863 confirms resolver ownership of FIELD semantic diagnostics.
+
+Iteration 1864 confirms no parser changes are needed for this slice.
+
+Iteration 1865 confirms no resolver changes are needed for this slice.
+
+Iteration 1866 confirms generated target code is not a semantic input.
+
+Iteration 1867 reviews field ordering for deterministic output.
+
+Iteration 1868 reviews channel generation behavior for repeated FIELD declarations.
+
+Iteration 1869 reviews known width-shape inference against record tests.
+
+Iteration 1870 confirms explicit semantic field shape remains authoritative.
+
+Iteration 1871 confirms record DSL ownership remains separate from raw FIELD.
+
+Iteration 1872 confirms top-level semantic FIELD dispatch uses shared layout.
+
+Iteration 1873 confirms callable prepass semantic FIELD dispatch uses shared layout.
+
+Iteration 1874 confirms backend storage constraints remain backend-local.
+
+Iteration 1875 confirms error propagation remains owned by C codegen.
+
+Iteration 1876 confirms only C codegen and plan files changed.
+
+Iteration 1877 checks the plan sequence begins at iteration 1760.
+
+Iteration 1878 checks the plan sequence ends at iteration 1909.
+
+Iteration 1879 confirms all 150 iteration entries are recorded.
+
+Iteration 1880 reviews the AST adapter beside the typed semantic adapter.
+
+Iteration 1881 reviews the shared layout routine for duplicated state mutation.
+
+Iteration 1882 confirms the AST adapter retains its existing internal contract.
+
+Iteration 1883 confirms semantic field names retain C mangling behavior.
+
+Iteration 1884 confirms typed suffix metadata supplies string storage classification.
+
+Iteration 1885 confirms widths remain literal integers before layout mutation.
+
+Iteration 1886 confirms channels remain literal integers before layout mutation.
+
+Iteration 1887 confirms failed semantic conversion leaves layout state unchanged.
+
+Iteration 1888 confirms legacy invalid-channel diagnostics retain precedence.
+
+Iteration 1889 confirms field capacity diagnostics remain unchanged.
+
+Iteration 1890 confirms existing tests cover semantic layout output.
+
+Iteration 1891 confirms focused tests ran after the final source edit.
+
+Iteration 1892 confirms the full suite ran after the final source edit.
+
+Iteration 1893 confirms Graphify was refreshed after the architecture change.
+
+Iteration 1894 confirms `git diff --check` passes before staging.
+
+Iteration 1895 reviews the complete patch for unrelated edits.
+
+Iteration 1896 stages only C codegen and the migration plan.
+
+Iteration 1897 checks the staged patch for whitespace errors.
+
+Iteration 1898 commits the typed semantic FIELD layout slice.
+
+Iteration 1899 records the C FIELD layout checkpoint commit.
+
+Iteration 1900 verifies the committed worktree is clean.
+
+Iteration 1901 records the shared C/C64 FIELD layout routine.
+
+Iteration 1902 records semantic FIELD metadata flowing directly to layout.
+
+Iteration 1903 records layout, source-order, and diagnostic coverage.
+
+Iteration 1904 records validation across BASIC, C, C64, JVM, and records.
+
+Iteration 1905 records that typed IR already contains the required FIELD facts.
+
+Iteration 1906 records the unchanged JVM GOSUB target boundary.
+
+Iteration 1907 completes the 150-iteration migration checkpoint.
+
+Iteration 1908 leaves broader typed-IR-only codegen migration open.
+
+Iteration 1909 identifies remaining AST compatibility paths for follow-up.
