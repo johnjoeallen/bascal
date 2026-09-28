@@ -7574,6 +7574,16 @@ fn emit_c_semantic_for_body(
                 "    goto bcc_lbl_{};\n",
                 target.name.to_ascii_lowercase()
             )),
+            Kind::Gosub(target) => {
+                let id = gosub.next;
+                gosub.next += 1;
+                out.push_str(&format!("    bcc_gosub_stack[bcc_gosub_sp++] = {id};\n"));
+                out.push_str(&format!(
+                    "    goto bcc_lbl_{};\n",
+                    target.name.to_ascii_lowercase()
+                ));
+                out.push_str(&format!("    bcc_ret_{id}:;\n"));
+            }
             Kind::OnBranch {
                 selector,
                 branch,
@@ -26355,6 +26365,41 @@ mod dialect_tests {
             assert!(
                 !output.contains("bcc_lbl_olda:"),
                 "AST branch targets replaced nested typed IR for {target:?}: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn c_nested_semantic_gosub_uses_shared_site_ids() {
+        let filename = "c_nested_semantic_gosub.bcl";
+        let ast_source = "if 1 then\ngoto oldTarget\nend if\nend\noldTarget:\nend\n";
+        let semantic_source =
+            "if 1 then\ngosub newTarget\nend if\nend\nnewTarget:\nreturn\n";
+        let program = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(program).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap(),
+        );
+
+        for target in [Target::C, Target::C64] {
+            let output = generate(&resolved, target).unwrap().app;
+            assert!(
+                output.contains("bcc_gosub_stack[bcc_gosub_sp++] = 0;")
+                    && output.contains("goto bcc_lbl_newtarget;"),
+                "nested typed GOSUB target missing for {target:?}: {output}"
+            );
+            assert!(
+                output.contains("bcc_ret_0:;"),
+                "nested typed GOSUB resume label missing for {target:?}: {output}"
+            );
+            assert!(
+                output.contains("case 0: goto bcc_ret_0;"),
+                "nested typed GOSUB return dispatch missing for {target:?}: {output}"
+            );
+            assert!(
+                !output.contains("bcc_lbl_oldtarget:"),
+                "AST GOTO target replaced nested typed IR for {target:?}: {output}"
             );
         }
     }

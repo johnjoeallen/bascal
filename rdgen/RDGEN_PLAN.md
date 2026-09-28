@@ -8947,3 +8947,107 @@ tests successfully.
 
 Iteration 1559 records completion of this 50-iteration checkpoint; typed-IR-
 only codegen migration remains open.
+
+Iteration 1560 audits the nested C semantic-line emitter for remaining
+control-flow gaps.
+
+Iteration 1561 confirms the nested typed `GOSUB` arm is absent.
+
+Iteration 1562 traces nested `GOSUB` to the shared C return dispatcher.
+
+Iteration 1563 reuses the shared C GOSUB site state for nested dispatch.
+
+Iteration 1564 assigns each nested typed `GOSUB` a return-site ID.
+
+Iteration 1565 increments the site counter only for emitted typed calls.
+
+Iteration 1566 pushes the site ID onto the C GOSUB stack.
+
+Iteration 1567 branches to the target retained by typed IR.
+
+Iteration 1568 emits a resume label for the nested typed call.
+
+Iteration 1569 preserves nested GOSUB state through semantic-line recursion.
+
+Iteration 1570 keeps nested GOSUB site allocation shared with nested
+`ON GOSUB`.
+
+Iteration 1571 adds a unit regression for nested typed GOSUB in C output.
+
+Iteration 1572 verifies the nested GOSUB stack push in generated C.
+
+Iteration 1573 verifies the branch uses the typed-IR target.
+
+Iteration 1574 verifies the generated resume label matches the site ID.
+
+Iteration 1575 verifies the existing return dispatcher handles the site.
+
+Iteration 1576 verifies stale AST branch targets are not emitted.
+
+Iteration 1577 exercises the nested GOSUB emitter for the C64 backend.
+
+Iteration 1578 checks the C and C64 outputs against the same typed-IR
+contract.
+
+Iteration 1579 adds nested single-target GOSUB to the C conformance fixture.
+
+Iteration 1580 preserves the fixture's nested typed `ON GOSUB` coverage.
+
+Iteration 1581 verifies the fixture calls both typed GOSUB forms in order.
+
+Iteration 1582 updates expected runtime output for the additional call.
+
+Iteration 1583 compiles the generated C conformance program with GCC.
+
+Iteration 1584 verifies nested single-target GOSUB runtime return behavior.
+
+Iteration 1585 verifies nested computed GOSUB runtime return behavior.
+
+Iteration 1586 runs the focused nested C/C64 codegen regression.
+
+Iteration 1587 runs the focused generated-C runtime regression.
+
+Iteration 1588 refreshes Graphify after reviewing the C emitter change.
+
+Iteration 1589 confirms Graphify detects no code-graph topology changes.
+
+Iteration 1590 runs all 1,170 library tests successfully.
+
+Iteration 1591 runs all 19 CLI tests successfully.
+
+Iteration 1592 runs all 12 DOSBox and C target tests successfully.
+
+Iteration 1593 runs all 51 example tests successfully.
+
+Iteration 1594 runs all 110 JVM conformance tests successfully.
+
+Iteration 1595 runs the language conformance test successfully.
+
+Iteration 1596 runs all 11 general-purpose record tests successfully.
+
+Iteration 1597 runs all 40 record-method tests successfully.
+
+Iteration 1598 completes the full locked Cargo test suite successfully.
+
+Iteration 1599 checks the patch for whitespace errors.
+
+Iteration 1600 reviews the C emitter diff for unrelated changes.
+
+Iteration 1601 reviews the C conformance fixture and expected output.
+
+Iteration 1602 confirms generated Graphify data remains untracked.
+
+Iteration 1603 records nested typed single-target GOSUB support for C and C64.
+
+Iteration 1604 records runtime coverage for nested single and computed GOSUB.
+
+Iteration 1605 records successful full-suite validation for this checkpoint.
+
+Iteration 1606 stages only the emitter, conformance, and plan changes.
+
+Iteration 1607 commits the nested C GOSUB typed-IR codegen slice.
+
+Iteration 1608 verifies the checkpoint commit and resulting worktree status.
+
+Iteration 1609 records completion of this 50-iteration checkpoint; typed-IR-
+only codegen migration remains open.
