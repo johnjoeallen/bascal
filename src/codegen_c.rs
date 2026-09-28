@@ -25952,6 +25952,12 @@ mod dialect_tests {
             !output.contains("oldA") && !output.contains("oldB"),
             "AST ON GOTO replaced typed IR: {output}"
         );
+
+        let c64 = generate(&resolved, Target::C64).unwrap().app;
+        assert!(
+            c64.contains("switch (2)") && c64.contains("bcc_lbl_newb"),
+            "C64 did not consume typed ON GOTO: {c64}"
+        );
     }
 
     #[test]

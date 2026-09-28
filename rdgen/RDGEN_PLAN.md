@@ -8513,3 +8513,104 @@ Iteration 1358 records nested module and callable `ON GOTO` coverage.
 
 Iteration 1359 records this checkpoint; complete typed-IR-only codegen remains
 open.
+
+Iteration 1360 audits the C nested statement dispatcher after typed `ON GOTO`.
+
+Iteration 1361 checks the existing C64 profile against nested typed branches.
+
+Iteration 1362 adds C64 output assertions to the module `ON GOTO` regression.
+
+Iteration 1363 verifies the C64 selector is sourced from typed IR.
+
+Iteration 1364 verifies the C64 branch target is sourced from typed IR.
+
+Iteration 1365 confirms plain nested `GOTO` remains typed.
+
+Iteration 1366 confirms nested labels remain typed in module scope.
+
+Iteration 1367 confirms nested labels remain typed in callable scope.
+
+Iteration 1368 confirms nested `RESTORE` retains the typed data-label map.
+
+Iteration 1369 confirms nested `ERASE` retains fixed-array semantics.
+
+Iteration 1370 traces the GOSUB return-stack allocation path.
+
+Iteration 1371 traces the GOSUB ID counter through module statement emission.
+
+Iteration 1372 checks GOSUB IDs are assigned in source traversal order.
+
+Iteration 1373 checks fallback emission must not consume typed GOSUB IDs.
+
+Iteration 1374 checks nested RETURN dispatch requires the complete GOSUB count.
+
+Iteration 1375 records transactional GOSUB state as a separate migration slice.
+
+Iteration 1376 keeps stateful GOSUB outside the current typed `ON GOTO` change.
+
+Iteration 1377 confirms the existing AST GOSUB path remains available.
+
+Iteration 1378 confirms the root typed GOSUB path remains unchanged.
+
+Iteration 1379 confirms nested `ON GOSUB` does not enter the new `ON GOTO` arm.
+
+Iteration 1380 runs the module C nested `ON GOTO` test successfully.
+
+Iteration 1381 runs the callable C nested `ON GOTO` test successfully.
+
+Iteration 1382 verifies module output uses typed selector value `2`.
+
+Iteration 1383 verifies callable output uses typed selector value `2`.
+
+Iteration 1384 verifies C emits typed first and second target labels.
+
+Iteration 1385 verifies C64 emits typed branch targets.
+
+Iteration 1386 verifies AST target names do not appear in module output.
+
+Iteration 1387 verifies AST target names do not appear in callable output.
+
+Iteration 1388 checks out-of-range selector behavior retains the default branch.
+
+Iteration 1389 checks selector coercion uses the existing numeric C renderer.
+
+Iteration 1390 checks the C64 path does not introduce floating-point output.
+
+Iteration 1391 checks no resolver or typed-IR contract changed.
+
+Iteration 1392 checks no BASIC or JVM codegen backend behavior changed.
+
+Iteration 1393 confirms Graphify output remains generated analysis data.
+
+Iteration 1394 runs `cargo check --locked` successfully.
+
+Iteration 1395 runs all 1,166 library tests successfully.
+
+Iteration 1396 runs all 19 CLI tests successfully.
+
+Iteration 1397 runs all 11 DOSBox conformance tests successfully.
+
+Iteration 1398 runs all 51 example tests successfully.
+
+Iteration 1399 runs all 110 JVM conformance tests successfully.
+
+Iteration 1400 runs the language conformance test successfully.
+
+Iteration 1401 runs all 11 general-purpose record tests successfully.
+
+Iteration 1402 runs all 40 record-method tests successfully.
+
+Iteration 1403 confirms the doctest target passes.
+
+Iteration 1404 runs `git diff --check` successfully.
+
+Iteration 1405 checks formatting for the new C64 assertion.
+
+Iteration 1406 verifies only the C backend and iteration plan are changed.
+
+Iteration 1407 verifies no generated Graphify files enter the worktree.
+
+Iteration 1408 records C and C64 nested `ON GOTO` coverage.
+
+Iteration 1409 records this checkpoint; complete typed-IR-only codegen remains
+open.
