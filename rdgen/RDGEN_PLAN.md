@@ -9051,3 +9051,341 @@ Iteration 1608 verifies the checkpoint commit and resulting worktree status.
 
 Iteration 1609 records completion of this 50-iteration checkpoint; typed-IR-
 only codegen migration remains open.
+
+Iteration 1610 refreshes the code graph before the next cross-backend migration slice.
+
+Iteration 1611 queries Graphify for remaining typed-IR consumers in BASIC, C, and JVM.
+
+Iteration 1612 identifies `basic_semantic_callable_leaf` as a BASIC typed-IR statement
+    path.
+
+Iteration 1613 traces BASIC callable label rendering from semantic dispatch to generated
+    BASIC.
+
+Iteration 1614 inspects the source after Graphify identifies the BASIC codegen path.
+
+Iteration 1615 confirms callable and module semantic dispatch both render label
+    references.
+
+Iteration 1616 finds semantic `NamedReference` values wrapped in synthetic AST
+    identifiers.
+
+Iteration 1617 checks every `NamedReference` transfer rendered by the BASIC backend.
+
+Iteration 1618 includes typed `GOTO` targets in the renderer audit.
+
+Iteration 1619 includes typed `GOSUB` targets in the renderer audit.
+
+Iteration 1620 includes typed `ON ERROR GOTO` targets in the renderer audit.
+
+Iteration 1621 includes typed `ON ... GOTO` targets in the renderer audit.
+
+Iteration 1622 includes typed `ON ... GOSUB` targets in the renderer audit.
+
+Iteration 1623 includes typed `RESTORE` targets in the renderer audit.
+
+Iteration 1624 includes typed `RESUME` targets in the renderer audit.
+
+Iteration 1625 traces the shared target renderer to callable-entry lookup.
+
+Iteration 1626 confirms callable entries use generated BASIC line labels.
+
+Iteration 1627 confirms ordinary labels retain their source label token.
+
+Iteration 1628 confirms the AST target renderer also handles the integer-zero sentinel.
+
+Iteration 1629 keeps AST rendering of the `ON ERROR GOTO 0` sentinel unchanged.
+
+Iteration 1630 separates AST expression handling from semantic named-reference handling.
+
+Iteration 1631 adds a semantic target renderer accepting a typed-IR name.
+
+Iteration 1632 shares identifier-to-label mapping between AST and semantic renderers.
+
+Iteration 1633 preserves suffix-aware callable lookup for semantic names.
+
+Iteration 1634 preserves source label spelling rules for semantic names.
+
+Iteration 1635 removes synthetic AST construction for callable semantic transfers.
+
+Iteration 1636 removes synthetic AST construction for module semantic transfers.
+
+Iteration 1637 confirms both typed BASIC dispatch paths use semantic target rendering.
+
+Iteration 1638 checks no typed transfer path calls `label_target_text` through an AST
+    node.
+
+Iteration 1639 records the BASIC target-rendering bridge as removed.
+
+Iteration 1640 audits JVM semantic block dispatch against the semantic statement
+    variants.
+
+Iteration 1641 confirms JVM typed dispatch emits labels and `GOTO` from semantic IR.
+
+Iteration 1642 confirms JVM typed dispatch implements `ON ... GOTO` from semantic IR.
+
+Iteration 1643 checks JVM typed block state rollback when a statement is unsupported.
+
+Iteration 1644 traces the JVM backend's explicit `GOSUB` diagnostic in legacy dispatch.
+
+Iteration 1645 confirms JVM `GOSUB` is rejected as unsupported target syntax.
+
+Iteration 1646 confirms the JVM resolver/codegen contract does not promise GOSUB
+    support.
+
+Iteration 1647 retains the explicit JVM diagnostic directing users to functions or
+    procedures.
+
+Iteration 1648 does not introduce JVM GOSUB semantics in the codegen-only migration
+    slice.
+
+Iteration 1649 checks JVM nested blocks route through `emit_jvm_semantic_block`.
+
+Iteration 1650 checks JVM callable bodies route through typed semantic block dispatch.
+
+Iteration 1651 checks JVM semantic returns use typed return values.
+
+Iteration 1652 checks JVM semantic array declarations use resolver allocation facts.
+
+Iteration 1653 checks JVM `ON GOTO` uses semantic selector and target references.
+
+Iteration 1654 checks JVM unsupported cases return control to the compatibility dispatc
+    her.
+
+Iteration 1655 records the JVM GOSUB limitation as an explicit target-support boundary.
+
+Iteration 1656 audits BASIC method-expression statement dispatch.
+
+Iteration 1657 finds a no-argument typed method path constructing an AST receiver.
+
+Iteration 1658 traces the constructed receiver into legacy `call_lines`.
+
+Iteration 1659 compares the legacy path with the adjacent semantic method-call emitter.
+
+Iteration 1660 confirms the semantic emitter already accepts a typed receiver
+    expression.
+
+Iteration 1661 confirms the semantic emitter supplies the implicit `self` argument.
+
+Iteration 1662 confirms the semantic emitter retains ByRef copy-back handling.
+
+Iteration 1663 confirms the semantic emitter retains typed argument temporary suffixes.
+
+Iteration 1664 confirms the semantic emitter retains typed default argument handling.
+
+Iteration 1665 confirms the legacy no-argument branch duplicates semantic method
+    dispatch.
+
+Iteration 1666 removes the legacy AST receiver branch from semantic method statements.
+
+Iteration 1667 routes no-argument typed method statements through semantic call
+    emission.
+
+Iteration 1668 keeps AST method-call emission available to the AST compatibility path.
+
+Iteration 1669 records no JVM code change because its audited GOSUB behavior is
+    intentional.
+
+Iteration 1670 runs the focused BASIC semantic callable transfer regression.
+
+Iteration 1671 verifies semantic ON ERROR target maps to the generated procedure entry.
+
+Iteration 1672 runs the focused BASIC no-argument scalar method statement regression.
+
+Iteration 1673 verifies the typed receiver value reaches the method call site.
+
+Iteration 1674 verifies stale AST method output does not replace typed semantic output.
+
+Iteration 1675 runs the typed BASIC method call receiver regression.
+
+Iteration 1676 verifies a typed function receiver prelude precedes the method dispatch.
+
+Iteration 1677 runs the BASIC scalar method ByRef copy-back regression.
+
+Iteration 1678 verifies typed ByRef mutation is copied back to caller storage.
+
+Iteration 1679 runs the callable-focused test group across compiler backends.
+
+Iteration 1680 confirms typed callable DIM behavior remains intact across backends.
+
+Iteration 1681 confirms typed callable return handling remains intact in BASIC.
+
+Iteration 1682 confirms typed callable array shape handling remains intact in C.
+
+Iteration 1683 confirms typed callable file-operation handling remains intact in JVM.
+
+Iteration 1684 runs the full locked Cargo test suite.
+
+Iteration 1685 passes all 1,170 library tests.
+
+Iteration 1686 passes all 19 CLI tests.
+
+Iteration 1687 passes all 12 DOSBox and C target tests.
+
+Iteration 1688 passes all 51 example tests.
+
+Iteration 1689 passes all 110 JVM conformance tests.
+
+Iteration 1690 passes the language conformance test.
+
+Iteration 1691 passes all 11 general-purpose record tests.
+
+Iteration 1692 passes all 40 record-method tests.
+
+Iteration 1693 completes all Cargo test groups with no failures.
+
+Iteration 1694 refreshes Graphify after the BASIC codegen call-path change.
+
+Iteration 1695 confirms Graphify reports the updated code graph topology.
+
+Iteration 1696 checks the BASIC codegen patch for whitespace errors.
+
+Iteration 1697 reviews the diff for unintended changes to AST compatibility dispatch.
+
+Iteration 1698 confirms generated Graphify outputs remain excluded from the source
+    commit.
+
+Iteration 1699 records that JVM GOSUB remains explicitly unsupported.
+
+Iteration 1700 reviews the final BASIC target-rendering helper contract.
+
+Iteration 1701 confirms AST label rendering still accepts identifier targets.
+
+Iteration 1702 confirms AST label rendering still handles the zero sentinel.
+
+Iteration 1703 confirms typed semantic references do not construct AST expressions.
+
+Iteration 1704 confirms typed semantic callable method dispatch does not call AST
+    `call_lines`.
+
+Iteration 1705 confirms user-defined label references preserve target token formatting.
+
+Iteration 1706 confirms callable entry references preserve generated label mapping.
+
+Iteration 1707 confirms typed suffix-bearing function names preserve callable lookup.
+
+Iteration 1708 confirms `ON ERROR GOTO` semantic references retain callable mapping.
+
+Iteration 1709 confirms BASIC semantic target rendering remains shared across call
+    sites.
+
+Iteration 1710 confirms no changes were made to semantic IR contracts.
+
+Iteration 1711 confirms no changes were made to resolver diagnostics.
+
+Iteration 1712 confirms no changes were made to the JVM supported-language contract.
+
+Iteration 1713 confirms C and C64 behavior from the previous checkpoint remains covered.
+
+Iteration 1714 reviews the focused test outputs for generated BASIC assertions.
+
+Iteration 1715 reviews the full-suite output for backend-specific regressions.
+
+Iteration 1716 checks `git diff --check` after the plan update.
+
+Iteration 1717 checks the iteration sequence begins at 1610.
+
+Iteration 1718 checks the iteration sequence ends at 1759.
+
+Iteration 1719 checks the plan records the actual implementation and validation steps.
+
+Iteration 1720 confirms the 150 requested migration iterations are recorded.
+
+Iteration 1721 stages only BASIC codegen and the migration plan.
+
+Iteration 1722 checks the staged patch for whitespace errors.
+
+Iteration 1723 commits the BASIC typed-reference and method-dispatch slice.
+
+Iteration 1724 verifies the resulting checkpoint commit identifier.
+
+Iteration 1725 verifies the worktree is clean after the commit.
+
+Iteration 1726 records BASIC semantic target rendering without synthetic AST nodes.
+
+Iteration 1727 records typed BASIC method calls through semantic IR dispatch.
+
+Iteration 1728 records successful full-suite validation for this checkpoint.
+
+Iteration 1729 records this BASIC codegen slice; typed-IR-only codegen migration remains
+    open.
+
+Iteration 1730 audits semantic named references across the BASIC label transfer
+    statements.
+
+Iteration 1731 confirms no resolver or typed-IR contract change is needed for this
+    renderer refactor.
+
+Iteration 1732 verifies semantic transfer rendering receives names directly from
+    NamedReference.
+
+Iteration 1733 verifies AST transfer rendering remains isolated in the legacy AST
+    dispatcher.
+
+Iteration 1734 confirms no Expr::Ident construction remains in the semantic target
+    renderers.
+
+Iteration 1735 confirms only the typed no-argument method branch was removed from AST
+    call_lines.
+
+Iteration 1736 checks argument-bearing typed methods still use semantic argument
+    rendering.
+
+Iteration 1737 checks method receiver type comes from the semantic expression value
+    type.
+
+Iteration 1738 checks method callable lookup uses the semantic receiver type and member
+    name.
+
+Iteration 1739 confirms method default arguments remain supplied by semantic parameter
+    metadata.
+
+Iteration 1740 confirms method temporaries retain semantic parameter suffixes.
+
+Iteration 1741 confirms method ByRef parameters preserve caller copy-back behavior.
+
+Iteration 1742 confirms callable transfer rendering still resolves declared procedure
+    entries.
+
+Iteration 1743 confirms ordinary source labels still use the BASIC label-token renderer.
+
+Iteration 1744 confirms transfer target suffix parsing is unchanged by the helper
+    extraction.
+
+Iteration 1745 confirms module and callable target rendering use one semantic-name
+    helper.
+
+Iteration 1746 confirms test fixtures distinguish semantic method output from stale AST
+    output.
+
+Iteration 1747 confirms focused method tests exercise zero-argument and argument-bearing
+    calls.
+
+Iteration 1748 confirms focused callable-transfer tests exercise semantic procedure
+    labels.
+
+Iteration 1749 confirms the codegen change is confined to BASIC semantic dispatch.
+
+Iteration 1750 confirms C, C64, and JVM source files are unchanged in this slice.
+
+Iteration 1751 reviews Graphify's updated BASIC call path after the dispatch refactor.
+
+Iteration 1752 confirms Graphify reports the new helper edges in its refreshed graph.
+
+Iteration 1753 confirms no generated graph files are included in the implementation
+    diff.
+
+Iteration 1754 confirms full validation ran after the final BASIC codegen edits.
+
+Iteration 1755 confirms all focused regressions ran before the full Cargo test suite.
+
+Iteration 1756 confirms the full test suite passed with no ignored or failed test
+    groups.
+
+Iteration 1757 confirms git diff --check reports no whitespace errors.
+
+Iteration 1758 stages the BASIC backend and plan, commits the slice, and verifies the
+    clean worktree.
+
+Iteration 1759 completes this 150-iteration checkpoint; typed-IR-only codegen migration
+    remains open.

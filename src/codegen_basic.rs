@@ -4724,7 +4724,7 @@ fn basic_semantic_intrinsics(
         SemanticStatementKind as Kind,
     };
     fn render_target(generator: &CodeGenerator, name: &str) -> String {
-        generator.label_target_text(&Expr::Ident(BasicIdent::parse(name)))
+        generator.semantic_label_target_text(name)
     }
     fn visit(
         generator: &mut CodeGenerator,
@@ -6514,7 +6514,7 @@ fn basic_semantic_callable_leaf(
 ) -> Option<Vec<String>> {
     use crate::semantic_ir::{PrintDestination, ReturnValue, SemanticStatementKind as Kind};
     let render_target = |target: &crate::semantic_ir::NamedReference| {
-        generator.label_target_text(&Expr::Ident(BasicIdent::parse(&target.name)))
+        generator.semantic_label_target_text(&target.name)
     };
     match &semantic.kind {
         Kind::Try { .. } => basic_semantic_callable_try(generator, semantic, function),
@@ -8033,32 +8033,6 @@ fn basic_semantic_expression_statement(
             // whether this array name is a whole-array argument or a scalar
             // value. Preserve the legacy statement emission in that case.
             return None;
-        }
-    }
-    if let ExpressionKind::Member {
-        base: Some(base),
-        member,
-        arguments: Some(arguments),
-    } = &expression.kind
-    {
-        if arguments.is_empty() {
-            if let ExpressionKind::Name(name) = &base.kind {
-                let receiver = match base.value_type {
-                    SemanticValueType::String => Some(TypeSuffix::String),
-                    SemanticValueType::Integer => Some(TypeSuffix::Integer),
-                    SemanticValueType::Long => Some(TypeSuffix::Long),
-                    SemanticValueType::Single => Some(TypeSuffix::Single),
-                    SemanticValueType::Double => Some(TypeSuffix::Double),
-                    SemanticValueType::Unknown | SemanticValueType::Boolean => None,
-                };
-                if let Some(info) = receiver
-                    .and_then(|receiver| generator.method_info(receiver, member))
-                    .cloned()
-                {
-                    let receiver = Expr::Ident(BasicIdent::parse(name));
-                    return Some(generator.call_lines(&info, &[receiver], function));
-                }
-            }
         }
     }
     if let ExpressionKind::Member {
@@ -11210,15 +11184,23 @@ impl CodeGenerator {
     /// function table instead of rendering the identifier text as-is.
     fn label_target_text(&self, target: &Expr) -> String {
         match target {
-            Expr::Ident(ident) => match self.function_info(ident) {
-                Some(info) => info.label.clone(),
-                None => user_label_token(&ident.as_basic()),
-            },
+            Expr::Ident(ident) => self.label_target_ident(ident),
             Expr::Integer(0) => "0".to_string(),
             _ => unreachable!(
                 "goto/gosub/on/resume targets are label identifiers (or the `on error goto 0` sentinel), enforced at parse time"
             ),
         }
+    }
+
+    fn label_target_ident(&self, ident: &BasicIdent) -> String {
+        match self.function_info(ident) {
+            Some(info) => info.label.clone(),
+            None => user_label_token(&ident.as_basic()),
+        }
+    }
+
+    fn semantic_label_target_text(&self, name: &str) -> String {
+        self.label_target_ident(&BasicIdent::parse(name))
     }
 
     /// Declared rank of the array named `name`, resolved in whatever scope
