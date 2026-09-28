@@ -8614,3 +8614,113 @@ Iteration 1408 records C and C64 nested `ON GOTO` coverage.
 
 Iteration 1409 records this checkpoint; complete typed-IR-only codegen remains
 open.
+
+Iteration 1410 begins the next typed-IR codegen audit at JVM callable dispatch.
+
+Iteration 1411 traces callable emission from typed block dispatch to aligned
+statement fallback.
+
+Iteration 1412 confirms JVM DATA values are collected into the class data pool.
+
+Iteration 1413 confirms module-level typed dispatch treats DATA declarations as
+already materialized.
+
+Iteration 1414 confirms nested JVM semantic-block dispatch treats DATA as a
+typed no-op.
+
+Iteration 1415 identifies callable DATA as the inconsistent typed-dispatch
+case.
+
+Iteration 1416 verifies callable AST fallback could emit stale DATA from the
+AST.
+
+Iteration 1417 selects the callable dispatcher as the owning codegen backend
+path.
+
+Iteration 1418 preserves DATA pool construction in the existing typed-IR
+collector.
+
+Iteration 1419 adds an explicit typed DATA no-op to JVM callable dispatch.
+
+Iteration 1420 documents why callable DATA emits no JVM bytecode.
+
+Iteration 1421 adds a regression with AST DATA value 1 and typed DATA value 73.
+
+Iteration 1422 verifies the typed callable DATA fixture parses.
+
+Iteration 1423 verifies the differing AST and typed callable DATA resolve.
+
+Iteration 1424 verifies the JVM backend emits the typed DATA pool value.
+
+Iteration 1425 verifies the AST DATA pool value does not leak into output.
+
+Iteration 1426 runs the focused callable DATA dispatch regression.
+
+Iteration 1427 confirms the focused regression passes.
+
+Iteration 1428 inspects module-level and callable DATA emission contracts.
+
+Iteration 1429 confirms this slice requires no resolver or typed-IR contract
+change.
+
+Iteration 1430 confirms no BASIC, C, or JVM runtime DATA behavior changes.
+
+Iteration 1431 confirms DATA initializer collection remains module-wide.
+
+Iteration 1432 confirms callable dispatch consumes the established class pool.
+
+Iteration 1433 confirms the new branch avoids AST-based DATA reconstruction.
+
+Iteration 1434 confirms the new regression distinguishes typed output from AST
+fallback.
+
+Iteration 1435 runs all 1,167 library tests successfully.
+
+Iteration 1436 runs all 19 CLI tests successfully.
+
+Iteration 1437 runs all 11 DOSBox conformance tests successfully.
+
+Iteration 1438 runs all 51 example tests successfully.
+
+Iteration 1439 runs all 110 JVM conformance tests successfully.
+
+Iteration 1440 runs the language conformance test successfully.
+
+Iteration 1441 runs all 11 general-purpose record tests successfully.
+
+Iteration 1442 runs all 40 record-method tests successfully.
+
+Iteration 1443 confirms the doctest target passes.
+
+Iteration 1444 checks the changed JVM code and test for formatting issues.
+
+Iteration 1445 checks the iteration plan entry sequence.
+
+Iteration 1446 inspects the final diff for unrelated changes.
+
+Iteration 1447 confirms generated Graphify output is not part of the change.
+
+Iteration 1448 confirms the change is limited to JVM callable dispatch and its
+regression.
+
+Iteration 1449 records typed callable DATA dispatch coverage.
+
+Iteration 1450 records full-suite validation for this checkpoint.
+
+Iteration 1451 confirms typed DATA stays in the JVM class pool.
+
+Iteration 1452 confirms callable DATA declarations remain bytecode-free.
+
+Iteration 1453 confirms the AST fallback regression is prevented.
+
+Iteration 1454 confirms there are no downstream typed-IR producer changes.
+
+Iteration 1455 confirms there are no cross-backend semantic changes.
+
+Iteration 1456 prepares this JVM dispatch slice as a separate checkpoint.
+
+Iteration 1457 records that full typed-IR-only codegen remains open.
+
+Iteration 1458 verifies the diff before commit.
+
+Iteration 1459 records completion of this 50-iteration checkpoint.

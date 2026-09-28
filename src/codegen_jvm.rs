@@ -6733,6 +6733,9 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
                             );
                         }
                         Kind::Global { .. } => {}
+                        // DATA items are materialized in the class pool before
+                        // callable statement dispatch; declarations emit no bytecode.
+                        Kind::Data(_) => {}
                         Kind::Erase(names) => {
                             return emit_jvm_semantic_erase(names, &context, &mut body);
                         }
@@ -13407,6 +13410,29 @@ mod tests {
         );
         assert!(!main.contains("ldc \"1\""), "AST DATA item leaked: {main}");
         assert!(!output.contains("first"), "AST READ target leaked: {output}");
+    }
+
+    #[test]
+    fn jvm_callable_data_dispatch_uses_typed_pool_without_ast_fallback() {
+        let filename = "jvm_typed_callable_data.bcl";
+        let ast_source = "procedure loadData()\ndata 1\nend procedure\nloadData()\nend\n";
+        let semantic_source = "procedure loadData()\ndata 73\nend procedure\nloadData()\nend\n";
+        let parsed = crate::parse_source(filename.to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(filename, semantic_source)
+            .expect("typed callable DATA parses");
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic))
+            .expect("typed callable DATA resolves");
+
+        let output = super::generate(&resolved).expect("typed callable DATA emits");
+        assert!(
+            output.contains("ldc \"73\""),
+            "typed DATA item missing: {output}"
+        );
+        assert!(
+            !output.contains("ldc \"1\""),
+            "AST DATA item leaked: {output}"
+        );
     }
 
     #[test]
