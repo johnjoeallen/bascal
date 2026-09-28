@@ -7556,6 +7556,31 @@ fn emit_c_semantic_for_body(
                 "    goto bcc_lbl_{};\n",
                 target.name.to_ascii_lowercase()
             )),
+            Kind::OnBranch {
+                selector,
+                branch: crate::semantic_ir::BranchKind::Goto,
+                targets,
+            } => {
+                let Some((selector, is_float)) = render_c_semantic_numeric_expression_context(
+                    selector,
+                    needs_math,
+                    supports_float,
+                    Some(arrays),
+                    Some(functions),
+                ) else {
+                    return false;
+                };
+                let selector = coerce_numeric(selector, is_float, false, needs_math);
+                out.push_str(&format!("    switch ({selector}) {{\n"));
+                for (index, target) in targets.iter().enumerate() {
+                    out.push_str(&format!(
+                        "    case {}: goto bcc_lbl_{};\n",
+                        index + 1,
+                        target.name.to_ascii_lowercase()
+                    ));
+                }
+                out.push_str("    default: break;\n    }\n");
+            }
             // DATA items are collected into the program-wide pool before
             // block emission, including callable and nested block bodies.
             Kind::Data(_) => {}
@@ -25891,6 +25916,86 @@ mod dialect_tests {
         assert!(
             !worker.contains("oldtarget"),
             "AST callable control transfer replaced typed IR: {worker}"
+        );
+    }
+
+    #[test]
+    fn c_nested_semantic_on_goto_uses_typed_selector_and_targets() {
+        let ast_source = "if true then\non 1 goto oldA, oldB\nend if\noldA:\nend\noldB:\nend\n";
+        let semantic_source =
+            "if true then\non 2 goto newA, newB\nend if\nnewA:\nend\nnewB:\nend\n";
+        let parsed = parse_source("c_nested_semantic_on_goto.bcl".to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_nested_semantic_on_goto.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(
+            output.contains("switch (2)"),
+            "typed ON GOTO selector missing: {output}"
+        );
+        assert!(
+            output.contains("case 1: goto bcc_lbl_newa;"),
+            "typed ON GOTO first target missing: {output}"
+        );
+        assert!(
+            output.contains("case 2: goto bcc_lbl_newb;"),
+            "typed ON GOTO second target missing: {output}"
+        );
+        assert!(
+            !output.contains("oldA") && !output.contains("oldB"),
+            "AST ON GOTO replaced typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn c_callable_nested_semantic_on_goto_uses_typed_selector_and_targets() {
+        let ast_source = "procedure worker()\nif true then\non 1 goto oldA, oldB\nend if\noldA:\noldB:\nend procedure\nworker()\nend\n";
+        let semantic_source = "procedure worker()\nif true then\non 2 goto newA, newB\nend if\nnewA:\nnewB:\nend procedure\nworker()\nend\n";
+        let parsed = parse_source(
+            "c_callable_nested_semantic_on_goto.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_callable_nested_semantic_on_goto.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        let worker = output
+            .split("void bf_i_worker(void) {")
+            .nth(1)
+            .unwrap_or_else(|| panic!("generated worker missing: {output}"))
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            worker.contains("switch (2)"),
+            "typed callable ON GOTO selector missing: {worker}"
+        );
+        assert!(
+            worker.contains("case 1: goto bcc_lbl_newa;"),
+            "typed callable ON GOTO first target missing: {worker}"
+        );
+        assert!(
+            worker.contains("case 2: goto bcc_lbl_newb;"),
+            "typed callable ON GOTO second target missing: {worker}"
+        );
+        assert!(
+            !worker.contains("oldA") && !worker.contains("oldB"),
+            "AST callable ON GOTO replaced typed IR: {worker}"
         );
     }
 

@@ -8412,3 +8412,104 @@ Iteration 1308 records that C nested control transfers now use typed IR.
 
 Iteration 1309 records this checkpoint; complete typed-IR-only codegen remains
 open.
+
+Iteration 1310 audits nested C control-flow statement coverage.
+
+Iteration 1311 traces existing module-level typed `ON GOTO` emission.
+
+Iteration 1312 traces existing callable root-level typed branch emission.
+
+Iteration 1313 confirms `GOSUB` requires mutable return-stack state.
+
+Iteration 1314 scopes this slice to typed `GOTO` branches.
+
+Iteration 1315 uses the typed numeric selector in nested dispatch.
+
+Iteration 1316 preserves the existing 1-based `ON GOTO` case numbering.
+
+Iteration 1317 preserves the default branch fallthrough behavior.
+
+Iteration 1318 preserves C's established generated label prefix and casing.
+
+Iteration 1319 adds nested typed `ON GOTO` to the C block emitter.
+
+Iteration 1320 emits each typed branch target as a generated C `goto`.
+
+Iteration 1321 declines unsupported selector expressions without partial output.
+
+Iteration 1322 keeps `GOSUB` on its existing stateful compatibility path.
+
+Iteration 1323 adds a module nested `ON GOTO` regression test.
+
+Iteration 1324 verifies the nested selector comes from typed IR.
+
+Iteration 1325 verifies the first nested branch target comes from typed IR.
+
+Iteration 1326 verifies the second nested branch target comes from typed IR.
+
+Iteration 1327 verifies mismatched AST targets do not leak into module output.
+
+Iteration 1328 adds a callable nested `ON GOTO` regression test.
+
+Iteration 1329 keeps both callable target labels in their legal procedure scope.
+
+Iteration 1330 verifies the callable selector comes from typed IR.
+
+Iteration 1331 verifies callable branch targets come from typed IR.
+
+Iteration 1332 verifies mismatched AST targets do not leak into callable output.
+
+Iteration 1333 corrects an initially invalid test fixture with an out-of-scope label.
+
+Iteration 1334 runs the module nested `ON GOTO` regression successfully.
+
+Iteration 1335 runs the callable nested `ON GOTO` regression successfully.
+
+Iteration 1336 checks nested plain `GOTO` remains covered.
+
+Iteration 1337 checks root-level `ON GOTO` remains unchanged.
+
+Iteration 1338 checks typed labels remain emitted from their own statements.
+
+Iteration 1339 checks no `GOSUB` return IDs are allocated in this path.
+
+Iteration 1340 checks the typed-IR contract remains unchanged.
+
+Iteration 1341 checks the resolver remains responsible for label scope.
+
+Iteration 1342 refreshes Graphify after the nested control-flow dispatch change.
+
+Iteration 1343 runs `cargo check --locked` successfully.
+
+Iteration 1344 runs all 1,166 library tests successfully.
+
+Iteration 1345 runs all 19 CLI tests successfully.
+
+Iteration 1346 runs all 11 DOSBox conformance tests successfully.
+
+Iteration 1347 runs all 51 example tests successfully.
+
+Iteration 1348 runs all 110 JVM conformance tests successfully.
+
+Iteration 1349 runs the language conformance test successfully.
+
+Iteration 1350 runs all 11 general-purpose record tests successfully.
+
+Iteration 1351 runs all 40 record-method tests successfully.
+
+Iteration 1352 confirms the doctest target passes.
+
+Iteration 1353 runs `git diff --check` successfully.
+
+Iteration 1354 checks formatting for the new C regression code.
+
+Iteration 1355 confirms the worktree contains only the C backend and plan edits.
+
+Iteration 1356 confirms Graphify generated output remains untracked.
+
+Iteration 1357 verifies no BASIC or JVM backend behavior changed.
+
+Iteration 1358 records nested module and callable `ON GOTO` coverage.
+
+Iteration 1359 records this checkpoint; complete typed-IR-only codegen remains
+open.
