@@ -1,15 +1,13 @@
 include!(env!("RDGEN_GENERATED"));
 
 fn scan_terminal(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
-    if name == "any_char" && source.get(position..)?.starts_with("*/") {
-        return None;
-    }
     let character = source.get(position..)?.chars().next()?;
     let accepted = match name {
         "letter" => character.is_ascii_alphabetic(),
         "digit" => character.is_ascii_digit(),
         "hex_digit" => character.is_ascii_hexdigit(),
         "any_char" => true,
+        "any_char_except_block_comment_close" => !source.get(position..)?.starts_with("*/"),
         "any_char_except_quote" => character != '"',
         "any_char_except_newline" => character != '\n',
         "suffix" => matches!(character, '%' | '$' | '!' | '#' | '&'),

@@ -80,7 +80,9 @@ impl<'a> Lexer<'a> {
                 tokens.push(self.literal()?);
                 continue;
             }
-            if ch.is_ascii_digit() || (ch == '-' && self.peek_char().is_some_and(|next| next.is_ascii_digit())) {
+            if ch.is_ascii_digit()
+                || (ch == '-' && self.peek_char().is_some_and(|next| next.is_ascii_digit()))
+            {
                 let mut end = start + ch.len_utf8();
                 self.next_char();
                 while let Some((index, part)) = self.current {
@@ -383,9 +385,9 @@ impl<'a> Parser<'a> {
             return Err(self.error("prefix operator declaration requires an operator literal"));
         }
         self.expect_ident("binds_below")?;
-        let binds_below = self
-            .take_literal()
-            .ok_or_else(|| self.error("prefix operator declaration requires a binds_below operator literal"))?;
+        let binds_below = self.take_literal().ok_or_else(|| {
+            self.error("prefix operator declaration requires a binds_below operator literal")
+        })?;
         let constructor = if self.accept_arrow() {
             Some(self.parse_constructor()?)
         } else {
@@ -577,7 +579,10 @@ impl<'a> Parser<'a> {
         self.expect_symbol('{')?;
         let mut terminators = Vec::new();
         while !self.accept_symbol('}') {
-            terminators.push(self.take_literal().ok_or_else(|| self.error("repeat terminator must be a literal"))?);
+            terminators.push(
+                self.take_literal()
+                    .ok_or_else(|| self.error("repeat terminator must be a literal"))?,
+            );
             self.accept_symbol(',');
         }
         if terminators.is_empty() {
@@ -1007,7 +1012,9 @@ fn resolve_element(
                 ))
             }
         }
-        rdgen_ir::Element::Fold { base, step, span, .. } => {
+        rdgen_ir::Element::Fold {
+            base, step, span, ..
+        } => {
             if !rule_names.contains(base) {
                 return Err(format!(
                     "fold references undefined base rule '{}' at {}",
@@ -1038,6 +1045,7 @@ fn is_builtin_terminal(name: &str) -> bool {
             | "java_ident_start"
             | "java_ident_part"
             | "any_char"
+            | "any_char_except_block_comment_close"
             | "any_char_except_quote"
             | "any_char_except_newline"
             | "any_char_except_slash"
@@ -1108,12 +1116,7 @@ fn validate_precedence(
             .is_some_and(|rule| is_sole_climb_rule(rule));
         let mut literals = std::collections::HashSet::new();
         let mut visited = std::collections::HashSet::new();
-        collect_reachable_literals(
-            &table.rule,
-            &rule_map,
-            &mut visited,
-            &mut literals,
-        );
+        collect_reachable_literals(&table.rule, &rule_map, &mut visited, &mut literals);
         let mut operators = std::collections::HashSet::new();
         for level in &table.levels {
             for operator in &level.operators {
@@ -1332,7 +1335,12 @@ fn collect_literal_values(
                 );
             }
             rdgen_ir::Element::SameLine { element, .. } => {
-                collect_literal_values(std::slice::from_ref(element.as_ref()), rules, visited, literals);
+                collect_literal_values(
+                    std::slice::from_ref(element.as_ref()),
+                    rules,
+                    visited,
+                    literals,
+                );
             }
             rdgen_ir::Element::Cut { .. } => {}
             rdgen_ir::Element::LineEnd { .. } => {}
@@ -1386,7 +1394,11 @@ fn validate_repetition_elements(
                         rule_name
                     ));
                 }
-                validate_repetition_elements(std::slice::from_ref(element.as_ref()), nullable, rule_name)?;
+                validate_repetition_elements(
+                    std::slice::from_ref(element.as_ref()),
+                    nullable,
+                    rule_name,
+                )?;
             }
             rdgen_ir::Element::Group { alternatives, .. } => {
                 for alternative in alternatives {
@@ -1418,10 +1430,20 @@ fn first_rule_names<'a>(
                 }
             }
             rdgen_ir::Element::Repeat { element, .. } => {
-                first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
+                first_rule_names(
+                    std::slice::from_ref(element.as_ref()),
+                    names,
+                    nullable,
+                    output,
+                );
             }
             rdgen_ir::Element::SameLine { element, .. } => {
-                first_rule_names(std::slice::from_ref(element.as_ref()), names, nullable, output);
+                first_rule_names(
+                    std::slice::from_ref(element.as_ref()),
+                    names,
+                    nullable,
+                    output,
+                );
             }
             rdgen_ir::Element::Climb { atom, .. } => {
                 if names.contains(atom.as_str()) {
@@ -1479,8 +1501,7 @@ fn nullable_element(
         rdgen_ir::Element::Rule { rule, .. } => nullable.contains(rule.as_str()),
         rdgen_ir::Element::Climb { atom, .. } => nullable.contains(atom.as_str()),
         rdgen_ir::Element::Fold { base, .. } => nullable.contains(base.as_str()),
-        | rdgen_ir::Element::Token { .. }
-        | rdgen_ir::Element::Literal { .. } => false,
+        rdgen_ir::Element::Token { .. } | rdgen_ir::Element::Literal { .. } => false,
     }
 }
 
@@ -1576,7 +1597,8 @@ mod tests {
 
     #[test]
     fn rejects_precedence_for_unknown_rule() {
-        let error = compile("grammar Expr; precedence missing { left \"+\"; } expr = \"x\";").unwrap_err();
+        let error =
+            compile("grammar Expr; precedence missing { left \"+\"; } expr = \"x\";").unwrap_err();
         assert!(error.contains("precedence table references undefined rule 'missing'"));
     }
 
@@ -1609,19 +1631,15 @@ mod tests {
 
     #[test]
     fn rejects_empty_precedence_operators() {
-        let error = compile(
-            "grammar Expr; precedence expr { left \"\"; } expr = \"x\";",
-        )
-        .unwrap_err();
+        let error =
+            compile("grammar Expr; precedence expr { left \"\"; } expr = \"x\";").unwrap_err();
         assert!(error.contains("precedence operator in rule 'expr' must not be empty"));
     }
 
     #[test]
     fn rejects_precedence_operators_missing_from_grammar() {
-        let error = compile(
-            "grammar Expr; precedence expr { left \"+\"; } expr = \"x\";",
-        )
-        .unwrap_err();
+        let error =
+            compile("grammar Expr; precedence expr { left \"+\"; } expr = \"x\";").unwrap_err();
         assert!(error.contains(
             "precedence operator \"+\" in rule 'expr' does not occur as a grammar literal"
         ));
@@ -1749,7 +1767,9 @@ mod tests {
             .find(|rule| rule.name == "expr")
             .expect("expr rule");
         match &rule.alternatives[0].elements[0] {
-            rdgen_ir::Element::Fold { base, step, label, .. } => {
+            rdgen_ir::Element::Fold {
+                base, step, label, ..
+            } => {
                 assert_eq!(base, "atom");
                 assert_eq!(step, "suffix");
                 assert_eq!(label.as_deref(), Some("value"));
@@ -1784,9 +1804,8 @@ mod tests {
             "grammar Postfix; start = \".\" , member: \"y\" => Member(base: base, member: member);",
         )
         .unwrap_err();
-        assert!(error.contains(
-            "constructor field 'base' references unknown label 'base' in rule 'start'"
-        ));
+        assert!(error
+            .contains("constructor field 'base' references unknown label 'base' in rule 'start'"));
     }
 
     #[test]
@@ -1804,11 +1823,10 @@ mod tests {
 
     #[test]
     fn rejects_identity_forwarding_a_constant_field() {
-        let error = compile(
-            "grammar Bounds; start = \"x\" => Identity(value: -1);",
-        )
-        .unwrap_err();
-        assert!(error.contains("Identity constructor in rule 'start' cannot forward a constant field"));
+        let error = compile("grammar Bounds; start = \"x\" => Identity(value: -1);").unwrap_err();
+        assert!(
+            error.contains("Identity constructor in rule 'start' cannot forward a constant field")
+        );
     }
 
     #[test]
@@ -1870,7 +1888,8 @@ mod tests {
 
     #[test]
     fn rejects_left_recursion_through_nullable_rule_reference() {
-        let error = compile("grammar Bad; expr = prefix, expr | atom; prefix = ε; atom = \"x\";").unwrap_err();
+        let error = compile("grammar Bad; expr = prefix, expr | atom; prefix = ε; atom = \"x\";")
+            .unwrap_err();
         assert!(error.contains("left recursion through expr -> expr"));
     }
 
@@ -1898,7 +1917,8 @@ mod tests {
 
     #[test]
     fn preserves_same_line_wrappers_in_the_ir() {
-        let grammar = compile("grammar Demo; start = \"return\", [ same_line expr ]; expr = \"x\";").unwrap();
+        let grammar =
+            compile("grammar Demo; start = \"return\", [ same_line expr ]; expr = \"x\";").unwrap();
         let optional = &grammar.rules[0].alternatives[0].elements[1];
         assert!(matches!(
             optional,
@@ -1947,10 +1967,8 @@ mod tests {
 
     #[test]
     fn rejects_duplicate_or_unknown_semantic_output_types() {
-        let duplicate = compile(
-            "grammar Demo; output atom Expr; output atom Other; atom = \"a\";",
-        )
-        .unwrap_err();
+        let duplicate = compile("grammar Demo; output atom Expr; output atom Other; atom = \"a\";")
+            .unwrap_err();
         assert!(duplicate.contains("duplicate output declaration"));
         let unknown = compile("grammar Demo; output missing Expr; atom = \"a\";").unwrap_err();
         assert!(unknown.contains("unknown rule 'missing'"));
@@ -2000,7 +2018,10 @@ mod tests {
         let grammar = compile(
             "grammar Demo; start statement; statement = expr; expr = primary; primary = identifier, \"(\", [ expr ], \")\" | \"{\", field_init, \"}\" | identifier; field_init = identifier, \":\", expr; identifier = letter, { letter };",
         );
-        assert!(grammar.is_ok(), "expression assignment fixture: {grammar:?}");
+        assert!(
+            grammar.is_ok(),
+            "expression assignment fixture: {grammar:?}"
+        );
     }
 
     #[test]
@@ -2041,7 +2062,9 @@ mod tests {
             "grammar Demo; start wrapper; wrapper = left: \"a\", right: \"b\" => Identity(left: left, right: right);",
         )
         .unwrap_err();
-        assert!(error.contains("Identity constructor in rule 'wrapper' must bind exactly one field"));
+        assert!(
+            error.contains("Identity constructor in rule 'wrapper' must bind exactly one field")
+        );
     }
 
     #[test]

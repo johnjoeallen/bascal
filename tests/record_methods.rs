@@ -213,6 +213,18 @@ fn record_method_mutation_of_self_is_visible_to_the_caller() {
     assert_eq!(run_basic_via_bas(source).trim_end(), "5");
 }
 
+#[test]
+fn c_semantic_byref_calls_flatten_record_member_arguments() {
+    let source = "program p\nrecord Counter\nvalue: int32\nend record\nfunction bump&(byref value&)\nvalue& = value& + 1\nreturn value&\nend function\nlet counter = { value: 4 }\nprint bump&(counter.value)\nprint counter.value\nend\n";
+    assert_eq!(run_basic_via_bas(source).trim_end(), "5\n5");
+}
+
+#[test]
+fn c_semantic_string_byref_calls_flatten_record_member_arguments() {
+    let source = "program p\nrecord Label\nvalue: string(20)\nend record\nfunction suffix$(byref value$)\nvalue$ = value$ + \"!\"\nreturn value$\nend function\nlet label = { value: \"typed\" }\nprint suffix$(label.value)\nprint label.value\nend\n";
+    assert_eq!(run_basic_via_bas(source).trim_end(), "typed!\ntyped!");
+}
+
 /// A method taking arguments beyond the implicit receiver.
 #[test]
 fn record_method_accepts_arguments() {

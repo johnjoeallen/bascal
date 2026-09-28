@@ -80,15 +80,23 @@ pub fn compile_source(
     source: &str,
 ) -> Result<String, Vec<Diagnostic>> {
     let filename = filename.into();
-    let program = parse_source(filename, source)?;
+    let program = parse_source(filename.clone(), source)?;
     let lower::Lowered {
         program,
         synthesized_buffer_names,
+        lowered_record_files,
     } = lower::lower(program)?;
-    let semantic_module = semantic_ir::parse_and_adapt(source).ok();
-    let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
-    print_legacy_form_warnings(&resolved.program);
-    let conflicts = codegen::check_generated_name_conflicts(&resolved.program);
+    let mut semantic_module = semantic_ir::parse_and_adapt_named(filename.clone(), source)
+        .map_err(|error| vec![semantic_ir::parse_diagnostic(filename, &error)])?;
+    semantic_module.lowered_record_files = lowered_record_files;
+    let resolved = resolver::resolve_with_semantic(program, Some(semantic_module))?;
+    let module = resolved
+        .semantic_module
+        .as_ref()
+        .expect("compile_source requires generated semantic IR");
+    print_semantic_legacy_form_warnings(module);
+    let conflicts =
+        codegen::check_generated_name_conflicts_semantic(module, &resolved.common_blocks);
     if !conflicts.is_empty() {
         return Err(conflicts);
     }
@@ -168,13 +176,21 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let mut visited = HashSet::new();
     let mut program = load_program_recursive(input, true, options, &mut visited)?;
 
+    // Load generated semantic metadata before resolving the root's shared
+    // header so its typed declaration is authoritative for COMMON lookup.
+    // Compatibility AST header handling remains available only when
+    // generated semantic parsing fails.
+    let mut semantic_warnings = Vec::new();
+    let semantic_module = load_semantic_module_recursive(
+        input,
+        true,
+        options,
+        &mut HashSet::new(),
+        &mut semantic_warnings,
+    )?;
+
     // Resolve the shared COMMON block if the program declares one.
-    if let Some(shared_name) = program
-        .program_decl
-        .as_ref()
-        .and_then(|d| d.shared.as_deref())
-        .map(str::to_string)
-    {
+    if let Some(shared_name) = program_shared_name(&program, Some(&semantic_module)) {
         if let Some(shared_path) = resolve_shared_path(&shared_name, input, options) {
             program.common = load_shared_file(&shared_path, &shared_name)?;
         }
@@ -184,20 +200,32 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let lower::Lowered {
         program,
         synthesized_buffer_names,
+        lowered_record_files,
     } = lower::lower(program)?;
     // Keep the generated semantic frontend attached for the ordinary file
     // compilation path too.  A legacy parser acceptance that the generated
     // frontend does not yet recognize remains an explicit compatibility
     // fallback; it must not prevent the legacy backend pipeline from
     // compiling an otherwise valid source file.
-    let semantic_module = load_semantic_module_recursive(
-        input,
-        true,
-        options,
-        &mut HashSet::new(),
-    );
+    let semantic_module = Some({
+        let mut module = semantic_module;
+        module.lowered_record_files = lowered_record_files;
+        module
+    });
     let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
-    print_legacy_form_warnings(&resolved.program);
+    for finding in semantic_warnings {
+        eprintln!("{finding}");
+    }
+    if matches!(options.target, Target::Basic | Target::Fbc) {
+        let conflicts = if let Some(module) = resolved.semantic_module.as_ref() {
+            codegen::check_generated_name_conflicts_semantic(module, &resolved.common_blocks)
+        } else {
+            codegen::check_generated_name_conflicts(&resolved.program)
+        };
+        if !conflicts.is_empty() {
+            return Err(conflicts);
+        }
+    }
     match options.target {
         Target::Basic => {
             let basic = CodeGenerator::new()
@@ -207,24 +235,11 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
             Ok(basic)
         }
         Target::Fbc => {
-            if resolved
+            let module = resolved
                 .semantic_module
                 .as_ref()
-                .is_some_and(crate::semantic_ir::SemanticModule::contains_try)
-            {
-                return Err(vec![Diagnostic::error(
-                    diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
-                    "`try`/`catch` is permanently unsupported with --target fbc; fbc's \
-                     `RESUME`/`RESUME NEXT` cannot resume at an arbitrary later line the \
-                     way `RESUME <lineno>` does under real BASCOM (verified: fbc's parser \
-                     rejects `RESUME <lineno>`/`RESUME <label>` outright under every `-lang` \
-                     dialect, and the obvious GOSUB-plus-`RESUME NEXT` workaround crashes at \
-                     runtime with fbc's own \"illegal resume\" error -- see GitHub issue #153 \
-                     for the full investigation). Use `--target basic` (verified against real \
-                     BASCOM) or `on error goto`/`resume` for a program that must build under fbc.",
-                )]);
-            }
-            reject_fbc_incompatible_constructs(&resolved.program)?;
+                .expect("compile_file requires generated semantic IR");
+            reject_semantic_fbc_incompatible_constructs(module)?;
             let basic = CodeGenerator::new()
                 .with_line_numbers(options.line_numbers)
                 .with_synthesized_buffer_names(synthesized_buffer_names)
@@ -254,21 +269,107 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     }
 }
 
-/// `Target::Fbc` generates the exact same BASIC as `Target::Basic`
-/// (`codegen_basic` doesn't distinguish them at all), except that `try`/
-/// `catch`'s generated `RESUME <lineno>` is real, correct classic BASIC --
-/// verified against real IBM/Microsoft BASCOM under `dosbox-x` -- that
-/// `fbc` (FreeBASIC) nonetheless rejects outright, in every `-lang`
-/// dialect, with no switch that unlocks it (see GitHub issue #100's
-/// investigation and #153, tracking a real fix). Until #153 lands, reject
-/// `try`/`catch` here with a clear diagnostic rather than emit BASIC that
-/// compiles under `Target::Basic`'s own real-BASCOM verification but then
-/// silently fails under `fbc`.
-fn reject_fbc_incompatible_constructs(program: &ast::Program) -> Result<(), Vec<Diagnostic>> {
+fn semantic_source_position(
+    source: &crate::semantic_ir::SemanticSource,
+    span: crate::rdgen_frontend::SourceSpan,
+) -> diagnostics::SourcePos {
+    let mut offset = span.start.min(source.text.len());
+    let end = span.end.min(source.text.len());
+    while offset < end {
+        let character = source.text[offset..].chars().next().unwrap();
+        if !character.is_whitespace() {
+            break;
+        }
+        offset += character.len_utf8();
+    }
+    while !source.text.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    let prefix = &source.text[..offset];
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+    diagnostics::SourcePos::new(source.filename.clone(), line, column)
+}
+
+fn reject_semantic_fbc_incompatible_constructs(
+    module: &crate::semantic_ir::SemanticModule,
+) -> Result<(), Vec<Diagnostic>> {
+    use crate::semantic_ir::{SemanticStatement, SemanticStatementKind as Kind};
+
+    fn visit(
+        statements: &[SemanticStatement],
+        source: &crate::semantic_ir::SemanticSource,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for statement in statements {
+            match &statement.kind {
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    diagnostics.push(Diagnostic::error(
+                        semantic_source_position(source, statement.span),
+                        "`try`/`catch` is permanently unsupported with --target fbc; fbc's \
+                         `RESUME`/`RESUME NEXT` cannot resume at an arbitrary later line the \
+                         way `RESUME <lineno>` does under real BASCOM (verified: fbc's parser \
+                         rejects `RESUME <lineno>`/`RESUME <label>` outright under every `-lang` \
+                         dialect, and the obvious GOSUB-plus-`RESUME NEXT` workaround crashes at \
+                         runtime with fbc's own \"illegal resume\" error -- see GitHub issue #153 \
+                         for the full investigation). Use `--target basic` (verified against real \
+                         BASCOM) or `on error goto`/`resume` for a program that must build under fbc."
+                            .to_string(),
+                    ));
+                    visit(body, source, diagnostics);
+                    if let Some(catch) = catch {
+                        visit(&catch.body, source, diagnostics);
+                    }
+                    visit(finally_body, source, diagnostics);
+                }
+                Kind::If {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit(then_body, source, diagnostics);
+                    visit(else_body, source, diagnostics);
+                }
+                Kind::For { body, .. }
+                | Kind::While { body, .. }
+                | Kind::Do { body, .. }
+                | Kind::Line(body) => visit(body, source, diagnostics),
+                Kind::SelectCase {
+                    cases, else_body, ..
+                } => {
+                    for case in cases {
+                        visit(&case.body, source, diagnostics);
+                    }
+                    visit(else_body, source, diagnostics);
+                }
+                _ => {}
+            }
+        }
+    }
+
     let mut diagnostics = Vec::new();
-    reject_try_catch(&program.statements, &mut diagnostics);
-    for function in &program.functions {
-        reject_try_catch(&function.body, &mut diagnostics);
+    for (index, statement) in module.statements.iter().enumerate() {
+        let source = module
+            .statement_sources
+            .get(index)
+            .and_then(|source_index| module.sources.get(*source_index))
+            .or_else(|| module.sources.first());
+        if let Some(source) = source {
+            visit(std::slice::from_ref(statement), source, &mut diagnostics);
+        }
+    }
+    for callable in &module.callables {
+        let source = module
+            .sources
+            .get(callable.source_index)
+            .or_else(|| module.sources.first());
+        if let Some(source) = source {
+            visit(&callable.body, source, &mut diagnostics);
+        }
     }
     if diagnostics.is_empty() {
         Ok(())
@@ -277,45 +378,23 @@ fn reject_fbc_incompatible_constructs(program: &ast::Program) -> Result<(), Vec<
     }
 }
 
-fn reject_try_catch(statements: &[ast::Stmt], diagnostics: &mut Vec<Diagnostic>) {
-    for statement in statements {
-        match &statement.kind {
-            ast::Statement::TryCatch { try_body, catch, finally_body } => {
-                diagnostics.push(Diagnostic::error(
-                    statement.pos.clone(),
-                    "`try`/`catch` is permanently unsupported with --target fbc; fbc's \
-                     `RESUME`/`RESUME NEXT` cannot resume at an arbitrary later line the \
-                     way `RESUME <lineno>` does under real BASCOM (verified: fbc's parser \
-                     rejects `RESUME <lineno>`/`RESUME <label>` outright under every \
-                     `-lang` dialect, and the obvious GOSUB-plus-`RESUME NEXT` workaround \
-                     crashes at runtime with fbc's own \"illegal resume\" error -- see \
-                     GitHub issue #153 for the full investigation). Use `--target basic` \
-                     (verified against real BASCOM) or `on error goto`/`resume` for a \
-                     program that must build under fbc."
-                        .to_string(),
-                ));
-                reject_try_catch(try_body, diagnostics);
-                if let Some(catch) = catch {
-                    reject_try_catch(&catch.body, diagnostics);
-                }
-                reject_try_catch(finally_body, diagnostics);
-            }
-            ast::Statement::If { then_body, else_body, .. } => {
-                reject_try_catch(then_body, diagnostics);
-                reject_try_catch(else_body, diagnostics);
-            }
-            ast::Statement::For { body, .. }
-            | ast::Statement::While { body, .. }
-            | ast::Statement::Do { body, .. } => reject_try_catch(body, diagnostics),
-            ast::Statement::SelectCase { cases, else_body, .. } => {
-                for case in cases {
-                    reject_try_catch(&case.body, diagnostics);
-                }
-                reject_try_catch(else_body, diagnostics);
-            }
-            _ => {}
-        }
+/// Resolve the shared-module declaration from typed IR when available. This
+/// keeps COMMON lookup aligned with the same semantic header used by the
+/// driver and backends; compatibility callers may still provide AST alone.
+fn program_shared_name(
+    program: &ast::Program,
+    semantic_module: Option<&semantic_ir::SemanticModule>,
+) -> Option<String> {
+    if let Some(module) = semantic_module {
+        return match &module.header {
+            Some(semantic_ir::ModuleHeader::Program { shared, .. }) => shared.clone(),
+            _ => None,
+        };
     }
+    program
+        .program_decl
+        .as_ref()
+        .and_then(|declaration| declaration.shared.clone())
 }
 
 /// Parses the root source file and every transitively required library, but
@@ -333,26 +412,19 @@ pub fn check_file(input: &Path, options: &CompileOptions) -> Result<(), Vec<Diag
 
     let mut visited = HashSet::new();
     let program = load_program_recursive(input, true, &options, &mut visited)?;
-    if let Some(shared_name) = program
-        .program_decl
-        .as_ref()
-        .and_then(|d| d.shared.as_deref())
-    {
-        if let Some(shared_path) = resolve_shared_path(shared_name, input, &options) {
-            load_shared_file(&shared_path, shared_name)?;
+    let semantic_module = fs::read_to_string(input).ok().and_then(|source| {
+        semantic_ir::parse_and_adapt_named(input.display().to_string(), &source).ok()
+    });
+    if let Some(shared_name) = program_shared_name(&program, semantic_module.as_ref()) {
+        if let Some(shared_path) = resolve_shared_path(&shared_name, input, &options) {
+            load_shared_file(&shared_path, &shared_name)?;
         }
     }
     Ok(())
 }
 
-/// Prints every legacy-form finding from `resolver::check_legacy_forms` to
-/// stderr as a warning -- advisory only, so unlike `resolver::validate`
-/// this never turns into an `Err`; a legacy BASIC form with a BASCAL
-/// equivalent still compiles, it just gets named so new/edited source can
-/// be steered toward the structured spelling (see resolver.rs's own doc
-/// comment on `check_legacy_forms`).
-fn print_legacy_form_warnings(program: &ast::Program) {
-    for finding in resolver::check_legacy_forms(program) {
+fn print_semantic_legacy_form_warnings(module: &semantic_ir::SemanticModule) {
+    for finding in module.legacy_form_diagnostics() {
         eprintln!("{finding}");
     }
 }
@@ -464,7 +536,6 @@ pub(crate) fn load_program_recursive(
             functions: Vec::new(),
             records: Vec::new(),
             typed_arrays: Vec::new(),
-            typed_array_refs: Vec::new(),
         });
     }
 
@@ -546,7 +617,6 @@ pub(crate) fn load_program_recursive(
         functions: Vec::new(),
         records: Vec::new(),
         typed_arrays: program.typed_arrays.clone(),
-        typed_array_refs: program.typed_array_refs.clone(),
     };
 
     for declaration in &program.declarations {
@@ -576,22 +646,1174 @@ fn load_semantic_module_recursive(
     _is_root: bool,
     options: &CompileOptions,
     visited: &mut HashSet<PathBuf>,
-) -> Option<semantic_ir::SemanticModule> {
+    warnings: &mut Vec<Diagnostic>,
+) -> Result<semantic_ir::SemanticModule, Vec<Diagnostic>> {
     let input = normalize_path(input);
     if !visited.insert(input.clone()) {
-        return None;
+        return Ok(semantic_ir::SemanticModule {
+            span: crate::rdgen_frontend::SourceSpan { start: 0, end: 0 },
+            sources: Vec::new(),
+            header: None,
+            dependencies: Vec::new(),
+            records: Vec::new(),
+            lowered_record_files: Vec::new(),
+            callables: Vec::new(),
+            statements: Vec::new(),
+            statement_sources: Vec::new(),
+        });
     }
-    let source = fs::read_to_string(&input).ok()?;
-    let mut module = semantic_ir::parse_and_adapt(&source).ok()?;
+    let source = fs::read_to_string(&input).map_err(|error| {
+        vec![Diagnostic::error(
+            diagnostics::SourcePos::new(input.display().to_string(), 1, 1),
+            format!("failed to read source file: {error}"),
+        )]
+    })?;
+    let mut module = semantic_ir::parse_and_adapt_named(input.display().to_string(), &source)
+        .map_err(|error| vec![semantic_ir::parse_diagnostic(input.display().to_string(), &error)])?;
+    warnings.extend(module.legacy_form_diagnostics());
     let dependencies = module.dependencies.clone();
     // Each dependency is prepended, so walk the declarations backwards to
     // retain the legacy loader's left-to-right sibling order.
     for dependency in dependencies.into_iter().rev() {
-        let path = resolve_required_symbol(&dependency.path, &input, options).ok()?;
-        let dependency = load_semantic_module_recursive(&path, false, options, visited)?;
+        let path = resolve_required_symbol(&dependency.path, &input, options)?;
+        let dependency = load_semantic_module_recursive(&path, false, options, visited, warnings)?;
         module.prepend_dependency(dependency);
     }
-    Some(module)
+    for dependency in &mut module.dependencies {
+        dependency.resolved = true;
+    }
+    Ok(module)
+}
+
+#[cfg(test)]
+mod semantic_driver_differential_tests {
+    use super::*;
+
+    #[test]
+    fn shared_header_lookup_prefers_semantic_program_header() {
+        let ast = parse_source(
+            "shared_header_ast.bcl".to_string(),
+            "program astProgram shared astCommon\nend\n",
+        )
+        .expect("AST header parses");
+        let semantic = semantic_ir::parse_and_adapt_named(
+            "shared_header_typed.bcl",
+            "program typedProgram shared typedCommon\nend\n",
+        )
+        .expect("semantic header parses");
+
+        assert_eq!(
+            program_shared_name(&ast, Some(&semantic)),
+            Some("typedCommon".to_string())
+        );
+        assert_eq!(
+            program_shared_name(&ast, None),
+            Some("astCommon".to_string())
+        );
+
+        let semantic_without_shared = semantic_ir::parse_and_adapt_named(
+            "shared_header_typed.bcl",
+            "program typedProgram\nend\n",
+        )
+        .expect("semantic header without COMMON parses");
+        assert_eq!(
+            program_shared_name(&ast, Some(&semantic_without_shared)),
+            None
+        );
+    }
+
+    #[test]
+    fn required_library_callable_uses_typed_return_call_across_backends() {
+        let directory = tempfile::tempdir().expect("temporary project directory");
+        let library_dir = directory.path().join("com/example");
+        fs::create_dir_all(&library_dir).expect("library directory");
+        fs::write(
+            library_dir.join("base.bcl"),
+            "library com.example.base\nfunction identity%(value%)\nreturn value%\nend function\n",
+        )
+        .expect("base library source");
+        fs::write(
+            library_dir.join("math.bcl"),
+            "library com.example.math\nrequire com.example.base\nfunction twice%(value%)\nreturn identity%(value%) * 2\nend function\n",
+        )
+        .expect("library source");
+        let root = directory.path().join("main.bcl");
+        fs::write(
+            &root,
+            "program main\nrequire com.example.math\nresult% = twice%(3)\nprint result%\nend\n",
+        )
+        .expect("root source");
+        let options = CompileOptions {
+            library_dirs: vec![directory.path().to_path_buf()],
+            ..CompileOptions::new()
+        };
+
+        let mut ast_visited = HashSet::new();
+        let ast = load_program_recursive(&root, true, &options, &mut ast_visited)
+            .expect("load legacy dependency graph");
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            lowered_record_files,
+        } = lower::lower(ast).expect("lower dependency graph");
+        let mut semantic_warnings = Vec::new();
+        let semantic = load_semantic_module_recursive(
+            &root,
+            true,
+            &options,
+            &mut HashSet::new(),
+            &mut semantic_warnings,
+        )
+        .expect("load generated semantic dependency graph");
+        let mut semantic = semantic;
+        assert!(semantic
+            .dependencies
+            .iter()
+            .all(|dependency| dependency.resolved));
+        semantic.lowered_record_files = lowered_record_files;
+        assert!(semantic_warnings.is_empty());
+
+        fn output(
+            program: ast::Program,
+            semantic: Option<semantic_ir::SemanticModule>,
+            buffers: &std::collections::HashSet<String>,
+            target: Target,
+        ) -> String {
+            let resolved = resolver::resolve_with_semantic(program, semantic)
+                .expect("resolve differential program");
+            match target {
+                Target::Basic => crate::codegen::CodeGenerator::new()
+                    .with_synthesized_buffer_names(buffers.clone())
+                    .generate(&resolved)
+                    .expect("transpile BASIC"),
+                Target::C => {
+                    crate::codegen_c::generate(&resolved, Target::C)
+                        .expect("transpile C")
+                        .app
+                }
+                Target::Jvm => crate::codegen_jvm::generate(&resolved).expect("transpile JVM"),
+                Target::Fbc | Target::C64 => unreachable!(),
+            }
+        }
+
+        for target in [Target::Basic, Target::C, Target::Jvm] {
+            let semantic_output = output(
+                program.clone(),
+                Some(semantic.clone()),
+                &synthesized_buffer_names,
+                target,
+            );
+            let legacy_output = output(program.clone(), None, &synthesized_buffer_names, target);
+            if target == Target::Basic {
+                assert!(
+                    semantic_output.contains("GOSUB 10\n    BCCT1% = identityResult0%\n    twiceResult0% = BCCT1% * 2"),
+                    "typed BASIC return call must execute and capture the required-library result: {semantic_output}"
+                );
+                assert_eq!(
+                    semantic_output.contains("BCCT1% = identityResult0%"),
+                    !legacy_output.contains("BCCT1% = identityResult0%"),
+                    "typed BASIC return call must capture its call result before arithmetic"
+                );
+            } else {
+                assert_eq!(semantic_output, legacy_output, "target: {target:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn callable_global_name_migration_matches_typed_source_across_backends() {
+        let filename = "driver_callable_global.bcl";
+        let ast_source = "function choose%(flag%)\nif flag% = 1 then\nglobal legacy%\nlegacy% = 3\nreturn legacy%\nend if\nreturn 0\nend function\nprint choose%(1)\nend\n";
+        let semantic_source = "function choose%(flag%)\nif flag% = 1 then\nglobal canonical%\ncanonical% = 42\nreturn canonical%\nend if\nreturn 0\nend function\nprint choose%(1)\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).unwrap();
+        let module = semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap();
+        let resolved = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+
+        let basic = crate::codegen::CodeGenerator::new()
+            .with_synthesized_buffer_names(synthesized_buffer_names.clone())
+            .generate(&resolved)
+            .expect("transpile typed BASIC");
+        let c = crate::codegen_c::generate(&resolved, Target::C)
+            .expect("transpile typed C")
+            .app;
+        let jvm = crate::codegen_jvm::generate(&resolved).expect("transpile typed JVM");
+        let semantic_ast = parse_source(filename.to_string(), semantic_source)
+            .expect("typed source also parses through compatibility AST");
+        let lower::Lowered {
+            program: semantic_ast,
+            synthesized_buffer_names: semantic_ast_buffers,
+            ..
+        } = lower::lower(semantic_ast).expect("lower typed-source AST");
+        let compatibility = resolver::resolve(semantic_ast).expect("resolve typed-source AST");
+        assert!(compatibility
+            .function_global_declarations
+            .values()
+            .flatten()
+            .any(|ident| ident.name.eq_ignore_ascii_case("canonical")));
+        let legacy_basic = crate::codegen::CodeGenerator::new()
+            .with_synthesized_buffer_names(semantic_ast_buffers)
+            .generate(&compatibility)
+            .expect("transpile compatibility BASIC");
+        let legacy_c = crate::codegen_c::generate(&compatibility, Target::C)
+            .expect("transpile compatibility C")
+            .app;
+        let legacy_jvm =
+            crate::codegen_jvm::generate(&compatibility).expect("transpile compatibility JVM");
+        assert_eq!(basic, legacy_basic, "BASIC semantic/compatibility output");
+        assert_eq!(c, legacy_c, "C semantic/compatibility output");
+        assert_ne!(
+            jvm, legacy_jvm,
+            "semantic and compatibility label layouts differ"
+        );
+        assert!(
+            jvm.contains(".field public static g1 I") && jvm.contains("putstatic Program/g1 I")
+        );
+        assert!(
+            legacy_jvm.contains(".field public static g1 I")
+                && legacy_jvm.contains("putstatic Program/g1 I")
+                && !legacy_jvm.contains("istore 1")
+        );
+        for output in [&basic, &c] {
+            let normalized = output.to_ascii_lowercase();
+            assert!(
+                normalized.contains("canonical") && !normalized.contains("legacy"),
+                "backend output retained the AST global name:\n{output}"
+            );
+        }
+        assert!(
+            jvm.contains("ldc 42") && !jvm.contains("ldc 3"),
+            "JVM bytecode did not retain semantic assignment value:\n{jvm}"
+        );
+    }
+
+    #[test]
+    fn semantic_array_bounds_match_driver_output_across_backends() {
+        let filename = "driver_semantic_array_bounds.bcl";
+        let ast_source = "dim values%(1)\nvalues%(0) = 2\nprint values%(0)\nend\n";
+        let semantic_source = "dim values%(4)\nvalues%(4) = 7\nprint values%(4)\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).unwrap();
+        let module = semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap();
+        let typed = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+
+        let semantic_ast = parse_source(filename.to_string(), semantic_source).unwrap();
+        let lower::Lowered {
+            program: semantic_ast,
+            synthesized_buffer_names: semantic_ast_buffers,
+            ..
+        } = lower::lower(semantic_ast).unwrap();
+        let compatibility = resolver::resolve(semantic_ast).unwrap();
+
+        fn outputs(resolved: &resolver::ResolvedProgram, buffers: &HashSet<String>) -> [String; 3] {
+            [
+                crate::codegen::CodeGenerator::new()
+                    .with_synthesized_buffer_names(buffers.clone())
+                    .generate(resolved)
+                    .expect("transpile BASIC"),
+                crate::codegen_c::generate(resolved, Target::C)
+                    .expect("transpile C")
+                    .app,
+                crate::codegen_jvm::generate(resolved).expect("transpile JVM"),
+            ]
+        }
+        let typed_output = outputs(&typed, &synthesized_buffer_names);
+        let compatibility_output = outputs(&compatibility, &semantic_ast_buffers);
+        for (backend, output) in ["BASIC", "C", "JVM"].into_iter().zip(&typed_output) {
+            let normalized = output.to_ascii_lowercase();
+            assert!(
+                normalized.contains("7") && !normalized.contains("= 2"),
+                "{backend} output did not use the typed assignment: {output}"
+            );
+        }
+        assert!(typed_output[0].contains("values%(4)"));
+        assert!(
+            typed_output[1].contains("bv_i_values[5]") && typed_output[1].contains("[(4)] = 7")
+        );
+        assert!(typed_output[2].contains("ldc 7") && !typed_output[2].contains("ldc 2"));
+        assert_eq!(
+            typed_output, compatibility_output,
+            "typed and compatibility backends"
+        );
+    }
+
+    #[test]
+    fn compile_source_transpiles_typed_module_statement_operands() {
+        for (filename, statement, expected) in [
+            (
+                "driver_typed_locate_calls.bcl",
+                "locate tick%(), tick%()",
+                "LOCATE BCCT1%, BCCT2%",
+            ),
+            (
+                "driver_typed_color_calls.bcl",
+                "color tick%(), tick%()",
+                "COLOR BCCT1%, BCCT2%",
+            ),
+            (
+                "driver_typed_width_calls.bcl",
+                "width #tick%(), tick%()",
+                "WIDTH #BCCT1%, BCCT2%",
+            ),
+            (
+                "driver_typed_poke_out_calls.bcl",
+                "poke tick%(), tick%()\nout tick%(), tick%()",
+                "OUT BCCT3%, BCCT4%",
+            ),
+        ] {
+            let source = format!("function tick%()\nreturn 9\nend function\n{statement}\nend\n");
+            let output = compile_source(filename, &source)
+                .expect("compile source through the generated frontend and BASIC backend");
+
+            assert!(
+                output.contains(expected),
+                "driver output must evaluate typed operands for {statement}: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn compile_file_preserves_typed_module_statement_operands() {
+        let directory = tempfile::tempdir().expect("temporary typed BASIC project");
+        let input = directory.path().join("typed_statements.bcl");
+        let source = "program typed\nfunction tick%()\nreturn 9\nend function\nlocate tick%(), tick%()\ncolor tick%(), tick%()\nwidth #tick%(), tick%()\npoke tick%(), tick%()\nout tick%(), tick%()\nend\n";
+        fs::write(&input, source).expect("write typed BASIC source");
+
+        let direct_basic = compile_source(input.display().to_string(), source)
+            .expect("compile typed module statements through generated frontend");
+        for target in [Target::Basic, Target::Fbc] {
+            let from_file = compile_file(
+                &input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| panic!("compile file for {target:?}: {diagnostics:?}"));
+            assert_eq!(
+                from_file, direct_basic,
+                "file driver output differs from direct typed {target:?} codegen"
+            );
+        }
+        assert!(
+            direct_basic.contains("LOCATE BCCT1%, BCCT2%")
+                && direct_basic.contains("COLOR BCCT3%, BCCT4%")
+                && direct_basic.contains("WIDTH #BCCT5%, BCCT6%")
+                && direct_basic.contains("POKE BCCT7%, BCCT8%")
+                && direct_basic.contains("OUT BCCT9%, BCCT10%"),
+            "BASIC driver output lost typed operand evaluation: {}",
+            direct_basic
+        );
+
+        // Use a statement subset accepted by C and JVM to verify their
+        // compile_file target dispatch independently of BASIC-only I/O.
+        let cross_target_input = directory.path().join("typed_call_assignment.bcl");
+        let cross_target_source =
+            "program typed\nfunction tick%()\nreturn 9\nend function\nresult% = tick%()\nend\n";
+        fs::write(&cross_target_input, cross_target_source)
+            .expect("write cross-target typed source");
+        let parsed = parse_source(
+            cross_target_input.display().to_string(),
+            cross_target_source,
+        )
+        .unwrap();
+        let lower::Lowered {
+            program,
+            lowered_record_files,
+            ..
+        } = lower::lower(parsed).unwrap();
+        let mut module = semantic_ir::parse_and_adapt_named(
+            cross_target_input.display().to_string(),
+            cross_target_source,
+        )
+        .expect("adapt cross-target typed IR");
+        module.lowered_record_files = lowered_record_files;
+        let typed = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+        for (target, expected) in [
+            (
+                Target::C,
+                crate::codegen_c::generate(&typed, Target::C)
+                    .expect("transpile typed C")
+                    .app,
+            ),
+            (
+                Target::Jvm,
+                crate::codegen_jvm::generate(&typed).expect("transpile typed JVM"),
+            ),
+        ] {
+            let from_file = compile_file(
+                &cross_target_input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| panic!("compile file for {target:?}: {diagnostics:?}"));
+            assert_eq!(
+                from_file, expected,
+                "file driver output differs from direct typed {target:?} codegen"
+            );
+        }
+    }
+
+    #[test]
+    fn compile_file_preserves_semantic_record_field_types_across_backends() {
+        let directory = tempfile::tempdir().expect("temporary typed record project");
+        let filename = "typed_record_fields.bcl";
+        let input = directory.path().join(filename);
+        let source = "program typed\nrecord Entry\nid: int16\nname: string(8)\nend record\nlet row = { id: 1, name: \"ast\" }\nrow.id = 7\nrow.name = \"typed\"\nprint row.id, row.name\nend\n";
+        fs::write(&input, source).expect("write typed record source");
+
+        let parsed = parse_source(filename.to_string(), source).expect("parse typed record source");
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).expect("lower typed record source");
+        let module = semantic_ir::parse_and_adapt_named(filename, source)
+            .expect("adapt typed record source");
+        let resolved = resolver::resolve_with_semantic(program, Some(module))
+            .expect("resolve typed record source");
+        let expected = [
+            crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)
+                .expect("transpile typed record to BASIC"),
+            crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed record to C")
+                .app,
+            crate::codegen_jvm::generate(&resolved).expect("transpile typed record to JVM"),
+        ];
+
+        for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
+            .into_iter()
+            .zip(expected)
+        {
+            let actual = compile_file(
+                &input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| {
+                panic!("compile typed record through {target:?}: {diagnostics:?}")
+            });
+            assert_eq!(actual, expected, "{target:?} driver output");
+        }
+    }
+
+    #[test]
+    fn compile_file_preserves_lowered_record_file_layouts_across_backends() {
+        let directory = tempfile::tempdir().expect("temporary typed record-file project");
+        let filename = "typed_record_file.bcl";
+        let input = directory.path().join(filename);
+        let source = "program typed\nrecord Entry\nid: int16\nname: string(8)\nend record\nfile db as Entry = open(\"entries.dat\")\ndb[1] = { id: 7, name: \"typed\" }\nend\n";
+        fs::write(&input, source).expect("write typed record-file source");
+
+        let source_name = input.display().to_string();
+        let parsed =
+            parse_source(source_name.clone(), source).expect("parse typed record-file source");
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            lowered_record_files,
+        } = lower::lower(parsed).expect("lower typed record-file source");
+        let mut module = semantic_ir::parse_and_adapt_named(source_name, source)
+            .expect("adapt typed record-file source");
+        module.lowered_record_files = lowered_record_files;
+        let resolved = resolver::resolve_with_semantic(program, Some(module))
+            .expect("resolve typed record-file source");
+        let expected = [
+            crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)
+                .expect("transpile typed record file to BASIC"),
+            crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed record file to C")
+                .app,
+            crate::codegen_jvm::generate(&resolved).expect("transpile typed record file to JVM"),
+        ];
+
+        for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
+            .into_iter()
+            .zip(expected)
+        {
+            let actual = compile_file(
+                &input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| {
+                panic!("compile typed record file through {target:?}: {diagnostics:?}")
+            });
+            assert_eq!(actual, expected, "{target:?} driver output");
+        }
+    }
+
+    #[test]
+    fn compile_file_transpiles_scalar_method_byref_prints_across_backends() {
+        let directory = tempfile::tempdir().expect("temporary scalar method project");
+        let filename = "typed_scalar_method_byref_print.bcl";
+        let input = directory.path().join(filename);
+        let source = "program typed\nmethod adjust%[integer](byref delta%)\ndelta%=delta%+9\nreturn self%+delta%\nend method\nvalue%=20\nimplicit%=3\nprint value%.adjust(implicit%)\nend\n";
+        fs::write(&input, source).expect("write typed scalar method source");
+
+        let parsed = parse_source(filename.to_string(), source).expect("parse typed method");
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).expect("lower typed method");
+        let module =
+            semantic_ir::parse_and_adapt_named(filename, source).expect("adapt typed method");
+        let resolved =
+            resolver::resolve_with_semantic(program, Some(module)).expect("resolve typed method");
+        let expected = [
+            crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)
+                .expect("transpile typed method to BASIC"),
+            crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed method to C")
+                .app,
+            crate::codegen_jvm::generate(&resolved).expect("transpile typed method to JVM"),
+        ];
+
+        for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
+            .into_iter()
+            .zip(expected)
+        {
+            let actual = compile_file(
+                &input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| {
+                panic!("compile scalar method through {target:?}: {diagnostics:?}")
+            });
+            assert_eq!(actual, expected, "{target:?} driver output");
+        }
+    }
+
+    #[test]
+    fn compile_file_transpiles_scalar_method_assignment_and_condition_across_backends() {
+        let directory = tempfile::tempdir().expect("temporary scalar method expression project");
+        let filename = "typed_scalar_method_expressions.bcl";
+        let input = directory.path().join(filename);
+        let source = "program typed\nmethod adjust%[integer](delta%)\nreturn self%+delta%\nend method\nmethod bump%[integer](byref target%)\ntarget%=target%+1\nreturn self%\nend method\nfunction transformed%(input%)\nreturn input%.adjust(3)\nend function\nvalue%=20\nbound%=8\nresult%=value%.adjust(7)\nif value%.adjust(0) then\nprint result%\nend if\nwhile value%.adjust(-20)\nprint result%\nend while\ndo while value%.adjust(-20)\nprint result%\nend do\ndo\nprint result%\nloop until value%.adjust(0)\nfor snapshot%=value% to value%.bump(value%)\nprint snapshot%\nend for\nalias%=5\nfor alias%=alias% to alias%.bump(alias%)\nprint alias%\nend for\nfor stepSnapshot%=value% to bound% step bound%.bump(bound%)\nprint stepSnapshot%\nend for\nbodyLimit%=3\nfor bodyIndex%=1 to bodyLimit%\nbodyLimit%=0\nprint bodyIndex%\nend for\ndim index%\nfor index%=value%.adjust(1) to value%.adjust(2) step value%.adjust(0)\nprint index%\nend for\nselect case value%.adjust(7)\ncase 27\nprint result%\ncase else\nprint 0\nend select\nprint value%.adjust(1)+value%.adjust(2)\nprint transformed%(value%)\nend\n";
+        fs::write(&input, source).expect("write typed scalar method expressions");
+
+        let parsed = parse_source(filename.to_string(), source).expect("parse typed methods");
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).expect("lower typed methods");
+        let module =
+            semantic_ir::parse_and_adapt_named(filename, source).expect("adapt typed methods");
+        let resolved =
+            resolver::resolve_with_semantic(program, Some(module)).expect("resolve typed methods");
+        let expected = [
+            crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names)
+                .generate(&resolved)
+                .expect("transpile method expressions to BASIC"),
+            crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile method expressions to C")
+                .app,
+            crate::codegen_jvm::generate(&resolved).expect("transpile method expressions to JVM"),
+        ];
+
+        for (target, expected) in [Target::Basic, Target::C, Target::Jvm]
+            .into_iter()
+            .zip(expected)
+        {
+            let actual = compile_file(
+                &input,
+                &CompileOptions {
+                    target,
+                    ..CompileOptions::new()
+                },
+            )
+            .unwrap_or_else(|diagnostics| {
+                panic!("compile method expressions through {target:?}: {diagnostics:?}")
+            });
+            assert_eq!(actual, expected, "{target:?} driver output");
+        }
+    }
+
+    #[test]
+    fn semantic_array_element_types_reach_driver_backends() {
+        let filename = "driver_semantic_array_element_types.bcl";
+        let directory = tempfile::tempdir().expect("temporary typed-source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\ndim values(2)\nvalues(1) = 2\nprint values(1)\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).unwrap();
+        for (annotation, c_storage, jvm_array, c_name, store, load) in [
+            (
+                "integer",
+                "int bv_i_values[3]",
+                "[I",
+                "bv_i_values",
+                "iastore",
+                "iaload",
+            ),
+            (
+                "long",
+                "int bv_l_values[3]",
+                "[J",
+                "bv_l_values",
+                "lastore",
+                "laload",
+            ),
+            (
+                "single",
+                "float bv_f_values[3]",
+                "[D",
+                "bv_f_values",
+                "dastore",
+                "daload",
+            ),
+            (
+                "double",
+                "double bv_d_values[3]",
+                "[D",
+                "bv_d_values",
+                "dastore",
+                "daload",
+            ),
+            (
+                "string",
+                "bv_s_values[3]",
+                "[Ljava/lang/String;",
+                "bv_s_values",
+                "aastore",
+                "aaload",
+            ),
+        ] {
+            let assigned = if annotation == "string" {
+                "\"typed\""
+            } else {
+                "7"
+            };
+            let semantic_source = format!(
+                "program typed\ndim values(2) as {annotation}\nvalues(1) = {assigned}\nprint values(1)\nend\n"
+            );
+            fs::write(&input, &semantic_source).expect("write typed source for driver");
+            let module = semantic_ir::parse_and_adapt_named(filename, &semantic_source).unwrap();
+            let typed = resolver::resolve_with_semantic(program.clone(), Some(module)).unwrap();
+            let typed_output = [
+                crate::codegen::CodeGenerator::new()
+                    .with_synthesized_buffer_names(synthesized_buffer_names.clone())
+                    .generate(&typed)
+                    .expect("transpile typed BASIC"),
+                crate::codegen_c::generate(&typed, Target::C)
+                    .expect("transpile typed C")
+                    .app,
+                crate::codegen_jvm::generate(&typed).expect("transpile typed JVM"),
+            ];
+            for (target, expected) in [
+                (Target::Basic, &typed_output[0]),
+                (Target::Fbc, &typed_output[0]),
+                (Target::C, &typed_output[1]),
+                (Target::Jvm, &typed_output[2]),
+            ] {
+                let driver_output = compile_file(
+                    &input,
+                    &CompileOptions {
+                        target,
+                        ..CompileOptions::new()
+                    },
+                )
+                .unwrap_or_else(|diagnostics| {
+                    panic!("compile {annotation} source through {target:?} driver: {diagnostics:?}")
+                });
+                assert_eq!(
+                    &driver_output, expected,
+                    "{target:?} driver changed typed {annotation} array output"
+                );
+            }
+            let compatibility_parsed = parse_source(filename.to_string(), &semantic_source)
+                .expect("parse typed source through compatibility AST");
+            let lower::Lowered {
+                program: compatibility_program,
+                synthesized_buffer_names: compatibility_buffers,
+                ..
+            } = lower::lower(compatibility_parsed).expect("lower compatibility AST");
+            let compatibility =
+                resolver::resolve(compatibility_program).expect("resolve compatibility AST");
+            let compatibility_basic = crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(compatibility_buffers)
+                .generate(&compatibility)
+                .expect("transpile compatibility BASIC");
+            let compatibility_c = crate::codegen_c::generate(&compatibility, Target::C);
+            let compatibility_jvm = crate::codegen_jvm::generate(&compatibility);
+            assert!(
+                typed_output[0].contains(&format!(
+                    "DIM values(2) AS {}",
+                    annotation.to_ascii_uppercase()
+                )),
+                "BASIC lost {annotation} annotation:\n{}",
+                typed_output[0]
+            );
+            assert_ne!(
+                typed_output[0], compatibility_basic,
+                "BASIC compatibility output unexpectedly retained the {annotation} DIM fact"
+            );
+            if annotation == "string" {
+                assert!(
+                    compatibility_c.is_err(),
+                    "C compatibility path unexpectedly accepted untyped STRING array assignment"
+                );
+            } else if annotation != "single" {
+                let compatibility_c = compatibility_c.expect("transpile compatibility C").app;
+                assert_ne!(
+                    typed_output[1], compatibility_c,
+                    "C compatibility output unexpectedly retained the {annotation} DIM fact"
+                );
+            }
+            if matches!(annotation, "integer" | "long" | "string") {
+                match compatibility_jvm {
+                    Ok(compatibility_jvm) => assert_ne!(
+                        typed_output[2], compatibility_jvm,
+                        "JVM compatibility output unexpectedly retained the {annotation} DIM fact"
+                    ),
+                    Err(_) => assert_eq!(
+                        annotation, "string",
+                        "JVM compatibility path unexpectedly rejected {annotation} array"
+                    ),
+                }
+            }
+            assert!(
+                typed_output[1].contains(c_storage),
+                "C lost {annotation} element type:\n{}",
+                typed_output[1]
+            );
+            assert!(
+                typed_output[1].contains(c_name) && typed_output[1].contains(assigned),
+                "C lost {annotation} array access:\n{}",
+                typed_output[1]
+            );
+            assert!(
+                typed_output[2].contains(&format!(".field public static a0 {jvm_array}")),
+                "JVM lost {annotation} element type:\n{}",
+                typed_output[2]
+            );
+            assert!(
+                typed_output[2].contains(store) && typed_output[2].contains(load),
+                "JVM lost {annotation} array access:\n{}",
+                typed_output[2]
+            );
+        }
+    }
+
+    #[test]
+    fn semantic_long_array_assignment_reaches_c_driver_output() {
+        let filename = "driver_semantic_long_array_assignment.bcl";
+        let ast_source = "dim values(2)\nvalues(1) = 2\nprint values(1)\nend\n";
+        let semantic_source = "dim values(2) as long\nvalues(1) = 7\nprint values(1)\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).unwrap();
+        let module = semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap();
+        let resolved = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+        let basic = crate::codegen::CodeGenerator::new()
+            .with_synthesized_buffer_names(synthesized_buffer_names)
+            .generate(&resolved)
+            .expect("transpile typed LONG array to BASIC");
+        let c = crate::codegen_c::generate(&resolved, Target::C)
+            .expect("transpile typed LONG array assignment to C")
+            .app;
+        let jvm =
+            crate::codegen_jvm::generate(&resolved).expect("transpile typed LONG array to JVM");
+        assert!(
+            basic.contains("DIM values(2) AS LONG") && basic.contains("values(1)"),
+            "{basic}"
+        );
+        assert!(c.contains("bv_l_values[(1)] = 7;"), "{c}");
+        assert!(!c.contains("bv_l_values[(1)] = 2;"), "{c}");
+        assert!(c.contains("bv_l_values[(1)]"), "{c}");
+        assert!(jvm.contains(".field public static a0 [J"), "{jvm}");
+        assert!(jvm.contains("lastore") && jvm.contains("laload"), "{jvm}");
+    }
+
+    #[test]
+    fn semantic_long_array_assignment_reaches_c64_driver_output() {
+        let filename = "driver_semantic_long_array_assignment_c64.bcl";
+        let directory = tempfile::tempdir().expect("temporary C64 source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\ndim values(2)\nvalues(1) = 2\nprint values(1)\nend\n";
+        let semantic_source =
+            "program typed\ndim values(2) as long\nvalues(1) = 7\nprint values(1)\nend\n";
+        fs::write(&input, semantic_source).expect("write typed C64 source for driver");
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let module = semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap();
+        let resolved = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+        let c = crate::codegen_c::generate(&resolved, Target::C64)
+            .expect("transpile typed LONG array assignment to C64")
+            .app;
+        assert!(c.contains("bv_l_values[(1)] = 7;"), "{c}");
+        assert!(!c.contains("bv_l_values[(1)] = 2;"), "{c}");
+        assert!(c.contains("bv_l_values[(1)]"), "{c}");
+        let driver_output = compile_file(
+            &input,
+            &CompileOptions {
+                target: Target::C64,
+                ..CompileOptions::new()
+            },
+        )
+        .expect("compile typed LONG array through C64 driver");
+        assert_eq!(driver_output, c);
+    }
+
+    #[test]
+    fn semantic_callable_local_array_type_reaches_driver_backends() {
+        let filename = "driver_semantic_callable_local_array_type.bcl";
+        let directory = tempfile::tempdir().expect("temporary typed-source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\nfunction read%()\ndim values(2)\nvalues(1) = 2\nprint values(1)\nreturn 0\nend function\nprint read%()\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered {
+            program,
+            synthesized_buffer_names,
+            ..
+        } = lower::lower(parsed).unwrap();
+        for (annotation, c_storage, c_name, store, load) in [
+            (
+                "integer",
+                "bv_i_values[3]",
+                "bv_i_values",
+                "iastore",
+                "iaload",
+            ),
+            ("long", "bv_l_values[3]", "bv_l_values", "lastore", "laload"),
+            (
+                "single",
+                "bv_f_values[3]",
+                "bv_f_values",
+                "dastore",
+                "daload",
+            ),
+            (
+                "double",
+                "bv_d_values[3]",
+                "bv_d_values",
+                "dastore",
+                "daload",
+            ),
+            (
+                "string",
+                "bv_s_values[3]",
+                "bv_s_values",
+                "aastore",
+                "aaload",
+            ),
+        ] {
+            let assigned = if annotation == "string" {
+                "\"typed\""
+            } else {
+                "7"
+            };
+            let semantic_source = format!(
+                "program typed\nfunction read%()\ndim values(2) as {annotation}\nvalues(1) = {assigned}\nprint values(1)\nreturn 0\nend function\nprint read%()\nend\n"
+            );
+            fs::write(&input, &semantic_source).expect("write typed callable source for driver");
+            let module = semantic_ir::parse_and_adapt_named(filename, &semantic_source).unwrap();
+            let resolved = resolver::resolve_with_semantic(program.clone(), Some(module)).unwrap();
+            let basic = crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(synthesized_buffer_names.clone())
+                .generate(&resolved)
+                .expect("transpile typed callable array to BASIC");
+            let compatibility_parsed = parse_source(filename.to_string(), &semantic_source)
+                .expect("parse typed callable source through compatibility AST");
+            let lower::Lowered {
+                program: compatibility_program,
+                synthesized_buffer_names: compatibility_buffers,
+                ..
+            } = lower::lower(compatibility_parsed).expect("lower compatibility callable AST");
+            let compatibility =
+                resolver::resolve(compatibility_program).expect("resolve compatibility AST");
+            let compatibility_basic = crate::codegen::CodeGenerator::new()
+                .with_synthesized_buffer_names(compatibility_buffers)
+                .generate(&compatibility)
+                .expect("transpile compatibility callable BASIC");
+            let compatibility_c = crate::codegen_c::generate(&compatibility, Target::C);
+            let compatibility_jvm = crate::codegen_jvm::generate(&compatibility);
+            let c = crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed callable array to C")
+                .app;
+            let jvm = crate::codegen_jvm::generate(&resolved)
+                .expect("transpile typed callable array to JVM");
+            for (target, expected) in [
+                (Target::Basic, &basic),
+                (Target::Fbc, &basic),
+                (Target::C, &c),
+                (Target::Jvm, &jvm),
+            ] {
+                let driver_output = compile_file(
+                    &input,
+                    &CompileOptions {
+                        target,
+                        ..CompileOptions::new()
+                    },
+                )
+                .unwrap_or_else(|diagnostics| {
+                    panic!(
+                        "compile callable {annotation} source through {target:?}: {diagnostics:?}"
+                    )
+                });
+                assert_eq!(
+                    &driver_output, expected,
+                    "{target:?} driver changed callable-local {annotation} array output"
+                );
+            }
+            assert!(
+                basic.contains(&format!("AS {}", annotation.to_ascii_uppercase()))
+                    && basic.contains(assigned),
+                "BASIC lost callable-local {annotation} array type:\n{basic}"
+            );
+            assert_ne!(
+                basic, compatibility_basic,
+                "BASIC compatibility path unexpectedly retained callable-local {annotation} DIM"
+            );
+            if annotation == "string" {
+                assert!(
+                    compatibility_c.is_err(),
+                    "C compatibility path unexpectedly accepted untyped callable STRING array"
+                );
+            } else if annotation != "single" {
+                let compatibility_c = compatibility_c
+                    .expect("transpile compatibility callable C")
+                    .app;
+                assert_ne!(
+                    c, compatibility_c,
+                    "C compatibility output unexpectedly retained callable-local {annotation} DIM"
+                );
+            }
+            if matches!(annotation, "integer" | "long" | "string") {
+                match compatibility_jvm {
+                    Ok(compatibility_jvm) => assert_ne!(
+                        jvm, compatibility_jvm,
+                        "JVM compatibility output unexpectedly retained callable-local {annotation} DIM"
+                    ),
+                    Err(diagnostics) => assert!(
+                        !diagnostics.is_empty(),
+                        "JVM compatibility path returned an empty callable {annotation} diagnostic"
+                    ),
+                }
+            }
+            assert!(
+                c.contains(c_storage) && c.contains(c_name),
+                "C lost callable-local {annotation} array type:\n{c}"
+            );
+            assert!(
+                jvm.contains(store) && jvm.contains(load),
+                "JVM lost callable-local {annotation} array type:\n{jvm}"
+            );
+        }
+    }
+
+    #[test]
+    fn semantic_callable_long_array_reaches_c64_driver_output() {
+        let filename = "driver_semantic_callable_long_array_c64.bcl";
+        let directory = tempfile::tempdir().expect("temporary callable C64 source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\nfunction read%()\ndim values(2)\nvalues(1) = 2\nprint values(1)\nreturn 0\nend function\nprint read%()\nend\n";
+        let semantic_source = "program typed\nfunction read%()\ndim values(2) as long\nvalues(1) = 7\nprint values(1)\nreturn 0\nend function\nprint read%()\nend\n";
+        fs::write(&input, semantic_source).expect("write typed callable C64 source");
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let module = semantic_ir::parse_and_adapt_named(filename, semantic_source).unwrap();
+        let resolved = resolver::resolve_with_semantic(program, Some(module)).unwrap();
+        let c = crate::codegen_c::generate(&resolved, Target::C64)
+            .expect("transpile typed callable LONG array to C64")
+            .app;
+        assert!(c.contains("bv_l_values[3]"), "{c}");
+        assert!(c.contains("bv_l_values[(1)] = 7;"), "{c}");
+        assert!(!c.contains("bv_l_values[(1)] = 2;"), "{c}");
+        let driver_output = compile_file(
+            &input,
+            &CompileOptions {
+                target: Target::C64,
+                ..CompileOptions::new()
+            },
+        )
+        .expect("compile typed callable LONG array through C64 driver");
+        assert_eq!(driver_output, c);
+    }
+
+    #[test]
+    fn semantic_scalar_dim_type_reaches_all_driver_targets() {
+        let filename = "driver_semantic_scalar_dim_type.bcl";
+        let directory = tempfile::tempdir().expect("temporary typed scalar source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\ndim value\nvalue = 2\nprint value\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        for (annotation, c_name, jvm_type, assigned) in [
+            ("integer", "bv_i_value", "I", "7"),
+            ("long", "bv_l_value", "J", "7"),
+            ("single", "bv_f_value", "D", "7"),
+            ("double", "bv_d_value", "D", "7"),
+            ("string", "bv_s_value", "Ljava/lang/String;", "\"typed\""),
+        ] {
+            let semantic_source = format!(
+                "program typed\ndim value as {annotation}\nvalue = {assigned}\nprint value\nend\n"
+            );
+            fs::write(&input, &semantic_source).expect("write typed scalar source for driver");
+            let module = semantic_ir::parse_and_adapt_named(filename, &semantic_source).unwrap();
+            let resolved = resolver::resolve_with_semantic(program.clone(), Some(module)).unwrap();
+            let basic = crate::codegen::CodeGenerator::new()
+                .generate(&resolved)
+                .expect("transpile typed scalar to BASIC");
+            let c = crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed scalar to C")
+                .app;
+            let jvm =
+                crate::codegen_jvm::generate(&resolved).expect("transpile typed scalar to JVM");
+            assert!(
+                basic.contains(&format!("DIM value AS {}", annotation.to_ascii_uppercase()))
+                    && basic.contains(assigned),
+                "BASIC lost {annotation} scalar DIM:\n{basic}"
+            );
+            assert!(
+                c.contains(c_name) && c.contains(assigned),
+                "C lost {annotation} scalar DIM:\n{c}"
+            );
+            assert!(
+                jvm.contains(&format!(".field public static g1 {jvm_type}"))
+                    && jvm.contains(assigned),
+                "JVM lost {annotation} scalar DIM:\n{jvm}"
+            );
+            let mut targets = vec![
+                (Target::Basic, basic.clone()),
+                (Target::Fbc, basic.clone()),
+                (Target::C, c.clone()),
+                (Target::Jvm, jvm.clone()),
+            ];
+            if matches!(annotation, "integer" | "long") {
+                let c64 = crate::codegen_c::generate(&resolved, Target::C64)
+                    .expect("transpile supported typed scalar to C64")
+                    .app;
+                assert!(c64.contains(c_name) && c64.contains(assigned), "{c64}");
+                targets.push((Target::C64, c64));
+            }
+            for (target, expected) in targets {
+                let driver_output = compile_file(
+                    &input,
+                    &CompileOptions {
+                        target,
+                        ..CompileOptions::new()
+                    },
+                )
+                .unwrap_or_else(|diagnostics| {
+                    panic!("compile {annotation} scalar through {target:?}: {diagnostics:?}")
+                });
+                assert_eq!(
+                    driver_output, expected,
+                    "{target:?} {annotation} scalar driver output"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn semantic_callable_scalar_dim_type_reaches_all_driver_targets() {
+        let filename = "driver_semantic_callable_scalar_dim_type.bcl";
+        let directory = tempfile::tempdir().expect("temporary callable scalar source directory");
+        let input = directory.path().join(filename);
+        let ast_source = "program typed\nfunction read%()\ndim value\nvalue = 2\nprint value\nreturn 0\nend function\nprint read%()\nend\n";
+        let parsed = parse_source(filename.to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        for (annotation, c_name, jvm_op, assigned) in [
+            ("integer", "bv_i_value", "istore", "7"),
+            ("long", "bv_l_value", "lstore", "7"),
+            ("single", "bv_f_value", "dstore", "7"),
+            ("double", "bv_d_value", "dstore", "7"),
+            ("string", "bv_s_value", "astore", "\"typed\""),
+        ] {
+            let semantic_source = format!(
+                "program typed\nfunction read%()\ndim value as {annotation}\nvalue = {assigned}\nprint value\nreturn 0\nend function\nprint read%()\nend\n"
+            );
+            fs::write(&input, &semantic_source).expect("write typed callable scalar source");
+            let module = semantic_ir::parse_and_adapt_named(filename, &semantic_source).unwrap();
+            let resolved = resolver::resolve_with_semantic(program.clone(), Some(module)).unwrap();
+            let basic = crate::codegen::CodeGenerator::new()
+                .generate(&resolved)
+                .expect("transpile typed callable scalar to BASIC");
+            let c = crate::codegen_c::generate(&resolved, Target::C)
+                .expect("transpile typed callable scalar to C")
+                .app;
+            let jvm = crate::codegen_jvm::generate(&resolved)
+                .expect("transpile typed callable scalar to JVM");
+            assert!(
+                basic.contains(&format!("AS {}", annotation.to_ascii_uppercase()))
+                    && basic.contains(assigned),
+                "BASIC lost callable {annotation} scalar DIM:\n{basic}"
+            );
+            assert!(
+                c.contains(c_name) && c.contains(assigned),
+                "C lost callable {annotation} scalar DIM:\n{c}"
+            );
+            assert!(
+                jvm.contains(jvm_op),
+                "JVM lost callable {annotation} scalar storage:\n{jvm}"
+            );
+            let mut targets = vec![
+                (Target::Basic, basic.clone()),
+                (Target::Fbc, basic),
+                (Target::C, c),
+                (Target::Jvm, jvm),
+            ];
+            if matches!(annotation, "integer" | "long") {
+                let c64 = crate::codegen_c::generate(&resolved, Target::C64)
+                    .expect("transpile supported callable scalar to C64")
+                    .app;
+                assert!(c64.contains(c_name) && c64.contains(assigned), "{c64}");
+                targets.push((Target::C64, c64));
+            }
+            for (target, expected) in targets {
+                let driver_output = compile_file(
+                    &input,
+                    &CompileOptions {
+                        target,
+                        ..CompileOptions::new()
+                    },
+                )
+                .unwrap_or_else(|diagnostics| {
+                    panic!(
+                        "compile callable {annotation} scalar through {target:?}: {diagnostics:?}"
+                    )
+                });
+                assert_eq!(
+                    driver_output, expected,
+                    "{target:?} callable {annotation} scalar driver output"
+                );
+            }
+        }
+    }
 }
 
 pub(crate) fn load_shared_file(
@@ -604,7 +1826,103 @@ pub(crate) fn load_shared_file(
             format!("failed to read shared file: {err}"),
         )]
     })?;
-    let program = parse_source(path.display().to_string(), &source)?;
+    let semantic_facts = semantic_ir::parse_and_adapt_named(path.display().to_string(), &source)
+        .ok()
+        .map(|module| {
+            fn collect_dims(
+                statements: &[semantic_ir::SemanticStatement],
+                dim_vars: &mut Vec<ast::CommonVar>,
+            ) -> bool {
+                use semantic_ir::SemanticStatementKind as Kind;
+                let mut has_other = false;
+                for statement in statements {
+                    match &statement.kind {
+                        Kind::Line(body) => {
+                            has_other |= collect_dims(body, dim_vars);
+                        }
+                        Kind::Comment { .. } => {}
+                        Kind::Dim(items) => {
+                            dim_vars.extend(items.iter().map(|item| ast::CommonVar {
+                                name: ast::BasicIdent::parse(&item.name),
+                                is_array: item.array_axes > 0,
+                            }));
+                        }
+                        _ => has_other = true,
+                    }
+                }
+                has_other
+            }
+
+            let mut dim_vars = Vec::new();
+            let has_other_statements = collect_dims(&module.statements, &mut dim_vars);
+            let (has_program_header, has_library_header, shared_decl) = match module.header {
+                Some(semantic_ir::ModuleHeader::Program { .. }) => (true, false, None),
+                Some(semantic_ir::ModuleHeader::Library { .. }) => (false, true, None),
+                Some(semantic_ir::ModuleHeader::Shared { name, .. }) => (false, false, Some(name)),
+                None => (false, false, None),
+            };
+            (
+                has_other_statements,
+                !module.callables.is_empty(),
+                !module.dependencies.is_empty(),
+                has_program_header,
+                has_library_header,
+                shared_decl,
+                dim_vars,
+            )
+        });
+    // Avoid requiring legacy-parser acceptance once the generated frontend
+    // has supplied the shared-file header, statement classification, and
+    // DIM declarations. Parse the compatibility AST only for that explicit
+    // fallback.
+    let program = if semantic_facts.is_none() {
+        Some(parse_source(path.display().to_string(), &source)?)
+    } else {
+        None
+    };
+    let (
+        has_other_statements,
+        has_functions,
+        has_dependencies,
+        has_program_header,
+        has_library_header,
+        shared_decl,
+        dim_vars,
+    ) =
+        semantic_facts.unwrap_or_else(|| {
+            let program = program
+                .as_ref()
+                .expect("legacy shared-file fallback parsed its AST");
+            let has_other_statements = program.statements.iter().any(|statement| match &statement
+                .kind
+            {
+                ast::Statement::BlankLine
+                | ast::Statement::BlockComment(_)
+                | ast::Statement::Dim { .. } => false,
+                ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
+                _ => true,
+            });
+            let dim_vars = program
+                .statements
+                .iter()
+                .filter_map(|statement| match &statement.kind {
+                    ast::Statement::Dim { name, is_array, .. } => Some(ast::CommonVar {
+                        name: name.clone(),
+                        is_array: *is_array,
+                    }),
+                    _ => None,
+                })
+                .collect();
+            (
+                has_other_statements,
+                !program.functions.is_empty(),
+                !program.declarations.is_empty(),
+                program.program_decl.is_some(),
+                program.library_decl.is_some(),
+                program.shared_decl.clone(),
+                dim_vars,
+            )
+        });
 
     let pos = diagnostics::SourcePos::new(path.display().to_string(), 1, 1);
     let mut errors = Vec::new();
@@ -612,13 +1930,7 @@ pub(crate) fn load_shared_file(
     // Every top-level `dim` becomes a CommonVar below -- a `shared <name>`
     // file's variables are COMMON by default, with no separate keyword to
     // opt in.
-    if program.statements.iter().any(|s| match &s.kind {
-        ast::Statement::BlankLine
-        | ast::Statement::BlockComment(_)
-        | ast::Statement::Dim { .. } => false,
-        ast::Statement::Raw(text) => !text.trim_start().starts_with('\''),
-        _ => true,
-    }) {
+    if has_other_statements {
         errors.push(Diagnostic::error(
             pos.clone(),
             format!(
@@ -627,7 +1939,7 @@ pub(crate) fn load_shared_file(
             ),
         ));
     }
-    if !program.functions.is_empty() {
+    if has_functions {
         errors.push(Diagnostic::error(
             pos.clone(),
             format!(
@@ -636,7 +1948,7 @@ pub(crate) fn load_shared_file(
             ),
         ));
     }
-    if !program.declarations.is_empty() {
+    if has_dependencies {
         errors.push(Diagnostic::error(
             pos.clone(),
             format!(
@@ -645,7 +1957,7 @@ pub(crate) fn load_shared_file(
             ),
         ));
     }
-    if program.program_decl.is_some() {
+    if has_program_header {
         errors.push(Diagnostic::error(
             pos.clone(),
             format!(
@@ -654,7 +1966,7 @@ pub(crate) fn load_shared_file(
             ),
         ));
     }
-    if program.library_decl.is_some() {
+    if has_library_header {
         errors.push(Diagnostic::error(
             pos.clone(),
             format!(
@@ -667,7 +1979,7 @@ pub(crate) fn load_shared_file(
     // exactly one of `program`/`library`/`shared` -- and it must name the
     // same shared file this was actually resolved as, catching a
     // copy-pasted header pointing at the wrong filename.
-    match &program.shared_decl {
+    match &shared_decl {
         None => errors.push(Diagnostic::error(
             pos.clone(),
             format!("shared file `{}` must declare `shared {shared_name}`", path.display()),
@@ -685,18 +1997,6 @@ pub(crate) fn load_shared_file(
     // Every `dim name[()]` in the file becomes one more shared variable,
     // collected into a single COMMON block (declaration order matters for
     // CHAIN).
-    let dim_vars: Vec<ast::CommonVar> = program
-        .statements
-        .iter()
-        .filter_map(|s| match &s.kind {
-            ast::Statement::Dim { name, is_array, .. } => Some(ast::CommonVar {
-                name: name.clone(),
-                is_array: *is_array,
-            }),
-            _ => None,
-        })
-        .collect();
-
     if dim_vars.is_empty() {
         errors.push(Diagnostic::error(
             pos,

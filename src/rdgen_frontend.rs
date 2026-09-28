@@ -26,11 +26,17 @@ fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> 
         "digit" => character.is_ascii_digit(),
         "hex_digit" => character.is_ascii_hexdigit(),
         "any_char" => true,
+        "any_char_except_block_comment_close" => !source.get(position..)?.starts_with("*/"),
         "any_char_except_quote" => character != '"',
         "any_char_except_newline" => character != '\n',
         _ => false,
     };
-    accepted.then(|| (Token(character.to_string()), position + character.len_utf8()))
+    accepted.then(|| {
+        (
+            Token(character.to_string()),
+            position + character.len_utf8(),
+        )
+    })
 }
 
 /// Skip lexical trivia while leaving line-oriented grammar elements to the
@@ -64,5 +70,11 @@ mod tests {
         let program = parse("total% = -2 ^ 2\nprint total%\n").unwrap();
         let Program::File { items, .. } = program;
         assert_eq!(items.len(), 2);
+    }
+
+    #[test]
+    fn block_comment_terminator_is_excluded_only_by_its_terminal_class() {
+        assert!(scanner("*/", 0, "any_char").is_some());
+        assert!(scanner("*/", 0, "any_char_except_block_comment_close").is_none());
     }
 }

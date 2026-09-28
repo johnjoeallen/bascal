@@ -1,0 +1,14 @@
+program midAssignByRef
+
+value$ = "abcdef"
+position% = 1
+
+function advance%(byref position%)
+    position% = position% + 1
+    return position%
+end function
+
+mid$(value$, advance%(position%), 2) = "XY"
+print value$
+print position%
+end

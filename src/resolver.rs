@@ -26,9 +26,6 @@ pub struct ResolvedProgram {
     /// Typed top-level array declarations preserved for backends that need
     /// element type and dimension expressions after resolution.
     pub typed_array_declarations: Vec<TypedArrayDecl>,
-    /// Typed array uses, including rank and `sizeof` axes, retained for
-    /// backends after parser state is no longer their input boundary.
-    pub typed_array_references: Vec<TypedArrayRef>,
     /// COMMON blocks loaded by the driver before resolution, retained as
     /// backend input rather than read from the mutable legacy program.
     pub common_blocks: Vec<CommonBlock>,
@@ -111,14 +108,33 @@ pub fn resolve_with_semantic(
     program: Program,
     semantic_module: Option<crate::semantic_ir::SemanticModule>,
 ) -> Result<ResolvedProgram, Vec<Diagnostic>> {
-    validate(&program)?;
+    validate_with_semantic(&program, semantic_module.as_ref())?;
 
-    let error_handler_procedures = error_handler_targets(&program)
-        .iter()
-        .map(|ident| ident.name.to_ascii_lowercase())
-        .collect();
-    let record_buffer_names = crate::codegen_basic::collect_record_buffer_names(&program);
-    let const_info = {
+    // AST-derived caches are compatibility data for `resolve(program)`.
+    // When the generated typed IR is present, populate the corresponding
+    // semantic facts from it and leave legacy-only caches empty.
+    let error_handler_procedures = semantic_module
+        .as_ref()
+        .map(|module| {
+            module
+                .top_level_error_handler_targets()
+                .into_iter()
+                .map(|name| name.to_ascii_lowercase())
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            error_handler_targets(&program)
+                .iter()
+                .map(|ident| ident.name.to_ascii_lowercase())
+                .collect()
+        });
+    let record_buffer_names = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::record_buffer_names)
+        .unwrap_or_else(|| crate::codegen_basic::collect_record_buffer_names(&program));
+    let const_info = if semantic_module.is_some() {
+        HashMap::new()
+    } else {
         let mut decls = Vec::new();
         collect_const_decls(&program.statements, &mut decls);
         for f in &program.functions {
@@ -134,34 +150,71 @@ pub fn resolve_with_semantic(
             })
             .collect()
     };
-    let top_level_array_ranks = crate::codegen_basic::dim_ranks_in_body(&program.statements);
-    let top_level_integer_constants = collect_top_level_integer_constants(&program.statements);
-    let top_level_const_c_names = crate::codegen_c::collect_top_level_const_c_names(&program.statements);
-    let mut function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>> = program.functions.iter().map(|function| {
-        let mut declarations = Vec::new();
-        collect_global_declarations(&function.body, &mut declarations);
-        ((function.name.name.to_ascii_lowercase(), function.name.suffix), declarations)
-    }).collect();
-    let uses_catch_source_var = crate::codegen_basic::program_uses_catch_source_var(&program);
+    let top_level_array_ranks = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::top_level_array_ranks)
+        .unwrap_or_else(|| crate::codegen_basic::dim_ranks_in_body(&program.statements));
+    let top_level_integer_constants = semantic_module
+        .as_ref()
+        .map(|module| {
+            module
+                .top_level_integer_constants()
+                .into_iter()
+                .map(|(name, value)| {
+                    let ident = BasicIdent::parse(&name);
+                    ((ident.name.to_ascii_lowercase(), ident.suffix), value)
+                })
+                .collect()
+        })
+        .unwrap_or_else(|| collect_top_level_integer_constants(&program.statements));
+    let top_level_const_c_names = if semantic_module.is_some() {
+        BTreeSet::new()
+    } else {
+        crate::codegen_c::collect_top_level_const_c_names(&program.statements)
+    };
+    let function_global_declarations: HashMap<(String, Option<TypeSuffix>), Vec<BasicIdent>> =
+        if let Some(scopes) = semantic_module
+            .as_ref()
+            .map(crate::semantic_ir::SemanticModule::name_scopes)
+        {
+            scopes
+                .callable_globals
+                .into_iter()
+                .map(|(callable, names)| {
+                    let ident = BasicIdent::parse(&callable);
+                    (
+                        (ident.name.to_ascii_lowercase(), ident.suffix),
+                        names.iter().map(|name| BasicIdent::parse(name)).collect(),
+                    )
+                })
+                .collect()
+        } else {
+            program
+                .functions
+                .iter()
+                .map(|function| {
+                    let mut declarations = Vec::new();
+                    collect_global_declarations(&function.body, &mut declarations);
+                    (
+                        (
+                            function.name.name.to_ascii_lowercase(),
+                            function.name.suffix,
+                        ),
+                        declarations,
+                    )
+                })
+                .collect()
+        };
+    let uses_catch_source_var = semantic_module
+        .as_ref()
+        .map(crate::semantic_ir::SemanticModule::uses_catch_source_var)
+        .unwrap_or_else(|| crate::codegen_basic::program_uses_catch_source_var(&program));
 
     let semantic_name_scopes = semantic_module
         .as_ref()
         .map(crate::semantic_ir::SemanticModule::name_scopes);
-    if let Some(scopes) = semantic_name_scopes.as_ref() {
-        for function in &program.functions {
-            let key = (function.name.name.to_ascii_lowercase(), function.name.suffix);
-            if let Some(names) = scopes.callable_globals.get(&function.name.as_basic().to_ascii_lowercase()) {
-                function_global_declarations.insert(
-                    key,
-                    names.iter().map(|name| BasicIdent::parse(name)).collect(),
-                );
-            }
-        }
-    }
-
     Ok(ResolvedProgram {
         typed_array_declarations: program.typed_arrays.clone(),
-        typed_array_references: program.typed_array_refs.clone(),
         common_blocks: program.common.clone(),
         program,
         semantic_module,
@@ -181,10 +234,36 @@ fn collect_global_declarations(statements: &[Stmt], out: &mut Vec<BasicIdent>) {
     for statement in statements {
         match &statement.kind {
             Statement::GlobalDecl(name) => out.push(name.clone()),
-            Statement::If { then_body, else_body, .. } => { collect_global_declarations(then_body, out); collect_global_declarations(else_body, out); }
-            Statement::For { body, .. } | Statement::While { body, .. } | Statement::Do { body, .. } => collect_global_declarations(body, out),
-            Statement::SelectCase { cases, else_body, .. } => { for case in cases { collect_global_declarations(&case.body, out); } collect_global_declarations(else_body, out); }
-            Statement::TryCatch { try_body, catch, finally_body } => { collect_global_declarations(try_body, out); if let Some(catch) = catch { collect_global_declarations(&catch.body, out); } collect_global_declarations(finally_body, out); }
+            Statement::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_global_declarations(then_body, out);
+                collect_global_declarations(else_body, out);
+            }
+            Statement::For { body, .. }
+            | Statement::While { body, .. }
+            | Statement::Do { body, .. } => collect_global_declarations(body, out),
+            Statement::SelectCase {
+                cases, else_body, ..
+            } => {
+                for case in cases {
+                    collect_global_declarations(&case.body, out);
+                }
+                collect_global_declarations(else_body, out);
+            }
+            Statement::TryCatch {
+                try_body,
+                catch,
+                finally_body,
+            } => {
+                collect_global_declarations(try_body, out);
+                if let Some(catch) = catch {
+                    collect_global_declarations(&catch.body, out);
+                }
+                collect_global_declarations(finally_body, out);
+            }
             _ => {}
         }
     }
@@ -295,12 +374,19 @@ fn reject_duplicate_consts(program: &Program, diagnostics: &mut Vec<Diagnostic>)
 }
 
 pub fn validate(program: &Program) -> Result<(), Vec<Diagnostic>> {
+    validate_with_semantic(program, None)
+}
+
+fn validate_with_semantic(
+    program: &Program,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
     reject_functions_shadowing_builtins(program, &mut diagnostics);
     reject_duplicate_functions(program, &mut diagnostics);
     reject_scalar_methods(program, &mut diagnostics);
     reject_call_cycles(program, &mut diagnostics);
-    reject_missing_returns(program, &mut diagnostics);
+    reject_missing_returns(program, semantic_module, &mut diagnostics);
     reject_invalid_parameter_defaults(program, &mut diagnostics);
     reject_global_shadows_param(program, &mut diagnostics);
     reject_unsafe_error_handler_procedures(program, &mut diagnostics);
@@ -1014,12 +1100,61 @@ fn reject_call_cycles(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
     }
 }
 
-fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) {
+fn reject_missing_returns(
+    program: &Program,
+    semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for function in &program.functions {
         if function.is_procedure {
             continue;
         }
-        if !contains_return(&function.body) {
+        let semantic_callable = semantic_module.and_then(|module| {
+            module.callables.iter().find(|callable| {
+                if !callable
+                    .name
+                    .eq_ignore_ascii_case(&function.name.as_basic())
+                    || callable.receiver.is_some() != function.receiver.is_some()
+                {
+                    return false;
+                }
+                let receiver_matches = match (function.receiver, callable.receiver.as_deref()) {
+                    (None, None) => true,
+                    (Some(suffix), Some(receiver)) => {
+                        let expected = match suffix {
+                            TypeSuffix::Integer => "integer",
+                            TypeSuffix::Long => "long",
+                            TypeSuffix::Single => "single",
+                            TypeSuffix::Double => "double",
+                            TypeSuffix::String => "string",
+                        };
+                        receiver.eq_ignore_ascii_case(expected)
+                    }
+                    _ => false,
+                };
+                if !receiver_matches {
+                    return false;
+                }
+                use crate::semantic_ir::CallableKind as Kind;
+                matches!(
+                    (
+                        function.receiver.is_some(),
+                        function.is_procedure,
+                        callable.kind
+                    ),
+                    (
+                        true,
+                        false,
+                        Kind::Method | Kind::FluentMethod | Kind::InlineMethod
+                    ) | (false, true, Kind::Procedure)
+                        | (false, false, Kind::Function)
+                )
+            })
+        });
+        let returns = semantic_callable
+            .map(|callable| semantic_body_contains_return(&callable.body))
+            .unwrap_or_else(|| contains_return(&function.body));
+        if !returns {
             diagnostics.push(Diagnostic::error(
                 function.pos.clone(),
                 format!(
@@ -1029,6 +1164,42 @@ fn reject_missing_returns(program: &Program, diagnostics: &mut Vec<Diagnostic>) 
             ));
         }
     }
+}
+
+fn semantic_body_contains_return(statements: &[crate::semantic_ir::SemanticStatement]) -> bool {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    statements.iter().any(|statement| match &statement.kind {
+        Kind::Return(_) => true,
+        Kind::Line(body)
+        | Kind::While { body, .. }
+        | Kind::For { body, .. }
+        | Kind::Do { body, .. } => semantic_body_contains_return(body),
+        Kind::If {
+            then_body,
+            else_body,
+            ..
+        } => semantic_body_contains_return(then_body) || semantic_body_contains_return(else_body),
+        Kind::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases
+                .iter()
+                .any(|case| semantic_body_contains_return(&case.body))
+                || semantic_body_contains_return(else_body)
+        }
+        Kind::Try {
+            body,
+            catch,
+            finally_body,
+        } => {
+            semantic_body_contains_return(body)
+                || catch
+                    .as_ref()
+                    .is_some_and(|binding| semantic_body_contains_return(&binding.body))
+                || semantic_body_contains_return(finally_body)
+        }
+        _ => false,
+    })
 }
 
 /// A procedure named as an `on error goto` target is entered via a raw
@@ -2691,9 +2862,28 @@ mod legacy_form_tests {
     fn resolve_with_semantic_retains_generated_module() {
         let source = "print value%\nend\n";
         let program = parse(source);
-        let semantic = crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
-        let resolved = resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
+        let resolved =
+            resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
         assert!(resolved.semantic_module.is_some());
+    }
+
+    #[test]
+    fn semantic_resolution_does_not_rebuild_legacy_codegen_caches_from_ast() {
+        let source = "const capacity = 12\ndim values%(capacity)\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("generated frontend should parse");
+        let resolved =
+            resolve_with_semantic(program, Some(semantic)).expect("source should resolve");
+
+        assert!(resolved.const_info.is_empty());
+        assert!(resolved.top_level_const_c_names.is_empty());
+        assert_eq!(resolved.top_level_array_ranks.get("values%"), Some(&1));
+        assert!(resolved
+            .top_level_integer_constants
+            .contains_key(&("capacity".to_string(), None)));
     }
 
     #[test]
@@ -2828,7 +3018,7 @@ items[1] = { name: "widget" }
 items.close()
 end
 "#;
-        let (lowered, _) = crate::records::lower(parse(source)).expect("should lower");
+        let (lowered, _, _) = crate::records::lower(parse(source)).expect("should lower");
         let msgs: Vec<String> = check_legacy_forms(&lowered)
             .into_iter()
             .map(|d| d.message)
@@ -2836,6 +3026,38 @@ end
         assert!(
             msgs.is_empty(),
             "record/file DSL usage shouldn't be flagged as hand-written FIELD bookkeeping: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn record_file_lowering_exports_typed_channel_and_field_layout() {
+        let source = r#"record Item
+    name: string(10)
+    count: int16
+end record
+
+file items as Item = open("probe.dat")
+end
+"#;
+        let (_, _, layouts) = crate::records::lower(parse(source)).expect("should lower");
+        assert_eq!(layouts.len(), 1);
+        let layout = &layouts[0];
+        assert_eq!(layout.name, "items");
+        assert_eq!(layout.channel, 1);
+        assert_eq!(layout.record_type, "Item");
+        assert_eq!(layout.owner, None);
+        assert_eq!(layout.fields.len(), 2);
+        assert_eq!(layout.fields[0].width, 10);
+        assert_eq!(
+            layout.fields[0].kind,
+            crate::semantic_ir::LoweredRecordFieldKind::String {
+                right_aligned: false
+            }
+        );
+        assert_eq!(layout.fields[1].width, 2);
+        assert_eq!(
+            layout.fields[1].kind,
+            crate::semantic_ir::LoweredRecordFieldKind::Int16
         );
     }
 
@@ -3095,7 +3317,9 @@ end
 
     #[test]
     fn a_negative_non_sentinel_literal_is_still_flagged() {
-        let msgs = messages(check_magic_numbers(&parse("if a% = -5 then\nend if\nend\n")));
+        let msgs = messages(check_magic_numbers(&parse(
+            "if a% = -5 then\nend if\nend\n",
+        )));
         assert_eq!(msgs.len(), 1, "unexpected findings: {msgs:?}");
         assert!(msgs[0].contains("-5"), "{}", msgs[0]);
     }
@@ -3183,6 +3407,24 @@ mod position_tests {
             .find(|d| d.message.contains("implicit function return"))
             .expect("expected a missing-return diagnostic");
         assert_eq!(missing.pos.line, 4, "diagnostics: {diags:?}");
+    }
+
+    #[test]
+    fn semantic_callable_identity_owns_missing_return_validation_across_arity_mismatch() {
+        let program = parse("function calculate%(legacy%)\nprint legacy%\nend function\nend\n");
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "test.bcl",
+            "function calculate%(left%, right%)\nreturn left%+right%\nend function\nend\n",
+        )
+        .expect("typed source should parse");
+
+        let resolved = resolve_with_semantic(program, Some(semantic));
+
+        assert!(
+            resolved.is_ok(),
+            "the matched typed callable returns despite its stale AST body: {:?}",
+            resolved.err()
+        );
     }
 
     #[test]

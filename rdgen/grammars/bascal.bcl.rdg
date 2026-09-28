@@ -55,7 +55,7 @@ lexical line_comment     = prefix: "'" , body: { any_char_except_newline }
                          => ApostropheComment(prefix: prefix, body: body)
                          | prefix: "//" , body: { any_char_except_newline }
                          => SlashComment(prefix: prefix, body: body) ;
-lexical block_comment    = opening: "/*" , body: { any_char } , closing: "*/"
+lexical block_comment    = opening: "/*" , body: { any_char_except_block_comment_close } , closing: "*/"
                          => BlockComment(opening: opening, body: body, closing: closing) ;
 
 (* ----- Program and declarations ----- *)
@@ -106,18 +106,18 @@ subprogram       = function: function_decl => Function(function: function)
                  | method: fluent_method_decl => FluentMethod(method: method)
                  | method: method_decl => Method(method: method) ;
 function_decl    = "function" , name: typed_ident , "(" , parameters: [ param_list ] , ")"
-                   , body: { statement } until { "end" } , "end" , "function"
+                   , body: { statement } until { "end function" } , "end" , "function"
                    => FunctionDeclaration(name: name, parameters: parameters, body: body) ;
 procedure_decl   = "procedure" , name: identifier , "(" , parameters: [ param_list ] , ")"
-                   , body: { statement } until { "end" } , "end" , "procedure"
+                   , body: { statement } until { "end procedure" } , "end" , "procedure"
                    => ProcedureDeclaration(name: name, parameters: parameters, body: body) ;
 fluent_method_decl = "fluent" , method: method_decl => FluentMethod(method: method) ;
 method_decl      = "method" , name: identifier , "[" , receiver: identifier , "]"
                    , "(" , parameters: [ param_list ] , ")" , result: [ ":" , return_type ]
-                   , body: { statement } until { "end" } , "end" , "method"
+                   , body: { statement } until { "end method" } , "end" , "method"
                    => MethodDeclaration(name: name, receiver: receiver, parameters: parameters, result: result, body: body) ;
 inline_method    = "method" , name: identifier , "(" , parameters: [ param_list ] , ")"
-                   , result: [ ":" , return_type ] , body: { statement } until { "end" }
+                   , result: [ ":" , return_type ] , body: { statement } until { "end method" }
                    , "end" , "method"
                    => InlineMethodDeclaration(name: name, parameters: parameters, result: result, body: body) ;
 return_type      = "integer" => Integer()
@@ -137,9 +137,10 @@ param            = mode: [ passing_mode ] , name: typed_ident
 passing_mode     = "byref" => ByRef()
                  | "byval" => ByVal() ;
 array_axes       = "(" , first: axis , rest: { "," , axis } , ")"
-                   => ArrayAxes(first: first, rest: rest) ;
+                   => ArrayAxes(first: first, rest: rest)
+                 | "(" , ")" => EmptyArrayAxes() ;
 axis             = "?" => InferredCapacity()
-                 | capacity: integer_literal => FixedCapacity(capacity: capacity) ;
+                 | capacity: expr => ExpressionCapacity(capacity: capacity) ;
 typed_ident      = value: identifier => TypedIdentifier(value: value) ;
 
 (* ----- Statements ----- *)
@@ -220,7 +221,7 @@ dim_item         = name: typed_ident , axes: [ array_axes ] , type_annotation: [
                    => DimItem(name: name, axes: axes, type_annotation: type_annotation) ;
 const_stmt       = "const" , name: identifier , "=" , value: expr => Const(name: name, value: value) ;
 print_stmt       = "print" , destination: print_destination ,
-                    tokens: { print_token } until { "\n" }
+                    tokens: { print_token } until { "\n", "else" }
                     => Print(destination: destination, tokens: tokens) ;
 print_destination = "#" , channel: expr , "," , using: [ "using" , expr , ";" ]
                     => Channel(channel: channel, using: using)
@@ -268,8 +269,8 @@ input_stmt       = "input" , "#" , channel: expr , "," , first: expr , rest: { "
                     => ConsoleInput(prompt: prompt, first: first, rest: rest) ;
 write_stmt       = "write" , "#" , channel: expr , values: [ "," , expr , { "," , expr } ]
                     => Write(channel: channel, values: values) ;
-seek_stmt        = "seek" , channel: expr , "," , position: expr
-                   => Seek(channel: channel, position: position) ;
+seek_stmt        = "seek" , "#" , channel: expr , "," , position: expr
+                    => Seek(channel: channel, position: position) ;
 kill_stmt        = "kill" , path: expr => Kill(path: path) ;
 name_stmt        = "name" , source: expr , "as" , destination: expr
                    => Rename(source: source, destination: destination) ;
@@ -320,14 +321,14 @@ if_stmt          = "if" , condition: expr , "then" , tail: if_tail
                    => If(condition: condition, tail: tail) ;
 if_tail          = newline , tail: block_if_tail => Block(tail: tail)
                  | tail: ( same_line single_line_if_tail ) => SingleLine(tail: tail) ;
-block_if_tail    = then_body: { statement } until { "elseif", "else", "end" } ,
+block_if_tail    = then_body: { statement } until { "elseif", "else", "end if" } ,
                     continuation: if_block_continuation
                     => BlockIf(then_body: then_body, continuation: continuation) ;
 if_block_continuation = "elseif" , condition: expr , "then" , tail: block_if_tail
                     => ElseIf(condition: condition, tail: tail)
-                 | else_body: [ "else" , { statement } until { "end" } ] , "end" , "if"
+                 | else_body: [ "else" , { statement } until { "end if" } ] , "end" , "if"
                     => End(else_body: else_body) ;
-single_line_if_tail = first: ( same_line statement ) , rest: { ( same_line statement ) }
+single_line_if_tail = first: ( same_line statement ) , rest: { ( same_line statement ) } until { "else" }
                      , else_clause: [ "else" , ( same_line statement ) , { ( same_line statement ) } ]
                      => SingleLineIf(first: first, rest: rest, else_clause: else_clause) ;
 for_stmt         = "for" , variable: typed_ident , "=" , start: expr , bounds: for_bounds ,
@@ -354,11 +355,12 @@ do_condition     = kind: do_condition_kind , value: expr => Condition(kind: kind
 do_condition_kind = "while" => While()
                   | "until" => Until() ;
 select_case_stmt = "select" , "case" , selector: expr ,
-                    cases: { case_clause } until { "end" } ,
-                    else_body: [ "case" , "else" , { statement } until { "end" } ] ,
+                    cases: { case_clause } until { "end select" } ,
                     "end" , "select"
-                    => SelectCase(selector: selector, cases: cases, else_body: else_body) ;
-case_clause      = "case" , values: case_values , body: { statement } until { "case", "end" }
+                    => SelectCase(selector: selector, cases: cases) ;
+case_clause      = "case" , "else" , body: { statement } until { "end select" }
+                    => Else(body: body)
+                 | "case" , values: case_values , body: { statement } until { "case", "end select" }
                     => Case(values: values, body: body) ;
 case_values      = first: case_value , rest: { "," , case_value }
                     => CaseValues(first: first, rest: rest) ;
@@ -393,7 +395,7 @@ assign_target       = value: postfix_expr => Target(value: value) ;
  * the target has no side effects to duplicate, which is semantic
  * knowledge the grammar does not have. *)
 lexical assignment_op = "=" | "+=" | "-=" | "*=" | "/=" ;
-mid_assign          = "mid" , "$" , "(" , target: expr , "," , start: expr
+mid_assign          = "mid$" , "(" , target: expr , "," , start: expr
                       , length: [ "," , expr ] , ")" , "=" , value: expr
                       => MidAssign(target: target, start: start, length: length, value: value) ;
 

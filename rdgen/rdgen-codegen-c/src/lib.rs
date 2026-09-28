@@ -317,12 +317,48 @@ fn c_field_name(name: &str) -> String {
         "field".into()
     } else if matches!(
         result.as_str(),
-        "auto" | "break" | "case" | "char" | "const" | "continue" | "default" | "do"
-            | "double" | "else" | "enum" | "extern" | "float" | "for" | "goto" | "if"
-            | "inline" | "int" | "long" | "register" | "restrict" | "return" | "short"
-            | "signed" | "sizeof" | "static" | "struct" | "switch" | "typedef" | "union"
-            | "unsigned" | "void" | "volatile" | "while" | "_alignas" | "_atomic"
-            | "_bool" | "_complex" | "_generic" | "_imaginary" | "_noreturn" | "_static_assert"
+        "auto"
+            | "break"
+            | "case"
+            | "char"
+            | "const"
+            | "continue"
+            | "default"
+            | "do"
+            | "double"
+            | "else"
+            | "enum"
+            | "extern"
+            | "float"
+            | "for"
+            | "goto"
+            | "if"
+            | "inline"
+            | "int"
+            | "long"
+            | "register"
+            | "restrict"
+            | "return"
+            | "short"
+            | "signed"
+            | "sizeof"
+            | "static"
+            | "struct"
+            | "switch"
+            | "typedef"
+            | "union"
+            | "unsigned"
+            | "void"
+            | "volatile"
+            | "while"
+            | "_alignas"
+            | "_atomic"
+            | "_bool"
+            | "_complex"
+            | "_generic"
+            | "_imaginary"
+            | "_noreturn"
+            | "_static_assert"
             | "_thread_local"
     ) {
         format!("field_{result}")
@@ -374,7 +410,8 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "static void rdgen_skip_until_sync(rdgen_parser *parser, const char *const *sync, size_t count) { while (parser->position < parser->length) { for (size_t index = 0; index < count; index++) { size_t length = strlen(sync[index]); if (parser->position + length <= parser->length && strncmp(parser->source + parser->position, sync[index], length) == 0) return; } parser->position++; } }\n"
             + "static bool rdgen_scan_capture(rdgen_parser *parser, const char *name, rdgen_token *token, size_t *end) { return parser->scan_terminal != NULL && parser->scan_terminal(parser->source, parser->position, parser->length, name, token, end) && *end > parser->position && *end <= parser->length; }\n"
             + "static bool rdgen_match_literal_default(const char *source, size_t position, size_t source_length, const char *literal, size_t *end) { size_t length = strlen(literal); if (position > source_length || length > source_length - position || memcmp(source + position, literal, length) != 0) return false; *end = position + length; return true; }\n"
-            + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { rdgen_skip(parser); size_t end = parser->position; if (parser->match_literal != NULL && parser->match_literal(parser->source, parser->position, parser->length, literal, &end) && end > parser->position && end <= parser->length) { token->text = parser->source + parser->position; token->length = end - parser->position; parser->position = end; return true; } rdgen_set_error(parser->error, \"expected literal\", parser->position); return false; }\n"
+            + "static bool rdgen_literal_has_boundary(const char *source, size_t source_length, size_t end, const char *literal) { size_t length = strlen(literal); if (length <= 1) return true; for (size_t index = 0; index < length; index++) if (!((literal[index] >= 'A' && literal[index] <= 'Z') || (literal[index] >= 'a' && literal[index] <= 'z'))) return true; if (end >= source_length) return true; unsigned char next = (unsigned char)source[end]; return !((next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z') || (next >= '0' && next <= '9') || next == '_' || next == '.' || next == '$' || next == '%' || next == '!' || next == '#' || next == '&'); }\n"
+            + "static bool rdgen_expect_literal(rdgen_parser *parser, const char *literal, rdgen_token *token) { rdgen_skip(parser); size_t end = parser->position; if (parser->match_literal != NULL && parser->match_literal(parser->source, parser->position, parser->length, literal, &end) && end > parser->position && end <= parser->length && rdgen_literal_has_boundary(parser->source, parser->length, end, literal)) { token->text = parser->source + parser->position; token->length = end - parser->position; parser->position = end; return true; } rdgen_set_error(parser->error, \"expected literal\", parser->position); return false; }\n"
             + "rdgen_parser rdgen_parser_init_with_literal_match(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal, rdgen_match_literal_fn match_literal) { rdgen_parser parser = { source, length, 0, arena, skip_trivia, scan_terminal, match_literal, NULL }; return parser; }\n"
             + "rdgen_parser rdgen_parser_init(const char *source, size_t length, rdgen_arena *arena, rdgen_skip_trivia_fn skip_trivia, rdgen_scan_terminal_fn scan_terminal) { return rdgen_parser_init_with_literal_match(source, length, arena, skip_trivia, scan_terminal, rdgen_match_literal_default); }\n\n"
     ));
@@ -770,7 +807,8 @@ mod tests {
 
     #[test]
     fn escapes_c_reserved_constructor_fields() {
-        let grammar = compile("grammar Start; start = struct: \"a\" => Start(struct: struct);").unwrap();
+        let grammar =
+            compile("grammar Start; start = struct: \"a\" => Start(struct: struct);").unwrap();
         let generated = emit_ast(&grammar).unwrap();
         assert!(generated.contains("rdgen_token field_struct;"));
     }
@@ -787,7 +825,9 @@ mod tests {
 
     #[test]
     fn escapes_lowered_c11_reserved_constructor_fields() {
-        let grammar = compile("grammar Start; start = _Alignas: \"a\" => Start(_Alignas: _Alignas);").unwrap();
+        let grammar =
+            compile("grammar Start; start = _Alignas: \"a\" => Start(_Alignas: _Alignas);")
+                .unwrap();
         let generated = emit_ast(&grammar).unwrap();
         assert!(generated.contains("rdgen_token field__alignas;"));
     }
@@ -802,7 +842,9 @@ mod tests {
         assert!(generated.contains("rdgen_parser rdgen_parser_init"));
         assert!(generated.contains("rdgen_match_literal_fn"));
         assert!(generated.contains("size_t source_length, const char *literal"));
-        assert!(generated.contains("rdgen_skip_trivia_fn)(const char *source, size_t position, size_t source_length"));
+        assert!(generated.contains(
+            "rdgen_skip_trivia_fn)(const char *source, size_t position, size_t source_length"
+        ));
         assert!(generated.contains("rdgen_parser_init_with_literal_match"));
         assert!(generated.contains("rdgen_start *rdgen_parse("));
         assert!(generated.contains("rdgen_expect_literal(parser, \"a\""));
@@ -876,7 +918,9 @@ mod tests {
 
     #[test]
     fn generated_c_parser_captures_labeled_single_element_group() {
-        let grammar = rdgen_grammar::compile("grammar Start; start = pair: ( \"a\" ) => Start(pair: pair);").unwrap();
+        let grammar =
+            rdgen_grammar::compile("grammar Start; start = pair: ( \"a\" ) => Start(pair: pair);")
+                .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let header = directory.path().join("generated.h");
         let source = directory.path().join("main.c");
@@ -896,13 +940,23 @@ int main(void) {
 }
 "#).unwrap();
         let compiler = std::process::Command::new("gcc")
-            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
             .output()
             .unwrap();
         if !compiler.status.success() {
             panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -995,7 +1049,9 @@ int main(void) {
         let source = directory.path().join("main.c");
         let binary = directory.path().join("parser-bounded-input");
         std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
-        std::fs::write(&source, r#"
+        std::fs::write(
+            &source,
+            r#"
 #include <stdlib.h>
 #include "generated.h"
 struct rdgen_arena { int unused; };
@@ -1007,15 +1063,27 @@ int main(void) {
     rdgen_error error = { 0 };
     return rdgen_parse(&parser, &error) != NULL ? 0 : 1;
 }
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         let compiler = std::process::Command::new("gcc")
-            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
             .output()
             .unwrap();
         if !compiler.status.success() {
             panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1213,7 +1281,9 @@ int main(void) {
 
     #[test]
     fn generated_c_parser_captures_present_optional_token() {
-        let grammar = rdgen_grammar::compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);").unwrap();
+        let grammar =
+            rdgen_grammar::compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);")
+                .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let header = directory.path().join("generated.h");
         let source = directory.path().join("main.c");
@@ -1246,18 +1316,24 @@ int main(void) {
         if !compiler.status.success() {
             panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_c_parser_preserves_furthest_literal_failure() {
-        let grammar = rdgen_grammar::compile("grammar Start; start = \"a\", \"b\" | \"a\", \"c\";").unwrap();
+        let grammar =
+            rdgen_grammar::compile("grammar Start; start = \"a\", \"b\" | \"a\", \"c\";").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let header = directory.path().join("generated.h");
         let source = directory.path().join("main.c");
         let binary = directory.path().join("parser-error-depth");
         std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
-        std::fs::write(&source, r#"
+        std::fs::write(
+            &source,
+            r#"
 #include <stdlib.h>
 #include "generated.h"
 struct rdgen_arena { int unused; };
@@ -1269,72 +1345,9 @@ int main(void) {
     if (rdgen_parse(&parser, &error) != NULL) return 1;
     return error.message != NULL && error.position == 1 ? 0 : 1;
 }
-"#).unwrap();
-        let compiler = std::process::Command::new("gcc")
-            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
-            .output()
-            .unwrap();
-        if !compiler.status.success() {
-            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
-        }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
-    }
-
-    #[test]
-    fn generated_c_parser_applies_skip_until_sync_recovery() {
-        let grammar = rdgen_grammar::compile(
-            "grammar Start; start = \"ok\" => Start() recover { sync \";\"; skip_until_sync; };",
+"#,
         )
         .unwrap();
-        let directory = tempfile::tempdir().unwrap();
-        let header = directory.path().join("generated.h");
-        let source = directory.path().join("main.c");
-        let binary = directory.path().join("parser-recovery");
-        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
-        std::fs::write(&source, r#"
-#include <stdlib.h>
-#include "generated.h"
-struct rdgen_arena { int unused; };
-void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
-int main(void) {
-    struct rdgen_arena arena = { 0 };
-    rdgen_parser parser = rdgen_parser_init("bad;ok", 6, &arena, NULL, NULL);
-    rdgen_error error = { 0 };
-    if (rdgen_parse(&parser, &error) != NULL) return 1;
-    return error.position == 3 ? 0 : 1;
-}
-"#).unwrap();
-        let compiler = std::process::Command::new("gcc")
-            .args(["-std=c11", "-Wall", "-Wextra", source.to_str().unwrap(), "-o", binary.to_str().unwrap()])
-            .output()
-            .unwrap();
-        if !compiler.status.success() {
-            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
-        }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
-    }
-
-    #[test]
-    fn generated_c_parser_accepts_empty_repetition() {
-        let grammar = rdgen_grammar::compile("grammar Start; start = items: { \"a\" } => Start(items: items);").unwrap();
-        let directory = tempfile::tempdir().unwrap();
-        let header = directory.path().join("generated.h");
-        let source = directory.path().join("main.c");
-        let binary = directory.path().join("parser-repeat-empty");
-        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
-        std::fs::write(&source, r#"
-#include <stdlib.h>
-#include "generated.h"
-struct rdgen_arena { int unused; };
-void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
-int main(void) {
-    struct rdgen_arena arena = { 0 };
-    rdgen_parser parser = rdgen_parser_init("", 0, &arena, NULL, NULL);
-    rdgen_error error = { 0 };
-    rdgen_start *node = rdgen_parse(&parser, &error);
-    return node != NULL && node->as.rdgen_start.items.length == 0 ? 0 : 1;
-}
-"#).unwrap();
         let compiler = std::process::Command::new("gcc")
             .args([
                 "-std=c11",
@@ -1349,7 +1362,106 @@ int main(void) {
         if !compiler.status.success() {
             panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    #[test]
+    fn generated_c_parser_applies_skip_until_sync_recovery() {
+        let grammar = rdgen_grammar::compile(
+            "grammar Start; start = \"ok\" => Start() recover { sync \";\"; skip_until_sync; };",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-recovery");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &source,
+            r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("bad;ok", 6, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    if (rdgen_parse(&parser, &error) != NULL) return 1;
+    return error.position == 3 ? 0 : 1;
+}
+"#,
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    #[test]
+    fn generated_c_parser_accepts_empty_repetition() {
+        let grammar = rdgen_grammar::compile(
+            "grammar Start; start = items: { \"a\" } => Start(items: items);",
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let header = directory.path().join("generated.h");
+        let source = directory.path().join("main.c");
+        let binary = directory.path().join("parser-repeat-empty");
+        std::fs::write(&header, emit_parser(&grammar).unwrap()).unwrap();
+        std::fs::write(
+            &source,
+            r#"
+#include <stdlib.h>
+#include "generated.h"
+struct rdgen_arena { int unused; };
+void *rdgen_arena_alloc(rdgen_arena *arena, size_t size) { (void)arena; return malloc(size); }
+int main(void) {
+    struct rdgen_arena arena = { 0 };
+    rdgen_parser parser = rdgen_parser_init("", 0, &arena, NULL, NULL);
+    rdgen_error error = { 0 };
+    rdgen_start *node = rdgen_parse(&parser, &error);
+    return node != NULL && node->as.rdgen_start.items.length == 0 ? 0 : 1;
+}
+"#,
+        )
+        .unwrap();
+        let compiler = std::process::Command::new("gcc")
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                source.to_str().unwrap(),
+                "-o",
+                binary.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        if !compiler.status.success() {
+            panic!("gcc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+        }
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]

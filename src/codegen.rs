@@ -13,7 +13,7 @@
 
 pub use crate::codegen_basic::CodeGenerator;
 pub(crate) use crate::codegen_basic::{
-    camel_join, check_generated_name_conflicts, MID_ASSIGN_HELPER_NAME,
+    camel_join, check_generated_name_conflicts, check_generated_name_conflicts_semantic,
 };
 
 /// Which backend to generate code for. `Basic` (the default, also spelled

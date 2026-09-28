@@ -40,10 +40,11 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
     for (output_name, rules) in output_groups {
         let mut merged = rules[0].clone();
         if rules.len() > 1 {
-            if rules
-                .iter()
-                .any(|rule| rule.alternatives.iter().any(|alternative| is_default_constructor(rule, alternative)))
-            {
+            if rules.iter().any(|rule| {
+                rule.alternatives
+                    .iter()
+                    .any(|alternative| is_default_constructor(rule, alternative))
+            }) {
                 return Err(format!(
                     "shared output type '{}' requires explicit constructors on every alternative",
                     output_name
@@ -54,7 +55,13 @@ pub fn emit_ast(grammar: &Grammar) -> Result<String, String> {
                 .flat_map(|rule| rule.alternatives.iter().cloned())
                 .collect();
         }
-        validate_labeled_groups(&merged.alternatives.iter().flat_map(|alternative| alternative.elements.iter()).collect::<Vec<_>>())?;
+        validate_labeled_groups(
+            &merged
+                .alternatives
+                .iter()
+                .flat_map(|alternative| alternative.elements.iter())
+                .collect::<Vec<_>>(),
+        )?;
         emit_rule(
             &mut output,
             &merged,
@@ -110,10 +117,8 @@ fn emit_rule(
     output.push_str(&format!("pub enum {} {{\n", enum_name));
     let mut variants = std::collections::HashSet::new();
     let mut spanned_variants: Vec<String> = Vec::new();
-    let mut precedence_variants: std::collections::HashMap<
-        String,
-        Vec<rdgen_ir::FieldBinding>,
-    > = std::collections::HashMap::new();
+    let mut precedence_variants: std::collections::HashMap<String, Vec<rdgen_ir::FieldBinding>> =
+        std::collections::HashMap::new();
     for (index, alternative) in rule.alternatives.iter().enumerate() {
         if is_identity_constructor(alternative) {
             continue;
@@ -153,7 +158,9 @@ fn emit_rule(
                 let element = find_labeled_element(&alternative.elements, &field.source_label);
                 match element {
                     Some(element) => rust_type(element, output_types),
-                    None if field.source_label == "base" => format!("Option<Box<{}>>", type_name(&rule.output.0)),
+                    None if field.source_label == "base" => {
+                        format!("Option<Box<{}>>", type_name(&rule.output.0))
+                    }
                     None => {
                         return Err(format!(
                             "missing label '{}' in rule '{}'",
@@ -214,10 +221,7 @@ fn emit_rule(
                     "operator" => "Token".to_owned(),
                     _ => unreachable!("precedence constructor validation guarantees roles"),
                 };
-                output.push_str(&format!(
-                    "        {}: {},\n",
-                    generated_name, field_type
-                ));
+                output.push_str(&format!("        {}: {},\n", generated_name, field_type));
             }
             output.push_str("        span: SourceSpan,\n    },\n");
             spanned_variants.push(variant);
@@ -255,10 +259,7 @@ fn emit_rule(
                     "operator" => "Token".to_owned(),
                     _ => unreachable!("prefix constructor validation guarantees roles"),
                 };
-                output.push_str(&format!(
-                    "        {}: {},\n",
-                    generated_name, field_type
-                ));
+                output.push_str(&format!("        {}: {},\n", generated_name, field_type));
             }
             output.push_str("        span: SourceSpan,\n    },\n");
             spanned_variants.push(variant);
@@ -292,11 +293,13 @@ fn is_default_constructor(rule: &Rule, alternative: &rdgen_ir::Alternative) -> b
 }
 
 fn is_identity_constructor(alternative: &rdgen_ir::Alternative) -> bool {
-    alternative.constructor.type_name.0 == "Identity"
-        && alternative.constructor.fields.len() == 1
+    alternative.constructor.type_name.0 == "Identity" && alternative.constructor.fields.len() == 1
 }
 
-fn same_constructor_fields(left: &[rdgen_ir::FieldBinding], right: &[rdgen_ir::FieldBinding]) -> bool {
+fn same_constructor_fields(
+    left: &[rdgen_ir::FieldBinding],
+    right: &[rdgen_ir::FieldBinding],
+) -> bool {
     left.len() == right.len()
         && left.iter().zip(right).all(|(left, right)| {
             left.field == right.field && left.source_label == right.source_label
@@ -354,7 +357,10 @@ fn find_labeled_element<'a>(elements: &'a [Element], label: &str) -> Option<&'a 
     None
 }
 
-fn rust_type(element: &Element, output_types: &std::collections::HashMap<String, String>) -> String {
+fn rust_type(
+    element: &Element,
+    output_types: &std::collections::HashMap<String, String>,
+) -> String {
     match element {
         Element::Rule { rule, .. } => format!(
             "Box<{}>",
@@ -368,9 +374,15 @@ fn rust_type(element: &Element, output_types: &std::collections::HashMap<String,
             element,
             max: Some(1),
             ..
-        } => format!("Option<{}>", rust_type(rust_repeat_child(element), output_types)),
+        } => format!(
+            "Option<{}>",
+            rust_type(rust_repeat_child(element), output_types)
+        ),
         Element::Repeat { element, .. } => {
-            format!("Vec<{}>", rust_type(rust_repeat_child(element), output_types))
+            format!(
+                "Vec<{}>",
+                rust_type(rust_repeat_child(element), output_types)
+            )
         }
         Element::Group { alternatives, .. } if alternatives.len() == 1 => {
             rust_group_type(&alternatives[0], output_types)
@@ -397,7 +409,10 @@ fn rust_type(element: &Element, output_types: &std::collections::HashMap<String,
     }
 }
 
-fn rust_group_type(elements: &[Element], output_types: &std::collections::HashMap<String, String>) -> String {
+fn rust_group_type(
+    elements: &[Element],
+    output_types: &std::collections::HashMap<String, String>,
+) -> String {
     match elements {
         [] => "()".into(),
         [element] => rust_type(element, output_types),
@@ -441,13 +456,12 @@ fn type_name(name: &str) -> String {
 
 fn field_name(name: &str) -> String {
     match name {
-        "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" | "extern"
-        | "false" | "fn" | "for" | "if" | "impl" | "in" | "let" | "loop" | "match"
-        | "mod" | "move" | "mut" | "pub" | "ref" | "return" | "self" | "Self" | "static"
-        | "struct" | "super" | "trait" | "true" | "type" | "unsafe" | "use" | "where"
-        | "while" | "async" | "await" | "dyn" | "abstract" | "become" | "box" | "do"
-        | "final" | "macro" | "override" | "priv" | "typeof" | "unsized" | "virtual"
-        | "yield" | "try" => {
+        "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" | "extern" | "false"
+        | "fn" | "for" | "if" | "impl" | "in" | "let" | "loop" | "match" | "mod" | "move"
+        | "mut" | "pub" | "ref" | "return" | "self" | "Self" | "static" | "struct" | "super"
+        | "trait" | "true" | "type" | "unsafe" | "use" | "where" | "while" | "async" | "await"
+        | "dyn" | "abstract" | "become" | "box" | "do" | "final" | "macro" | "override"
+        | "priv" | "typeof" | "unsized" | "virtual" | "yield" | "try" => {
             format!("r#{}", name)
         }
         _ => name.to_owned(),
@@ -472,8 +486,7 @@ fn emit_precedence_metadata(output: &mut String, grammar: &Grammar) -> Result<()
         .any(|rule| type_name(&rule.name) == "RdgenPrecedenceLevel")
     {
         return Err(
-            "Rust grammar rule name collides with generated type 'RdgenPrecedenceLevel'"
-                .to_owned(),
+            "Rust grammar rule name collides with generated type 'RdgenPrecedenceLevel'".to_owned(),
         );
     }
     output.push_str("#[derive(Clone, Copy, Debug, PartialEq)]\n");
@@ -612,13 +625,14 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    fn expect_line_end(&mut self) -> Result<(), ParseError> { while self.position < self.source.len() && matches!(self.source.as_bytes()[self.position], b' ' | b'\\t' | b'\\r') && self.same_line_limit.map_or(true, |limit| self.position < limit) { self.position += 1; } if self.same_line_limit.is_some_and(|limit| limit < self.source.len() && self.position >= limit) { let error = ParseError { message: \"expected same-line statement terminator\".into(), position: self.position }; self.remember_error(&error); return Err(error); } if self.position == self.source.len() { return Ok(()); } if self.source[self.position..].starts_with(':') { self.position += 1; return Ok(()); } if self.source[self.position..].starts_with('\\n') { self.position += 1; while self.position < self.source.len() && self.source[self.position..].starts_with('\\n') { self.position += 1; } return Ok(()); } let error = ParseError { message: \"expected statement terminator\".into(), position: self.position }; self.remember_error(&error); Err(error) }\n"
             + "    fn expect_newline(&mut self) -> Result<(), ParseError> { if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { let error = ParseError { message: \"expected newline\".into(), position: self.position }; self.remember_error(&error); return Err(error); } while self.position < self.source.len() { if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { break; } } Ok(()) }\n"
             + "    fn has_terminator_boundary(&self, literal: &str, end: usize) -> bool { !literal.bytes().all(|byte| byte.is_ascii_alphabetic()) || self.source.get(end..).and_then(|rest| rest.chars().next()).map_or(true, |character| !(character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '$' | '%' | '!' | '#' | '&'))) }\n"
+            + "    fn has_literal_boundary(&self, literal: &str, end: usize) -> bool { literal.len() <= 1 || !literal.bytes().all(|byte| byte.is_ascii_alphabetic()) || self.has_terminator_boundary(literal, end) }\n"
             + "    fn matches_terminator(&mut self, literal: &str) -> bool { let start = self.position; let mut first = true; for part in literal.split_whitespace() { if !first { self.skip_trivia(); } let Some(end) = (self.match_literal)(self.source, self.position, part) else { self.position = start; return false; }; if !self.has_terminator_boundary(part, end) { self.position = start; return false; } self.position = end; first = false; } self.position = start; true }\n"
             + "    fn skip_until_sync(&mut self, sync: &[&str]) { while self.position < self.source.len() { if sync.iter().any(|literal| self.source[self.position..].starts_with(literal)) { return; } if let Some(character) = self.source[self.position..].chars().next() { self.position += character.len_utf8(); } else { return; } } }\n"
             + "    fn expect_literal(&mut self, literal: &str) -> Result<Token, ParseError> {\n"
             + "        self.skip_trivia();\n"
             + "        if self.position <= self.source.len() && self.source.is_char_boundary(self.position) {\n"
             + "            if let Some(end) = (self.match_literal)(self.source, self.position, literal) {\n"
-            + "                if end >= self.position && end <= self.source.len() && self.source.is_char_boundary(end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
+            + "                if end >= self.position && end <= self.source.len() && self.source.is_char_boundary(end) && self.has_literal_boundary(literal, end) { self.position = end; return Ok(Token(literal.to_owned())); }\n"
             + "            }\n"
             + "        }\n"
             + "        let error = ParseError { message: format!(\"expected {:?}\", literal), position: self.position }; self.remember_error(&error); Err(error)\n"
@@ -708,7 +722,9 @@ fn emit_precedence_ast_helper(
         "    fn {}(left: {}, operator: Token, right: {}) -> {} {{\n",
         combine_name, rule_type, rule_type, rule_type
     ));
-    output.push_str("        let node_span = SourceSpan { start: left.span().start, end: right.span().end };\n");
+    output.push_str(
+        "        let node_span = SourceSpan { start: left.span().start, end: right.span().end };\n",
+    );
     output.push_str("        match operator.0.as_str() {\n");
     for level in &table.levels {
         let constructor = level
@@ -717,7 +733,10 @@ fn emit_precedence_ast_helper(
             .expect("precedence AST helper requires constructors for every level");
         let variant = type_name(&constructor.type_name.0);
         for operator in &level.operators {
-            output.push_str(&format!("            {:?} => {}::{} {{\n", operator, rule_type, variant));
+            output.push_str(&format!(
+                "            {:?} => {}::{} {{\n",
+                operator, rule_type, variant
+            ));
             for field in &constructor.fields {
                 let value = match field.source_label.as_str() {
                     "left" => "Box::new(left)".to_owned(),
@@ -734,7 +753,9 @@ fn emit_precedence_ast_helper(
             output.push_str("                span: node_span,\n            },\n");
         }
     }
-    output.push_str("            other => unreachable!(\"unknown precedence operator {:?}\", other),\n");
+    output.push_str(
+        "            other => unreachable!(\"unknown precedence operator {:?}\", other),\n",
+    );
     output.push_str("        }\n    }\n\n");
     output.push_str(&format!(
         "    pub fn parse_{}_precedence_ast(&mut self, minimum_binding_power: usize, parse_atom: fn(&mut Self) -> Result<{}, ParseError>, parse_operator: fn(&mut Self) -> Result<Option<Token>, ParseError>) -> Result<{}, ParseError> {{ self.parse_precedence_climbing_tokens(minimum_binding_power, parse_atom, parse_operator, {}_binding_power, {}) }}\n\n",
@@ -745,17 +766,23 @@ fn emit_precedence_ast_helper(
 
 /// Find the atom rule a `climb` element uses for the precedence table
 /// matching `table.rule`, if any rule wires itself to that table.
-fn climb_atom_for_table<'a>(grammar: &'a Grammar, table: &rdgen_ir::PrecedenceTable) -> Option<&'a str> {
+fn climb_atom_for_table<'a>(
+    grammar: &'a Grammar,
+    table: &rdgen_ir::PrecedenceTable,
+) -> Option<&'a str> {
     grammar
         .rules
         .iter()
         .find(|rule| rule.name == table.rule)
         .and_then(|rule| {
             rule.alternatives.iter().find_map(|alternative| {
-                alternative.elements.iter().find_map(|element| match element {
-                    Element::Climb { atom, .. } => Some(atom.as_str()),
-                    _ => None,
-                })
+                alternative
+                    .elements
+                    .iter()
+                    .find_map(|element| match element {
+                        Element::Climb { atom, .. } => Some(atom.as_str()),
+                        _ => None,
+                    })
             })
         })
 }
@@ -820,15 +847,24 @@ fn emit_precedence_climb_helpers(
                 "            let operand = match self.parse_precedence_climbing_tokens_backtracking({}, Self::parse_{}_climb_atom, Self::parse_{}_operator, {}_binding_power, Self::{}_precedence_combine) {{ Ok(value) => value, Err(error) => return Err(error) }};\n",
                 threshold, table.rule, table.rule, table.rule, table.rule
             ));
-            output.push_str("            let node_span = SourceSpan { start, end: operand.span().end };\n");
-            output.push_str(&format!("            return Ok({}::{} {{\n", rule_type, variant));
+            output.push_str(
+                "            let node_span = SourceSpan { start, end: operand.span().end };\n",
+            );
+            output.push_str(&format!(
+                "            return Ok({}::{} {{\n",
+                rule_type, variant
+            ));
             for field in &constructor.fields {
                 let value = match field.source_label.as_str() {
                     "operand" => "Box::new(operand)".to_owned(),
                     "operator" => "operator_token".to_owned(),
                     _ => unreachable!("prefix constructor validation guarantees roles"),
                 };
-                output.push_str(&format!("                {}: {},\n", field_name(&field.field), value));
+                output.push_str(&format!(
+                    "                {}: {},\n",
+                    field_name(&field.field),
+                    value
+                ));
             }
             output.push_str("                span: node_span,\n            });\n        }\n");
         }
@@ -997,7 +1033,9 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
         rule.name,
         type_name(&rule.output.0)
     ));
-    output.push_str("        let previous_commit = self.committed;\n        self.committed = false;\n");
+    output.push_str(
+        "        let previous_commit = self.committed;\n        self.committed = false;\n",
+    );
     if rule.lexical {
         output.push_str("        let lexical_start = self.position;\n        self.skip_trivia();\n        let lexical_token_start = self.position;\n        let previous_lexical_mode = self.lexical_mode;\n        self.lexical_mode = true;\n");
     }
@@ -1051,8 +1089,15 @@ fn emit_parser_rule(output: &mut String, rule: &Rule, grammar: &Grammar) -> Resu
                 type_name(&rule.output.0)
             )
         } else {
-            let span_start = if rule.lexical { "lexical_token_start" } else { "rdgen_span_start" };
-            let span_expr = format!("SourceSpan {{ start: {}, end: rdgen_span_end }}", span_start);
+            let span_start = if rule.lexical {
+                "lexical_token_start"
+            } else {
+                "rdgen_span_start"
+            };
+            let span_expr = format!(
+                "SourceSpan {{ start: {}, end: rdgen_span_end }}",
+                span_start
+            );
             format!(
                 "{}::{}{}",
                 type_name(&rule.output.0),
@@ -1195,7 +1240,12 @@ fn emit_element_binding(
                 ));
                 return Ok(());
             }
-            output.push_str(&format!("{}let {} = {} ;\n", indent, variable, emit_group_expression(element)?));
+            output.push_str(&format!(
+                "{}let {} = {} ;\n",
+                indent,
+                variable,
+                emit_group_expression(element)?
+            ));
             return Ok(());
         }
         Element::Group { alternatives, .. } => {
@@ -1227,9 +1277,9 @@ fn emit_element_binding(
             let output_types = std::collections::HashMap::new();
             let expected_type = rust_type(first, &output_types);
             if alternatives.iter().any(|alternative| {
-                alternative
-                    .first()
-                    .map_or(true, |element| rust_type(element, &output_types) != expected_type)
+                alternative.first().map_or(true, |element| {
+                    rust_type(element, &output_types) != expected_type
+                })
             }) {
                 output.push_str(&format!(
                     "{}let {} = {};\n",
@@ -1423,7 +1473,10 @@ fn element_variable(element: &Element, index: usize) -> String {
     label.map_or_else(|| format!("_element_{}", index), field_name)
 }
 
-fn emit_constructor_fields(alternative: &rdgen_ir::Alternative, span_expr: &str) -> Result<String, String> {
+fn emit_constructor_fields(
+    alternative: &rdgen_ir::Alternative,
+    span_expr: &str,
+) -> Result<String, String> {
     let mut output = String::from(" { ");
     for field in &alternative.constructor.fields {
         // A fold step's magic `base`-role field isn't bound by any of this
@@ -1486,8 +1539,10 @@ mod tests {
         .unwrap();
         let generated = emit(&grammar).unwrap();
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
-        assert!(generated.contains("    Atom {\n        value: Token,\n        span: SourceSpan,\n    },"));
-        assert!(generated.contains("    Term {\n        value: Token,\n        span: SourceSpan,\n    },"));
+        assert!(generated
+            .contains("    Atom {\n        value: Token,\n        span: SourceSpan,\n    },"));
+        assert!(generated
+            .contains("    Term {\n        value: Token,\n        span: SourceSpan,\n    },"));
         assert!(generated.contains("fn parse_atom(&mut self) -> Result<Expr, ParseError>"));
         assert!(generated.contains("fn parse_term(&mut self) -> Result<Expr, ParseError>"));
     }
@@ -1500,7 +1555,8 @@ mod tests {
         .unwrap();
         let generated = emit(&grammar).unwrap();
         assert_eq!(generated.matches("pub enum Expr {").count(), 1);
-        assert!(generated.contains("    Name {\n        value: Token,\n        span: SourceSpan,\n    },"));
+        assert!(generated
+            .contains("    Name {\n        value: Token,\n        span: SourceSpan,\n    },"));
         assert!(!generated.contains("Identity"));
         assert!(generated.contains("Ok(*value)"));
     }
@@ -1547,8 +1603,15 @@ mod tests {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1660,7 +1723,10 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
     }
 
@@ -1688,9 +1754,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1728,9 +1800,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1781,9 +1859,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1811,7 +1895,9 @@ mod tests {
         let grammar =
             compile("grammar Start; start = value: \"x\" => Start(span: value);").unwrap();
         let error = emit_ast(&grammar).unwrap_err();
-        assert!(error.contains("constructor field 'span' is reserved for the generated node span in rule 'start'"));
+        assert!(error.contains(
+            "constructor field 'span' is reserved for the generated node span in rule 'start'"
+        ));
     }
 
     #[test]
@@ -1849,9 +1935,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1878,9 +1970,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -1932,7 +2030,9 @@ mod tests {
 
     #[test]
     fn rejects_labeled_group_alternatives_without_a_group_sum_type() {
-        let grammar = compile("grammar Start; start = choice: ( \"a\" | \"b\" ) => Start(choice: choice);").unwrap();
+        let grammar =
+            compile("grammar Start; start = choice: ( \"a\" | \"b\" ) => Start(choice: choice);")
+                .unwrap();
         let error = emit_ast(&grammar).unwrap_err();
         assert!(error.contains("does not yet support labeled group 'choice' with alternatives"));
     }
@@ -2021,9 +2121,15 @@ mod tests {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2049,8 +2155,15 @@ mod tests {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2076,8 +2189,15 @@ mod tests {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2100,8 +2220,15 @@ mod tests {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2119,15 +2246,13 @@ mod tests {
                 generated.to_str().unwrap(),
                 r#"
 fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> {
-    if name == "any_char" && source.get(position..)?.starts_with("*/") {
-        return None;
-    }
     let ch = source.get(position..)?.chars().next()?;
     let accepted = match name {
         "letter" => ch.is_ascii_alphabetic(),
         "digit" => ch.is_ascii_digit(),
         "hex_digit" => ch.is_ascii_hexdigit(),
         "any_char" => true,
+        "any_char_except_block_comment_close" => !source.get(position..)?.starts_with("*/"),
         "any_char_except_quote" => ch != '"',
         "any_char_except_newline" => ch != '\n',
         _ => false,
@@ -2175,8 +2300,15 @@ fn main() {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2200,6 +2332,7 @@ fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> 
         "digit" => ch.is_ascii_digit(),
         "hex_digit" => ch.is_ascii_hexdigit(),
         "any_char" => true,
+        "any_char_except_block_comment_close" => !source.get(position..)?.starts_with("*/"),
         "any_char_except_quote" => ch != '"',
         "any_char_except_newline" => ch != '\n',
         _ => false,
@@ -2237,8 +2370,15 @@ fn main() {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     /// Shared lexical callbacks matching bascal.bcl.rdg's terminal/trivia/
@@ -2251,6 +2391,7 @@ fn scanner(source: &str, position: usize, name: &str) -> Option<(Token, usize)> 
         "digit" => ch.is_ascii_digit(),
         "hex_digit" => ch.is_ascii_hexdigit(),
         "any_char" => true,
+        "any_char_except_block_comment_close" => !source.get(position..)?.starts_with("*/"),
         "any_char_except_quote" => ch != '"',
         "any_char_except_newline" => ch != '\n',
         _ => false,
@@ -2300,7 +2441,10 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
         let output = std::process::Command::new(&binary).output().unwrap();
         assert!(
@@ -2545,8 +2689,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2572,8 +2723,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2596,8 +2754,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2624,9 +2789,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2662,15 +2833,26 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             ])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
 
         let mut files = Vec::new();
         for directory in ["tutorial", "examples", "tests/fixtures"] {
             collect_bcl_files(&repository.join(directory), &mut files);
         }
         files.sort();
-        assert_eq!(files.len(), 83, "update the corpus expectation deliberately");
-        let output = std::process::Command::new(&binary).args(&files).output().unwrap();
+        assert_eq!(
+            files.len(),
+            83,
+            "update the corpus expectation deliberately"
+        );
+        let output = std::process::Command::new(&binary)
+            .args(&files)
+            .output()
+            .unwrap();
         assert!(
             output.status.success(),
             "{}{}",
@@ -2734,7 +2916,9 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
 
     #[test]
     fn generated_line_end_accepts_colon_newline_and_eof() {
-        let grammar = compile("grammar Lines; start = \"a\", line_end, \"b\", line_end | \"a\", line_end;").unwrap();
+        let grammar =
+            compile("grammar Lines; start = \"a\", line_end, \"b\", line_end | \"a\", line_end;")
+                .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -2752,8 +2936,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2779,8 +2970,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2803,8 +3001,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2830,8 +3035,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2854,8 +3066,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2881,8 +3100,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2909,9 +3135,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2937,8 +3169,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2964,8 +3203,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .args([wrapper.to_str().unwrap(), "-o", binary.to_str().unwrap()])
             .output()
             .unwrap();
-        assert!(compiler.status.success(), "{}", String::from_utf8_lossy(&compiler.stderr));
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(
+            compiler.status.success(),
+            "{}",
+            String::from_utf8_lossy(&compiler.stderr)
+        );
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -2989,9 +3235,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3018,9 +3270,15 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3084,7 +3342,10 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
         let output = std::process::Command::new(&binary).output().unwrap();
         assert!(
@@ -3145,7 +3406,10 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
         let output = std::process::Command::new(&binary).output().unwrap();
         assert!(
@@ -3177,9 +3441,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3203,9 +3473,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3229,9 +3505,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3255,9 +3537,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3281,14 +3569,21 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_captures_repeated_literals() {
-        let grammar = compile("grammar Start; items = values: { \"x\" } => Start(values: values);").unwrap();
+        let grammar =
+            compile("grammar Start; items = values: { \"x\" } => Start(values: values);").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3307,14 +3602,21 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_backtracks_group_alternatives() {
-        let grammar = compile("grammar Start; start = ( \"a\", \"b\" | \"c\", \"d\" ) => Start();").unwrap();
+        let grammar =
+            compile("grammar Start; start = ( \"a\", \"b\" | \"c\", \"d\" ) => Start();").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3333,14 +3635,21 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_captures_optional_literals() {
-        let grammar = compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);").unwrap();
+        let grammar =
+            compile("grammar Start; start = item: [ \"a\" ] => Start(item: item);").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3359,14 +3668,21 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_captures_single_element_group() {
-        let grammar = compile("grammar Start; start = pair: ( \"a\" ) => Start(pair: pair);").unwrap();
+        let grammar =
+            compile("grammar Start; start = pair: ( \"a\" ) => Start(pair: pair);").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3385,14 +3701,21 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_captures_multi_element_group() {
-        let grammar = compile("grammar Start; start = pair: ( \"a\", \"b\" ) => Start(pair: pair);").unwrap();
+        let grammar =
+            compile("grammar Start; start = pair: ( \"a\", \"b\" ) => Start(pair: pair);").unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3411,14 +3734,22 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
     fn generated_rust_parser_captures_repeated_multi_element_groups() {
-        let grammar = compile("grammar Start; start = pairs: { ( \"a\", \"b\" ) } => Start(pairs: pairs);").unwrap();
+        let grammar =
+            compile("grammar Start; start = pairs: { ( \"a\", \"b\" ) } => Start(pairs: pairs);")
+                .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let generated = directory.path().join("generated.rs");
         let wrapper = directory.path().join("main.rs");
@@ -3437,9 +3768,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3466,9 +3803,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3495,9 +3838,15 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 
     #[test]
@@ -3521,8 +3870,14 @@ fn main() {
             .output()
             .unwrap();
         if !compiler.status.success() {
-            panic!("rustc failed: {}", String::from_utf8_lossy(&compiler.stderr));
+            panic!(
+                "rustc failed: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
         }
-        assert!(std::process::Command::new(&binary).status().unwrap().success());
+        assert!(std::process::Command::new(&binary)
+            .status()
+            .unwrap()
+            .success());
     }
 }

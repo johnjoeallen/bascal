@@ -4,206 +4,239 @@
 
 .field public static g1 I
 .field public static g2 I
-.field public static g3 Ljava/lang/String;
+.field public static g3 I
+.field public static g4 I
+.field public static g5 I
+.field public static g6 I
+.field public static g7 I
+.field public static g8 I
+.field public static g9 I
+.field public static g10 I
+.field public static g11 I
+.field public static g12 I
+.field public static g13 I
+.field public static g14 I
+.field public static g15 I
+.field public static g16 I
+.field public static g17 I
+.field public static g18 I
+.field public static g19 I
+.field public static g20 I
+.field public static g21 I
+.field public static g22 I
+.field public static g23 I
+.field public static g24 I
+.field public static g25 I
+.field public static g26 I
+.field public static g27 I
+.field public static g28 I
+.field public static g29 I
+.field public static g30 I
+.field public static g31 I
+.field public static g32 I
+.field public static g33 I
+.field public static g34 I
+.field public static g35 I
+.field public static g36 Ljava/lang/String;
 .method public static error : (I)Ljava/lang/String;
     .limit stack 16
     .limit locals 1
 
     iload 0
     dup
-    ldc 2
+    getstatic PortableErrorHandling/g33 I
     isub
     ifeq L_select_0_case_0
     goto L_select_0_next_0
 L_select_0_next_0:
     dup
-    ldc 3
+    getstatic PortableErrorHandling/g31 I
     isub
     ifeq L_select_0_case_1
     goto L_select_0_next_1
 L_select_0_next_1:
     dup
-    ldc 4
+    getstatic PortableErrorHandling/g23 I
     isub
     ifeq L_select_0_case_2
     goto L_select_0_next_2
 L_select_0_next_2:
     dup
-    ldc 5
+    getstatic PortableErrorHandling/g20 I
     isub
     ifeq L_select_0_case_3
     goto L_select_0_next_3
 L_select_0_next_3:
     dup
-    ldc 6
+    getstatic PortableErrorHandling/g27 I
     isub
     ifeq L_select_0_case_4
     goto L_select_0_next_4
 L_select_0_next_4:
     dup
-    ldc 7
+    getstatic PortableErrorHandling/g24 I
     isub
     ifeq L_select_0_case_5
     goto L_select_0_next_5
 L_select_0_next_5:
     dup
-    ldc 9
+    getstatic PortableErrorHandling/g32 I
     isub
     ifeq L_select_0_case_6
     goto L_select_0_next_6
 L_select_0_next_6:
     dup
-    ldc 10
+    getstatic PortableErrorHandling/g16 I
     isub
     ifeq L_select_0_case_7
     goto L_select_0_next_7
 L_select_0_next_7:
     dup
-    ldc 11
+    getstatic PortableErrorHandling/g15 I
     isub
     ifeq L_select_0_case_8
     goto L_select_0_next_8
 L_select_0_next_8:
     dup
-    ldc 13
+    getstatic PortableErrorHandling/g35 I
     isub
     ifeq L_select_0_case_9
     goto L_select_0_next_9
 L_select_0_next_9:
     dup
-    ldc 14
+    getstatic PortableErrorHandling/g26 I
     isub
     ifeq L_select_0_case_10
     goto L_select_0_next_10
 L_select_0_next_10:
     dup
-    ldc 19
+    getstatic PortableErrorHandling/g22 I
     isub
     ifeq L_select_0_case_11
     goto L_select_0_next_11
 L_select_0_next_11:
     dup
-    ldc 20
+    getstatic PortableErrorHandling/g30 I
     isub
     ifeq L_select_0_case_12
     goto L_select_0_next_12
 L_select_0_next_12:
     dup
-    ldc 24
+    getstatic PortableErrorHandling/g9 I
     isub
     ifeq L_select_0_case_13
     goto L_select_0_next_13
 L_select_0_next_13:
     dup
-    ldc 25
+    getstatic PortableErrorHandling/g7 I
     isub
     ifeq L_select_0_case_14
     goto L_select_0_next_14
 L_select_0_next_14:
     dup
-    ldc 27
+    getstatic PortableErrorHandling/g25 I
     isub
     ifeq L_select_0_case_15
     goto L_select_0_next_15
 L_select_0_next_15:
     dup
-    ldc 52
+    getstatic PortableErrorHandling/g5 I
     isub
     ifeq L_select_0_case_16
     goto L_select_0_next_16
 L_select_0_next_16:
     dup
-    ldc 53
+    getstatic PortableErrorHandling/g19 I
     isub
     ifeq L_select_0_case_17
     goto L_select_0_next_17
 L_select_0_next_17:
     dup
-    ldc 54
+    getstatic PortableErrorHandling/g3 I
     isub
     ifeq L_select_0_case_18
     goto L_select_0_next_18
 L_select_0_next_18:
     dup
-    ldc 55
+    getstatic PortableErrorHandling/g18 I
     isub
     ifeq L_select_0_case_19
     goto L_select_0_next_19
 L_select_0_next_19:
     dup
-    ldc 57
+    getstatic PortableErrorHandling/g8 I
     isub
     ifeq L_select_0_case_20
     goto L_select_0_next_20
 L_select_0_next_20:
     dup
-    ldc 58
+    getstatic PortableErrorHandling/g17 I
     isub
     ifeq L_select_0_case_21
     goto L_select_0_next_21
 L_select_0_next_21:
     dup
-    ldc 61
+    getstatic PortableErrorHandling/g11 I
     isub
     ifeq L_select_0_case_22
     goto L_select_0_next_22
 L_select_0_next_22:
     dup
-    ldc 62
+    getstatic PortableErrorHandling/g21 I
     isub
     ifeq L_select_0_case_23
     goto L_select_0_next_23
 L_select_0_next_23:
     dup
-    ldc 63
+    getstatic PortableErrorHandling/g6 I
     isub
     ifeq L_select_0_case_24
     goto L_select_0_next_24
 L_select_0_next_24:
     dup
-    ldc 64
+    getstatic PortableErrorHandling/g4 I
     isub
     ifeq L_select_0_case_25
     goto L_select_0_next_25
 L_select_0_next_25:
     dup
-    ldc 67
+    getstatic PortableErrorHandling/g34 I
     isub
     ifeq L_select_0_case_26
     goto L_select_0_next_26
 L_select_0_next_26:
     dup
-    ldc 68
+    getstatic PortableErrorHandling/g10 I
     isub
     ifeq L_select_0_case_27
     goto L_select_0_next_27
 L_select_0_next_27:
     dup
-    ldc 70
+    getstatic PortableErrorHandling/g14 I
     isub
     ifeq L_select_0_case_28
     goto L_select_0_next_28
 L_select_0_next_28:
     dup
-    ldc 71
+    getstatic PortableErrorHandling/g13 I
     isub
     ifeq L_select_0_case_29
     goto L_select_0_next_29
 L_select_0_next_29:
     dup
-    ldc 72
+    getstatic PortableErrorHandling/g12 I
     isub
     ifeq L_select_0_case_30
     goto L_select_0_next_30
 L_select_0_next_30:
     dup
-    ldc 75
+    getstatic PortableErrorHandling/g28 I
     isub
     ifeq L_select_0_case_31
     goto L_select_0_next_31
 L_select_0_next_31:
     dup
-    ldc 76
+    getstatic PortableErrorHandling/g29 I
     isub
     ifeq L_select_0_case_32
     goto L_select_0_next_32
@@ -392,14 +425,80 @@ L_select_0_end:
 
 .method public static main : ([Ljava/lang/String;)V
     .limit stack 16
-    .limit locals 4
+    .limit locals 37
 
     iconst_0
     putstatic PortableErrorHandling/g1 I
     iconst_0
     putstatic PortableErrorHandling/g2 I
+    iconst_0
+    putstatic PortableErrorHandling/g3 I
+    iconst_0
+    putstatic PortableErrorHandling/g4 I
+    iconst_0
+    putstatic PortableErrorHandling/g5 I
+    iconst_0
+    putstatic PortableErrorHandling/g6 I
+    iconst_0
+    putstatic PortableErrorHandling/g7 I
+    iconst_0
+    putstatic PortableErrorHandling/g8 I
+    iconst_0
+    putstatic PortableErrorHandling/g9 I
+    iconst_0
+    putstatic PortableErrorHandling/g10 I
+    iconst_0
+    putstatic PortableErrorHandling/g11 I
+    iconst_0
+    putstatic PortableErrorHandling/g12 I
+    iconst_0
+    putstatic PortableErrorHandling/g13 I
+    iconst_0
+    putstatic PortableErrorHandling/g14 I
+    iconst_0
+    putstatic PortableErrorHandling/g15 I
+    iconst_0
+    putstatic PortableErrorHandling/g16 I
+    iconst_0
+    putstatic PortableErrorHandling/g17 I
+    iconst_0
+    putstatic PortableErrorHandling/g18 I
+    iconst_0
+    putstatic PortableErrorHandling/g19 I
+    iconst_0
+    putstatic PortableErrorHandling/g20 I
+    iconst_0
+    putstatic PortableErrorHandling/g21 I
+    iconst_0
+    putstatic PortableErrorHandling/g22 I
+    iconst_0
+    putstatic PortableErrorHandling/g23 I
+    iconst_0
+    putstatic PortableErrorHandling/g24 I
+    iconst_0
+    putstatic PortableErrorHandling/g25 I
+    iconst_0
+    putstatic PortableErrorHandling/g26 I
+    iconst_0
+    putstatic PortableErrorHandling/g27 I
+    iconst_0
+    putstatic PortableErrorHandling/g28 I
+    iconst_0
+    putstatic PortableErrorHandling/g29 I
+    iconst_0
+    putstatic PortableErrorHandling/g30 I
+    iconst_0
+    putstatic PortableErrorHandling/g31 I
+    iconst_0
+    putstatic PortableErrorHandling/g32 I
+    iconst_0
+    putstatic PortableErrorHandling/g33 I
+    iconst_0
+    putstatic PortableErrorHandling/g34 I
+    iconst_0
+    putstatic PortableErrorHandling/g35 I
     ldc ""
-    putstatic PortableErrorHandling/g3 Ljava/lang/String;
+    putstatic PortableErrorHandling/g36 Ljava/lang/String;
     ; Maps an ERR code to its classic MBASIC/GW-BASIC/BASCOM message. Compiles
     ; and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     ; returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
@@ -417,6 +516,72 @@ L_select_0_end:
     ; the *error code itself* has a message, when really this is a lookup
     ; table keyed by that code. Stays an ordinary function.
 
+    ldc 2
+    putstatic PortableErrorHandling/g33 I
+    ldc 3
+    putstatic PortableErrorHandling/g31 I
+    ldc 4
+    putstatic PortableErrorHandling/g23 I
+    ldc 5
+    putstatic PortableErrorHandling/g20 I
+    ldc 6
+    putstatic PortableErrorHandling/g27 I
+    ldc 7
+    putstatic PortableErrorHandling/g24 I
+    ldc 9
+    putstatic PortableErrorHandling/g32 I
+    ldc 10
+    putstatic PortableErrorHandling/g16 I
+    ldc 11
+    putstatic PortableErrorHandling/g15 I
+    ldc 13
+    putstatic PortableErrorHandling/g35 I
+    ldc 14
+    putstatic PortableErrorHandling/g26 I
+    ldc 19
+    putstatic PortableErrorHandling/g22 I
+    ldc 20
+    putstatic PortableErrorHandling/g30 I
+    ldc 24
+    putstatic PortableErrorHandling/g9 I
+    ldc 25
+    putstatic PortableErrorHandling/g7 I
+    ldc 27
+    putstatic PortableErrorHandling/g25 I
+    ldc 52
+    putstatic PortableErrorHandling/g5 I
+    ldc 53
+    putstatic PortableErrorHandling/g19 I
+    ldc 54
+    putstatic PortableErrorHandling/g3 I
+    ldc 55
+    putstatic PortableErrorHandling/g18 I
+    ldc 57
+    putstatic PortableErrorHandling/g8 I
+    ldc 58
+    putstatic PortableErrorHandling/g17 I
+    ldc 61
+    putstatic PortableErrorHandling/g11 I
+    ldc 62
+    putstatic PortableErrorHandling/g21 I
+    ldc 63
+    putstatic PortableErrorHandling/g6 I
+    ldc 64
+    putstatic PortableErrorHandling/g4 I
+    ldc 67
+    putstatic PortableErrorHandling/g34 I
+    ldc 68
+    putstatic PortableErrorHandling/g10 I
+    ldc 70
+    putstatic PortableErrorHandling/g14 I
+    ldc 71
+    putstatic PortableErrorHandling/g13 I
+    ldc 72
+    putstatic PortableErrorHandling/g12 I
+    ldc 75
+    putstatic PortableErrorHandling/g28 I
+    ldc 76
+    putstatic PortableErrorHandling/g29 I
 
     ; Tutorial — Portable Structured Error Handling
     ; 
@@ -429,7 +594,7 @@ L_select_0_end:
 L_try_0_start:
     new java/lang/RuntimeException
     dup
-    ldc 53
+    getstatic PortableErrorHandling/g19 I
     invokestatic java/lang/Integer/toString (I)Ljava/lang/String;
     invokespecial java/lang/RuntimeException/<init> (Ljava/lang/String;)V
     athrow
@@ -442,12 +607,12 @@ L_try_0_catch:
     iconst_0
     putstatic PortableErrorHandling/g1 I
     ldc "tutorial/portable_error_handling.bcl"
-    putstatic PortableErrorHandling/g3 Ljava/lang/String;
+    putstatic PortableErrorHandling/g36 Ljava/lang/String;
     getstatic PortableErrorHandling/g2 I
-    ldc 53
+    getstatic PortableErrorHandling/g19 I
     if_icmpeq L_try_0_matched
     getstatic PortableErrorHandling/g2 I
-    ldc 55
+    getstatic PortableErrorHandling/g18 I
     if_icmpeq L_try_0_matched
     goto L_try_0_rethrow
 L_try_0_matched:
@@ -461,7 +626,7 @@ L_try_0_matched:
     ldc " at "
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
-    getstatic PortableErrorHandling/g3 Ljava/lang/String;
+    getstatic PortableErrorHandling/g36 Ljava/lang/String;
     invokevirtual java/io/PrintStream/print (Ljava/lang/String;)V
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc ":"

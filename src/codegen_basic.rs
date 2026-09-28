@@ -38,6 +38,100 @@ mod tests {
     }
 
     #[test]
+    fn basic_generation_uses_semantic_dependency_declarations() {
+        let ast_source = "require com.example.ast\nimport com.example.astImport\nprint 1\nend\n";
+        let semantic_source =
+            "require com.example.semantic\nimport com.example.semanticImport\nprint 9\nend\n";
+        let parsed =
+            crate::parse_source("semantic_dependency.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("semantic_dependency.bcl", semantic_source)
+                .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("' require com.example.semantic"),
+            "{output}"
+        );
+        assert!(
+            output.contains("' import com.example.semanticImport (alias for require)"),
+            "{output}"
+        );
+        assert!(!output.contains("' require com.example.ast"), "{output}");
+        assert!(
+            !output.contains("' import com.example.astImport"),
+            "{output}"
+        );
+        assert!(output.contains("PRINT 9"), "{output}");
+    }
+
+    #[test]
+    fn semantic_callable_return_controls_implicit_return_emission() {
+        let ast_source = "function amount%()\nreturn 1\n' AST trailing comment\nend function\nprint amount%()\nend\n";
+        let semantic_source = "function amount%()\nreturn 2\nend function\nprint amount%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_callable_return.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_callable_return.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("amountResult0% = 2"), "{output}");
+        assert_eq!(output.matches("    RETURN").count(), 1, "{output}");
+    }
+
+    #[test]
+    fn unmatched_semantic_callable_keeps_ast_return_compatibility() {
+        let ast_source = "function amount%()\nreturn 1\nend function\nprint amount%()\nend\n";
+        let semantic_source = "print 2\nend\n";
+        let parsed =
+            crate::parse_source("semantic_return_fallback.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_return_fallback.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("amountResult0% = 1"), "{output}");
+        assert_eq!(output.matches("    RETURN").count(), 1, "{output}");
+    }
+
+    #[test]
+    fn semantic_missing_return_rejects_ast_only_return() {
+        let ast_source =
+            "function amount%()\nvalue% = 1\nreturn 1\nend function\nprint amount%()\nend\n";
+        let semantic_source =
+            "function amount%()\nvalue% = 2\nend function\nprint amount%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_partial_return.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_partial_return.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let diagnostics = match crate::resolver::resolve_with_semantic(program, Some(semantic)) {
+            Err(diagnostics) => diagnostics,
+            Ok(_) => panic!("AST-only RETURN incorrectly satisfied typed callable validation"),
+        };
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("implicit function return")),
+            "typed callable return validation did not report the missing RETURN: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn basic_generation_uses_semantic_suffixless_string_dim() {
         let source = "dim text as string\nend\n";
         let parsed = crate::parse_source("semantic_dim.bcl".to_string(), source).unwrap();
@@ -49,6 +143,4207 @@ mod tests {
     }
 
     #[test]
+    fn basic_generation_uses_semantic_long_dim_over_legacy_suffix() {
+        let legacy_source = "dim value%\nvalue% = 1\nend\n";
+        let semantic_source = "dim value as long\nvalue = 2\nend\n";
+        let parsed =
+            crate::parse_source("semantic_long_dim_authority.bcl".to_string(), legacy_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named(
+                    "semantic_long_dim_authority.bcl",
+                    semantic_source,
+                )
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("DIM value AS LONG"), "{output}");
+        assert!(output.contains("value = 2"), "{output}");
+        assert!(!output.contains("DIM value%"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_record_field_reads_and_writes() {
+        let ast_source = "program roomTest\nrecord Room\nname: string(20)\nend record\nlet room = { name: \"Hall\" }\nroom.name = \"AST\"\nfunction read$()\nreturn \"AST return\"\nend function\nfunction localRead$()\nlet local = { name: \"Local\" }\nlocal.name = \"AST local\"\nreturn \"AST local\"\nend function\nprint \"AST\"\nprint read$()\nprint localRead$()\nend\n";
+        let semantic_source = "program roomTest\nrecord Room\nname: string(20)\nend record\nlet room = { name: \"Hall\" }\nmid$(room.name, 2, 2) = \"IR\"\nfunction read$()\nreturn room.name\nend function\nfunction localRead$()\nlet local = { name: \"Local\" }\nmid$(local.name, 2, 2) = \"XY\"\nreturn local.name\nend function\nprint room.name\nprint read$()\nprint localRead$()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_record_member.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_record_member.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("LEFT$(BCCT"),
+            "typed MID$ field target did not emit its splice: {output}"
+        );
+        assert!(
+            output.contains("roomname$ = LEFT$(BCCT"),
+            "typed MID$ field target did not write back to typed field storage: {output}"
+        );
+        assert!(
+            output.contains("PRINT roomname$"),
+            "typed field read was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("PRINT \"AST\""),
+            "AST print replaced semantic field read: {output}"
+        );
+        assert!(
+            output.contains(" = roomname$"),
+            "typed callable field read was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("AST return"),
+            "AST callable return replaced semantic IR: {output}"
+        );
+        assert!(
+            output.contains(" = localreadLocalName0$"),
+            "typed local record-field read was not emitted: {output}"
+        );
+        assert!(
+            output.contains("localreadLocalName0$ = LEFT$(BCCT"),
+            "callable-local MID$ write did not use allocated record-field storage: {output}"
+        );
+        assert!(
+            !output.contains("AST local"),
+            "AST local return replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_emits_typed_record_file_declaration_without_record_ops() {
+        let ast_source = "record Student\nid: int16\nname: string(6)\nend record\nfile db as Student = open(\"ast.dat\")\nend\n";
+        let semantic_source = "record Student\nid: int16\nname: string(6)\nend record\nfile db as Student = open(\"typed.dat\")\nend\n";
+        let parsed = crate::parse_source("typed_record_file.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered {
+            program,
+            lowered_record_files,
+            ..
+        } = crate::lower::lower(parsed).unwrap();
+        assert_eq!(lowered_record_files[0].record_length, 8);
+        assert_eq!(
+            lowered_record_files[0]
+                .fields
+                .iter()
+                .map(|field| (field.width, field.offset))
+                .collect::<Vec<_>>(),
+            [(2, 0), (6, 2)]
+        );
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "typed_record_file.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        semantic.lowered_record_files = lowered_record_files;
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("OPEN \"typed.dat\" FOR RANDOM AS #1 LEN = 8"), "{output}");
+        assert!(
+            output.contains("FIELD #1, 2 AS dbidbuf$, 6 AS dbnamebuf$"),
+            "{output}"
+        );
+        assert!(!output.contains("ast.dat"), "AST file path leaked: {output}");
+    }
+
+    #[test]
+    fn basic_semantic_record_buffers_replace_compatibility_ast_names() {
+        let ast_source = "program p\nfield #1, 4 as value$\nfunction read$()\nlet value$ = \"AST\"\nreturn value$\nend function\nprint read$()\nend\n";
+        let semantic_source = "program p\nbeep\nfunction read$()\nlet value$ = \"typed\"\nreturn value$\nend function\nprint read$()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_record_buffer_scope.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_record_buffer_scope.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("BEEP"),
+            "semantic root statement missing: {output}"
+        );
+        assert!(
+            output.contains("\"typed\""),
+            "semantic local initializer missing: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST local initializer leaked: {output}"
+        );
+        assert!(
+            !output.contains("PRINT value$") && !output.contains("= value$"),
+            "AST FIELD binding leaked into semantic local scope: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_semantic_field_binding_uses_typed_suffix_metadata() {
+        let ast_source = "open \"record.dat\" for random as #1 len = 4\nfield #1, 4 as buffer%\nend\n";
+        let semantic_source = "open \"record.dat\" for random as #1 len = 4\nfield #1, 4 as buffer$\nend\n";
+        let parsed =
+            crate::parse_source("typed_field_binding.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "typed_field_binding.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &mut semantic.statements[1].kind
+        else {
+            panic!()
+        };
+        let crate::semantic_ir::SemanticStatementKind::Field { bindings, .. } =
+            &mut statements[0].kind
+        else {
+            panic!()
+        };
+        bindings[0].name = "buffer%".to_string();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("FIELD #1, 4 AS buffer$"), "{output}");
+        assert!(!output.contains("FIELD #1, 4 AS buffer%"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_resolves_composed_semantic_record_fields() {
+        let declarations = "record Core\nid: int16\nend record\nrecord Identity combines Core\nkey: int32\nend record\nrecord Entry combines Identity\nname: string(8)\nend record\ndim row as Entry\n";
+        let ast_source = format!("{declarations}print 999\nend\n");
+        let semantic_source = format!("{declarations}print row.id\nend\n");
+        let parsed = crate::parse_source("semantic_composed_record.bcl".to_string(), &ast_source)
+            .expect("compatibility AST parses");
+        let crate::lower::Lowered { program, .. } =
+            crate::lower::lower(parsed).expect("compatibility AST lowers");
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_composed_record.bcl",
+            &semantic_source,
+        )
+        .expect("typed IR parses");
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic))
+            .expect("program resolves");
+        let module = resolved
+            .semantic_module
+            .as_ref()
+            .expect("typed module remains attached");
+        assert!(
+            super::semantic_record_storage_names(module).contains("rowid%"),
+            "inherited member storage was not reserved"
+        );
+        let output = super::CodeGenerator::new()
+            .generate(&resolved)
+            .expect("BASIC transpires");
+        assert!(output.contains("PRINT rowid%"), "{output}");
+        assert!(!output.contains("PRINT 999"), "AST print leaked: {output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_simple_terminal_statements_from_semantic_ir() {
+        let source = "beep\n";
+        let semantic_source = "stop\n";
+        let parsed = crate::parse_source("semantic_terminal.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("\nSTOP\n"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_terminal_intrinsic_family_from_semantic_ir() {
+        for (semantic_statement, expected) in [
+            ("stop", "STOP"),
+            ("cls", "CLS"),
+            ("beep", "BEEP"),
+            ("system", "SYSTEM"),
+            ("clear", "CLEAR"),
+        ] {
+            let source = "stop\nend\n";
+            let semantic_source = format!("{semantic_statement}\nend\n");
+            let parsed = crate::parse_source("semantic_intrinsic.bcl".to_string(), source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let mut resolved = crate::resolver::resolve(program).unwrap();
+            resolved.semantic_module =
+                Some(crate::semantic_ir::parse_and_adapt(&semantic_source).unwrap());
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(output.contains(&format!("\n{expected}\n")), "{output}");
+            assert!(output.contains("\nEND\n"), "{output}");
+        }
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_label_transfers_from_ir() {
+        let source = "beep\n";
+        let semantic_source = "top:\ngosub sub\ngoto ender\nsub:\nrestore top\nresume next\non error goto 0\nender:\nstop\nend\n";
+        let parsed = crate::parse_source("semantic_labels.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in ["GOSUB", "GOTO", "RESTORE", "RESUME NEXT", "ON ERROR GOTO 0"] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
+        assert!(output.contains("GOSUB 20"), "{output}");
+        assert!(output.contains("GOTO 30"), "{output}");
+        assert!(output.contains("RESTORE 10"), "{output}");
+        assert!(output.contains("\nEND\n"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_single_line_if_from_semantic_ir() {
+        let parsed = crate::parse_source("semantic_single_line_if.bcl".to_string(), "beep\n")
+            .expect("compatibility AST parses");
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_single_line_if.bcl",
+            "if 1 then stop\n",
+        )
+        .expect("typed IR parses");
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (1) = 0 THEN GOTO"), "{output}");
+        assert!(output.contains("STOP"), "{output}");
+        assert!(
+            !output.contains("BEEP"),
+            "legacy statement leaked: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_single_line_if_else_from_semantic_ir() {
+        let parsed = crate::parse_source("semantic_single_line_if_else.bcl".to_string(), "cls\n")
+            .expect("compatibility AST parses");
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_single_line_if_else.bcl",
+            "if 1 then stop else beep\n",
+        )
+        .expect("typed IR parses");
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (1) = 0 THEN GOTO"), "{output}");
+        assert!(output.contains("STOP"), "{output}");
+        assert!(output.contains("BEEP"), "{output}");
+        assert!(!output.contains("CLS"), "legacy statement leaked: {output}");
+    }
+
+    #[test]
+    fn basic_callable_dispatches_single_line_if_from_semantic_ir() {
+        let ast_source = "function choose%()\nreturn 1\nend function\nend\n";
+        let semantic_source =
+            "function choose%()\nif 1 then return 2 else return 3\nend function\nend\n";
+        let parsed = crate::parse_source("semantic_callable_single_if.bcl".to_string(), ast_source)
+            .expect("compatibility AST parses");
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_callable_single_if.bcl",
+            semantic_source,
+        )
+        .expect("typed IR parses");
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (1) = 0 THEN GOTO"), "{output}");
+        assert!(output.contains("chooseResult0% = 2"), "{output}");
+        assert!(output.contains("chooseResult0% = 3"), "{output}");
+        assert!(
+            !output.contains("chooseResult0% = 1"),
+            "AST return leaked: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_consumes_semantic_global_declarations_without_output() {
+        let source = "beep\n";
+        let semantic_source = "global value%\nstop\nend\n";
+        let parsed = crate::parse_source("semantic_global_noop.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("\nSTOP\n"), "{output}");
+        assert!(output.contains("\nEND\n"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_data_and_read_statements() {
+        let source = "beep\n";
+        let semantic_source = "data 7, \"ok\"\nread value%\nend\n";
+        let parsed = crate::parse_source("semantic_data_read.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DATA 7, \"ok\""), "{output}");
+        assert!(output.contains("READ value%"), "{output}");
+        assert!(output.contains("END"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_semantic_top_level_expression_statements() {
+        let ast_source =
+            "function tick%()\nreturn 7\nend function\nprint \"ast expression\"\nend\n";
+        let semantic_source = "function tick%()\nreturn 7\nend function\ntick%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_top_level_expression.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_top_level_expression.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("GOSUB 10"),
+            "semantic expression call was not transpiled: {output}"
+        );
+        assert!(
+            !output.contains("BCCT1% = tickResult0%"),
+            "discarded expression result allocated an unnecessary BASIC temporary: {output}"
+        );
+        assert!(
+            !output.contains("ast expression"),
+            "AST top-level expression replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_callable_print_operands_from_semantic_ir() {
+        let ast_source =
+            "function tick%()\nreturn 7\nend function\nfunction makeFormat$()\nreturn \"###\"\nend function\nfunction display%()\nlprint using \"###\"; \"ast expression\"\nwrite #1, 0, 0\ninput #1, inputValue%\nline input #1, inputText$\nopen \"ast.dat\" for input as #1\nclose #1\nkill \"ast.tmp\"\nname \"a\" as \"b\"\nprint #1, using \"###\"; 0\nreturn 0\nend function\nlprint using \"###\"; \"ast expression\"\nprint \"ast expression\"\nprint 0, 0\nwrite #1, 0, 0\ninput #1, inputValue%\nline input #1, inputText$\nopen \"ast.dat\" for input as #1\nclose #1\nkill \"ast.tmp\"\nname \"a\" as \"b\"\nprint #1, using \"###\"; 0\nend\n";
+        let semantic_source =
+            "function tick%()\nreturn 7\nend function\nfunction makeFormat$()\nreturn \"###\"\nend function\nfunction display%()\nlprint using makeFormat$(); tick%(), tick%()\nwrite #tick%(), tick%(), tick%()\ninput #tick%(), inputValue%\nline input #tick%(), inputText$\nopen \"semantic.dat\" for input as #tick%()\nclose #tick%()\nkill makeFormat$()\nname makeFormat$() as makeFormat$()\nprint #tick%(), using makeFormat$(); tick%()\nreturn 0\nend function\nlprint using makeFormat$(); tick%(), tick%()\nprint using makeFormat$(); tick%()\nprint tick%(), tick%()\nwrite #tick%(), tick%(), tick%()\ninput #tick%(), inputValue%\nline input #tick%(), inputText$\nopen \"semantic.dat\" for input as #tick%()\nclose #tick%()\nkill makeFormat$()\nname makeFormat$() as makeFormat$()\nprint #tick%(), using makeFormat$(); tick%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_print_callable.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_print_callable.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("GOSUB 10"), "{output}");
+        assert!(output.contains("PRINT USING BCCT"), "{output}");
+        assert!(output.contains("PRINT #BCCT"), "{output}");
+        assert!(output.contains("PRINT BCCT"), "{output}");
+        assert!(output.contains("LPRINT USING BCCT"), "{output}");
+        assert!(output.contains("WRITE #BCCT"), "{output}");
+        assert!(output.contains("INPUT #BCCT"), "{output}");
+        assert!(output.contains("LINE INPUT #BCCT"), "{output}");
+        assert!(output.contains("OPEN \"semantic.dat\" FOR INPUT AS #BCCT"), "{output}");
+        assert!(output.contains("CLOSE #BCCT"), "{output}");
+        assert!(output.contains("KILL BCCT"), "{output}");
+        assert!(output.contains("NAME BCCT"), "{output}");
+        assert!(!output.contains("ast expression"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_locate_operands_at_module_scope() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nlocate 1, 2\nend\n";
+        let semantic_source =
+            "function tick%()\nreturn 9\nend function\nlocate tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_module_locate_call.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_module_locate_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("LOCATE BCCT1%, BCCT2%"),
+            "typed module LOCATE operands must use their evaluated call results: {output}"
+        );
+        assert!(
+            !output.contains("LOCATE 1, 2"),
+            "AST module LOCATE operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_color_operands_at_module_scope() {
+        let ast_source = "function tick%()\nreturn 1\nend function\ncolor 1, 2\nend\n";
+        let semantic_source =
+            "function tick%()\nreturn 9\nend function\ncolor tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_module_color_call.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_module_color_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("COLOR BCCT1%, BCCT2%"),
+            "typed module COLOR operands must use their evaluated call results: {output}"
+        );
+        assert!(
+            !output.contains("COLOR 1, 2"),
+            "AST module COLOR operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_width_operands_at_module_scope() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nwidth #1, 2\nend\n";
+        let semantic_source =
+            "function tick%()\nreturn 9\nend function\nwidth #tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_module_width_call.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_module_width_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("WIDTH #BCCT1%, BCCT2%"),
+            "typed module WIDTH operands must use evaluated call results: {output}"
+        );
+        assert!(
+            !output.contains("WIDTH #1, 2"),
+            "AST module WIDTH operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_poke_and_out_operands_at_module_scope() {
+        let ast_source = "function tick%()\nreturn 1\nend function\npoke 1, 2\nout 3, 4\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\npoke tick%(), tick%()\nout tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_module_poke_out_calls.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_module_poke_out_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("POKE BCCT1%, BCCT2%") && output.contains("OUT BCCT3%, BCCT4%"),
+            "typed module POKE/OUT operands must use evaluated call results: {output}"
+        );
+        assert!(
+            !output.contains("POKE 1, 2") && !output.contains("OUT 3, 4"),
+            "AST module POKE/OUT operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_read_indices_with_callable_operands() {
+        let ast_source = "dim values%(4)\nfunction index%()\nreturn 1\nend function\nfunction load%()\nread values%(1)\nreturn 0\nend function\ndata 0\nread values%(1)\nprint load%()\nend\n";
+        let semantic_source = "dim values%(4)\nfunction index%()\nreturn 2\nend function\nfunction load%()\nread values%(index%())\nreturn 0\nend function\ndata 7\nread values%(index%())\nprint load%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_read_index.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_read_index.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("READ values%(BCCT2%)")
+                && output.contains("READ loadValues0%(BCCT4%)"),
+            "typed module and callable READ target indices must use callable results: {output}"
+        );
+        assert!(
+            !output.contains("READ values%(1)"),
+            "AST READ target must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_swap_lvalues_with_callable_indices() {
+        let ast_source = "dim values%(4)\nfunction index%()\nreturn 1\nend function\nfunction exchange%()\nswap values%(1), values%(2)\nreturn 0\nend function\nswap values%(1), values%(2)\nprint exchange%()\nend\n";
+        let semantic_source = "dim values%(4)\nfunction index%()\nreturn 2\nend function\nfunction exchange%()\nswap values%(index%()), values%(index%())\nreturn 0\nend function\nswap values%(index%()), values%(index%())\nprint exchange%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_swap_indices.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_swap_indices.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("SWAP values%(BCCT2%), values%(BCCT4%)"),
+            "typed module SWAP must use ordered callable-index snapshots: {output}"
+        );
+        assert!(
+            output.contains("SWAP exchangeValues0%(BCCT")
+                && output.contains("), exchangeValues0%(BCCT"),
+            "typed callable SWAP must use callable-index snapshots: {output}"
+        );
+        assert!(
+            !output.contains("SWAP values%(1), values%(2)"),
+            "AST SWAP operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_input_lvalues_with_callable_indices() {
+        let ast_source = "dim values%(4)\ndim texts$(4)\nopen \"input.txt\" for input as #1\nfunction index%()\nreturn 1\nend function\nfunction load%()\ninput values%(1)\nline input #1, texts$(1)\nreturn 0\nend function\ninput values%(1)\nline input #1, texts$(1)\nprint load%()\nend\n";
+        let semantic_source = "dim values%(4)\ndim texts$(4)\nopen \"input.txt\" for input as #1\nfunction index%()\nreturn 2\nend function\nfunction load%()\ninput values%(index%())\nline input #1, texts$(index%())\nreturn 0\nend function\ninput values%(index%())\nline input #1, texts$(index%())\nprint load%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_input_indices.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_input_indices.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("INPUT values%(BCCT2%)")
+                && output.contains("INPUT loadValues0%(BCCT6%)"),
+            "typed module and callable INPUT targets must use callable-index snapshots: {output}"
+        );
+        assert!(
+            !output.contains("INPUT values%(1)"),
+            "AST INPUT targets must not replace typed IR: {output}"
+        );
+        assert!(
+            output.contains("LINE INPUT #1, texts$(BCCT4%)")
+                && output.contains("LINE INPUT #1, loadTexts0$(BCCT8%)"),
+            "typed module and callable LINE INPUT targets must use callable-index snapshots: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_assignment_lvalues_with_callable_indices() {
+        let ast_source = "dim values%(4)\nfunction index%()\nreturn 1\nend function\nfunction change%()\nvalues%(1) = 3\nreturn 0\nend function\nvalues%(1) = 3\nprint change%()\nend\n";
+        let semantic_source = "dim values%(4)\nfunction index%()\nreturn 2\nend function\nfunction change%()\nvalues%(index%()) = index%()\nreturn 0\nend function\nvalues%(index%()) = index%()\nprint change%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_assignment_indices.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_assignment_indices.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("values%(BCCT2%) = indexResult0%")
+                && output.contains("changeValues0%(BCCT4%) = indexResult0%"),
+            "typed assignment targets must snapshot callable indices before evaluating callable values: {output}"
+        );
+        assert!(
+            !output.contains("values%(1) = 3"),
+            "AST assignment target and value must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_rank_two_assignment_indices_with_callables() {
+        let ast_source = "function index%()\nreturn 1\nend function\nfunction update%()\ndim grid%(2, 2)\ngrid%(1, 1) = 2\nreturn 0\nend function\ndim grid%(2, 2)\ngrid%(1, 1) = 2\nprint update%()\nend\n";
+        let semantic_source = "function index%()\nreturn 2\nend function\nfunction update%()\ndim grid%(2, 2)\ngrid%(index%(), index%()) = 7\nreturn 0\nend function\ndim grid%(2, 2)\ngrid%(index%(), index%()) = 7\nprint update%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_rank_two_assignment_indices.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_rank_two_assignment_indices.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.matches(" = 7").count() == 2,
+            "typed rank-two module and callable assignments must replace AST values: {output}"
+        );
+        assert!(
+            output.contains("grid%(BCCT") && output.contains(", BCCT"),
+            "typed rank-two indices must be snapshotted before assignment: {output}"
+        );
+        assert!(
+            !output.contains("grid%(1, 1) = 2"),
+            "AST rank-two lvalues must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_dim_bounds_with_callable_expressions() {
+        let ast_source = "function size%()\nreturn 1\nend function\nfunction allocate%()\ndim local%(1)\nreturn 0\nend function\ndim values%(1)\nprint allocate%()\nend\n";
+        let semantic_source = "function size%()\nreturn 2\nend function\nfunction allocate%()\ndim local%(size%())\nreturn 0\nend function\ndim values%(size%())\nprint allocate%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_dim_callable_bounds.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_dim_callable_bounds.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("DIM values%(BCCT")
+                && output.contains("DIM allocateLocal0%(BCCT"),
+            "typed module and callable DIM bounds must use callable results: {output}"
+        );
+        assert!(
+            !output.contains("DIM values%(1)") && !output.contains("DIM local%(1)"),
+            "AST DIM bounds must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_scalar_method_expression_statements() {
+        let ast_source = "method adjust%[integer]()\nreturn self% + 1\nend method\nbase% = 10\nprint \"AST method\"\nend\n";
+        let semantic_source = "method adjust%[integer]()\nreturn self% + 7\nend method\nbase% = 20\nbase%.adjust()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_method_expression_statement.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_method_expression_statement.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("base% = 20"),
+            "semantic receiver assignment missing: {output}"
+        );
+        assert!(
+            output.contains("GOSUB 10"),
+            "typed scalar method call was not transpiled: {output}"
+        );
+        assert!(
+            !output.contains("AST method"),
+            "AST method statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_typed_scalar_method_arguments() {
+        let ast_source = "method adjust%[integer](delta$)\nreturn self% + delta$\nend method\nbase% = 10\nprint \"AST method\"\nend\n";
+        let semantic_source = "method adjust%[integer](delta%)\nreturn self% + delta%\nend method\nbase% = 20\nbase%.adjust(7)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_method_expression_arguments.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_method_expression_arguments.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("base% = 20"),
+            "semantic receiver assignment missing: {output}"
+        );
+        assert!(
+            output.contains("= 7") && output.contains("GOSUB 10"),
+            "typed scalar method argument or call missing: {output}"
+        );
+        assert!(
+            output.contains("BCCT2% = 7") && !output.contains("BCCT2$ = 7"),
+            "method argument temporary did not use the typed parameter suffix: {output}"
+        );
+        assert!(
+            !output.contains("AST method"),
+            "AST method statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_scalar_method_with_typed_call_receiver() {
+        let ast_source = "function identity%(value%)\nreturn value%\nend function\nmethod adjust%[integer](delta%)\nreturn self% + delta%\nend method\nprint \"AST method\"\nend\n";
+        let semantic_source = "function identity%(value%)\nreturn value%\nend function\nmethod adjust%[integer](delta%)\nreturn self% + delta%\nend method\nidentity%(20).adjust(7)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_method_call_receiver.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_method_call_receiver.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("identityResult0%") && output.contains("GOSUB 20"),
+            "typed method receiver call prelude or method call missing: {output}"
+        );
+        assert!(
+            !output.contains("AST method"),
+            "AST method statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_copies_back_scalar_method_byref_arguments() {
+        let ast_source = "method update%[integer](byref target%)\ntarget% = target% + self%\nreturn target%\nend method\ntarget% = 3\nbase% = 10\nprint \"AST method\"\nend\n";
+        let semantic_source = "method update%[integer](byref target%)\ntarget% = target% + self%\nreturn target%\nend method\ntarget% = 5\nbase% = 20\nbase%.update(target%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_method_byref.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("semantic_method_byref.bcl", semantic_source)
+                .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.matches("target% = ").count() >= 2,
+            "typed method ByRef value was not copied back to its caller: {output}"
+        );
+        assert!(
+            !output.contains("AST method"),
+            "AST method statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_preserves_typed_method_receiver_and_argument_order() {
+        let ast_source = "function firstValue%()\nreturn 1\nend function\nfunction secondValue%()\nreturn 2\nend function\nmethod combine%[integer](first%, second%)\nreturn self% + first% + second%\nend method\nprint \"AST method\"\nend\n";
+        let semantic_source = "function firstValue%()\nreturn 1\nend function\nfunction secondValue%()\nreturn 2\nend function\nmethod combine%[integer](first%, second%)\nreturn self% + first% + second%\nend method\nfirstValue%().combine(secondValue%(), firstValue%())\nend\n";
+        let parsed =
+            crate::parse_source("semantic_method_call_order.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_method_call_order.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        let main = output.split("\nEND\n").next().unwrap_or(&output);
+        let calls = main
+            .lines()
+            .filter(|line| line.contains("GOSUB "))
+            .map(str::trim)
+            .collect::<Vec<_>>();
+        assert_eq!(calls, ["GOSUB 10", "GOSUB 20", "GOSUB 10", "GOSUB 30"]);
+        assert!(
+            !output.contains("AST method"),
+            "AST method statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_assignments_and_print_tokens() {
+        let source = "beep\n";
+        let semantic_source = "value% = 4\nvalue% += 3\nprint value%;, \"ok\"\nend\n";
+        let parsed =
+            crate::parse_source("semantic_assignment_print.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("value% = 4"), "{output}");
+        assert!(output.contains("value% = value% + 3"), "{output}");
+        assert!(output.contains("PRINT value%;, \"ok\""), "{output}");
+        assert!(output.contains("END"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_normalizes_boolean_names_from_semantic_ir() {
+        let source = "beep\n";
+        let semantic_source = "enabled% = true\ndisabled% = false\nend\n";
+        let parsed = crate::parse_source("semantic_boolean_names.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("enabled% = -1"), "{output}");
+        assert!(output.contains("disabled% = 0"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_formatted_and_device_prints() {
+        let source = "beep\n";
+        let semantic_source = "print using \"###\"; 5\nprint #1, \"file\"\nlprint \"paper\"\nlprint using \"##\"; 7\nend\n";
+        let parsed = crate::parse_source("semantic_print_modes.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "PRINT USING \"###\"; 5",
+            "PRINT #1, \"file\"",
+            "LPRINT \"paper\"",
+            "LPRINT USING \"##\"; 7",
+        ] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_file_operations() {
+        let source = "beep\n";
+        let semantic_source = "open \"file.dat\" for random as #1 len = 128\nfield #1, 4 as record$\nwrite #1, \"x\", 4\ninput #1, value%\nline input #1, text$\nlset record$ = \"left\"\nrset record$ = \"right\"\nget #1, 1\nput #1, 1\nclose #1\nkill \"old.dat\"\nname \"a\" as \"b\"\nend\n";
+        let parsed = crate::parse_source("semantic_file_ops.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "OPEN \"file.dat\" FOR RANDOM AS #1 LEN = 128",
+            "FIELD #1, 4 AS record$",
+            "WRITE #1, \"x\", 4",
+            "INPUT #1, value%",
+            "LINE INPUT #1, text$",
+            "LSET record$ = \"left\"",
+            "RSET record$ = \"right\"",
+            "GET #1, 1",
+            "PUT #1, 1",
+            "CLOSE #1",
+            "KILL \"old.dat\"",
+            "NAME \"a\" AS \"b\"",
+        ] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_machine_and_console_statements() {
+        let source = "beep\n";
+        let semantic_source = "option base 1\nrandomize 5\nswap x%, y%\npoke 100, 3\nout 888, 1\nwidth #1, 80\nwidth 40\nlocate 2, 3\ncolor 7, 0\ncolor 2\nerror 5\nthrow 6\non choice% goto first, second\nerase values%\nfirst:\nsecond:\nend\n";
+        let parsed = crate::parse_source("semantic_machine_io.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "OPTION BASE 1",
+            "RANDOMIZE 5",
+            "SWAP x%, y%",
+            "POKE 100, 3",
+            "OUT 888, 1",
+            "WIDTH #1, 80",
+            "WIDTH 40",
+            "LOCATE 2, 3",
+            "COLOR 7, 0",
+            "COLOR 2",
+            "ERROR 5",
+            "ERROR 6",
+            "ON choice% GOTO",
+            "ERASE values%",
+        ] {
+            assert!(output.contains(expected), "missing {expected}: {output}");
+        }
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_if_blocks_and_nested_assignments() {
+        let source = "beep\n";
+        let semantic_source = "if choice% > 0 then\nresult% = 1\nelse\nresult% = 2\nend if\nend\n";
+        let parsed = crate::parse_source("semantic_if_block.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (choice% > 0) = 0 THEN GOTO 10\n    result% = 1\nGOTO 20\n10 result% = 2\n20 REM END IF"), "{output}");
+        assert!(output.contains("END"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_restores_label_counter_when_semantic_if_stream_falls_back() {
+        let source = "if true then\nbeep\nend if\nend\n";
+        let semantic_source =
+            "if true then\nstop\ntry\nthrow 5\ncatch e%, l%\nprint \"semantic\"\nend try\nend if\n";
+        let parsed = crate::parse_source("semantic_if_fallback.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (-1) = 0 THEN GOTO 10"), "{output}");
+        assert!(output.contains("BEEP"), "{output}");
+        assert!(!output.contains("STOP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_counted_loops() {
+        let source = "beep\n";
+        let semantic_source = "for i% = 1 to 3 step 2\nsum% += i%\nend for\nfor j% = 3 downto 1\nsum% += j%\nend for\nfor k% = 1 to 2\ncontinue\nend for\nend\n";
+        let parsed = crate::parse_source("semantic_for.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("FOR i% = 1 TO 3 STEP 2\n    sum% = sum% + i%\n10 NEXT i%"),
+            "{output}"
+        );
+        assert!(
+            output.contains("FOR j% = 3 TO 1 STEP -1\n    sum% = sum% + j%\n20 NEXT j%"),
+            "{output}"
+        );
+        assert!(
+            output.contains("GOTO 30\n30 NEXT k%"),
+            "CONTINUE needs a line-numbered label before NEXT: {output}"
+        );
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_transpiles_typed_method_calls_in_for_bounds() {
+        let ast_source = "method adjust%[integer](delta%)\nreturn self%+delta%\nend method\ndim index%\nvalue%=10\nif 0 then\nprint 2\nend if\nwhile 0\nprint 2\nend while\ndo while 0\nprint 2\nend do\ndo\nprint 2\nloop until 1\nfor index%=0 to 1 step 1\nprint 2\nend for\nfunction runner%()\ndim local%\nif 0 then\nprint 2\nend if\nwhile 0\nprint 2\nend while\ndo while 0\nprint 2\nend do\ndo\nprint 2\nloop until 1\nfor local%=0 to 1 step 1\nprint 2\nend for\nreturn 0\nend function\nrunner%()\nend\n";
+        let semantic_source = "method adjust%[integer](delta%)\nreturn self%+delta%\nend method\ndim index%\nvalue%=20\nif value%.adjust(0) then\nprint index%\nend if\nwhile value%.adjust(-20)\nprint index%\nend while\ndo while value%.adjust(0)\nprint index%\nend do\ndo\nprint index%\nloop until value%.adjust(0)\nfor index%=value%.adjust(1) to value%.adjust(2) step value%.adjust(0)\nprint index%\nend for\nfunction runner%()\ndim local%\nif value%.adjust(0) then\nprint local%\nend if\nwhile value%.adjust(-20)\nprint local%\nend while\ndo while value%.adjust(0)\nprint local%\nend do\ndo\nprint local%\nloop until value%.adjust(0)\nfor local%=value%.adjust(3) to value%.adjust(4) step value%.adjust(0)\nprint local%\nend for\nreturn 0\nend function\nrunner%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_method_for.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_method_for.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("FOR index% = BCCT")
+                && output.contains(" TO BCCT")
+                && output.contains(" STEP BCCT"),
+            "typed FOR expressions weren't staged before the loop: {output}"
+        );
+        assert!(
+            output.contains("FOR runnerLocal0% = BCCT"),
+            "typed callable FOR expressions weren't staged before the loop: {output}"
+        );
+        assert!(
+            output.matches("GOSUB ").count() >= 10,
+            "typed method calls in module and callable conditions/bounds weren't emitted: {output}"
+        );
+        assert!(
+            output.contains("PRINT index%"),
+            "typed loop body didn't replace the AST PRINT: {output}"
+        );
+        assert!(
+            !output.contains("PRINT 2"),
+            "AST FOR bodies leaked: {output}"
+        );
+        assert!(
+            !output.contains("FOR index% = 0 TO 1"),
+            "AST FOR bounds leaked: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_snapshots_for_start_before_method_bounds() {
+        let source = "method update%[integer](byref target%)\ntarget%=target%+1\nreturn self%\nend method\nvalue%=5\nbound%=8\ndim index%\nindex%=5\nfor index%=index% to index%.update(index%)\nprint index%\nend for\nfor stepIndex%=value% to bound% step bound%.update(bound%)\nprint stepIndex%\nend for\nfunction runner%()\nfor local%=value% to value%.update(value%)\nprint local%\nend for\nreturn 0\nend function\nrunner%()\nend\n";
+        let ast_source = source
+            .replace("index%.update(index%)", "1")
+            .replace("value%.update(value%)", "1")
+            .replace("bound%.update(bound%)", "1");
+        let parsed =
+            crate::parse_source("basic_for_start_snapshot.bcl".to_string(), &ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named("basic_for_start_snapshot.bcl", source)
+                .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        let main = output.split("\nEND\n").next().unwrap_or(&output);
+        let start_snapshot = main
+            .lines()
+            .position(|line| line.contains("BCCT") && line.contains(" = index%"))
+            .expect("FOR start snapshot");
+        let method_call = main
+            .lines()
+            .position(|line| line.trim_start().starts_with("GOSUB "))
+            .unwrap_or_else(|| panic!("method call in FOR bound missing: {main}"));
+        assert!(
+            start_snapshot < method_call,
+            "FOR start was evaluated after its method bound: {main}"
+        );
+        assert!(
+            main.lines().any(|line| line.contains("FOR index% = BCCT")),
+            "FOR header did not use the captured start: {main}"
+        );
+        assert!(
+            !main.contains("FOR index% = index%"),
+            "FOR header rereads the mutated start variable: {main}"
+        );
+        assert!(
+            output.contains("FOR runnerLocal0% = BCCT"),
+            "callable FOR header didn't use its captured start: {output}"
+        );
+        let lines = output.lines().collect::<Vec<_>>();
+        let limit_snapshot = lines
+            .iter()
+            .position(|line| line.contains("BCCT") && line.contains(" = bound%"))
+            .expect("FOR limit snapshot before side-effecting STEP");
+        let step_call = lines
+            .iter()
+            .enumerate()
+            .skip(limit_snapshot + 1)
+            .find(|(_, line)| line.trim_start().starts_with("GOSUB "))
+            .map(|(index, _)| index)
+            .expect("method call in FOR STEP");
+        assert!(
+            limit_snapshot < step_call,
+            "FOR limit was read after its STEP method call: {output}"
+        );
+        assert!(
+            output.contains("FOR stepindex% = BCCT"),
+            "FOR header did not use the captured limit and start: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_emits_semantic_while_loops() {
+        let source = "beep\n";
+        let semantic_source = "while value% < 3\nvalue% += 1\nend while\nend\n";
+        let parsed = crate::parse_source("semantic_while.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("IF (value% < 3) = 0 THEN GOTO"), "{output}");
+        assert!(output.contains("value% = value% + 1"), "{output}");
+        assert!(output.contains("GOTO 10"), "{output}");
+        assert!(output.contains("REM END WHILE"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_emits_typed_semantic_select_case_dispatch() {
+        let source = "beep\n";
+        let semantic_source = "select case choice%\ncase 1 to 3, is >= 9\nresult% = 1\ncase else\nresult% = 0\nend select\nselect case mode\ncase 1\nresult% = 3\nend select\nend\n";
+        let parsed = crate::parse_source("semantic_select_case.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("BCCT2% = choice%"), "{output}");
+        assert!(output.contains("BCCT2% >= 1 AND BCCT2% <= 3"), "{output}");
+        assert!(output.contains("BCCT2% >= 9"), "{output}");
+        assert!(output.contains("BCCT4 = mode"), "{output}");
+        assert!(
+            !output.contains('\0'),
+            "semantic temporary contains a NUL: {output:?}"
+        );
+        assert!(output.contains("REM END SELECT"), "{output}");
+        assert!(!output.contains("BEEP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_resolves_semantic_transfers_to_callable_entries() {
+        let source = "on error goto worker\nstop\nprocedure worker()\nresume next\nend procedure\n";
+        let parsed =
+            crate::parse_source("semantic_callable_transfer.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("ON ERROR GOTO 10"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_keeps_mixed_semantic_statements_on_compatibility_path() {
+        let source = "beep\n";
+        let semantic_source = "stop\ntry\nthrow 5\ncatch e%, l%\nprint \"semantic\"\nend try\n";
+        let parsed =
+            crate::parse_source("mixed_semantic_intrinsic.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("\nBEEP\n"), "{output}");
+        assert!(!output.contains("STOP"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_aligned_semantic_nodes_around_ast_fallbacks() {
+        let ast_source = "print 0: print 0\n\nprint 0\ntry\nthrow 5\ncatch e%, l%\nprint \"ast\"\nend try\nprint 0\nend\n";
+        let semantic_source = "print 1: print 2\n\nprint 3\ntry\nthrow 6\ncatch e%, l%\nprint \"sem\"\nend try\nprint 4\nend\n";
+        let parsed = crate::parse_source("aligned_dispatch.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named("aligned_dispatch.bcl", semantic_source)
+                    .unwrap(),
+            ),
+        )
+        .unwrap();
+        assert!(
+            super::basic_semantic_statements_by_source(
+                &mut super::CodeGenerator::new(),
+                resolved.semantic_module.as_ref().unwrap(),
+                &resolved.program.statements,
+            )
+            .is_some(),
+            "source-aligned dispatcher declined matching input positions"
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in ["PRINT 1", "PRINT 2", "PRINT 3", "PRINT 4"] {
+            assert!(
+                output.contains(expected),
+                "missing semantic node {expected}: {output}"
+            );
+        }
+        assert!(
+            output.contains("ERROR 6"),
+            "semantic TRY body was not emitted: {output}"
+        );
+        assert!(
+            output.contains("PRINT \"sem\""),
+            "semantic catch body was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("ERROR 5") && !output.contains("PRINT \"ast\""),
+            "AST TRY replaced the typed semantic body: {output}"
+        );
+        assert!(
+            !output.contains("PRINT 0"),
+            "AST output replaced supported semantic nodes: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_dispatches_semantic_try_filters_and_finally() {
+        let ast_source = "try\nerror 1\ncatch err%(2), erl%\nprint \"ast catch\"\nfinally\nprint \"ast finally\"\nend try\nend\n";
+        let semantic_source = "try\nerror 5\ncatch err%(5), erl%\nprint \"semantic catch\"\nfinally\nprint \"semantic finally\"\nend try\nend\n";
+        let parsed = crate::parse_source("basic_semantic_try.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named("basic_semantic_try.bcl", semantic_source)
+                .unwrap(),
+        );
+
+        let module = resolved.semantic_module.as_ref().unwrap();
+        assert!(
+            super::basic_semantic_try_stream_is_typed(module, &resolved.program.statements),
+            "source-aligned TRY without catch-source mapping should use typed dispatch"
+        );
+        assert!(
+            super::basic_semantic_intrinsics(
+                &mut super::CodeGenerator::new(),
+                module,
+                &module.statements,
+                true,
+            )
+            .is_some(),
+            "typed whole-module dispatcher declined semantic TRY"
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("ERROR 5"), "{output}");
+        assert!(output.contains("IF (ERR = 5)"), "{output}");
+        assert!(output.contains("PRINT \"semantic catch\""), "{output}");
+        assert!(output.contains("PRINT \"semantic finally\""), "{output}");
+        assert!(!output.contains("ERROR 1"), "{output}");
+        assert!(!output.contains("ast catch"), "{output}");
+        assert!(!output.contains("ast finally"), "{output}");
+    }
+
+    #[test]
+    fn basic_program_termination_uses_semantic_ir_when_available() {
+        let with_end = crate::semantic_ir::parse_and_adapt("print 1\nend\n").unwrap();
+        let without_end = crate::semantic_ir::parse_and_adapt("print 1\n").unwrap();
+        assert!(with_end.ends_with_end());
+        assert!(!without_end.ends_with_end());
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_aligned_semantic_assignment_and_print() {
+        let ast_source = "function value%()\nlocal% = 1\nprint local%\nreturn local%\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nlocal% = 9\nprint 17\nreturn 23\nend function\nprint value%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains(" = 9"),
+            "semantic callable assignment missing: {output}"
+        );
+        assert!(
+            !output.contains(" = 1"),
+            "AST callable assignment replaced semantic IR: {output}"
+        );
+        assert!(
+            output.contains("PRINT 17"),
+            "semantic callable PRINT missing: {output}"
+        );
+        assert!(
+            !output.contains("PRINT local%"),
+            "AST callable PRINT replaced semantic IR: {output}"
+        );
+        assert!(
+            output.contains(" = 23"),
+            "semantic callable RETURN missing: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_mid_assign() {
+        let ast_source = "function edit$(text$)\ntext$ = \"AST\"\nreturn text$\nend function\nprint edit$(\"abcdef\")\nend\n";
+        let semantic_source = "function edit$(text$)\nmid$(text$, 4, 2) = \"IR\"\nreturn text$\nend function\nprint edit$(\"abcdef\")\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_mid_assign.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_mid_assign.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("= 4"),
+            "semantic MID$ start missing: {output}"
+        );
+        assert!(
+            output.contains("= 2"),
+            "semantic MID$ length missing: {output}"
+        );
+        assert!(
+            output.contains("= \"IR\""),
+            "semantic MID$ value missing: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST MID$ operands replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_mid_assign_evaluates_typed_scalar_calls_once_in_order() {
+        let ast_source = "function offset%(byref counter%)\ncounter% = counter% + 1\nreturn counter%\nend function\nfunction position%(first%, second%)\nreturn first% + second%\nend function\nfunction replacement$()\nreturn \"AST\"\nend function\nfunction edit$(text$, counter%)\ntext$ = \"AST\"\nreturn text$\nend function\ncounter% = 0\nprint edit$(\"abcdef\", counter%)\nend\n";
+        let semantic_source = "function offset%(byref counter%)\ncounter% = counter% + 1\nreturn counter%\nend function\nfunction position%(first%, second%)\nreturn first% + second%\nend function\nfunction replacement$()\nreturn \"IR\"\nend function\nfunction edit$(text$, counter%)\nmid$(text$, abs(position%(offset%(counter%), offset%(counter%))) + rnd(), 2) = replacement$()\nreturn text$\nend function\ncounter% = 0\nprint edit$(\"abcdef\", counter%)\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_mid_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_mid_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("\"IR\""),
+            "typed replacement function was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST MID$ replacement leaked into semantic emission: {output}"
+        );
+        assert!(
+            !output.contains("' function midassign$"),
+            "semantic MID$ should emit inline without a helper call: {output}"
+        );
+        let offset_call = output
+            .find("GOSUB 10")
+            .unwrap_or_else(|| panic!("nested offset call missing: {output}"));
+        let second_offset_call = output[offset_call + 1..]
+            .find("GOSUB 10")
+            .map(|index| index + offset_call + 1)
+            .unwrap_or_else(|| panic!("second nested offset call missing: {output}"));
+        let position_call = output
+            .find("GOSUB 20")
+            .unwrap_or_else(|| panic!("position call missing: {output}"));
+        let replacement_call = output
+            .find("GOSUB 30")
+            .unwrap_or_else(|| panic!("replacement call missing: {output}"));
+        let splice = output
+            .find("IF LEN(")
+            .unwrap_or_else(|| panic!("inline MID$ splice missing: {output}"));
+        let abs_snapshot = output
+            .find(" = ABS(")
+            .expect("nested ABS call was not snapshotted");
+        let rnd_snapshot = output
+            .find(" = RND")
+            .expect("RND operand was not snapshotted");
+        assert!(
+            offset_call < second_offset_call
+                && second_offset_call < position_call
+                && position_call < abs_snapshot
+                && abs_snapshot < rnd_snapshot
+                && rnd_snapshot < replacement_call
+                && replacement_call < splice,
+            "MID$ operands were not evaluated left-to-right: {output}"
+        );
+        assert!(
+            output.contains("offsetCounter0% = editCounter0%")
+                && output.contains("editCounter0% = offsetCounter0%"),
+            "by-reference argument was not copied in and back: {output}"
+        );
+        assert!(
+            output.contains("positionFirst0% = BCCT") && output.contains("positionSecond0% = BCCT"),
+            "nested call argument was not captured before the outer call: {output}"
+        );
+        assert!(
+            output.contains("LEFT$(BCCT") && output.contains("MID$(BCCT"),
+            "semantic MID$ splice expression missing: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_module_mid_assign_dispatches_byref_array_argument_from_semantic_ir() {
+        let ast_source = "program semanticArrayMid\ndim values%(1)\nvalues%(0) = 1\nvalue$ = \"abcdef\"\nfunction advance%(byref values%(10))\nvalues%(0) = values%(0) + 1\nreturn values%(0)\nend function\nfunction edit$(value$, byref values%(10))\nvalue$ = \"AST\"\nreturn value$\nend function\nprint edit$(value$, values%)\nprint values%(0)\nend\n";
+        let semantic_source = "program semanticArrayMid\ndim values%(1)\nvalues%(0) = 1\nvalue$ = \"abcdef\"\nfunction advance%(byref values%(10))\nvalues%(0) = values%(0) + 1\nreturn values%(0)\nend function\nfunction edit$(value$, byref values%(10))\nmid$(value$, advance%(values%), 2) = \"XY\"\nreturn value$\nend function\nprint edit$(value$, values%)\nprint values%(0)\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_byref_array_argument.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_byref_array_argument.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("IF LEN("),
+            "semantic MID$ splice was not emitted: {output}"
+        );
+        assert!(
+            output.contains("copy array argument into transpiled function storage"),
+            "typed array copy-in was not emitted: {output}"
+        );
+        assert!(
+            output.contains("copy mutated array argument back to caller storage"),
+            "typed ByRef array copy-back was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("' function midassign$"),
+            "semantic MID$ should emit inline without a helper call: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST assignment replaced semantic MID$: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_module_generation_dispatches_semantic_mid_assign() {
+        let ast_source = "text$ = \"abcdef\"\ntext$ = \"AST\"\nprint text$\nend\n";
+        let semantic_source = "text$ = \"abcdef\"\nmid$(text$, 4, 2) = \"IR\"\nprint text$\nend\n";
+        let parsed = crate::parse_source(
+            "basic_module_semantic_mid_assign.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_module_semantic_mid_assign.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("= 4"),
+            "semantic MID$ start missing: {output}"
+        );
+        assert!(
+            output.contains("= 2"),
+            "semantic MID$ length missing: {output}"
+        );
+        assert!(
+            output.contains("= \"IR\""),
+            "semantic MID$ value missing: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST MID$ operands replaced semantic IR: {output}"
+        );
+        assert!(
+            !output.contains("' function midassign$"),
+            "semantic MID$ should emit inline without a helper call: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_ast_mid_assign_transpiles_inline_without_helper_injection() {
+        let ast_source = "text$ = \"abcdef\"\nmid$(text$, 2, 2) = \"XY\"\nprint text$\nend\n";
+        let parsed =
+            crate::parse_source("basic_ast_mid_assign_fallback.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        assert!(
+            program.functions.iter().all(|function| {
+                !function
+                    .name
+                    .name
+                    .eq_ignore_ascii_case(super::MID_ASSIGN_HELPER_NAME)
+            }),
+            "AST lowering injected a MID$ helper"
+        );
+        let resolved = crate::resolver::resolve(program).unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("LEFT$(BCCT"),
+            "AST fallback did not emit the splice inline: {output}"
+        );
+        assert!(
+            output.contains("MID$(BCCT"),
+            "AST fallback did not emit the suffix splice: {output}"
+        );
+        assert!(
+            !output.contains("function midassign$"),
+            "AST fallback emitted the legacy helper: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_ast_mid_assign_evaluates_target_start_and_value_once_in_order() {
+        let source = "dim values$(2)\nfunction nextIndex%()\nreturn 0\nend function\nfunction nextStart%()\nreturn 2\nend function\nfunction replacement$()\nreturn \"XY\"\nend function\nvalues$(0) = \"abcdef\"\nmid$(values$(nextIndex%()), nextStart%()) = replacement$()\nend\n";
+        let parsed =
+            crate::parse_source("basic_ast_mid_assign_order.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve(program).unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        let target_call = output
+            .find("GOSUB 30")
+            .unwrap_or_else(|| panic!("target index call missing: {output}"));
+        let start_call = output
+            .find("GOSUB 40")
+            .unwrap_or_else(|| panic!("start call missing: {output}"));
+        let value_call = output
+            .find("GOSUB 50")
+            .unwrap_or_else(|| panic!("replacement call missing: {output}"));
+        let splice = output
+            .find("IF LEN(")
+            .unwrap_or_else(|| panic!("inline MID$ splice missing: {output}"));
+        assert!(
+            target_call < start_call && start_call < value_call && value_call < splice,
+            "AST MID$ operands were not emitted left-to-right: {output}"
+        );
+        assert!(
+            output.contains("LEN(BCCT"),
+            "omitted MID$ length did not use the snapshotted replacement: {output}"
+        );
+        assert_eq!(
+            output.matches("GOSUB 30").count(),
+            1,
+            "target index call must execute once: {output}"
+        );
+        assert!(
+            !output.contains("function midassign$"),
+            "AST MID$ emitted the removed compatibility helper: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_module_mid_assign_evaluates_typed_scalar_calls_once_in_order() {
+        let ast_source = "function position%()\nreturn 1\nend function\nfunction replacement$()\nreturn \"AST\"\nend function\ntext$ = \"abcdef\"\ntext$ = \"AST\"\nprint text$\nend\n";
+        let semantic_source = "function position%()\nreturn 4\nend function\nfunction replacement$()\nreturn \"IR\"\nend function\ntext$ = \"abcdef\"\nmid$(text$, position%(), 2) = replacement$()\nprint text$\nend\n";
+        let parsed =
+            crate::parse_source("basic_module_semantic_mid_call.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_module_semantic_mid_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        let position_call = output
+            .find("GOSUB 30")
+            .unwrap_or_else(|| panic!("position call missing: {output}"));
+        let replacement_call = output
+            .find("GOSUB 40")
+            .unwrap_or_else(|| panic!("replacement call missing: {output}"));
+        let splice = output
+            .find("IF LEN(")
+            .unwrap_or_else(|| panic!("inline MID$ splice missing: {output}"));
+        assert!(
+            position_call < replacement_call && replacement_call < splice,
+            "MID$ operands were not evaluated left-to-right: {output}"
+        );
+        assert!(
+            output.contains("\"IR\""),
+            "typed replacement function was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("\"AST\""),
+            "AST MID$ replacement leaked into semantic emission: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_mid_assign_renders_array_bound_intrinsic_with_nested_callable() {
+        let ast_source = "dim names$(3)\nfunction axis%()\nreturn 1\nend function\ntext$ = \"abcdef\"\ntext$ = \"AST\"\nend\n";
+        for (intrinsic, expected) in [
+            ("sizeof(names$, 0)", 4),
+            ("lbound(names$, 0)", 0),
+            ("ubound(names$, 0)", 3),
+        ] {
+            let semantic_source = format!(
+                "dim names$(3)\nfunction axis%()\nreturn 1\nend function\ntext$ = \"abcdef\"\nmid$(text$, {intrinsic} + axis%(), 2) = \"IR\"\nend\n"
+            );
+            let parsed = crate::parse_source(
+                "basic_mid_assign_array_bound_call.bcl".to_string(),
+                ast_source,
+            )
+            .unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let semantic = crate::semantic_ir::parse_and_adapt_named(
+                "basic_mid_assign_array_bound_call.bcl",
+                &semantic_source,
+            )
+            .unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(
+                output.contains("GOSUB 30"),
+                "nested axis function call was not emitted for {intrinsic}: {output}"
+            );
+            assert!(
+                output.contains(&format!("= {expected}")),
+                "typed {intrinsic} result was not resolved inside MID$: {output}"
+            );
+            assert!(
+                output.contains("LEFT$(BCCT") && output.contains("MID$(BCCT"),
+                "typed MID$ expression did not reach inline splice emission: {output}"
+            );
+            assert!(
+                !output.contains("\"AST\""),
+                "AST replacement leaked into semantic output: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_lprint_using() {
+        let ast_source =
+            "function value%()\nlprint \"ast\"; 1\nreturn 0\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nlprint using \"##\"; \"semantic\"; 7\nreturn 0\nend function\nprint value%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_lprint.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_lprint.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("LPRINT USING \"##\"; \"semantic\"; 7"),
+            "semantic callable LPRINT USING missing: {output}"
+        );
+        assert!(
+            !output.contains("LPRINT \"ast\"; 1"),
+            "AST callable LPRINT replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_line_input_and_write() {
+        let ast_source = "function readValue%(file%, value$)\nvalue$ = \"ast\"\nvalue$ = \"ast2\"\nvalue$ = \"ast3\"\nreturn 0\nend function\nprint readValue%(1, \"\")\nend\n";
+        let semantic_source = "function readValue%(file%, value$)\nline input #file%, value$\nwrite #file%, value$\nclose #file%\nreturn 0\nend function\nprint readValue%(1, \"\")\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_line_input.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_line_input.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("LINE INPUT #readvalueFile0%, readvalueValue0$"),
+            "semantic callable LINE INPUT missing: {output}"
+        );
+        assert!(
+            output.contains("WRITE #readvalueFile0%, readvalueValue0$"),
+            "semantic callable WRITE missing: {output}"
+        );
+        assert!(
+            output.contains("CLOSE #readvalueFile0%"),
+            "semantic callable CLOSE missing: {output}"
+        );
+        assert!(
+            !output.contains("value$ = \"ast\""),
+            "AST assignment replaced semantic file operations: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_expression_statements() {
+        let ast_source = "function tick%()\nreturn 7\nend function\nfunction run%()\nprint \"ast expression\"\nreturn 0\nend function\nprint run%()\nend\n";
+        let semantic_source = "function tick%()\nreturn 7\nend function\nfunction run%()\ntick%()\nreturn 0\nend function\nprint run%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_expression.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_expression.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("GOSUB 10") && !output.contains("BCCT1% = tickResult0%"),
+            "semantic expression call was not transpiled: {output}"
+        );
+        assert!(
+            !output.contains("ast expression"),
+            "AST expression statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_terminal_and_error_statements() {
+        let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nreturn 0\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\ncls\nbeep\nclear\nstop\nsystem\nerror 9\nthrow\nreturn 0\nend function\nprint value%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_terminal.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_terminal.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for statement in ["CLS", "BEEP", "CLEAR", "STOP", "SYSTEM"] {
+            assert!(
+                output.contains(statement),
+                "semantic callable {statement} missing: {output}"
+            );
+        }
+        assert!(
+            output.contains("ERROR 9"),
+            "semantic callable ERROR missing: {output}"
+        );
+        assert!(
+            output.contains("ERROR ERR"),
+            "semantic callable bare THROW missing: {output}"
+        );
+        for ast_statement in [
+            "PRINT 1", "PRINT 2", "PRINT 3", "PRINT 4", "PRINT 5", "PRINT 6", "PRINT 7",
+        ] {
+            assert!(
+                !output.contains(ast_statement),
+                "AST callable statement leaked in place of semantic IR: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_end_statement() {
+        let ast_source = "function stop%()\nif true then\nprint 0\nend if\nselect case 1\ncase 1\nprint 0\nend select\nreturn 0\nend function\nprint stop%()\nend\n";
+        let semantic_source = "function stop%()\nif true then\nend\nend if\nselect case 1\ncase 1\nend\nend select\nreturn 0\nend function\nprint stop%()\nend\n";
+        let parsed = crate::parse_source("semantic_callable_end.bcl".to_string(), ast_source)
+            .expect("legacy source parses");
+        let crate::lower::Lowered { program, .. } =
+            crate::lower::lower(parsed).expect("legacy source lowers");
+        let mut resolved = crate::resolver::resolve(program).expect("legacy program resolves");
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named("semantic_callable_end.bcl", semantic_source)
+                .expect("typed callable END parses"),
+        );
+
+        let output = super::CodeGenerator::new()
+            .generate(&resolved)
+            .expect("typed callable END transpiles");
+        assert!(
+            output.matches("END").count() >= 3,
+            "nested semantic END statements are missing: {output}"
+        );
+        assert!(
+            !output.contains("PRINT 0"),
+            "AST statement replaced typed callable END: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_file_and_console_operations() {
+        let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nprint 8\nprint 9\nprint 10\nreturn 0\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nopen \"new.dat\" for output as #1\nseek #1, 3\nget #1, 2\nput #1, 3\nclose #1\nkill \"old.dat\"\nname \"a.dat\" as \"b.dat\"\nwidth #1, 80\nlocate 1, 2\ncolor 7, 0\nreturn 0\nend function\nprint value%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_file_console.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_file_console.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "OPEN \"new.dat\" FOR OUTPUT AS #1",
+            "SEEK #1, 3",
+            "GET #1, 2",
+            "PUT #1, 3",
+            "CLOSE #1",
+            "KILL \"old.dat\"",
+            "NAME \"a.dat\" AS \"b.dat\"",
+            "WIDTH #1, 80",
+            "LOCATE 1, 2",
+            "COLOR 7, 0",
+        ] {
+            assert!(
+                output.contains(expected),
+                "semantic callable statement {expected} missing: {output}"
+            );
+        }
+        assert!(
+            !output.contains("PRINT 1"),
+            "AST callable statements replaced semantic operations: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_semantic_function_statement_copies_back_byref() {
+        let ast_source = "function increment%(byref value%)\nvalue% = value% + 1\nreturn value%\nend function\nvalue% = 3\nprint \"AST call\"\nreturn\nend\n";
+        let semantic_source = "function increment%(byref value%)\nvalue% = value% + 1\nreturn value%\nend function\nvalue% = 5\nincrement%(value%)\nreturn\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_function_byref.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "basic_callable_semantic_function_byref.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("value% = 5") && output.contains("GOSUB 10"),
+            "semantic setup or call missing: {output}"
+        );
+        assert!(
+            output.contains("value% = incrementValue0%"),
+            "typed ByRef mutation was not copied back after the discarded call: {output}"
+        );
+        assert!(
+            !output.contains("AST call"),
+            "AST call statement replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_semantic_default_return_ignores_ast_expression() {
+        let ast_source = "function value%()\nreturn 7\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nreturn\nend function\nprint value%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_default_return.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "basic_callable_semantic_default_return.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("RETURN"),
+            "typed default return is missing: {output}"
+        );
+        assert!(
+            !output.contains("value% = 7"),
+            "AST return expression replaced the typed default return: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_arity_and_bindings_come_from_semantic_signature() {
+        let ast_source =
+            "function total%(old%)\nreturn old%\nend function\nresult%=total%(1)\nend\n";
+        let semantic_source = "function total%(left%, right%)\nreturn left%+right%\nend function\nresult%=total%(4,5)\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_callable_arity.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_arity.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("' function total%(left%, right%)"),
+            "callable parameter listing must come from typed IR: {output}"
+        );
+        assert!(
+            output.contains("totalResult0% = totalLeft0% + totalRight0%"),
+            "callable body must use the typed parameter bindings: {output}"
+        );
+        assert!(
+            !output.contains("oldValue0%"),
+            "stale AST parameter must not leak into BASIC output: {output}"
+        );
+        assert!(
+            output.contains("totalLeft0% = 4\ntotalRight0% = 5\nGOSUB 10"),
+            "typed call arguments must be preserved: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_error_and_throw_call_operands() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nfunction fail%()\nerror 2\nthrow 3\nreturn 0\nend function\nerror 4\nthrow 5\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\nfunction fail%()\nerror tick%()\nthrow tick%()\nreturn 0\nend function\nerror tick%()\nthrow tick%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_error_throw_calls.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_error_throw_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.matches("ERROR BCCT").count() == 4,
+            "typed ERROR/THROW operands must execute and feed all four statements: {output}"
+        );
+        assert!(
+            !output.contains("ERROR 2")
+                && !output.contains("ERROR 3")
+                && !output.contains("ERROR 4")
+                && !output.contains("ERROR 5"),
+            "AST ERROR/THROW operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_randomize_call_operands() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nfunction seed%()\nrandomize 2\nreturn 0\nend function\nrandomize 3\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\nfunction seed%()\nrandomize tick%()\nreturn 0\nend function\nrandomize tick%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_randomize_call.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_randomize_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(
+            output.matches("RANDOMIZE BCCT").count(),
+            2,
+            "typed function calls must feed both RANDOMIZE statements: {output}"
+        );
+        assert!(
+            !output.contains("RANDOMIZE 2") && !output.contains("RANDOMIZE 3"),
+            "AST RANDOMIZE operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_on_branch_selector_calls() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nfunction dispatch%()\non 1 goto localA, localB\nlocalA:\nreturn 0\nlocalB:\nreturn 1\nend function\non 1 goto topA, topB\ntopA:\nend\ntopB:\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\nfunction dispatch%()\non tick%() goto localA, localB\nlocalA:\nreturn 0\nlocalB:\nreturn 1\nend function\non tick%() goto topA, topB\ntopA:\nend\ntopB:\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_on_branch_call.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_on_branch_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(
+            output.matches("ON BCCT").count(),
+            2,
+            "typed top-level and callable branch selectors must be evaluated: {output}"
+        );
+        assert!(
+            !output.contains("ON 1 GOTO"),
+            "AST branch selectors must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_lset_rset_string_call_operands() {
+        let ast_source = "function text$()\nreturn \"ast\"\nend function\nfunction update%()\nlset local$ = \"old\"\nrset local$ = \"old\"\nreturn 0\nend function\nlset module$ = \"old\"\nrset module$ = \"old\"\nend\n";
+        let semantic_source = "function text$()\nreturn \"typed\"\nend function\nfunction update%()\nlset local$ = text$()\nrset local$ = text$()\nreturn 0\nend function\nlset module$ = text$()\nrset module$ = text$()\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_lset_rset_calls.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_lset_rset_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(
+            output.matches("LSET ").count(),
+            2,
+            "both typed LSET statements should emit: {output}"
+        );
+        assert_eq!(
+            output.matches("RSET ").count(),
+            2,
+            "both typed RSET statements should emit: {output}"
+        );
+        assert_eq!(
+            output.matches("GOSUB 10").count(),
+            4,
+            "each typed string call must execute before assignment: {output}"
+        );
+        assert!(
+            !output.contains("= \"old\"") && !output.contains("return ast"),
+            "AST string operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_lset_rset_scalar_method_operands() {
+        let ast_source = "method suffix$[string](extra$)\nreturn self$\nend method\nlset local$ = \"old\"\nrset local$ = \"old\"\nlset module$ = \"old\"\nrset module$ = \"old\"\nend\n";
+        let semantic_source = "method suffix$[string](extra$)\nreturn self$+extra$\nend method\nlset local$ = name$.suffix(\"typed\")\nrset local$ = name$.suffix(\"typed\")\nlset module$ = name$.suffix(\"typed\")\nrset module$ = name$.suffix(\"typed\")\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_lset_rset_methods.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_lset_rset_methods.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(output.matches("LSET ").count(), 2, "{output}");
+        assert_eq!(output.matches("RSET ").count(), 2, "{output}");
+        assert_eq!(output.matches("GOSUB 10").count(), 4, "{output}");
+        assert!(output.contains("suffixSelf0$ = name$"), "{output}");
+        assert!(output.contains("suffixExtra0$ = BCCT"), "{output}");
+        assert!(!output.contains("= \"old\""), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_seek_channel_and_position_calls() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nfunction reposition%()\nseek #1, 2\nreturn 0\nend function\nseek #3, 4\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\nfunction reposition%()\nseek #tick%(), tick%()\nreturn 0\nend function\nseek #tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_seek_calls.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_seek_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(
+            output.matches("SEEK #BCCT").count(),
+            2,
+            "typed callable and module SEEK operands must be evaluated: {output}"
+        );
+        assert!(
+            !output.contains("SEEK #1, 2") && !output.contains("SEEK #3, 4"),
+            "AST SEEK operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_get_put_position_calls() {
+        let ast_source = "function tick%()\nreturn 1\nend function\nfunction transfer%()\nget #1, 2, 3\nput #1, 2, 3\nreturn 0\nend function\nget #4, 5, 6\nput #4, 5, 6\nend\n";
+        let semantic_source = "function tick%()\nreturn 9\nend function\nfunction transfer%()\nget #tick%(), tick%(), tick%()\nput #tick%(), tick%(), tick%()\nreturn 0\nend function\nget #tick%(), tick%(), tick%()\nput #tick%(), tick%(), tick%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_get_put_calls.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_get_put_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert_eq!(
+            output.matches("GET #BCCT").count(),
+            2,
+            "typed GET positions must be evaluated in both scopes: {output}"
+        );
+        assert_eq!(
+            output.matches("PUT #BCCT").count(),
+            2,
+            "typed PUT positions must be evaluated in both scopes: {output}"
+        );
+        assert!(
+            !output.contains("GET #1, 2, 3") && !output.contains("PUT #1, 2, 3"),
+            "AST file positions must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_return_function_call_uses_typed_expression_prelude() {
+        let ast_source = "function value%(item%)\nreturn item%\nend function\nfunction outer%(arg%)\nreturn 1\nend function\nresult%=outer%(8)\nend\n";
+        let semantic_source = "function value%(item%)\nreturn item%+1\nend function\nfunction outer%(arg%)\nreturn value%(arg%)\nend function\nresult%=outer%(8)\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_return_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_return_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("GOSUB 10\n    BCCT1% = valueResult0%\n    outerResult0% = BCCT1%"),
+            "typed function call result must be returned from the callable: {output}"
+        );
+        assert!(
+            output.contains("valueItem0% = outerArg0%"),
+            "typed argument binding must be emitted in the return prelude: {output}"
+        );
+        assert!(
+            !output.contains("outerResult0% = 1"),
+            "AST return expression must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_locate_uses_typed_expression_preludes() {
+        let ast_source = "function row%()\nreturn 1\nend function\nfunction position%()\nlocate 1, 2\nreturn 0\nend function\nprint position%()\nend\n";
+        let semantic_source = "function row%()\nreturn 9\nend function\nfunction position%()\nlocate row%(), row%()\nreturn 0\nend function\nprint position%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_locate_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_locate_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("GOSUB 10") && output.contains("LOCATE BCCT1%, BCCT2%"),
+            "typed LOCATE operands must execute before LOCATE emission: {output}"
+        );
+        assert!(
+            !output.contains("LOCATE 1, 2"),
+            "AST LOCATE operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_color_uses_typed_expression_preludes() {
+        let ast_source = "function shade%()\nreturn 1\nend function\nfunction paint%()\ncolor 1, 2\nreturn 0\nend function\nprint paint%()\nend\n";
+        let semantic_source = "function shade%()\nreturn 9\nend function\nfunction paint%()\ncolor shade%(), shade%()\nreturn 0\nend function\nprint paint%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_color_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_color_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("COLOR BCCT1%, BCCT2%"),
+            "typed COLOR operands must execute before COLOR emission: {output}"
+        );
+        assert!(
+            !output.contains("COLOR 1, 2"),
+            "AST COLOR operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_width_uses_typed_expression_preludes() {
+        let ast_source = "function channel%()\nreturn 1\nend function\nfunction resize%()\nwidth #1, 2\nreturn 0\nend function\nprint resize%()\nend\n";
+        let semantic_source = "function channel%()\nreturn 9\nend function\nfunction resize%()\nwidth #channel%(), channel%()\nreturn 0\nend function\nprint resize%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_width_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_width_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("WIDTH #BCCT1%, BCCT2%"),
+            "typed WIDTH operands must execute before WIDTH emission: {output}"
+        );
+        assert!(
+            !output.contains("WIDTH #1, 2"),
+            "AST WIDTH operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_compatibility_width_evaluates_channel_before_columns() {
+        let source = "function channel%()\nreturn 1\nend function\nfunction columns%()\nreturn 2\nend function\nwidth #channel%(), columns%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_compatibility_width_order.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve(program).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        let channel_call = output.find("GOSUB 10");
+        let columns_call = output.find("GOSUB 20");
+        let width = output.find("WIDTH #");
+
+        assert!(
+            channel_call.is_some_and(|channel| {
+                columns_call.is_some_and(|columns| {
+                    width.is_some_and(|width| channel < columns && columns < width)
+                })
+            }),
+            "WIDTH compatibility emission must evaluate channel before columns: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_poke_and_out_use_typed_expression_preludes() {
+        let ast_source = "function hardware%()\nreturn 1\nend function\nfunction io%()\npoke 1, 2\nout 3, 4\nreturn 0\nend function\nprint io%()\nend\n";
+        let semantic_source = "function hardware%()\nreturn 9\nend function\nfunction io%()\npoke hardware%(), hardware%()\nout hardware%(), hardware%()\nreturn 0\nend function\nprint io%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_poke_out_calls.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_poke_out_calls.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(
+            output.contains("POKE BCCT1%, BCCT2%") && output.contains("OUT BCCT3%, BCCT4%"),
+            "typed POKE and OUT operands must execute before their statements: {output}"
+        );
+        assert!(
+            !output.contains("POKE 1, 2") && !output.contains("OUT 3, 4"),
+            "AST POKE/OUT operands must not replace typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_function_call_uses_typed_default_argument() {
+        let ast_source = "function sum%(left%, right%=3)\nreturn left%+right%\nend function\nresult%=sum%(4)\nend\n";
+        let semantic_source = "function sum%(left%, right%=8)\nreturn left%+right%\nend function\nresult%=sum%(4)\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_function_default.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_function_default.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("sumRight0% = 8"), "{output}");
+        assert!(!output.contains("sumRight0% = 3"), "{output}");
+    }
+
+    #[test]
+    fn basic_callable_assignment_uses_typed_function_call() {
+        let ast_source = "function value%(old%)\nreturn old%\nend function\nfunction outer%()\ntotal%=value%(1)\nreturn total%\nend function\nresult%=outer%()\nend\n";
+        let semantic_source = "function value%(item%)\nreturn item%+2\nend function\nfunction outer%()\ntotal%=value%(7)\nreturn total%\nend function\nresult%=outer%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_semantic_callable_assignment_call.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_callable_assignment_call.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("valueItem0% = 7"), "{output}");
+        assert!(!output.contains("valueItem0% = 1"), "{output}");
+        assert!(output.contains("outerTotal0% = valueResult0%"), "{output}");
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_machine_statements() {
+        let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nprint 8\nprint 9\nprint 10\nreturn 0\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nglobal typedGlobal%\ndata 7, \"typed\"\nrandomize 5\nswap left%, right%\npoke 100, 3\nout 888, 1\nfield #1, 4 as typed$\nlset record$ = \"left\"\nrset record$ = \"right\"\nerase values%\nreturn 0\nend function\nprint value%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_machine.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_machine.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "DATA 7, \"typed\"",
+            "RANDOMIZE 5",
+            "SWAP ",
+            "POKE 100, 3",
+            "OUT 888, 1",
+            "FIELD #1, 4 AS typed$",
+            "LSET ",
+            "RSET ",
+            "ERASE ",
+        ] {
+            assert!(
+                output.contains(expected),
+                "semantic callable operation {expected} missing: {output}"
+            );
+        }
+        assert!(
+            !output.contains("PRINT 1"),
+            "AST callable statements replaced semantic machine operations: {output}"
+        );
+        assert!(
+            !output.contains("PRINT 2"),
+            "AST callable statement replaced semantic DATA: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_control_transfers() {
+        let ast_source = "function flow%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nprint 8\nprint 9\nprint 10\nreturn 0\nend function\nprint flow%()\nend\n";
+        let semantic_source = "function flow%()\ngoto done\ngosub worker\non 2 goto done, worker\non 2 gosub worker, done\non error goto 0\nresume next\nrestore\nstart:\nworker:\ndone:\nreturn 0\nend function\nprint flow%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_transfers.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_transfers.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        for expected in [
+            "GOTO ",
+            "GOSUB ",
+            "ON 2 GOTO ",
+            "ON 2 GOSUB ",
+            "ON ERROR GOTO 0",
+            "RESUME NEXT",
+            "RESTORE",
+        ] {
+            assert!(
+                output.contains(expected),
+                "semantic callable transfer {expected} missing: {output}"
+            );
+        }
+        for ast_statement in [
+            "PRINT 1", "PRINT 2", "PRINT 3", "PRINT 4", "PRINT 5", "PRINT 6", "PRINT 7", "PRINT 8",
+            "PRINT 9", "PRINT 10",
+        ] {
+            assert!(
+                !output.contains(ast_statement),
+                "AST callable statements replaced semantic control transfers: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_formatted_and_channel_prints() {
+        let ast_source = "function value%()\nprint \"ast one\"\nprint \"ast two\"\nreturn 0\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\nprint using \"##\"; 7\nprint #1, using \"###\"; 8\nreturn 0\nend function\nprint value%()\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_print_modes.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_print_modes.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("PRINT USING \"##\"; 7"),
+            "semantic callable PRINT USING missing: {output}"
+        );
+        assert!(
+            output.contains("PRINT #1, USING \"###\"; 8"),
+            "semantic callable channel PRINT USING missing: {output}"
+        );
+        assert!(
+            !output.contains("ast one") && !output.contains("ast two"),
+            "AST callable print replaced semantic output: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_block_if() {
+        let ast_source = "function result%()\nif flag% then\nprint \"ast then\"\nelse\nprint \"ast else\"\nend if\nreturn 0\nend function\nprint result%()\nend\n";
+        let semantic_source = "function result%()\nif flag% then\nvalue% = 11\nelse\nvalue% = 22\nend if\nreturn value%\nend function\nprint result%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_if.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_if.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("IF (resultFlag0%) = 0 THEN GOTO "),
+            "semantic callable IF missing: {output}"
+        );
+        assert!(
+            output.contains(" = 11") && output.contains(" = 22"),
+            "semantic branch assignments missing: {output}"
+        );
+        assert!(
+            !output.contains("ast then") && !output.contains("ast else"),
+            "AST callable branches replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_module_assignments_expressions_and_prints_use_typed_ir_without_ast_alignment() {
+        let ast_source = "legacy% = 1\nprint legacy%\nend\n";
+        let semantic_source = "canonical% = 42\nprint canonical%\nend\n";
+        let parsed = crate::parse_source("typed_module_stream.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "typed_module_stream.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let mut resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        resolved
+            .semantic_module
+            .as_mut()
+            .unwrap()
+            .statement_sources
+            .clear();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("canonical% = 42"), "{output}");
+        assert!(output.contains("PRINT canonical%"), "{output}");
+        assert!(!output.contains("legacy%"), "{output}");
+    }
+
+    #[test]
+    fn basic_semantic_catch_identifiers_use_typed_binding_types() {
+        let source = "try\nerror 5\ncatch failure%, linenum%, filename$\nprint failure%\nend try\nend\n";
+        let parsed = crate::parse_source("typed_basic_catch.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut semantic =
+            crate::semantic_ir::parse_and_adapt_named("typed_basic_catch.bcl", source).unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &mut semantic.statements[0].kind
+        else {
+            panic!()
+        };
+        let crate::semantic_ir::SemanticStatementKind::Try {
+            catch: Some(catch), ..
+        } = &mut statements[0].kind
+        else {
+            panic!()
+        };
+        catch.error = "failure$".to_string();
+        catch.line = "linenum&".to_string();
+        catch.source = Some("filename%".to_string());
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("failure% = ERR"), "{output}");
+        assert!(output.contains("linenum% = ERL"), "{output}");
+        assert!(output.contains("filename$ = BCCSOURCEFILE$"), "{output}");
+        assert!(!output.contains("failure$ = ERR"), "{output}");
+        assert!(!output.contains("linenum& = ERL"), "{output}");
+        assert!(!output.contains("filename% = BCCSOURCEFILE$"), "{output}");
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_try_catch_finally() {
+        let ast_source = "procedure work()\ntry\nerror 1\ncatch err%(2), erl%, source$\nprint \"ast catch\"\nfinally\nprint \"ast finally\"\nend try\nend procedure\nwork()\nend\n";
+        let semantic_source = "procedure work()\ntry\nerror 5\ncatch err%(5), erl%, source$\nprint \"semantic catch\"\nfinally\nprint \"semantic finally\"\nend try\nend procedure\nwork()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_try.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "basic_callable_semantic_try.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        fn stale_callable_catch_names(
+            statements: &mut [crate::semantic_ir::SemanticStatement],
+        ) -> bool {
+            for statement in statements {
+                match &mut statement.kind {
+                    crate::semantic_ir::SemanticStatementKind::Try {
+                        catch: Some(catch), ..
+                    } => {
+                        catch.error = "err$".to_string();
+                        catch.line = "erl&".to_string();
+                        catch.source = Some("source%".to_string());
+                        return true;
+                    }
+                    crate::semantic_ir::SemanticStatementKind::Line(body) => {
+                        if stale_callable_catch_names(body) {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        assert!(stale_callable_catch_names(&mut semantic.callables[0].body));
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("ERROR 5"), "{output}");
+        assert!(output.contains("IF (ERR = 5)"), "{output}");
+        assert!(output.contains("PRINT \"semantic catch\""), "{output}");
+        assert!(output.contains("PRINT \"semantic finally\""), "{output}");
+        assert!(output.contains("workSource0$ = BCCSOURCEFILE$"), "{output}");
+        assert!(!output.contains("ERROR 1"), "{output}");
+        assert!(!output.contains("ast catch"), "{output}");
+        assert!(!output.contains("ast finally"), "{output}");
+
+        let parsed = crate::parse_source(
+            "basic_callable_semantic_try.bcl".to_string(),
+            semantic_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let compatibility = crate::resolver::resolve(program).unwrap();
+        let compatibility_output = super::CodeGenerator::new()
+            .generate(&compatibility)
+            .unwrap();
+        let matching_semantic_source = crate::resolver::resolve_with_semantic(
+            compatibility.program.clone(),
+            Some(
+                crate::semantic_ir::parse_and_adapt_named(
+                    "basic_callable_semantic_try.bcl",
+                    semantic_source,
+                )
+                .unwrap(),
+            ),
+        )
+        .unwrap();
+        let matching_semantic_output = super::CodeGenerator::new()
+            .generate(&matching_semantic_source)
+            .unwrap();
+        assert_eq!(matching_semantic_output, compatibility_output);
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_for_and_while_loops() {
+        let ast_source = "function count%()\nfor i% = 1 to 3 step 1\nprint \"ast for\"\ncontinue\nend for\nwhile value% < 10\nprint \"ast while\"\nexit\nend while\nreturn 0\nend function\nprint count%()\nend\n";
+        let semantic_source = "function count%()\nfor i% = 1 to 3 step 1\nvalue% += i%\ncontinue\nend for\nwhile value% < 10\nvalue% += 1\nexit\nend while\nreturn value%\nend function\nprint count%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_loops.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_loops.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        assert!(
+            super::basic_semantic_callable_statements_by_source(
+                resolved.semantic_module.as_ref().unwrap(),
+                &resolved.program.functions[0],
+            )
+            .is_some(),
+            "callable loop source alignment failed"
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("FOR countI0% = 1 TO 3 STEP 1"),
+            "semantic callable FOR missing: {output}"
+        );
+        assert!(
+            output.contains("NEXT countI0%"),
+            "semantic callable NEXT missing: {output}"
+        );
+        assert!(
+            output.contains("IF (countValue0% < 10) = 0 THEN GOTO 40"),
+            "semantic callable WHILE missing: {output}"
+        );
+        assert!(
+            output.contains("GOTO 20") && output.contains("GOTO 30"),
+            "semantic callable EXIT/CONTINUE targets missing: {output}"
+        );
+        assert!(
+            output.contains("+ countI0%") && output.contains(" + 1"),
+            "semantic callable loop assignments missing: {output}"
+        );
+        assert!(
+            !output.contains("ast for") && !output.contains("ast while"),
+            "AST callable loops replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_select_case() {
+        let ast_source = "function result%()\nselect case choice%\ncase 1\nprint \"ast one\"\ncase else\nprint \"ast else\"\nend select\nreturn 0\nend function\nprint result%()\nend\n";
+        let semantic_source = "function result%()\nselect case choice%\ncase 1 to 3, is >= 9\nvalue% = 10\ncase else\nvalue% = 20\nend select\nreturn value%\nend function\nprint result%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_select.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_select.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("BCCT") && output.contains("<="),
+            "semantic callable SELECT CASE dispatch missing: {output}"
+        );
+        assert!(
+            output.contains(" = 10") && output.contains(" = 20"),
+            "semantic callable CASE bodies missing: {output}"
+        );
+        assert!(
+            !output.contains("ast one") && !output.contains("ast else"),
+            "AST CASE bodies replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_do_loop() {
+        let ast_source = "function count%()\ndo while value% < 2\nprint \"ast loop\"\nloop\nreturn 0\nend function\nprint count%()\nend\n";
+        let semantic_source = "function count%()\ndo while value% < 2\nvalue% += 1\nloop\nreturn value%\nend function\nprint count%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_do.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_do.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("DO_0001_TOP") && output.contains("GOTO DO_0001_TOP"),
+            "semantic callable DO labels missing: {output}"
+        );
+        assert!(
+            output.contains("countValue0% = countValue0% + 1"),
+            "semantic callable DO body missing: {output}"
+        );
+        assert!(
+            !output.contains("ast loop"),
+            "AST callable DO body replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_input_nodes() {
+        let ast_source =
+            "function readValue%()\nvalue% = 12\nreturn 0\nend function\nprint readValue%()\nend\n";
+        let semantic_source = "function readValue%()\ninput \"semantic\"; value%\nreturn 0\nend function\nprint readValue%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_input.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_input.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("INPUT \"semantic\";"),
+            "semantic callable INPUT missing: {output}"
+        );
+        assert!(
+            !output.contains(" = 12"),
+            "AST callable assignment replaced by semantic INPUT: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_semantic_local_array_reads_and_writes() {
+        let ast_source = "function value%()\ndim values%(10)\ndim grid%(2, 3)\nvalues%(1) = 2\ngrid%(1, 1) = 3\ngrid%(1, 1) += 4\nprint values%(1), grid%(1, 1)\nreturn values%(1)\nend function\nprint value%()\nend\n";
+        let semantic_source = "function value%()\ndim values%(10)\ndim grid%(2, 3)\nvalues%(2) = 7\ngrid%(2, 3) = 9\ngrid%(2, 3) += 12\nprint values%(2), grid%(2, 3)\nreturn values%(2)\nend function\nprint value%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_array.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_array.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("(2) = 7"),
+            "semantic callable array write missing: {output}"
+        );
+        assert!(
+            output.contains("valueGrid0%(2, 3) = 9"),
+            "semantic callable rank-two array write missing: {output}"
+        );
+        assert!(
+            output.contains("valueGrid0%(2, 3) = valueGrid0%(2, 3) + 12"),
+            "semantic callable rank-two compound assignment missing: {output}"
+        );
+        assert!(
+            output.contains("PRINT ") && output.contains("(2)"),
+            "semantic callable array read missing: {output}"
+        );
+        assert!(
+            !output.contains("(1) = 2"),
+            "AST callable array write replaced semantic IR: {output}"
+        );
+        assert!(
+            !output.contains("valueGrid0%(1, 1) = 3"),
+            "AST callable rank-two array write replaced semantic IR: {output}"
+        );
+        assert!(
+            !output.contains("valueGrid0%(1, 1) = valueGrid0%(1, 1) + 4"),
+            "AST callable rank-two compound assignment replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_keeps_whole_stream_fallback_when_source_alignment_fails() {
+        let ast_source = "beep\n";
+        let semantic_source = "stop\ntry\nthrow 6\ncatch e%, l%\nprint \"sem\"\nend try\nend\n";
+        let parsed = crate::parse_source("ast_origin.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named("different_origin.bcl", semantic_source)
+                    .unwrap(),
+            ),
+        )
+        .unwrap();
+        assert!(
+            super::basic_semantic_statements_by_source(
+                &mut super::CodeGenerator::new(),
+                resolved.semantic_module.as_ref().unwrap(),
+                &resolved.program.statements,
+            )
+            .is_none(),
+            "mismatched source identity should decline per-node dispatch"
+        );
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("BEEP"),
+            "AST compatibility path was not used: {output}"
+        );
+        assert!(
+            !output.contains("STOP"),
+            "partial semantic output escaped before fallback: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_uses_typed_stream_without_ast_source_alignment() {
+        let parsed = crate::parse_source("ast_origin.bcl".to_string(), "beep\n").unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("different_origin.bcl", "stop\nend\n")
+                .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("\nSTOP\n"),
+            "typed stream was not emitted: {output}"
+        );
+        assert!(
+            !output.contains("BEEP"),
+            "AST statement was emitted despite a complete typed stream: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_semantic_dispatch_declines_ambiguous_same_line_ast_mapping() {
+        let source = "print 0\nend\n";
+        let parsed = crate::parse_source("ambiguous_mapping.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { mut program, .. } = crate::lower::lower(parsed).unwrap();
+        let duplicate = program.statements[0].clone();
+        program.statements.insert(1, duplicate);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("ambiguous_mapping.bcl", "print 1\nend\n")
+                .unwrap();
+        let mut generator = super::CodeGenerator::new();
+        assert!(
+            super::basic_semantic_statements_by_source(
+                &mut generator,
+                &semantic,
+                &program.statements,
+            )
+            .is_none(),
+            "multiple legacy statements at one source line must decline alignment"
+        );
+        assert!(
+            generator.output.is_empty(),
+            "ambiguous alignment wrote output before declining"
+        );
+    }
+
+    #[test]
+    fn basic_generation_prefers_semantic_array_dimensions() {
+        let source = "dim values%(10)\nend\n";
+        let semantic_source = "dim values%(20)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_array_precedence.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM values%(20)"), "{output}");
+        assert!(!output.contains("DIM values%(10)"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_dim_name_and_bounds_from_semantic_ir() {
+        let ast_source = "dim legacy%(2)\nend\n";
+        let semantic_source = "dim canonical%(9)\nend\n";
+        let parsed =
+            crate::parse_source("basic_semantic_dim_dispatch.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_semantic_dim_dispatch.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM canonical%(9)"), "{output}");
+        assert!(!output.contains("DIM legacy%"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_retains_semantic_array_type_annotations() {
+        for type_name in ["LONG", "SINGLE", "DOUBLE", "STRING"] {
+            let source = format!("dim values(2) as {}\nend\n", type_name.to_ascii_lowercase());
+            let parsed = crate::parse_source("typed_array.bcl".to_string(), &source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(
+                program,
+                Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
+            )
+            .unwrap();
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(
+                output.contains(&format!("DIM values(2) AS {type_name}")),
+                "{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_generation_retains_callable_local_array_type_annotations() {
+        for type_name in ["long", "single", "double", "string"] {
+            let source = format!(
+                "function read%()\ndim values(2) as {type_name}\nreturn 0\nend function\nprint read%()\nend\n"
+            );
+            let parsed =
+                crate::parse_source("callable_typed_array.bcl".to_string(), &source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(
+                program,
+                Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
+            )
+            .unwrap();
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(
+                output.contains(&format!("AS {}", type_name.to_ascii_uppercase())),
+                "{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_generation_resolves_bounds_for_every_scalar_suffix() {
+        for suffix in ['%', '&', '!', '#', '$'] {
+            let source = format!(
+                "dim values{suffix}(4)\nconst highest = ubound(values{suffix})\nprint highest\nend\n"
+            );
+            let parsed =
+                crate::parse_source("suffixed_array_bound.bcl".to_string(), &source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(
+                program,
+                Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
+            )
+            .unwrap();
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(
+                output.contains("CONSTHIGHEST% = 4"),
+                "suffix {suffix}: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_generation_resolves_bounds_for_every_declared_array_type() {
+        for type_name in ["integer", "long", "single", "double", "string"] {
+            let source = format!(
+                "dim values(3) as {type_name}\nconst highest = ubound(values)\nprint highest\nend\n"
+            );
+            let parsed =
+                crate::parse_source("declared_array_bound.bcl".to_string(), &source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(
+                program,
+                Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
+            )
+            .unwrap();
+            let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+            assert!(
+                output.contains("CONSTHIGHEST% = 3"),
+                "type {type_name}: {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn basic_generation_resolves_semantic_array_bound_constants() {
+        let source = "dim values%(4)\nconst count = sizeof(values%)\nprint count\nend\n";
+        let semantic_source = "dim values%(9)\nconst count = sizeof(values%)\nprint count\nend\n";
+        let parsed = crate::parse_source("semantic_array_bound.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM values%(9)"), "{output}");
+        assert!(output.contains("CONSTCOUNT% = 10"), "{output}");
+        assert!(!output.contains("CONSTCOUNT% = 5"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_top_level_const_from_semantic_ir() {
+        let ast_source = "const amount = 4\nprint amount\nend\n";
+        let semantic_source = "const amount = 9\nprint amount\nend\n";
+        let parsed =
+            crate::parse_source("semantic_top_level_const.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_top_level_const.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("CONSTAMOUNT% = 9"), "{output}");
+        assert!(!output.contains("CONSTAMOUNT% = 4"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_dispatches_line_and_block_comments_from_semantic_ir() {
+        let ast_source = "function amount%()\n/*\n * AST callable comment\n */\nreturn 1\nend function\n// AST slash module comment\n/*\n * AST module comment\n */\nend\n";
+        let semantic_source = "function amount%()\n/*\n * semantic callable comment\n */\nreturn 1\nend function\n// semantic slash module comment\n/*\n * semantic module comment\n */\nend\n";
+        let parsed = crate::parse_source("semantic_comments.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("semantic_comments.bcl", semantic_source)
+                .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("' semantic callable comment"), "{output}");
+        assert!(output.contains("' semantic module comment"), "{output}");
+        assert!(
+            output.contains("' semantic slash module comment"),
+            "{output}"
+        );
+        assert!(!output.contains("AST callable comment"), "{output}");
+        assert!(!output.contains("AST module comment"), "{output}");
+    }
+
+    #[test]
+    fn basic_callable_generation_dispatches_const_from_semantic_ir() {
+        let ast_source = "function amount%()\nconst value = 4\nreturn value\nend function\nprint amount%()\nend\n";
+        let semantic_source = "function amount%()\nconst value = 9\nreturn value\nend function\nprint amount%()\nend\n";
+        let parsed =
+            crate::parse_source("semantic_callable_const.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_callable_const.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("CONSTVALUE% = 9"), "{output}");
+        assert!(!output.contains("CONSTVALUE% = 4"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_resolves_parenthesized_semantic_array_axis() {
+        let ast_source = "dim grid%(1, 1)\nconst highest = ubound(grid%, 0)\nprint highest\nend\n";
+        let semantic_source =
+            "dim grid%(2, 3)\nconst highest = ubound((grid%), (1))\nprint highest\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_parenthesized_array_axis.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("CONSTHIGHEST% = 3"),
+            "semantic parenthesized axis was not used: {output}"
+        );
+        assert!(
+            !output.contains("CONSTHIGHEST% = 1"),
+            "AST axis replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_callable_generation_resolves_parenthesized_semantic_array_axis() {
+        let ast_source = "dim grid%(1, 1)\nfunction highest%()\nconst edge = ubound(grid%, 0)\nreturn edge\nend function\nprint highest%()\nend\n";
+        let semantic_source = "dim grid%(2, 3)\nfunction highest%()\nconst edge = ubound(grid%, (1))\nreturn edge\nend function\nprint highest%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_callable_parenthesized_array_axis.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("CONSTEDGE% = 3"),
+            "callable semantic parenthesized axis was not used: {output}"
+        );
+        assert!(
+            !output.contains("CONSTEDGE% = 1"),
+            "AST callable axis replaced semantic IR: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_generation_prefers_semantic_callable_array_dimensions() {
+        let source =
+            "function read%()\ndim values%(4)\nreturn 0\nend function\nprint read%()\nend\n";
+        let semantic_source =
+            "function read%()\ndim values%(9)\nreturn 0\nend function\nprint read%()\nend\n";
+        let parsed =
+            crate::parse_source("callable_array_precedence.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module =
+            Some(crate::semantic_ir::parse_and_adapt(semantic_source).unwrap());
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("(9)"), "{output}");
+        assert!(!output.contains("(4)"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_uses_semantic_parameter_capacity_facts() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source = "function consume%(values%(3))\nreturn 0\nend function\nend\n";
+        let parsed =
+            crate::parse_source("semantic_parameter_capacity.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_parameter_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(3)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_parameter_rank_seeds_capacity_when_ast_parameter_is_scalar() {
+        let ast_source = "dim actual%(5)\nfunction consume%(values%)\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_array_parameter_rank.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_array_parameter_rank.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("consumeValuesDim00% = 5"), "{output}");
+        assert!(!output.contains("consumeValuesDim00% = 0"), "{output}");
+    }
+
+    #[test]
+    fn semantic_fixed_array_parameter_allocates_storage_without_ast_rank() {
+        let ast_source = "function consume%(values%)\nreturn 0\nend function\nend\n";
+        let semantic_source = "function consume%(values%(5))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_fixed_array_parameter_rank.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_fixed_array_parameter_rank.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_procedure_array_parameter_allocates_typed_storage() {
+        let ast_source = "procedure consume(values%)\nend procedure\nend\n";
+        let semantic_source = "procedure consume(values%(5))\nend procedure\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_procedure_array_parameter.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_procedure_array_parameter.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_scalar_parameter_drops_ast_array_capacity() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source = "function consume%(values%)\nreturn 0\nend function\nend\n";
+        let parsed =
+            crate::parse_source("semantic_scalar_parameter_rank.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_scalar_parameter_rank.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+        assert!(!output.contains("consumeValuesDim00%"), "{output}");
+    }
+
+    #[test]
+    fn semantic_parameter_rank_adds_capacity_axes_missing_from_ast() {
+        let ast_source = "dim actual%(2, 3)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5, 7)\nfunction consume%(values%(?, ?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_parameter_added_rank.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_parameter_added_rank.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("consumeValuesDim00% = 5"), "{output}");
+        assert!(output.contains("consumeValuesDim10% = 7"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_evaluates_semantic_parameter_capacity_expressions() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source = "const capacity = 2 + 3\nfunction consume%(values%(capacity))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_parameter_capacity_expression.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_parameter_capacity_expression.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_parses_radix_semantic_parameter_capacity() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source = "function consume%(values%(&H5))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_radix_parameter_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_radix_parameter_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn basic_generation_evaluates_division_in_semantic_parameter_capacity() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source =
+            "function consume%(values%((12 / 2) - 1))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_parameter_capacity_division.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_parameter_capacity_division.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn basic_inferred_capacity_parses_radix_semantic_actual_dimension() {
+        let ast_source = "dim actual%(2)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(&H5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_radix_actual_capacity.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_radix_actual_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_inferred_parameter_capacity_does_not_keep_ast_capacity() {
+        let ast_source = "function consume%(values%(2))\nreturn 0\nend function\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_inferred_parameter_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_inferred_parameter_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("never called") && diagnostic.message.contains("values")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_parameter_capacity_uses_semantic_actual_array_dimensions() {
+        let ast_source = "dim actual%(2)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_actual_array_capacity.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_actual_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn omitted_semantic_array_declaration_does_not_reuse_ast_capacity() {
+        let ast_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source =
+            "function consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_missing_actual_declaration.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_missing_actual_declaration.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("can't automatically size")
+                    && diagnostic.message.contains("call site passes an array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_parameter_capacity_evaluates_module_constants() {
+        let ast_source = "dim actual%(2)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "const capacity = 2 + 3\ndim actual%(capacity)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_module_actual_array_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_module_actual_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_actual_array_capacity_drives_parameter_overflow_diagnostic() {
+        let ast_source = "dim actual%(2)\nfunction consume%(values%(3))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5)\nfunction consume%(values%(3))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_actual_array_overflow.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_actual_array_overflow.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("passes 5 elements")
+                    && diagnostic.message.contains("storage is only sized for 3")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_expression_parameter_capacity_drives_overflow_diagnostic() {
+        let ast_source = "dim actual%(2)\nfunction consume%(values%(10))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5)\nfunction consume%(values%(1 + 2))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_expression_capacity_overflow.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_expression_capacity_overflow.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("passes 5 elements")
+                    && diagnostic.message.contains("storage is only sized for 3")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_multidimensional_overflow_reports_the_exceeding_axis() {
+        let ast_source = "dim actual%(2, 3)\nfunction consume%(values%(3, 4))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(2, 6)\nfunction consume%(values%(3, 4))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_multidimensional_overflow.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_multidimensional_overflow.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic
+                    .message
+                    .contains("passes 6 elements along axis 1")
+                    && diagnostic.message.contains("storage is only sized for 4")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_capacity_uses_semantic_forwarded_parameter_capacity() {
+        let ast_source = "dim actual%(1)\nfunction consume%(values%(?))\nreturn 0\nend function\nfunction forward%(values%(2))\nconsume%(values%)\nreturn 0\nend function\nforward%(actual%)\nend\n";
+        let semantic_source = "dim actual%(1)\nfunction consume%(values%(?))\nreturn 0\nend function\nfunction forward%(values%(6))\nconsume%(values%)\nreturn 0\nend function\nforward%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_forwarded_array_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_forwarded_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(6)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_parameter_expression_capacity_propagates_through_forwarding() {
+        let ast_source = "dim actual%(1)\nfunction consume%(values%(?))\nreturn 0\nend function\nfunction forward%(values%(2))\nconsume%(values%)\nreturn 0\nend function\nforward%(actual%)\nend\n";
+        let semantic_source = "const capacity = 2 + 3\ndim actual%(1)\nfunction consume%(values%(?))\nreturn 0\nend function\nfunction forward%(values%(capacity))\nconsume%(values%)\nreturn 0\nend function\nforward%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_expression_forwarded_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_expression_forwarded_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_dynamic_actual_array_dimension_does_not_use_ast_bound() {
+        let ast_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim limit%\ndim actual%(limit%)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_dynamic_actual_array_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_dynamic_actual_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("can't automatically size")
+                    && diagnostic.message.contains("call site passes an array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_dynamic_callable_array_dimension_does_not_use_ast_bound() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(5)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim limit%\ndim actual%(limit%)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_dynamic_callable_array_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_dynamic_callable_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("can't automatically size")
+                    && diagnostic.message.contains("call site passes an array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_parameter_capacity_uses_semantic_multidimensional_bounds() {
+        let ast_source = "dim actual%(2, 3)\nfunction consume%(values%(?, ?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim actual%(5, 7)\nfunction consume%(values%(?, ?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_multidimensional_actual_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_multidimensional_actual_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5, 7)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2, 3)"), "{output}");
+    }
+
+    #[test]
+    fn dynamic_semantic_bound_blocks_only_its_inferred_axis() {
+        let ast_source = "dim actual%(5, 8)\nfunction consume%(values%(?, ?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let semantic_source = "dim limit%\ndim actual%(5, limit%)\nfunction consume%(values%(?, ?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_dynamic_multidimensional_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_dynamic_multidimensional_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("along axis 1")
+                    && diagnostic.message.contains("can't automatically size")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_capacity_uses_maximum_semantic_callsite_bound() {
+        let ast_source = "dim first%(1)\ndim second%(2)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(first%)\nconsume%(second%)\nend\n";
+        let semantic_source = "dim first%(5)\ndim second%(8)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(first%)\nconsume%(second%)\nend\n";
+        let parsed =
+            crate::parse_source("semantic_max_callsite_capacity.bcl".to_string(), ast_source)
+                .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_max_callsite_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(8)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn basic_inferred_capacity_uses_semantic_callsites_without_legacy_call() {
+        let filename = "semantic_callsite_capacity_without_ast_call.bcl";
+        let parsed = crate::parse_source(
+            filename.to_string(),
+            "function consume%(values%(?))\nreturn 0\nend function\nend\n",
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            filename,
+            "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n",
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+    }
+
+    #[test]
+    fn dynamic_semantic_callsite_blocks_inference_with_other_known_bounds() {
+        let ast_source = "dim known%(5)\ndim dynamic%(8)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(known%)\nconsume%(dynamic%)\nend\n";
+        let semantic_source = "dim known%(5)\ndim limit%\ndim dynamic%(limit%)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(known%)\nconsume%(dynamic%)\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_mixed_callsite_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_mixed_callsite_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("can't automatically size")
+                    && diagnostic.message.contains("call site passes an array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_parameter_capacity_uses_semantic_callable_array_dimensions() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(2)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(5)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_callable_actual_array_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_callable_actual_array_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn unmatched_semantic_callable_scope_keeps_ast_array_bound_fallback() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(5)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_unmatched_callable_bound_fallback.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_unmatched_callable_bound_fallback.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+    }
+
+    #[test]
+    fn omitted_semantic_callable_array_does_not_reuse_local_ast_capacity() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(5)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_missing_callable_array.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "semantic_missing_callable_array.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("can't automatically size")
+                    && diagnostic.message.contains("call site passes an array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn basic_inferred_parameter_capacity_evaluates_callable_local_constants() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\nconst capacity = 2\ndim actual%(capacity)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\nconst capacity = 2 + 3\ndim actual%(capacity)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_callable_local_capacity_constant.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_callable_local_capacity_constant.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn basic_inferred_capacity_parses_radix_callable_array_dimension() {
+        let ast_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(2)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let semantic_source = "function consume%(values%(?))\nreturn 0\nend function\nfunction send%()\ndim actual%(&H5)\nconsume%(actual%)\nreturn 0\nend function\nprint send%()\nend\n";
+        let parsed = crate::parse_source(
+            "semantic_radix_callable_actual_capacity.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "semantic_radix_callable_actual_capacity.bcl",
+            semantic_source,
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM consumeValues0%(5)"), "{output}");
+        assert!(!output.contains("DIM consumeValues0%(2)"), "{output}");
+    }
+
+    #[test]
+    fn semantic_array_bound_constants_preserve_unknown_array_diagnostics() {
+        let source = "const count = sizeof(missing%)\nprint count\nend\n";
+        let parsed = crate::parse_source("unknown_semantic_bound.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("missing%")
+                    && diagnostic.message.contains("isn't a known array")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_array_bound_constants_preserve_invalid_axis_diagnostics() {
+        let source = "dim grid%(2, 3)\nconst count = sizeof(grid%, 2)\nprint count\nend\n";
+        let parsed =
+            crate::parse_source("invalid_semantic_bound_axis.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.message.contains("axis 2 doesn't exist") }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_sizeof_requires_axis_for_multidimensional_arrays() {
+        let source = "dim grid%(2, 3)\nconst count = sizeof(grid%)\nprint count\nend\n";
+        let parsed =
+            crate::parse_source("missing_semantic_bound_axis.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.message.contains("SIZEOF needs an axis argument") }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_array_bound_constants_preserve_nonliteral_axis_diagnostic() {
+        let source = "dim grid%(2, 3)\nconst count = sizeof(grid%, 1.5)\nprint count\nend\n";
+        let parsed =
+            crate::parse_source("nonliteral_semantic_bound_axis.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("axis argument")
+                    && diagnostic.message.contains("literal integer")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_array_bound_constants_reject_negative_axis() {
+        let source = "dim grid%(2, 3)\nconst count = sizeof(grid%, -1)\nprint count\nend\n";
+        let parsed =
+            crate::parse_source("negative_semantic_bound_axis.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("axis argument")
+                    && diagnostic.message.contains("literal integer")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn semantic_lbound_and_ubound_require_axis_for_multidimensional_arrays() {
+        for builtin in ["lbound", "ubound"] {
+            let source =
+                format!("dim grid%(2, 3)\nconst result = {builtin}(grid%)\nprint result\nend\n");
+            let parsed =
+                crate::parse_source("missing_bound_axis.bcl".to_string(), &source).unwrap();
+            let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+            let resolved = crate::resolver::resolve_with_semantic(
+                program,
+                Some(crate::semantic_ir::parse_and_adapt(&source).unwrap()),
+            )
+            .unwrap();
+            let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+            assert!(
+                diagnostics.iter().any(|diagnostic| {
+                    diagnostic.message.contains(&format!(
+                        "{} needs an axis argument",
+                        builtin.to_uppercase()
+                    ))
+                }),
+                "{builtin}: {diagnostics:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sizeof_rejects_element_count_overflow_without_panicking() {
+        let source =
+            "dim huge%(9223372036854775807)\nconst count = sizeof(huge%)\nprint count\nend\n";
+        let parsed = crate::parse_source("sizeof_overflow.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let diagnostics = super::CodeGenerator::new().generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("element count")
+                    && diagnostic.message.contains("overflows")
+            }),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_accepts_largest_nonoverflowing_element_count() {
+        let source =
+            "dim huge%(9223372036854775806)\nconst count = sizeof(huge%)\nprint count\nend\n";
+        let parsed = crate::parse_source("sizeof_max_count.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("CONSTCOUNT% = 9223372036854775807"),
+            "{output}"
+        );
+    }
+
+    #[test]
+    fn ubound_accepts_largest_supported_index_without_incrementing() {
+        let source =
+            "dim huge%(9223372036854775807)\nconst highest = ubound(huge%)\nprint highest\nend\n";
+        let parsed = crate::parse_source("ubound_max_index.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("CONSTHIGHEST% = 9223372036854775807"),
+            "{output}"
+        );
+    }
+
+    #[test]
     fn basic_generation_uses_semantic_callable_string_dim() {
         let source = "function f%()\ndim text as string\nreturn 0\nend function\nend\n";
         let parsed = crate::parse_source("semantic_dim.bcl".to_string(), source).unwrap();
@@ -57,6 +4352,28 @@ mod tests {
         resolved.semantic_module = Some(crate::semantic_ir::parse_and_adapt(source).unwrap());
         let output = super::CodeGenerator::new().generate(&resolved).unwrap();
         assert!(output.contains(" AS STRING"), "{output}");
+    }
+
+    #[test]
+    fn basic_callable_dim_dispatches_name_and_bounds_from_semantic_ir() {
+        let ast_source = "function first%()\ndim legacy%(2)\nreturn legacy%(0)\nend function\nprint first%()\nend\n";
+        let semantic_source = "function first%()\ndim canonical%(9)\nreturn canonical%(0)\nend function\nprint first%()\nend\n";
+        let parsed =
+            crate::parse_source("basic_callable_semantic_dim.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_semantic_dim.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(output.contains("DIM firstCanonical0%(9)"), "{output}");
+        assert!(!output.contains("legacy"), "{output}");
+        assert!(output.contains("(9)"), "{output}");
     }
 }
 
@@ -106,6 +4423,12 @@ pub struct CodeGenerator {
     // the way an ordinary variable's can -- `const_var_name` builds an
     // entirely fresh, underscore-free name instead.
     const_var_names: HashMap<String, String>,
+    // Module-level CONST initializer expressions retained by semantic IR.
+    // The BASIC emitter consumes the semantic expression directly when it
+    // can render it without syntax-specific rewriting.
+    semantic_const_initializers: HashMap<String, crate::semantic_ir::Expression>,
+    semantic_records: Vec<crate::semantic_ir::Record>,
+    semantic_top_level_dims: HashMap<String, crate::semantic_ir::DimDeclaration>,
     // Lowercase BASIC names of the *subset* of `record_buffer_names` that
     // `records::lower` invented itself (via `buffer_ident`), as opposed to
     // a `FIELD` buffer name the author typed directly in raw-BASIC-
@@ -164,8 +4487,8 @@ struct FunctionInfo {
     stem: String,
     label: String,
     result: BasicIdent,
-    /// (source parameter, allocated lowered BASIC name) pairs, in declared order.
-    params: Vec<(Param, BasicIdent)>,
+    /// (resolved source binding, allocated lowered BASIC name) pairs, in declared order.
+    params: Vec<(FunctionParameterInfo, BasicIdent)>,
     /// Array rank inferred per parameter from how it's indexed inside this
     /// function's own body (`None` if never directly indexed, or indexed
     /// inconsistently). Parallel to `params`.
@@ -194,6 +4517,9 @@ struct FunctionInfo {
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
     local_dim_types: HashMap<String, String>,
+    semantic_const_initializers: HashMap<String, crate::semantic_ir::Expression>,
+    semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
+    semantic_dim_declarations: HashMap<String, crate::semantic_ir::DimDeclaration>,
     /// Frozen per-axis bound text for every array DIMed locally within this
     /// function. RefCell because it's populated lazily as DIM statements
     /// are generated, through a shared `&FunctionInfo` reference -- same
@@ -205,6 +4531,3636 @@ struct FunctionInfo {
     // Cache of source-variable-key → allocated lowered BASIC name for locals in this function.
     // RefCell because ident() populates this lazily through a shared &FunctionInfo reference.
     local_var_map: RefCell<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone)]
+struct FunctionParameterInfo {
+    name: BasicIdent,
+    mode: ParamMode,
+    /// AST default retained only for the AST compatibility emitter. Normal
+    /// codegen reads defaults from `FunctionInfo::semantic_parameters`.
+    default: Option<Expr>,
+}
+
+/// Emit supported top-level BASIC statements directly from typed semantic
+/// IR when the complete module statement stream is in this subset. Returning
+/// `None` keeps mixed statement families on the compatibility path.
+fn basic_semantic_dim(
+    generator: &mut CodeGenerator,
+    declarations: &HashMap<String, crate::semantic_ir::DimDeclaration>,
+    statement: &crate::semantic_ir::SemanticStatement,
+    current_function: Option<&FunctionInfo>,
+) -> Option<Vec<String>> {
+    let crate::semantic_ir::SemanticStatementKind::Dim(items) = &statement.kind else {
+        return None;
+    };
+    let mut output = Vec::new();
+    for item in items {
+        let key = item.name.to_ascii_lowercase();
+        let declaration = declarations.get(&key)?;
+        if declaration.array_axes != item.array_axes
+            || declaration
+                .dimensions
+                .iter()
+                .any(|axis| matches!(axis, crate::semantic_ir::DimAxis::Inferred))
+        {
+            return None;
+        }
+        let ident = BasicIdent::parse(&declaration.name);
+        let type_clause = ident
+            .suffix
+            .is_none()
+            .then(|| declaration.type_annotation.as_deref())
+            .flatten()
+            .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
+            .unwrap_or_default();
+        if declaration.array_axes == 0 {
+            let base = generator.ident(&ident, current_function);
+            output.push(format!("DIM {base}{type_clause}"));
+            continue;
+        }
+        if declaration.dimensions.is_empty() {
+            let base = generator.ident(&ident, current_function);
+            output.push(format!("DIM {base}(){type_clause}"));
+            continue;
+        }
+        if declaration.dimensions.len() != declaration.array_axes {
+            return None;
+        }
+        let mut axes = Vec::with_capacity(declaration.dimensions.len());
+        for axis in &declaration.dimensions {
+            let axis = match axis {
+                crate::semantic_ir::DimAxis::Fixed(value) => {
+                    let literal = value.chars().next().is_some_and(|character| {
+                        character.is_ascii_digit() || character == '&' || character == '"'
+                    });
+                    let rendered = if literal {
+                        value.clone()
+                    } else {
+                        generator.ident(&BasicIdent::parse(value), current_function)
+                    };
+                    (rendered, literal)
+                }
+                crate::semantic_ir::DimAxis::Expression(expression) => {
+                    let (prelude, rendered) = if let Some(rendered) =
+                        generator.semantic_const_expression(expression, current_function)
+                    {
+                        (Vec::new(), rendered)
+                    } else {
+                        generator.semantic_expression_with_prelude(expression, current_function)?
+                    };
+                    output.extend(prelude);
+                    let literal = matches!(
+                        expression.kind,
+                        crate::semantic_ir::ExpressionKind::Literal(_)
+                    );
+                    (rendered, literal)
+                }
+                crate::semantic_ir::DimAxis::Inferred => return None,
+            };
+            axes.push(axis);
+        }
+        let base = generator.ident(&ident, current_function);
+        let rendered = axes
+            .iter()
+            .map(|(value, _)| value.clone())
+            .collect::<Vec<_>>();
+        output.push(format!("DIM {base}({}){type_clause}", rendered.join(", ")));
+        let frozen = axes
+            .into_iter()
+            .map(|(value, literal)| {
+                if literal {
+                    value
+                } else {
+                    let temp = generator.next_temp_var();
+                    output.push(format!("{temp} = {value}"));
+                    temp
+                }
+            })
+            .collect();
+        if let Some(function) = current_function {
+            function.local_array_bounds.borrow_mut().insert(key, frozen);
+        } else {
+            generator.top_level_array_bounds.insert(key, frozen);
+        }
+    }
+    Some(output)
+}
+
+fn basic_semantic_try_stream_is_typed(
+    module: &crate::semantic_ir::SemanticModule,
+    ast_statements: &[Stmt],
+) -> bool {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    fn try_support(statements: &[crate::semantic_ir::SemanticStatement]) -> (bool, bool) {
+        let mut has_try = false;
+        let mut supported = true;
+        for statement in statements {
+            let bodies: Vec<&[crate::semantic_ir::SemanticStatement]> = match &statement.kind {
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    has_try = true;
+                    if catch.as_ref().is_some_and(|catch| catch.source.is_some()) {
+                        supported = false;
+                    }
+                    let mut bodies = vec![body.as_slice(), finally_body.as_slice()];
+                    if let Some(catch) = catch {
+                        bodies.push(catch.body.as_slice());
+                    }
+                    bodies
+                }
+                Kind::Line(body) | Kind::While { body, .. } | Kind::For { body, .. } | Kind::Do { body, .. } => {
+                    vec![body]
+                }
+                Kind::If { then_body, else_body, .. } => vec![then_body, else_body],
+                Kind::SelectCase { cases, else_body, .. } => cases
+                    .iter()
+                    .map(|case| case.body.as_slice())
+                    .chain(std::iter::once(else_body.as_slice()))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            for body in bodies {
+                let (nested_has_try, nested_supported) = try_support(body);
+                has_try |= nested_has_try;
+                supported &= nested_supported;
+            }
+        }
+        (has_try, supported)
+    }
+
+    if module.statement_sources.len() != module.statements.len() {
+        return !module
+            .statements
+            .iter()
+            .any(|statement| try_support(std::slice::from_ref(statement)).0);
+    }
+    module
+        .statements
+        .iter()
+        .zip(&module.statement_sources)
+        .all(|(statement, source_index)| {
+            let (has_try, supported) = try_support(std::slice::from_ref(statement));
+            !has_try
+                || (supported && module.sources.get(*source_index).is_some_and(|source| {
+                ast_statements
+                    .iter()
+                    .any(|statement| statement.pos.filename == source.filename)
+                }))
+        })
+}
+
+fn basic_semantic_intrinsics(
+    generator: &mut CodeGenerator,
+    module: &crate::semantic_ir::SemanticModule,
+    statements: &[crate::semantic_ir::SemanticStatement],
+    allow_structured_try: bool,
+) -> Option<Vec<String>> {
+    use crate::semantic_ir::{
+        PrintDestination, PrintToken as SemanticPrintToken, ResumeTarget,
+        SemanticStatementKind as Kind,
+    };
+    fn render_target(generator: &CodeGenerator, name: &str) -> String {
+        generator.label_target_text(&Expr::Ident(BasicIdent::parse(name)))
+    }
+    fn visit(
+        generator: &mut CodeGenerator,
+        module: &crate::semantic_ir::SemanticModule,
+        statements: &[crate::semantic_ir::SemanticStatement],
+        output: &mut Vec<String>,
+        allow_structured_try: bool,
+    ) -> bool {
+        for statement in statements {
+            match &statement.kind {
+                Kind::Dim(_) => {
+                    let declarations = module.top_level_dim_declarations();
+                    let Some(lines) = basic_semantic_dim(generator, &declarations, statement, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                }
+                Kind::FileDeclaration {
+                    name,
+                    record_type: Some(record_type),
+                    path,
+                    ..
+                } => {
+                    let Some(file) = module.lowered_record_files.iter().find(|file| {
+                        file.owner.is_none()
+                            && file.name.eq_ignore_ascii_case(&name.name)
+                            && file.record_type.eq_ignore_ascii_case(&record_type.name)
+                    }) else {
+                        return false;
+                    };
+                    let Some((mut lines, path)) =
+                        generator.semantic_expression_with_prelude(path, None)
+                    else {
+                        return false;
+                    };
+                    let record_length = file.record_length;
+                    lines.push(format!(
+                        "OPEN {path} FOR RANDOM AS #{} LEN = {record_length}",
+                        file.channel
+                    ));
+                    let bindings = file
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            format!(
+                                "{} AS {}",
+                                field.width,
+                                generator.ident(&BasicIdent::parse(&field.buffer_name), None)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    lines.push(format!("FIELD #{}, {bindings}", file.channel));
+                    output.extend(lines);
+                }
+                Kind::Line(body) => {
+                    if !visit(generator, module, body, output, allow_structured_try) {
+                        return false;
+                    }
+                }
+                Kind::Expression(expression) => {
+                    let Some(lines) =
+                        basic_semantic_expression_statement(generator, expression, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                }
+                Kind::If {
+                    condition,
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    let (condition_prelude, condition) = if let Some(condition) =
+                        generator.semantic_const_expression(condition, None)
+                    {
+                        (Vec::new(), condition)
+                    } else if let Some(rendered) =
+                        generator.semantic_expression_with_prelude(condition, None)
+                    {
+                        rendered
+                    } else {
+                        return false;
+                    };
+                    let mut then_lines = Vec::new();
+                    let mut else_lines = Vec::new();
+                    if !visit(
+                        generator,
+                        module,
+                        then_body,
+                        &mut then_lines,
+                        allow_structured_try,
+                    ) || !visit(
+                        generator,
+                        module,
+                        else_body,
+                        &mut else_lines,
+                        allow_structured_try,
+                    ) {
+                        return false;
+                    }
+                    let id = generator.next_label;
+                    generator.next_label += 1;
+                    let else_label = format!("IF_{id:04}_ELSE");
+                    let end_label = format!("IF_{id:04}_END");
+                    output.extend(condition_prelude);
+                    if else_body.is_empty() {
+                        output.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                        output.extend(then_lines.into_iter().map(|line| format!("    {line}")));
+                        output.push(format!("{end_label}:"));
+                        output.push("REM END IF".to_string());
+                    } else {
+                        output.push(format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+                        output.extend(then_lines.into_iter().map(|line| format!("    {line}")));
+                        output.push(format!("GOTO {end_label}"));
+                        output.push(format!("{else_label}:"));
+                        output.extend(else_lines.into_iter().map(|line| format!("    {line}")));
+                        output.push(format!("{end_label}:"));
+                        output.push("REM END IF".to_string());
+                    }
+                }
+                Kind::For {
+                    variable,
+                    variable_type: _,
+                    start,
+                    bounds,
+                    body,
+                } => {
+                    let start_suffix = start
+                        .value_type
+                        .suffix()
+                        .map(|suffix| suffix.to_string())
+                        .unwrap_or_default();
+                    let bounds_contain_callable_call = match bounds {
+                        crate::semantic_ir::ForBounds::To { limit, step } => {
+                            generator.semantic_expression_contains_callable_call(limit)
+                                || step.as_ref().is_some_and(|step| {
+                                    generator.semantic_expression_contains_callable_call(step)
+                                })
+                        }
+                        crate::semantic_ir::ForBounds::Downto { limit, .. } => {
+                            generator.semantic_expression_contains_callable_call(limit)
+                        }
+                    };
+                    let (mut for_prelude, start) =
+                        if let Some(start) = generator.semantic_const_expression(start, None) {
+                            (Vec::new(), start)
+                        } else if let Some((prelude, start)) =
+                            generator.semantic_expression_with_prelude(start, None)
+                        {
+                            (prelude, start)
+                        } else {
+                            return false;
+                        };
+                    let start = if bounds_contain_callable_call {
+                        let snapshot = generator.next_temp_var_suffixed(&start_suffix);
+                        for_prelude.push(format!("{snapshot} = {start}"));
+                        snapshot
+                    } else {
+                        start
+                    };
+                    let (limit, step) = match bounds {
+                        crate::semantic_ir::ForBounds::To {
+                            limit: limit_expression,
+                            step,
+                        } => {
+                            let limit = if let Some(limit) =
+                                generator.semantic_const_expression(limit_expression, None)
+                            {
+                                limit
+                            } else if let Some((prelude, limit)) =
+                                generator.semantic_expression_with_prelude(limit_expression, None)
+                            {
+                                for_prelude.extend(prelude);
+                                limit
+                            } else {
+                                return false;
+                            };
+                            let limit = if step.as_ref().is_some_and(|step| {
+                                generator.semantic_expression_contains_callable_call(step)
+                            }) {
+                                let suffix = limit_expression
+                                    .value_type
+                                    .suffix()
+                                    .map(|suffix| suffix.to_string())
+                                    .unwrap_or_default();
+                                let snapshot = generator.next_temp_var_suffixed(&suffix);
+                                for_prelude.push(format!("{snapshot} = {limit}"));
+                                snapshot
+                            } else {
+                                limit
+                            };
+                            let step = match step {
+                                Some(step) => {
+                                    let step = if let Some(step) =
+                                        generator.semantic_const_expression(step, None)
+                                    {
+                                        step
+                                    } else if let Some((prelude, step)) =
+                                        generator.semantic_expression_with_prelude(step, None)
+                                    {
+                                        for_prelude.extend(prelude);
+                                        step
+                                    } else {
+                                        return false;
+                                    };
+                                    format!(" STEP {step}")
+                                }
+                                None => String::new(),
+                            };
+                            (limit, step)
+                        }
+                        crate::semantic_ir::ForBounds::Downto { limit, step } => {
+                            let limit = if let Some(limit) =
+                                generator.semantic_const_expression(limit, None)
+                            {
+                                limit
+                            } else if let Some((prelude, limit)) =
+                                generator.semantic_expression_with_prelude(limit, None)
+                            {
+                                for_prelude.extend(prelude);
+                                limit
+                            } else {
+                                return false;
+                            };
+                            (limit, format!(" STEP {step}"))
+                        }
+                    };
+                    output.append(&mut for_prelude);
+                    let continue_id = generator.next_label;
+                    generator.next_label += 1;
+                    let continue_label = format!("FOR_{continue_id:04}_CONTINUE");
+                    generator.loop_exit_stack.push(LoopExit::NativeFor);
+                    generator.loop_continue_stack.push(continue_label.clone());
+                    let mut body_lines = Vec::new();
+                    let body_supported = visit(
+                        generator,
+                        module,
+                        body,
+                        &mut body_lines,
+                        allow_structured_try,
+                    );
+                    generator.loop_continue_stack.pop();
+                    generator.loop_exit_stack.pop();
+                    if !body_supported {
+                        return false;
+                    }
+                    let variable = generator.ident(&BasicIdent::parse(variable), None);
+                    output.push(format!("FOR {variable} = {start} TO {limit}{step}"));
+                    output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+                    output.push(format!("{continue_label}:"));
+                    output.push(format!("NEXT {variable}"));
+                }
+                Kind::While { condition, body } => {
+                    let (condition_prelude, condition) = if let Some(condition) =
+                        generator.semantic_const_expression(condition, None)
+                    {
+                        (Vec::new(), condition)
+                    } else if let Some(rendered) =
+                        generator.semantic_expression_with_prelude(condition, None)
+                    {
+                        rendered
+                    } else {
+                        return false;
+                    };
+                    let id = generator.next_label;
+                    generator.next_label += 1;
+                    let top_label = format!("WHILE_{id:04}_TOP");
+                    let end_label = format!("WHILE_{id:04}_END");
+                    generator
+                        .loop_exit_stack
+                        .push(LoopExit::Goto(end_label.clone()));
+                    generator.loop_continue_stack.push(top_label.clone());
+                    let mut body_lines = Vec::new();
+                    let body_supported = visit(
+                        generator,
+                        module,
+                        body,
+                        &mut body_lines,
+                        allow_structured_try,
+                    );
+                    generator.loop_continue_stack.pop();
+                    generator.loop_exit_stack.pop();
+                    if !body_supported {
+                        return false;
+                    }
+                    output.push(format!("{top_label}:"));
+                    output.extend(condition_prelude);
+                    output.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                    output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+                    output.push(format!("GOTO {top_label}"));
+                    output.push(format!("{end_label}:"));
+                    output.push("REM END WHILE".to_string());
+                }
+                Kind::Do {
+                    pre_condition,
+                    post_condition,
+                    body,
+                } => {
+                    let pre = match pre_condition {
+                        Some(condition) => {
+                            let (prelude, value) = if let Some(value) =
+                                generator.semantic_const_expression(&condition.value, None)
+                            {
+                                (Vec::new(), value)
+                            } else if let Some(rendered) =
+                                generator.semantic_expression_with_prelude(&condition.value, None)
+                            {
+                                rendered
+                            } else {
+                                return false;
+                            };
+                            Some((condition.kind, prelude, value))
+                        }
+                        None => None,
+                    };
+                    let post = match post_condition {
+                        Some(condition) => {
+                            let (prelude, value) = if let Some(value) =
+                                generator.semantic_const_expression(&condition.value, None)
+                            {
+                                (Vec::new(), value)
+                            } else if let Some(rendered) =
+                                generator.semantic_expression_with_prelude(&condition.value, None)
+                            {
+                                rendered
+                            } else {
+                                return false;
+                            };
+                            Some((condition.kind, prelude, value))
+                        }
+                        None => None,
+                    };
+                    let id = generator.next_label;
+                    generator.next_label += 1;
+                    let top_label = format!("DO_{id:04}_TOP");
+                    let end_label = format!("DO_{id:04}_END");
+                    let continue_label = format!("DO_{id:04}_CONTINUE");
+                    generator
+                        .loop_exit_stack
+                        .push(LoopExit::Goto(end_label.clone()));
+                    generator.loop_continue_stack.push(continue_label.clone());
+                    let mut body_lines = Vec::new();
+                    let body_supported = visit(
+                        generator,
+                        module,
+                        body,
+                        &mut body_lines,
+                        allow_structured_try,
+                    );
+                    generator.loop_continue_stack.pop();
+                    generator.loop_exit_stack.pop();
+                    if !body_supported {
+                        return false;
+                    }
+                    output.push(format!("{top_label}:"));
+                    if let Some((kind, prelude, condition)) = pre {
+                        output.extend(prelude);
+                        let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
+                            "= 0"
+                        } else {
+                            "<> 0"
+                        };
+                        output.push(format!("IF ({condition}) {operator} THEN GOTO {end_label}"));
+                    }
+                    output.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+                    output.push(format!("{continue_label}:"));
+                    if let Some((kind, prelude, condition)) = post {
+                        output.extend(prelude.into_iter().map(|line| format!("    {line}")));
+                        let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
+                            "<> 0"
+                        } else {
+                            "= 0"
+                        };
+                        output.push(format!("IF ({condition}) {operator} THEN GOTO {top_label}"));
+                    } else {
+                        output.push(format!("GOTO {top_label}"));
+                    }
+                    output.push(format!("{end_label}:"));
+                    output.push("REM END DO".to_string());
+                }
+                Kind::SelectCase {
+                    selector,
+                    cases,
+                    else_body,
+                } => {
+                    let (selector_prelude, selector_text) = if let Some(rendered) =
+                        generator.semantic_const_expression(selector, None)
+                    {
+                        (Vec::new(), rendered)
+                    } else if let Some(rendered) =
+                        generator.semantic_expression_with_prelude(selector, None)
+                    {
+                        rendered
+                    } else {
+                        return false;
+                    };
+                    let id = generator.next_label;
+                    generator.next_label += 1;
+                    let end_label = format!("SEL_{id:04}_END");
+                    let temp_id = generator.next_label;
+                    generator.next_label += 1;
+                    let suffix = selector
+                        .value_type
+                        .suffix()
+                        .map(|suffix| suffix.to_string())
+                        .unwrap_or_default();
+                    let temp = format!("BCCT{temp_id}{suffix}");
+                    let case_labels = (0..cases.len())
+                        .map(|index| format!("SEL_{id:04}_C{index}"))
+                        .collect::<Vec<_>>();
+                    let else_label = format!("SEL_{id:04}_ELSE");
+                    let mut rendered_cases = Vec::new();
+                    for clause in cases {
+                        let mut values = Vec::new();
+                        for value in &clause.values {
+                            let condition = match value {
+                                crate::semantic_ir::CaseValue::Value {
+                                    first,
+                                    range_end: None,
+                                    ..
+                                } => {
+                                    let Some(value) =
+                                        generator.semantic_const_expression(first, None)
+                                    else {
+                                        return false;
+                                    };
+                                    format!("{temp} = {value}")
+                                }
+                                crate::semantic_ir::CaseValue::Value {
+                                    first,
+                                    range_end: Some(last),
+                                    ..
+                                } => {
+                                    let (Some(first), Some(last)) = (
+                                        generator.semantic_const_expression(first, None),
+                                        generator.semantic_const_expression(last, None),
+                                    ) else {
+                                        return false;
+                                    };
+                                    format!("{temp} >= {first} AND {temp} <= {last}")
+                                }
+                                crate::semantic_ir::CaseValue::Comparison {
+                                    operator,
+                                    value,
+                                    ..
+                                } => {
+                                    let Some(value) =
+                                        generator.semantic_const_expression(value, None)
+                                    else {
+                                        return false;
+                                    };
+                                    let operator = match operator {
+                                        crate::semantic_ir::ComparisonOperator::NotEqual => "<>",
+                                        crate::semantic_ir::ComparisonOperator::LessOrEqual => "<=",
+                                        crate::semantic_ir::ComparisonOperator::GreaterOrEqual => {
+                                            ">="
+                                        }
+                                        crate::semantic_ir::ComparisonOperator::Equal => "=",
+                                        crate::semantic_ir::ComparisonOperator::Less => "<",
+                                        crate::semantic_ir::ComparisonOperator::Greater => ">",
+                                    };
+                                    format!("{temp} {operator} {value}")
+                                }
+                            };
+                            values.push(condition);
+                        }
+                        if values.is_empty() {
+                            return false;
+                        }
+                        rendered_cases.push(values.join(" OR "));
+                    }
+                    let mut rendered_bodies = Vec::new();
+                    for clause in cases {
+                        let mut lines = Vec::new();
+                        if !visit(
+                            generator,
+                            module,
+                            &clause.body,
+                            &mut lines,
+                            allow_structured_try,
+                        ) {
+                            return false;
+                        }
+                        rendered_bodies.push(lines);
+                    }
+                    let mut rendered_else = Vec::new();
+                    if !visit(
+                        generator,
+                        module,
+                        else_body,
+                        &mut rendered_else,
+                        allow_structured_try,
+                    ) {
+                        return false;
+                    }
+
+                    output.extend(selector_prelude);
+                    output.push(format!("{temp} = {selector_text}"));
+                    for (index, condition) in rendered_cases.iter().enumerate() {
+                        output.push(format!(
+                            "IF ({condition}) <> 0 THEN GOTO {}",
+                            case_labels[index]
+                        ));
+                    }
+                    output.push(format!(
+                        "GOTO {}",
+                        if else_body.is_empty() {
+                            &end_label
+                        } else {
+                            &else_label
+                        }
+                    ));
+                    for (index, lines) in rendered_bodies.into_iter().enumerate() {
+                        output.push(format!("{}:", case_labels[index]));
+                        output.extend(lines.into_iter().map(|line| format!("    {line}")));
+                        output.push(format!("    GOTO {end_label}"));
+                    }
+                    if !else_body.is_empty() {
+                        output.push(format!("{else_label}:"));
+                        output.extend(rendered_else.into_iter().map(|line| format!("    {line}")));
+                    }
+                    output.push(format!("{end_label}:"));
+                    output.push("REM END SELECT".to_string());
+                }
+                Kind::Assignment {
+                    target,
+                    operator,
+                    value,
+                } => {
+                    let Some(lines) =
+                        basic_semantic_assignment(generator, target, *operator, value, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                }
+                Kind::MidAssign {
+                    target,
+                    start,
+                    length,
+                    value,
+                } => {
+                    let Some(lines) = basic_semantic_mid_assign(
+                        generator,
+                        target,
+                        start,
+                        length.as_ref(),
+                        value,
+                        None,
+                    ) else {
+                        return false;
+                    };
+                    output.extend(lines);
+                }
+                Kind::Print {
+                    destination,
+                    tokens,
+                } => {
+                    let mut body = String::new();
+                    let has_callable_expression = tokens.iter().any(|token| {
+                        matches!(token, SemanticPrintToken::Expression(expression)
+                            if generator.semantic_expression_contains_callable_call(expression))
+                    });
+                    let expression_count = tokens
+                        .iter()
+                        .filter(|token| matches!(token, SemanticPrintToken::Expression(_)))
+                        .count();
+                    let mut expression_prelude = Vec::new();
+                    let mut after_separator = false;
+                    for token in tokens {
+                        match token {
+                            SemanticPrintToken::Expression(expression) => {
+                                let expression = if has_callable_expression {
+                                    let Some((mut prelude, mut value)) = generator
+                                        .semantic_expression_with_prelude(expression, None)
+                                    else {
+                                        return false;
+                                    };
+                                    if expression_count == 1
+                                        && matches!(expression.kind, crate::semantic_ir::ExpressionKind::Call { .. })
+                                        && prelude.last().is_some_and(|line| {
+                                            line.strip_prefix(&format!("{value} = ")).is_some()
+                                        })
+                                    {
+                                        let line = prelude.pop().expect("checked call result");
+                                        value = line
+                                            .split_once(" = ")
+                                            .expect("checked call result assignment")
+                                            .1
+                                            .to_string();
+                                        generator.next_label = generator.next_label.saturating_sub(1);
+                                    }
+                                    expression_prelude.extend(prelude);
+                                    if expression_count == 1 {
+                                        value
+                                    } else {
+                                        let suffix = expression
+                                            .value_type
+                                            .suffix()
+                                            .map(|suffix| suffix.to_string())
+                                            .unwrap_or_default();
+                                        let snapshot = generator.next_temp_var_suffixed(&suffix);
+                                        expression_prelude.push(format!("{snapshot} = {value}"));
+                                        snapshot
+                                    }
+                                } else {
+                                    let Some(expression) =
+                                        generator.semantic_const_expression(expression, None)
+                                    else {
+                                        return false;
+                                    };
+                                    expression
+                                };
+                                if after_separator {
+                                    body.push(' ');
+                                }
+                                body.push_str(&expression);
+                                after_separator = false;
+                            }
+                            SemanticPrintToken::Comma { .. } => {
+                                body.push(',');
+                                after_separator = true;
+                            }
+                            SemanticPrintToken::Semicolon { .. } => {
+                                body.push(';');
+                                after_separator = true;
+                            }
+                        }
+                    }
+                    let (destination_prelude, rendered_destination) = match destination {
+                        PrintDestination::Standard { .. } => (Some(Vec::new()), Some(String::new())),
+                        PrintDestination::Using { format, .. } => generator
+                            .semantic_expression_with_prelude(format, None)
+                            .map(|(lines, format)| (Some(lines), Some(format!(" USING {format}"))))
+                            .unwrap_or((None, None)),
+                        PrintDestination::Channel { channel, using, .. } => {
+                            let Some((mut lines, channel)) =
+                                generator.semantic_expression_with_prelude(channel, None)
+                            else {
+                                return false;
+                            };
+                            match using {
+                                Some(format) => {
+                                    let Some((format_lines, format)) = generator
+                                        .semantic_expression_with_prelude(format, None)
+                                    else {
+                                        return false;
+                                    };
+                                    lines.extend(format_lines);
+                                    (Some(lines), Some(format!(" #{channel}, USING {format}")))
+                                }
+                                None => (Some(lines), Some(format!(" #{channel}"))),
+                            }
+                        }
+                    };
+                    let Some(destination_prelude) = destination_prelude else {
+                        return false;
+                    };
+                    let Some(destination) = rendered_destination else {
+                        return false;
+                    };
+                    output.extend(destination_prelude);
+                    output.extend(expression_prelude);
+                    let prefix = "PRINT";
+                    let separator = if destination.starts_with(" USING") {
+                        "; "
+                    } else if destination.contains(", USING ") {
+                        "; "
+                    } else {
+                        ", "
+                    };
+                    output.push(if body.is_empty() {
+                        format!("{prefix}{destination}")
+                    } else if destination.starts_with(" USING") || destination.contains(", USING ")
+                    {
+                        format!("{prefix}{destination}{separator}{body}")
+                    } else if destination.is_empty() {
+                        format!("{prefix} {body}")
+                    } else {
+                        format!("{prefix}{destination}{separator}{body}")
+                    });
+                }
+                Kind::Lprint { using, tokens } => {
+                    let (using_prelude, using) = match using {
+                        Some(format) => {
+                            let Some((lines, format)) =
+                                generator.semantic_expression_with_prelude(format, None)
+                            else {
+                                return false;
+                            };
+                            (lines, Some(format))
+                        }
+                        None => (Vec::new(), None),
+                    };
+                    let Some((lines, body)) = basic_semantic_print_body(generator, tokens, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(using_prelude);
+                    output.extend(lines);
+                    output.push(match (using, body.is_empty()) {
+                        (Some(format), true) => format!("LPRINT USING {format}"),
+                        (Some(format), false) => format!("LPRINT USING {format};{body}"),
+                        (None, true) => "LPRINT".to_string(),
+                        (None, false) => format!("LPRINT{body}"),
+                    });
+                }
+                Kind::Write { channel, values } => {
+                    let Some((mut lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    let (value_lines, values) = match values {
+                        crate::semantic_ir::WriteValues::Omitted => (Vec::new(), Vec::new()),
+                        crate::semantic_ir::WriteValues::Values(values) => {
+                            let Some(rendered) = basic_semantic_io_values(generator, values, None)
+                            else {
+                                return false;
+                            };
+                            rendered
+                        }
+                    };
+                    lines.extend(value_lines);
+                    let suffix = if values.is_empty() {
+                        String::new()
+                    } else {
+                        format!(", {}", values.join(", "))
+                    };
+                    output.extend(lines);
+                    output.push(format!("WRITE #{channel}{suffix}"));
+                }
+                Kind::Close(channel) => {
+                    let Some((lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                    output.push(format!("CLOSE #{channel}"));
+                }
+                Kind::Kill(path) => {
+                    let Some((lines, path)) =
+                        generator.semantic_expression_with_prelude(path, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                    output.push(format!("KILL {path}"));
+                }
+                Kind::Rename {
+                    source,
+                    destination,
+                } => {
+                    let Some((mut lines, source)) =
+                        generator.semantic_expression_with_prelude(source, None)
+                    else {
+                        return false;
+                    };
+                    let Some((destination_lines, destination)) =
+                        generator.semantic_expression_with_prelude(destination, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(destination_lines);
+                    output.extend(lines);
+                    output.push(format!("NAME {source} AS {destination}"));
+                }
+                Kind::Seek { channel, position } => {
+                    let Some((mut lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    let Some((position_lines, position)) =
+                        generator.semantic_expression_with_prelude(position, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(position_lines);
+                    output.extend(lines);
+                    output.push(format!("SEEK #{channel}, {position}"));
+                }
+                Kind::Open {
+                    path,
+                    mode,
+                    channel,
+                    length,
+                } => {
+                    let Some((mut lines, path)) =
+                        generator.semantic_expression_with_prelude(path, None)
+                    else {
+                        return false;
+                    };
+                    let Some((channel_lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(channel_lines);
+                    let length = match length {
+                        Some(length) => {
+                            let Some((length_lines, length)) =
+                                generator.semantic_expression_with_prelude(length, None)
+                            else {
+                                return false;
+                            };
+                            lines.extend(length_lines);
+                            format!(" LEN = {length}")
+                        }
+                        None => String::new(),
+                    };
+                    let mode = match mode.kind {
+                        crate::semantic_ir::OpenModeKind::Input => "INPUT",
+                        crate::semantic_ir::OpenModeKind::Output => "OUTPUT",
+                        crate::semantic_ir::OpenModeKind::Append => "APPEND",
+                        crate::semantic_ir::OpenModeKind::Random => "RANDOM",
+                        crate::semantic_ir::OpenModeKind::Binary => "BINARY",
+                    };
+                    output.extend(lines);
+                    output.push(format!("OPEN {path} FOR {mode} AS #{channel}{length}"));
+                }
+                Kind::LineInput { channel, target } => {
+                    let Some((mut lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    let Some((target_lines, target)) =
+                        basic_semantic_lvalue(generator, target, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(target_lines);
+                    output.extend(lines);
+                    output.push(format!("LINE INPUT #{channel}, {target}"));
+                }
+                Kind::Input { source, targets } => {
+                    let mut prelude = Vec::new();
+                    let prefix = match source {
+                        crate::semantic_ir::InputSource::Console(prompt) => {
+                            let prompt = prompt
+                                .as_ref()
+                                .map(basic_semantic_input_prompt)
+                                .unwrap_or_default();
+                            format!("INPUT {prompt}")
+                        }
+                        crate::semantic_ir::InputSource::Channel(channel) => {
+                            let Some((lines, channel)) =
+                                generator.semantic_expression_with_prelude(channel, None)
+                            else {
+                                return false;
+                            };
+                            prelude = lines;
+                            format!("INPUT #{channel}, ")
+                        }
+                    };
+                    let mut rendered_targets = Vec::with_capacity(targets.len());
+                    for target in targets {
+                        let Some((lines, target)) =
+                            basic_semantic_lvalue(generator, target, None)
+                        else {
+                            return false;
+                        };
+                        prelude.extend(lines);
+                        rendered_targets.push(target);
+                    }
+                    output.extend(prelude);
+                    output.push(format!("{prefix}{}", rendered_targets.join(", ")));
+                }
+                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                    let command = if matches!(&statement.kind, Kind::Get { .. }) {
+                        "GET"
+                    } else {
+                        "PUT"
+                    };
+                    let Some((mut lines, channel)) =
+                        generator.semantic_expression_with_prelude(channel, None)
+                    else {
+                        return false;
+                    };
+                    let position = match position {
+                        Some(position) => {
+                            let value = match &position.position {
+                                Some(position) => {
+                                    let Some((prelude, value)) =
+                                        generator.semantic_expression_with_prelude(position, None)
+                                    else {
+                                        return false;
+                                    };
+                                    lines.extend(prelude);
+                                    Some(value)
+                                }
+                                None => Some(String::new()),
+                            };
+                            let Some(value) = value else {
+                                return false;
+                            };
+                            let record = match &position.record {
+                                Some(record) => {
+                                    let Some((prelude, record)) =
+                                        generator.semantic_expression_with_prelude(record, None)
+                                    else {
+                                        return false;
+                                    };
+                                    lines.extend(prelude);
+                                    Some(record)
+                                }
+                                None => Some(String::new()),
+                            };
+                            let Some(record) = record else {
+                                return false;
+                            };
+                            if record.is_empty() {
+                                format!(", {value}")
+                            } else {
+                                format!(", {value}, {record}")
+                            }
+                        }
+                        None => String::new(),
+                    };
+                    output.extend(lines);
+                    output.push(format!("{command} #{channel}{position}"));
+                }
+                Kind::Lset { target, value } | Kind::Rset { target, value } => {
+                    let command = if matches!(&statement.kind, Kind::Lset { .. }) {
+                        "LSET"
+                    } else {
+                        "RSET"
+                    };
+                    let rendered = if generator.semantic_expression_contains_callable_call(value) {
+                        generator.semantic_expression_with_prelude(value, None)
+                    } else {
+                        generator
+                            .semantic_const_expression(value, None)
+                            .map(|value| (Vec::new(), value))
+                    };
+                    let Some((lines, value)) = rendered else {
+                        return false;
+                    };
+                    let target = generator.ident(&BasicIdent::parse(&target.name), None);
+                    output.extend(lines);
+                    output.push(format!("{command} {target} = {value}"));
+                }
+                Kind::Field { channel, bindings } => {
+                    let Some(channel) = generator.semantic_const_expression(channel, None) else {
+                        return false;
+                    };
+                    let Some(bindings) = bindings
+                        .iter()
+                        .map(|binding| {
+                                    generator
+                                        .semantic_const_expression(&binding.length, None)
+                                        .map(|length| {
+                                            let mut ident = BasicIdent::parse(&binding.name);
+                                            ident.suffix = binding
+                                                .type_suffix
+                                                .as_deref()
+                                                .and_then(|suffix| suffix.chars().next())
+                                                .and_then(TypeSuffix::from_char);
+                                            format!(
+                                                "{length} AS {}",
+                                                generator.ident(&ident, None)
+                                            )
+                                        })
+                        })
+                        .collect::<Option<Vec<_>>>()
+                    else {
+                        return false;
+                    };
+                    output.push(format!("FIELD #{channel}, {}", bindings.join(", ")));
+                }
+                Kind::OptionBase(base) => {
+                    let Some(base) = generator.semantic_const_expression(base, None) else {
+                        return false;
+                    };
+                    output.push(format!("OPTION BASE {base}"));
+                }
+                Kind::Erase(names) => output.push(format!(
+                    "ERASE {}",
+                    names
+                        .iter()
+                        .map(|name| generator.ident(&BasicIdent::parse(&name.name), None))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )),
+                Kind::Randomize(seed) => match seed {
+                    crate::semantic_ir::RandomizeSeed::Default => {
+                        output.push("RANDOMIZE".to_string())
+                    }
+                    crate::semantic_ir::RandomizeSeed::Value(value) => {
+                        let Some((lines, value)) =
+                            generator.semantic_expression_with_prelude(value, None)
+                        else {
+                            return false;
+                        };
+                        output.extend(lines);
+                        output.push(format!("RANDOMIZE {value}"));
+                    }
+                },
+                Kind::Swap { left, right } => {
+                    let (Some((mut lines, left)), Some((right_lines, right))) = (
+                        basic_semantic_lvalue(generator, left, None),
+                        basic_semantic_lvalue(generator, right, None),
+                    ) else {
+                        return false;
+                    };
+                    lines.extend(right_lines);
+                    output.extend(lines);
+                    output.push(format!("SWAP {left}, {right}"));
+                }
+                Kind::Poke { address, value } => {
+                    let Some((mut lines, address)) =
+                        generator.semantic_expression_with_prelude(address, None)
+                    else {
+                        return false;
+                    };
+                    let Some((value_lines, value)) =
+                        generator.semantic_expression_with_prelude(value, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(value_lines);
+                    output.extend(lines);
+                    output.push(format!("POKE {address}, {value}"));
+                }
+                Kind::Out { port, value } => {
+                    let Some((mut lines, port)) =
+                        generator.semantic_expression_with_prelude(port, None)
+                    else {
+                        return false;
+                    };
+                    let Some((value_lines, value)) =
+                        generator.semantic_expression_with_prelude(value, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(value_lines);
+                    output.extend(lines);
+                    output.push(format!("OUT {port}, {value}"));
+                }
+                Kind::Width { channel, value } => {
+                    let mut lines = Vec::new();
+                    let channel = if let Some(channel) = channel {
+                        let Some((channel_lines, channel)) =
+                            generator.semantic_expression_with_prelude(channel, None)
+                        else {
+                            return false;
+                        };
+                        lines.extend(channel_lines);
+                        Some(channel)
+                    } else {
+                        None
+                    };
+                    let Some((value_lines, value)) =
+                        generator.semantic_expression_with_prelude(value, None)
+                    else {
+                        return false;
+                    };
+                    lines.extend(value_lines);
+                    lines.push(match channel {
+                        Some(channel) => format!("WIDTH #{channel}, {value}"),
+                        None => format!("WIDTH {value}"),
+                    });
+                    output.extend(lines);
+                }
+                Kind::Locate { row, column } => {
+                    let Some((mut row_lines, row)) =
+                        generator.semantic_expression_with_prelude(row, None)
+                    else {
+                        return false;
+                    };
+                    let Some((column_lines, column)) =
+                        generator.semantic_expression_with_prelude(column, None)
+                    else {
+                        return false;
+                    };
+                    row_lines.extend(column_lines);
+                    output.extend(row_lines);
+                    output.push(format!("LOCATE {row}, {column}"));
+                }
+                Kind::Color {
+                    foreground,
+                    background,
+                } => {
+                    let Some((mut lines, foreground)) =
+                        generator.semantic_expression_with_prelude(foreground, None)
+                    else {
+                        return false;
+                    };
+                    match background {
+                        Some(background) => {
+                            let Some((background_lines, background)) =
+                                generator.semantic_expression_with_prelude(background, None)
+                            else {
+                                return false;
+                            };
+                            lines.extend(background_lines);
+                            output.extend(lines);
+                            output.push(format!("COLOR {foreground}, {background}"));
+                        }
+                        None => {
+                            output.extend(lines);
+                            output.push(format!("COLOR {foreground}"));
+                        }
+                    }
+                }
+                Kind::Error(code) => {
+                    let Some((lines, code)) =
+                        generator.semantic_expression_with_prelude(code, None)
+                    else {
+                        return false;
+                    };
+                    output.extend(lines);
+                    output.push(format!("ERROR {code}"));
+                }
+                Kind::Throw(value) => match value {
+                    crate::semantic_ir::ThrowValue::Bare => output.push("ERROR ERR".to_string()),
+                    crate::semantic_ir::ThrowValue::Value(value) => {
+                        let Some((lines, value)) =
+                            generator.semantic_expression_with_prelude(value, None)
+                        else {
+                            return false;
+                        };
+                        output.extend(lines);
+                        output.push(format!("ERROR {value}"));
+                    }
+                },
+                Kind::OnBranch {
+                    selector,
+                    branch,
+                    targets,
+                } => {
+                    let Some((lines, selector)) =
+                        generator.semantic_expression_with_prelude(selector, None)
+                    else {
+                        return false;
+                    };
+                    let command = match branch {
+                        crate::semantic_ir::BranchKind::Goto => "GOTO",
+                        crate::semantic_ir::BranchKind::Gosub => "GOSUB",
+                    };
+                    let targets = targets
+                        .iter()
+                        .map(|target| render_target(generator, &target.name))
+                        .collect::<Vec<_>>();
+                    output.extend(lines);
+                    output.push(format!("ON {selector} {command} {}", targets.join(", ")));
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    if !allow_structured_try {
+                        return false;
+                    }
+                    let catch_filters = match catch.as_ref() {
+                        Some(catch) => {
+                            let Some(filters) = catch
+                                .filters
+                                .iter()
+                                .map(|filter| generator.semantic_const_expression(filter, None))
+                                .collect::<Option<Vec<_>>>()
+                            else {
+                                return false;
+                            };
+                            Some(filters)
+                        }
+                        None => None,
+                    };
+                    let id = generator.next_label;
+                    generator.next_label += 1;
+                    let catch_label = format!("TRY_{id:04}_CATCH");
+                    let catch_run_label = format!("TRY_{id:04}_CATCH_RUN");
+                    let rethrow_label = format!("TRY_{id:04}_RETHROW");
+                    let finally_label = format!("TRY_{id:04}_FINALLY");
+                    let end_label = format!("TRY_{id:04}_END");
+                    let pending_name = format!("BCCTRY{id:04}PENDING%");
+                    let outer_handler = generator.try_handler_stack.last().cloned();
+                    let restore_outer = |output: &mut Vec<String>| match &outer_handler {
+                        Some(label) => output.push(format!("ON ERROR GOTO {label}")),
+                        None => output.push("ON ERROR GOTO 0".to_string()),
+                    };
+
+                    output.push(format!("ON ERROR GOTO {catch_label}"));
+                    output.push(format!("{pending_name} = 0"));
+                    generator.try_handler_stack.push(catch_label.clone());
+                    if !visit(generator, module, body, output, allow_structured_try) {
+                        generator.try_handler_stack.pop();
+                        return false;
+                    }
+                    generator.try_handler_stack.pop();
+                    restore_outer(output);
+                    output.push(format!("GOTO {finally_label}"));
+
+                    output.push(format!("{catch_label}:"));
+                    output.push(format!("{pending_name} = ERR"));
+                    if let Some(catch) = catch {
+                        let filters = catch_filters.as_ref().expect("filters were rendered");
+                        if !filters.is_empty() {
+                            let matched_label = format!("TRY_{id:04}_MATCHED");
+                            let condition = filters
+                                .iter()
+                                .map(|filter| format!("(ERR = {filter})"))
+                                .collect::<Vec<_>>()
+                                .join(" OR ");
+                            output.push(format!("IF {condition} THEN GOTO {matched_label}"));
+                            output.push(format!("RESUME {finally_label}"));
+                            output.push(format!("{matched_label}:"));
+                        }
+                        let mut error_ident = BasicIdent::parse(&catch.error);
+                        error_ident.suffix = catch
+                            .error_type
+                            .suffix()
+                            .and_then(TypeSuffix::from_char);
+                        let mut line_ident = BasicIdent::parse(&catch.line);
+                        line_ident.suffix =
+                            catch.line_type.suffix().and_then(TypeSuffix::from_char);
+                        let error_name = generator.ident(&error_ident, None);
+                        let line_name = generator.ident(&line_ident, None);
+                        output.push(format!("{error_name} = ERR"));
+                        output.push(format!("{line_name} = ERL"));
+                        if let Some(source) = &catch.source {
+                            let mut source_ident = BasicIdent::parse(source);
+                            source_ident.suffix = catch
+                                .source_type
+                                .and_then(crate::semantic_ir::SemanticValueType::suffix)
+                                .and_then(TypeSuffix::from_char);
+                            let source_name = generator.ident(&source_ident, None);
+                            output.push("GOSUB BCC_RESOLVE_SOURCE_FILE".to_string());
+                            output.push(format!("{source_name} = BCCSOURCEFILE$"));
+                        }
+                        output.push(format!("RESUME {catch_run_label}"));
+                    } else {
+                        output.push(format!("RESUME {finally_label}"));
+                    }
+
+                    if let Some(catch) = catch {
+                        output.push(format!("{catch_run_label}:"));
+                        output.push(format!("ON ERROR GOTO {rethrow_label}"));
+                        generator.try_handler_stack.push(rethrow_label.clone());
+                        if !visit(generator, module, &catch.body, output, allow_structured_try) {
+                            generator.try_handler_stack.pop();
+                            return false;
+                        }
+                        generator.try_handler_stack.pop();
+                        output.push(format!("{pending_name} = 0"));
+                        restore_outer(output);
+                        output.push(format!("GOTO {finally_label}"));
+                        output.push(format!("{rethrow_label}:"));
+                        output.push(format!("{pending_name} = ERR"));
+                        output.push(format!("RESUME {finally_label}"));
+                    }
+
+                    output.push(format!("{finally_label}:"));
+                    restore_outer(output);
+                    if !visit(
+                        generator,
+                        module,
+                        finally_body,
+                        output,
+                        allow_structured_try,
+                    ) {
+                        return false;
+                    }
+                    output.push(format!("IF {pending_name} <> 0 THEN ERROR {pending_name}"));
+                    output.push(format!("{end_label}:"));
+                    output.push("REM END TRY".to_string());
+                }
+                Kind::Exit => output.push(match generator.loop_exit_stack.last() {
+                    Some(LoopExit::NativeFor) => "EXIT FOR".to_string(),
+                    Some(LoopExit::Goto(label)) => format!("GOTO {label}"),
+                    None => "' warning: EXIT outside of a loop".to_string(),
+                }),
+                Kind::Continue => output.push(match generator.loop_continue_stack.last() {
+                    Some(label) => format!("GOTO {label}"),
+                    None => "' warning: CONTINUE outside of a loop".to_string(),
+                }),
+                Kind::Stop => output.push("STOP".to_string()),
+                Kind::Cls => output.push("CLS".to_string()),
+                Kind::Beep => output.push("BEEP".to_string()),
+                Kind::System => output.push("SYSTEM".to_string()),
+                Kind::Clear => output.push("CLEAR".to_string()),
+                Kind::End => output.push("END".to_string()),
+                Kind::Global { .. } => {}
+                Kind::Const { name, value, .. } => {
+                    let Some(value) = generator.semantic_const_expression(value, None) else {
+                        return false;
+                    };
+                    let name = generator.ident(&BasicIdent::parse(&name.name), None);
+                    output.push(format!("{name} = {value}"));
+                }
+                Kind::Comment { block, text } => {
+                    output.extend(basic_semantic_comment(*block, text));
+                }
+                Kind::Label(label) => output.push(format!("{}:", user_label_token(&label.name))),
+                Kind::Goto(label) => {
+                    output.push(format!("GOTO {}", render_target(generator, &label.name)))
+                }
+                Kind::Gosub(label) => {
+                    output.push(format!("GOSUB {}", render_target(generator, &label.name)))
+                }
+                Kind::Restore(restore_target) => output.push(match restore_target {
+                    Some(target) => format!("RESTORE {}", render_target(generator, &target.name)),
+                    None => "RESTORE".to_string(),
+                }),
+                Kind::Resume(target) => output.push(match target {
+                    None => "RESUME".to_string(),
+                    Some(ResumeTarget::Next) => "RESUME NEXT".to_string(),
+                    Some(ResumeTarget::Label(target)) => {
+                        format!("RESUME {}", render_target(generator, &target.name))
+                    }
+                }),
+                Kind::OnErrorGoto(target) => output.push(match target {
+                    crate::semantic_ir::ErrorHandlerTarget::Disable => {
+                        "ON ERROR GOTO 0".to_string()
+                    }
+                    crate::semantic_ir::ErrorHandlerTarget::Label(target) => {
+                        format!("ON ERROR GOTO {}", render_target(generator, &target.name))
+                    }
+                }),
+                Kind::Data(values) => {
+                    let Some(values) = values
+                        .iter()
+                        .map(|value| generator.semantic_const_expression(value, None))
+                        .collect::<Option<Vec<_>>>()
+                    else {
+                        return false;
+                    };
+                    output.push(format!("DATA {}", values.join(", ")));
+                }
+                Kind::Read(targets) => {
+                    let mut target_text = Vec::with_capacity(targets.len());
+                    for target in targets {
+                        let Some((prelude, rendered)) =
+                            basic_semantic_lvalue(generator, target, None)
+                        else {
+                            return false;
+                        };
+                        output.extend(prelude);
+                        target_text.push(rendered);
+                    }
+                    output.push(format!("READ {}", target_text.join(", ")));
+                }
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    let mut output = Vec::new();
+    let initial_label = generator.next_label;
+    let initial_loop_exit_depth = generator.loop_exit_stack.len();
+    let initial_loop_continue_depth = generator.loop_continue_stack.len();
+    let initial_taken_names = generator.taken_names.borrow().clone();
+    let initial_top_level_array_bounds = generator.top_level_array_bounds.clone();
+    let initial_diagnostic_count = generator.diagnostics.len();
+    if !statements.is_empty()
+        && visit(
+            generator,
+            module,
+            statements,
+            &mut output,
+            allow_structured_try,
+        )
+    {
+        Some(output)
+    } else {
+        // A declined semantic stream must not perturb labels generated by the
+        // compatibility emitter that will handle it instead, or leave loop
+        // context behind for later statements/callables.
+        generator.next_label = initial_label;
+        generator.loop_exit_stack.truncate(initial_loop_exit_depth);
+        generator
+            .loop_continue_stack
+            .truncate(initial_loop_continue_depth);
+        *generator.taken_names.borrow_mut() = initial_taken_names;
+        generator.top_level_array_bounds = initial_top_level_array_bounds;
+        generator.diagnostics.truncate(initial_diagnostic_count);
+        None
+    }
+}
+
+/// Dispatch aligned top-level semantic statements independently. A failed
+/// semantic node uses the matching legacy statement; inability to prove a
+/// one-to-one source mapping declines the dispatcher before any output is
+/// written, preserving the existing whole-stream compatibility path.
+fn basic_semantic_statements_by_source(
+    generator: &mut CodeGenerator,
+    module: &crate::semantic_ir::SemanticModule,
+    ast_statements: &[Stmt],
+) -> Option<()> {
+    if module.statement_sources.len() != module.statements.len() {
+        return None;
+    }
+
+    let mut aligned = Vec::new();
+    let mut used_ast = HashSet::new();
+    for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let source = module.sources.get(*source_index)?;
+        let pairs = if let crate::semantic_ir::SemanticStatementKind::Line(nodes) = &root.kind {
+            let line = source_position(source, root.span.start)?.line;
+            let ast_line = ast_statements
+                .iter()
+                .enumerate()
+                .filter(|(_, stmt)| {
+                    stmt.pos.filename == source.filename
+                        && stmt.pos.line == line
+                        && !matches!(stmt.kind, Statement::BlankLine)
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if ast_line.len() != nodes.len() {
+                return None;
+            }
+            nodes.iter().zip(ast_line).collect::<Vec<_>>()
+        } else {
+            let position = source_position(source, root.span.start)?;
+            let matches = ast_statements
+                .iter()
+                .enumerate()
+                .filter(|(_, stmt)| {
+                    stmt.pos.filename == source.filename
+                        && stmt.pos.line == position.line
+                        && stmt.pos.column == position.column
+                        && !matches!(stmt.kind, Statement::BlankLine)
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            let [ast_index] = matches.as_slice() else {
+                return None;
+            };
+            vec![(root, *ast_index)]
+        };
+        for (node, ast_index) in pairs {
+            if !used_ast.insert(ast_index)
+                || aligned
+                    .last()
+                    .is_some_and(|(previous, _, _)| previous >= &ast_index)
+            {
+                return None;
+            }
+            aligned.push((ast_index, node, *source_index));
+        }
+    }
+    if !ast_statements.is_empty() {
+        generator.blank();
+    }
+    let mut aligned_iter = aligned.into_iter().peekable();
+    for (ast_index, ast_statement) in ast_statements.iter().enumerate() {
+        if aligned_iter
+            .peek()
+            .is_some_and(|(semantic_ast_index, _, _)| *semantic_ast_index == ast_index)
+        {
+            let (_, semantic, source_index) =
+                aligned_iter.next().expect("peeked aligned statement");
+            let source = &module.sources[source_index];
+            if generator.needs_source_lookup
+                && generator.current_marker_file.as_deref() != Some(source.filename.as_str())
+            {
+                generator.current_marker_file = Some(source.filename.clone());
+                generator.line(&source_file_marker(
+                    &crate::diagnostics::display_source_filename(&source.filename),
+                ));
+            }
+            if let Some(lines) =
+                basic_semantic_intrinsics(generator, module, std::slice::from_ref(semantic), true)
+            {
+                for line in lines {
+                    generator.line(&line);
+                }
+            } else {
+                generator.statement(ast_statement, None);
+            }
+        } else {
+            // Legacy-only synthetic nodes such as blank-line markers retain
+            // their original codegen behavior.
+            generator.statement(ast_statement, None);
+        }
+    }
+    Some(())
+}
+
+/// Record DSL lowering currently synthesizes several operations (GET/PUT,
+/// CLOSE, and field assignments) that are not yet represented in semantic IR.
+/// Keep the whole lowered AST stream authoritative when one of those nodes
+/// occurs so a typed FileDeclaration cannot make the dispatcher silently
+/// omit its generated record operations.
+fn has_untyped_lowered_record_operations(
+    statements: &[Stmt],
+    files: &[crate::semantic_ir::LoweredRecordFile],
+) -> bool {
+    let is_record_channel = |channel: &Expr| {
+        let Expr::Integer(channel) = channel else {
+            return false;
+        };
+        files.iter().any(|file| file.owner.is_none() && file.channel == *channel)
+    };
+    let is_record_buffer = |name: &BasicIdent| {
+        files.iter().any(|file| {
+            file.owner.is_none()
+                && file
+                    .fields
+                    .iter()
+                    .any(|field| field.buffer_name.eq_ignore_ascii_case(&name.as_basic()))
+        })
+    };
+    statements.iter().any(|statement| match &statement.kind {
+        Statement::Get { channel, .. }
+        | Statement::Put { channel, .. }
+        | Statement::Close { channel } => is_record_channel(channel),
+        Statement::Lset { var, .. } | Statement::Rset { var, .. } => is_record_buffer(var),
+        Statement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            has_untyped_lowered_record_operations(then_body, files)
+                || has_untyped_lowered_record_operations(else_body, files)
+        }
+        Statement::For { body, .. }
+        | Statement::While { body, .. }
+        | Statement::Do { body, .. } => has_untyped_lowered_record_operations(body, files),
+        Statement::TryCatch {
+            try_body,
+            catch,
+            finally_body,
+        } => {
+            has_untyped_lowered_record_operations(try_body, files)
+                || catch.as_ref().is_some_and(|catch| {
+                    has_untyped_lowered_record_operations(&catch.body, files)
+                })
+                || has_untyped_lowered_record_operations(finally_body, files)
+        }
+        Statement::SelectCase {
+            cases, else_body, ..
+        } => {
+            cases.iter().any(|case| {
+                has_untyped_lowered_record_operations(&case.body, files)
+            }) || has_untyped_lowered_record_operations(else_body, files)
+        }
+        _ => false,
+    })
+}
+
+fn basic_semantic_callable_statements_by_source<'a>(
+    module: &'a crate::semantic_ir::SemanticModule,
+    function: &FunctionDef,
+) -> Option<Vec<Option<&'a crate::semantic_ir::SemanticStatement>>> {
+    use crate::semantic_ir::{CallableKind, SemanticStatementKind as Kind};
+    let callable = module.callables.iter().find(|callable| {
+        callable
+            .name
+            .eq_ignore_ascii_case(&function.name.as_basic())
+            && callable.receiver.is_some() == function.receiver.is_some()
+            && callable
+                .receiver
+                .as_deref()
+                .map_or(true, |receiver| match function.receiver {
+                    Some(TypeSuffix::Integer) => receiver.eq_ignore_ascii_case("integer"),
+                    Some(TypeSuffix::Long) => receiver.eq_ignore_ascii_case("long"),
+                    Some(TypeSuffix::Single) => receiver.eq_ignore_ascii_case("single"),
+                    Some(TypeSuffix::Double) => receiver.eq_ignore_ascii_case("double"),
+                    Some(TypeSuffix::String) => receiver.eq_ignore_ascii_case("string"),
+                    None => false,
+                })
+            && match (
+                function.receiver.is_some(),
+                function.is_procedure,
+                callable.kind,
+            ) {
+                (
+                    true,
+                    false,
+                    CallableKind::Method | CallableKind::FluentMethod | CallableKind::InlineMethod,
+                )
+                | (false, true, CallableKind::Procedure)
+                | (false, false, CallableKind::Function) => true,
+                _ => false,
+            }
+    })?;
+    let source = module.sources.get(callable.source_index)?;
+    let mut aligned = vec![None; function.body.len()];
+    let mut previous = None;
+    for root in &callable.body {
+        let children: Vec<_> = if let Kind::Line(children) = &root.kind {
+            children.iter().collect()
+        } else {
+            vec![root]
+        };
+        for semantic in children {
+            let position = source_position(source, semantic.span.start)?;
+            let candidates = function
+                .body
+                .iter()
+                .enumerate()
+                .filter(|(_, statement)| {
+                    statement.pos.filename == position.filename
+                        && statement.pos.line == position.line
+                        && statement.pos.column == position.column
+                        && !matches!(statement.kind, Statement::BlankLine)
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            let [index] = candidates.as_slice() else {
+                return None;
+            };
+            if previous.is_some_and(|previous| previous >= *index) || aligned[*index].is_some() {
+                return None;
+            }
+            aligned[*index] = Some(semantic);
+            previous = Some(*index);
+        }
+    }
+    Some(aligned)
+}
+
+fn basic_semantic_callable_try(
+    generator: &mut CodeGenerator,
+    semantic: &crate::semantic_ir::SemanticStatement,
+    function: &FunctionInfo,
+) -> Option<Vec<String>> {
+    fn render_body(
+        generator: &mut CodeGenerator,
+        statements: &[crate::semantic_ir::SemanticStatement],
+        function: &FunctionInfo,
+    ) -> Option<Vec<String>> {
+        statements
+            .iter()
+            .map(|statement| basic_semantic_callable_statement(generator, statement, function))
+            .collect::<Option<Vec<_>>>()
+            .map(|lines| lines.into_iter().flatten().collect())
+    }
+
+    fn inner(
+        generator: &mut CodeGenerator,
+        semantic: &crate::semantic_ir::SemanticStatement,
+        function: &FunctionInfo,
+    ) -> Option<Vec<String>> {
+        let crate::semantic_ir::SemanticStatementKind::Try {
+            body,
+            catch,
+            finally_body,
+        } = &semantic.kind
+        else {
+            return None;
+        };
+        let catch_filters = match catch.as_ref() {
+            Some(catch) => Some(
+                catch
+                    .filters
+                    .iter()
+                    .map(|filter| generator.semantic_const_expression(filter, Some(function)))
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            None => None,
+        };
+
+        let id = generator.next_label;
+        generator.next_label += 1;
+        let catch_label = format!("TRY_{id:04}_CATCH");
+        let catch_run_label = format!("TRY_{id:04}_CATCH_RUN");
+        let rethrow_label = format!("TRY_{id:04}_RETHROW");
+        let finally_label = format!("TRY_{id:04}_FINALLY");
+        let end_label = format!("TRY_{id:04}_END");
+        let pending_name = format!("BCCTRY{id:04}PENDING%");
+        let outer_handler = generator.try_handler_stack.last().cloned();
+        let restore_outer = |lines: &mut Vec<String>| match &outer_handler {
+            Some(label) => lines.push(format!("ON ERROR GOTO {label}")),
+            None => lines.push("ON ERROR GOTO 0".to_string()),
+        };
+        let nested = |lines: Vec<String>| {
+            lines
+                .into_iter()
+                .map(|line| format!("    {line}"))
+                .collect::<Vec<_>>()
+        };
+
+        let mut lines = vec![
+            format!("ON ERROR GOTO {catch_label}"),
+            format!("{pending_name} = 0"),
+        ];
+        generator.try_handler_stack.push(catch_label.clone());
+        let try_lines = render_body(generator, body, function);
+        generator.try_handler_stack.pop();
+        lines.extend(nested(try_lines?));
+        restore_outer(&mut lines);
+        lines.push(format!("GOTO {finally_label}"));
+        lines.push(format!("{catch_label}:"));
+        lines.push(format!("{pending_name} = ERR"));
+
+        if let Some(catch) = catch {
+            let filters = catch_filters.as_ref().expect("catch filters were rendered");
+            let mut catch_setup = Vec::new();
+            if !filters.is_empty() {
+                let matched_label = format!("TRY_{id:04}_MATCHED");
+                let condition = filters
+                    .iter()
+                    .map(|filter| format!("(ERR = {filter})"))
+                    .collect::<Vec<_>>()
+                    .join(" OR ");
+                catch_setup.push(format!("IF {condition} THEN GOTO {matched_label}"));
+                catch_setup.push(format!("RESUME {finally_label}"));
+                catch_setup.push(format!("{matched_label}:"));
+            }
+            let mut error_ident = BasicIdent::parse(&catch.error);
+            error_ident.suffix = catch
+                .error_type
+                .suffix()
+                .and_then(TypeSuffix::from_char);
+            let mut line_ident = BasicIdent::parse(&catch.line);
+            line_ident.suffix = catch.line_type.suffix().and_then(TypeSuffix::from_char);
+            let error_name = generator.ident(&error_ident, Some(function));
+            let line_name = generator.ident(&line_ident, Some(function));
+            catch_setup.push(format!("{error_name} = ERR"));
+            catch_setup.push(format!("{line_name} = ERL"));
+            if let Some(source) = &catch.source {
+                let mut source_ident = BasicIdent::parse(source);
+                source_ident.suffix = catch
+                    .source_type
+                    .and_then(crate::semantic_ir::SemanticValueType::suffix)
+                    .and_then(TypeSuffix::from_char);
+                let source_name = generator.ident(&source_ident, Some(function));
+                catch_setup.push("GOSUB BCC_RESOLVE_SOURCE_FILE".to_string());
+                catch_setup.push(format!("{source_name} = BCCSOURCEFILE$"));
+            }
+            catch_setup.push(format!("RESUME {catch_run_label}"));
+            lines.extend(nested(catch_setup));
+
+            lines.push(format!("{catch_run_label}:"));
+            lines.push(format!("ON ERROR GOTO {rethrow_label}"));
+            generator.try_handler_stack.push(rethrow_label.clone());
+            let catch_lines = render_body(generator, &catch.body, function);
+            generator.try_handler_stack.pop();
+            lines.extend(nested(catch_lines?));
+            lines.push(format!("    {pending_name} = 0"));
+            let mut catch_restore = Vec::new();
+            restore_outer(&mut catch_restore);
+            lines.extend(nested(catch_restore));
+            lines.push(format!("    GOTO {finally_label}"));
+            lines.push(format!("{rethrow_label}:"));
+            lines.push(format!("    {pending_name} = ERR"));
+            lines.push(format!("    RESUME {finally_label}"));
+        } else {
+            lines.push(format!("    RESUME {finally_label}"));
+        }
+
+        lines.push(format!("{finally_label}:"));
+        restore_outer(&mut lines);
+        lines.extend(nested(render_body(generator, finally_body, function)?));
+        lines.push(format!(
+            "    IF {pending_name} <> 0 THEN ERROR {pending_name}"
+        ));
+        lines.push(format!("{end_label}:"));
+        lines.push("REM END TRY".to_string());
+        Some(lines)
+    }
+
+    let next_label = generator.next_label;
+    let loop_exit_stack = generator.loop_exit_stack.clone();
+    let loop_continue_stack = generator.loop_continue_stack.clone();
+    let try_handler_stack = generator.try_handler_stack.clone();
+    let taken_names = generator.taken_names.borrow().clone();
+    let local_var_map = function.local_var_map.borrow().clone();
+    let local_array_bounds = function.local_array_bounds.borrow().clone();
+    let result = inner(generator, semantic, function);
+    if result.is_none() {
+        generator.next_label = next_label;
+        generator.loop_exit_stack = loop_exit_stack;
+        generator.loop_continue_stack = loop_continue_stack;
+        generator.try_handler_stack = try_handler_stack;
+        *generator.taken_names.borrow_mut() = taken_names;
+        *function.local_var_map.borrow_mut() = local_var_map;
+        *function.local_array_bounds.borrow_mut() = local_array_bounds;
+    }
+    result
+}
+
+fn basic_semantic_callable_leaf(
+    generator: &mut CodeGenerator,
+    semantic: &crate::semantic_ir::SemanticStatement,
+    function: &FunctionInfo,
+) -> Option<Vec<String>> {
+    use crate::semantic_ir::{PrintDestination, ReturnValue, SemanticStatementKind as Kind};
+    let render_target = |target: &crate::semantic_ir::NamedReference| {
+        generator.label_target_text(&Expr::Ident(BasicIdent::parse(&target.name)))
+    };
+    match &semantic.kind {
+        Kind::Try { .. } => basic_semantic_callable_try(generator, semantic, function),
+        Kind::Dim(_) => basic_semantic_dim(
+            generator,
+            &function.semantic_dim_declarations,
+            semantic,
+            Some(function),
+        ),
+        Kind::MidAssign {
+            target,
+            start,
+            length,
+            value,
+        } => basic_semantic_mid_assign(
+            generator,
+            target,
+            start,
+            length.as_ref(),
+            value,
+            Some(function),
+        ),
+        Kind::Assignment {
+            target,
+            operator,
+            value,
+        } => basic_semantic_assignment(generator, target, *operator, value, Some(function)),
+        Kind::Expression(expression) => {
+            basic_semantic_expression_statement(generator, expression, Some(function))
+        }
+        Kind::Const { name, value, .. } => {
+            let value = generator.semantic_const_expression(value, Some(function))?;
+            let name = generator.ident(&BasicIdent::parse(&name.name), Some(function));
+            Some(vec![format!("{name} = {value}")])
+        }
+        Kind::Comment { block, text } => Some(basic_semantic_comment(*block, text)),
+        Kind::Print {
+            destination,
+            tokens,
+        } => {
+            let (lines, body) = basic_semantic_print_body(generator, tokens, Some(function))?;
+            let mut destination_lines = Vec::new();
+            let line = match destination {
+                PrintDestination::Standard { .. } => format!("PRINT{body}"),
+                PrintDestination::Using { format, .. } => {
+                    let (prelude, format) =
+                        generator.semantic_expression_with_prelude(format, Some(function))?;
+                    destination_lines.extend(prelude);
+                    if body.is_empty() {
+                        format!("PRINT USING {format}")
+                    } else {
+                        format!("PRINT USING {format};{body}")
+                    }
+                }
+                PrintDestination::Channel { channel, using, .. } => {
+                    let (prelude, channel) =
+                        generator.semantic_expression_with_prelude(channel, Some(function))?;
+                    destination_lines.extend(prelude);
+                    match using {
+                        Some(format) => {
+                            let (prelude, format) = generator
+                                .semantic_expression_with_prelude(format, Some(function))?;
+                            destination_lines.extend(prelude);
+                            if body.is_empty() {
+                                format!("PRINT #{channel}, USING {format}")
+                            } else {
+                                format!("PRINT #{channel}, USING {format};{body}")
+                            }
+                        }
+                        None if body.is_empty() => format!("PRINT #{channel}"),
+                        None => format!("PRINT #{channel}, {}", body.trim_start()),
+                    }
+                }
+            };
+            destination_lines.extend(lines);
+            let mut lines = destination_lines;
+            lines.push(line);
+            Some(lines)
+        }
+        Kind::Lprint { using, tokens } => {
+            let (mut using_lines, using) = match using {
+                Some(format) => {
+                    let (lines, format) =
+                        generator.semantic_expression_with_prelude(format, Some(function))?;
+                    (lines, Some(format))
+                }
+                None => (Vec::new(), None),
+            };
+            let (mut lines, body) = basic_semantic_print_body(generator, tokens, Some(function))?;
+            using_lines.append(&mut lines);
+            let mut lines = using_lines;
+            lines.push(match (using, body.is_empty()) {
+                (Some(format), true) => format!("LPRINT USING {format}"),
+                (Some(format), false) => format!("LPRINT USING {format};{}", body),
+                (None, _) => format!("LPRINT{body}"),
+            });
+            Some(lines)
+        }
+        Kind::Input { source, targets } => {
+            let mut lines = Vec::new();
+            let prefix = match source {
+                crate::semantic_ir::InputSource::Console(prompt) => {
+                    let prompt = prompt
+                        .as_ref()
+                        .map(basic_semantic_input_prompt)
+                        .unwrap_or_default();
+                    format!("INPUT {prompt}")
+                }
+                crate::semantic_ir::InputSource::Channel(channel) => {
+                    let (prelude, channel) =
+                        generator.semantic_expression_with_prelude(channel, Some(function))?;
+                    lines.extend(prelude);
+                    format!("INPUT #{channel}, ")
+                }
+            };
+            let mut rendered_targets = Vec::with_capacity(targets.len());
+            for target in targets {
+                let (prelude, target) =
+                    basic_semantic_lvalue(generator, target, Some(function))?;
+                lines.extend(prelude);
+                rendered_targets.push(target);
+            }
+            lines.push(format!("{prefix}{}", rendered_targets.join(", ")));
+            Some(lines)
+        }
+        Kind::LineInput { channel, target } => {
+            let (mut lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            let (target_lines, target) =
+                basic_semantic_lvalue(generator, target, Some(function))?;
+            lines.extend(target_lines);
+            lines.push(format!("LINE INPUT #{channel}, {target}"));
+            Some(lines)
+        }
+        Kind::Write { channel, values } => {
+            let (mut lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            let (value_lines, values) = match values {
+                crate::semantic_ir::WriteValues::Omitted => (Vec::new(), Vec::new()),
+                crate::semantic_ir::WriteValues::Values(values) => {
+                    basic_semantic_io_values(generator, values, Some(function))?
+                }
+            };
+            lines.extend(value_lines);
+            let suffix = if values.is_empty() {
+                String::new()
+            } else {
+                format!(", {}", values.join(", "))
+            };
+            lines.push(format!("WRITE #{channel}{suffix}"));
+            Some(lines)
+        }
+        Kind::Close(channel) => {
+            let (mut lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            lines.push(format!("CLOSE #{channel}"));
+            Some(lines)
+        }
+        Kind::Open {
+            path,
+            mode,
+            channel,
+            length,
+        } => {
+            let (mut lines, path) =
+                generator.semantic_expression_with_prelude(path, Some(function))?;
+            let (channel_lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            lines.extend(channel_lines);
+            let length = match length {
+                Some(length) => {
+                    let (length_lines, length) =
+                        generator.semantic_expression_with_prelude(length, Some(function))?;
+                    lines.extend(length_lines);
+                    format!(" LEN = {length}")
+                }
+                None => String::new(),
+            };
+            let mode = match mode.kind {
+                crate::semantic_ir::OpenModeKind::Input => "INPUT",
+                crate::semantic_ir::OpenModeKind::Output => "OUTPUT",
+                crate::semantic_ir::OpenModeKind::Append => "APPEND",
+                crate::semantic_ir::OpenModeKind::Random => "RANDOM",
+                crate::semantic_ir::OpenModeKind::Binary => "BINARY",
+            };
+            lines.push(format!("OPEN {path} FOR {mode} AS #{channel}{length}"));
+            Some(lines)
+        }
+        Kind::Seek { channel, position } => {
+            let (mut lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            let (position_lines, position) =
+                generator.semantic_expression_with_prelude(position, Some(function))?;
+            lines.extend(position_lines);
+            lines.push(format!("SEEK #{channel}, {position}"));
+            Some(lines)
+        }
+        Kind::Get { channel, position } | Kind::Put { channel, position } => {
+            let command = if matches!(&semantic.kind, Kind::Get { .. }) {
+                "GET"
+            } else {
+                "PUT"
+            };
+            let (mut lines, channel) =
+                generator.semantic_expression_with_prelude(channel, Some(function))?;
+            let position = match position {
+                Some(position) => {
+                    let value = match &position.position {
+                        Some(value) => {
+                            let (prelude, value) = generator
+                                .semantic_expression_with_prelude(value, Some(function))?;
+                            lines.extend(prelude);
+                            value
+                        }
+                        None => String::new(),
+                    };
+                    let record = match &position.record {
+                        Some(record) => {
+                            let (prelude, record) = generator
+                                .semantic_expression_with_prelude(record, Some(function))?;
+                            lines.extend(prelude);
+                            record
+                        }
+                        None => String::new(),
+                    };
+                    if record.is_empty() {
+                        if value.is_empty() {
+                            String::new()
+                        } else {
+                            format!(", {value}")
+                        }
+                    } else {
+                        format!(", {value}, {record}")
+                    }
+                }
+                None => String::new(),
+            };
+            lines.push(format!("{command} #{channel}{position}"));
+            Some(lines)
+        }
+        Kind::Field { channel, bindings } => {
+            let channel = generator.semantic_const_expression(channel, Some(function))?;
+            let bindings = bindings
+                .iter()
+                .map(|binding| {
+                    generator
+                    .semantic_const_expression(&binding.length, Some(function))
+                    .map(|length| {
+                        let mut ident = BasicIdent::parse(&binding.name);
+                        ident.suffix = binding
+                            .type_suffix
+                            .as_deref()
+                            .and_then(|suffix| suffix.chars().next())
+                            .and_then(TypeSuffix::from_char);
+                        format!(
+                            "{length} AS {}",
+                            generator.ident(&ident, Some(function))
+                        )
+                    })
+                })
+                .collect::<Option<Vec<_>>>()?;
+            Some(vec![format!("FIELD #{channel}, {}", bindings.join(", "))])
+        }
+        Kind::Kill(path) => {
+            let (mut lines, path) =
+                generator.semantic_expression_with_prelude(path, Some(function))?;
+            lines.push(format!("KILL {path}"));
+            Some(lines)
+        }
+        Kind::Rename {
+            source,
+            destination,
+        } => {
+            let (mut lines, source) =
+                generator.semantic_expression_with_prelude(source, Some(function))?;
+            let (destination_lines, destination) =
+                generator.semantic_expression_with_prelude(destination, Some(function))?;
+            lines.extend(destination_lines);
+            lines.push(format!("NAME {source} AS {destination}"));
+            Some(lines)
+        }
+        Kind::Width { channel, value } => {
+            let mut lines = Vec::new();
+            let channel = if let Some(channel) = channel {
+                let (channel_lines, channel) =
+                    generator.semantic_expression_with_prelude(channel, Some(function))?;
+                lines.extend(channel_lines);
+                Some(channel)
+            } else {
+                None
+            };
+            let (value_lines, value) =
+                generator.semantic_expression_with_prelude(value, Some(function))?;
+            lines.extend(value_lines);
+            lines.push(match channel {
+                Some(channel) => format!("WIDTH #{channel}, {value}"),
+                None => format!("WIDTH {value}"),
+            });
+            Some(lines)
+        }
+        Kind::Locate { row, column } => {
+            let (mut lines, row) =
+                generator.semantic_expression_with_prelude(row, Some(function))?;
+            let (column_lines, column) =
+                generator.semantic_expression_with_prelude(column, Some(function))?;
+            lines.extend(column_lines);
+            lines.push(format!("LOCATE {row}, {column}"));
+            Some(lines)
+        }
+        Kind::Color {
+            foreground,
+            background,
+        } => {
+            let (mut lines, foreground) =
+                generator.semantic_expression_with_prelude(foreground, Some(function))?;
+            match background {
+                Some(background) => {
+                    let (background_lines, background) =
+                        generator.semantic_expression_with_prelude(background, Some(function))?;
+                    lines.extend(background_lines);
+                    lines.push(format!("COLOR {foreground}, {background}"));
+                    Some(lines)
+                }
+                None => {
+                    lines.push(format!("COLOR {foreground}"));
+                    Some(lines)
+                }
+            }
+        }
+        Kind::Swap { left, right } => {
+            let (mut lines, left) = basic_semantic_lvalue(generator, left, Some(function))?;
+            let (right_lines, right) = basic_semantic_lvalue(generator, right, Some(function))?;
+            lines.extend(right_lines);
+            lines.push(format!("SWAP {left}, {right}"));
+            Some(lines)
+        }
+        Kind::Randomize(seed) => match seed {
+            crate::semantic_ir::RandomizeSeed::Default => Some(vec!["RANDOMIZE".to_string()]),
+            crate::semantic_ir::RandomizeSeed::Value(value) => {
+                let (mut lines, value) =
+                    generator.semantic_expression_with_prelude(value, Some(function))?;
+                lines.push(format!("RANDOMIZE {value}"));
+                Some(lines)
+            }
+        },
+        Kind::Poke { address, value } => {
+            let (mut lines, address) =
+                generator.semantic_expression_with_prelude(address, Some(function))?;
+            let (value_lines, value) =
+                generator.semantic_expression_with_prelude(value, Some(function))?;
+            lines.extend(value_lines);
+            lines.push(format!("POKE {address}, {value}"));
+            Some(lines)
+        }
+        Kind::Out { port, value } => {
+            let (mut lines, port) =
+                generator.semantic_expression_with_prelude(port, Some(function))?;
+            let (value_lines, value) =
+                generator.semantic_expression_with_prelude(value, Some(function))?;
+            lines.extend(value_lines);
+            lines.push(format!("OUT {port}, {value}"));
+            Some(lines)
+        }
+        Kind::Lset { target, value } | Kind::Rset { target, value } => {
+            let command = if matches!(&semantic.kind, Kind::Lset { .. }) {
+                "LSET"
+            } else {
+                "RSET"
+            };
+            let target = generator.ident(&BasicIdent::parse(&target.name), Some(function));
+            let (mut lines, value) = if generator.semantic_expression_contains_callable_call(value)
+            {
+                generator.semantic_expression_with_prelude(value, Some(function))?
+            } else {
+                (
+                    Vec::new(),
+                    generator.semantic_const_expression(value, Some(function))?,
+                )
+            };
+            lines.push(format!("{command} {target} = {value}"));
+            Some(lines)
+        }
+        Kind::Erase(names) => Some(vec![format!(
+            "ERASE {}",
+            names
+                .iter()
+                .map(|name| generator.ident(&BasicIdent::parse(&name.name), Some(function)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )]),
+        Kind::Label(label) => Some(vec![format!("{}:", user_label_token(&label.name))]),
+        Kind::Goto(label) => Some(vec![format!("GOTO {}", render_target(label))]),
+        Kind::Gosub(label) => Some(vec![format!("GOSUB {}", render_target(label))]),
+        Kind::Restore(target) => Some(vec![match target {
+            Some(target) => format!("RESTORE {}", render_target(target)),
+            None => "RESTORE".to_string(),
+        }]),
+        Kind::Resume(target) => Some(vec![match target {
+            None => "RESUME".to_string(),
+            Some(crate::semantic_ir::ResumeTarget::Next) => "RESUME NEXT".to_string(),
+            Some(crate::semantic_ir::ResumeTarget::Label(target)) => {
+                format!("RESUME {}", render_target(target))
+            }
+        }]),
+        Kind::OnErrorGoto(target) => Some(vec![match target {
+            crate::semantic_ir::ErrorHandlerTarget::Disable => "ON ERROR GOTO 0".to_string(),
+            crate::semantic_ir::ErrorHandlerTarget::Label(target) => {
+                format!("ON ERROR GOTO {}", render_target(target))
+            }
+        }]),
+        // Callable globals are already represented in the resolver's
+        // semantic name scopes; BASIC has no corresponding body statement.
+        Kind::Global { .. } => Some(Vec::new()),
+        Kind::OnBranch {
+            selector,
+            branch,
+            targets,
+        } => {
+            let command = match branch {
+                crate::semantic_ir::BranchKind::Goto => "GOTO",
+                crate::semantic_ir::BranchKind::Gosub => "GOSUB",
+            };
+            let targets = targets
+                .iter()
+                .map(|target| render_target(target))
+                .collect::<Vec<_>>();
+            let (mut lines, selector) =
+                generator.semantic_expression_with_prelude(selector, Some(function))?;
+            lines.push(format!("ON {selector} {command} {}", targets.join(", ")));
+            Some(lines)
+        }
+        Kind::Exit => Some(vec![match generator.loop_exit_stack.last() {
+            Some(LoopExit::NativeFor) => "EXIT FOR".to_string(),
+            Some(LoopExit::Goto(label)) => format!("GOTO {label}"),
+            None => "' warning: EXIT outside of a loop".to_string(),
+        }]),
+        Kind::Continue => Some(vec![match generator.loop_continue_stack.last() {
+            Some(label) => format!("GOTO {label}"),
+            None => "' warning: CONTINUE outside of a loop".to_string(),
+        }]),
+        Kind::End => Some(vec!["END".to_string()]),
+        Kind::Stop => Some(vec!["STOP".to_string()]),
+        Kind::Cls => Some(vec!["CLS".to_string()]),
+        Kind::Beep => Some(vec!["BEEP".to_string()]),
+        Kind::System => Some(vec!["SYSTEM".to_string()]),
+        Kind::Clear => Some(vec!["CLEAR".to_string()]),
+        Kind::Error(code) => {
+            let (mut lines, code) =
+                generator.semantic_expression_with_prelude(code, Some(function))?;
+            lines.push(format!("ERROR {code}"));
+            Some(lines)
+        }
+        Kind::Throw(value) => match value {
+            crate::semantic_ir::ThrowValue::Bare => Some(vec!["ERROR ERR".to_string()]),
+            crate::semantic_ir::ThrowValue::Value(value) => {
+                let (mut lines, value) =
+                    generator.semantic_expression_with_prelude(value, Some(function))?;
+                lines.push(format!("ERROR {value}"));
+                Some(lines)
+            }
+        },
+        Kind::Read(targets) => {
+            let mut lines = Vec::new();
+            let mut target_text = Vec::with_capacity(targets.len());
+            for target in targets {
+                let (prelude, rendered) =
+                    basic_semantic_lvalue(generator, target, Some(function))?;
+                lines.extend(prelude);
+                target_text.push(rendered);
+            }
+            lines.push(format!("READ {}", target_text.join(", ")));
+            Some(lines)
+        }
+        Kind::Data(values) => Some(vec![format!(
+            "DATA {}",
+            values
+                .iter()
+                .map(|value| generator.semantic_const_expression(value, Some(function)))
+                .collect::<Option<Vec<_>>>()?
+                .join(", ")
+        )]),
+        Kind::Return(ReturnValue::Value(expression)) if !function.is_procedure => {
+            let (mut lines, expression) =
+                generator.semantic_expression_with_prelude(expression, Some(function))?;
+            lines.push(format!("{} = {expression}", function.result.as_basic()));
+            lines.push("RETURN".to_string());
+            Some(lines)
+        }
+        Kind::Return(ReturnValue::Default) => Some(vec!["RETURN".to_string()]),
+        _ => None,
+    }
+}
+
+/// Render a typed `MID$` assignment when its scalar operands and lvalue can
+/// be emitted without AST reconstruction. Operand values and array indices
+/// are snapshotted in source order before the inline splice.
+fn basic_semantic_mid_assign(
+    generator: &mut CodeGenerator,
+    target: &crate::semantic_ir::Expression,
+    start: &crate::semantic_ir::Expression,
+    length: Option<&crate::semantic_ir::Expression>,
+    value: &crate::semantic_ir::Expression,
+    current_function: Option<&FunctionInfo>,
+) -> Option<Vec<String>> {
+    fn supported_expression(expression: &crate::semantic_ir::Expression) -> bool {
+        use crate::semantic_ir::ExpressionKind as Kind;
+        match &expression.kind {
+            Kind::Literal(_) | Kind::Boolean(_) | Kind::Name(_) => true,
+            Kind::Parenthesized(inner) | Kind::Unary { operand: inner, .. } => {
+                supported_expression(inner)
+            }
+            Kind::Binary { left, right, .. } => {
+                supported_expression(left) && supported_expression(right)
+            }
+            Kind::Index { index, .. } => supported_expression(index),
+            Kind::MultiIndex { indices, .. } => indices.iter().all(supported_expression),
+            // A resolved scalar function call is rendered with an explicit
+            // prelude and its result is captured before later operands.
+            Kind::Call { arguments, .. } => arguments.iter().all(supported_expression),
+            // Scalar record members have typed storage names; record-valued
+            // expressions and method calls still require other machinery.
+            Kind::Member {
+                base: Some(base),
+                arguments: None,
+                ..
+            } => matches!(base.kind, Kind::Name(_)),
+            _ => false,
+        }
+    }
+    if ![target, start, value]
+        .into_iter()
+        .chain(length)
+        .all(supported_expression)
+    {
+        return None;
+    }
+    let mut lines = Vec::new();
+    let (target_prelude, target_lvalue) = basic_semantic_lvalue(generator, target, current_function)?;
+    lines.extend(target_prelude);
+    let target_text = generator.next_temp_var_suffixed("$");
+    lines.push(format!("{target_text} = {target_lvalue}"));
+    let mut render_snapshot =
+        |expression: &crate::semantic_ir::Expression, is_string: bool, lines: &mut Vec<String>| {
+            let (prelude, rendered) =
+                generator.semantic_expression_with_prelude(expression, current_function)?;
+            lines.extend(prelude);
+            let suffix = if is_string { "$" } else { "%" };
+            let temporary = generator.next_temp_var_suffixed(&suffix);
+            lines.push(format!("{temporary} = {rendered}"));
+            Some(temporary)
+        };
+    let start_text = render_snapshot(start, false, &mut lines)?;
+    let length_text = match length {
+        Some(length) => Some(render_snapshot(length, false, &mut lines)?),
+        None => None,
+    };
+    let value_text = render_snapshot(value, true, &mut lines)?;
+    let length_text = match length_text {
+        Some(length) => length,
+        None => {
+            let length = generator.next_temp_var_suffixed("%");
+            lines.push(format!("{length} = LEN({value_text})"));
+            length
+        }
+    };
+    let id = generator.next_label;
+    generator.next_label += 1;
+    let trim_label = format!("MID_{id:04}_TRIM");
+    let done_label = format!("MID_{id:04}_DONE");
+    lines.push(format!(
+        "IF LEN({value_text}) > {length_text} THEN GOTO {trim_label}"
+    ));
+    lines.push(format!("GOTO {done_label}"));
+    lines.push(format!("{trim_label}:"));
+    lines.push(format!("{value_text} = LEFT$({value_text}, {length_text})"));
+    lines.push(format!("{done_label}:"));
+    lines.push(format!(
+        "{target_lvalue} = LEFT$({target_text}, {start_text} - 1) + {value_text} + MID$({target_text}, {start_text} + LEN({value_text}))"
+    ));
+    Some(lines)
+}
+
+/// Render a typed scalar or array lvalue, evaluating each array index once
+/// in source order before returning the target text.
+fn basic_semantic_lvalue(
+    generator: &mut CodeGenerator,
+    target: &crate::semantic_ir::Expression,
+    current_function: Option<&FunctionInfo>,
+) -> Option<(Vec<String>, String)> {
+    match &target.kind {
+        crate::semantic_ir::ExpressionKind::Name(_) => (
+            Vec::new(),
+            generator.semantic_const_expression(target, current_function)?,
+        ),
+        crate::semantic_ir::ExpressionKind::Member {
+            base: Some(base),
+            arguments: None,
+            ..
+        } if matches!(base.kind, crate::semantic_ir::ExpressionKind::Name(_)) => (
+            Vec::new(),
+            generator.semantic_const_expression(target, current_function)?,
+        ),
+        crate::semantic_ir::ExpressionKind::Index { name, index } => {
+            let ident = BasicIdent::parse(name);
+            if generator.ordinary_function_info(&ident).is_some()
+                || generator.resolve_array_rank(&ident, current_function)? != 1
+            {
+                return None;
+            }
+            if !generator.semantic_expression_contains_callable_call(index) {
+                return Some((
+                    Vec::new(),
+                    generator.semantic_const_expression(target, current_function)?,
+                ));
+            }
+            let (mut prelude, rendered) =
+                generator.semantic_expression_with_prelude(index, current_function)?;
+            let suffix = index
+                .value_type
+                .suffix()
+                .map(|suffix| suffix.to_string())
+                .unwrap_or_else(|| "%".to_string());
+            let temporary = generator.next_temp_var_suffixed(&suffix);
+            prelude.push(format!("{temporary} = {rendered}"));
+            (
+                prelude,
+                format!("{}({temporary})", generator.ident(&ident, current_function)),
+            )
+        }
+        crate::semantic_ir::ExpressionKind::MultiIndex { name, indices } => {
+            let ident = BasicIdent::parse(name);
+            if generator.ordinary_function_info(&ident).is_some()
+                || generator.resolve_array_rank(&ident, current_function)? != indices.len()
+            {
+                return None;
+            }
+            if !indices
+                .iter()
+                .any(|index| generator.semantic_expression_contains_callable_call(index))
+            {
+                return Some((
+                    Vec::new(),
+                    generator.semantic_const_expression(target, current_function)?,
+                ));
+            }
+            let mut prelude = Vec::new();
+            let mut rendered_indices = Vec::with_capacity(indices.len());
+            for index in indices {
+                let (index_prelude, rendered) =
+                    generator.semantic_expression_with_prelude(index, current_function)?;
+                prelude.extend(index_prelude);
+                let suffix = index
+                    .value_type
+                    .suffix()
+                    .map(|suffix| suffix.to_string())
+                    .unwrap_or_else(|| "%".to_string());
+                let temporary = generator.next_temp_var_suffixed(&suffix);
+                prelude.push(format!("{temporary} = {rendered}"));
+                rendered_indices.push(temporary);
+            }
+            (
+                prelude,
+                format!(
+                    "{}({})",
+                    generator.ident(&ident, current_function),
+                    rendered_indices.join(", ")
+                ),
+            )
+        }
+        crate::semantic_ir::ExpressionKind::Call { name, arguments } => {
+            // The generated frontend represents ordinary parenthesized
+            // references as calls. Resolved array rank distinguishes an
+            // lvalue subscript here from a callable invocation.
+            let ident = BasicIdent::parse(name);
+            if generator.resolve_array_rank(&ident, current_function)? != arguments.len()
+                || generator.ordinary_function_info(&ident).is_some()
+            {
+                return None;
+            }
+            if !arguments
+                .iter()
+                .any(|index| generator.semantic_expression_contains_callable_call(index))
+            {
+                return Some((
+                    Vec::new(),
+                    generator.semantic_const_expression(target, current_function)?,
+                ));
+            }
+            let mut prelude = Vec::new();
+            let mut rendered_indices = Vec::with_capacity(arguments.len());
+            for index in arguments {
+                let (index_prelude, rendered) =
+                    generator.semantic_expression_with_prelude(index, current_function)?;
+                prelude.extend(index_prelude);
+                let suffix = index
+                    .value_type
+                    .suffix()
+                    .map(|suffix| suffix.to_string())
+                    .unwrap_or_else(|| "%".to_string());
+                let temporary = generator.next_temp_var_suffixed(&suffix);
+                prelude.push(format!("{temporary} = {rendered}"));
+                rendered_indices.push(temporary);
+            }
+            (
+                prelude,
+                format!(
+                    "{}({})",
+                    generator.ident(&ident, current_function),
+                    rendered_indices.join(", ")
+                ),
+            )
+        }
+        _ => return None,
+    }
+    .into()
+}
+
+fn basic_semantic_callable_statement(
+    generator: &mut CodeGenerator,
+    semantic: &crate::semantic_ir::SemanticStatement,
+    function: &FunctionInfo,
+) -> Option<Vec<String>> {
+    let initial_label = generator.next_label;
+    let initial_loop_exit_depth = generator.loop_exit_stack.len();
+    let initial_loop_continue_depth = generator.loop_continue_stack.len();
+    let lines = basic_semantic_callable_statement_inner(generator, semantic, function);
+    if lines.is_none() {
+        generator.next_label = initial_label;
+        generator.loop_exit_stack.truncate(initial_loop_exit_depth);
+        generator
+            .loop_continue_stack
+            .truncate(initial_loop_continue_depth);
+    }
+    lines
+}
+
+fn basic_semantic_callable_statement_inner(
+    generator: &mut CodeGenerator,
+    semantic: &crate::semantic_ir::SemanticStatement,
+    function: &FunctionInfo,
+) -> Option<Vec<String>> {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    match &semantic.kind {
+        Kind::Line(statements) => {
+            let mut lines = Vec::new();
+            for statement in statements {
+                lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+            }
+            Some(lines)
+        }
+        Kind::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            let (condition_prelude, condition) = if let Some(condition) =
+                generator.semantic_const_expression(condition, Some(function))
+            {
+                (Vec::new(), condition)
+            } else {
+                generator.semantic_expression_with_prelude(condition, Some(function))?
+            };
+            let mut then_lines = Vec::new();
+            let mut else_lines = Vec::new();
+            for statement in then_body {
+                then_lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+            }
+            for statement in else_body {
+                else_lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+            }
+            let id = generator.next_label;
+            generator.next_label += 1;
+            let else_label = format!("IF_{id:04}_ELSE");
+            let end_label = format!("IF_{id:04}_END");
+            let mut lines = condition_prelude;
+            if else_body.is_empty() {
+                lines.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+                lines.extend(then_lines.into_iter().map(|line| format!("    {line}")));
+                lines.push(format!("{end_label}:"));
+            } else {
+                lines.push(format!("IF ({condition}) = 0 THEN GOTO {else_label}"));
+                lines.extend(then_lines.into_iter().map(|line| format!("    {line}")));
+                lines.push(format!("GOTO {end_label}"));
+                lines.push(format!("{else_label}:"));
+                lines.extend(else_lines.into_iter().map(|line| format!("    {line}")));
+                lines.push(format!("{end_label}:"));
+            }
+            lines.push("REM END IF".to_string());
+            Some(lines)
+        }
+        Kind::For {
+            variable,
+            start,
+            bounds,
+            body,
+            ..
+        } => {
+            let start_suffix = start
+                .value_type
+                .suffix()
+                .map(|suffix| suffix.to_string())
+                .unwrap_or_default();
+            let bounds_contain_callable_call = match bounds {
+                crate::semantic_ir::ForBounds::To { limit, step } => {
+                    generator.semantic_expression_contains_callable_call(limit)
+                        || step.as_ref().is_some_and(|step| {
+                            generator.semantic_expression_contains_callable_call(step)
+                        })
+                }
+                crate::semantic_ir::ForBounds::Downto { limit, .. } => {
+                    generator.semantic_expression_contains_callable_call(limit)
+                }
+            };
+            let (mut for_prelude, start) =
+                if let Some(start) = generator.semantic_const_expression(start, Some(function)) {
+                    (Vec::new(), start)
+                } else {
+                    generator.semantic_expression_with_prelude(start, Some(function))?
+                };
+            let start = if bounds_contain_callable_call {
+                let snapshot = generator.next_temp_var_suffixed(&start_suffix);
+                for_prelude.push(format!("{snapshot} = {start}"));
+                snapshot
+            } else {
+                start
+            };
+            let (limit, step) = match bounds {
+                crate::semantic_ir::ForBounds::To {
+                    limit: limit_expression,
+                    step,
+                } => {
+                    let limit = if let Some(limit) =
+                        generator.semantic_const_expression(limit_expression, Some(function))
+                    {
+                        limit
+                    } else {
+                        let (prelude, limit) = generator
+                            .semantic_expression_with_prelude(limit_expression, Some(function))?;
+                        for_prelude.extend(prelude);
+                        limit
+                    };
+                    let limit = if step.as_ref().is_some_and(|step| {
+                        generator.semantic_expression_contains_callable_call(step)
+                    }) {
+                        let suffix = limit_expression
+                            .value_type
+                            .suffix()
+                            .map(|suffix| suffix.to_string())
+                            .unwrap_or_default();
+                        let snapshot = generator.next_temp_var_suffixed(&suffix);
+                        for_prelude.push(format!("{snapshot} = {limit}"));
+                        snapshot
+                    } else {
+                        limit
+                    };
+                    let step = match step {
+                        Some(step) => {
+                            let step = if let Some(step) =
+                                generator.semantic_const_expression(step, Some(function))
+                            {
+                                step
+                            } else {
+                                let (prelude, step) = generator
+                                    .semantic_expression_with_prelude(step, Some(function))?;
+                                for_prelude.extend(prelude);
+                                step
+                            };
+                            format!(" STEP {step}")
+                        }
+                        None => String::new(),
+                    };
+                    (limit, step)
+                }
+                crate::semantic_ir::ForBounds::Downto { limit, step } => {
+                    let limit = if let Some(limit) =
+                        generator.semantic_const_expression(limit, Some(function))
+                    {
+                        limit
+                    } else {
+                        let (prelude, limit) =
+                            generator.semantic_expression_with_prelude(limit, Some(function))?;
+                        for_prelude.extend(prelude);
+                        limit
+                    };
+                    (limit, format!(" STEP {step}"))
+                }
+            };
+            let continue_id = generator.next_label;
+            generator.next_label += 1;
+            let continue_label = format!("FOR_{continue_id:04}_CONTINUE");
+            generator.loop_exit_stack.push(LoopExit::NativeFor);
+            generator.loop_continue_stack.push(continue_label.clone());
+            let mut body_lines = Vec::new();
+            let body_result = body.iter().try_for_each(|statement| {
+                body_lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+                Some(())
+            });
+            generator.loop_continue_stack.pop();
+            generator.loop_exit_stack.pop();
+            body_result?;
+            let variable = generator.ident(&BasicIdent::parse(variable), Some(function));
+            for_prelude.push(format!("FOR {variable} = {start} TO {limit}{step}"));
+            let mut lines = for_prelude;
+            lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+            lines.push(format!("{continue_label}:"));
+            lines.push(format!("NEXT {variable}"));
+            Some(lines)
+        }
+        Kind::While { condition, body } => {
+            let (condition_prelude, condition) = if let Some(condition) =
+                generator.semantic_const_expression(condition, Some(function))
+            {
+                (Vec::new(), condition)
+            } else {
+                generator.semantic_expression_with_prelude(condition, Some(function))?
+            };
+            let id = generator.next_label;
+            generator.next_label += 1;
+            let top_label = format!("WHILE_{id:04}_TOP");
+            let end_label = format!("WHILE_{id:04}_END");
+            generator
+                .loop_exit_stack
+                .push(LoopExit::Goto(end_label.clone()));
+            generator.loop_continue_stack.push(top_label.clone());
+            let mut body_lines = Vec::new();
+            let body_result = body.iter().try_for_each(|statement| {
+                body_lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+                Some(())
+            });
+            generator.loop_continue_stack.pop();
+            generator.loop_exit_stack.pop();
+            body_result?;
+            let mut lines = vec![format!("{top_label}:")];
+            lines.extend(condition_prelude);
+            lines.push(format!("IF ({condition}) = 0 THEN GOTO {end_label}"));
+            lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+            lines.push(format!("GOTO {top_label}"));
+            lines.push(format!("{end_label}:"));
+            lines.push("REM END WHILE".to_string());
+            Some(lines)
+        }
+        Kind::Do {
+            pre_condition,
+            post_condition,
+            body,
+        } => {
+            let render_condition =
+                |generator: &mut CodeGenerator, condition: &crate::semantic_ir::LoopCondition| {
+                    if let Some(value) =
+                        generator.semantic_const_expression(&condition.value, Some(function))
+                    {
+                        Some((condition.kind, Vec::new(), value))
+                    } else {
+                        generator
+                            .semantic_expression_with_prelude(&condition.value, Some(function))
+                            .map(|(prelude, value)| (condition.kind, prelude, value))
+                    }
+                };
+            let pre = match pre_condition {
+                Some(condition) => Some(render_condition(generator, condition)?),
+                None => None,
+            };
+            let post = match post_condition {
+                Some(condition) => Some(render_condition(generator, condition)?),
+                None => None,
+            };
+            let id = generator.next_label;
+            generator.next_label += 1;
+            let top_label = format!("DO_{id:04}_TOP");
+            let end_label = format!("DO_{id:04}_END");
+            let continue_label = format!("DO_{id:04}_CONTINUE");
+            generator
+                .loop_exit_stack
+                .push(LoopExit::Goto(end_label.clone()));
+            generator.loop_continue_stack.push(continue_label.clone());
+            let mut body_lines = Vec::new();
+            let body_result = body.iter().try_for_each(|statement| {
+                body_lines.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+                Some(())
+            });
+            generator.loop_continue_stack.pop();
+            generator.loop_exit_stack.pop();
+            body_result?;
+            let mut lines = vec![top_label.clone()];
+            if let Some((kind, prelude, condition)) = pre {
+                lines.extend(prelude);
+                let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
+                    "= 0"
+                } else {
+                    "<> 0"
+                };
+                lines.push(format!("IF ({condition}) {operator} THEN GOTO {end_label}"));
+            }
+            lines.extend(body_lines.into_iter().map(|line| format!("    {line}")));
+            lines.push(format!("{continue_label}:"));
+            if let Some((kind, prelude, condition)) = post {
+                lines.extend(prelude.into_iter().map(|line| format!("    {line}")));
+                let operator = if kind == crate::semantic_ir::LoopConditionKind::While {
+                    "<> 0"
+                } else {
+                    "= 0"
+                };
+                lines.push(format!("IF ({condition}) {operator} THEN GOTO {top_label}"));
+            } else {
+                lines.push(format!("GOTO {top_label}"));
+            }
+            lines.push(format!("{end_label}:"));
+            lines.push("REM END DO".to_string());
+            Some(lines)
+        }
+        Kind::SelectCase {
+            selector,
+            cases,
+            else_body,
+        } => {
+            let (selector_prelude, selector_text) = if let Some(rendered) =
+                generator.semantic_const_expression(selector, Some(function))
+            {
+                (Vec::new(), rendered)
+            } else {
+                generator.semantic_expression_with_prelude(selector, Some(function))?
+            };
+            let id = generator.next_label;
+            generator.next_label += 1;
+            let end_label = format!("SEL_{id:04}_END");
+            let temp_id = generator.next_label;
+            generator.next_label += 1;
+            let suffix = selector
+                .value_type
+                .suffix()
+                .map(|suffix| suffix.to_string())
+                .unwrap_or_default();
+            let temp = format!("BCCT{temp_id}{suffix}");
+            let case_labels = (0..cases.len())
+                .map(|index| format!("SEL_{id:04}_C{index}"))
+                .collect::<Vec<_>>();
+            let else_label = format!("SEL_{id:04}_ELSE");
+            let mut rendered_cases = Vec::new();
+            for clause in cases {
+                let mut values = Vec::new();
+                for value in &clause.values {
+                    values.push(match value {
+                        crate::semantic_ir::CaseValue::Value {
+                            first,
+                            range_end: None,
+                            ..
+                        } => {
+                            format!(
+                                "{temp} = {}",
+                                generator.semantic_const_expression(first, Some(function))?
+                            )
+                        }
+                        crate::semantic_ir::CaseValue::Value {
+                            first,
+                            range_end: Some(last),
+                            ..
+                        } => {
+                            let first =
+                                generator.semantic_const_expression(first, Some(function))?;
+                            let last = generator.semantic_const_expression(last, Some(function))?;
+                            format!("{temp} >= {first} AND {temp} <= {last}")
+                        }
+                        crate::semantic_ir::CaseValue::Comparison {
+                            operator, value, ..
+                        } => {
+                            let value =
+                                generator.semantic_const_expression(value, Some(function))?;
+                            let operator = match operator {
+                                crate::semantic_ir::ComparisonOperator::NotEqual => "<>",
+                                crate::semantic_ir::ComparisonOperator::LessOrEqual => "<=",
+                                crate::semantic_ir::ComparisonOperator::GreaterOrEqual => ">=",
+                                crate::semantic_ir::ComparisonOperator::Equal => "=",
+                                crate::semantic_ir::ComparisonOperator::Less => "<",
+                                crate::semantic_ir::ComparisonOperator::Greater => ">",
+                            };
+                            format!("{temp} {operator} {value}")
+                        }
+                    });
+                }
+                if values.is_empty() {
+                    return None;
+                }
+                rendered_cases.push(values.join(" OR "));
+            }
+            let mut rendered_bodies = Vec::new();
+            for clause in cases {
+                let mut lines = Vec::new();
+                for statement in &clause.body {
+                    lines.extend(basic_semantic_callable_statement(
+                        generator, statement, function,
+                    )?);
+                }
+                rendered_bodies.push(lines);
+            }
+            let mut rendered_else = Vec::new();
+            for statement in else_body {
+                rendered_else.extend(basic_semantic_callable_statement(
+                    generator, statement, function,
+                )?);
+            }
+            let mut lines = selector_prelude;
+            lines.push(format!("{temp} = {selector_text}"));
+            for (index, condition) in rendered_cases.iter().enumerate() {
+                lines.push(format!(
+                    "IF ({condition}) <> 0 THEN GOTO {}",
+                    case_labels[index]
+                ));
+            }
+            lines.push(format!(
+                "GOTO {}",
+                if else_body.is_empty() {
+                    &end_label
+                } else {
+                    &else_label
+                }
+            ));
+            for (index, body) in rendered_bodies.into_iter().enumerate() {
+                lines.push(format!("{}:", case_labels[index]));
+                lines.extend(body.into_iter().map(|line| format!("    {line}")));
+                lines.push(format!("    GOTO {end_label}"));
+            }
+            if !else_body.is_empty() {
+                lines.push(format!("{else_label}:"));
+                lines.extend(rendered_else.into_iter().map(|line| format!("    {line}")));
+            }
+            lines.push(format!("{end_label}:"));
+            lines.push("REM END SELECT".to_string());
+            Some(lines)
+        }
+        _ => basic_semantic_callable_leaf(generator, semantic, function),
+    }
+}
+
+fn basic_semantic_print_body(
+    generator: &mut CodeGenerator,
+    tokens: &[crate::semantic_ir::PrintToken],
+    function: Option<&FunctionInfo>,
+) -> Option<(Vec<String>, String)> {
+    use crate::semantic_ir::PrintToken;
+    let mut body = String::new();
+    let has_callable_expression = tokens.iter().any(|token| {
+        matches!(token, PrintToken::Expression(expression)
+            if generator.semantic_expression_contains_callable_call(expression))
+    });
+    let expression_count = tokens
+        .iter()
+        .filter(|token| matches!(token, PrintToken::Expression(_)))
+        .count();
+    let mut lines = Vec::new();
+    let mut after_separator = false;
+    for token in tokens {
+        match token {
+            PrintToken::Expression(expression) => {
+                let rendered = if has_callable_expression {
+                    let (mut prelude, mut value) =
+                        generator.semantic_expression_with_prelude(expression, function)?;
+                    if expression_count == 1
+                        && matches!(expression.kind, crate::semantic_ir::ExpressionKind::Call { .. })
+                        && prelude.last().is_some_and(|line| {
+                            line.strip_prefix(&format!("{value} = ")).is_some()
+                        })
+                    {
+                        let line = prelude.pop().expect("checked call result");
+                        value = line
+                            .split_once(" = ")
+                            .expect("checked call result assignment")
+                            .1
+                            .to_string();
+                        generator.next_label = generator.next_label.saturating_sub(1);
+                    } else if expression_count > 1 {
+                        let suffix = expression
+                            .value_type
+                            .suffix()
+                            .map(|suffix| suffix.to_string())
+                            .unwrap_or_default();
+                        let snapshot = generator.next_temp_var_suffixed(&suffix);
+                        prelude.push(format!("{snapshot} = {value}"));
+                        value = snapshot;
+                    }
+                    lines.extend(prelude);
+                    value
+                } else {
+                    generator.semantic_const_expression(expression, function)?
+                };
+                if after_separator {
+                    body.push(' ');
+                }
+                body.push_str(&rendered);
+                after_separator = false;
+            }
+            PrintToken::Comma { .. } => {
+                body.push(',');
+                after_separator = true;
+            }
+            PrintToken::Semicolon { .. } => {
+                body.push(';');
+                after_separator = true;
+            }
+        }
+    }
+    Some((
+        lines,
+        if body.is_empty() {
+            String::new()
+        } else {
+            format!(" {body}")
+        },
+    ))
+}
+
+fn basic_semantic_io_values(
+    generator: &mut CodeGenerator,
+    values: &[crate::semantic_ir::Expression],
+    function: Option<&FunctionInfo>,
+) -> Option<(Vec<String>, Vec<String>)> {
+    let has_callable = values
+        .iter()
+        .any(|value| generator.semantic_expression_contains_callable_call(value));
+    let mut lines = Vec::new();
+    let mut rendered = Vec::with_capacity(values.len());
+    for value in values {
+        let text = if has_callable {
+            let (mut prelude, mut text) =
+                generator.semantic_expression_with_prelude(value, function)?;
+            if values.len() == 1
+                && matches!(value.kind, crate::semantic_ir::ExpressionKind::Call { .. })
+                && prelude.last().is_some_and(|line| {
+                    line.strip_prefix(&format!("{text} = ")).is_some()
+                })
+            {
+                let line = prelude.pop().expect("checked call result");
+                text = line
+                    .split_once(" = ")
+                    .expect("checked call result assignment")
+                    .1
+                    .to_string();
+                generator.next_label = generator.next_label.saturating_sub(1);
+            } else if values.len() > 1 {
+                let suffix = value
+                    .value_type
+                    .suffix()
+                    .map(|suffix| suffix.to_string())
+                    .unwrap_or_default();
+                let snapshot = generator.next_temp_var_suffixed(&suffix);
+                prelude.push(format!("{snapshot} = {text}"));
+                text = snapshot;
+            }
+            lines.extend(prelude);
+            text
+        } else {
+            generator.semantic_const_expression(value, function)?
+        };
+        rendered.push(text);
+    }
+    Some((lines, rendered))
+}
+
+fn basic_semantic_input_prompt(prompt: &crate::semantic_ir::InputPrompt) -> String {
+    let text = prompt
+        .text
+        .strip_prefix('"')
+        .and_then(|text| text.strip_suffix('"'))
+        .unwrap_or(&prompt.text)
+        .replace("\"\"", "\"");
+    format!("\"{}\"; ", escape_string(&text))
+}
+
+fn basic_semantic_assignment(
+    generator: &mut CodeGenerator,
+    target: &crate::semantic_ir::Expression,
+    operator: crate::semantic_ir::AssignmentOperator,
+    value: &crate::semantic_ir::Expression,
+    current_function: Option<&FunctionInfo>,
+) -> Option<Vec<String>> {
+    use crate::semantic_ir::{AssignmentOperator, ExpressionKind};
+    let (mut prelude, target) = basic_semantic_lvalue(generator, target, current_function)?;
+    let (value_prelude, mut rendered_value) =
+        if let Some(value) = generator.semantic_const_expression(value, current_function) {
+            (Vec::new(), value)
+        } else {
+            generator.semantic_expression_with_prelude(value, current_function)?
+        };
+    prelude.extend(value_prelude);
+    if let ExpressionKind::Call { name, .. } = &value.kind {
+        if let Some(info) = generator.ordinary_function_info(&BasicIdent::parse(name)) {
+            let result_name = info.result.as_basic();
+            if prelude.last() == Some(&format!("{rendered_value} = {result_name}")) {
+                prelude.pop();
+                generator.next_label = generator.next_label.saturating_sub(1);
+                rendered_value = result_name;
+            }
+        }
+    }
+    let expression = match operator {
+        AssignmentOperator::Assign => rendered_value,
+        AssignmentOperator::Add => format!("{target} + {rendered_value}"),
+        AssignmentOperator::Subtract => format!("{target} - {rendered_value}"),
+        AssignmentOperator::Multiply => format!("{target} * {rendered_value}"),
+        AssignmentOperator::Divide => format!("{target} / {rendered_value}"),
+    };
+    prelude.push(format!("{target} = {expression}"));
+    Some(prelude)
+}
+
+fn basic_semantic_comment(block: bool, text: &str) -> Vec<String> {
+    if !block {
+        let body = text
+            .strip_prefix('\'')
+            .or_else(|| text.strip_prefix("//"))
+            .unwrap_or(text);
+        return vec![format!("' {}", body.trim_start())];
+    }
+
+    let body = text
+        .strip_prefix("/*")
+        .and_then(|body| body.strip_suffix("*/"))
+        .unwrap_or(text);
+    let lines = body
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            trimmed
+                .strip_prefix('*')
+                .map(|line| line.trim())
+                .unwrap_or(trimmed)
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    let start = lines.iter().position(|line| !line.is_empty()).unwrap_or(0);
+    let end = lines
+        .iter()
+        .rposition(|line| !line.is_empty())
+        .map(|index| index + 1)
+        .unwrap_or(start);
+    lines[start..end]
+        .iter()
+        .map(|line| {
+            if line.is_empty() {
+                String::new()
+            } else {
+                format!("' {line}")
+            }
+        })
+        .collect()
+}
+
+fn basic_semantic_expression_statement(
+    generator: &mut CodeGenerator,
+    expression: &crate::semantic_ir::Expression,
+    function: Option<&FunctionInfo>,
+) -> Option<Vec<String>> {
+    use crate::semantic_ir::{ExpressionKind, SemanticValueType};
+    if let ExpressionKind::Call { name, arguments } = &expression.kind {
+        let callable = BasicIdent::parse(name);
+        if let Some(info) = generator.ordinary_function_info(&callable).cloned() {
+            if info.is_procedure {
+                let parameters = info.semantic_parameters.as_ref()?;
+                if arguments.len() > parameters.len()
+                    || parameters.len() != info.params.len()
+                    || info.params.iter().zip(parameters).enumerate().any(
+                        |(index, ((ast, _), semantic))| {
+                            !ast.name.as_basic().eq_ignore_ascii_case(&semantic.name)
+                                || info.param_ranks.get(index).copied().flatten().unwrap_or(0)
+                                    != semantic.array_axes
+                        },
+                    )
+                    || parameters
+                        .iter()
+                        .skip(arguments.len())
+                        .any(|parameter| parameter.default.is_none())
+                {
+                    return None;
+                }
+                let mut complete_arguments = arguments.clone();
+                complete_arguments.extend(
+                    parameters
+                        .iter()
+                        .skip(arguments.len())
+                        .filter_map(|parameter| parameter.default.clone()),
+                );
+                let mut lines = Vec::new();
+                let mut byref_copyback = Vec::new();
+                let mut array_copyback = Vec::new();
+                for (index, (argument, (_, lowered))) in
+                    complete_arguments.iter().zip(&info.params).enumerate()
+                {
+                    let semantic_parameter = &parameters[index];
+                    if semantic_parameter.array_axes > 0 {
+                        let ExpressionKind::Name(argument_name) = &argument.kind else {
+                            return None;
+                        };
+                        let source_ident = BasicIdent::parse(argument_name);
+                        let rank = generator.resolve_array_rank(&source_ident, function)?;
+                        if rank != semantic_parameter.array_axes {
+                            return None;
+                        }
+                        let expected = semantic_parameter
+                            .value_type
+                            .suffix()
+                            .and_then(TypeSuffix::from_char)?;
+                        if generator.resolve_array_suffix(&source_ident, function)? != expected {
+                            return None;
+                        }
+                        let source = generator.ident(&source_ident, function);
+                        let bounds = info.param_bound_vars.get(index)?;
+                        let capacities = info.param_capacities.get(index)?;
+                        if bounds.len() != rank {
+                            return None;
+                        }
+                        for (axis, bound_var) in bounds.iter().enumerate() {
+                            let bound =
+                                generator.resolve_axis_bound(&source_ident, axis, function)?;
+                            lines.push(format!("{bound_var} = {bound}"));
+                            if let Some(capacity) = capacities.get(axis) {
+                                lines.push(format!(
+                                    "IF {bound_var} > {capacity} THEN PRINT \"runtime error: `{}` of `{}` needs \"; {bound_var}; \" elements along axis {axis}, but its storage only holds {capacity}\" : STOP",
+                                    semantic_parameter.name, info.source_name,
+                                ));
+                            }
+                        }
+                        let loop_vars = (0..rank)
+                            .map(|_| generator.next_temp_var())
+                            .collect::<Vec<_>>();
+                        lines.extend(array_copy_lines(
+                            &lowered.as_basic(),
+                            &source,
+                            bounds,
+                            "copy array argument into transpiled procedure storage",
+                            &loop_vars,
+                        ));
+                        if semantic_parameter.passing == Some(crate::semantic_ir::Passing::ByRef) {
+                            array_copyback.push((
+                                source,
+                                lowered.as_basic(),
+                                bounds.to_vec(),
+                                rank,
+                            ));
+                        }
+                        continue;
+                    }
+                    let expected = semantic_parameter
+                        .value_type
+                        .suffix()
+                        .and_then(TypeSuffix::from_char)?;
+                    if argument
+                        .value_type
+                        .suffix()
+                        .and_then(TypeSuffix::from_char)?
+                        != expected
+                    {
+                        return None;
+                    }
+                    if semantic_parameter.passing == Some(crate::semantic_ir::Passing::ByRef) {
+                        let ExpressionKind::Name(argument_name) = &argument.kind else {
+                            return None;
+                        };
+                        let caller = generator.ident(&BasicIdent::parse(argument_name), function);
+                        lines.push(format!("{} = {caller}", lowered.as_basic()));
+                        byref_copyback.push((caller, lowered.as_basic()));
+                    } else {
+                        let (prelude, value) =
+                            generator.semantic_expression_with_prelude(argument, function)?;
+                        lines.extend(prelude);
+                        lines.push(format!("{} = {value}", lowered.as_basic()));
+                    }
+                }
+                lines.push(format!("GOSUB {}", info.label));
+                for (source, destination, bounds, rank) in array_copyback {
+                    let loop_vars = (0..rank)
+                        .map(|_| generator.next_temp_var())
+                        .collect::<Vec<_>>();
+                    lines.extend(array_copy_lines(
+                        &source,
+                        &destination,
+                        &bounds,
+                        "copy mutated array argument back to caller storage",
+                        &loop_vars,
+                    ));
+                }
+                lines.extend(
+                    byref_copyback
+                        .into_iter()
+                        .map(|(caller, lowered)| format!("{caller} = {lowered}")),
+                );
+                return Some(lines);
+            }
+        }
+    }
+    if let ExpressionKind::Call { name, arguments } = &expression.kind {
+        let callable = BasicIdent::parse(name);
+        let has_typed_callable = generator.ordinary_function_info(&callable).is_some()
+            || generator.function_info(&callable).is_some();
+        if !has_typed_callable
+            && arguments.iter().any(|argument| {
+                matches!(&argument.kind, ExpressionKind::Name(argument_name)
+                    if generator.resolve_array_rank(
+                        &BasicIdent::parse(argument_name),
+                        function,
+                    ).is_some())
+            })
+        {
+            // The call signature is unresolved, so the typed IR cannot tell
+            // whether this array name is a whole-array argument or a scalar
+            // value. Preserve the legacy statement emission in that case.
+            return None;
+        }
+    }
+    if let ExpressionKind::Member {
+        base: Some(base),
+        member,
+        arguments: Some(arguments),
+    } = &expression.kind
+    {
+        if arguments.is_empty() {
+            if let ExpressionKind::Name(name) = &base.kind {
+                let receiver = match base.value_type {
+                    SemanticValueType::String => Some(TypeSuffix::String),
+                    SemanticValueType::Integer => Some(TypeSuffix::Integer),
+                    SemanticValueType::Long => Some(TypeSuffix::Long),
+                    SemanticValueType::Single => Some(TypeSuffix::Single),
+                    SemanticValueType::Double => Some(TypeSuffix::Double),
+                    SemanticValueType::Unknown | SemanticValueType::Boolean => None,
+                };
+                if let Some(info) = receiver
+                    .and_then(|receiver| generator.method_info(receiver, member))
+                    .cloned()
+                {
+                    let receiver = Expr::Ident(BasicIdent::parse(name));
+                    return Some(generator.call_lines(&info, &[receiver], function));
+                }
+            }
+        }
+    }
+    if let ExpressionKind::Member {
+        base: Some(base),
+        member,
+        arguments: Some(arguments),
+    } = &expression.kind
+    {
+        let receiver = match base.value_type {
+            SemanticValueType::String => Some(TypeSuffix::String),
+            SemanticValueType::Integer => Some(TypeSuffix::Integer),
+            SemanticValueType::Long => Some(TypeSuffix::Long),
+            SemanticValueType::Single => Some(TypeSuffix::Single),
+            SemanticValueType::Double => Some(TypeSuffix::Double),
+            SemanticValueType::Unknown | SemanticValueType::Boolean => None,
+        }?;
+        let info = generator.method_info(receiver, member)?.clone();
+        let mut call_arguments = Vec::with_capacity(arguments.len() + 1);
+        call_arguments.push(base.as_ref().clone());
+        call_arguments.extend(arguments.iter().cloned());
+        if call_arguments.len() != info.params.len() || info.param_ranks.iter().any(Option::is_some)
+        {
+            return None;
+        }
+        let mut lines = Vec::new();
+        let mut byref_copyback = Vec::new();
+        for (position, (argument, (parameter, lowered))) in
+            call_arguments.iter().zip(&info.params).enumerate()
+        {
+            if parameter.mode == ParamMode::ByRef {
+                let ExpressionKind::Name(name) = &argument.kind else {
+                    return None;
+                };
+                let caller = generator.ident(&BasicIdent::parse(name), function);
+                lines.push(format!("{} = {caller}", lowered.as_basic()));
+                byref_copyback.push((caller, lowered.as_basic()));
+            } else {
+                let (prelude, rendered) =
+                    generator.semantic_expression_with_prelude(argument, function)?;
+                lines.extend(prelude);
+                let semantic_position = position.checked_sub(usize::from(info.receiver.is_some()));
+                let suffix = semantic_position
+                    .and_then(|position| info.semantic_parameters.as_ref()?.get(position))
+                    .and_then(|parameter| parameter.value_type.suffix())
+                    .and_then(TypeSuffix::from_char)
+                    .or(parameter.name.suffix)
+                    .map(|suffix| suffix.to_string())
+                    .unwrap_or_default();
+                let temporary = generator.next_temp_var_suffixed(&suffix);
+                lines.push(format!("{temporary} = {rendered}"));
+                lines.push(format!("{} = {temporary}", lowered.as_basic()));
+            }
+        }
+        lines.push(format!("GOSUB {}", info.label));
+        for (caller, lowered) in byref_copyback {
+            lines.push(format!("{caller} = {lowered}"));
+        }
+        return Some(lines);
+    }
+
+    let (mut lines, rendered) = generator.semantic_expression_with_prelude(expression, function)?;
+    if matches!(expression.kind, ExpressionKind::Call { .. })
+        && lines
+            .last()
+            .is_some_and(|line| line.starts_with(&format!("{rendered} = ")))
+    {
+        lines.pop();
+        generator.next_label = generator.next_label.saturating_sub(1);
+    } else if lines.is_empty() {
+        lines.push(rendered);
+    }
+    Some(lines)
+}
+
+fn semantic_dim_type_suffix(annotation: &str) -> Option<TypeSuffix> {
+    match annotation.to_ascii_uppercase().as_str() {
+        "STRING" => Some(TypeSuffix::String),
+        "INTEGER" | "INT16" => Some(TypeSuffix::Integer),
+        "LONG" | "INT32" => Some(TypeSuffix::Long),
+        "SINGLE" => Some(TypeSuffix::Single),
+        "DOUBLE" => Some(TypeSuffix::Double),
+        _ => None,
+    }
+}
+
+fn source_position(
+    source: &crate::semantic_ir::SemanticSource,
+    offset: usize,
+) -> Option<crate::diagnostics::SourcePos> {
+    let tail = source.text.get(offset..)?;
+    let leading_trivia = tail
+        .char_indices()
+        .find(|(_, character)| !character.is_whitespace())?
+        .0;
+    let prefix = source.text.get(..offset + leading_trivia)?;
+    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+    let column = prefix.rsplit('\n').next()?.chars().count() + 1;
+    Some(crate::diagnostics::SourcePos::new(
+        &source.filename,
+        line,
+        column,
+    ))
 }
 
 impl CodeGenerator {
@@ -221,6 +8177,9 @@ impl CodeGenerator {
             taken_names: RefCell::new(HashSet::new()),
             record_buffer_names: HashSet::new(),
             const_var_names: HashMap::new(),
+            semantic_const_initializers: HashMap::new(),
+            semantic_records: Vec::new(),
+            semantic_top_level_dims: HashMap::new(),
             synthesized_buffer_names: HashSet::new(),
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
@@ -261,32 +8220,44 @@ impl CodeGenerator {
             .as_ref()
             .map(|scopes| scopes.global_names.iter().cloned().collect())
             .unwrap_or_else(|| collect_program_names(program));
+        let semantic_record_storage = resolved
+            .semantic_module
+            .as_ref()
+            .map(semantic_record_storage_names)
+            .unwrap_or_default();
+        taken.extend(semantic_record_storage.iter().cloned());
+        if let Some(scopes) = resolved.semantic_name_scopes.as_ref() {
+            for names in scopes.callable_globals.values() {
+                taken.extend(names.iter().cloned());
+            }
+        }
         for block in &resolved.common_blocks {
             for variable in &block.vars {
                 taken.insert(variable.name.as_basic().to_ascii_lowercase());
             }
         }
-        let known_callables: HashSet<String> = if let Some(module) = resolved.semantic_module.as_ref() {
-            module
-                .callables
-                .iter()
-                .flat_map(|callable| {
-                    let typed = callable.name.to_ascii_lowercase();
-                    let base = typed
-                        .trim_end_matches(['$', '%', '&', '!', '#'])
-                        .to_string();
-                    [typed, base].into_iter()
-                })
-                .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
-                .collect()
-        } else {
-            program
-                .functions
-                .iter()
-                .map(|f| f.name.name.to_ascii_lowercase())
-                .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
-                .collect()
-        };
+        let known_callables: HashSet<String> =
+            if let Some(module) = resolved.semantic_module.as_ref() {
+                module
+                    .callables
+                    .iter()
+                    .flat_map(|callable| {
+                        let typed = callable.name.to_ascii_lowercase();
+                        let base = typed
+                            .trim_end_matches(['$', '%', '&', '!', '#'])
+                            .to_string();
+                        [typed, base].into_iter()
+                    })
+                    .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
+                    .collect()
+            } else {
+                program
+                    .functions
+                    .iter()
+                    .map(|f| f.name.name.to_ascii_lowercase())
+                    .chain(BASIC_BUILTINS.iter().map(|s| s.to_string()))
+                    .collect()
+            };
         let param_capacities = infer_array_param_capacities(
             program,
             resolved.semantic_module.as_ref(),
@@ -302,10 +8273,25 @@ impl CodeGenerator {
             .as_ref()
             .map(crate::semantic_ir::SemanticModule::top_level_dim_types)
             .unwrap_or_default();
+        self.semantic_const_initializers = resolved
+            .semantic_module
+            .as_ref()
+            .map(crate::semantic_ir::SemanticModule::top_level_const_initializers)
+            .unwrap_or_default();
+        self.semantic_records = resolved
+            .semantic_module
+            .as_ref()
+            .map(|module| module.records.clone())
+            .unwrap_or_default();
+        self.semantic_top_level_dims = resolved
+            .semantic_module
+            .as_ref()
+            .map(crate::semantic_ir::SemanticModule::top_level_dim_declarations)
+            .unwrap_or_default();
         let record_buffer_names = resolved
             .semantic_module
             .as_ref()
-            .map(crate::semantic_ir::SemanticModule::record_buffer_names)
+            .map(semantic_record_buffer_names)
             .unwrap_or_else(|| resolved.record_buffer_names.clone());
         let mut functions = Vec::new();
         for f in &program.functions {
@@ -313,77 +8299,57 @@ impl CodeGenerator {
                 .get(&f.name.name.to_ascii_lowercase())
                 .cloned()
                 .unwrap_or_default();
-            let semantic_callable = resolved.semantic_module.as_ref().and_then(|module| {
-                module
-                    .callables
-                    .iter()
-                    .find(|callable| callable.name.eq_ignore_ascii_case(&f.name.as_basic()))
-                    .filter(|callable| callable.receiver.is_some() == f.receiver.is_some())
-                    .filter(|callable| {
-                        let Some(receiver) = callable.receiver.as_deref() else { return true; };
-                        match f.receiver {
-                            Some(TypeSuffix::Integer) => receiver.eq_ignore_ascii_case("integer"),
-                            Some(TypeSuffix::Long) => receiver.eq_ignore_ascii_case("long"),
-                            Some(TypeSuffix::Single) => receiver.eq_ignore_ascii_case("single"),
-                            Some(TypeSuffix::Double) => receiver.eq_ignore_ascii_case("double"),
-                            Some(TypeSuffix::String) => receiver.eq_ignore_ascii_case("string"),
-                            None => true,
+            let semantic_callable = resolved
+                .semantic_module
+                .as_ref()
+                .and_then(|module| semantic_basic_callable_for_function(module, f));
+            let semantic_array_ranks =
+                semantic_callable.map(crate::semantic_ir::CallableSignature::array_ranks);
+            let semantic_dim_types =
+                semantic_callable.map(crate::semantic_ir::CallableSignature::dim_types);
+            let semantic_param_ranks = semantic_callable.map(|callable| {
+                let (ranks, observed) = callable.parameter_array_ranks();
+                for (index, uses) in observed.iter().enumerate() {
+                    let parameter = &callable.parameters[index];
+                    if uses.len() > 1 {
+                        self.diagnostics.push(Diagnostic::error(
+                            SourcePos::new("<validation>", 1, 1),
+                            format!(
+                                "parameter `{}` of `{}` is indexed with different numbers of subscripts in different places -- BASCAL can't tell how many dimensions it has",
+                                parameter.name, callable.name
+                            ),
+                        ));
+                    } else if let Some(used) = uses.first() {
+                        match parameter.array_axes {
+                            0 => self.diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                format!(
+                                    "parameter `{}` of `{}` is indexed as an array, but its declaration doesn't say so. Give it an explicit rank, e.g. `{}(?)`",
+                                    parameter.name, callable.name, parameter.name
+                                ),
+                            )),
+                            declared if declared != *used => self.diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                format!(
+                                    "parameter `{}` of `{}` is declared with {declared} dimensions but indexed with {used} subscript{} in the body",
+                                    parameter.name, callable.name, if *used == 1 { "" } else { "s" }
+                                ),
+                            )),
+                            _ => {}
                         }
-                    })
-                    .filter(|callable| {
-                        use crate::semantic_ir::CallableKind;
-                        match (f.receiver.is_some(), f.is_procedure, callable.kind) {
-                            (true, false, CallableKind::Method | CallableKind::FluentMethod | CallableKind::InlineMethod) => true,
-                            (false, true, CallableKind::Procedure) => true,
-                            (false, false, CallableKind::Function) => true,
-                            _ => false,
-                        }
-                    })
-                    .filter(|callable| callable.parameters.len() == f.params.len())
-                    .filter(|callable| {
-                        callable.result_type.as_deref().map_or(f.is_procedure, |result| {
-                            !f.is_procedure
-                                && match f.name.suffix {
-                                    Some(TypeSuffix::Integer) => result == "%",
-                                    Some(TypeSuffix::Long) => result == "&",
-                                    Some(TypeSuffix::Single) => result == "!",
-                                    Some(TypeSuffix::Double) => result == "#",
-                                    Some(TypeSuffix::String) => result == "$",
-                                    None => false,
-                                }
-                        })
-                    })
-                    .filter(|callable| {
-                        callable
-                            .parameters
-                            .iter()
-                            .zip(&f.params)
-                            .all(|(semantic, legacy)| {
-                                (semantic.array_axes > 0) == legacy.axes.is_some()
-                                    && semantic.type_suffix.as_deref().map_or(true, |suffix| {
-                                        legacy
-                                            .name
-                                            .suffix
-                                            .map_or(false, |legacy_suffix| suffix == legacy_suffix.to_string())
-                                    })
-                                    && semantic.passing.map_or(true, |passing| {
-                                        matches!(passing, crate::semantic_ir::Passing::ByRef)
-                                            == (legacy.mode == ParamMode::ByRef)
-                                    })
-                            })
-                    })
+                    }
+                }
+                ranks
             });
-            let semantic_array_ranks = semantic_callable.map(crate::semantic_ir::CallableSignature::array_ranks);
-            let semantic_dim_types = semantic_callable.map(crate::semantic_ir::CallableSignature::dim_types);
-            let semantic_param_ranks = semantic_callable.map(|callable| callable.parameters.iter().map(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes)).collect());
-            let semantic_globals = semantic_callable.and_then(|_| {
-                resolved
-                    .semantic_name_scopes
-                    .as_ref()
-                    .and_then(|scopes| scopes.callable_globals.get(&f.name.as_basic().to_ascii_lowercase()))
-                    .map(|globals| globals.iter().cloned().collect())
+            let semantic_globals = semantic_callable.map(|callable| {
+                let mut globals: HashSet<String> =
+                    crate::semantic_ir::SemanticModule::global_declarations_in(&callable.body)
+                        .into_iter()
+                        .collect();
+                globals.extend(semantic_record_storage.iter().cloned());
+                globals
             });
-            functions.push(FunctionInfo::from_def(
+            let mut function_info = FunctionInfo::from_def(
                 f,
                 &mut taken,
                 &known_callables,
@@ -393,7 +8359,14 @@ impl CodeGenerator {
                 semantic_array_ranks,
                 semantic_dim_types,
                 semantic_globals,
-            ));
+                semantic_callable.map(|callable| callable.parameters.clone()),
+                semantic_callable,
+            );
+            if let Some(callable) = semantic_callable {
+                function_info.semantic_const_initializers = callable.const_initializers();
+                function_info.semantic_dim_declarations = callable.dim_declarations();
+            }
+            functions.push(function_info);
         }
         self.functions = functions;
         self.error_handler_procedures = if let Some(module) = resolved.semantic_module.as_ref() {
@@ -416,9 +8389,9 @@ impl CodeGenerator {
                     }
                     value_type => value_type,
                 };
-                let suffix = ident
-                    .suffix
-                    .or_else(|| value_type.suffix().and_then(TypeSuffix::from_char))
+                let suffix = value_type
+                    .suffix()
+                    .and_then(TypeSuffix::from_char)
                     .unwrap_or(TypeSuffix::Integer);
                 let generated = BasicIdent {
                     name: const_var_name(&ident.name),
@@ -479,7 +8452,26 @@ impl CodeGenerator {
             self.line(&format!("COMMON {vars}"));
         }
 
-        if !program.declarations.is_empty() {
+        if let Some(module) = resolved.semantic_module.as_ref() {
+            let unresolved = module
+                .dependencies
+                .iter()
+                .filter(|dependency| !dependency.resolved)
+                .collect::<Vec<_>>();
+            if !unresolved.is_empty() {
+                self.line("' TODO: resolve BASCAL dependency selectors during link");
+                for dependency in unresolved {
+                    match dependency.kind {
+                        crate::semantic_ir::DependencyKind::Require => {
+                            self.line(&format!("' require {}", dependency.path))
+                        }
+                        crate::semantic_ir::DependencyKind::Import => {
+                            self.line(&format!("' import {} (alias for require)", dependency.path))
+                        }
+                    }
+                }
+            }
+        } else if !program.declarations.is_empty() {
             self.line("' TODO: resolve BASCAL dependency selectors during link");
             for declaration in &program.declarations {
                 match declaration {
@@ -495,17 +8487,67 @@ impl CodeGenerator {
 
         self.emit_array_param_storage_dims();
 
-        if !program.statements.is_empty() {
+        // Prefer whole-stream typed emission: it has no AST alignment step
+        // and lets the semantic IR own statement order and structure. The
+        // aligned dispatcher remains a compatibility bridge for streams
+        // containing nodes the typed emitter has not migrated yet. Record DSL
+        // expansions are one such bridge until their GET/PUT transformations
+        // are represented in typed IR.
+        let record_stream_is_typed = !has_untyped_lowered_record_operations(
+            &program.statements,
+            resolved
+                .semantic_module
+                .as_ref()
+                .map(|module| module.lowered_record_files.as_slice())
+                .unwrap_or_default(),
+        );
+        let semantic_try_stream_is_typed = resolved
+            .semantic_module
+            .as_ref()
+            .is_some_and(|module| basic_semantic_try_stream_is_typed(module, &program.statements));
+        let semantic_intrinsics = if record_stream_is_typed {
+            resolved.semantic_module.as_ref().and_then(|module| {
+                basic_semantic_intrinsics(
+                    &mut self,
+                    module,
+                    &module.statements,
+                    semantic_try_stream_is_typed,
+                )
+            })
+        } else {
+            None
+        };
+        let source_dispatch = if semantic_intrinsics.is_none() && record_stream_is_typed {
+            resolved.semantic_module.as_ref().and_then(|module| {
+                basic_semantic_statements_by_source(&mut self, module, &program.statements)
+            })
+        } else {
+            None
+        };
+        if let Some(intrinsics) = semantic_intrinsics {
+            self.blank();
+            for intrinsic in intrinsics {
+                self.line(&intrinsic);
+            }
+        } else if source_dispatch.is_some() {
+            // The aligned dispatcher emitted each semantic or compatibility
+            // statement in source order.
+        } else if !program.statements.is_empty() {
             self.blank();
             self.statements(&program.statements, None);
         }
 
         if !program.functions.is_empty() {
-            if !ends_with_end(&program.statements) {
+            if !resolved
+                .semantic_module
+                .as_ref()
+                .map(crate::semantic_ir::SemanticModule::ends_with_end)
+                .unwrap_or_else(|| ends_with_end(&program.statements))
+            {
                 self.line("END");
             }
             for function in &program.functions {
-                self.function(function);
+                self.function(function, resolved.semantic_module.as_ref());
             }
         }
         if !self.diagnostics.is_empty() {
@@ -522,7 +8564,13 @@ impl CodeGenerator {
             // second, real pass over the augmented program produces
             // identical numbers for every line that mattered here.
             let (_, breakpoints) = number_basic_lines(&self.output, self.line_numbers);
-            if program.functions.is_empty() && !ends_with_end(&program.statements) {
+            if program.functions.is_empty()
+                && !resolved
+                    .semantic_module
+                    .as_ref()
+                    .map(crate::semantic_ir::SemanticModule::ends_with_end)
+                    .unwrap_or_else(|| ends_with_end(&program.statements))
+            {
                 self.line("END");
             }
             self.emit_source_file_lookup_subroutine(&breakpoints);
@@ -544,8 +8592,8 @@ impl CodeGenerator {
                 info.params
                     .iter()
                     .enumerate()
-                    .filter_map(move |(index, (param, lowered))| {
-                        param.axes.as_ref()?;
+                    .filter_map(move |(index, (_, lowered))| {
+                        info.param_ranks.get(index).copied().flatten()?;
                         let capacities = info.param_capacities.get(index)?;
                         if capacities.is_empty() {
                             return None;
@@ -567,29 +8615,23 @@ impl CodeGenerator {
         self.lines(lines);
     }
 
-    fn function(&mut self, function: &FunctionDef) {
+    fn function(
+        &mut self,
+        function: &FunctionDef,
+        semantic_module: Option<&crate::semantic_ir::SemanticModule>,
+    ) {
         let info = self
             .function_info(&function.name)
             .expect("function table should contain every function")
             .clone();
-        let params = function
+        let params = info
             .params
             .iter()
-            .map(|p| {
-                BasicIdent {
-                    name: p.name.name.to_ascii_lowercase(),
-                    suffix: p.name.suffix,
-                }
-                .as_basic()
-            })
+            .map(|(parameter, _)| parameter.name.as_basic())
             .collect::<Vec<_>>()
             .join(", ");
-        let lowered_name = BasicIdent {
-            name: function.name.name.to_ascii_lowercase(),
-            suffix: function.name.suffix,
-        }
-        .as_basic();
-        let kind = if function.is_procedure {
+        let lowered_name = info.source_name.as_basic().to_ascii_lowercase();
+        let kind = if info.is_procedure {
             "procedure"
         } else {
             "function"
@@ -598,18 +8640,61 @@ impl CodeGenerator {
         self.line(&format!("' {kind} {}({})", lowered_name, params));
         self.line(&format!("{}:", info.label));
         self.indent += 1;
-        self.statements(&function.body, Some(&info));
+        let semantic_dispatch = semantic_module
+            .and_then(|module| basic_semantic_callable_statements_by_source(module, function));
+        let semantic_source_filename = semantic_module
+            .and_then(|module| semantic_basic_callable_for_function(module, function))
+            .and_then(|callable| semantic_module?.sources.get(callable.source_index))
+            .map(|source| source.filename.clone());
+        for (index, statement) in function.body.iter().enumerate() {
+            let semantic_statement = semantic_dispatch
+                .as_ref()
+                .and_then(|items| items.get(index).copied().flatten());
+            let semantic_lines = semantic_dispatch
+                .as_ref()
+                .and_then(|items| items.get(index).copied().flatten())
+                .and_then(|semantic| basic_semantic_callable_statement(self, semantic, &info));
+            if let Some(lines) = semantic_lines {
+                let filename = semantic_statement
+                    .and(semantic_source_filename.as_deref())
+                    .unwrap_or(&statement.pos.filename);
+                if self.needs_source_lookup && self.current_marker_file.as_deref() != Some(filename)
+                {
+                    self.current_marker_file = Some(filename.to_string());
+                    self.line(&source_file_marker(
+                        &crate::diagnostics::display_source_filename(filename),
+                    ));
+                }
+                for line in lines {
+                    self.line(&line);
+                }
+            } else {
+                self.statement(statement, Some(&info));
+            }
+        }
         // A procedure named as an `on error goto` target is entered via a
         // raw GOTO, never a GOSUB -- resolver::validate has already proven
         // it contains no `return` and never falls off the end, so the
         // usual implicit trailing RETURN below would be both unreachable
         // and, if that proof were ever wrong, a "RETURN without GOSUB"
         // crash. Skip it entirely for these, same as a raw label.
-        let is_unreturnable_error_handler = function.is_procedure
+        let is_unreturnable_error_handler = info.is_procedure
             && self
                 .error_handler_procedures
-                .contains(&function.name.name.to_ascii_lowercase());
-        if !ends_with_return(&function.body) && !is_unreturnable_error_handler {
+                .contains(&info.source_name.name.to_ascii_lowercase());
+        let ends_with_return = semantic_module
+            .as_ref()
+            .and_then(|module| {
+                semantic_basic_callable_for_function(module, function)
+                    .map(|callable| ends_with_semantic_return(&callable.body))
+            })
+            .unwrap_or_else(|| {
+                semantic_dispatch.as_ref().map_or_else(
+                    || ends_with_return(&function.body),
+                    |statements| ends_with_emitted_return(&function.body, statements),
+                )
+            });
+        if !ends_with_return && !is_unreturnable_error_handler {
             self.line("RETURN");
         }
         self.indent -= 1;
@@ -638,11 +8723,114 @@ impl CodeGenerator {
                 sizes,
             } => {
                 let base = self.ident(name, current_function);
-                let type_clause = name.suffix.is_none().then(|| {
-                    current_function
-                        .map(|function| function.local_dim_types.get(&name.as_basic().to_ascii_lowercase()))
-                        .unwrap_or_else(|| self.top_level_dim_types.get(&name.as_basic().to_ascii_lowercase()))
-                }).flatten()
+                let key = name.as_basic().to_ascii_lowercase();
+                let semantic_declaration = current_function
+                    .and_then(|function| function.semantic_dim_declarations.get(&key))
+                    .or_else(|| {
+                        current_function
+                            .is_none()
+                            .then(|| self.semantic_top_level_dims.get(&key))
+                            .flatten()
+                    });
+                let semantic_axes = semantic_declaration.and_then(|declaration| {
+                    if declaration
+                        .dimensions
+                        .iter()
+                        .any(|axis| matches!(axis, crate::semantic_ir::DimAxis::Inferred))
+                    {
+                        return None;
+                    }
+                    declaration
+                        .dimensions
+                        .iter()
+                        .map(|axis| match axis {
+                            crate::semantic_ir::DimAxis::Fixed(value) => {
+                                let literal = value.chars().next().is_some_and(|character| {
+                                    character.is_ascii_digit()
+                                        || character == '&'
+                                        || character == '"'
+                                });
+                                let rendered = if literal {
+                                    value.clone()
+                                } else {
+                                    self.ident(&BasicIdent::parse(value), None)
+                                };
+                                Some((rendered, literal))
+                            }
+                            crate::semantic_ir::DimAxis::Expression(expression) => self
+                                .semantic_const_expression(expression, current_function)
+                                .map(|value| {
+                                    let literal = matches!(
+                                        expression.kind,
+                                        crate::semantic_ir::ExpressionKind::Literal(_)
+                                    );
+                                    (value, literal)
+                                }),
+                            crate::semantic_ir::DimAxis::Inferred => None,
+                        })
+                        .collect::<Option<Vec<_>>>()
+                });
+                if let (Some(declaration), Some(axes)) = (semantic_declaration, semantic_axes) {
+                    let type_clause = name
+                        .suffix
+                        .is_none()
+                        .then(|| {
+                            declaration.type_annotation.as_deref().or_else(|| {
+                                current_function
+                                    .and_then(|function| function.local_dim_types.get(&key))
+                                    .or_else(|| self.top_level_dim_types.get(&key))
+                                    .map(String::as_str)
+                            })
+                        })
+                        .flatten()
+                        .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
+                        .unwrap_or_default();
+                    if declaration.array_axes == 0 {
+                        self.line(&format!("DIM {base}{type_clause}"));
+                    } else if axes.is_empty() {
+                        self.line(&format!("DIM {base}(){type_clause}"));
+                    } else {
+                        let rendered = axes
+                            .iter()
+                            .map(|(value, _)| value.clone())
+                            .collect::<Vec<_>>();
+                        self.line(&format!("DIM {base}({}){type_clause}", rendered.join(", ")));
+                        let frozen = axes
+                            .into_iter()
+                            .map(|(value, literal)| {
+                                if literal {
+                                    value
+                                } else {
+                                    let temp = self.next_temp_var();
+                                    self.line(&format!("{temp} = {value}"));
+                                    temp
+                                }
+                            })
+                            .collect();
+                        if let Some(function) = current_function {
+                            function.local_array_bounds.borrow_mut().insert(key, frozen);
+                        } else {
+                            self.top_level_array_bounds.insert(key, frozen);
+                        }
+                    }
+                    return;
+                }
+                let type_clause = name
+                    .suffix
+                    .is_none()
+                    .then(|| {
+                        current_function
+                            .map(|function| {
+                                function
+                                    .local_dim_types
+                                    .get(&name.as_basic().to_ascii_lowercase())
+                            })
+                            .unwrap_or_else(|| {
+                                self.top_level_dim_types
+                                    .get(&name.as_basic().to_ascii_lowercase())
+                            })
+                    })
+                    .flatten()
                     .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
                     .unwrap_or_default();
                 if sizes.is_empty() {
@@ -764,56 +8952,50 @@ impl CodeGenerator {
                 len,
                 value,
             } => {
-                // Left-to-right evaluation order, matching how the
-                // statement reads: target, then start, then len (if
-                // written), then value last -- same order `Statement::
-                // Assignment` flushes target before value. Each operand is
-                // evaluated exactly once and its *rendered text* reused
-                // below (for the call, and again for the final assignment)
-                // rather than re-running `self.expr` on the original
-                // `target` a second time -- `target` may be an array
-                // element whose index has side effects.
+                // Preserve left-to-right evaluation and snapshot every
+                // value before later operands can mutate it. Array indices
+                // already arrive in `target_prelude` as single-evaluation
+                // temporaries; reusing target_text preserves that lvalue.
                 let (target_prelude, target_text) = self.expr(target, current_function);
                 let (start_prelude, start_text) = self.expr(start, current_function);
                 let len_rendered = len.as_ref().map(|e| self.expr(e, current_function));
                 let (value_prelude, value_text) = self.expr(value, current_function);
                 self.lines(target_prelude);
+                let target_value = self.next_temp_var_suffixed("$");
+                self.line(&format!("{target_value} = {target_text}"));
                 self.lines(start_prelude);
+                let start_value = self.next_temp_var();
+                self.line(&format!("{start_value} = {start_text}"));
                 let len_text = match len_rendered {
                     Some((len_prelude, len_text)) => {
                         self.lines(len_prelude);
-                        len_text
+                        let len_value = self.next_temp_var();
+                        self.line(&format!("{len_value} = {len_text}"));
+                        Some(len_value)
                     }
-                    // Two-argument form (`MID$(a$, start) = value`): real
-                    // MBASIC/BASCOM behaves as if `len` were `LEN(value)`.
-                    None => format!("LEN({value_text})"),
+                    None => None,
                 };
                 self.lines(value_prelude);
+                let replacement = self.next_temp_var_suffixed("$");
+                self.line(&format!("{replacement} = {value_text}"));
+                let length_value = len_text.unwrap_or_else(|| format!("LEN({replacement})"));
 
-                // Transpiled into an ordinary call to com.bascal.stdlib.
-                // midAssign, auto-injected into the program (see
-                // `lib::inject_mid_assign_helper_if_used`) whenever this
-                // statement is used anywhere -- the same GOSUB-based
-                // call/return machinery every other function call already
-                // goes through, just fed pre-rendered argument text instead
-                // of re-evaluating `target`/`start`/`len`/`value` a second
-                // time (see `call_lines_from_rendered_scalars`).
-                let info = self
-                    .function_info(&mid_assign_helper_ident())
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "BASCAL bug: com.bascal.stdlib.midAssign should always be \
-                         auto-injected into the program whenever MID$ assignment \
-                         syntax is used"
-                        )
-                    });
-                let call = self.call_lines_from_rendered_scalars(
-                    &info,
-                    &[target_text.clone(), start_text, len_text, value_text],
-                );
-                self.lines(call);
-                self.line(&format!("{target_text} = {}", info.result.as_basic()));
+                let label = self.next_label;
+                self.next_label += 1;
+                let trim_label = format!("MID_{label:04}_TRIM");
+                let done_label = format!("MID_{label:04}_DONE");
+                self.line(&format!(
+                    "IF LEN({replacement}) > {length_value} THEN GOTO {trim_label}"
+                ));
+                self.line(&format!("GOTO {done_label}"));
+                self.line(&format!("{trim_label}:"));
+                self.line(&format!(
+                    "{replacement} = LEFT$({replacement}, {length_value})"
+                ));
+                self.line(&format!("{done_label}:"));
+                self.line(&format!(
+                    "{target_text} = LEFT$({target_value}, {start_value} - 1) + {replacement} + MID$({target_value}, {start_value} + LEN({replacement}))"
+                ));
             }
             Statement::Print { tokens } => {
                 let body = self.render_print_tokens(tokens, current_function);
@@ -1029,18 +9211,20 @@ impl CodeGenerator {
                 self.lines(val_prelude);
                 self.line(&format!("OUT {port}, {val}"));
             }
-            Statement::Width { channel, cols } => {
-                let (cols_prelude, cols_s) = self.expr(cols, current_function);
-                self.lines(cols_prelude);
-                match channel {
-                    Some(ch) => {
-                        let (ch_prelude, ch_s) = self.expr(ch, current_function);
-                        self.lines(ch_prelude);
-                        self.line(&format!("WIDTH #{ch_s}, {cols_s}"));
-                    }
-                    None => self.line(&format!("WIDTH {cols_s}")),
+            Statement::Width { channel, cols } => match channel {
+                Some(ch) => {
+                    let (ch_prelude, ch_s) = self.expr(ch, current_function);
+                    self.lines(ch_prelude);
+                    let (cols_prelude, cols_s) = self.expr(cols, current_function);
+                    self.lines(cols_prelude);
+                    self.line(&format!("WIDTH #{ch_s}, {cols_s}"));
                 }
-            }
+                None => {
+                    let (cols_prelude, cols_s) = self.expr(cols, current_function);
+                    self.lines(cols_prelude);
+                    self.line(&format!("WIDTH {cols_s}"));
+                }
+            },
             Statement::Clear => {
                 self.line("CLEAR");
             }
@@ -1133,9 +9317,37 @@ impl CodeGenerator {
                 // source is purely a naming/intent signal to the reader;
                 // nothing in generated BASIC needs to express "this
                 // shouldn't be reassigned" for it to behave correctly.
-                let (prelude, value) = self.expr(value, current_function);
-                self.lines(prelude);
-                self.line(&format!("{} = {value}", self.ident(name, current_function)));
+                let key = name.as_basic().to_ascii_lowercase();
+                // Semantic names preserve source spelling without the BASIC
+                // suffix synthesized for an untyped AST const declaration.
+                let semantic_key = name.name.to_ascii_lowercase();
+                let semantic_value = current_function
+                    .and_then(|function| {
+                        function
+                            .semantic_const_initializers
+                            .get(&key)
+                            .or_else(|| function.semantic_const_initializers.get(&semantic_key))
+                    })
+                    .or_else(|| {
+                        current_function
+                            .is_none()
+                            .then(|| {
+                                self.semantic_const_initializers
+                                    .get(&key)
+                                    .or_else(|| self.semantic_const_initializers.get(&semantic_key))
+                            })
+                            .flatten()
+                    })
+                    .and_then(|expression| {
+                        self.semantic_const_expression(expression, current_function)
+                    });
+                if let Some(value) = semantic_value {
+                    self.line(&format!("{} = {value}", self.ident(name, current_function)));
+                } else {
+                    let (prelude, value) = self.expr(value, current_function);
+                    self.lines(prelude);
+                    self.line(&format!("{} = {value}", self.ident(name, current_function)));
+                }
             }
             Statement::Write { channel, exprs } => {
                 let (channel_prelude, channel) = self.expr(channel, current_function);
@@ -1853,6 +10065,724 @@ impl CodeGenerator {
         }
     }
 
+    /// Render typed semantic expressions that may call a declared scalar
+    /// function. Call operands are emitted in source order, then the result
+    /// is snapshotted so a later call cannot overwrite the callee's shared
+    /// BASIC result variable before its parent expression uses it.
+    fn semantic_expression_with_prelude(
+        &mut self,
+        expression: &crate::semantic_ir::Expression,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<(Vec<String>, String)> {
+        use crate::semantic_ir::ExpressionKind;
+        match &expression.kind {
+            ExpressionKind::Parenthesized(inner) => {
+                let (lines, rendered) =
+                    self.semantic_expression_with_prelude(inner, current_function)?;
+                Some((lines, format!("({rendered})")))
+            }
+            ExpressionKind::Unary { operator, operand } => {
+                let (lines, operand) =
+                    self.semantic_expression_with_prelude(operand, current_function)?;
+                let rendered = match operator.to_ascii_lowercase().as_str() {
+                    "-" => format!("-{operand}"),
+                    "not" => format!("NOT ({operand})"),
+                    _ => return None,
+                };
+                Some((lines, rendered))
+            }
+            ExpressionKind::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                let (mut lines, left_text) =
+                    self.semantic_expression_with_prelude(left, current_function)?;
+                let (right_lines, right_text) =
+                    self.semantic_expression_with_prelude(right, current_function)?;
+                lines.extend(right_lines);
+                let left = if matches!(left.kind, ExpressionKind::Binary { .. }) {
+                    format!("({left_text})")
+                } else {
+                    left_text
+                };
+                let right = if matches!(right.kind, ExpressionKind::Binary { .. }) {
+                    format!("({right_text})")
+                } else {
+                    right_text
+                };
+                let op = match operator.as_str() {
+                    "+" | "-" | "*" | "/" | "\\" | "^" | "=" | "<>" | "<" | "<=" | ">" | ">=" => {
+                        operator.to_string()
+                    }
+                    value if value.eq_ignore_ascii_case("and") => "AND".to_string(),
+                    value if value.eq_ignore_ascii_case("or") => "OR".to_string(),
+                    value if value.eq_ignore_ascii_case("xor") => "XOR".to_string(),
+                    value if value.eq_ignore_ascii_case("mod") => "MOD".to_string(),
+                    _ => return None,
+                };
+                Some((lines, format!("{left} {op} {right}")))
+            }
+            ExpressionKind::Call { name, arguments } => {
+                let ident = BasicIdent::parse(name);
+                let Some(info) = self.ordinary_function_info(&ident).cloned() else {
+                    if self.function_info(&ident).is_some() {
+                        return None;
+                    }
+                    if ["sizeof", "lbound", "ubound"]
+                        .iter()
+                        .any(|builtin| name.eq_ignore_ascii_case(builtin))
+                    {
+                        let rendered =
+                            self.semantic_const_expression(expression, current_function)?;
+                        let suffix = expression
+                            .value_type
+                            .suffix()
+                            .map(|suffix| suffix.to_string())
+                            .unwrap_or_default();
+                        let result = self.next_temp_var_suffixed(&suffix);
+                        return Some((vec![format!("{result} = {rendered}")], result));
+                    }
+                    if let Some(rank) = self.resolve_array_rank(&ident, current_function) {
+                        if rank != arguments.len() {
+                            return None;
+                        }
+                        let mut lines = Vec::new();
+                        let mut indices = Vec::with_capacity(arguments.len());
+                        for argument in arguments {
+                            let (prelude, rendered) =
+                                self.semantic_expression_with_prelude(argument, current_function)?;
+                            lines.extend(prelude);
+                            let suffix = argument
+                                .value_type
+                                .suffix()
+                                .map(|suffix| suffix.to_string())
+                                .unwrap_or_else(|| "%".to_string());
+                            let index = self.next_temp_var_suffixed(&suffix);
+                            lines.push(format!("{index} = {rendered}"));
+                            indices.push(index);
+                        }
+                        let array = format!(
+                            "{}({})",
+                            self.ident(&ident, current_function),
+                            indices.join(", ")
+                        );
+                        let suffix = expression
+                            .value_type
+                            .suffix()
+                            .map(|suffix| suffix.to_string())
+                            .unwrap_or_default();
+                        let result = self.next_temp_var_suffixed(&suffix);
+                        lines.push(format!("{result} = {array}"));
+                        return Some((lines, result));
+                    }
+                    let mut lines = Vec::new();
+                    let mut rendered_arguments = Vec::with_capacity(arguments.len());
+                    for argument in arguments {
+                        let (prelude, rendered) =
+                            self.semantic_expression_with_prelude(argument, current_function)?;
+                        lines.extend(prelude);
+                        let suffix = argument
+                            .value_type
+                            .suffix()
+                            .map(|suffix| suffix.to_string())
+                            .unwrap_or_default();
+                        let temporary = self.next_temp_var_suffixed(&suffix);
+                        lines.push(format!("{temporary} = {rendered}"));
+                        rendered_arguments.push(temporary);
+                    }
+                    let suffix = expression
+                        .value_type
+                        .suffix()
+                        .map(|suffix| suffix.to_string())
+                        .unwrap_or_default();
+                    let result = self.next_temp_var_suffixed(&suffix);
+                    lines.push(format!(
+                        "{result} = {}({})",
+                        self.canonical_callable(&ident),
+                        rendered_arguments.join(", ")
+                    ));
+                    return Some((lines, result));
+                };
+                let parameters = info.semantic_parameters.as_ref()?;
+                if arguments.len() > info.params.len() || parameters.len() != info.params.len() {
+                    return None;
+                }
+                let mut complete_arguments = arguments.clone();
+                for parameter in parameters.iter().skip(arguments.len()) {
+                    complete_arguments.push(parameter.default.clone()?);
+                }
+                let mut lines = Vec::new();
+                let mut rendered_arguments = Vec::with_capacity(complete_arguments.len());
+                let mut array_arguments = vec![None; complete_arguments.len()];
+                let mut byref_copyback = Vec::new();
+                for (index, (argument, (param, lowered))) in
+                    complete_arguments.iter().zip(&info.params).enumerate()
+                {
+                    let whole_array = match &argument.kind {
+                        ExpressionKind::Name(name) => Some(BasicIdent::parse(name)),
+                        ExpressionKind::Call { name, arguments } if arguments.is_empty() => {
+                            Some(BasicIdent::parse(name))
+                        }
+                        _ => None,
+                    }
+                    .filter(|name| self.resolve_array_rank(name, current_function).is_some());
+                    if let Some(target_rank) = info.param_ranks.get(index).copied().flatten() {
+                        let source_name = whole_array?;
+                        let source_rank =
+                            self.resolve_array_rank(&source_name, current_function)?;
+                        if source_rank != target_rank {
+                            self.diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                format!(
+                                    "`{source_name}` has {source_rank} dimension{} here, but parameter `{}` of `{}` requires {target_rank} -- passing it would generate incorrect BASIC",
+                                    if source_rank == 1 { "" } else { "s" }, param.name, info.source_name,
+                                ),
+                            ));
+                            return None;
+                        }
+                        array_arguments[index] = Some((
+                            self.ident(&source_name, current_function),
+                            source_name,
+                            target_rank,
+                        ));
+                        rendered_arguments.push(None);
+                        continue;
+                    }
+                    if whole_array.is_some() {
+                        return None;
+                    }
+                    if param.mode == ParamMode::ByRef {
+                        let ExpressionKind::Name(name) = &argument.kind else {
+                            return None;
+                        };
+                        if name.eq_ignore_ascii_case("true") || name.eq_ignore_ascii_case("false") {
+                            return None;
+                        }
+                        let caller = self.ident(&BasicIdent::parse(name), current_function);
+                        rendered_arguments.push(Some(caller.clone()));
+                        byref_copyback.push((caller, lowered.as_basic()));
+                    } else {
+                        let (argument_lines, rendered) =
+                            self.semantic_expression_with_prelude(argument, current_function)?;
+                        let has_prelude = !argument_lines.is_empty();
+                        lines.extend(argument_lines);
+                        if has_prelude {
+                            let suffix = param
+                                .name
+                                .suffix
+                                .map(|suffix| suffix.to_string())
+                                .unwrap_or_default();
+                            let temporary = self.next_temp_var_suffixed(&suffix);
+                            lines.push(format!("{temporary} = {rendered}"));
+                            rendered_arguments.push(Some(temporary));
+                        } else {
+                            rendered_arguments.push(Some(rendered));
+                        }
+                    }
+                }
+                for (argument, (_, lowered)) in rendered_arguments.iter().zip(&info.params) {
+                    if let Some(argument) = argument {
+                        lines.push(format!("{} = {argument}", lowered.as_basic()));
+                    }
+                }
+                for (index, array_argument) in array_arguments.iter().enumerate() {
+                    let Some((actual_array, source_name, rank)) = array_argument else {
+                        continue;
+                    };
+                    let (_, lowered) = info.params.get(index)?;
+                    let bound_vars = info
+                        .param_bound_vars
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default();
+                    let capacities = info
+                        .param_capacities
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_default();
+                    for (axis, bound_var) in bound_vars.iter().enumerate() {
+                        let bound = self.resolve_axis_bound(source_name, axis, current_function)
+                            .unwrap_or_else(|| {
+                                self.diagnostics.push(Diagnostic::error(
+                                    SourcePos::new("<validation>", 1, 1),
+                                    format!("could not determine the size of `{source_name}` along axis {axis} to pass to `{}`", info.source_name),
+                                ));
+                                "1".to_string()
+                            });
+                        lines.push(format!("{bound_var} = {bound}"));
+                        if let Some(capacity) = capacities.get(axis) {
+                            let param_name = info
+                                .params
+                                .get(index)
+                                .map(|(param, _)| param.name.as_basic())
+                                .unwrap_or_default();
+                            lines.push(format!(
+                                "IF {bound_var} > {capacity} THEN PRINT \"runtime error: `{param_name}` of `{}` needs \"; {bound_var}; \" elements along axis {axis}, but its storage only holds {capacity}\" : STOP",
+                                info.source_name,
+                            ));
+                        }
+                    }
+                    let loop_vars = (0..*rank).map(|_| self.next_temp_var()).collect::<Vec<_>>();
+                    lines.extend(array_copy_lines(
+                        &lowered.as_basic(),
+                        actual_array,
+                        &bound_vars,
+                        "copy array argument into transpiled function storage",
+                        &loop_vars,
+                    ));
+                }
+                lines.push(format!("GOSUB {}", info.label));
+                for (index, array_argument) in array_arguments.iter().enumerate() {
+                    let Some((actual_array, _source_name, rank)) = array_argument else {
+                        continue;
+                    };
+                    if info
+                        .params
+                        .get(index)
+                        .is_some_and(|(param, _)| param.mode == ParamMode::ByRef)
+                    {
+                        let (_, lowered) = info.params.get(index)?;
+                        let bound_vars = info
+                            .param_bound_vars
+                            .get(index)
+                            .cloned()
+                            .unwrap_or_default();
+                        let loop_vars =
+                            (0..*rank).map(|_| self.next_temp_var()).collect::<Vec<_>>();
+                        lines.extend(array_copy_lines(
+                            actual_array,
+                            &lowered.as_basic(),
+                            &bound_vars,
+                            "copy mutated array argument back to caller storage",
+                            &loop_vars,
+                        ));
+                    }
+                }
+                for (caller, lowered) in byref_copyback {
+                    lines.push(format!("{caller} = {lowered}"));
+                }
+                let suffix = match info.result.suffix {
+                    Some(TypeSuffix::Integer) => "%",
+                    Some(TypeSuffix::String) => "$",
+                    Some(TypeSuffix::Single) => "!",
+                    Some(TypeSuffix::Double) => "#",
+                    Some(TypeSuffix::Long) => "&",
+                    None => "",
+                };
+                let result = self.next_temp_var_suffixed(suffix);
+                lines.push(format!("{result} = {}", info.result.as_basic()));
+                Some((lines, result))
+            }
+            ExpressionKind::Member {
+                base: Some(base),
+                member,
+                arguments: Some(arguments),
+            } => {
+                let receiver = match base.value_type {
+                    crate::semantic_ir::SemanticValueType::String => TypeSuffix::String,
+                    crate::semantic_ir::SemanticValueType::Integer => TypeSuffix::Integer,
+                    crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
+                    crate::semantic_ir::SemanticValueType::Single => TypeSuffix::Single,
+                    crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
+                    crate::semantic_ir::SemanticValueType::Unknown
+                    | crate::semantic_ir::SemanticValueType::Boolean => return None,
+                };
+                let info = self.method_info(receiver, member)?.clone();
+                let parameters = info.semantic_parameters.as_ref()?;
+                if arguments.len() > parameters.len()
+                    || parameters.len() + 1 != info.params.len()
+                    || parameters
+                        .iter()
+                        .skip(arguments.len())
+                        .any(|parameter| parameter.default.is_none())
+                {
+                    return None;
+                }
+                let mut explicit_arguments = arguments.clone();
+                explicit_arguments.extend(
+                    parameters
+                        .iter()
+                        .skip(arguments.len())
+                        .filter_map(|parameter| parameter.default.clone()),
+                );
+                if explicit_arguments.len() != parameters.len()
+                    || info.param_ranks.iter().skip(1).any(Option::is_some)
+                {
+                    return None;
+                }
+                let mut lines = Vec::new();
+                let mut byref_copyback = Vec::new();
+                let (receiver_parameter, receiver_lowered) = info.params.first()?;
+                if receiver_parameter.mode == ParamMode::ByRef {
+                    let ExpressionKind::Name(name) = &base.kind else {
+                        return None;
+                    };
+                    let caller = self.ident(&BasicIdent::parse(name), current_function);
+                    lines.push(format!("{} = {caller}", receiver_lowered.as_basic()));
+                    byref_copyback.push((caller, receiver_lowered.as_basic()));
+                } else {
+                    let (prelude, rendered) =
+                        self.semantic_expression_with_prelude(base, current_function)?;
+                    lines.extend(prelude);
+                    lines.push(format!("{} = {rendered}", receiver_lowered.as_basic()));
+                }
+                for (index, (argument, ((parameter, lowered), semantic))) in explicit_arguments
+                    .iter()
+                    .zip(info.params.iter().skip(1).zip(parameters))
+                    .enumerate()
+                {
+                    let expected = semantic
+                        .value_type
+                        .suffix()
+                        .and_then(TypeSuffix::from_char)?;
+                    if argument
+                        .value_type
+                        .suffix()
+                        .and_then(TypeSuffix::from_char)?
+                        != expected
+                        || info
+                            .param_ranks
+                            .get(index + 1)
+                            .copied()
+                            .flatten()
+                            .unwrap_or(0)
+                            != semantic.array_axes
+                    {
+                        return None;
+                    }
+                    if parameter.mode == ParamMode::ByRef {
+                        let ExpressionKind::Name(name) = &argument.kind else {
+                            return None;
+                        };
+                        let caller = self.ident(&BasicIdent::parse(name), current_function);
+                        lines.push(format!("{} = {caller}", lowered.as_basic()));
+                        byref_copyback.push((caller, lowered.as_basic()));
+                    } else {
+                        let (prelude, rendered) =
+                            self.semantic_expression_with_prelude(argument, current_function)?;
+                        lines.extend(prelude);
+                        let temporary = self.next_temp_var_suffixed(
+                            &parameter
+                                .name
+                                .suffix
+                                .map(|suffix| suffix.to_string())
+                                .unwrap_or_default(),
+                        );
+                        lines.push(format!("{temporary} = {rendered}"));
+                        lines.push(format!("{} = {temporary}", lowered.as_basic()));
+                    }
+                }
+                lines.push(format!("GOSUB {}", info.label));
+                lines.extend(
+                    byref_copyback
+                        .into_iter()
+                        .map(|(caller, lowered)| format!("{caller} = {lowered}")),
+                );
+                let suffix = match info.result.suffix {
+                    Some(TypeSuffix::Integer) => "%",
+                    Some(TypeSuffix::String) => "$",
+                    Some(TypeSuffix::Single) => "!",
+                    Some(TypeSuffix::Double) => "#",
+                    Some(TypeSuffix::Long) => "&",
+                    None => "",
+                };
+                let result = self.next_temp_var_suffixed(suffix);
+                lines.push(format!("{result} = {}", info.result.as_basic()));
+                Some((lines, result))
+            }
+            _ => self
+                .semantic_const_expression(expression, current_function)
+                .map(|rendered| (Vec::new(), rendered)),
+        }
+    }
+
+    fn semantic_expression_contains_callable_call(
+        &self,
+        expression: &crate::semantic_ir::Expression,
+    ) -> bool {
+        use crate::semantic_ir::ExpressionKind;
+        match &expression.kind {
+            ExpressionKind::Call { name, arguments } => {
+                self.ordinary_function_info(&BasicIdent::parse(name))
+                    .is_some()
+                    || arguments
+                        .iter()
+                        .any(|argument| self.semantic_expression_contains_callable_call(argument))
+            }
+            ExpressionKind::Parenthesized(inner) | ExpressionKind::Unary { operand: inner, .. } => {
+                self.semantic_expression_contains_callable_call(inner)
+            }
+            ExpressionKind::Binary { left, right, .. } => {
+                self.semantic_expression_contains_callable_call(left)
+                    || self.semantic_expression_contains_callable_call(right)
+            }
+            ExpressionKind::Index { index, .. } => {
+                self.semantic_expression_contains_callable_call(index)
+            }
+            ExpressionKind::MultiIndex { indices, .. } => indices
+                .iter()
+                .any(|index| self.semantic_expression_contains_callable_call(index)),
+            ExpressionKind::Member {
+                base,
+                member,
+                arguments,
+            } => {
+                let is_scalar_method_call = base.as_ref().is_some_and(|base| {
+                    let receiver = match base.value_type {
+                        crate::semantic_ir::SemanticValueType::String => Some(TypeSuffix::String),
+                        crate::semantic_ir::SemanticValueType::Integer => Some(TypeSuffix::Integer),
+                        crate::semantic_ir::SemanticValueType::Long => Some(TypeSuffix::Long),
+                        crate::semantic_ir::SemanticValueType::Single => Some(TypeSuffix::Single),
+                        crate::semantic_ir::SemanticValueType::Double => Some(TypeSuffix::Double),
+                        crate::semantic_ir::SemanticValueType::Unknown
+                        | crate::semantic_ir::SemanticValueType::Boolean => None,
+                    };
+                    matches!(arguments, Some(_))
+                        && receiver
+                            .is_some_and(|receiver| self.method_info(receiver, member).is_some())
+                });
+                is_scalar_method_call
+                    || base
+                        .as_ref()
+                        .is_some_and(|base| self.semantic_expression_contains_callable_call(base))
+                    || arguments.as_ref().is_some_and(|arguments| {
+                        arguments.iter().any(|argument| {
+                            self.semantic_expression_contains_callable_call(argument)
+                        })
+                    })
+            }
+            ExpressionKind::RecordLiteral(fields)
+            | ExpressionKind::PartialRecordLiteral(fields) => fields
+                .iter()
+                .any(|field| self.semantic_expression_contains_callable_call(&field.value)),
+            ExpressionKind::Name(_) | ExpressionKind::Literal(_) | ExpressionKind::Boolean(_) => {
+                false
+            }
+        }
+    }
+
+    fn semantic_const_expression(
+        &self,
+        expression: &crate::semantic_ir::Expression,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<String> {
+        use crate::semantic_ir::ExpressionKind;
+        match &expression.kind {
+            ExpressionKind::Literal(value) => Some(value.clone()),
+            ExpressionKind::Boolean(value) => Some(if *value { "-1" } else { "0" }.to_string()),
+            ExpressionKind::Name(name) => {
+                if name.eq_ignore_ascii_case("true") {
+                    return Some("-1".to_string());
+                }
+                if name.eq_ignore_ascii_case("false") {
+                    return Some("0".to_string());
+                }
+                if name.contains('.')
+                    && expression.value_type != crate::semantic_ir::SemanticValueType::Unknown
+                {
+                    let suffix = match expression.value_type.suffix()? {
+                        '%' => TypeSuffix::Integer,
+                        '$' => TypeSuffix::String,
+                        '!' => TypeSuffix::Single,
+                        '#' => TypeSuffix::Double,
+                        '&' => TypeSuffix::Long,
+                        _ => return None,
+                    };
+                    let parts = name.split('.').collect::<Vec<_>>();
+                    let storage = BasicIdent {
+                        name: camel_join(&parts),
+                        suffix: Some(suffix),
+                    };
+                    return Some(self.ident(&storage, current_function));
+                }
+                let ident = BasicIdent::parse(name);
+                if current_function.is_some_and(|function| {
+                    function
+                        .params
+                        .iter()
+                        .any(|(parameter, _)| same_ident(&parameter.name, &ident))
+                }) {
+                    return Some(self.ident(&ident, current_function));
+                }
+                let base = ident.name.to_ascii_lowercase();
+                let base = base.trim_end_matches(['$', '%', '&', '!', '#']);
+                let suffixed_error_local = ident.suffix.is_some()
+                    && (ident.name.eq_ignore_ascii_case("err")
+                        || ident.name.eq_ignore_ascii_case("erl"));
+                if !suffixed_error_local
+                    && (self
+                        .known_callables
+                        .contains(&ident.name.to_ascii_lowercase())
+                        || self.known_callables.contains(base))
+                {
+                    Some(self.canonical_callable(&ident))
+                } else {
+                    Some(self.ident(&ident, current_function))
+                }
+            }
+            ExpressionKind::Parenthesized(inner) => self
+                .semantic_const_expression(inner, current_function)
+                .map(|value| format!("({value})")),
+            ExpressionKind::Unary { operator, operand } => {
+                let operand = self.semantic_const_expression(operand, current_function)?;
+                match operator.to_ascii_lowercase().as_str() {
+                    "-" => Some(format!("-{operand}")),
+                    "not" => Some(format!("NOT ({operand})")),
+                    _ => None,
+                }
+            }
+            ExpressionKind::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                let left_text = self.semantic_const_expression(left, current_function)?;
+                let right_text = self.semantic_const_expression(right, current_function)?;
+                let left = if matches!(left.kind, ExpressionKind::Binary { .. }) {
+                    format!("({left_text})")
+                } else {
+                    left_text
+                };
+                let right = if matches!(right.kind, ExpressionKind::Binary { .. }) {
+                    format!("({right_text})")
+                } else {
+                    right_text
+                };
+                let operator = match operator.as_str() {
+                    "+" => "+",
+                    "-" => "-",
+                    "*" => "*",
+                    "/" => "/",
+                    "\\" => "\\",
+                    "^" => "^",
+                    "=" => "=",
+                    "<>" => "<>",
+                    "<" => "<",
+                    "<=" => "<=",
+                    ">" => ">",
+                    ">=" => ">=",
+                    value if value.eq_ignore_ascii_case("and") => "AND",
+                    value if value.eq_ignore_ascii_case("or") => "OR",
+                    value if value.eq_ignore_ascii_case("xor") => "XOR",
+                    value if value.eq_ignore_ascii_case("mod") => "MOD",
+                    "&&" | "||" => return None,
+                    _ => return None,
+                };
+                Some(format!("{left} {operator} {right}"))
+            }
+            ExpressionKind::Member {
+                base: Some(base),
+                member,
+                arguments: None,
+            } => {
+                let ExpressionKind::Name(base_name) = &base.kind else {
+                    return None;
+                };
+                let record_type = base.record_type.as_deref()?;
+                let record = self
+                    .semantic_records
+                    .iter()
+                    .find(|record| record.name.eq_ignore_ascii_case(record_type))?;
+                let field = semantic_record_field(&self.semantic_records, record, member)?;
+                let suffix = match field.field_type {
+                    crate::semantic_ir::RecordFieldType::String { .. } => TypeSuffix::String,
+                    crate::semantic_ir::RecordFieldType::Int16 { .. }
+                    | crate::semantic_ir::RecordFieldType::Int { .. } => TypeSuffix::Integer,
+                    crate::semantic_ir::RecordFieldType::Int32 { .. } => TypeSuffix::Long,
+                    crate::semantic_ir::RecordFieldType::Float32 { .. } => TypeSuffix::Single,
+                    crate::semantic_ir::RecordFieldType::Float64 { .. } => TypeSuffix::Double,
+                    crate::semantic_ir::RecordFieldType::Record { .. } => return None,
+                };
+                let storage = BasicIdent {
+                    name: camel_join(&[base_name, &field.name]),
+                    suffix: Some(suffix),
+                };
+                Some(self.ident(&storage, current_function))
+            }
+            ExpressionKind::Call { name, arguments } => {
+                let ident = BasicIdent::parse(name);
+                if ["sizeof", "lbound", "ubound"]
+                    .iter()
+                    .any(|builtin| name.eq_ignore_ascii_case(builtin))
+                {
+                    let Some(array_name) = arguments.first().and_then(semantic_array_designator)
+                    else {
+                        return None;
+                    };
+                    if arguments.len() > 2 {
+                        return None;
+                    }
+                    let axis = match arguments.get(1) {
+                        None => None,
+                        Some(axis) => Some(Expr::Integer(semantic_integer_literal_axis(axis)?)),
+                    };
+                    let array = BasicIdent::parse(array_name);
+                    return match name.to_ascii_lowercase().as_str() {
+                        "sizeof" => self
+                            .resolve_sizeof(&array, axis.as_ref(), current_function)
+                            .ok(),
+                        "lbound" => self
+                            .resolve_lbound(&array, axis.as_ref(), current_function)
+                            .ok(),
+                        _ => self
+                            .resolve_ubound(&array, axis.as_ref(), current_function)
+                            .ok(),
+                    };
+                }
+                let arguments = arguments
+                    .iter()
+                    .map(|argument| self.semantic_const_expression(argument, current_function))
+                    .collect::<Option<Vec<_>>>()?;
+                if let Some(rank) = self.resolve_array_rank(&ident, current_function) {
+                    if rank != arguments.len() {
+                        return None;
+                    }
+                    return Some(format!(
+                        "{}({})",
+                        self.ident(&ident, current_function),
+                        arguments.join(", ")
+                    ));
+                }
+                if self.function_info(&ident).is_some() {
+                    return None;
+                }
+                Some(format!(
+                    "{}({})",
+                    self.canonical_callable(&ident),
+                    arguments.join(", ")
+                ))
+            }
+            ExpressionKind::Index { name, index } => {
+                let ident = BasicIdent::parse(name);
+                if self.ordinary_function_info(&ident).is_some() {
+                    return None;
+                }
+                let index = self.semantic_const_expression(index, current_function)?;
+                Some(format!("{}({index})", self.ident(&ident, current_function)))
+            }
+            ExpressionKind::MultiIndex { name, indices } => {
+                let ident = BasicIdent::parse(name);
+                if self.ordinary_function_info(&ident).is_some() {
+                    return None;
+                }
+                let indices = indices
+                    .iter()
+                    .map(|index| self.semantic_const_expression(index, current_function))
+                    .collect::<Option<Vec<_>>>()?;
+                if indices.len() != self.resolve_array_rank(&ident, current_function)? {
+                    return None;
+                }
+                Some(format!(
+                    "{}({})",
+                    self.ident(&ident, current_function),
+                    indices.join(", ")
+                ))
+            }
+            _ => None,
+        }
+    }
+
     fn call_lines(
         &mut self,
         info: &FunctionInfo,
@@ -1944,11 +10874,46 @@ impl CodeGenerator {
             }
         }
 
-        for (param, lowered) in info.params.iter().skip(args.len()) {
-            if let Some(default) = &param.default {
-                let (default_prelude, rendered_default) = self.expr(default, current_function);
-                lines.extend(default_prelude);
-                lines.push(format!("{} = {rendered_default}", lowered.as_basic()));
+        for (index, (param, lowered)) in info.params.iter().enumerate().skip(args.len()) {
+            let semantic_default = index
+                .checked_sub(usize::from(info.receiver.is_some()))
+                .and_then(|position| {
+                    info.semantic_parameters
+                        .as_ref()
+                        .and_then(|parameters| parameters.get(position))
+                })
+                .and_then(|parameter| parameter.default.as_ref());
+            if let Some(default) = semantic_default {
+                if let Some((default_prelude, rendered_default)) =
+                    self.semantic_expression_with_prelude(default, current_function)
+                {
+                    lines.extend(default_prelude);
+                    lines.push(format!("{} = {rendered_default}", lowered.as_basic()));
+                } else {
+                    self.diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "typed default for parameter `{}` of `{}` isn't supported by the BASIC backend",
+                            param.name, info.source_name
+                        ),
+                    ));
+                }
+            } else if info.semantic_parameters.is_none() {
+                if let Some(default) = &param.default {
+                    let (default_prelude, rendered_default) = self.expr(default, current_function);
+                    lines.extend(default_prelude);
+                    lines.push(format!("{} = {rendered_default}", lowered.as_basic()));
+                } else {
+                    self.diagnostics.push(Diagnostic::error(
+                        SourcePos::new("<validation>", 1, 1),
+                        format!(
+                            "`{}` expects {} argument(s), got {}",
+                            info.source_name,
+                            info.params.len(),
+                            args.len()
+                        ),
+                    ));
+                }
             } else {
                 self.diagnostics.push(Diagnostic::error(
                     SourcePos::new("<validation>", 1, 1),
@@ -2061,31 +11026,6 @@ impl CodeGenerator {
         lines
     }
 
-    /// Like `call_lines`, but for a callee (`com.bascal.stdlib.midAssign`,
-    /// the only current caller) whose every parameter is a plain byval
-    /// scalar, and whose arguments the caller has *already* rendered to
-    /// text via its own `self.expr` calls -- so this skips `call_lines`'s
-    /// own per-argument evaluation instead of re-running it (which would
-    /// re-execute any side effect in an argument expression a second time,
-    /// e.g. an array index).
-    fn call_lines_from_rendered_scalars(
-        &self,
-        info: &FunctionInfo,
-        rendered_args: &[String],
-    ) -> Vec<String> {
-        let mut lines: Vec<String> = rendered_args
-            .iter()
-            .enumerate()
-            .filter_map(|(index, rendered)| {
-                info.params
-                    .get(index)
-                    .map(|(_, lowered)| format!("{} = {rendered}", lowered.as_basic()))
-            })
-            .collect();
-        lines.push(format!("GOSUB {}", info.label));
-        lines
-    }
-
     fn emit_call_statement(
         &mut self,
         info: &FunctionInfo,
@@ -2139,15 +11079,9 @@ impl CodeGenerator {
             };
         }
         if let Some(generated) = self.const_var_names.get(&ident.name.to_ascii_lowercase()) {
-            // `const` values always resolve globally, with or without an
-            // explicit `global` declaration, to the one fixed name
-            // `const_var_name` generated for this const -- keyed by bare
-            // name only (never `source_key`, which includes a suffix): a
-            // const's type suffix isn't part of its identity, and a
-            // reference is never written with one anyway (see
-            // resolver AST compatibility metadata). Checked before the
-            // current_function branch below, same as record_buffer_names
-            // above.
+            // Constants resolve program-wide to the fixed name generated by
+            // `const_var_name`, even when their declaration appears in a
+            // callable body.
             return generated.clone();
         }
         if let Some(info) = current_function {
@@ -2313,6 +11247,54 @@ impl CodeGenerator {
         self.top_level_array_ranks.get(&key).copied()
     }
 
+    fn resolve_array_suffix(
+        &self,
+        name: &BasicIdent,
+        current_function: Option<&FunctionInfo>,
+    ) -> Option<TypeSuffix> {
+        let key = name.as_basic().to_ascii_lowercase();
+        let suffix_from_type = |value_type: crate::semantic_ir::SemanticValueType| match value_type {
+            crate::semantic_ir::SemanticValueType::String => TypeSuffix::String,
+            crate::semantic_ir::SemanticValueType::Integer => TypeSuffix::Integer,
+            crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
+            crate::semantic_ir::SemanticValueType::Single => TypeSuffix::Single,
+            crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
+            crate::semantic_ir::SemanticValueType::Unknown
+            | crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
+        };
+        if let Some(function) = current_function {
+            if let Some(index) = function
+                .params
+                .iter()
+                .position(|(parameter, _)| same_ident(&parameter.name, name))
+            {
+                if let Some(suffix) = function
+                    .semantic_parameters
+                    .as_ref()?
+                    .get(index)?
+                    .value_type
+                    .suffix()
+                    .and_then(TypeSuffix::from_char)
+                {
+                    return Some(suffix);
+                }
+            }
+            if let Some(declaration) = function.semantic_dim_declarations.get(&key) {
+                return Some(suffix_from_type(declaration.element_type));
+            }
+            if let Some(annotation) = function.local_dim_types.get(&key) {
+                return semantic_dim_type_suffix(annotation);
+            }
+        }
+        if let Some(declaration) = self.semantic_top_level_dims.get(&key) {
+            return Some(suffix_from_type(declaration.element_type));
+        }
+        if let Some(annotation) = self.top_level_dim_types.get(&key) {
+            return semantic_dim_type_suffix(annotation);
+        }
+        Some(name.suffix.unwrap_or(TypeSuffix::Single))
+    }
+
     /// Bound text for one axis of a known array: a frozen DIM-time bound
     /// for a directly-`dim`ed array (local or top-level), or -- for an
     /// array *parameter* -- the transpiler-synthesized hidden variable that
@@ -2389,14 +11371,14 @@ impl CodeGenerator {
             Some(_) => {
                 return Err(format!(
                     "the axis argument to `{builtin_name}` must be a literal integer"
-                ))
+                ));
             }
             None if rank == 1 => 0,
             None => {
                 return Err(format!(
                     "`{name}` has {rank} dimensions -- {builtin_name} needs an axis argument, \
                      e.g. `{builtin_name}({name}, 0)`"
-                ))
+                ));
             }
         };
         if axis >= rank {
@@ -2455,9 +11437,15 @@ impl CodeGenerator {
         axis_expr: Option<&Expr>,
         current_function: Option<&FunctionInfo>,
     ) -> Result<String, String> {
-        let bound = self.resolve_ubound(name, axis_expr, current_function)?;
+        let bound =
+            self.resolve_array_bound_for_builtin("SIZEOF", name, axis_expr, current_function)?;
         Ok(match bound.parse::<i64>() {
-            Ok(n) => (n + 1).to_string(),
+            Ok(n) => n
+                .checked_add(1)
+                .ok_or_else(|| {
+                    format!("the element count of `{name}` overflows the supported integer range")
+                })?
+                .to_string(),
             Err(_) => format!("({bound} + 1)"),
         })
     }
@@ -2550,16 +11538,48 @@ impl CodeGenerator {
                         escape_string(file)
                     ));
                 }
-                self.line(&format!(
-                    "BCCSOURCEFILE$ = \"{}\"",
-                    escape_string(&last.1)
-                ));
+                self.line(&format!("BCCSOURCEFILE$ = \"{}\"", escape_string(&last.1)));
             }
             None => self.line("BCCSOURCEFILE$ = \"\""),
         }
         self.line("RETURN");
         self.indent -= 1;
     }
+}
+
+fn semantic_record_field<'a>(
+    records: &'a [crate::semantic_ir::Record],
+    record: &'a crate::semantic_ir::Record,
+    member: &str,
+) -> Option<&'a crate::semantic_ir::RecordField> {
+    for combined in &record.combines {
+        let combined_record = records
+            .iter()
+            .find(|candidate| candidate.name.eq_ignore_ascii_case(combined))?;
+        if let Some(field) = semantic_record_field(records, combined_record, member) {
+            return Some(field);
+        }
+    }
+    record
+        .fields
+        .iter()
+        .find(|field| field.name.eq_ignore_ascii_case(member))
+}
+
+fn collect_semantic_record_fields<'a>(
+    records: &'a [crate::semantic_ir::Record],
+    record: &'a crate::semantic_ir::Record,
+    fields: &mut Vec<&'a crate::semantic_ir::RecordField>,
+) {
+    for combined in &record.combines {
+        if let Some(combined_record) = records
+            .iter()
+            .find(|candidate| candidate.name.eq_ignore_ascii_case(combined))
+        {
+            collect_semantic_record_fields(records, combined_record, fields);
+        }
+    }
+    fields.extend(record.fields.iter());
 }
 
 /// A hidden, never-emitted marker line `statement()` inserts right before
@@ -2591,39 +11611,102 @@ impl FunctionInfo {
         semantic_array_ranks: Option<HashMap<String, usize>>,
         semantic_dim_types: Option<HashMap<String, String>>,
         semantic_globals: Option<HashSet<String>>,
+        semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
+        semantic_signature: Option<&crate::semantic_ir::CallableSignature>,
     ) -> Self {
-        let stem = sanitize_symbol(&function.name.name);
-        let mut params: Vec<(Param, BasicIdent)> = function
-            .params
+        let source_name = semantic_signature
+            .map(|callable| BasicIdent::parse(&callable.name))
+            .unwrap_or_else(|| function.name.clone());
+        let receiver = semantic_signature
+            .map(|callable| {
+                match callable
+                    .receiver
+                    .as_deref()
+                    .map(str::to_ascii_lowercase)
+                    .as_deref()
+                {
+                    Some("integer") => Some(TypeSuffix::Integer),
+                    Some("long") => Some(TypeSuffix::Long),
+                    Some("single") => Some(TypeSuffix::Single),
+                    Some("double") => Some(TypeSuffix::Double),
+                    Some("string") => Some(TypeSuffix::String),
+                    _ => None,
+                }
+            })
+            .unwrap_or(function.receiver);
+        let stem = sanitize_symbol(&source_name.name);
+        let parameter_specs = semantic_parameters
+            .as_ref()
+            .map(|parameters| {
+                parameters
+                    .iter()
+                    .map(|parameter| {
+                        let mut name = BasicIdent::parse(&parameter.name);
+                        if let Some(suffix) = parameter
+                            .value_type
+                            .suffix()
+                            .and_then(TypeSuffix::from_char)
+                        {
+                            name.suffix = Some(suffix);
+                        }
+                        let mode = match parameter.passing {
+                            Some(crate::semantic_ir::Passing::ByRef) => ParamMode::ByRef,
+                            Some(crate::semantic_ir::Passing::ByVal) | None => ParamMode::ByVal,
+                        };
+                        (name, mode, None)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| {
+                function
+                    .params
+                    .iter()
+                    .map(|parameter| {
+                        (
+                            parameter.name.clone(),
+                            parameter.mode,
+                            parameter.default.clone(),
+                        )
+                    })
+                    .collect()
+            });
+        let mut params: Vec<(FunctionParameterInfo, BasicIdent)> = parameter_specs
             .iter()
-            .map(|param| {
-                let preferred = camel_join(&[&stem, &param.name.name]);
-                let lowered = allocate_unique(&preferred, param.name.suffix, taken);
+            .map(|(name, mode, default)| {
+                let preferred = camel_join(&[&stem, &name.name]);
+                let lowered = allocate_unique(&preferred, name.suffix, taken);
                 taken.insert(lowered.as_basic().to_ascii_lowercase());
-                (param.clone(), lowered)
+                (
+                    FunctionParameterInfo {
+                        name: name.clone(),
+                        mode: *mode,
+                        default: default.clone(),
+                    },
+                    lowered,
+                )
             })
             .collect();
-        // Generated callable metadata is authoritative only when it covers
-        // the complete legacy parameter list.  Keeping the legacy inference
-        // fallback for an incomplete adapter result prevents a truncated
-        // semantic vector from dropping parameters or misaligning the
-        // per-parameter bound-variable and capacity vectors.
-        let inferred_param_ranks = infer_param_ranks(function, known_callables, diagnostics);
-        let mut param_ranks = semantic_param_ranks
-            .filter(|ranks| ranks.len() == function.params.len())
-            .map(|semantic| {
-                semantic
-                    .into_iter()
-                    .zip(inferred_param_ranks.iter().copied())
-                    .map(|(semantic, inferred)| semantic.or(inferred))
+        // A complete resolved signature is authoritative, including scalar
+        // parameters (`None` rank). Infer from calls only for AST-only callers
+        // or an adapter result that does not cover the whole declaration.
+        let mut param_ranks = semantic_parameters
+            .as_ref()
+            .map(|parameters| {
+                parameters
+                    .iter()
+                    .map(|parameter| (parameter.array_axes > 0).then_some(parameter.array_axes))
                     .collect()
             })
-            .unwrap_or(inferred_param_ranks);
-        let mut param_bound_vars: Vec<Vec<String>> = function
-            .params
+            .unwrap_or_else(|| {
+                match semantic_param_ranks.filter(|ranks| ranks.len() == parameter_specs.len()) {
+                    Some(ranks) => ranks,
+                    None => infer_param_ranks(function, known_callables, diagnostics),
+                }
+            });
+        let mut param_bound_vars: Vec<Vec<String>> = params
             .iter()
             .zip(param_ranks.iter())
-            .map(|(param, rank)| match rank {
+            .map(|((param, _), rank)| match rank {
                 Some(rank) => (0..*rank)
                     .map(|axis| {
                         let preferred =
@@ -2636,15 +11719,14 @@ impl FunctionInfo {
                 None => Vec::new(),
             })
             .collect();
-        if let Some(receiver) = function.receiver {
-            let self_param = Param {
+        if let Some(receiver) = receiver {
+            let self_param = FunctionParameterInfo {
                 name: BasicIdent {
                     name: "self".to_string(),
                     suffix: Some(receiver),
                 },
                 mode: ParamMode::ByVal,
                 default: None,
-                axes: None,
             };
             let preferred = camel_join(&[&stem, "self"]);
             let lowered = allocate_unique(&preferred, Some(receiver), taken);
@@ -2654,15 +11736,39 @@ impl FunctionInfo {
             param_bound_vars.insert(0, Vec::new());
             param_capacities.insert(0, Vec::new());
         }
-        let local_array_ranks = semantic_array_ranks.unwrap_or_else(|| dim_ranks_in_body(&function.body));
+        let local_array_ranks = match (semantic_signature, semantic_array_ranks) {
+            (Some(_), Some(ranks)) => ranks,
+            (Some(_), None) => HashMap::new(),
+            (None, Some(ranks)) => ranks,
+            (None, None) => dim_ranks_in_body(&function.body),
+        };
         let local_dim_types = semantic_dim_types.unwrap_or_default();
-        let result = allocate_unique(&camel_join(&[&stem, "result"]), function.name.suffix, taken);
+        let result_suffix = semantic_signature
+            .map(|callable| {
+                callable
+                    .result_type
+                    .as_deref()
+                    .and_then(|suffix| suffix.chars().next())
+                    .and_then(TypeSuffix::from_char)
+            })
+            .unwrap_or_else(|| {
+                semantic_signature
+                    .is_none()
+                    .then_some(source_name.suffix)
+                    .flatten()
+            });
+        let result = allocate_unique(&camel_join(&[&stem, "result"]), result_suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
-        let globals = semantic_globals.unwrap_or_else(|| collect_globals(&function.body));
+        let globals = match (semantic_signature, semantic_globals) {
+            (Some(_), Some(globals)) => globals,
+            (Some(_), None) => HashSet::new(),
+            (None, Some(globals)) => globals,
+            (None, None) => collect_globals(&function.body),
+        };
         Self {
-            source_name: function.name.clone(),
+            source_name,
             stem: stem.clone(),
-            label: function_label(&stem, function.name.suffix, function.receiver),
+            label: function_label(&stem, result_suffix, receiver),
             result,
             params,
             param_ranks,
@@ -2670,9 +11776,14 @@ impl FunctionInfo {
             param_capacities,
             local_array_ranks,
             local_dim_types,
+            semantic_const_initializers: HashMap::new(),
+            semantic_parameters,
+            semantic_dim_declarations: HashMap::new(),
             local_array_bounds: RefCell::new(HashMap::new()),
-            is_procedure: function.is_procedure,
-            receiver: function.receiver,
+            is_procedure: semantic_signature
+                .map(|callable| callable.kind == crate::semantic_ir::CallableKind::Procedure)
+                .unwrap_or(function.is_procedure),
+            receiver,
             globals,
             local_var_map: RefCell::new(HashMap::new()),
         }
@@ -3248,6 +12359,12 @@ enum ArgBound {
     Resolved(i64),
 }
 
+#[derive(Clone)]
+enum CapacityCallArgument {
+    Legacy(Expr),
+    Semantic(crate::semantic_ir::Expression),
+}
+
 /// Evaluates `expr` to a concrete integer if it's a compile-time constant:
 /// a literal, a reference to an unambiguous `const` (recursively), or
 /// +/-/*// on two such values. Anything else (a plain variable, a function
@@ -3416,6 +12533,387 @@ fn collect_call_sites(
     sites
 }
 
+fn collect_semantic_call_sites(
+    module: &crate::semantic_ir::SemanticModule,
+    function_names: &HashSet<String>,
+) -> Vec<(Option<String>, String, Vec<CapacityCallArgument>)> {
+    use crate::semantic_ir::{
+        Expression, ExpressionKind, SemanticStatement, SemanticStatementKind as Kind,
+    };
+
+    fn visit_expression(
+        expression: &Expression,
+        scope: &Option<String>,
+        function_names: &HashSet<String>,
+        sites: &mut Vec<(Option<String>, String, Vec<CapacityCallArgument>)>,
+    ) {
+        match &expression.kind {
+            ExpressionKind::Call { name, arguments } => {
+                let callee = BasicIdent::parse(name).name.to_ascii_lowercase();
+                if function_names.contains(&callee) {
+                    sites.push((
+                        scope.clone(),
+                        callee,
+                        arguments
+                            .iter()
+                            .cloned()
+                            .map(CapacityCallArgument::Semantic)
+                            .collect(),
+                    ));
+                }
+                for argument in arguments {
+                    visit_expression(argument, scope, function_names, sites);
+                }
+            }
+            ExpressionKind::Index { index, .. } => {
+                visit_expression(index, scope, function_names, sites)
+            }
+            ExpressionKind::MultiIndex { indices, .. } => {
+                for index in indices {
+                    visit_expression(index, scope, function_names, sites);
+                }
+            }
+            ExpressionKind::Parenthesized(inner) | ExpressionKind::Unary { operand: inner, .. } => {
+                visit_expression(inner, scope, function_names, sites)
+            }
+            ExpressionKind::Binary { left, right, .. } => {
+                visit_expression(left, scope, function_names, sites);
+                visit_expression(right, scope, function_names, sites);
+            }
+            ExpressionKind::Member {
+                base, arguments, ..
+            } => {
+                if let Some(base) = base {
+                    visit_expression(base, scope, function_names, sites);
+                }
+                if let Some(arguments) = arguments {
+                    for argument in arguments {
+                        visit_expression(argument, scope, function_names, sites);
+                    }
+                }
+            }
+            ExpressionKind::RecordLiteral(fields)
+            | ExpressionKind::PartialRecordLiteral(fields) => {
+                for field in fields {
+                    visit_expression(&field.value, scope, function_names, sites);
+                }
+            }
+            ExpressionKind::Name(_) | ExpressionKind::Literal(_) | ExpressionKind::Boolean(_) => {}
+        }
+    }
+
+    fn visit_body(
+        statements: &[SemanticStatement],
+        scope: &Option<String>,
+        function_names: &HashSet<String>,
+        sites: &mut Vec<(Option<String>, String, Vec<CapacityCallArgument>)>,
+    ) {
+        fn visit_print_tokens(
+            tokens: &[crate::semantic_ir::PrintToken],
+            scope: &Option<String>,
+            function_names: &HashSet<String>,
+            sites: &mut Vec<(Option<String>, String, Vec<CapacityCallArgument>)>,
+        ) {
+            for token in tokens {
+                if let crate::semantic_ir::PrintToken::Expression(expression) = token {
+                    visit_expression(expression, scope, function_names, sites);
+                }
+            }
+        }
+        for statement in statements {
+            match &statement.kind {
+                Kind::Line(body) => visit_body(body, scope, function_names, sites),
+                Kind::Assignment { target, value, .. } => {
+                    visit_expression(target, scope, function_names, sites);
+                    visit_expression(value, scope, function_names, sites);
+                }
+                Kind::MidAssign {
+                    target,
+                    start,
+                    length,
+                    value,
+                } => {
+                    visit_expression(target, scope, function_names, sites);
+                    visit_expression(start, scope, function_names, sites);
+                    if let Some(length) = length {
+                        visit_expression(length, scope, function_names, sites);
+                    }
+                    visit_expression(value, scope, function_names, sites);
+                }
+                Kind::Expression(expression)
+                | Kind::OptionBase(expression)
+                | Kind::Error(expression)
+                | Kind::Kill(expression)
+                | Kind::Close(expression) => {
+                    visit_expression(expression, scope, function_names, sites);
+                }
+                Kind::If {
+                    condition,
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    visit_expression(condition, scope, function_names, sites);
+                    visit_body(then_body, scope, function_names, sites);
+                    visit_body(else_body, scope, function_names, sites);
+                }
+                Kind::While { condition, body } => {
+                    visit_expression(condition, scope, function_names, sites);
+                    visit_body(body, scope, function_names, sites);
+                }
+                Kind::For {
+                    start,
+                    bounds,
+                    body,
+                    ..
+                } => {
+                    visit_expression(start, scope, function_names, sites);
+                    match bounds {
+                        crate::semantic_ir::ForBounds::To { limit, step } => {
+                            visit_expression(limit, scope, function_names, sites);
+                            if let Some(step) = step {
+                                visit_expression(step, scope, function_names, sites);
+                            }
+                        }
+                        crate::semantic_ir::ForBounds::Downto { limit, .. } => {
+                            visit_expression(limit, scope, function_names, sites)
+                        }
+                    }
+                    visit_body(body, scope, function_names, sites);
+                }
+                Kind::Do {
+                    pre_condition,
+                    post_condition,
+                    body,
+                } => {
+                    for condition in pre_condition.iter().chain(post_condition.iter()) {
+                        visit_expression(&condition.value, scope, function_names, sites);
+                    }
+                    visit_body(body, scope, function_names, sites);
+                }
+                Kind::SelectCase {
+                    selector,
+                    cases,
+                    else_body,
+                } => {
+                    visit_expression(selector, scope, function_names, sites);
+                    for case in cases {
+                        for value in &case.values {
+                            match value {
+                                crate::semantic_ir::CaseValue::Comparison { value, .. } => {
+                                    visit_expression(value, scope, function_names, sites)
+                                }
+                                crate::semantic_ir::CaseValue::Value {
+                                    first, range_end, ..
+                                } => {
+                                    visit_expression(first, scope, function_names, sites);
+                                    if let Some(last) = range_end {
+                                        visit_expression(last, scope, function_names, sites);
+                                    }
+                                }
+                            }
+                        }
+                        visit_body(&case.body, scope, function_names, sites);
+                    }
+                    visit_body(else_body, scope, function_names, sites);
+                }
+                Kind::Try {
+                    body,
+                    catch,
+                    finally_body,
+                } => {
+                    visit_body(body, scope, function_names, sites);
+                    if let Some(catch) = catch {
+                        for filter in &catch.filters {
+                            visit_expression(filter, scope, function_names, sites);
+                        }
+                        visit_body(&catch.body, scope, function_names, sites);
+                    }
+                    visit_body(finally_body, scope, function_names, sites);
+                }
+                Kind::Return(crate::semantic_ir::ReturnValue::Value(value))
+                | Kind::Throw(crate::semantic_ir::ThrowValue::Value(value)) => {
+                    visit_expression(value, scope, function_names, sites)
+                }
+                Kind::OnBranch { selector, .. } => {
+                    visit_expression(selector, scope, function_names, sites)
+                }
+                Kind::Print {
+                    destination,
+                    tokens,
+                } => {
+                    match destination {
+                        crate::semantic_ir::PrintDestination::Standard { .. } => {}
+                        crate::semantic_ir::PrintDestination::Channel {
+                            channel, using, ..
+                        } => {
+                            visit_expression(channel, scope, function_names, sites);
+                            if let Some(using) = using {
+                                visit_expression(using, scope, function_names, sites);
+                            }
+                        }
+                        crate::semantic_ir::PrintDestination::Using { format, .. } => {
+                            visit_expression(format, scope, function_names, sites)
+                        }
+                    }
+                    visit_print_tokens(tokens, scope, function_names, sites);
+                }
+                Kind::Input { source, targets } => {
+                    if let crate::semantic_ir::InputSource::Channel(channel) = source {
+                        visit_expression(channel, scope, function_names, sites);
+                    }
+                    for target in targets {
+                        visit_expression(target, scope, function_names, sites);
+                    }
+                }
+                Kind::Write { channel, values } => {
+                    visit_expression(channel, scope, function_names, sites);
+                    if let crate::semantic_ir::WriteValues::Values(values) = values {
+                        for value in values {
+                            visit_expression(value, scope, function_names, sites);
+                        }
+                    }
+                }
+                Kind::Open {
+                    path,
+                    channel,
+                    length,
+                    ..
+                } => {
+                    visit_expression(path, scope, function_names, sites);
+                    visit_expression(channel, scope, function_names, sites);
+                    if let Some(length) = length {
+                        visit_expression(length, scope, function_names, sites);
+                    }
+                }
+                Kind::Seek { channel, position } => {
+                    visit_expression(channel, scope, function_names, sites);
+                    visit_expression(position, scope, function_names, sites);
+                }
+                Kind::Rename {
+                    source,
+                    destination,
+                } => {
+                    visit_expression(source, scope, function_names, sites);
+                    visit_expression(destination, scope, function_names, sites);
+                }
+                Kind::Data(values) | Kind::Read(values) => {
+                    for value in values {
+                        visit_expression(value, scope, function_names, sites);
+                    }
+                }
+                Kind::Dim(items) => {
+                    for item in items {
+                        for dimension in &item.dimensions {
+                            if let crate::semantic_ir::DimAxis::Expression(expression) = dimension {
+                                visit_expression(expression, scope, function_names, sites);
+                            }
+                        }
+                    }
+                }
+                Kind::Const { value, .. } => visit_expression(value, scope, function_names, sites),
+                Kind::Swap { left, right } => {
+                    visit_expression(left, scope, function_names, sites);
+                    visit_expression(right, scope, function_names, sites);
+                }
+                Kind::Randomize(crate::semantic_ir::RandomizeSeed::Value(value)) => {
+                    visit_expression(value, scope, function_names, sites)
+                }
+                Kind::Poke { address, value } => {
+                    visit_expression(address, scope, function_names, sites);
+                    visit_expression(value, scope, function_names, sites);
+                }
+                Kind::Out { port, value } => {
+                    visit_expression(port, scope, function_names, sites);
+                    visit_expression(value, scope, function_names, sites);
+                }
+                Kind::Width { channel, value } => {
+                    if let Some(channel) = channel {
+                        visit_expression(channel, scope, function_names, sites);
+                    }
+                    visit_expression(value, scope, function_names, sites);
+                }
+                Kind::LineInput { channel, target } => {
+                    visit_expression(channel, scope, function_names, sites);
+                    visit_expression(target, scope, function_names, sites);
+                }
+                Kind::Get { channel, position } | Kind::Put { channel, position } => {
+                    visit_expression(channel, scope, function_names, sites);
+                    if let Some(position) = position {
+                        if let Some(value) = &position.position {
+                            visit_expression(value, scope, function_names, sites);
+                        }
+                        if let Some(value) = &position.record {
+                            visit_expression(value, scope, function_names, sites);
+                        }
+                    }
+                }
+                Kind::Lset { value, .. } | Kind::Rset { value, .. } => {
+                    visit_expression(value, scope, function_names, sites)
+                }
+                Kind::Locate { row, column } => {
+                    visit_expression(row, scope, function_names, sites);
+                    visit_expression(column, scope, function_names, sites);
+                }
+                Kind::Color {
+                    foreground,
+                    background,
+                } => {
+                    visit_expression(foreground, scope, function_names, sites);
+                    if let Some(background) = background {
+                        visit_expression(background, scope, function_names, sites);
+                    }
+                }
+                Kind::Lprint { using, tokens } => {
+                    if let Some(using) = using {
+                        visit_expression(using, scope, function_names, sites);
+                    }
+                    visit_print_tokens(tokens, scope, function_names, sites);
+                }
+                Kind::FileDeclaration { path, .. } => {
+                    visit_expression(path, scope, function_names, sites)
+                }
+                Kind::Field { channel, bindings } => {
+                    visit_expression(channel, scope, function_names, sites);
+                    for binding in bindings {
+                        visit_expression(&binding.length, scope, function_names, sites);
+                    }
+                }
+                Kind::Unsupported
+                | Kind::Label(_)
+                | Kind::Comment { .. }
+                | Kind::Exit
+                | Kind::Continue
+                | Kind::End
+                | Kind::Goto(_)
+                | Kind::Gosub(_)
+                | Kind::Resume(_)
+                | Kind::OnErrorGoto(_)
+                | Kind::Erase(_)
+                | Kind::Restore(_)
+                | Kind::Global { .. }
+                | Kind::Randomize(crate::semantic_ir::RandomizeSeed::Default)
+                | Kind::Return(crate::semantic_ir::ReturnValue::Default)
+                | Kind::Throw(crate::semantic_ir::ThrowValue::Bare)
+                | Kind::Stop
+                | Kind::Clear
+                | Kind::Cls
+                | Kind::Beep
+                | Kind::System => {}
+            }
+        }
+    }
+
+    let mut sites = Vec::new();
+    let top_level = None;
+    visit_body(&module.statements, &top_level, function_names, &mut sites);
+    for callable in &module.callables {
+        let scope = Some(BasicIdent::parse(&callable.name).name.to_ascii_lowercase());
+        visit_body(&callable.body, &scope, function_names, &mut sites);
+    }
+    sites
+}
+
 /// Resolves one call site's argument to a concrete per-axis bound, if
 /// possible -- see `ArgBound`.
 fn resolve_call_arg_bound(
@@ -3424,7 +12922,9 @@ fn resolve_call_arg_bound(
     axis: usize,
     resolved: &HashMap<String, Vec<Vec<Option<i64>>>>,
     local_dim_sizes: &HashMap<String, HashMap<String, Vec<Expr>>>,
+    semantic_local_dim_sizes: Option<&HashMap<String, HashMap<String, Vec<Option<i64>>>>>,
     top_level_dim_sizes: &HashMap<String, Vec<Expr>>,
+    semantic_top_level_dim_sizes: Option<&HashMap<String, Vec<Option<i64>>>>,
     functions_by_name: &HashMap<String, &FunctionDef>,
     consts: &HashMap<String, Vec<Expr>>,
 ) -> ArgBound {
@@ -3442,7 +12942,11 @@ fn resolve_call_arg_bound(
                 .iter()
                 .position(|p| p.name.as_basic().to_ascii_lowercase() == key)
             {
-                return if def.params[idx].axes.is_some() {
+                return if resolved
+                    .get(func)
+                    .and_then(|parameters| parameters.get(idx))
+                    .is_some_and(|axes| !axes.is_empty())
+                {
                     match resolved
                         .get(func)
                         .and_then(|v| v.get(idx))
@@ -3456,12 +12960,38 @@ fn resolve_call_arg_bound(
                 };
             }
         }
+        if let Some(semantic_local) = semantic_local_dim_sizes.and_then(|scopes| scopes.get(func)) {
+            if let Some(sizes) = semantic_local.get(&key) {
+                return match sizes.get(axis).copied().flatten() {
+                    Some(value) => ArgBound::Resolved(value),
+                    None => ArgBound::Unresolvable,
+                };
+            }
+            if let Some(semantic_top_level) = semantic_top_level_dim_sizes {
+                return semantic_top_level
+                    .get(&key)
+                    .map(|sizes| match sizes.get(axis).copied().flatten() {
+                        Some(value) => ArgBound::Resolved(value),
+                        None => ArgBound::Unresolvable,
+                    })
+                    .unwrap_or(ArgBound::NotAnArray);
+            }
+        }
         if let Some(sizes) = local_dim_sizes.get(func).and_then(|m| m.get(&key)) {
             return match sizes.get(axis).and_then(|e| const_eval(e, consts, 0)) {
                 Some(v) => ArgBound::Resolved(v),
                 None => ArgBound::Unresolvable,
             };
         }
+    }
+    if let Some(semantic_top_level) = semantic_top_level_dim_sizes {
+        return semantic_top_level
+            .get(&key)
+            .map(|sizes| match sizes.get(axis).copied().flatten() {
+                Some(value) => ArgBound::Resolved(value),
+                None => ArgBound::Unresolvable,
+            })
+            .unwrap_or(ArgBound::NotAnArray);
     }
     if let Some(sizes) = top_level_dim_sizes.get(&key) {
         return match sizes.get(axis).and_then(|e| const_eval(e, consts, 0)) {
@@ -3470,6 +13000,143 @@ fn resolve_call_arg_bound(
         };
     }
     ArgBound::NotAnArray
+}
+
+fn resolve_semantic_call_arg_bound(
+    scope: &Option<String>,
+    arg: &crate::semantic_ir::Expression,
+    module: &crate::semantic_ir::SemanticModule,
+    resolved: &HashMap<String, Vec<Vec<Option<i64>>>>,
+    semantic_local_dim_sizes: &HashMap<String, HashMap<String, Vec<Option<i64>>>>,
+    semantic_top_level_dim_sizes: &HashMap<String, Vec<Option<i64>>>,
+    axis: usize,
+) -> ArgBound {
+    use crate::semantic_ir::ExpressionKind;
+    let mut expression = arg;
+    while let ExpressionKind::Parenthesized(inner) = &expression.kind {
+        expression = inner;
+    }
+    let name = match &expression.kind {
+        ExpressionKind::Name(name) => name,
+        // The grammar preserves `array%()` as a zero-argument Call until
+        // declaration facts disambiguate it; BASCAL permits that spelling
+        // for an array passed as a whole call argument.
+        ExpressionKind::Call { name, arguments } if arguments.is_empty() => name,
+        _ => return ArgBound::NotAnArray,
+    };
+    let key = BasicIdent::parse(name).as_basic().to_ascii_lowercase();
+
+    if let Some(scope) = scope {
+        let callable_name = BasicIdent::parse(scope).name.to_ascii_lowercase();
+        if let Some(callable) = module.callables.iter().find(|callable| {
+            callable.receiver.is_none()
+                && BasicIdent::parse(&callable.name)
+                    .name
+                    .eq_ignore_ascii_case(&callable_name)
+                && matches!(
+                    callable.kind,
+                    crate::semantic_ir::CallableKind::Function
+                        | crate::semantic_ir::CallableKind::Procedure
+                )
+        }) {
+            if let Some(index) = callable.parameters.iter().position(|parameter| {
+                BasicIdent::parse(&parameter.name)
+                    .as_basic()
+                    .eq_ignore_ascii_case(&key)
+            }) {
+                return if resolved
+                    .get(&callable_name)
+                    .and_then(|parameters| parameters.get(index))
+                    .is_some_and(|axes| !axes.is_empty())
+                {
+                    match resolved
+                        .get(&callable_name)
+                        .and_then(|parameters| parameters.get(index))
+                        .and_then(|axes| axes.get(axis))
+                    {
+                        Some(Some(value)) => ArgBound::Resolved(*value),
+                        _ => ArgBound::Unresolvable,
+                    }
+                } else {
+                    ArgBound::NotAnArray
+                };
+            }
+        }
+        if let Some(sizes) = semantic_local_dim_sizes
+            .get(&callable_name)
+            .and_then(|declarations| declarations.get(&key))
+        {
+            return match sizes.get(axis).copied().flatten() {
+                Some(value) => ArgBound::Resolved(value),
+                None => ArgBound::Unresolvable,
+            };
+        }
+    }
+
+    semantic_top_level_dim_sizes
+        .get(&key)
+        .map(|sizes| match sizes.get(axis).copied().flatten() {
+            Some(value) => ArgBound::Resolved(value),
+            None => ArgBound::Unresolvable,
+        })
+        .unwrap_or(ArgBound::NotAnArray)
+}
+
+fn semantic_basic_callable_for_function<'a>(
+    module: &'a crate::semantic_ir::SemanticModule,
+    function: &FunctionDef,
+) -> Option<&'a crate::semantic_ir::CallableSignature> {
+    let candidates = module
+        .callables
+        .iter()
+        .filter(|callable| {
+            callable
+                .name
+                .eq_ignore_ascii_case(&function.name.as_basic())
+                && callable.receiver.is_some() == function.receiver.is_some()
+                && matches!(
+                    (function.receiver.is_some(), callable.kind),
+                    (
+                        true,
+                        crate::semantic_ir::CallableKind::Method
+                            | crate::semantic_ir::CallableKind::FluentMethod
+                            | crate::semantic_ir::CallableKind::InlineMethod
+                    ) | (
+                        false,
+                        crate::semantic_ir::CallableKind::Procedure
+                            | crate::semantic_ir::CallableKind::Function
+                    )
+                )
+        })
+        .collect::<Vec<_>>();
+    candidates
+        .iter()
+        .copied()
+        .find(
+            |callable| match (function.receiver, callable.receiver.as_deref()) {
+                (None, None) => true,
+                (Some(TypeSuffix::Integer), Some(value)) => value.eq_ignore_ascii_case("integer"),
+                (Some(TypeSuffix::Long), Some(value)) => value.eq_ignore_ascii_case("long"),
+                (Some(TypeSuffix::Single), Some(value)) => value.eq_ignore_ascii_case("single"),
+                (Some(TypeSuffix::Double), Some(value)) => value.eq_ignore_ascii_case("double"),
+                (Some(TypeSuffix::String), Some(value)) => value.eq_ignore_ascii_case("string"),
+                _ => false,
+            },
+        )
+        .or_else(|| (candidates.len() == 1).then(|| candidates[0]))
+}
+
+fn semantic_dimension_capacity(
+    module: &crate::semantic_ir::SemanticModule,
+    dimension: &crate::semantic_ir::DimAxis,
+) -> Option<i64> {
+    match dimension {
+        crate::semantic_ir::DimAxis::Inferred => None,
+        crate::semantic_ir::DimAxis::Fixed(value) => crate::semantic_ir::parse_integer_value(value),
+        crate::semantic_ir::DimAxis::Expression(expression) => {
+            module.evaluate_integer_expression(expression)
+        }
+    }
 }
 
 /// Resolves every array parameter's per-axis storage capacity across the
@@ -3484,11 +13151,27 @@ fn infer_array_param_capacities(
     semantic_module: Option<&crate::semantic_ir::SemanticModule>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> HashMap<String, Vec<Vec<i64>>> {
-    let function_names: HashSet<String> = program
-        .functions
-        .iter()
-        .map(|f| f.name.name.to_ascii_lowercase())
-        .collect();
+    let function_names: HashSet<String> = if let Some(module) = semantic_module {
+        let mut names: HashSet<_> = module
+            .callables
+            .iter()
+            .map(|callable| BasicIdent::parse(&callable.name).name.to_ascii_lowercase())
+            .collect();
+        names.extend(
+            program
+                .functions
+                .iter()
+                .filter(|function| semantic_basic_callable_for_function(module, function).is_none())
+                .map(|function| function.name.name.to_ascii_lowercase()),
+        );
+        names
+    } else {
+        program
+            .functions
+            .iter()
+            .map(|function| function.name.name.to_ascii_lowercase())
+            .collect()
+    };
     let functions_by_name: HashMap<String, &FunctionDef> = program
         .functions
         .iter()
@@ -3503,6 +13186,11 @@ fn infer_array_param_capacities(
                 consts.insert(format!("{name}%"), vec![Expr::Integer(value)]);
             }
         }
+        for function in &program.functions {
+            if basic_semantic_callable_statements_by_source(module, function).is_none() {
+                collect_consts(&function.body, &mut consts);
+            }
+        }
     } else {
         collect_consts(&program.statements, &mut consts);
         for f in &program.functions {
@@ -3511,26 +13199,146 @@ fn infer_array_param_capacities(
     }
 
     let mut top_level_dim_sizes = HashMap::new();
-    collect_dim_sizes(&program.statements, &mut top_level_dim_sizes);
+    if semantic_module.is_none() {
+        collect_dim_sizes(&program.statements, &mut top_level_dim_sizes);
+    }
+    let semantic_top_level_dim_sizes = semantic_module.map(|module| {
+        module
+            .top_level_dim_declarations()
+            .into_iter()
+            .filter(|(_, declaration)| declaration.array_axes > 0)
+            .map(|(name, declaration)| {
+                let dimensions = declaration
+                    .dimensions
+                    .iter()
+                    .map(|dimension| semantic_dimension_capacity(module, dimension))
+                    .collect();
+                (name, dimensions)
+            })
+            .collect::<HashMap<_, Vec<Option<i64>>>>()
+    });
 
     let mut local_dim_sizes: HashMap<String, HashMap<String, Vec<Expr>>> = HashMap::new();
     for f in &program.functions {
-        let mut sizes = HashMap::new();
-        collect_dim_sizes(&f.body, &mut sizes);
-        local_dim_sizes.insert(f.name.name.to_ascii_lowercase(), sizes);
+        if semantic_module
+            .is_none_or(|module| basic_semantic_callable_statements_by_source(module, f).is_none())
+        {
+            let mut sizes = HashMap::new();
+            collect_dim_sizes(&f.body, &mut sizes);
+            local_dim_sizes.insert(f.name.name.to_ascii_lowercase(), sizes);
+        }
     }
+    let semantic_local_dim_sizes = semantic_module.map(|module| {
+        module
+            .callables
+            .iter()
+            .filter(|callable| {
+                callable.receiver.is_none()
+                    && matches!(
+                        callable.kind,
+                        crate::semantic_ir::CallableKind::Function
+                            | crate::semantic_ir::CallableKind::Procedure
+                    )
+            })
+            .map(|callable| {
+                let mut scoped_module = module.clone();
+                scoped_module.statements = callable.body.clone();
+                let dimensions = callable
+                    .dim_declarations()
+                    .into_iter()
+                    .filter(|(_, declaration)| declaration.array_axes > 0)
+                    .map(|(name, declaration)| {
+                        let capacities = declaration
+                            .dimensions
+                            .iter()
+                            .map(|dimension| semantic_dimension_capacity(&scoped_module, dimension))
+                            .collect();
+                        (name, capacities)
+                    })
+                    .collect();
+                (
+                    BasicIdent::parse(&callable.name).name.to_ascii_lowercase(),
+                    dimensions,
+                )
+            })
+            .collect::<HashMap<_, HashMap<String, Vec<Option<i64>>>>>()
+    });
 
-    let call_sites = collect_call_sites(program, &function_names);
+    let call_sites = if let Some(module) = semantic_module {
+        let mut sites = collect_semantic_call_sites(module, &function_names);
+        let legacy_sites = collect_call_sites(program, &function_names);
+        for (scope, callee, arguments) in legacy_sites {
+            let Some(scope_name) = scope.as_deref() else {
+                continue;
+            };
+            let Some(function) = program
+                .functions
+                .iter()
+                .find(|function| function.name.name.eq_ignore_ascii_case(scope_name))
+            else {
+                continue;
+            };
+            // Preserve AST call-site analysis only for callable bodies that
+            // cannot be aligned to semantic IR and therefore remain on the
+            // backend's explicit compatibility path.
+            if basic_semantic_callable_statements_by_source(module, function).is_none() {
+                sites.push((
+                    scope,
+                    callee.name.to_ascii_lowercase(),
+                    arguments
+                        .into_iter()
+                        .map(CapacityCallArgument::Legacy)
+                        .collect(),
+                ));
+            }
+        }
+        sites
+    } else {
+        collect_call_sites(program, &function_names)
+            .into_iter()
+            .map(|(scope, callee, arguments)| {
+                (
+                    scope,
+                    callee.name.to_ascii_lowercase(),
+                    arguments
+                        .into_iter()
+                        .map(CapacityCallArgument::Legacy)
+                        .collect(),
+                )
+            })
+            .collect()
+    };
 
     let mut resolved: HashMap<String, Vec<Vec<Option<i64>>>> = program
         .functions
         .iter()
         .map(|f| {
-            let per_param = f
-                .params
-                .iter()
-                .map(|p| p.axes.clone().unwrap_or_default())
-                .collect();
+            let per_param = semantic_module
+                .and_then(|module| semantic_basic_callable_for_function(module, f))
+                .map(|callable| {
+                    callable
+                        .parameters
+                        .iter()
+                        .map(|parameter| {
+                            parameter
+                                .dimensions
+                                .iter()
+                                .map(|dimension| {
+                                    semantic_dimension_capacity(
+                                        semantic_module.expect("semantic callable module"),
+                                        dimension,
+                                    )
+                                })
+                                .collect()
+                        })
+                        .collect()
+                })
+                .unwrap_or_else(|| {
+                    f.params
+                        .iter()
+                        .map(|parameter| parameter.axes.clone().unwrap_or_default())
+                        .collect()
+                });
             (f.name.name.to_ascii_lowercase(), per_param)
         })
         .collect();
@@ -3544,11 +13352,20 @@ fn infer_array_param_capacities(
         let mut changed = false;
         for f in &program.functions {
             let fname = f.name.name.to_ascii_lowercase();
-            for (param_index, param) in f.params.iter().enumerate() {
-                let Some(declared_axes) = &param.axes else {
+            let parameter_count = semantic_module
+                .and_then(|module| semantic_basic_callable_for_function(module, f))
+                .map(|callable| callable.parameters.len())
+                .unwrap_or(f.params.len());
+            for param_index in 0..parameter_count {
+                let axis_count = resolved
+                    .get(&fname)
+                    .and_then(|parameters| parameters.get(param_index))
+                    .map(Vec::len)
+                    .unwrap_or_default();
+                if axis_count == 0 {
                     continue;
-                };
-                for axis in 0..declared_axes.len() {
+                }
+                for axis in 0..axis_count {
                     if resolved[&fname][param_index][axis].is_some() {
                         continue;
                     }
@@ -3556,22 +13373,44 @@ fn infer_array_param_capacities(
                     let mut all_resolved = true;
                     let mut any_call_site = false;
                     for (scope, callee, call_args) in &call_sites {
-                        if callee.name.to_ascii_lowercase() != fname {
+                        if callee != &fname {
                             continue;
                         }
                         let Some(arg) = call_args.get(param_index) else {
                             continue;
                         };
-                        match resolve_call_arg_bound(
-                            scope,
-                            arg,
-                            axis,
-                            &resolved,
-                            &local_dim_sizes,
-                            &top_level_dim_sizes,
-                            &functions_by_name,
-                            &consts,
-                        ) {
+                        let bound = match arg {
+                            CapacityCallArgument::Legacy(argument) => resolve_call_arg_bound(
+                                scope,
+                                argument,
+                                axis,
+                                &resolved,
+                                &local_dim_sizes,
+                                semantic_local_dim_sizes.as_ref(),
+                                &top_level_dim_sizes,
+                                semantic_top_level_dim_sizes.as_ref(),
+                                &functions_by_name,
+                                &consts,
+                            ),
+                            CapacityCallArgument::Semantic(argument) => {
+                                let module = semantic_module
+                                    .expect("semantic callsites require a semantic module");
+                                resolve_semantic_call_arg_bound(
+                                    scope,
+                                    argument,
+                                    module,
+                                    &resolved,
+                                    semantic_local_dim_sizes
+                                        .as_ref()
+                                        .expect("semantic callable DIM facts are available"),
+                                    semantic_top_level_dim_sizes
+                                        .as_ref()
+                                        .expect("semantic top-level DIM facts are available"),
+                                    axis,
+                                )
+                            }
+                        };
+                        match bound {
                             ArgBound::NotAnArray => {}
                             ArgBound::Unresolvable => {
                                 any_call_site = true;
@@ -3603,31 +13442,73 @@ fn infer_array_param_capacities(
     // it with the runtime check `call_lines` emits for the general case.
     for f in &program.functions {
         let fname = f.name.name.to_ascii_lowercase();
-        for (param_index, param) in f.params.iter().enumerate() {
-            let Some(declared_axes) = &param.axes else {
+        let semantic_parameters = semantic_module
+            .and_then(|module| semantic_basic_callable_for_function(module, f))
+            .map(|callable| callable.parameters.as_slice());
+        let parameter_count = semantic_parameters
+            .map(|parameters| parameters.len())
+            .unwrap_or(f.params.len());
+        for param_index in 0..parameter_count {
+            let param_name = semantic_parameters
+                .and_then(|parameters| parameters.get(param_index))
+                .map(|parameter| parameter.name.clone())
+                .or_else(|| {
+                    f.params
+                        .get(param_index)
+                        .map(|parameter| parameter.name.as_basic())
+                })
+                .unwrap_or_default();
+            let axis_count = resolved
+                .get(&fname)
+                .and_then(|parameters| parameters.get(param_index))
+                .map(Vec::len)
+                .unwrap_or_default();
+            if axis_count == 0 {
                 continue;
-            };
-            for axis in 0..declared_axes.len() {
+            }
+            for axis in 0..axis_count {
                 let Some(capacity) = resolved[&fname][param_index][axis] else {
                     continue;
                 };
                 for (scope, callee, call_args) in &call_sites {
-                    if callee.name.to_ascii_lowercase() != fname {
+                    if callee != &fname {
                         continue;
                     }
                     let Some(arg) = call_args.get(param_index) else {
                         continue;
                     };
-                    if let ArgBound::Resolved(actual) = resolve_call_arg_bound(
-                        scope,
-                        arg,
-                        axis,
-                        &resolved,
-                        &local_dim_sizes,
-                        &top_level_dim_sizes,
-                        &functions_by_name,
-                        &consts,
-                    ) {
+                    let bound = match arg {
+                        CapacityCallArgument::Legacy(argument) => resolve_call_arg_bound(
+                            scope,
+                            argument,
+                            axis,
+                            &resolved,
+                            &local_dim_sizes,
+                            semantic_local_dim_sizes.as_ref(),
+                            &top_level_dim_sizes,
+                            semantic_top_level_dim_sizes.as_ref(),
+                            &functions_by_name,
+                            &consts,
+                        ),
+                        CapacityCallArgument::Semantic(argument) => {
+                            let module = semantic_module
+                                .expect("semantic callsites require a semantic module");
+                            resolve_semantic_call_arg_bound(
+                                scope,
+                                argument,
+                                module,
+                                &resolved,
+                                semantic_local_dim_sizes
+                                    .as_ref()
+                                    .expect("semantic callable DIM facts are available"),
+                                semantic_top_level_dim_sizes
+                                    .as_ref()
+                                    .expect("semantic top-level DIM facts are available"),
+                                axis,
+                            )
+                        }
+                    };
+                    if let ArgBound::Resolved(actual) = bound {
                         if actual > capacity {
                             diagnostics.push(Diagnostic::error(
                                 SourcePos::new("<validation>", 1, 1),
@@ -3635,7 +13516,7 @@ fn infer_array_param_capacities(
                                     "a call to `{}` passes {} elements along axis {} of `{}`, \
                                      but its storage is only sized for {} -- give `{}` a \
                                      bigger explicit capacity",
-                                    f.name, actual, axis, param.name, capacity, param.name,
+                                    f.name, actual, axis, param_name, capacity, param_name,
                                 ),
                             ));
                         }
@@ -3649,32 +13530,57 @@ fn infer_array_param_capacities(
     // inferred -- either no call site could be resolved, or the parameter
     // is never called at all.
     for f in &program.functions {
-        let fname = f.name.name.to_ascii_lowercase();
-        for (param_index, param) in f.params.iter().enumerate() {
-            let Some(declared_axes) = &param.axes else {
+        let semantic_callable =
+            semantic_module.and_then(|module| semantic_basic_callable_for_function(module, f));
+        let fname = semantic_callable
+            .map(|callable| BasicIdent::parse(&callable.name).name.to_ascii_lowercase())
+            .unwrap_or_else(|| f.name.name.to_ascii_lowercase());
+        let callable_name = semantic_callable
+            .map(|callable| callable.name.clone())
+            .unwrap_or_else(|| f.name.as_basic());
+        let parameter_names: Vec<String> = semantic_callable
+            .map(|callable| {
+                callable
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.name.clone())
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                f.params
+                    .iter()
+                    .map(|parameter| parameter.name.as_basic())
+                    .collect()
+            });
+        for (param_index, param_name) in parameter_names.iter().enumerate() {
+            let axis_count = resolved
+                .get(&fname)
+                .and_then(|parameters| parameters.get(param_index))
+                .map(Vec::len)
+                .unwrap_or_default();
+            if axis_count == 0 {
                 continue;
-            };
-            for axis in 0..declared_axes.len() {
+            }
+            for axis in 0..axis_count {
                 if resolved[&fname][param_index][axis].is_some() {
                     continue;
                 }
                 let any_call_site = call_sites.iter().any(|(_, callee, call_args)| {
-                    callee.name.to_ascii_lowercase() == fname
-                        && call_args.get(param_index).is_some()
+                    callee == &fname && call_args.get(param_index).is_some()
                 });
                 let message = if any_call_site {
                     format!(
                         "can't automatically size `{}`'s storage along axis {} of `{}` -- at \
                          least one call site passes an array whose size isn't a compile-time \
                          constant. Give it an explicit capacity instead of `?`, e.g. `{}(100)`",
-                        param.name, axis, f.name, param.name,
+                        param_name, axis, callable_name, param_name,
                     )
                 } else {
                     format!(
                         "can't automatically size `{}`'s storage along axis {} of `{}` -- `{}` \
                          is never called, so there's no call site to infer a capacity from. \
                          Give it an explicit capacity instead of `?`, e.g. `{}(100)`",
-                        param.name, axis, f.name, f.name, param.name,
+                        param_name, axis, callable_name, callable_name, param_name,
                     )
                 };
                 diagnostics.push(Diagnostic::error(
@@ -3757,6 +13663,18 @@ pub(crate) fn collect_record_buffer_names(program: &Program) -> HashSet<String> 
     names
 }
 
+fn semantic_record_buffer_names(module: &crate::semantic_ir::SemanticModule) -> HashSet<String> {
+    let mut names = module.record_buffer_names();
+    for file in &module.lowered_record_files {
+        names.extend(
+            file.fields
+                .iter()
+                .map(|field| field.buffer_name.to_ascii_lowercase()),
+        );
+    }
+    names
+}
+
 fn collect_record_buffer_names_in(stmts: &[Stmt], names: &mut HashSet<String>) {
     for stmt in stmts {
         match &stmt.kind {
@@ -3802,18 +13720,11 @@ fn collect_record_buffer_names_in(stmts: &[Stmt], names: &mut HashSet<String>) {
     }
 }
 
-/// Name (sans type suffix) of the require-able `com.bascal.stdlib.
-/// midAssign` helper function `Statement::MidAssign` transpiles into a call
-/// to -- shared with `lib::inject_mid_assign_helper_if_used`, which
-/// resolves and auto-injects it, so the two can't drift out of sync.
+/// Name (sans type suffix) of the optional require-able `com.bascal.stdlib.
+/// midAssign` compatibility function. The BASIC backend handles statement-
+/// form MID$ assignment inline; the JVM backend recognizes explicitly
+/// required legacy helper definitions.
 pub(crate) const MID_ASSIGN_HELPER_NAME: &str = "midAssign";
-
-/// `BasicIdent` for `com.bascal.stdlib.midAssign`. Case-insensitive lookup
-/// (`same_ident`/`function_info`) means this matches the function
-/// regardless of how its own source spells the name.
-fn mid_assign_helper_ident() -> BasicIdent {
-    BasicIdent::parse(&format!("{MID_ASSIGN_HELPER_NAME}$"))
-}
 
 /// Returns a `BasicIdent` whose BASIC form is not present in `taken`.
 /// Always uses the indexed form `preferredStem0`, `1`, … so that allocated
@@ -4295,6 +14206,56 @@ fn callable_expr(expr: &Expr) -> Option<(&BasicIdent, &[Expr])> {
     }
 }
 
+fn semantic_integer_literal_axis(expression: &crate::semantic_ir::Expression) -> Option<i64> {
+    use crate::semantic_ir::ExpressionKind;
+    match &expression.kind {
+        ExpressionKind::Literal(value) => value.parse().ok(),
+        ExpressionKind::Parenthesized(inner) => semantic_integer_literal_axis(inner),
+        _ => None,
+    }
+}
+
+fn semantic_array_designator(expression: &crate::semantic_ir::Expression) -> Option<&str> {
+    use crate::semantic_ir::ExpressionKind;
+    match &expression.kind {
+        ExpressionKind::Name(name) => Some(name),
+        ExpressionKind::Parenthesized(inner) => semantic_array_designator(inner),
+        _ => None,
+    }
+}
+
+fn semantic_record_storage_names(module: &crate::semantic_ir::SemanticModule) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for (variable, record_type) in module.record_variable_types() {
+        let Some(record) = module
+            .records
+            .iter()
+            .find(|record| record.name.eq_ignore_ascii_case(&record_type))
+        else {
+            continue;
+        };
+        let mut fields = Vec::new();
+        collect_semantic_record_fields(&module.records, record, &mut fields);
+        for field in fields {
+            let suffix = match field.field_type {
+                crate::semantic_ir::RecordFieldType::String { .. } => TypeSuffix::String,
+                crate::semantic_ir::RecordFieldType::Int16 { .. }
+                | crate::semantic_ir::RecordFieldType::Int { .. } => TypeSuffix::Integer,
+                crate::semantic_ir::RecordFieldType::Int32 { .. } => TypeSuffix::Long,
+                crate::semantic_ir::RecordFieldType::Float32 { .. } => TypeSuffix::Single,
+                crate::semantic_ir::RecordFieldType::Float64 { .. } => TypeSuffix::Double,
+                crate::semantic_ir::RecordFieldType::Record { .. } => continue,
+            };
+            let storage = BasicIdent {
+                name: camel_join(&[&variable, &field.name]),
+                suffix: Some(suffix),
+            };
+            names.insert(storage.as_basic().to_ascii_lowercase());
+        }
+    }
+    names
+}
+
 /// Bound for one axis of an array argument: the arguments immediately
 /// following the array argument are its per-axis element counts, in the
 /// same order as `DIM`'s own bounds -- `axis` 0 is the first of these.
@@ -4456,6 +14417,58 @@ fn ends_with_return(statements: &[Stmt]) -> bool {
         .rev()
         .find(|s| !matches!(&***s, Statement::BlankLine))
         .is_some_and(|s| matches!(&**s, Statement::Return { .. } | Statement::ReturnVoid))
+}
+
+fn ends_with_emitted_return(
+    ast_statements: &[Stmt],
+    semantic_statements: &[Option<&crate::semantic_ir::SemanticStatement>],
+) -> bool {
+    for (index, ast_statement) in ast_statements.iter().enumerate().rev() {
+        if let Some(semantic) = semantic_statements.get(index).copied().flatten() {
+            if matches!(
+                &semantic.kind,
+                crate::semantic_ir::SemanticStatementKind::Comment { .. }
+            ) {
+                continue;
+            }
+            return matches!(
+                &semantic.kind,
+                crate::semantic_ir::SemanticStatementKind::Return(_)
+            );
+        }
+        match &**ast_statement {
+            Statement::BlankLine | Statement::Raw(_) | Statement::BlockComment(_) => continue,
+            Statement::Return { .. } | Statement::ReturnVoid => return true,
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn ends_with_semantic_return(statements: &[crate::semantic_ir::SemanticStatement]) -> bool {
+    fn last_statement(
+        statements: &[crate::semantic_ir::SemanticStatement],
+    ) -> Option<&crate::semantic_ir::SemanticStatement> {
+        for statement in statements.iter().rev() {
+            match &statement.kind {
+                crate::semantic_ir::SemanticStatementKind::Line(body) => {
+                    if let Some(last) = last_statement(body) {
+                        return Some(last);
+                    }
+                }
+                crate::semantic_ir::SemanticStatementKind::Comment { .. } => continue,
+                _ => return Some(statement),
+            }
+        }
+        None
+    }
+
+    last_statement(statements).is_some_and(|statement| {
+        matches!(
+            &statement.kind,
+            crate::semantic_ir::SemanticStatementKind::Return(_)
+        )
+    })
 }
 
 /// Renders `source` (the generator's raw, unnumbered text) into real BASIC
@@ -4827,6 +14840,107 @@ pub(crate) fn check_generated_name_conflicts(program: &Program) -> Vec<Diagnosti
         }
     }
 
+    diagnostics
+}
+
+/// Semantic-IR entry point for generated-name validation. The legacy AST
+/// overload remains for parser-only compatibility callers.
+pub(crate) fn check_generated_name_conflicts_semantic(
+    module: &crate::semantic_ir::SemanticModule,
+    common_blocks: &[CommonBlock],
+) -> Vec<Diagnostic> {
+    use crate::semantic_ir::CallableKind;
+    let mut globals: HashSet<String> = module.name_scopes().global_names.into_iter().collect();
+    for callable in &module.callables {
+        globals.extend(crate::semantic_ir::SemanticModule::global_declarations_in(
+            &callable.body,
+        ));
+    }
+    for block in common_blocks {
+        for variable in &block.vars {
+            globals.insert(variable.name.as_basic().to_ascii_lowercase());
+        }
+    }
+    let builtin_stems: HashSet<&str> = BASIC_BUILTINS.iter().copied().collect();
+    let function_stems: HashSet<String> = module
+        .callables
+        .iter()
+        .map(|callable| sanitize_symbol(&BasicIdent::parse(&callable.name).name))
+        .collect();
+    let mut diagnostics = Vec::new();
+    for callable in &module.callables {
+        if !matches!(
+            callable.kind,
+            CallableKind::Function
+                | CallableKind::Procedure
+                | CallableKind::Method
+                | CallableKind::FluentMethod
+                | CallableKind::InlineMethod
+        ) {
+            continue;
+        }
+        let function = BasicIdent::parse(&callable.name);
+        let stem = sanitize_symbol(&function.name);
+        let param_keys: HashSet<String> = callable
+            .parameters
+            .iter()
+            .map(|parameter| {
+                BasicIdent::parse(&parameter.name)
+                    .as_basic()
+                    .to_ascii_lowercase()
+            })
+            .collect();
+        let global_decls =
+            crate::semantic_ir::SemanticModule::global_declarations_in(&callable.body);
+        check_one_conflict(
+            &globals,
+            &stem,
+            "result",
+            function.suffix,
+            &function,
+            &format!("result variable for `{}`", function.as_basic()),
+            &mut diagnostics,
+        );
+        for parameter in &callable.parameters {
+            let parameter_ident = BasicIdent::parse(&parameter.name);
+            check_one_conflict(
+                &globals,
+                &stem,
+                &sanitize_symbol(&parameter_ident.name),
+                parameter_ident.suffix,
+                &function,
+                &format!(
+                    "parameter `{}` of `{}`",
+                    parameter_ident.as_basic(),
+                    function.as_basic()
+                ),
+                &mut diagnostics,
+            );
+        }
+        for key in crate::semantic_ir::SemanticModule::names_in_statements(&callable.body) {
+            if param_keys.contains(&key) || global_decls.contains(&key) {
+                continue;
+            }
+            let local = BasicIdent::parse(&key);
+            let bare = local.name.to_ascii_lowercase();
+            if builtin_stems.contains(bare.as_str()) || function_stems.contains(&bare) {
+                continue;
+            }
+            check_one_conflict(
+                &globals,
+                &stem,
+                &sanitize_symbol(&local.name),
+                local.suffix,
+                &function,
+                &format!(
+                    "local variable `{}` in `{}`",
+                    local.as_basic(),
+                    function.as_basic()
+                ),
+                &mut diagnostics,
+            );
+        }
+    }
     diagnostics
 }
 
