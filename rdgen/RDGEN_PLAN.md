@@ -8311,3 +8311,104 @@ Iteration 1258 verifies Graphify output remains generated and untracked.
 
 Iteration 1259 records this checkpoint; complete typed-IR-only codegen remains
 open.
+
+Iteration 1260 audits the C nested semantic statement dispatcher.
+
+Iteration 1261 confirms root-level C `GOTO` dispatch already consumes typed IR.
+
+Iteration 1262 confirms root-level C labels already consume typed IR.
+
+Iteration 1263 identifies nested `GOTO` as an AST fallback gap.
+
+Iteration 1264 identifies nested labels as an AST fallback gap.
+
+Iteration 1265 checks generated C label naming against root-level dispatch.
+
+Iteration 1266 checks nested labels remain function-scoped by C syntax.
+
+Iteration 1267 adds typed nested `LABEL` emission.
+
+Iteration 1268 adds typed nested `GOTO` emission.
+
+Iteration 1269 preserves the existing lowercase label normalization.
+
+Iteration 1270 adds a module nested control-transfer regression.
+
+Iteration 1271 uses mismatched AST and typed label names in that regression.
+
+Iteration 1272 verifies module C output jumps to the typed label.
+
+Iteration 1273 verifies module C output defines the typed label.
+
+Iteration 1274 verifies the module AST label does not leak into output.
+
+Iteration 1275 adds a callable nested control-transfer regression.
+
+Iteration 1276 uses mismatched AST and typed callable label names.
+
+Iteration 1277 verifies callable C output jumps to the typed label.
+
+Iteration 1278 verifies callable C output defines the typed label.
+
+Iteration 1279 verifies the callable AST label does not leak into output.
+
+Iteration 1280 runs the focused module control-transfer test successfully.
+
+Iteration 1281 runs the focused callable control-transfer test successfully.
+
+Iteration 1282 confirms typed nested `RESTORE` remains covered.
+
+Iteration 1283 confirms typed nested `ERASE` remains covered.
+
+Iteration 1284 confirms module-level C control-transfer output is unchanged.
+
+Iteration 1285 confirms callable root-level C control-transfer output is unchanged.
+
+Iteration 1286 checks `GOSUB` remains outside this label-only slice.
+
+Iteration 1287 checks label target resolution remains owned by the resolver.
+
+Iteration 1288 checks codegen does not re-resolve labels against the AST.
+
+Iteration 1289 checks generated C uses the existing label prefix.
+
+Iteration 1290 checks generated C uses deterministic label casing.
+
+Iteration 1291 refreshes Graphify after the nested dispatch change.
+
+Iteration 1292 runs `cargo check --locked` successfully.
+
+Iteration 1293 runs all 1,164 library tests successfully.
+
+Iteration 1294 runs all 19 CLI tests successfully.
+
+Iteration 1295 runs all 11 DOSBox conformance tests successfully.
+
+Iteration 1296 runs all 51 example tests successfully.
+
+Iteration 1297 runs all 110 JVM conformance tests successfully.
+
+Iteration 1298 runs the language conformance test successfully.
+
+Iteration 1299 runs all 11 general-purpose record tests successfully.
+
+Iteration 1300 runs all 40 record-method tests successfully.
+
+Iteration 1301 confirms the doctest target passes.
+
+Iteration 1302 runs `git diff --check` successfully.
+
+Iteration 1303 inspects the changes for unrelated edits.
+
+Iteration 1304 confirms only the C backend and iteration plan are modified.
+
+Iteration 1305 confirms Graphify output remains generated analysis data.
+
+Iteration 1306 confirms the worktree has no generated graph changes.
+
+Iteration 1307 records module and callable nested label coverage.
+
+Iteration 1308 records that C nested control transfers now use typed IR.
+
+Iteration 1309 records this checkpoint; complete typed-IR-only codegen remains
+open.

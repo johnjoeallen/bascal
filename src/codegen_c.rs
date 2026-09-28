@@ -7548,6 +7548,14 @@ fn emit_c_semantic_for_body(
                 };
                 out.push_str(&format!("    bcc_data_ptr = {cursor};\n"));
             }
+            Kind::Label(name) => out.push_str(&format!(
+                "    bcc_lbl_{}:;\n",
+                name.name.to_ascii_lowercase()
+            )),
+            Kind::Goto(target) => out.push_str(&format!(
+                "    goto bcc_lbl_{};\n",
+                target.name.to_ascii_lowercase()
+            )),
             // DATA items are collected into the program-wide pool before
             // block emission, including callable and nested block bodies.
             Kind::Data(_) => {}
@@ -25812,6 +25820,77 @@ mod dialect_tests {
         assert!(
             output.contains("\"9\""),
             "semantic DATA sequence missing: {output}"
+        );
+    }
+
+    #[test]
+    fn c_nested_semantic_goto_and_label_use_typed_ir() {
+        let ast_source = "if true then\ngoto oldTarget\nend if\noldTarget:\nend\n";
+        let semantic_source = "if true then\ngoto newTarget\nend if\nnewTarget:\nend\n";
+        let parsed = parse_source("c_nested_semantic_goto.bcl".to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_nested_semantic_goto.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(
+            output.contains("goto bcc_lbl_newtarget;"),
+            "typed nested GOTO missing: {output}"
+        );
+        assert!(
+            output.contains("bcc_lbl_newtarget:;"),
+            "typed nested label missing: {output}"
+        );
+        assert!(
+            !output.contains("oldtarget"),
+            "AST control transfer replaced typed IR: {output}"
+        );
+    }
+
+    #[test]
+    fn c_callable_nested_semantic_goto_and_label_use_typed_ir() {
+        let ast_source = "procedure worker()\nif true then\ngoto oldTarget\nend if\noldTarget:\nend procedure\nworker()\nend\n";
+        let semantic_source = "procedure worker()\nif true then\ngoto newTarget\nend if\nnewTarget:\nend procedure\nworker()\nend\n";
+        let parsed = parse_source(
+            "c_callable_nested_semantic_goto.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_callable_nested_semantic_goto.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        let worker = output
+            .split("void bf_i_worker(void) {")
+            .nth(1)
+            .unwrap_or_else(|| panic!("generated worker missing: {output}"))
+            .split("\n}")
+            .next()
+            .unwrap();
+        assert!(
+            worker.contains("goto bcc_lbl_newtarget;"),
+            "typed callable GOTO missing: {worker}"
+        );
+        assert!(
+            worker.contains("bcc_lbl_newtarget:;"),
+            "typed callable label missing: {worker}"
+        );
+        assert!(
+            !worker.contains("oldtarget"),
+            "AST callable control transfer replaced typed IR: {worker}"
         );
     }
 
