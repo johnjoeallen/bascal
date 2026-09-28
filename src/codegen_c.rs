@@ -7525,6 +7525,9 @@ fn emit_c_semantic_for_body(
                     return false;
                 }
             }
+            // Compiled C arrays have fixed storage; ERASE has no runtime
+            // effect in this backend.
+            Kind::Erase(_) => {}
             // DATA items are collected into the program-wide pool before
             // block emission, including callable and nested block bodies.
             Kind::Data(_) => {}
@@ -10793,6 +10796,7 @@ pub(crate) fn generate(
                         }
                     }
                     Kind::Global { .. } => {}
+                    Kind::Erase(_) => {}
                     Kind::Field { channel, bindings } => {
                         return apply_semantic_field_statement(channel, bindings, &mut file_io);
                     }
@@ -12410,6 +12414,7 @@ fn emit_function_def(
                             )
                     }
                     Kind::Global { .. } => true,
+                    Kind::Erase(_) => true,
                     // DATA payloads are collected from semantic IR into the
                     // module-wide data table before statement emission.
                     Kind::Data(_) => true,
@@ -23351,6 +23356,99 @@ mod dialect_tests {
         let output = generate(&resolved, Target::C).expect("C codegen succeeds").app;
         assert!(output.contains("printf(\"typed\\n\");"), "typed callable LPRINT missing: {output}");
         assert!(!output.contains("printf(\"ast\\n\");"), "AST callable LPRINT replaced typed IR: {output}");
+    }
+
+    #[test]
+    fn c_module_typed_erase_consumes_fixed_array_declaration() {
+        let ast_source = "dim values%(2)\nprint 99\nend\n";
+        let semantic_source = "dim values%(2)\nerase values%\nend\n";
+        let parsed = parse_source("c_semantic_erase.bcl".to_string(), ast_source)
+            .expect("legacy source parses");
+        let lower::Lowered { program, .. } = lower::lower(parsed).expect("legacy source lowers");
+        let resolved = resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named("c_semantic_erase.bcl", semantic_source)
+                    .expect("typed source parses"),
+            ),
+        )
+        .expect("semantic ERASE resolves");
+
+        let output = generate(&resolved, Target::C)
+            .expect("C codegen succeeds")
+            .app;
+        assert!(
+            output.contains("values"),
+            "fixed array storage missing: {output}"
+        );
+        assert!(
+            !output.contains("99"),
+            "AST PRINT replaced typed ERASE: {output}"
+        );
+    }
+
+    #[test]
+    fn c_callable_nested_typed_erase_consumes_fixed_array_declaration() {
+        let ast_source = "procedure worker()\ndim values%(2)\nif true then\nprint 98\nend if\nend procedure\nworker()\nend\n";
+        let semantic_source = "procedure worker()\ndim values%(2)\nif true then\nerase values%\nend if\nend procedure\nworker()\nend\n";
+        let parsed = parse_source("c_callable_semantic_erase.bcl".to_string(), ast_source)
+            .expect("legacy source parses");
+        let lower::Lowered { program, .. } = lower::lower(parsed).expect("legacy source lowers");
+        let resolved = resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named(
+                    "c_callable_semantic_erase.bcl",
+                    semantic_source,
+                )
+                .expect("typed source parses"),
+            ),
+        )
+        .expect("semantic callable ERASE resolves");
+
+        let output = generate(&resolved, Target::C)
+            .expect("C codegen succeeds")
+            .app;
+        assert!(
+            output.contains("values"),
+            "fixed callable array storage missing: {output}"
+        );
+        assert!(
+            !output.contains("98"),
+            "AST PRINT replaced typed callable ERASE: {output}"
+        );
+    }
+
+    #[test]
+    fn c_callable_typed_erase_consumes_fixed_array_declaration() {
+        let ast_source = "procedure worker()\ndim values%(2)\nprint 97\nend procedure\nworker()\nend\n";
+        let semantic_source = "procedure worker()\ndim values%(2)\nerase values%\nend procedure\nworker()\nend\n";
+        let parsed = parse_source("c_callable_semantic_erase.bcl".to_string(), ast_source)
+            .expect("legacy source parses");
+        let lower::Lowered { program, .. } = lower::lower(parsed).expect("legacy source lowers");
+        let resolved = resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named(
+                    "c_callable_semantic_erase.bcl",
+                    semantic_source,
+                )
+                .expect("typed source parses"),
+            ),
+        )
+        .expect("semantic callable ERASE resolves");
+
+        let output = generate(&resolved, Target::C)
+            .expect("C codegen succeeds")
+            .app;
+        assert!(
+            output.contains("values"),
+            "fixed callable array storage missing: {output}"
+        );
+        assert!(
+            !output.contains("97"),
+            "AST PRINT replaced typed callable ERASE: {output}"
+        );
     }
 
     #[test]

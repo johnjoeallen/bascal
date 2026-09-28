@@ -8108,3 +8108,105 @@ Iteration 1157 confirms the doctest target passes.
 Iteration 1158 records fixed-array `ERASE` coverage in module and callable scopes.
 
 Iteration 1159 records this completed checkpoint; typed-IR-only codegen remains open.
+
+Iteration 1160 refreshes Graphify after the typed-IR codegen checkpoint.
+
+Iteration 1161 queries remaining cross-backend AST and typed-IR paths.
+
+Iteration 1162 traces C `ERASE` handling in the source tree.
+
+Iteration 1163 confirms compiled C arrays use fixed storage.
+
+Iteration 1164 confirms C has no runtime `ERASE` operation to emit.
+
+Iteration 1165 identifies module `ERASE` as a typed dispatch gap.
+
+Iteration 1166 identifies callable `ERASE` as a typed dispatch gap.
+
+Iteration 1167 identifies nested-block `ERASE` as a typed dispatch gap.
+
+Iteration 1168 adds module typed `ERASE` dispatch with no runtime effect.
+
+Iteration 1169 adds callable typed `ERASE` dispatch with no runtime effect.
+
+Iteration 1170 adds nested-block typed `ERASE` dispatch with no runtime effect.
+
+Iteration 1171 verifies the new dispatch does not inspect array names.
+
+Iteration 1172 verifies the new dispatch does not infer array element types.
+
+Iteration 1173 verifies the new dispatch does not allocate or release storage.
+
+Iteration 1174 adds a module regression with a mismatched AST `PRINT`.
+
+Iteration 1175 verifies module codegen emits the typed statement stream.
+
+Iteration 1176 verifies module fixed array storage remains present.
+
+Iteration 1177 adds a callable nested-block regression with mismatched AST.
+
+Iteration 1178 verifies nested callable dispatch consumes typed `ERASE`.
+
+Iteration 1179 verifies nested callable fixed array storage remains present.
+
+Iteration 1180 adds a callable root-statement regression with mismatched AST.
+
+Iteration 1181 verifies callable root dispatch consumes typed `ERASE`.
+
+Iteration 1182 verifies no AST `PRINT` literal leaks into module output.
+
+Iteration 1183 verifies no AST `PRINT` literal leaks into callable output.
+
+Iteration 1184 runs the focused module regression successfully.
+
+Iteration 1185 runs the focused nested callable regression successfully.
+
+Iteration 1186 runs the focused callable root regression successfully.
+
+Iteration 1187 checks source-aligned module statement dispatch.
+
+Iteration 1188 checks callable semantic statement dispatch.
+
+Iteration 1189 checks the recursive nested-body dispatcher.
+
+Iteration 1190 checks no compatibility AST path is needed for typed `ERASE`.
+
+Iteration 1191 checks no BASIC codegen backend behavior changed.
+
+Iteration 1192 checks no JVM codegen backend behavior changed.
+
+Iteration 1193 checks no resolver or typed-IR contract changed.
+
+Iteration 1194 checks no parser or diagnostic behavior changed.
+
+Iteration 1195 confirms Graphify output remains generated analysis data.
+
+Iteration 1196 runs all 1,160 library tests successfully.
+
+Iteration 1197 runs all 19 CLI tests successfully.
+
+Iteration 1198 runs all 11 DOSBox tests successfully.
+
+Iteration 1199 runs all 51 example tests successfully.
+
+Iteration 1200 runs all 110 JVM conformance tests successfully.
+
+Iteration 1201 runs the language conformance test successfully.
+
+Iteration 1202 runs all 11 general-purpose record tests successfully.
+
+Iteration 1203 runs all 40 record-method tests successfully.
+
+Iteration 1204 confirms the doctest target passes.
+
+Iteration 1205 runs `git diff --check` successfully.
+
+Iteration 1206 reviews formatting for the new C regressions.
+
+Iteration 1207 records workspace-wide `cargo fmt --check` failures in existing
+unrelated formatting across multiple files.
+
+Iteration 1208 keeps formatting changes scoped to the new C regression code.
+
+Iteration 1209 records this checkpoint; complete typed-IR-only codegen remains
+open.
