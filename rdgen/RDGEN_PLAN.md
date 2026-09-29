@@ -17483,3 +17483,13 @@ Iteration 5804 made the C semantic assignment suffix collector require the resol
 Iteration 5805 added focused C coverage proving an Unknown assignment target does not yield a semantic storage suffix.
 
 Iteration 5806 refreshed Graphify and validated the complete locked workspace suite after C assignment target typing changes.
+
+Iteration 5807 removed compatibility-AST suffix fallback from C semantic callable-global storage names.
+
+Iteration 5808 made C annotated DIM storage use the resolved typed-IR element type instead of the identifier suffix.
+
+Iteration 5809 populated C semantic storage filters from typed-IR variable references so typed reads remain subject to target capability checks.
+
+Iteration 5810 derived C lowered record-file buffer suffixes from `LoweredRecordFieldKind` and added mapping coverage for every field kind.
+
+Iteration 5811 refreshed Graphify and validated the complete locked workspace suite after C semantic storage-name filtering changes.

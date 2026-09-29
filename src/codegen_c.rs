@@ -2113,6 +2113,18 @@ fn c_suffix_for_semantic_record_field(
     }
 }
 
+fn c_suffix_for_lowered_record_field(
+    field_kind: crate::semantic_ir::LoweredRecordFieldKind,
+) -> TypeSuffix {
+    match field_kind {
+        crate::semantic_ir::LoweredRecordFieldKind::String { .. } => TypeSuffix::String,
+        crate::semantic_ir::LoweredRecordFieldKind::Int16 => TypeSuffix::Integer,
+        crate::semantic_ir::LoweredRecordFieldKind::Int32 => TypeSuffix::Long,
+        crate::semantic_ir::LoweredRecordFieldKind::Float32 => TypeSuffix::Single,
+        crate::semantic_ir::LoweredRecordFieldKind::Float64 => TypeSuffix::Double,
+    }
+}
+
 fn semantic_callable_signature<'a>(
     module: &'a crate::semantic_ir::SemanticModule,
     function: &FunctionDef,
@@ -19221,9 +19233,8 @@ fn reject_float(
                         let ident = BasicIdent::parse(&name);
                         let suffix = semantic_dim_suffixes
                             .get(&ident.name.to_ascii_lowercase())
-                            .copied()
-                            .or(ident.suffix);
-                        suffix.map(|suffix| c_var_name(&ident, suffix))
+                            .copied()?;
+                        Some(c_var_name(&ident, suffix))
                     })
                     .collect()
             } else {
@@ -19288,7 +19299,7 @@ fn reject_float(
                     continue;
                 };
                 let ident = BasicIdent::parse(&name);
-                let typed_suffix = ident.suffix.unwrap_or(value_type);
+                let typed_suffix = value_type;
                 semantic_dim_suffixes.insert(ident.name.to_ascii_lowercase(), typed_suffix);
                 for candidate_suffix in [
                     TypeSuffix::Integer,
@@ -19590,7 +19601,7 @@ fn reject_float(
             } else {
                 ident.name.clone()
             };
-            let Some(suffix) = semantic_suffix.or(ident.suffix) else {
+            let Some(suffix) = semantic_suffix else {
                 return;
             };
             allowed_c_names.insert(c_var_name(
@@ -19606,9 +19617,9 @@ fn reject_float(
             let suffix = semantic_dim_suffixes
                 .get(&ident.name.to_ascii_lowercase())
                 .copied();
-            ident.suffix = suffix.or(ident.suffix);
+            ident.suffix = suffix;
             add_typed_name(&name, suffix);
-            if let Some(suffix @ (TypeSuffix::Single | TypeSuffix::Double)) = ident.suffix {
+            if let Some(suffix @ (TypeSuffix::Single | TypeSuffix::Double)) = suffix {
                 register_var(
                     &BasicIdent {
                         name: if ident.name.contains('.') {
@@ -19625,6 +19636,18 @@ fn reject_float(
         }
         for (name, suffix) in &semantic_dim_suffixes {
             add_typed_name(name, Some(*suffix));
+        }
+        for (name, value_type) in crate::semantic_ir::SemanticModule::typed_names_in_statements(
+            &module.statements,
+        ) {
+            add_typed_name(&name, semantic_value_type_suffix(value_type));
+        }
+        for callable in &module.callables {
+            for (name, value_type) in
+                crate::semantic_ir::SemanticModule::typed_names_in_statements(&callable.body)
+            {
+                add_typed_name(&name, semantic_value_type_suffix(value_type));
+            }
         }
         let mut typed_callable_storage_names = HashSet::new();
         for callable in &module.callables {
@@ -19677,10 +19700,9 @@ fn reject_float(
         allowed_c_names.extend(typed_callable_storage_names);
         for file in &module.lowered_record_files {
             for field in &file.fields {
-                allowed_c_names.insert(c_var_name(
-                    &BasicIdent::parse(&field.buffer_name),
-                    effective_suffix(BasicIdent::parse(&field.buffer_name).suffix),
-                ));
+                let ident = BasicIdent::parse(&field.buffer_name);
+                let suffix = c_suffix_for_lowered_record_field(field.kind);
+                allowed_c_names.insert(c_var_name(&ident, suffix));
             }
             for local in &file.record_locals {
                 if let Some(suffix) = local.value_type.suffix().and_then(TypeSuffix::from_char) {
@@ -20693,6 +20715,25 @@ mod dialect_tests {
                 c_suffix_for_semantic_record_field(&field_type),
                 expected,
                 "unexpected suffix for {field_type:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn c_lowered_record_buffer_suffixes_follow_typed_field_kinds() {
+        use crate::semantic_ir::LoweredRecordFieldKind as FieldKind;
+        let cases = [
+            (FieldKind::String { right_aligned: false }, TypeSuffix::String),
+            (FieldKind::Int16, TypeSuffix::Integer),
+            (FieldKind::Int32, TypeSuffix::Long),
+            (FieldKind::Float32, TypeSuffix::Single),
+            (FieldKind::Float64, TypeSuffix::Double),
+        ];
+        for (field_kind, expected) in cases {
+            assert_eq!(
+                c_suffix_for_lowered_record_field(field_kind),
+                expected,
+                "unexpected suffix for {field_kind:?}"
             );
         }
     }
