@@ -17429,3 +17429,9 @@ Iteration 5777 added C codegen coverage for an annotated semantic parameter whos
 Iteration 5778 added BASIC codegen coverage for an annotated semantic parameter whose type differs from the compatibility AST parameter suffix.
 
 Iteration 5779 validated all three codegen backend parameter annotation regressions with the complete locked workspace suite.
+
+Iteration 5780 verified that C callable parameter declarations use a typed-IR annotation that differs from the compatibility AST suffix.
+
+Iteration 5781 verified that BASIC callable parameter identifiers use a typed-IR annotation that differs from the compatibility AST suffix.
+
+Iteration 5782 validated the cross-backend callable parameter regressions with the complete locked workspace suite.
