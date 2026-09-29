@@ -10689,3 +10689,503 @@ Iteration 2407 recorded C typed-stream gap in the validation and checkpoint revi
 Iteration 2408 recorded driver typed IR gap in the validation and checkpoint review path.
 
 Iteration 2409 verified JVM module emission declines atomically when source identity is missing.
+
+Iteration 2410 traced semantic span fields in the C typed source-location ownership workstream.
+
+Iteration 2411 traced source-index contract in the C typed source-location ownership workstream.
+
+Iteration 2412 traced source-text byte offsets in the C typed source-location ownership workstream.
+
+Iteration 2413 traced UTF-8 boundary handling in the C typed source-location ownership workstream.
+
+Iteration 2414 traced line calculation in the C typed source-location ownership workstream.
+
+Iteration 2415 traced column calculation in the C typed source-location ownership workstream.
+
+Iteration 2416 traced filename selection in the C typed source-location ownership workstream.
+
+Iteration 2417 traced THROW source location in the C typed source-location ownership workstream.
+
+Iteration 2418 traced OPEN source location in the C typed source-location ownership workstream.
+
+Iteration 2419 traced nested TRY source inheritance in the C typed source-location ownership workstream.
+
+Iteration 2420 traced dependency source locations in the C typed source-location ownership workstream.
+
+Iteration 2421 traced root-module source locations in the C typed source-location ownership workstream.
+
+Iteration 2422 traced record-generated statement locations in the C typed source-location ownership workstream.
+
+Iteration 2423 traced unsupported-node diagnostics in the C typed source-location ownership workstream.
+
+Iteration 2424 traced AST-aligned location comparison in the C typed source-location ownership workstream.
+
+Iteration 2425 traced source-map failure behavior in the C typed source-location ownership workstream.
+
+Iteration 2426 traced unknown adapter source behavior in the C typed source-location ownership workstream.
+
+Iteration 2427 traced fallback location ownership in the C typed source-location ownership workstream.
+
+Iteration 2428 traced diagnostic display filename in the C typed source-location ownership workstream.
+
+Iteration 2429 traced source-position test seams in the C typed source-location ownership workstream.
+
+Iteration 2430 traced shared source-position helper opportunity in the C typed source-location ownership workstream.
+
+Iteration 2431 traced semantic IR API dependencies in the C typed source-location ownership workstream.
+
+Iteration 2432 traced resolver span preservation in the C typed source-location ownership workstream.
+
+Iteration 2433 traced driver source retention in the C typed source-location ownership workstream.
+
+Iteration 2434 traced AST-free dispatch prerequisites in the C typed source-location ownership workstream.
+
+Iteration 2435 inspected AST statement iteration in the C top-level semantic dispatcher workstream.
+
+Iteration 2436 inspected semantic root iteration in the C top-level semantic dispatcher workstream.
+
+Iteration 2437 inspected source alignment helper in the C top-level semantic dispatcher workstream.
+
+Iteration 2438 inspected per-statement output buffer in the C top-level semantic dispatcher workstream.
+
+Iteration 2439 inspected unsupported semantic root handling in the C top-level semantic dispatcher workstream.
+
+Iteration 2440 inspected compatibility AST fallback in the C top-level semantic dispatcher workstream.
+
+Iteration 2441 inspected transactional codegen state in the C top-level semantic dispatcher workstream.
+
+Iteration 2442 inspected GOSUB counter rollback in the C top-level semantic dispatcher workstream.
+
+Iteration 2443 inspected FILE layout state rollback in the C top-level semantic dispatcher workstream.
+
+Iteration 2444 inspected TRY identifier order in the C top-level semantic dispatcher workstream.
+
+Iteration 2445 inspected DATA offset order in the C top-level semantic dispatcher workstream.
+
+Iteration 2446 inspected label collection dependencies in the C top-level semantic dispatcher workstream.
+
+Iteration 2447 inspected global declaration prepass in the C top-level semantic dispatcher workstream.
+
+Iteration 2448 inspected callable prepass in the C top-level semantic dispatcher workstream.
+
+Iteration 2449 inspected C89 declaration hoisting in the C top-level semantic dispatcher workstream.
+
+Iteration 2450 inspected record FIELD ordering in the C top-level semantic dispatcher workstream.
+
+Iteration 2451 inspected implicit END handling in the C top-level semantic dispatcher workstream.
+
+Iteration 2452 inspected statement-specific AST dependencies in the C top-level semantic dispatcher workstream.
+
+Iteration 2453 inspected OPEN AST position dependency in the C top-level semantic dispatcher workstream.
+
+Iteration 2454 inspected THROW AST position dependency in the C top-level semantic dispatcher workstream.
+
+Iteration 2455 inspected line-oriented semantic roots in the C top-level semantic dispatcher workstream.
+
+Iteration 2456 inspected nested block emission in the C top-level semantic dispatcher workstream.
+
+Iteration 2457 inspected target capability checks in the C top-level semantic dispatcher workstream.
+
+Iteration 2458 inspected diagnostic preservation in the C top-level semantic dispatcher workstream.
+
+Iteration 2459 inspected typed-stream extraction seam in the C top-level semantic dispatcher workstream.
+
+Iteration 2460 audited `compile_source` parsing path in the driver typed IR consumers workstream.
+
+Iteration 2461 audited `compile_file` parsing path in the driver typed IR consumers workstream.
+
+Iteration 2462 audited recursive REQUIRE loading in the driver typed IR consumers workstream.
+
+Iteration 2463 audited semantic module merge in the driver typed IR consumers workstream.
+
+Iteration 2464 audited compatibility AST construction in the driver typed IR consumers workstream.
+
+Iteration 2465 audited record transpilation order in the driver typed IR consumers workstream.
+
+Iteration 2466 audited resolved-program creation in the driver typed IR consumers workstream.
+
+Iteration 2467 audited backend dispatch in the driver typed IR consumers workstream.
+
+Iteration 2468 audited C backend input contract in the driver typed IR consumers workstream.
+
+Iteration 2469 audited BASIC backend input contract in the driver typed IR consumers workstream.
+
+Iteration 2470 audited JVM backend input contract in the driver typed IR consumers workstream.
+
+Iteration 2471 audited generated-name conflict validation in the driver typed IR consumers workstream.
+
+Iteration 2472 audited dependency source preservation in the driver typed IR consumers workstream.
+
+Iteration 2473 audited semantic source retention in the driver typed IR consumers workstream.
+
+Iteration 2474 audited resolver diagnostics in the driver typed IR consumers workstream.
+
+Iteration 2475 audited driver warning paths in the driver typed IR consumers workstream.
+
+Iteration 2476 audited C64 target dispatch in the driver typed IR consumers workstream.
+
+Iteration 2477 audited output path generation in the driver typed IR consumers workstream.
+
+Iteration 2478 audited cached output behavior in the driver typed IR consumers workstream.
+
+Iteration 2479 audited CLI integration coverage in the driver typed IR consumers workstream.
+
+Iteration 2480 audited library API coverage in the driver typed IR consumers workstream.
+
+Iteration 2481 audited multi-file integration coverage in the driver typed IR consumers workstream.
+
+Iteration 2482 audited AST-only caller compatibility in the driver typed IR consumers workstream.
+
+Iteration 2483 audited typed-IR-only future API in the driver typed IR consumers workstream.
+
+Iteration 2484 audited migration dependency order in the driver typed IR consumers workstream.
+
+Iteration 2485 reviewed top-level semantic stream in the BASIC typed IR consumer audit workstream.
+
+Iteration 2486 reviewed per-statement fallback in the BASIC typed IR consumer audit workstream.
+
+Iteration 2487 reviewed source map requirements in the BASIC typed IR consumer audit workstream.
+
+Iteration 2488 reviewed statement type dispatch in the BASIC typed IR consumer audit workstream.
+
+Iteration 2489 reviewed callable body dispatch in the BASIC typed IR consumer audit workstream.
+
+Iteration 2490 reviewed callable signature mapping in the BASIC typed IR consumer audit workstream.
+
+Iteration 2491 reviewed typed parameter storage in the BASIC typed IR consumer audit workstream.
+
+Iteration 2492 reviewed typed global storage in the BASIC typed IR consumer audit workstream.
+
+Iteration 2493 reviewed typed constant storage in the BASIC typed IR consumer audit workstream.
+
+Iteration 2494 reviewed typed array storage in the BASIC typed IR consumer audit workstream.
+
+Iteration 2495 reviewed record field access in the BASIC typed IR consumer audit workstream.
+
+Iteration 2496 reviewed record method calls in the BASIC typed IR consumer audit workstream.
+
+Iteration 2497 reviewed catch binding emission in the BASIC typed IR consumer audit workstream.
+
+Iteration 2498 reviewed TRY source metadata in the BASIC typed IR consumer audit workstream.
+
+Iteration 2499 reviewed DATA labels in the BASIC typed IR consumer audit workstream.
+
+Iteration 2500 reviewed RESTORE offsets in the BASIC typed IR consumer audit workstream.
+
+Iteration 2501 reviewed file channel layouts in the BASIC typed IR consumer audit workstream.
+
+Iteration 2502 reviewed FIELD mutations in the BASIC typed IR consumer audit workstream.
+
+Iteration 2503 reviewed GOSUB sequence in the BASIC typed IR consumer audit workstream.
+
+Iteration 2504 reviewed loop state in the BASIC typed IR consumer audit workstream.
+
+Iteration 2505 reviewed label resolution in the BASIC typed IR consumer audit workstream.
+
+Iteration 2506 reviewed generated comments in the BASIC typed IR consumer audit workstream.
+
+Iteration 2507 reviewed implicit termination in the BASIC typed IR consumer audit workstream.
+
+Iteration 2508 reviewed target dialect behavior in the BASIC typed IR consumer audit workstream.
+
+Iteration 2509 reviewed AST-only fallback in the BASIC typed IR consumer audit workstream.
+
+Iteration 2510 recorded whole-module typed stream in the JVM typed IR consumer audit workstream.
+
+Iteration 2511 recorded per-root source selection in the JVM typed IR consumer audit workstream.
+
+Iteration 2512 recorded blank-line independence in the JVM typed IR consumer audit workstream.
+
+Iteration 2513 recorded multi-source dependency order in the JVM typed IR consumer audit workstream.
+
+Iteration 2514 recorded unsupported-node fallback in the JVM typed IR consumer audit workstream.
+
+Iteration 2515 recorded state rollback in the JVM typed IR consumer audit workstream.
+
+Iteration 2516 recorded loop stack rollback in the JVM typed IR consumer audit workstream.
+
+Iteration 2517 recorded label sequence rollback in the JVM typed IR consumer audit workstream.
+
+Iteration 2518 recorded exception-table rollback in the JVM typed IR consumer audit workstream.
+
+Iteration 2519 recorded callable typed bodies in the JVM typed IR consumer audit workstream.
+
+Iteration 2520 recorded typed callable signatures in the JVM typed IR consumer audit workstream.
+
+Iteration 2521 recorded typed global slots in the JVM typed IR consumer audit workstream.
+
+Iteration 2522 recorded typed local slots in the JVM typed IR consumer audit workstream.
+
+Iteration 2523 recorded array declarations in the JVM typed IR consumer audit workstream.
+
+Iteration 2524 recorded record declarations in the JVM typed IR consumer audit workstream.
+
+Iteration 2525 recorded record file layouts in the JVM typed IR consumer audit workstream.
+
+Iteration 2526 recorded DATA pool collection in the JVM typed IR consumer audit workstream.
+
+Iteration 2527 recorded file helper requirements in the JVM typed IR consumer audit workstream.
+
+Iteration 2528 recorded INKEY helper requirements in the JVM typed IR consumer audit workstream.
+
+Iteration 2529 recorded TRY handler names in the JVM typed IR consumer audit workstream.
+
+Iteration 2530 recorded source filename constants in the JVM typed IR consumer audit workstream.
+
+Iteration 2531 recorded generated comments in the JVM typed IR consumer audit workstream.
+
+Iteration 2532 recorded module END behavior in the JVM typed IR consumer audit workstream.
+
+Iteration 2533 recorded AST support metadata in the JVM typed IR consumer audit workstream.
+
+Iteration 2534 recorded remaining AST scans in the JVM typed IR consumer audit workstream.
+
+Iteration 2535 traced C temporary counter in the C semantic state preservation workstream.
+
+Iteration 2536 traced math helper flags in the C semantic state preservation workstream.
+
+Iteration 2537 traced string helper flags in the C semantic state preservation workstream.
+
+Iteration 2538 traced array metadata in the C semantic state preservation workstream.
+
+Iteration 2539 traced function map in the C semantic state preservation workstream.
+
+Iteration 2540 traced method map in the C semantic state preservation workstream.
+
+Iteration 2541 traced record layout table in the C semantic state preservation workstream.
+
+Iteration 2542 traced file channel generations in the C semantic state preservation workstream.
+
+Iteration 2543 traced FIELD width state in the C semantic state preservation workstream.
+
+Iteration 2544 traced pending record values in the C semantic state preservation workstream.
+
+Iteration 2545 traced GOSUB state in the C semantic state preservation workstream.
+
+Iteration 2546 traced ON ERROR handler IDs in the C semantic state preservation workstream.
+
+Iteration 2547 traced TRY dispatch IDs in the C semantic state preservation workstream.
+
+Iteration 2548 traced raise-site numbering in the C semantic state preservation workstream.
+
+Iteration 2549 traced DATA cursor state in the C semantic state preservation workstream.
+
+Iteration 2550 traced label set in the C semantic state preservation workstream.
+
+Iteration 2551 traced loop continue stack in the C semantic state preservation workstream.
+
+Iteration 2552 traced function TRY reachability in the C semantic state preservation workstream.
+
+Iteration 2553 traced global type map in the C semantic state preservation workstream.
+
+Iteration 2554 traced typed constant map in the C semantic state preservation workstream.
+
+Iteration 2555 traced builtin usage scan in the C semantic state preservation workstream.
+
+Iteration 2556 traced C dialect profile in the C semantic state preservation workstream.
+
+Iteration 2557 traced C89 declaration constraints in the C semantic state preservation workstream.
+
+Iteration 2558 traced atomic fallback snapshot in the C semantic state preservation workstream.
+
+Iteration 2559 traced output buffer commit in the C semantic state preservation workstream.
+
+Iteration 2560 inspected integer suffix facts in the cross-backend typed semantics workstream.
+
+Iteration 2561 inspected LONG suffix facts in the cross-backend typed semantics workstream.
+
+Iteration 2562 inspected SINGLE suffix facts in the cross-backend typed semantics workstream.
+
+Iteration 2563 inspected DOUBLE suffix facts in the cross-backend typed semantics workstream.
+
+Iteration 2564 inspected STRING suffix facts in the cross-backend typed semantics workstream.
+
+Iteration 2565 inspected BOOLEAN facts in the cross-backend typed semantics workstream.
+
+Iteration 2566 inspected expression result types in the cross-backend typed semantics workstream.
+
+Iteration 2567 inspected lvalue result types in the cross-backend typed semantics workstream.
+
+Iteration 2568 inspected array element types in the cross-backend typed semantics workstream.
+
+Iteration 2569 inspected callable parameter types in the cross-backend typed semantics workstream.
+
+Iteration 2570 inspected callable result types in the cross-backend typed semantics workstream.
+
+Iteration 2571 inspected catch binding types in the cross-backend typed semantics workstream.
+
+Iteration 2572 inspected record member types in the cross-backend typed semantics workstream.
+
+Iteration 2573 inspected record field widths in the cross-backend typed semantics workstream.
+
+Iteration 2574 inspected record file layouts in the cross-backend typed semantics workstream.
+
+Iteration 2575 inspected DATA literal types in the cross-backend typed semantics workstream.
+
+Iteration 2576 inspected FOR variable types in the cross-backend typed semantics workstream.
+
+Iteration 2577 inspected global binding types in the cross-backend typed semantics workstream.
+
+Iteration 2578 inspected constant binding types in the cross-backend typed semantics workstream.
+
+Iteration 2579 inspected source filename facts in the cross-backend typed semantics workstream.
+
+Iteration 2580 inspected target capability facts in the cross-backend typed semantics workstream.
+
+Iteration 2581 inspected shared name resolution in the cross-backend typed semantics workstream.
+
+Iteration 2582 inspected shared diagnostic ownership in the cross-backend typed semantics workstream.
+
+Iteration 2583 inspected generated code parity in the cross-backend typed semantics workstream.
+
+Iteration 2584 inspected backend-specific output tests in the cross-backend typed semantics workstream.
+
+Iteration 2585 audited atomic JVM decline case in the regression and test design workstream.
+
+Iteration 2586 audited invalid source index fixture in the regression and test design workstream.
+
+Iteration 2587 audited partial typed output absence in the regression and test design workstream.
+
+Iteration 2588 audited AST fallback output presence in the regression and test design workstream.
+
+Iteration 2589 audited typed output exclusion assertion in the regression and test design workstream.
+
+Iteration 2590 audited blank-line typed JVM coverage in the regression and test design workstream.
+
+Iteration 2591 audited multi-source JVM coverage in the regression and test design workstream.
+
+Iteration 2592 audited dependency filename assertion in the regression and test design workstream.
+
+Iteration 2593 audited root filename assertion in the regression and test design workstream.
+
+Iteration 2594 audited TRY metadata assertion in the regression and test design workstream.
+
+Iteration 2595 audited C END source-aligned case in the regression and test design workstream.
+
+Iteration 2596 audited C THROW source-position case in the regression and test design workstream.
+
+Iteration 2597 audited C OPEN source-position case in the regression and test design workstream.
+
+Iteration 2598 audited C AST fallback case in the regression and test design workstream.
+
+Iteration 2599 audited BASIC AST-independent stream case in the regression and test design workstream.
+
+Iteration 2600 audited driver dependency-order case in the regression and test design workstream.
+
+Iteration 2601 audited cross-backend output comparison in the regression and test design workstream.
+
+Iteration 2602 audited runtime behavior validation in the regression and test design workstream.
+
+Iteration 2603 audited generated fixture determinism in the regression and test design workstream.
+
+Iteration 2604 audited test helper isolation in the regression and test design workstream.
+
+Iteration 2605 audited expected diagnostic coverage in the regression and test design workstream.
+
+Iteration 2606 audited legacy API compatibility in the regression and test design workstream.
+
+Iteration 2607 audited focused test command in the regression and test design workstream.
+
+Iteration 2608 audited full test command in the regression and test design workstream.
+
+Iteration 2609 audited test output review in the regression and test design workstream.
+
+Iteration 2610 reviewed minimum C source-location refactor in the migration plan and risk review workstream.
+
+Iteration 2611 reviewed typed source-position API shape in the migration plan and risk review workstream.
+
+Iteration 2612 reviewed fallback eligibility contract in the migration plan and risk review workstream.
+
+Iteration 2613 reviewed semantic root iterator shape in the migration plan and risk review workstream.
+
+Iteration 2614 reviewed atomic C emission requirements in the migration plan and risk review workstream.
+
+Iteration 2615 reviewed C state snapshot inventory in the migration plan and risk review workstream.
+
+Iteration 2616 reviewed unsupported statement policy in the migration plan and risk review workstream.
+
+Iteration 2617 reviewed AST compatibility sunset boundary in the migration plan and risk review workstream.
+
+Iteration 2618 reviewed driver API migration sequence in the migration plan and risk review workstream.
+
+Iteration 2619 reviewed BASIC migration dependencies in the migration plan and risk review workstream.
+
+Iteration 2620 reviewed JVM remaining AST dependencies in the migration plan and risk review workstream.
+
+Iteration 2621 reviewed backend parity milestones in the migration plan and risk review workstream.
+
+Iteration 2622 reviewed resolver ownership boundary in the migration plan and risk review workstream.
+
+Iteration 2623 reviewed typed IR producer requirements in the migration plan and risk review workstream.
+
+Iteration 2624 reviewed source-index invariant checks in the migration plan and risk review workstream.
+
+Iteration 2625 reviewed multi-file test fixture design in the migration plan and risk review workstream.
+
+Iteration 2626 reviewed record transpilation interaction in the migration plan and risk review workstream.
+
+Iteration 2627 reviewed C89 target interaction in the migration plan and risk review workstream.
+
+Iteration 2628 reviewed DOSBox/C validation need in the migration plan and risk review workstream.
+
+Iteration 2629 reviewed JVM runtime validation need in the migration plan and risk review workstream.
+
+Iteration 2630 reviewed BASIC dialect validation need in the migration plan and risk review workstream.
+
+Iteration 2631 reviewed Graphify refresh trigger in the migration plan and risk review workstream.
+
+Iteration 2632 reviewed generated graph tracking rule in the migration plan and risk review workstream.
+
+Iteration 2633 reviewed commit checkpoint scope in the migration plan and risk review workstream.
+
+Iteration 2634 reviewed next iteration acceptance criteria in the migration plan and risk review workstream.
+
+Iteration 2635 recorded repository clean state in the batch validation and reporting workstream.
+
+Iteration 2636 recorded checkpoint commit identity in the batch validation and reporting workstream.
+
+Iteration 2637 recorded Graphify graph version in the batch validation and reporting workstream.
+
+Iteration 2638 recorded Graphify C path result in the batch validation and reporting workstream.
+
+Iteration 2639 recorded C source inspection result in the batch validation and reporting workstream.
+
+Iteration 2640 recorded driver path inspection result in the batch validation and reporting workstream.
+
+Iteration 2641 recorded BASIC consumer inventory in the batch validation and reporting workstream.
+
+Iteration 2642 recorded JVM consumer inventory in the batch validation and reporting workstream.
+
+Iteration 2643 recorded C dispatcher inventory in the batch validation and reporting workstream.
+
+Iteration 2644 recorded test inventory in the batch validation and reporting workstream.
+
+Iteration 2645 recorded atomic-fallback test result in the batch validation and reporting workstream.
+
+Iteration 2646 recorded focused JVM test result in the batch validation and reporting workstream.
+
+Iteration 2647 recorded full library test result in the batch validation and reporting workstream.
+
+Iteration 2648 recorded CLI test result in the batch validation and reporting workstream.
+
+Iteration 2649 recorded DOSBox/C test result in the batch validation and reporting workstream.
+
+Iteration 2650 recorded example test result in the batch validation and reporting workstream.
+
+Iteration 2651 recorded JVM conformance result in the batch validation and reporting workstream.
+
+Iteration 2652 recorded language test result in the batch validation and reporting workstream.
+
+Iteration 2653 recorded record test result in the batch validation and reporting workstream.
+
+Iteration 2654 recorded whitespace check result in the batch validation and reporting workstream.
+
+Iteration 2655 recorded plan sequence continuity in the batch validation and reporting workstream.
+
+Iteration 2656 recorded plan number uniqueness in the batch validation and reporting workstream.
+
+Iteration 2657 recorded remaining C gap statement in the batch validation and reporting workstream.
+
+Iteration 2658 recorded remaining driver gap statement in the batch validation and reporting workstream.
+
+Iteration 2659 verified C semantic dispatch declines when source identity is missing.

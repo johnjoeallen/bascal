@@ -20824,6 +20824,27 @@ mod dialect_tests {
     }
 
     #[test]
+    fn c_semantic_dispatch_declines_when_source_identity_is_missing() {
+        let parsed = parse_source(
+            "c_missing_source_identity.bcl".to_string(),
+            "print 1\nend\n",
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "c_missing_source_identity.bcl",
+            "print 2\nend\n",
+        )
+        .unwrap();
+        semantic.statement_sources[0] = usize::MAX;
+
+        assert!(
+            c_semantic_statements_by_source(&semantic, &program.statements).is_none(),
+            "semantic dispatch must decline when source identity is unavailable"
+        );
+    }
+
+    #[test]
     fn c_function_fallthrough_analysis_uses_semantic_callable_body() {
         let filename = "semantic_function_flow.bcl";
         let ast_source = "function work%()\nprint 1\nend function\nend\n";
