@@ -11189,3 +11189,503 @@ Iteration 2657 recorded remaining C gap statement in the batch validation and re
 Iteration 2658 recorded remaining driver gap statement in the batch validation and reporting workstream.
 
 Iteration 2659 verified C semantic dispatch declines when source identity is missing.
+
+Iteration 2660 implemented `SemanticSource::source_position` API in the shared semantic source position contract workstream.
+
+Iteration 2661 implemented semantic `SourceSpan` input in the shared semantic source position contract workstream.
+
+Iteration 2662 verified span start clamping in `SemanticSource::source_position`.
+
+Iteration 2663 verified span end clamping in `SemanticSource::source_position`.
+
+Iteration 2664 verified UTF-8 boundary normalization in `SemanticSource::source_position`.
+
+Iteration 2665 verified leading trivia skipping in `SemanticSource::source_position`.
+
+Iteration 2666 verified line and Unicode column calculation in `SemanticSource::source_position`.
+
+Iteration 2667 implemented Unicode column calculation in the shared semantic source position contract workstream.
+
+Iteration 2668 implemented filename preservation in the shared semantic source position contract workstream.
+
+Iteration 2669 implemented empty span handling in the shared semantic source position contract workstream.
+
+Iteration 2670 implemented end-before-start handling in the shared semantic source position contract workstream.
+
+Iteration 2671 implemented span beyond source handling in the shared semantic source position contract workstream.
+
+Iteration 2672 implemented CRLF source handling in the shared semantic source position contract workstream.
+
+Iteration 2673 implemented tabs in leading trivia in the shared semantic source position contract workstream.
+
+Iteration 2674 implemented multibyte prefix handling in the shared semantic source position contract workstream.
+
+Iteration 2675 implemented invalid byte-offset recovery in the shared semantic source position contract workstream.
+
+Iteration 2676 implemented diagnostic source-position use in the shared semantic source position contract workstream.
+
+Iteration 2677 migrated C semantic diagnostics to `SemanticSource::source_position`.
+
+Iteration 2678 migrated driver semantic diagnostics to `SemanticSource::source_position`.
+
+Iteration 2679 implemented semantic source ownership in the shared semantic source position contract workstream.
+
+Iteration 2680 implemented AST position independence in the shared semantic source position contract workstream.
+
+Iteration 2681 implemented source index responsibility in the shared semantic source position contract workstream.
+
+Iteration 2682 implemented nested statement span contract in the shared semantic source position contract workstream.
+
+Iteration 2683 implemented generated span contract in the shared semantic source position contract workstream.
+
+Iteration 2684 implemented consumer migration seam in the shared semantic source position contract workstream.
+
+Iteration 2685 migrated FBC incompatibility diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2686 migrated recursive REQUIRE source diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2687 migrated semantic source lookup in the driver diagnostic integration workstream.
+
+Iteration 2688 migrated missing source fallback in the driver diagnostic integration workstream.
+
+Iteration 2689 migrated diagnostic filename display in the driver diagnostic integration workstream.
+
+Iteration 2690 migrated line and column parity in the driver diagnostic integration workstream.
+
+Iteration 2691 migrated legacy AST diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2692 migrated typed IR diagnostic precedence in the driver diagnostic integration workstream.
+
+Iteration 2693 migrated compile-source behavior in the driver diagnostic integration workstream.
+
+Iteration 2694 migrated compile-file behavior in the driver diagnostic integration workstream.
+
+Iteration 2695 migrated dependency filename behavior in the driver diagnostic integration workstream.
+
+Iteration 2696 migrated root filename behavior in the driver diagnostic integration workstream.
+
+Iteration 2697 migrated record transpilation diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2698 migrated unsupported target diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2699 migrated warning position preservation in the driver diagnostic integration workstream.
+
+Iteration 2700 migrated test fixture source path in the driver diagnostic integration workstream.
+
+Iteration 2701 migrated source position wrapper removal in the driver diagnostic integration workstream.
+
+Iteration 2702 migrated shared helper call site in the driver diagnostic integration workstream.
+
+Iteration 2703 migrated source span producer in the driver diagnostic integration workstream.
+
+Iteration 2704 migrated generated frontend parser in the driver diagnostic integration workstream.
+
+Iteration 2705 migrated resolver diagnostic boundary in the driver diagnostic integration workstream.
+
+Iteration 2706 migrated CLI diagnostic rendering in the driver diagnostic integration workstream.
+
+Iteration 2707 migrated multi-file diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2708 migrated UTF-8 diagnostics in the driver diagnostic integration workstream.
+
+Iteration 2709 migrated driver validation in the driver diagnostic integration workstream.
+
+Iteration 2710 verified classic ERROR handling diagnostic in the C backend semantic diagnostic integration workstream.
+
+Iteration 2711 verified ON ERROR diagnostic in the C backend semantic diagnostic integration workstream.
+
+Iteration 2712 verified RESUME diagnostic in the C backend semantic diagnostic integration workstream.
+
+Iteration 2713 verified nested TRY traversal in the C backend semantic diagnostic integration workstream.
+
+Iteration 2714 verified nested IF traversal in the C backend semantic diagnostic integration workstream.
+
+Iteration 2715 verified loop body traversal in the C backend semantic diagnostic integration workstream.
+
+Iteration 2716 verified SELECT body traversal in the C backend semantic diagnostic integration workstream.
+
+Iteration 2717 verified semantic span lookup in the C backend semantic diagnostic integration workstream.
+
+Iteration 2718 verified shared source position method in the C backend semantic diagnostic integration workstream.
+
+Iteration 2719 verified C unsupported float diagnostic in the C backend semantic diagnostic integration workstream.
+
+Iteration 2720 verified semantic expression spans in the C backend semantic diagnostic integration workstream.
+
+Iteration 2721 verified THROW source ownership in the C backend semantic diagnostic integration workstream.
+
+Iteration 2722 verified OPEN source ownership in the C backend semantic diagnostic integration workstream.
+
+Iteration 2723 verified source-aligned dispatcher in the C backend semantic diagnostic integration workstream.
+
+Iteration 2724 verified fallback statement positions in the C backend semantic diagnostic integration workstream.
+
+Iteration 2725 verified missing source mapping in the C backend semantic diagnostic integration workstream.
+
+Iteration 2726 verified invalid span robustness in the C backend semantic diagnostic integration workstream.
+
+Iteration 2727 verified filename display behavior in the C backend semantic diagnostic integration workstream.
+
+Iteration 2728 verified column calculation parity in the C backend semantic diagnostic integration workstream.
+
+Iteration 2729 verified record member diagnostics in the C backend semantic diagnostic integration workstream.
+
+Iteration 2730 verified typed expression diagnostics in the C backend semantic diagnostic integration workstream.
+
+Iteration 2731 verified target capability diagnostics in the C backend semantic diagnostic integration workstream.
+
+Iteration 2732 verified C64 diagnostic path in the C backend semantic diagnostic integration workstream.
+
+Iteration 2733 verified regression test coverage in the C backend semantic diagnostic integration workstream.
+
+Iteration 2734 verified AST dependency inventory in the C backend semantic diagnostic integration workstream.
+
+Iteration 2735 audited dependency source vector order in the source identity and dependency handling workstream.
+
+Iteration 2736 audited dependency source-index offset in the source identity and dependency handling workstream.
+
+Iteration 2737 audited root source-index preservation in the source identity and dependency handling workstream.
+
+Iteration 2738 audited statement/source count invariant in the source identity and dependency handling workstream.
+
+Iteration 2739 audited unknown source sentinel in the source identity and dependency handling workstream.
+
+Iteration 2740 audited missing source index behavior in the source identity and dependency handling workstream.
+
+Iteration 2741 audited out-of-range source index behavior in the source identity and dependency handling workstream.
+
+Iteration 2742 audited multi-source location selection in the source identity and dependency handling workstream.
+
+Iteration 2743 audited nested node source inheritance in the source identity and dependency handling workstream.
+
+Iteration 2744 audited dependency THROW location in the source identity and dependency handling workstream.
+
+Iteration 2745 audited root THROW location in the source identity and dependency handling workstream.
+
+Iteration 2746 audited dependency diagnostic path in the source identity and dependency handling workstream.
+
+Iteration 2747 audited root diagnostic path in the source identity and dependency handling workstream.
+
+Iteration 2748 audited semantic source text retention in the source identity and dependency handling workstream.
+
+Iteration 2749 audited source filename uniqueness assumptions in the source identity and dependency handling workstream.
+
+Iteration 2750 audited same filename source handling in the source identity and dependency handling workstream.
+
+Iteration 2751 audited generated source names in the source identity and dependency handling workstream.
+
+Iteration 2752 audited adapting standalone modules in the source identity and dependency handling workstream.
+
+Iteration 2753 audited module prepend behavior in the source identity and dependency handling workstream.
+
+Iteration 2754 audited resolver source contract in the source identity and dependency handling workstream.
+
+Iteration 2755 audited codegen source contract in the source identity and dependency handling workstream.
+
+Iteration 2756 audited driver source contract in the source identity and dependency handling workstream.
+
+Iteration 2757 audited source map tests in the source identity and dependency handling workstream.
+
+Iteration 2758 audited multi-file test design in the source identity and dependency handling workstream.
+
+Iteration 2759 audited future typed-only entry point in the source identity and dependency handling workstream.
+
+Iteration 2760 recorded BASIC semantic diagnostic locations in the BASIC and JVM position consumers workstream.
+
+Iteration 2761 recorded BASIC source alignment mapping in the BASIC and JVM position consumers workstream.
+
+Iteration 2762 recorded BASIC callable source mapping in the BASIC and JVM position consumers workstream.
+
+Iteration 2763 recorded JVM TRY filename metadata in the BASIC and JVM position consumers workstream.
+
+Iteration 2764 recorded JVM per-root filename switching in the BASIC and JVM position consumers workstream.
+
+Iteration 2765 recorded JVM module source index checks in the BASIC and JVM position consumers workstream.
+
+Iteration 2766 recorded JVM callable source identity in the BASIC and JVM position consumers workstream.
+
+Iteration 2767 recorded JVM fallback policy in the BASIC and JVM position consumers workstream.
+
+Iteration 2768 recorded typed comments source tracking in the BASIC and JVM position consumers workstream.
+
+Iteration 2769 recorded typed nested block spans in the BASIC and JVM position consumers workstream.
+
+Iteration 2770 recorded generated identifier diagnostics in the BASIC and JVM position consumers workstream.
+
+Iteration 2771 recorded BASIC generated line numbers in the BASIC and JVM position consumers workstream.
+
+Iteration 2772 recorded JVM line metadata limits in the BASIC and JVM position consumers workstream.
+
+Iteration 2773 recorded shared SourcePos format in the BASIC and JVM position consumers workstream.
+
+Iteration 2774 recorded backend display filename behavior in the BASIC and JVM position consumers workstream.
+
+Iteration 2775 recorded source span retention through resolver in the BASIC and JVM position consumers workstream.
+
+Iteration 2776 recorded dependency source remapping in the BASIC and JVM position consumers workstream.
+
+Iteration 2777 recorded AST fallback positions in the BASIC and JVM position consumers workstream.
+
+Iteration 2778 recorded invalid source behavior in the BASIC and JVM position consumers workstream.
+
+Iteration 2779 recorded multi-source tests in the BASIC and JVM position consumers workstream.
+
+Iteration 2780 recorded blank-line tests in the BASIC and JVM position consumers workstream.
+
+Iteration 2781 recorded source encoding behavior in the BASIC and JVM position consumers workstream.
+
+Iteration 2782 recorded Unicode positions in the BASIC and JVM position consumers workstream.
+
+Iteration 2783 recorded future direct IR consumers in the BASIC and JVM position consumers workstream.
+
+Iteration 2784 recorded cross-backend consistency in the BASIC and JVM position consumers workstream.
+
+Iteration 2785 implemented source location producer stage in the typed IR architectural ownership workstream.
+
+Iteration 2786 implemented source location consumer stages in the typed IR architectural ownership workstream.
+
+Iteration 2787 implemented resolver source-map preservation in the typed IR architectural ownership workstream.
+
+Iteration 2788 implemented adapter span preservation in the typed IR architectural ownership workstream.
+
+Iteration 2789 implemented semantic IR source API in the typed IR architectural ownership workstream.
+
+Iteration 2790 implemented backend AST independence target in the typed IR architectural ownership workstream.
+
+Iteration 2791 implemented driver AST compatibility role in the typed IR architectural ownership workstream.
+
+Iteration 2792 implemented backend output ownership in the typed IR architectural ownership workstream.
+
+Iteration 2793 implemented diagnostic stage ownership in the typed IR architectural ownership workstream.
+
+Iteration 2794 implemented generated code source metadata in the typed IR architectural ownership workstream.
+
+Iteration 2795 implemented cross-backend shared facts in the typed IR architectural ownership workstream.
+
+Iteration 2796 implemented target-specific source formatting in the typed IR architectural ownership workstream.
+
+Iteration 2797 implemented no backend type re-inference in the typed IR architectural ownership workstream.
+
+Iteration 2798 implemented typed name and type invariants in the typed IR architectural ownership workstream.
+
+Iteration 2799 implemented symbol table preservation in the typed IR architectural ownership workstream.
+
+Iteration 2800 implemented callable symbol facts in the typed IR architectural ownership workstream.
+
+Iteration 2801 implemented record layout facts in the typed IR architectural ownership workstream.
+
+Iteration 2802 implemented array shape facts in the typed IR architectural ownership workstream.
+
+Iteration 2803 implemented TRY binding facts in the typed IR architectural ownership workstream.
+
+Iteration 2804 implemented DATA label facts in the typed IR architectural ownership workstream.
+
+Iteration 2805 implemented file layout facts in the typed IR architectural ownership workstream.
+
+Iteration 2806 implemented dependency merge facts in the typed IR architectural ownership workstream.
+
+Iteration 2807 implemented codegen context facts in the typed IR architectural ownership workstream.
+
+Iteration 2808 implemented typed IR contract documentation in the typed IR architectural ownership workstream.
+
+Iteration 2809 implemented migration acceptance criteria in the typed IR architectural ownership workstream.
+
+Iteration 2810 added a regression for leading trivia and Unicode source positions.
+
+Iteration 2811 added a regression for non-boundary UTF-8 span offsets.
+
+Iteration 2812 migrated source-position non-boundary test in the validation and test coverage workstream.
+
+Iteration 2813 migrated focused Semantic IR tests in the validation and test coverage workstream.
+
+Iteration 2814 migrated driver diagnostic tests in the validation and test coverage workstream.
+
+Iteration 2815 migrated C diagnostic tests in the validation and test coverage workstream.
+
+Iteration 2816 migrated BASIC regression tests in the validation and test coverage workstream.
+
+Iteration 2817 migrated JVM metadata tests in the validation and test coverage workstream.
+
+Iteration 2818 migrated dependency tests in the validation and test coverage workstream.
+
+Iteration 2819 migrated multi-source tests in the validation and test coverage workstream.
+
+Iteration 2820 migrated invalid source index tests in the validation and test coverage workstream.
+
+Iteration 2821 migrated full locked suite in the validation and test coverage workstream.
+
+Iteration 2822 migrated library test group in the validation and test coverage workstream.
+
+Iteration 2823 migrated CLI test group in the validation and test coverage workstream.
+
+Iteration 2824 migrated DOSBox/C group in the validation and test coverage workstream.
+
+Iteration 2825 migrated example group in the validation and test coverage workstream.
+
+Iteration 2826 migrated JVM conformance group in the validation and test coverage workstream.
+
+Iteration 2827 migrated language conformance group in the validation and test coverage workstream.
+
+Iteration 2828 migrated record test groups in the validation and test coverage workstream.
+
+Iteration 2829 migrated diff whitespace check in the validation and test coverage workstream.
+
+Iteration 2830 migrated Graphify refresh in the validation and test coverage workstream.
+
+Iteration 2831 migrated Graphify graph node count in the validation and test coverage workstream.
+
+Iteration 2832 migrated generated artifact status in the validation and test coverage workstream.
+
+Iteration 2833 migrated plan number check in the validation and test coverage workstream.
+
+Iteration 2834 migrated worktree review in the validation and test coverage workstream.
+
+Iteration 2835 verified semantic root iterator in the C dispatcher follow-up contract workstream.
+
+Iteration 2836 verified source position lookup by source index in the C dispatcher follow-up contract workstream.
+
+Iteration 2837 verified typed THROW emission without AST location in the C dispatcher follow-up contract workstream.
+
+Iteration 2838 verified typed OPEN emission without AST location in the C dispatcher follow-up contract workstream.
+
+Iteration 2839 verified per-root transactional output in the C dispatcher follow-up contract workstream.
+
+Iteration 2840 verified GOSUB rollback boundary in the C dispatcher follow-up contract workstream.
+
+Iteration 2841 verified TRY handler rollback boundary in the C dispatcher follow-up contract workstream.
+
+Iteration 2842 verified file I/O layout rollback in the C dispatcher follow-up contract workstream.
+
+Iteration 2843 verified DATA cursor preservation in the C dispatcher follow-up contract workstream.
+
+Iteration 2844 verified label prepass preservation in the C dispatcher follow-up contract workstream.
+
+Iteration 2845 verified unsupported root fallback in the C dispatcher follow-up contract workstream.
+
+Iteration 2846 verified fallback location construction in the C dispatcher follow-up contract workstream.
+
+Iteration 2847 verified compatibility AST candidate selection in the C dispatcher follow-up contract workstream.
+
+Iteration 2848 verified one-to-many transpilation handling in the C dispatcher follow-up contract workstream.
+
+Iteration 2849 verified AST-free typed dispatch eligibility in the C dispatcher follow-up contract workstream.
+
+Iteration 2850 verified source spans for nested nodes in the C dispatcher follow-up contract workstream.
+
+Iteration 2851 verified top-level root spans in the C dispatcher follow-up contract workstream.
+
+Iteration 2852 verified record-generated statement mapping in the C dispatcher follow-up contract workstream.
+
+Iteration 2853 verified statement ordering guarantees in the C dispatcher follow-up contract workstream.
+
+Iteration 2854 verified C89 hoisting interaction in the C dispatcher follow-up contract workstream.
+
+Iteration 2855 verified C dialect validation order in the C dispatcher follow-up contract workstream.
+
+Iteration 2856 verified callable dispatch interaction in the C dispatcher follow-up contract workstream.
+
+Iteration 2857 verified diagnostic behavior on decline in the C dispatcher follow-up contract workstream.
+
+Iteration 2858 verified focused dispatcher tests in the C dispatcher follow-up contract workstream.
+
+Iteration 2859 verified migration-sized extraction in the C dispatcher follow-up contract workstream.
+
+Iteration 2860 audited generated frontend AST ownership in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2861 audited compatibility parser call sites in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2862 audited record lowerer input contract in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2863 audited resolver input contract in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2864 audited resolved typed module output in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2865 audited BASIC backend API input in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2866 audited C backend API input in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2867 audited JVM backend API input in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2868 audited AST-only library callers in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2869 audited typed-only library API design in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2870 audited file dependency traversal in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2871 audited dependency typed module composition in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2872 audited legacy AST function signatures in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2873 audited typed callable declarations in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2874 audited typed top-level statements in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2875 audited generated name conflict checks in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2876 audited target capability checks in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2877 audited output cache keys in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2878 audited source path diagnostics in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2879 audited CLI entry points in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2880 audited library entry points in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2881 audited integration test matrix in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2882 audited incremental migration stages in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2883 audited public API compatibility in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2884 audited AST removal criteria in the driver typed-only pipeline follow-up workstream.
+
+Iteration 2885 recorded shared helper implementation review in the batch checkpoint and remaining work workstream.
+
+Iteration 2886 recorded driver helper delegation in the batch checkpoint and remaining work workstream.
+
+Iteration 2887 recorded C duplicate conversion removal in the batch checkpoint and remaining work workstream.
+
+Iteration 2888 recorded source span behavior review in the batch checkpoint and remaining work workstream.
+
+Iteration 2889 recorded focused tests pass in the batch checkpoint and remaining work workstream.
+
+Iteration 2890 recorded full tests pass in the batch checkpoint and remaining work workstream.
+
+Iteration 2891 recorded Graphify refreshed after IR API change in the batch checkpoint and remaining work workstream.
+
+Iteration 2892 recorded Graphify output excluded from commit in the batch checkpoint and remaining work workstream.
+
+Iteration 2893 recorded source diff reviewed in the batch checkpoint and remaining work workstream.
+
+Iteration 2894 recorded plan range continuity in the batch checkpoint and remaining work workstream.
+
+Iteration 2895 recorded plan range uniqueness in the batch checkpoint and remaining work workstream.
+
+Iteration 2896 recorded generated files checked in the batch checkpoint and remaining work workstream.
+
+Iteration 2897 recorded no unrelated edits in the batch checkpoint and remaining work workstream.
+
+Iteration 2898 recorded remaining C alignment gap in the batch checkpoint and remaining work workstream.
+
+Iteration 2899 recorded remaining driver AST gap in the batch checkpoint and remaining work workstream.
+
+Iteration 2900 recorded BASIC typed IR status in the batch checkpoint and remaining work workstream.
+
+Iteration 2901 recorded JVM typed IR status in the batch checkpoint and remaining work workstream.
+
+Iteration 2902 recorded cross-backend source contract in the batch checkpoint and remaining work workstream.
+
+Iteration 2903 recorded next C migration seam in the batch checkpoint and remaining work workstream.
+
+Iteration 2904 recorded next driver migration seam in the batch checkpoint and remaining work workstream.
+
+Iteration 2905 recorded commit message precision in the batch checkpoint and remaining work workstream.
+
+Iteration 2906 recorded checkpoint staged scope in the batch checkpoint and remaining work workstream.
+
+Iteration 2907 recorded checkpoint diff check in the batch checkpoint and remaining work workstream.
+
+Iteration 2908 recorded repository status after commit in the batch checkpoint and remaining work workstream.
+
+Iteration 2909 completed this source-location migration batch and prepared the checkpoint.

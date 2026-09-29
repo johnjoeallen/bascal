@@ -272,22 +272,7 @@ fn semantic_source_position(
     source: &crate::semantic_ir::SemanticSource,
     span: crate::rdgen_frontend::SourceSpan,
 ) -> diagnostics::SourcePos {
-    let mut offset = span.start.min(source.text.len());
-    let end = span.end.min(source.text.len());
-    while offset < end {
-        let character = source.text[offset..].chars().next().unwrap();
-        if !character.is_whitespace() {
-            break;
-        }
-        offset += character.len_utf8();
-    }
-    while !source.text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    let prefix = &source.text[..offset];
-    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
-    diagnostics::SourcePos::new(source.filename.clone(), line, column)
+    source.source_position(span)
 }
 
 fn reject_semantic_fbc_incompatible_constructs(

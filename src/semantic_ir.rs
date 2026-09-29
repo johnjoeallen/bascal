@@ -72,6 +72,40 @@ pub struct SemanticSource {
     pub text: String,
 }
 
+impl SemanticSource {
+    /// Resolve a generated frontend span to a source location without using
+    /// compatibility AST positions. Leading trivia within the span is
+    /// skipped so diagnostics point at the first source token.
+    pub fn source_position(&self, span: SourceSpan) -> crate::diagnostics::SourcePos {
+        let mut start = span.start.min(self.text.len());
+        while !self.text.is_char_boundary(start) {
+            start -= 1;
+        }
+        let mut end = span.end.min(self.text.len());
+        while !self.text.is_char_boundary(end) {
+            end -= 1;
+        }
+        end = end.max(start);
+
+        let mut offset = start;
+        while offset < end {
+            let character = self.text[offset..]
+                .chars()
+                .next()
+                .expect("offset is before a valid UTF-8 boundary");
+            if !character.is_whitespace() {
+                break;
+            }
+            offset += character.len_utf8();
+        }
+
+        let prefix = &self.text[..offset];
+        let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+        crate::diagnostics::SourcePos::new(self.filename.clone(), line, column)
+    }
+}
+
 /// Name visibility facts derived from the generated semantic module.  This is
 /// deliberately a fact table rather than a backend-specific symbol table:
 /// code generators can use it for collision checks without re-walking parser
@@ -5647,6 +5681,29 @@ fn token_text_string(value: &rdgen_frontend::StringLiteral) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn semantic_source_position_uses_span_and_skips_leading_trivia() {
+        let source = SemanticSource {
+            filename: "typed_source.bcl".to_string(),
+            text: "é\n  value%\n".to_string(),
+        };
+        let position = source.source_position(SourceSpan { start: 2, end: 10 });
+
+        assert_eq!(position.filename, "typed_source.bcl");
+        assert_eq!((position.line, position.column), (2, 3));
+    }
+
+    #[test]
+    fn semantic_source_position_handles_non_boundary_offsets() {
+        let source = SemanticSource {
+            filename: "typed_source.bcl".to_string(),
+            text: "évalue%".to_string(),
+        };
+        let position = source.source_position(SourceSpan { start: 1, end: 2 });
+
+        assert_eq!((position.line, position.column), (1, 1));
+    }
 
     #[test]
     fn annotates_array_element_types_from_dim_metadata() {

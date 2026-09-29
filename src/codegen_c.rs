@@ -12037,16 +12037,6 @@ fn reject_semantic_classic_error_handling(
         source: &SemanticSource,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        fn source_pos(source: &SemanticSource, offset: usize) -> SourcePos {
-            let mut offset = offset.min(source.text.len());
-            while !source.text.is_char_boundary(offset) {
-                offset -= 1;
-            }
-            let prefix = &source.text[..offset];
-            let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-            let column = prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1;
-            SourcePos::new(source.filename.clone(), line, column)
-        }
         for statement in statements {
             let (message, substatements): (&str, Vec<&[SemanticStatement]>) = match &statement.kind
             {
@@ -12096,7 +12086,7 @@ fn reject_semantic_classic_error_handling(
             };
             if !message.is_empty() {
                 diagnostics.push(Diagnostic::error(
-                    source_pos(source, statement.span.start),
+                    source.source_position(statement.span),
                     message.to_string(),
                 ));
             }
@@ -20071,23 +20061,8 @@ fn reject_float(
                 diagnostics: &mut Vec<Diagnostic>,
                 target: &str,
             ) {
-                fn source_pos(
-                    source: &crate::semantic_ir::SemanticSource,
-                    offset: usize,
-                ) -> SourcePos {
-                    let mut offset = offset.min(source.text.len());
-                    while !source.text.is_char_boundary(offset) {
-                        offset -= 1;
-                    }
-                    let prefix = &source.text[..offset];
-                    SourcePos::new(
-                        source.filename.clone(),
-                        prefix.bytes().filter(|byte| *byte == b'\n').count() + 1,
-                        prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1,
-                    )
-                }
                 let mut check = |expr: &SemanticExpr| {
-                    let pos = source_pos(source, expr.span.start);
+                    let pos = source.source_position(expr.span);
                     let message = match &expr.kind {
                         ExprKind::Literal(text)
                             if text.parse::<f64>().is_ok()
