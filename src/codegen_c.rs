@@ -3417,14 +3417,16 @@ fn collect_typed_array_declarations(
     Ok(arrays)
 }
 
-fn collect_semantic_array_declarations(module: &crate::semantic_ir::SemanticModule) -> ArrayTable {
+fn collect_semantic_array_declarations(
+    module: &crate::semantic_ir::SemanticModule,
+) -> Result<ArrayTable, String> {
     let consts = module.top_level_integer_constants();
     fn visit(
         statements: &[crate::semantic_ir::SemanticStatement],
         module: &crate::semantic_ir::SemanticModule,
         consts: &HashMap<String, i64>,
         arrays: &mut ArrayTable,
-    ) {
+    ) -> Result<(), String> {
         use crate::semantic_ir::{DimAxis, SemanticStatementKind as Kind};
         for statement in statements {
             match &statement.kind {
@@ -3436,8 +3438,13 @@ fn collect_semantic_array_declarations(module: &crate::semantic_ir::SemanticModu
                             crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
                             crate::semantic_ir::SemanticValueType::Single => TypeSuffix::Single,
                             crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
-                            crate::semantic_ir::SemanticValueType::Unknown
-                            | crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
+                            crate::semantic_ir::SemanticValueType::Unknown => {
+                                return Err(format!(
+                                    "array `{}` has no resolved element type",
+                                    item.name
+                                ));
+                            }
+                            crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
                         };
                         let name = item.name.trim_end_matches(['$', '%', '&', '!', '#']);
                         let base = BasicIdent {
@@ -3488,41 +3495,42 @@ fn collect_semantic_array_declarations(module: &crate::semantic_ir::SemanticModu
                 Kind::Line(body)
                 | Kind::While { body, .. }
                 | Kind::For { body, .. }
-                | Kind::Do { body, .. } => visit(body, module, consts, arrays),
+                | Kind::Do { body, .. } => visit(body, module, consts, arrays)?,
                 Kind::If {
                     then_body,
                     else_body,
                     ..
                 } => {
-                    visit(then_body, module, consts, arrays);
-                    visit(else_body, module, consts, arrays);
+                    visit(then_body, module, consts, arrays)?;
+                    visit(else_body, module, consts, arrays)?;
                 }
                 Kind::SelectCase {
                     cases, else_body, ..
                 } => {
                     for case in cases {
-                        visit(&case.body, module, consts, arrays);
+                        visit(&case.body, module, consts, arrays)?;
                     }
-                    visit(else_body, module, consts, arrays);
+                    visit(else_body, module, consts, arrays)?;
                 }
                 Kind::Try {
                     body,
                     catch,
                     finally_body,
                 } => {
-                    visit(body, module, consts, arrays);
+                    visit(body, module, consts, arrays)?;
                     if let Some(catch) = catch {
-                        visit(&catch.body, module, consts, arrays);
+                        visit(&catch.body, module, consts, arrays)?;
                     }
-                    visit(finally_body, module, consts, arrays);
+                    visit(finally_body, module, consts, arrays)?;
                 }
                 _ => {}
             }
         }
+        Ok(())
     }
     let mut arrays = ArrayTable::new();
-    visit(&module.statements, module, &consts, &mut arrays);
-    arrays
+    visit(&module.statements, module, &consts, &mut arrays)?;
+    Ok(arrays)
 }
 
 fn collect_callable_array_declarations(
@@ -3535,7 +3543,7 @@ fn collect_callable_array_declarations(
         if let Some(body) = semantic_callable_body(module, function) {
             let mut body_module = module.clone();
             body_module.statements = body.to_vec();
-            return Ok(collect_semantic_array_declarations(&body_module));
+            return collect_semantic_array_declarations(&body_module);
         }
         if let Some(dispatch) = semantic_dispatch {
             let mut body_module = module.clone();
@@ -3544,7 +3552,7 @@ fn collect_callable_array_declarations(
                 .flatten()
                 .map(|statement| (*statement).clone())
                 .collect();
-            return Ok(collect_semantic_array_declarations(&body_module));
+            return collect_semantic_array_declarations(&body_module);
         }
     }
     collect_array_declarations(&function.body, consts)
@@ -6731,8 +6739,8 @@ fn c_semantic_dim_is_predeclared(
             crate::semantic_ir::SemanticValueType::Long => crate::ast::TypeSuffix::Long,
             crate::semantic_ir::SemanticValueType::Single => crate::ast::TypeSuffix::Single,
             crate::semantic_ir::SemanticValueType::Double => crate::ast::TypeSuffix::Double,
-            crate::semantic_ir::SemanticValueType::Unknown
-            | crate::semantic_ir::SemanticValueType::Boolean => crate::ast::TypeSuffix::Single,
+            crate::semantic_ir::SemanticValueType::Unknown => return false,
+            crate::semantic_ir::SemanticValueType::Boolean => crate::ast::TypeSuffix::Single,
         };
         ident.suffix = Some(suffix);
         let key = c_var_name(&ident, suffix);
@@ -6755,9 +6763,9 @@ fn emit_c_semantic_dim(
             crate::semantic_ir::SemanticValueType::Integer => TypeSuffix::Integer,
             crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
             crate::semantic_ir::SemanticValueType::Single
-            | crate::semantic_ir::SemanticValueType::Unknown
             | crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
             crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
+            crate::semantic_ir::SemanticValueType::Unknown => return false,
         };
         let ident = BasicIdent {
             name: item
@@ -10451,7 +10459,7 @@ pub(crate) fn generate(
         }
     }
     let arrays = if let Some(module) = resolved.semantic_module.as_ref() {
-        Ok(collect_semantic_array_declarations(module))
+        collect_semantic_array_declarations(module)
     } else if resolved.typed_array_declarations.is_empty() {
         collect_array_declarations(&program.statements, &int_consts)
     } else {
@@ -27916,11 +27924,32 @@ mod dialect_tests {
     fn semantic_array_declarations_preserve_fixed_and_inferred_bounds() {
         let module = crate::semantic_ir::parse_and_adapt("dim fixed%(10, 20)\ndim inferred$(?)\n")
             .expect("semantic array declarations parse");
-        let arrays = collect_semantic_array_declarations(&module);
+        let arrays = collect_semantic_array_declarations(&module).unwrap();
         assert_eq!(arrays["bv_i_fixed"].bounds, vec![10, 20]);
         assert!(!arrays["bv_i_fixed"].dynamic);
         assert_eq!(arrays["bv_s_inferred"].bounds, vec![0]);
         assert!(arrays["bv_s_inferred"].dynamic);
+    }
+
+    #[test]
+    fn semantic_array_declarations_reject_unknown_element_types() {
+        let mut module = crate::semantic_ir::parse_and_adapt("dim values%(4)\n")
+            .expect("semantic array declaration parses");
+        let crate::semantic_ir::SemanticStatementKind::Line(body) =
+            &mut module.statements[0].kind
+        else {
+            panic!("expected DIM line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Dim(items) = &mut body[0].kind else {
+            panic!("expected DIM statement")
+        };
+        items[0].element_type = crate::semantic_ir::SemanticValueType::Unknown;
+
+        let error = match collect_semantic_array_declarations(&module) {
+            Err(error) => error,
+            Ok(_) => panic!("unresolved element type unexpectedly received C storage"),
+        };
+        assert!(error.contains("no resolved element type"), "{error}");
     }
 
     /// `\`/`MOD`/`AND`/`OR`/`XOR`/`NOT` on integer operands must still

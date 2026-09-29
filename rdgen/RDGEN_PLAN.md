@@ -17231,3 +17231,13 @@ Iteration 5678 removed JVM array declaration fallback for unresolved element typ
 Iteration 5679 added JVM regression coverage for unresolved DIM storage types.
 
 Iteration 5680 validated the complete locked workspace test suite after JVM collector changes.
+
+Iteration 5681 removed the C array collector's Unknown-to-Single element fallback.
+
+Iteration 5682 made unresolved C array element types produce a typed compiler error.
+
+Iteration 5683 removed unresolved C array predeclaration and DIM suffix fallbacks.
+
+Iteration 5684 added a regression for rejected unresolved semantic array element types.
+
+Iteration 5685 validated the complete locked workspace suite after C array collector changes.
