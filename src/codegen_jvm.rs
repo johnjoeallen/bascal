@@ -2670,7 +2670,7 @@ fn emit_jvm_semantic_comment(block: bool, text: &str, out: &mut String) {
 /// Whether a compound statement (a loop, branch, `select case` or `try`) has
 /// a record file declaration anywhere in its bodies. A plain `Line` is not
 /// compound: a top-level file declaration is consumed as metadata, with its
-/// `open` emitted from the lowered AST sibling beside it.
+/// `open` emitted from the AST sibling record transpilation adds beside it.
 fn semantic_compound_contains_file_declaration(
     statement: &crate::semantic_ir::SemanticStatement,
 ) -> bool {
@@ -2719,8 +2719,8 @@ fn emit_jvm_semantic_block(
     let mut rendered = String::new();
     for statement in statements {
         let mut node = String::new();
-        // A file declaration's `open` comes from a lowered AST sibling that
-        // only the compatibility emitter has, so a compound statement whose
+        // A file declaration's `open` comes from an AST sibling that record
+        // transpilation adds and only the compatibility emitter has, so a compound statement whose
         // body holds one cannot be emitted from typed IR alone.
         let handled = if semantic_compound_contains_file_declaration(statement) {
             false

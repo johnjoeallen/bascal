@@ -17542,11 +17542,11 @@ Iteration 5834 re-annotated a merged module's expression types after every `prep
 
 Iteration 5835 rendered ordinary-syntax scalar-method calls (`ucase$(s$)`) in the BASIC print and I/O paths by recognizing them in `semantic_expression_contains_callable_call`.
 
-Iteration 5836 added `SemanticCondition` to the BASIC semantic emitters: a `&&`/`||` chain lowers to one short-circuit guard per operand at every `if`, `while` and `do`, top level and callable. This was the last construct sending stdlib method bodies (`ucase`, `lcase`, `ltrim`, `rtrim`) and `short_circuit.bcl` to the AST; outside the record-DSL programs every top-level BASIC statement is now emitted from typed IR.
+Iteration 5836 added `SemanticCondition` to the BASIC semantic emitters: a `&&`/`||` chain transpiles to one short-circuit guard per operand at every `if`, `while` and `do`, top level and callable. This was the last construct sending stdlib method bodies (`ucase`, `lcase`, `ltrim`, `rtrim`) and `short_circuit.bcl` to the AST; outside the record-DSL programs every top-level BASIC statement is now emitted from typed IR.
 
-Iteration 5837 made the JVM semantic dispatchers decline any compound statement containing a record `file` declaration. Its `open` exists only as a lowered AST sibling, so a `try` around `file x = open(...)` compiled to a program that never opened the file (found by `jvm_inventory_list_all...` once alignment started succeeding for `inventory.bcl`).
+Iteration 5837 made the JVM semantic dispatchers decline any compound statement containing a record `file` declaration. Its `open` exists only as an AST sibling that record transpilation adds, so a `try` around `file x = open(...)` compiled to a program that never opened the file (found by `jvm_inventory_list_all...` once alignment started succeeding for `inventory.bcl`).
 
-Iteration 5838 added regression tests for chain lowering, chained and ordinary scalar-method prints, dependency re-annotation, and the JVM nested file declaration.
+Iteration 5838 added regression tests for short-circuit chain transpilation, chained and ordinary scalar-method prints, dependency re-annotation, and the JVM nested file declaration.
 
 Iteration 5839 rewrote ordinary-syntax scalar-method calls (`ucase$(s$)`) to member calls during typed-IR annotation with the same conditions as `records::Lowerer::try_ordinary_call_as_method` (no claiming function or builtin, receiver type match, result-suffix match), so every backend receives the resolved method call.
 
@@ -17562,4 +17562,4 @@ Iteration 5844 added JVM regression tests for the string and numeric built-ins.
 
 Iteration 5845 rendered `tab(n)` and `spc(n)` print directives in the C and JVM typed-IR print emitters, matching the AST escape/space sequences byte for byte.
 
-Iteration 5846 added C and JVM regression tests for print directives. Remaining AST emission is dominated by the record DSL: the lowered `LSET`/`GET`/`PUT`/`FIELD` siblings that `records::lower` expands from one source statement have no typed-IR counterpart, so every backend still emits them from the AST. Representing record file reads and writes in the typed IR is the prerequisite for retiring `ResolvedProgram::program` (Stage 68).
+Iteration 5846 added C and JVM regression tests for print directives. Remaining AST emission is dominated by the record DSL: the `LSET`/`GET`/`PUT`/`FIELD` siblings that record transpilation expands from one source statement have no typed-IR counterpart, so every backend still emits them from the AST. Representing record file reads and writes in the typed IR is the prerequisite for retiring `ResolvedProgram::program` (Stage 68).

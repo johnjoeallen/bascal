@@ -515,7 +515,6 @@ L_select_0_end:
     ; ucase$/lcase$ operate on their string -- code%.error() would read as if
     ; the *error code itself* has a message, when really this is a lookup
     ; table keyed by that code. Stays an ordinary function.
-
     ldc 2
     putstatic PortableErrorHandling/g33 I
     ldc 3
@@ -582,12 +581,10 @@ L_select_0_end:
     putstatic PortableErrorHandling/g28 I
     ldc 76
     putstatic PortableErrorHandling/g29 I
-
     ; Tutorial — Portable Structured Error Handling
     ;
     ; TRY/CATCH/FINALLY and THROW are BASCAL's portable error model.  A catch can
     ; select several error codes and bind the originating source file.
-
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "portable try/catch:"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
@@ -649,7 +646,6 @@ L_try_0_finish:
     getstatic java/lang/System/out Ljava/io/PrintStream;
     ldc "  cleanup always runs"
     invokevirtual java/io/PrintStream/println (Ljava/lang/String;)V
-
     return
     .catch java/lang/RuntimeException from L_try_0_start to L_try_0_end using L_try_0_catch
 .end method

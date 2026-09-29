@@ -10783,7 +10783,7 @@ impl CodeGenerator {
         }
     }
 
-    /// Render a branch condition, lowering a `&&`/`||` chain to per-operand
+    /// Render a branch condition, transpiling a `&&`/`||` chain to per-operand
     /// guards. Declines (`None`) when any operand cannot be rendered.
     fn semantic_condition(
         &mut self,
@@ -13448,7 +13448,7 @@ fn resolve_semantic_call_arg_bound(
 }
 
 /// A rendered branch condition: a single BASIC expression, or a `&&`/`||`
-/// chain lowered to one short-circuit guard per operand, so a later operand's
+/// chain transpiled to one short-circuit guard per operand, so a later operand's
 /// side effects genuinely do not run once an earlier operand has decided the
 /// outcome (the semantic counterpart of `CodeGenerator::condition_jump`).
 enum SemanticCondition {
