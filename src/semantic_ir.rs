@@ -5514,17 +5514,22 @@ fn adapt_method(method: &rdgen_frontend::MethodDecl, kind: CallableKind) -> Call
     } = method;
     let name_span = name.span();
     let name = identifier(name);
+    let receiver_span = receiver.span();
+    let receiver = identifier(receiver);
+    // A scalar method with no explicit result has its receiver's type,
+    // matching the legacy parser's `finish_scalar_method`.
     let result_type = result
         .as_ref()
         .map(|(_, value)| adapt_return_type(value))
-        .or_else(|| suffix_from_name(&name));
+        .or_else(|| suffix_from_name(&name))
+        .or_else(|| scalar_receiver_suffix(&receiver));
     CallableSignature {
         kind,
         name,
         name_span,
         result_type,
-        receiver: Some(identifier(receiver)),
-        receiver_span: Some(receiver.span()),
+        receiver: Some(receiver),
+        receiver_span: Some(receiver_span),
         parameters: adapt_parameters(parameters),
         body: body.iter().map(|value| adapt_statement(value)).collect(),
         span: *span,
@@ -5634,6 +5639,17 @@ fn suffix_from_name(name: &str) -> Option<String> {
         .filter(|value| matches!(value, '%' | '&' | '!' | '#' | '$' | '@'))
         .map(|value| value.to_string())
 }
+fn scalar_receiver_suffix(receiver: &str) -> Option<String> {
+    match receiver.to_ascii_lowercase().as_str() {
+        "integer" => Some("%".to_string()),
+        "long" => Some("&".to_string()),
+        "single" => Some("!".to_string()),
+        "double" => Some("#".to_string()),
+        "string" => Some("$".to_string()),
+        _ => None,
+    }
+}
+
 fn adapt_return_type(value: &rdgen_frontend::ReturnType) -> String {
     match value {
         rdgen_frontend::ReturnType::Integer { .. } => "%",
@@ -6260,6 +6276,26 @@ mod tests {
         };
         module.annotate_expression_types(&mut call);
         assert_eq!(call.value_type, SemanticValueType::Single);
+    }
+
+    #[test]
+    fn scalar_method_without_explicit_result_takes_its_receiver_type() {
+        let module = parse_and_adapt(
+            "method shout[string]()\nreturn self$\nend method\nmethod twice[integer]()\nreturn self%\nend method\nmethod widen%[string]()\nreturn 1\nend method\n",
+        )
+        .unwrap();
+        let result = |name: &str| {
+            module
+                .callables
+                .iter()
+                .find(|callable| callable.name == name)
+                .unwrap()
+                .result_type
+                .clone()
+        };
+        assert_eq!(result("shout").as_deref(), Some("$"));
+        assert_eq!(result("twice").as_deref(), Some("%"));
+        assert_eq!(result("widen%").as_deref(), Some("%"));
     }
 
     #[test]

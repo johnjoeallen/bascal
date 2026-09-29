@@ -1990,6 +1990,27 @@ mod tests {
     }
 
     #[test]
+    fn basic_scalar_method_body_dispatches_semantic_statements() {
+        // The typed IR names a scalar method by its bare spelling (`shout`);
+        // the AST function carries the synthesized `$` result suffix.
+        let ast_source = "method shout[string]()\nprint \"ast marker\"\nreturn self$\nend method\nprint \"a\".shout()\nend\n";
+        let semantic_source = "method shout[string]()\nn% = len(self$)\nreturn self$\nend method\nprint \"a\".shout()\nend\n";
+        let parsed = crate::parse_source("basic_method_semantic.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named("basic_method_semantic.bcl", semantic_source)
+                .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("LEN(shoutSelf0$)") && !output.contains("ast marker"),
+            "scalar method body was not emitted from semantic IR: {output}"
+        );
+    }
+
+    #[test]
     fn basic_callable_generation_dispatches_semantic_terminal_and_error_statements() {
         let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nreturn 0\nend function\nprint value%()\nend\n";
         let semantic_source = "function value%()\ncls\nbeep\nclear\nstop\nsystem\nerror 9\nthrow\nreturn 0\nend function\nprint value%()\nend\n";
@@ -6507,9 +6528,7 @@ fn basic_semantic_callable_statements_by_source<'a>(
 ) -> Option<Vec<Option<&'a crate::semantic_ir::SemanticStatement>>> {
     use crate::semantic_ir::{CallableKind, SemanticStatementKind as Kind};
     let callable = module.callables.iter().find(|callable| {
-        callable
-            .name
-            .eq_ignore_ascii_case(&function.name.as_basic())
+        semantic_callable_name_matches(&callable.name, function)
             && callable.receiver.is_some() == function.receiver.is_some()
             && callable
                 .receiver
@@ -11799,7 +11818,10 @@ impl FunctionInfo {
         semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
         semantic_signature: Option<&crate::semantic_ir::CallableSignature>,
     ) -> Self {
+        // A scalar method's semantic name is bare; keep the result suffix the
+        // callable table and call sites are keyed by.
         let source_name = semantic_signature
+            .filter(|callable| !semantic_callable_name_matches_bare_method(&callable.name, function))
             .map(|callable| BasicIdent::parse(&callable.name))
             .unwrap_or_else(|| function.name.clone());
         let receiver = semantic_signature
@@ -13279,6 +13301,17 @@ fn resolve_semantic_call_arg_bound(
         .unwrap_or(ArgBound::NotAnArray)
 }
 
+/// A scalar method's semantic name is its bare spelling (`ucase`); the AST
+/// function carries the synthesized result suffix (`ucase$`).
+fn semantic_callable_name_matches(name: &str, function: &FunctionDef) -> bool {
+    name.eq_ignore_ascii_case(&function.name.as_basic())
+        || (function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name))
+}
+
+fn semantic_callable_name_matches_bare_method(name: &str, function: &FunctionDef) -> bool {
+    function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name)
+}
+
 fn semantic_basic_callable_for_function<'a>(
     module: &'a crate::semantic_ir::SemanticModule,
     function: &FunctionDef,
@@ -13287,9 +13320,7 @@ fn semantic_basic_callable_for_function<'a>(
         .callables
         .iter()
         .filter(|callable| {
-            callable
-                .name
-                .eq_ignore_ascii_case(&function.name.as_basic())
+            semantic_callable_name_matches(&callable.name, function)
                 && callable.receiver.is_some() == function.receiver.is_some()
                 && matches!(
                     (function.receiver.is_some(), callable.kind),

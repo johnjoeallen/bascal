@@ -17507,3 +17507,7 @@ Iteration 5816 sourced C FOR-variable storage suffixes from the typed-IR `variab
 Iteration 5817 expanded C64 FOR-variable coverage with a stale AST Double suffix and a typed-IR Long DIM annotation.
 
 Iteration 5818 strengthened the C64 typed-read regression so a semantic Double read is rejected when the compatibility AST carries a Long suffix.
+
+Iteration 5819 took over from Codex: inventoried BASIC AST-fallback statements across the corpus and found scalar methods never aligned with their typed-IR callables (bare `ucase` versus AST `ucase$`), so every method body stayed on the AST emitter.
+
+Iteration 5820 made scalar-method callable matching suffix-tolerant and gave scalar methods without an explicit result their receiver type in the typed IR, matching the legacy parser; method bodies now emit from typed IR, with regression tests in codegen_basic and semantic_ir.
