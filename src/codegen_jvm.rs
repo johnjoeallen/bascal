@@ -6492,16 +6492,7 @@ fn callable_key_for_function(
     else {
         return function_key(&function.name);
     };
-    let mut ident = BasicIdent::parse(&callable.name);
-    if let Some(suffix) = callable
-        .result_type
-        .as_deref()
-        .and_then(|suffix| suffix.chars().next())
-        .and_then(TypeSuffix::from_char)
-    {
-        ident.suffix = Some(suffix);
-    }
-    function_key(&ident)
+    function_key(&BasicIdent::parse(&callable.name))
 }
 
 fn function_table(
@@ -15843,6 +15834,23 @@ mod tests {
             arrays.get("values").map(|array| array.element),
             Some(super::JvmType::Numeric(super::NumericType::Double))
         );
+    }
+
+    #[test]
+    fn jvm_unsuffixed_function_uses_typed_default_result_type() {
+        let source = "function total()\nreturn 1\nend function\nprint total()\nend\n";
+        let parsed = crate::parse_source("unsuffixed_function_result.bcl".to_string(), source)
+            .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+
+        let output = super::generate(&resolved).unwrap();
+
+        assert!(output.contains(".method public static total : ()D"), "{output}");
     }
 
     #[test]

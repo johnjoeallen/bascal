@@ -17369,3 +17369,11 @@ Iteration 5747 validated the complete locked workspace suite after C try-result 
 Iteration 5748 extended unsuffixed function typing coverage through call-expression annotation.
 
 Iteration 5749 validated the complete locked workspace suite after typed callable expression coverage.
+
+Iteration 5750 separated JVM callable identity keys from resolved result-type suffixes.
+
+Iteration 5751 aligned C callable symbol mangling with resolved result types for unsuffixed functions.
+
+Iteration 5752 added C and JVM codegen regressions for unsuffixed function result defaults.
+
+Iteration 5753 refreshed Graphify and validated the complete locked workspace suite after callable-key changes.

@@ -4411,6 +4411,10 @@ fn build_function_table(
                     func.name.suffix
                 }
             });
+        let mut emitted_callable_name = callable_name.clone();
+        if emitted_callable_name.suffix.is_none() {
+            emitted_callable_name.suffix = result_suffix;
+        }
         let is_procedure = semantic_callable
             .map(|callable| callable.kind == crate::semantic_ir::CallableKind::Procedure)
             .unwrap_or(func.is_procedure);
@@ -4563,8 +4567,14 @@ fn build_function_table(
         }
         let sig = FnSig {
             c_name: receiver_type.map_or_else(
-                || function_c_name(&callable_name),
-                |receiver| format!("{}_{}", function_c_name(&callable_name), type_tag(receiver)),
+                || function_c_name(&emitted_callable_name),
+                |receiver| {
+                    format!(
+                        "{}_{}",
+                        function_c_name(&emitted_callable_name),
+                        type_tag(receiver)
+                    )
+                },
             ),
             is_void: is_procedure,
             is_string,
@@ -27746,6 +27756,23 @@ mod dialect_tests {
             !output.contains("bv_i_old"),
             "stale AST parameter must not leak into C output: {output}"
         );
+    }
+
+    #[test]
+    fn c_unsuffixed_function_uses_typed_default_result_type() {
+        let source = "function total()\nreturn 1\nend function\nprint total()\nend\n";
+        let parsed = parse_source("unsuffixed_function_result.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let resolved = resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+
+        assert!(output.contains("float bf_f_total(void)"), "{output}");
+        assert!(output.contains("bf_f_total()"), "{output}");
     }
 
     #[test]
