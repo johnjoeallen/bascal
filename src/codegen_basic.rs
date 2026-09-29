@@ -3276,6 +3276,23 @@ mod tests {
     }
 
     #[test]
+    fn basic_unsuffixed_function_uses_typed_default_result_type() {
+        let source = "function total()\nreturn 1\nend function\nprint total()\nend\n";
+        let parsed = crate::parse_source("unsuffixed_function_result.bcl".to_string(), source)
+            .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(crate::semantic_ir::parse_and_adapt(source).unwrap()),
+        )
+        .unwrap();
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+
+        assert!(output.contains("totalResult0!"), "{output}");
+    }
+
+    #[test]
     fn basic_generation_retains_callable_local_array_type_annotations() {
         for type_name in ["long", "single", "double", "string"] {
             let source = format!(

@@ -17385,3 +17385,7 @@ Iteration 5755 preserved callable-local DIM shadowing over module-scope FOR vari
 Iteration 5756 added resolver coverage for module and callable FOR variable type scopes.
 
 Iteration 5757 refreshed Graphify and validated the complete locked workspace suite after FOR scope resolution changes.
+
+Iteration 5758 added BASIC codegen coverage for the resolver-materialized result type of unsuffixed functions.
+
+Iteration 5759 validated the complete locked workspace suite after BASIC callable result coverage.
