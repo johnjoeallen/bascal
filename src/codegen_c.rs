@@ -16813,12 +16813,16 @@ fn hoist_try_result_calls(
             }
             let temp_name = format!("anf_{temp_counter}");
             *temp_counter += 1;
+            let Some(result_suffix) = sig.result_suffix else {
+                return Err(format!(
+                    "callable `{name}` has no resolved result type for try-result storage"
+                ));
+            };
             let temp_ident = BasicIdent {
                 name: temp_name,
-                suffix: sig.result_suffix,
+                suffix: Some(result_suffix),
             };
-            let value_name =
-                c_var_name(&temp_ident, sig.result_suffix.unwrap_or(TypeSuffix::String));
+            let value_name = c_var_name(&temp_ident, result_suffix);
             if sig.is_string {
                 out.push_str(&format!("    char {value_name}[{STRING_BUFFER_SIZE}];\n"));
                 arg_texts.push(value_name.clone());

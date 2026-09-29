@@ -17359,3 +17359,9 @@ Iteration 5742 removed obsolete BASIC codegen storage of string-valued top-level
 Iteration 5743 refreshed Graphify after changing BASIC DIM type consumers.
 
 Iteration 5744 validated the complete locked workspace suite after BASIC DIM fallback changes.
+
+Iteration 5745 made C try-result temporary storage require a resolved callable result suffix.
+
+Iteration 5746 refreshed Graphify after tightening C callable result storage dependencies.
+
+Iteration 5747 validated the complete locked workspace suite after C try-result type changes.
