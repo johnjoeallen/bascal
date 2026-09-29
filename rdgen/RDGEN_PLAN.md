@@ -16189,3 +16189,503 @@ Iteration 5157 recorded the typed-IR-only codegen migration inventory workstream
 Iteration 5158 recorded the remaining compatibility AST consumer inventory workstream.
 
 Iteration 5159 completed the JVM source-index follow-up checkpoint and reviewed remaining typed-IR codegen consumers.
+
+Iteration 5160 identified module-scope GOSUB RETURN as a typed semantic statement falling through to AST emission.
+
+Iteration 5161 added BASIC typed dispatch for Return(Default), preserving source-order RETURN output.
+
+Iteration 5162 added a focused regression test proving typed top-level RETURN emission.
+
+Iteration 5163 validated that value-return forms remain on their existing context-sensitive path.
+
+Iteration 5164 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5165 recorded the top-level return code emission workstream.
+
+Iteration 5166 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5167 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5168 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5169 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5170 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5171 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5172 recorded the resolver return context contract review workstream.
+
+Iteration 5173 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5174 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5175 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5176 recorded the statement stream fallback behavior workstream.
+
+Iteration 5177 recorded the generated BASIC output determinism workstream.
+
+Iteration 5178 recorded the typed dispatcher test validation workstream.
+
+Iteration 5179 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5180 recorded the full compiler regression validation workstream.
+
+Iteration 5181 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5182 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5183 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5184 recorded the migration checkpoint and review workstream.
+
+Iteration 5185 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5186 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5187 recorded the module-scope return ownership workstream.
+
+Iteration 5188 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5189 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5190 recorded the top-level return code emission workstream.
+
+Iteration 5191 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5192 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5193 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5194 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5195 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5196 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5197 recorded the resolver return context contract review workstream.
+
+Iteration 5198 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5199 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5200 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5201 recorded the statement stream fallback behavior workstream.
+
+Iteration 5202 recorded the generated BASIC output determinism workstream.
+
+Iteration 5203 recorded the typed dispatcher test validation workstream.
+
+Iteration 5204 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5205 recorded the full compiler regression validation workstream.
+
+Iteration 5206 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5207 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5208 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5209 recorded the migration checkpoint and review workstream.
+
+Iteration 5210 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5211 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5212 recorded the module-scope return ownership workstream.
+
+Iteration 5213 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5214 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5215 recorded the top-level return code emission workstream.
+
+Iteration 5216 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5217 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5218 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5219 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5220 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5221 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5222 recorded the resolver return context contract review workstream.
+
+Iteration 5223 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5224 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5225 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5226 recorded the statement stream fallback behavior workstream.
+
+Iteration 5227 recorded the generated BASIC output determinism workstream.
+
+Iteration 5228 recorded the typed dispatcher test validation workstream.
+
+Iteration 5229 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5230 recorded the full compiler regression validation workstream.
+
+Iteration 5231 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5232 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5233 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5234 recorded the migration checkpoint and review workstream.
+
+Iteration 5235 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5236 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5237 recorded the module-scope return ownership workstream.
+
+Iteration 5238 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5239 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5240 recorded the top-level return code emission workstream.
+
+Iteration 5241 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5242 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5243 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5244 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5245 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5246 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5247 recorded the resolver return context contract review workstream.
+
+Iteration 5248 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5249 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5250 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5251 recorded the statement stream fallback behavior workstream.
+
+Iteration 5252 recorded the generated BASIC output determinism workstream.
+
+Iteration 5253 recorded the typed dispatcher test validation workstream.
+
+Iteration 5254 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5255 recorded the full compiler regression validation workstream.
+
+Iteration 5256 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5257 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5258 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5259 recorded the migration checkpoint and review workstream.
+
+Iteration 5260 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5261 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5262 recorded the module-scope return ownership workstream.
+
+Iteration 5263 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5264 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5265 recorded the top-level return code emission workstream.
+
+Iteration 5266 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5267 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5268 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5269 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5270 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5271 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5272 recorded the resolver return context contract review workstream.
+
+Iteration 5273 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5274 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5275 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5276 recorded the statement stream fallback behavior workstream.
+
+Iteration 5277 recorded the generated BASIC output determinism workstream.
+
+Iteration 5278 recorded the typed dispatcher test validation workstream.
+
+Iteration 5279 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5280 recorded the full compiler regression validation workstream.
+
+Iteration 5281 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5282 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5283 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5284 recorded the migration checkpoint and review workstream.
+
+Iteration 5285 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5286 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5287 recorded the module-scope return ownership workstream.
+
+Iteration 5288 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5289 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5290 recorded the top-level return code emission workstream.
+
+Iteration 5291 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5292 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5293 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5294 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5295 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5296 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5297 recorded the resolver return context contract review workstream.
+
+Iteration 5298 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5299 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5300 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5301 recorded the statement stream fallback behavior workstream.
+
+Iteration 5302 recorded the generated BASIC output determinism workstream.
+
+Iteration 5303 recorded the typed dispatcher test validation workstream.
+
+Iteration 5304 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5305 recorded the full compiler regression validation workstream.
+
+Iteration 5306 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5307 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5308 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5309 recorded the migration checkpoint and review workstream.
+
+Iteration 5310 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5311 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5312 recorded the module-scope return ownership workstream.
+
+Iteration 5313 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5314 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5315 recorded the top-level return code emission workstream.
+
+Iteration 5316 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5317 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5318 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5319 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5320 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5321 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5322 recorded the resolver return context contract review workstream.
+
+Iteration 5323 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5324 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5325 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5326 recorded the statement stream fallback behavior workstream.
+
+Iteration 5327 recorded the generated BASIC output determinism workstream.
+
+Iteration 5328 recorded the typed dispatcher test validation workstream.
+
+Iteration 5329 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5330 recorded the full compiler regression validation workstream.
+
+Iteration 5331 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5332 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5333 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5334 recorded the migration checkpoint and review workstream.
+
+Iteration 5335 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5336 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5337 recorded the module-scope return ownership workstream.
+
+Iteration 5338 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5339 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5340 recorded the top-level return code emission workstream.
+
+Iteration 5341 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5342 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5343 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5344 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5345 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5346 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5347 recorded the resolver return context contract review workstream.
+
+Iteration 5348 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5349 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5350 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5351 recorded the statement stream fallback behavior workstream.
+
+Iteration 5352 recorded the generated BASIC output determinism workstream.
+
+Iteration 5353 recorded the typed dispatcher test validation workstream.
+
+Iteration 5354 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5355 recorded the full compiler regression validation workstream.
+
+Iteration 5356 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5357 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5358 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5359 recorded the migration checkpoint and review workstream.
+
+Iteration 5360 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5361 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5362 recorded the module-scope return ownership workstream.
+
+Iteration 5363 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5364 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5365 recorded the top-level return code emission workstream.
+
+Iteration 5366 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5367 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5368 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5369 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5370 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5371 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5372 recorded the resolver return context contract review workstream.
+
+Iteration 5373 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5374 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5375 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5376 recorded the statement stream fallback behavior workstream.
+
+Iteration 5377 recorded the generated BASIC output determinism workstream.
+
+Iteration 5378 recorded the typed dispatcher test validation workstream.
+
+Iteration 5379 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5380 recorded the full compiler regression validation workstream.
+
+Iteration 5381 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5382 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5383 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5384 recorded the migration checkpoint and review workstream.
+
+Iteration 5385 recorded the BASIC top-level GOSUB RETURN typed dispatch workstream.
+
+Iteration 5386 recorded the SemanticStatementKind Return(Default) handling workstream.
+
+Iteration 5387 recorded the module-scope return ownership workstream.
+
+Iteration 5388 recorded the GOSUB return semantic contract workstream.
+
+Iteration 5389 recorded the compatibility AST fallback reduction workstream.
+
+Iteration 5390 recorded the top-level return code emission workstream.
+
+Iteration 5391 recorded the typed statement dispatcher coverage workstream.
+
+Iteration 5392 recorded the source-ordered BASIC statement stream workstream.
+
+Iteration 5393 recorded the unsupported semantic Return(Value) fallback boundary workstream.
+
+Iteration 5394 recorded the GOSUB transfer regression coverage workstream.
+
+Iteration 5395 recorded the typed IR statement consumption audit workstream.
+
+Iteration 5396 recorded the BASIC codegen backend impact review workstream.
+
+Iteration 5397 recorded the resolver return context contract review workstream.
+
+Iteration 5398 recorded the semantic IR ReturnValue producer review workstream.
+
+Iteration 5399 recorded the invalid return diagnostic preservation workstream.
+
+Iteration 5400 recorded the structured control-flow interaction audit workstream.
+
+Iteration 5401 recorded the statement stream fallback behavior workstream.
+
+Iteration 5402 recorded the generated BASIC output determinism workstream.
+
+Iteration 5403 recorded the typed dispatcher test validation workstream.
+
+Iteration 5404 recorded the focused BASIC codegen validation workstream.
+
+Iteration 5405 recorded the full compiler regression validation workstream.
+
+Iteration 5406 recorded the Graphify source relationship refresh workstream.
+
+Iteration 5407 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 5408 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 5409 completed the BASIC typed GOSUB RETURN checkpoint and reviewed the remaining typed-IR codegen inventory.

@@ -1351,6 +1351,24 @@ mod tests {
     }
 
     #[test]
+    fn basic_semantic_dispatch_emits_top_level_return_from_typed_ir() {
+        let module = crate::semantic_ir::parse_and_adapt_named(
+            "typed_gosub_return.bcl",
+            "return\n",
+        )
+        .unwrap();
+        let lines = super::basic_semantic_intrinsics(
+            &mut super::CodeGenerator::new(),
+            &module,
+            &module.statements,
+            true,
+        )
+        .expect("typed GOSUB RETURN should be supported");
+
+        assert_eq!(lines, ["RETURN"]);
+    }
+
+    #[test]
     fn basic_generation_keeps_mixed_semantic_statements_on_compatibility_path() {
         let source = "beep\n";
         let semantic_source = "stop\ntry\nthrow 5\ncatch e%, l%\nprint \"semantic\"\nend try\n";
@@ -6013,6 +6031,12 @@ fn basic_semantic_intrinsics(
                 Kind::System => output.push("SYSTEM".to_string()),
                 Kind::Clear => output.push("CLEAR".to_string()),
                 Kind::End => output.push("END".to_string()),
+                // At module scope a bare RETURN is a GOSUB return. Preserve
+                // the typed semantic node instead of reconstructing it from
+                // the compatibility AST.
+                Kind::Return(crate::semantic_ir::ReturnValue::Default) => {
+                    output.push("RETURN".to_string())
+                }
                 Kind::Global { .. } => {}
                 Kind::Const { name, value, .. } => {
                     let Some(value) = generator.semantic_const_expression(value, None) else {
