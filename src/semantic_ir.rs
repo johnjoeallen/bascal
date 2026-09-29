@@ -911,6 +911,64 @@ impl SemanticModule {
         declarations
     }
 
+    /// Resolve implicit DIM types before codegen. BASCAL's unsuffixed numeric
+    /// default is single precision; keeping that fact in typed IR prevents
+    /// each backend from independently defaulting `Unknown`.
+    pub fn resolve_dim_value_types(&mut self) {
+        fn visit(statements: &mut [SemanticStatement]) {
+            for statement in statements {
+                match &mut statement.kind {
+                    SemanticStatementKind::Dim(items) => {
+                        for item in items {
+                            if item.element_type == SemanticValueType::Unknown
+                                && item.type_annotation.is_none()
+                            {
+                                item.element_type = SemanticValueType::Single;
+                            }
+                        }
+                    }
+                    SemanticStatementKind::Line(body)
+                    | SemanticStatementKind::While { body, .. }
+                    | SemanticStatementKind::For { body, .. }
+                    | SemanticStatementKind::Do { body, .. } => visit(body),
+                    SemanticStatementKind::If {
+                        then_body,
+                        else_body,
+                        ..
+                    } => {
+                        visit(then_body);
+                        visit(else_body);
+                    }
+                    SemanticStatementKind::SelectCase {
+                        cases, else_body, ..
+                    } => {
+                        for case in cases {
+                            visit(&mut case.body);
+                        }
+                        visit(else_body);
+                    }
+                    SemanticStatementKind::Try {
+                        body,
+                        catch,
+                        finally_body,
+                    } => {
+                        visit(body);
+                        if let Some(catch) = catch {
+                            visit(&mut catch.body);
+                        }
+                        visit(finally_body);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        visit(&mut self.statements);
+        for callable in &mut self.callables {
+            visit(&mut callable.body);
+        }
+    }
+
     /// Resolve unsuffixed FOR variables against their enclosing module or
     /// callable DIM declarations so codegen backends consume the declared
     /// type directly from typed IR.
@@ -977,6 +1035,9 @@ impl SemanticModule {
                         if *variable_type == SemanticValueType::Unknown {
                             if let Some(value_type) = types.get(&variable.to_ascii_lowercase()) {
                                 *variable_type = *value_type;
+                            }
+                            if *variable_type == SemanticValueType::Unknown {
+                                *variable_type = SemanticValueType::Single;
                             }
                         }
                         annotate(body, types);
@@ -1917,8 +1978,7 @@ impl SemanticModule {
                             .or_else(|| {
                                 declarations
                                     .get(&name.to_ascii_lowercase())
-                                    .and_then(|declaration| declaration.type_annotation.as_deref())
-                                    .map(semantic_type_from_annotation)
+                                    .map(|declaration| declaration.element_type)
                                     .filter(|value_type| *value_type != SemanticValueType::Unknown)
                             })
                     })

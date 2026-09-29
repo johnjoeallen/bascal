@@ -110,6 +110,7 @@ pub fn resolve_with_semantic(
 ) -> Result<ResolvedProgram, Vec<Diagnostic>> {
     validate_with_semantic(&program, semantic_module.as_ref())?;
     if let Some(module) = semantic_module.as_mut() {
+        module.resolve_dim_value_types();
         module.resolve_for_variable_types();
     }
 
@@ -2876,8 +2877,8 @@ mod legacy_form_tests {
     fn resolver_populates_for_variable_types_from_typed_dim_declarations() {
         let source = "procedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nend procedure\ndim index as long\nfor index = 1 to 2\nprint index\nend for\nend\n";
         let program = parse(source);
-        let semantic = crate::semantic_ir::parse_and_adapt(source)
-            .expect("typed source should parse");
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
         let resolved = resolve_with_semantic(program, Some(semantic))
             .expect("typed declarations should resolve");
         let module = resolved.semantic_module.as_ref().unwrap();
@@ -2910,6 +2911,48 @@ mod legacy_form_tests {
         assert_eq!(
             find_for(&module.callables[0].body),
             Some(crate::semantic_ir::SemanticValueType::Double)
+        );
+    }
+
+    #[test]
+    fn resolver_materializes_the_default_type_of_unannotated_dim() {
+        let source = "dim value\nfor loopIndex = 1 to 2\nend for\nprocedure work()\ndim localValue\nend procedure\nend\n";
+        let program = parse(source);
+        let semantic =
+            crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
+        let resolved = resolve_with_semantic(program, Some(semantic))
+            .expect("implicit DIM types should resolve");
+        let module = resolved.semantic_module.as_ref().unwrap();
+
+        assert_eq!(
+            module.top_level_dim_declarations()["value"].element_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &module.statements[1].kind
+        else {
+            panic!("expected top-level statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::For { variable_type, .. } =
+            &statements[0].kind
+        else {
+            panic!("expected FOR statement")
+        };
+        assert_eq!(
+            *variable_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
+        let crate::semantic_ir::SemanticStatementKind::Line(statements) =
+            &module.callables[0].body[0].kind
+        else {
+            panic!("expected callable body line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Dim(items) = &statements[0].kind else {
+            panic!("expected callable DIM")
+        };
+        assert_eq!(
+            items[0].element_type,
+            crate::semantic_ir::SemanticValueType::Single
         );
     }
 

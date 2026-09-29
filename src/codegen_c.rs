@@ -1530,10 +1530,11 @@ fn collect_semantic_scalar_declarations(
                             SemanticValueType::String => TypeSuffix::String,
                             SemanticValueType::Integer => TypeSuffix::Integer,
                             SemanticValueType::Long => TypeSuffix::Long,
-                            SemanticValueType::Single
-                            | SemanticValueType::Unknown
-                            | SemanticValueType::Boolean => TypeSuffix::Single,
+                            SemanticValueType::Single | SemanticValueType::Boolean => {
+                                TypeSuffix::Single
+                            }
                             SemanticValueType::Double => TypeSuffix::Double,
+                            SemanticValueType::Unknown => continue,
                         };
                         base.suffix = Some(suffix);
                         for suffix in [
@@ -7469,12 +7470,9 @@ fn emit_c_semantic_for_body(
                 bounds,
                 body,
             } => {
-                let variable_type = (*variable_type
-                    != crate::semantic_ir::SemanticValueType::Unknown)
-                    .then_some(*variable_type);
                 if !emit_c_semantic_for(
                     variable,
-                    variable_type,
+                    *variable_type,
                     start,
                     bounds,
                     body,
@@ -8302,7 +8300,7 @@ fn emit_c_semantic_while_block(
 /// keeps the aligned AST statement on its compatibility path.
 fn emit_c_semantic_for(
     variable: &str,
-    variable_type: Option<crate::semantic_ir::SemanticValueType>,
+    variable_type: crate::semantic_ir::SemanticValueType,
     start: &crate::semantic_ir::Expression,
     bounds: &crate::semantic_ir::ForBounds,
     body: &[crate::semantic_ir::SemanticStatement],
@@ -8322,7 +8320,9 @@ fn emit_c_semantic_for(
 ) -> bool {
     use crate::semantic_ir::ForBounds;
     let ident = BasicIdent::parse(variable);
-    let suffix = semantic_for_variable_suffix(variable_type);
+    let Some(suffix) = semantic_for_variable_suffix(variable_type) else {
+        return false;
+    };
     let Some((c_type, variable_is_float)) = numeric_c_type(suffix) else {
         return false;
     };
@@ -8486,17 +8486,17 @@ fn c_semantic_expression_contains_call(expression: &crate::semantic_ir::Expressi
 }
 
 fn semantic_for_variable_suffix(
-    variable_type: Option<crate::semantic_ir::SemanticValueType>,
-) -> TypeSuffix {
-    variable_type.map_or(TypeSuffix::Single, |variable_type| match variable_type {
-        crate::semantic_ir::SemanticValueType::String => TypeSuffix::String,
-        crate::semantic_ir::SemanticValueType::Integer => TypeSuffix::Integer,
-        crate::semantic_ir::SemanticValueType::Long => TypeSuffix::Long,
-        crate::semantic_ir::SemanticValueType::Double => TypeSuffix::Double,
-        crate::semantic_ir::SemanticValueType::Single
-        | crate::semantic_ir::SemanticValueType::Unknown
-        | crate::semantic_ir::SemanticValueType::Boolean => TypeSuffix::Single,
-    })
+    variable_type: crate::semantic_ir::SemanticValueType,
+) -> Option<TypeSuffix> {
+    match variable_type {
+        crate::semantic_ir::SemanticValueType::String => Some(TypeSuffix::String),
+        crate::semantic_ir::SemanticValueType::Integer => Some(TypeSuffix::Integer),
+        crate::semantic_ir::SemanticValueType::Long => Some(TypeSuffix::Long),
+        crate::semantic_ir::SemanticValueType::Single => Some(TypeSuffix::Single),
+        crate::semantic_ir::SemanticValueType::Double => Some(TypeSuffix::Double),
+        crate::semantic_ir::SemanticValueType::Unknown
+        | crate::semantic_ir::SemanticValueType::Boolean => None,
+    }
 }
 
 fn semantic_value_type_suffix(
@@ -11119,12 +11119,9 @@ pub(crate) fn generate(
                         body: loop_body,
                         ..
                     } => {
-                        let variable_type = (*variable_type
-                            != crate::semantic_ir::SemanticValueType::Unknown)
-                            .then_some(*variable_type);
                         return emit_c_semantic_for(
                             variable,
-                            variable_type,
+                            *variable_type,
                             start,
                             bounds,
                             loop_body,
@@ -12755,12 +12752,9 @@ fn emit_function_def(
                         body: loop_body,
                         ..
                     } => {
-                        let variable_type = (*variable_type
-                            != crate::semantic_ir::SemanticValueType::Unknown)
-                            .then_some(*variable_type);
                         emit_c_semantic_for(
                             variable,
-                            variable_type,
+                            *variable_type,
                             start,
                             bounds,
                             loop_body,
@@ -24916,6 +24910,32 @@ mod dialect_tests {
             "numeric={numeric:?}, body={body:#?}"
         );
         assert_eq!(numeric.get("bv_l_value"), Some(&"int"), "{numeric:?}");
+    }
+
+    #[test]
+    fn c_semantic_unannotated_dim_consumes_resolver_default_type() {
+        let source = "dim value\nvalue = 1\nfor loopIndex = 1 to 2\nvalue = loopIndex\nend for\nend\n";
+        let parsed = parse_source("semantic_default_dim_type.bcl".to_string(), source)
+            .expect("legacy fixture parses");
+        let lower::Lowered { program, .. } = lower::lower(parsed).expect("fixture lowers");
+        let resolved = resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named("semantic_default_dim_type.bcl", source)
+                    .expect("semantic fixture adapts"),
+            ),
+        )
+        .expect("fixture resolves");
+
+        let output = generate(&resolved, Target::C)
+            .expect("default typed DIM transpiles")
+            .app;
+        assert!(output.contains("static float bv_f_value = 0"), "{output}");
+        assert!(!output.contains("static int bv_i_value"), "{output}");
+        assert!(
+            output.contains("static float bv_f_loopindex = 0"),
+            "suffixless FOR type was not resolved into typed IR: {output}"
+        );
     }
 
     #[test]

@@ -5314,10 +5314,12 @@ fn collect_semantic_scalar_declarations(
             expression: &crate::semantic_ir::Expression,
             declarations: &mut BTreeMap<String, JvmType>,
         ) {
-            if let ExpressionKind::Name(name) = &expression.kind {
-                let ident = BasicIdent::parse(name);
-                let ty = jvm_type_for_semantic_value(expression.value_type);
-                declarations.insert(variable_key(&ident), ty);
+            if expression.value_type != crate::semantic_ir::SemanticValueType::Unknown {
+                if let ExpressionKind::Name(name) = &expression.kind {
+                    let ident = BasicIdent::parse(name);
+                    let ty = jvm_type_for_semantic_value(expression.value_type);
+                    declarations.insert(variable_key(&ident), ty);
+                }
             }
         }
         fn register_byref_call_targets(
@@ -15795,6 +15797,32 @@ mod tests {
         assert_eq!(
             declarations.get("slot%"),
             Some(&super::JvmType::Numeric(super::NumericType::Int))
+        );
+    }
+
+    #[test]
+    fn jvm_semantic_unannotated_dim_uses_resolver_default_type() {
+        let source = "dim value\nvalue = 1\nend\n";
+        let parsed = crate::parse_source("semantic_default_dim_type.bcl".to_string(), source)
+            .expect("legacy fixture parses");
+        let crate::lower::Lowered { program, .. } =
+            crate::lower::lower(parsed).expect("fixture lowers");
+        let resolved = crate::resolver::resolve_with_semantic(
+            program,
+            Some(
+                crate::semantic_ir::parse_and_adapt_named("semantic_default_dim_type.bcl", source)
+                    .expect("semantic fixture adapts"),
+            ),
+        )
+        .expect("fixture resolves");
+        let module = resolved.semantic_module.as_ref().unwrap();
+        let mut declarations = std::collections::BTreeMap::new();
+
+        super::collect_semantic_scalar_declarations(module, &mut declarations);
+
+        assert_eq!(
+            declarations.get("value"),
+            Some(&super::JvmType::Numeric(super::NumericType::Double))
         );
     }
 
