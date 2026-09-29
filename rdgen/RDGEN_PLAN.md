@@ -17473,3 +17473,7 @@ Iteration 5799 rejected unsupported callable parameter type annotations during r
 Iteration 5800 added resolver coverage for an unknown parameter annotation diagnostic with semantic source location.
 
 Iteration 5801 refreshed Graphify and validated the complete locked workspace suite after parameter annotation validation changes.
+
+Iteration 5802 expanded typed-IR adapter coverage for callable parameter annotation retention, suffix precedence, and implicit Single defaults.
+
+Iteration 5803 validated callable parameter type adaptation with the complete locked workspace suite.

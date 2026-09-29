@@ -6144,7 +6144,7 @@ mod tests {
     #[test]
     fn adapts_callable_signatures_and_parameter_axes() {
         let module = adapt_module(&rdgen_frontend::parse(
-            "function sum%(byref values%(?), byval fixed%(3), byval count%)\nreturn count%\nend function\nprocedure log(message$, code)\nend procedure\nmethod scale[integer](byref factor%)\nend method\n",
+            "function sum%(byref values%(?), byval fixed%(3), byval count as long)\nreturn count\nend function\nprocedure log(message$ as integer, code as double, implicit)\nend procedure\nmethod scale[integer](byref factor%)\nend method\n",
         ).unwrap());
         assert_eq!(module.callables.len(), 3);
         assert_eq!(module.callables[0].kind, CallableKind::Function);
@@ -6180,12 +6180,29 @@ mod tests {
             SemanticValueType::String
         );
         assert_eq!(
+            module.callables[1].parameters[0].type_annotation.as_deref(),
+            Some("integer"),
+            "parameter annotation is retained even when a suffix takes precedence"
+        );
+        assert_eq!(
             module.callables[1].parameters[1].value_type,
+            SemanticValueType::Double
+        );
+        assert_eq!(
+            module.callables[1].parameters[1].type_annotation.as_deref(),
+            Some("double")
+        );
+        assert_eq!(
+            module.callables[1].parameters[2].value_type,
             SemanticValueType::Single
         );
         assert_eq!(
             module.callables[0].parameters[2].value_type,
-            SemanticValueType::Integer
+            SemanticValueType::Long
+        );
+        assert_eq!(
+            module.callables[0].parameters[2].type_annotation.as_deref(),
+            Some("long")
         );
         assert_eq!(module.callables[2].receiver.as_deref(), Some("integer"));
         assert_eq!(module.callables[0].result_type.as_deref(), Some("%"));
