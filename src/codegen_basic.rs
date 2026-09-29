@@ -3585,6 +3585,38 @@ mod tests {
     }
 
     #[test]
+    fn basic_callable_parameter_annotation_drives_typed_identifier() {
+        let ast_source =
+            "function read%(stale!)\nreturn 0\nend function\nprint read%(1)\nend\n";
+        let semantic_source =
+            "function read%(value as long)\nreturn value\nend function\nprint read%(1)\nend\n";
+        let parsed = crate::parse_source(
+            "basic_callable_parameter_annotation.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "basic_callable_parameter_annotation.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = super::CodeGenerator::new().generate(&resolved).unwrap();
+        assert!(
+            output.contains("readValue0&"),
+            "BASIC callable parameter should use typed-IR annotation: {output}"
+        );
+        assert!(
+            !output.contains("readStale0!"),
+            "AST callable parameter leaked into semantic BASIC output: {output}"
+        );
+    }
+
+    #[test]
     fn semantic_parameter_rank_seeds_capacity_when_ast_parameter_is_scalar() {
         let ast_source = "dim actual%(5)\nfunction consume%(values%)\nreturn 0\nend function\nconsume%(actual%)\nend\n";
         let semantic_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";

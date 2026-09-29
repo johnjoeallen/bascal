@@ -27804,6 +27804,37 @@ mod dialect_tests {
     }
 
     #[test]
+    fn c_callable_parameter_annotation_drives_typed_signature() {
+        let ast_source = "function identity%(stale!)\nreturn 1\nend function\nend\n";
+        let semantic_source =
+            "function identity%(value as long)\nreturn 1\nend function\nend\n";
+        let parsed = parse_source(
+            "c_semantic_callable_parameter_annotation.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_semantic_callable_parameter_annotation.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let output = generate(&resolved, Target::C).unwrap().app;
+        assert!(
+            output.contains("int bf_i_identity(int bv_l_value)"),
+            "C parameter declaration should use typed-IR annotation: {output}"
+        );
+        assert!(
+            !output.contains("bv_f_stale"),
+            "AST parameter type leaked into typed C signature: {output}"
+        );
+    }
+
+    #[test]
     fn c_callable_local_storage_candidates_come_from_typed_dispatch() {
         let ast_source =
             "function f%()\nold%=1\nreturn 0\nend function\nresult%=f%()\nend\n";

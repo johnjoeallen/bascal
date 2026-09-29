@@ -17423,3 +17423,9 @@ Iteration 5774 removed the JVM semantic callable parameter fallback from typed p
 Iteration 5775 added JVM callable signature coverage proving parameter descriptors consume typed-IR annotation types.
 
 Iteration 5776 refreshed Graphify and validated the complete locked workspace suite after callable parameter type propagation changes.
+
+Iteration 5777 added C codegen coverage for an annotated semantic parameter whose type differs from the compatibility AST parameter suffix.
+
+Iteration 5778 added BASIC codegen coverage for an annotated semantic parameter whose type differs from the compatibility AST parameter suffix.
+
+Iteration 5779 validated all three codegen backend parameter annotation regressions with the complete locked workspace suite.
