@@ -204,42 +204,30 @@ pub(crate) fn generate(
     };
     let mut emitted_typed_stream = false;
     if let Some(module) = resolved.semantic_module.as_ref() {
-        let source_index = module
-            .statement_sources
-            .first()
-            .copied()
-            .filter(|source_index| {
-                *source_index != usize::MAX
-                    && module
-                        .statement_sources
-                        .iter()
-                        .all(|other| other == source_index)
-            });
-        if let Some(source) = source_index
-            .and_then(|index| module.sources.get(index))
-            .filter(|source| !source.text.lines().any(|line| line.trim().is_empty()))
-        {
-            let mut semantic_state = JvmSemanticState {
-                source_filename: source.filename.clone(),
-                next_label: emitter.next_label,
-                exception_handlers: Vec::new(),
-            };
-            let mut typed_body = String::new();
-            if emit_jvm_semantic_block(
-                &module.statements,
-                &context,
-                &mut emitter.loop_exits,
-                &mut emitter.loop_continues,
-                &mut semantic_state,
-                &mut typed_body,
-            ) {
-                body.push_str(&typed_body);
-                emitter.next_label = semantic_state.next_label;
-                emitter
-                    .exception_handlers
-                    .extend(semantic_state.exception_handlers);
-                emitted_typed_stream = true;
-            }
+        let mut semantic_state = JvmSemanticState {
+            source_filename: String::new(),
+            next_label: emitter.next_label,
+            exception_handlers: Vec::new(),
+        };
+        let mut loop_exits = emitter.loop_exits.clone();
+        let mut loop_continues = emitter.loop_continues.clone();
+        let mut typed_body = String::new();
+        if emit_jvm_semantic_module(
+            module,
+            &context,
+            &mut loop_exits,
+            &mut loop_continues,
+            &mut semantic_state,
+            &mut typed_body,
+        ) {
+            body.push_str(&typed_body);
+            emitter.next_label = semantic_state.next_label;
+            emitter.loop_exits = loop_exits;
+            emitter.loop_continues = loop_continues;
+            emitter
+                .exception_handlers
+                .extend(semantic_state.exception_handlers);
+            emitted_typed_stream = true;
         }
     }
     if !emitted_typed_stream {
@@ -2610,7 +2598,12 @@ fn emit_jvm_semantic_comment(block: bool, text: &str, out: &mut String) {
             .strip_prefix('\'')
             .or_else(|| text.strip_prefix("//"))
             .unwrap_or(text);
-        out.push_str(&format!("    ; {}\n", body.trim_start()));
+        let body = body.trim_start();
+        if body.is_empty() {
+            out.push_str("    ;\n");
+        } else {
+            out.push_str(&format!("    ; {body}\n"));
+        }
         return;
     }
 
@@ -2621,7 +2614,11 @@ fn emit_jvm_semantic_comment(block: bool, text: &str, out: &mut String) {
     for line in body.lines() {
         let trimmed = line.trim();
         let comment = trimmed.strip_prefix('*').map(str::trim).unwrap_or(trimmed);
-        out.push_str(&format!("    ; {comment}\n"));
+        if comment.is_empty() {
+            out.push_str("    ;\n");
+        } else {
+            out.push_str(&format!("    ; {comment}\n"));
+        }
     }
 }
 
@@ -2902,6 +2899,49 @@ fn emit_jvm_semantic_block(
             return false;
         }
         rendered.push_str(&node);
+    }
+    out.push_str(&rendered);
+    true
+}
+
+fn emit_jvm_semantic_module(
+    module: &crate::semantic_ir::SemanticModule,
+    context: &JvmContext,
+    loop_exits: &mut Vec<String>,
+    loop_continues: &mut Vec<String>,
+    state: &mut JvmSemanticState,
+    out: &mut String,
+) -> bool {
+    if module.statement_sources.len() != module.statements.len() {
+        return false;
+    }
+    let initial_state = state.clone();
+    let initial_loop_exits = loop_exits.clone();
+    let initial_loop_continues = loop_continues.clone();
+    let mut rendered = String::new();
+    for (statement, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let Some(source) = module.sources.get(*source_index) else {
+            *state = initial_state;
+            *loop_exits = initial_loop_exits;
+            *loop_continues = initial_loop_continues;
+            return false;
+        };
+        state.source_filename.clone_from(&source.filename);
+        let mut statement_output = String::new();
+        if !emit_jvm_semantic_block(
+            std::slice::from_ref(statement),
+            context,
+            loop_exits,
+            loop_continues,
+            state,
+            &mut statement_output,
+        ) {
+            *state = initial_state;
+            *loop_exits = initial_loop_exits;
+            *loop_continues = initial_loop_continues;
+            return false;
+        }
+        rendered.push_str(&statement_output);
     }
     out.push_str(&rendered);
     true
@@ -10945,6 +10985,63 @@ mod tests {
         let main = main.split(".end method").next().unwrap();
         assert!(main.contains("ldc 2"), "typed statement missing: {main}");
         assert!(!main.contains("ldc 1"), "AST statement leaked: {main}");
+    }
+
+    #[test]
+    fn jvm_generation_emits_typed_top_level_stream_with_blank_lines() {
+        let parsed = crate::parse_source(
+            "jvm_blank_line_ast_origin.bcl".to_string(),
+            "print 1\nend\n",
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "jvm_blank_line_typed_origin.bcl",
+            "print 2\n\nend\n",
+        )
+        .unwrap();
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::generate(&resolved).expect("typed top-level stream should emit");
+        let main = output.split(".method public static main :").nth(1).unwrap();
+        let main = main.split(".end method").next().unwrap();
+        assert!(main.contains("ldc 2"), "typed statement missing: {main}");
+        assert!(!main.contains("ldc 1"), "AST statement leaked: {main}");
+    }
+
+    #[test]
+    fn jvm_generation_emits_typed_top_level_stream_across_source_files() {
+        let parsed = crate::parse_source(
+            "jvm_multisource_ast_origin.bcl".to_string(),
+            "print 0\nend\n",
+        )
+        .unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "jvm_multisource_root.bcl",
+            "try\nerror 4\ncatch rootError%, rootLine%, rootSource$\nprint rootSource$\nend try\nend\n",
+        )
+        .unwrap();
+        let dependency = crate::semantic_ir::parse_and_adapt_named(
+            "jvm_multisource_dependency.bcl",
+            "try\nerror 3\ncatch dependencyError%, dependencyLine%, dependencySource$\nprint dependencySource$\nend try\n",
+        )
+        .unwrap();
+        semantic.prepend_dependency(dependency);
+        let resolved = crate::resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+
+        let output = super::generate(&resolved).expect("multi-source typed stream should emit");
+        let main = output.split(".method public static main :").nth(1).unwrap();
+        let main = main.split(".end method").next().unwrap();
+        assert!(
+            main.contains("ldc \"jvm_multisource_dependency.bcl\""),
+            "dependency source metadata missing: {main}"
+        );
+        assert!(
+            main.contains("ldc \"jvm_multisource_root.bcl\""),
+            "root source metadata missing: {main}"
+        );
+        assert!(!main.contains("ldc 0"), "AST statement leaked: {main}");
     }
 
     #[test]

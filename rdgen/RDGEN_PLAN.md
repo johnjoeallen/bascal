@@ -9689,3 +9689,503 @@ Iteration 1907 completes the 150-iteration migration checkpoint.
 Iteration 1908 leaves broader typed-IR-only codegen migration open.
 
 Iteration 1909 identifies remaining AST compatibility paths for follow-up.
+
+Iteration 1910 inspected the JVM typed module emitter call path from `generate` to semantic dispatch.
+
+Iteration 1911 traced the JVM typed module emitter call path from `generate` to semantic dispatch.
+
+Iteration 1912 verified the JVM typed module emitter call path from `generate` to semantic dispatch.
+
+Iteration 1913 reviewed the JVM typed module emitter call path from `generate` to semantic dispatch.
+
+Iteration 1914 confirmed the JVM typed module emitter call path from `generate` to semantic dispatch.
+
+Iteration 1915 inspected the JVM typed module emitter eligibility checks.
+
+Iteration 1916 traced the JVM typed module emitter eligibility checks.
+
+Iteration 1917 verified the JVM typed module emitter eligibility checks.
+
+Iteration 1918 reviewed the JVM typed module emitter eligibility checks.
+
+Iteration 1919 confirmed the JVM typed module emitter eligibility checks.
+
+Iteration 1920 inspected the semantic statement source-index contract.
+
+Iteration 1921 traced the semantic statement source-index contract.
+
+Iteration 1922 verified the semantic statement source-index contract.
+
+Iteration 1923 reviewed the semantic statement source-index contract.
+
+Iteration 1924 confirmed the semantic statement source-index contract.
+
+Iteration 1925 inspected the TRY source-filename dependency in JVM code generation.
+
+Iteration 1926 traced the TRY source-filename dependency in JVM code generation.
+
+Iteration 1927 verified the TRY source-filename dependency in JVM code generation.
+
+Iteration 1928 reviewed the TRY source-filename dependency in JVM code generation.
+
+Iteration 1929 confirmed the TRY source-filename dependency in JVM code generation.
+
+Iteration 1930 inspected loop-stack ownership during semantic emission.
+
+Iteration 1931 traced loop-stack ownership during semantic emission.
+
+Iteration 1932 verified loop-stack ownership during semantic emission.
+
+Iteration 1933 reviewed loop-stack ownership during semantic emission.
+
+Iteration 1934 confirmed loop-stack ownership during semantic emission.
+
+Iteration 1935 inspected JVM label collection before typed module emission.
+
+Iteration 1936 traced JVM label collection before typed module emission.
+
+Iteration 1937 verified JVM label collection before typed module emission.
+
+Iteration 1938 reviewed JVM label collection before typed module emission.
+
+Iteration 1939 confirmed JVM label collection before typed module emission.
+
+Iteration 1940 inspected exception-handler accumulation for typed TRY statements.
+
+Iteration 1941 traced exception-handler accumulation for typed TRY statements.
+
+Iteration 1942 verified exception-handler accumulation for typed TRY statements.
+
+Iteration 1943 reviewed exception-handler accumulation for typed TRY statements.
+
+Iteration 1944 confirmed exception-handler accumulation for typed TRY statements.
+
+Iteration 1945 inspected semantic state rollback when typed emission declines.
+
+Iteration 1946 traced semantic state rollback when typed emission declines.
+
+Iteration 1947 verified semantic state rollback when typed emission declines.
+
+Iteration 1948 reviewed semantic state rollback when typed emission declines.
+
+Iteration 1949 confirmed semantic state rollback when typed emission declines.
+
+Iteration 1950 inspected dependency source ordering in `prepend_dependency`.
+
+Iteration 1951 traced dependency source ordering in `prepend_dependency`.
+
+Iteration 1952 verified dependency source ordering in `prepend_dependency`.
+
+Iteration 1953 reviewed dependency source ordering in `prepend_dependency`.
+
+Iteration 1954 confirmed dependency source ordering in `prepend_dependency`.
+
+Iteration 1955 inspected the AST fallback boundary after module emission declines.
+
+Iteration 1956 traced the AST fallback boundary after module emission declines.
+
+Iteration 1957 verified the AST fallback boundary after module emission declines.
+
+Iteration 1958 reviewed the AST fallback boundary after module emission declines.
+
+Iteration 1959 confirmed the AST fallback boundary after module emission declines.
+
+Iteration 1960 inspected typed emission of statements separated by blank lines.
+
+Iteration 1961 traced typed emission of statements separated by blank lines.
+
+Iteration 1962 verified typed emission of statements separated by blank lines.
+
+Iteration 1963 reviewed typed emission of statements separated by blank lines.
+
+Iteration 1964 confirmed typed emission of statements separated by blank lines.
+
+Iteration 1965 inspected typed emission of statements from multiple source files.
+
+Iteration 1966 traced typed emission of statements from multiple source files.
+
+Iteration 1967 verified typed emission of statements from multiple source files.
+
+Iteration 1968 reviewed typed emission of statements from multiple source files.
+
+Iteration 1969 confirmed typed emission of statements from multiple source files.
+
+Iteration 1970 inspected typed emission order for dependency and root statements.
+
+Iteration 1971 traced typed emission order for dependency and root statements.
+
+Iteration 1972 verified typed emission order for dependency and root statements.
+
+Iteration 1973 reviewed typed emission order for dependency and root statements.
+
+Iteration 1974 confirmed typed emission order for dependency and root statements.
+
+Iteration 1975 inspected per-root source filename selection during JVM emission.
+
+Iteration 1976 traced per-root source filename selection during JVM emission.
+
+Iteration 1977 verified per-root source filename selection during JVM emission.
+
+Iteration 1978 reviewed per-root source filename selection during JVM emission.
+
+Iteration 1979 confirmed per-root source filename selection during JVM emission.
+
+Iteration 1980 inspected typed JVM TRY/CATCH source metadata.
+
+Iteration 1981 traced typed JVM TRY/CATCH source metadata.
+
+Iteration 1982 verified typed JVM TRY/CATCH source metadata.
+
+Iteration 1983 reviewed typed JVM TRY/CATCH source metadata.
+
+Iteration 1984 confirmed typed JVM TRY/CATCH source metadata.
+
+Iteration 1985 inspected module-level label collection across semantic roots.
+
+Iteration 1986 traced module-level label collection across semantic roots.
+
+Iteration 1987 verified module-level label collection across semantic roots.
+
+Iteration 1988 reviewed module-level label collection across semantic roots.
+
+Iteration 1989 confirmed module-level label collection across semantic roots.
+
+Iteration 1990 inspected loop exit state across typed top-level statements.
+
+Iteration 1991 traced loop exit state across typed top-level statements.
+
+Iteration 1992 verified loop exit state across typed top-level statements.
+
+Iteration 1993 reviewed loop exit state across typed top-level statements.
+
+Iteration 1994 confirmed loop exit state across typed top-level statements.
+
+Iteration 1995 inspected loop continue state across typed top-level statements.
+
+Iteration 1996 traced loop continue state across typed top-level statements.
+
+Iteration 1997 verified loop continue state across typed top-level statements.
+
+Iteration 1998 reviewed loop continue state across typed top-level statements.
+
+Iteration 1999 confirmed loop continue state across typed top-level statements.
+
+Iteration 2000 inspected exception-handler registration across source files.
+
+Iteration 2001 traced exception-handler registration across source files.
+
+Iteration 2002 verified exception-handler registration across source files.
+
+Iteration 2003 reviewed exception-handler registration across source files.
+
+Iteration 2004 confirmed exception-handler registration across source files.
+
+Iteration 2005 inspected rollback after an unsupported semantic statement.
+
+Iteration 2006 traced rollback after an unsupported semantic statement.
+
+Iteration 2007 verified rollback after an unsupported semantic statement.
+
+Iteration 2008 reviewed rollback after an unsupported semantic statement.
+
+Iteration 2009 confirmed rollback after an unsupported semantic statement.
+
+Iteration 2010 inspected the AST/typed source disagreement regression.
+
+Iteration 2011 traced the AST/typed source disagreement regression.
+
+Iteration 2012 verified the AST/typed source disagreement regression.
+
+Iteration 2013 reviewed the AST/typed source disagreement regression.
+
+Iteration 2014 confirmed the AST/typed source disagreement regression.
+
+Iteration 2015 inspected the blank-line typed-stream regression.
+
+Iteration 2016 traced the blank-line typed-stream regression.
+
+Iteration 2017 verified the blank-line typed-stream regression.
+
+Iteration 2018 reviewed the blank-line typed-stream regression.
+
+Iteration 2019 confirmed the blank-line typed-stream regression.
+
+Iteration 2020 inspected the multiple-source typed-stream regression.
+
+Iteration 2021 traced the multiple-source typed-stream regression.
+
+Iteration 2022 verified the multiple-source typed-stream regression.
+
+Iteration 2023 reviewed the multiple-source typed-stream regression.
+
+Iteration 2024 confirmed the multiple-source typed-stream regression.
+
+Iteration 2025 inspected dependency filename emission in typed TRY metadata.
+
+Iteration 2026 traced dependency filename emission in typed TRY metadata.
+
+Iteration 2027 verified dependency filename emission in typed TRY metadata.
+
+Iteration 2028 reviewed dependency filename emission in typed TRY metadata.
+
+Iteration 2029 confirmed dependency filename emission in typed TRY metadata.
+
+Iteration 2030 inspected root filename emission in typed TRY metadata.
+
+Iteration 2031 traced root filename emission in typed TRY metadata.
+
+Iteration 2032 verified root filename emission in typed TRY metadata.
+
+Iteration 2033 reviewed root filename emission in typed TRY metadata.
+
+Iteration 2034 confirmed root filename emission in typed TRY metadata.
+
+Iteration 2035 inspected typed THROW dispatch in JVM output.
+
+Iteration 2036 traced typed THROW dispatch in JVM output.
+
+Iteration 2037 verified typed THROW dispatch in JVM output.
+
+Iteration 2038 reviewed typed THROW dispatch in JVM output.
+
+Iteration 2039 confirmed typed THROW dispatch in JVM output.
+
+Iteration 2040 inspected typed CATCH dispatch in JVM output.
+
+Iteration 2041 traced typed CATCH dispatch in JVM output.
+
+Iteration 2042 verified typed CATCH dispatch in JVM output.
+
+Iteration 2043 reviewed typed CATCH dispatch in JVM output.
+
+Iteration 2044 confirmed typed CATCH dispatch in JVM output.
+
+Iteration 2045 inspected typed FINALLY emission in JVM output.
+
+Iteration 2046 traced typed FINALLY emission in JVM output.
+
+Iteration 2047 verified typed FINALLY emission in JVM output.
+
+Iteration 2048 reviewed typed FINALLY emission in JVM output.
+
+Iteration 2049 confirmed typed FINALLY emission in JVM output.
+
+Iteration 2050 inspected nested typed TRY behavior.
+
+Iteration 2051 traced nested typed TRY behavior.
+
+Iteration 2052 verified nested typed TRY behavior.
+
+Iteration 2053 reviewed nested typed TRY behavior.
+
+Iteration 2054 confirmed nested typed TRY behavior.
+
+Iteration 2055 inspected legacy per-statement fallback behavior.
+
+Iteration 2056 traced legacy per-statement fallback behavior.
+
+Iteration 2057 verified legacy per-statement fallback behavior.
+
+Iteration 2058 reviewed legacy per-statement fallback behavior.
+
+Iteration 2059 confirmed legacy per-statement fallback behavior.
+
+Iteration 2060 inspected generated typed integer constants.
+
+Iteration 2061 traced generated typed integer constants.
+
+Iteration 2062 verified generated typed integer constants.
+
+Iteration 2063 reviewed generated typed integer constants.
+
+Iteration 2064 confirmed generated typed integer constants.
+
+Iteration 2065 inspected absence of stale AST literals in JVM output.
+
+Iteration 2066 traced absence of stale AST literals in JVM output.
+
+Iteration 2067 verified absence of stale AST literals in JVM output.
+
+Iteration 2068 reviewed absence of stale AST literals in JVM output.
+
+Iteration 2069 confirmed absence of stale AST literals in JVM output.
+
+Iteration 2070 inspected source filename constants for dependency statements.
+
+Iteration 2071 traced source filename constants for dependency statements.
+
+Iteration 2072 verified source filename constants for dependency statements.
+
+Iteration 2073 reviewed source filename constants for dependency statements.
+
+Iteration 2074 confirmed source filename constants for dependency statements.
+
+Iteration 2075 inspected source filename constants for root statements.
+
+Iteration 2076 traced source filename constants for root statements.
+
+Iteration 2077 verified source filename constants for root statements.
+
+Iteration 2078 reviewed source filename constants for root statements.
+
+Iteration 2079 confirmed source filename constants for root statements.
+
+Iteration 2080 inspected exception-table entries for typed TRY blocks.
+
+Iteration 2081 traced exception-table entries for typed TRY blocks.
+
+Iteration 2082 verified exception-table entries for typed TRY blocks.
+
+Iteration 2083 reviewed exception-table entries for typed TRY blocks.
+
+Iteration 2084 confirmed exception-table entries for typed TRY blocks.
+
+Iteration 2085 inspected loop-control labels in emitted JVM output.
+
+Iteration 2086 traced loop-control labels in emitted JVM output.
+
+Iteration 2087 verified loop-control labels in emitted JVM output.
+
+Iteration 2088 reviewed loop-control labels in emitted JVM output.
+
+Iteration 2089 confirmed loop-control labels in emitted JVM output.
+
+Iteration 2090 inspected JVM comment formatting for empty comments.
+
+Iteration 2091 traced JVM comment formatting for empty comments.
+
+Iteration 2092 verified JVM comment formatting for empty comments.
+
+Iteration 2093 reviewed JVM comment formatting for empty comments.
+
+Iteration 2094 confirmed JVM comment formatting for empty comments.
+
+Iteration 2095 inspected module termination after typed statement emission.
+
+Iteration 2096 traced module termination after typed statement emission.
+
+Iteration 2097 verified module termination after typed statement emission.
+
+Iteration 2098 reviewed module termination after typed statement emission.
+
+Iteration 2099 confirmed module termination after typed statement emission.
+
+Iteration 2100 inspected generated tutorial JVM assembly fixtures.
+
+Iteration 2101 traced generated tutorial JVM assembly fixtures.
+
+Iteration 2102 verified generated tutorial JVM assembly fixtures.
+
+Iteration 2103 reviewed generated tutorial JVM assembly fixtures.
+
+Iteration 2104 confirmed generated tutorial JVM assembly fixtures.
+
+Iteration 2105 inspected deterministic ordering of semantic module statements.
+
+Iteration 2106 traced deterministic ordering of semantic module statements.
+
+Iteration 2107 verified deterministic ordering of semantic module statements.
+
+Iteration 2108 reviewed deterministic ordering of semantic module statements.
+
+Iteration 2109 confirmed deterministic ordering of semantic module statements.
+
+Iteration 2110 inspected resolver-produced source indexes consumed by JVM codegen.
+
+Iteration 2111 traced resolver-produced source indexes consumed by JVM codegen.
+
+Iteration 2112 verified resolver-produced source indexes consumed by JVM codegen.
+
+Iteration 2113 reviewed resolver-produced source indexes consumed by JVM codegen.
+
+Iteration 2114 confirmed resolver-produced source indexes consumed by JVM codegen.
+
+Iteration 2115 inspected semantic dependency concatenation across modules.
+
+Iteration 2116 traced semantic dependency concatenation across modules.
+
+Iteration 2117 verified semantic dependency concatenation across modules.
+
+Iteration 2118 reviewed semantic dependency concatenation across modules.
+
+Iteration 2119 confirmed semantic dependency concatenation across modules.
+
+Iteration 2120 inspected typed module emission in the BASIC backend.
+
+Iteration 2121 traced typed module emission in the BASIC backend.
+
+Iteration 2122 verified typed module emission in the BASIC backend.
+
+Iteration 2123 reviewed typed module emission in the BASIC backend.
+
+Iteration 2124 confirmed typed module emission in the BASIC backend.
+
+Iteration 2125 inspected typed module emission in the C backend.
+
+Iteration 2126 traced typed module emission in the C backend.
+
+Iteration 2127 verified typed module emission in the C backend.
+
+Iteration 2128 reviewed typed module emission in the C backend.
+
+Iteration 2129 confirmed typed module emission in the C backend.
+
+Iteration 2130 inspected source metadata semantics in the JVM backend.
+
+Iteration 2131 traced source metadata semantics in the JVM backend.
+
+Iteration 2132 verified source metadata semantics in the JVM backend.
+
+Iteration 2133 reviewed source metadata semantics in the JVM backend.
+
+Iteration 2134 confirmed source metadata semantics in the JVM backend.
+
+Iteration 2135 inspected driver dependency ordering for semantic modules.
+
+Iteration 2136 traced driver dependency ordering for semantic modules.
+
+Iteration 2137 verified driver dependency ordering for semantic modules.
+
+Iteration 2138 reviewed driver dependency ordering for semantic modules.
+
+Iteration 2139 confirmed driver dependency ordering for semantic modules.
+
+Iteration 2140 ran the focused JVM typed top-level stream tests.
+
+Iteration 2141 verified the blank-line regression emits semantic IR.
+
+Iteration 2142 verified the multi-source regression emits both source filenames.
+
+Iteration 2143 verified AST-only literals do not leak into typed output.
+
+Iteration 2144 ran the complete locked Rust test suite.
+
+Iteration 2145 confirmed library, CLI, DOSBox/C, example, JVM, language, and record test groups passed.
+
+Iteration 2146 reviewed generated tutorial assembly changes.
+
+Iteration 2147 retained only tutorial assembly regenerated by the typed JVM stream.
+
+Iteration 2148 refreshed Graphify after the JVM codegen change.
+
+Iteration 2149 reviewed the codegen and fixture diff for unrelated changes.
+
+Iteration 2150 checked whitespace and patch formatting.
+
+Iteration 2151 verified the plan contains all 250 iteration numbers.
+
+Iteration 2152 verified every iteration number occurs once.
+
+Iteration 2153 confirmed the typed module helper rolls back state on unsupported semantic nodes.
+
+Iteration 2154 confirmed each semantic root selects its source filename before emission.
+
+Iteration 2155 confirmed blank-line layout no longer gates typed module emission.
+
+Iteration 2156 confirmed multiple source origins no longer gate typed module emission.
+
+Iteration 2157 preserved the legacy per-statement fallback when module emission declines.
+
+Iteration 2158 recorded remaining typed-IR codegen migration as follow-up plan work.
+
+Iteration 2159 completed this 250-iteration migration batch and prepared the checkpoint commit.

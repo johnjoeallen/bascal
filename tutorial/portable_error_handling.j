@@ -503,12 +503,12 @@ L_select_0_end:
     ; and links on a real IBM BASIC Compiler 2.00 as ERROR$, but silently
     ; returns an empty string at runtime (verified under dosbox-x) -- so BASCAL
     ; ships a working implementation.
-    ; 
+    ;
     ; The named constants below are the complete common subset supported by
     ; ERROR$: use them in THROW and filtered CATCH clauses instead of magic
     ; numbers.  Dialect-specific errors outside this shared MBASIC/GW-BASIC/
     ; BASCOM subset still fall through to ERROR$'s generic message.
-    ; 
+    ;
     ; Deliberately NOT a scalar method (see GitHub issue #41, which asked for
     ; this decision to be recorded either way): code% is an opaque lookup key,
     ; not a value the call is naturally "operating on" the way ltrim$/rtrim$/
@@ -584,7 +584,7 @@ L_select_0_end:
     putstatic PortableErrorHandling/g29 I
 
     ; Tutorial — Portable Structured Error Handling
-    ; 
+    ;
     ; TRY/CATCH/FINALLY and THROW are BASCAL's portable error model.  A catch can
     ; select several error codes and bind the originating source file.
 
