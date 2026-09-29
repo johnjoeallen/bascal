@@ -27835,6 +27835,38 @@ mod dialect_tests {
     }
 
     #[test]
+    fn c_unresolved_semantic_parameter_type_returns_error() {
+        let ast_source = "function identity%(value%)\nreturn 1\nend function\nend\n";
+        let semantic_source =
+            "function identity%(value as customtype)\nreturn 1\nend function\nend\n";
+        let parsed = parse_source(
+            "c_unknown_parameter_type.bcl".to_string(),
+            ast_source,
+        )
+        .unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let mut resolved = resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named(
+                "c_unknown_parameter_type.bcl",
+                semantic_source,
+            )
+            .unwrap(),
+        );
+
+        let diagnostics = match generate(&resolved, Target::C) {
+            Ok(_) => panic!("unresolved typed callable parameter unexpectedly generated C"),
+            Err(diagnostics) => diagnostics,
+        };
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("parameter `value`")),
+            "unresolved typed-IR parameter should produce a C diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn c_callable_local_storage_candidates_come_from_typed_dispatch() {
         let ast_source =
             "function f%()\nold%=1\nreturn 0\nend function\nresult%=f%()\nend\n";

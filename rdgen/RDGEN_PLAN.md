@@ -17447,3 +17447,7 @@ Iteration 5786 rejected unresolved typed callable parameter types in BASIC codeg
 Iteration 5787 added BASIC regression coverage that an unresolved typed callable parameter produces a codegen diagnostic.
 
 Iteration 5788 refreshed Graphify and validated the complete locked workspace suite after callable parameter error handling changes.
+
+Iteration 5789 added C backend coverage that an unresolved semantic parameter annotation is reported as a diagnostic instead of falling back to the compatibility AST suffix.
+
+Iteration 5790 validated the unresolved-parameter diagnostics across C, BASIC, and JVM with the complete locked workspace suite.
