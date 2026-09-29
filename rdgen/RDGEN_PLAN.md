@@ -17409,3 +17409,9 @@ Iteration 5767 refreshed Graphify and validated the complete locked workspace su
 Iteration 5768 added top-level BASIC semantic FOR regression coverage for a typed-IR variable type that differs from the parsed identifier suffix.
 
 Iteration 5769 validated the focused top-level BASIC semantic FOR regression.
+
+Iteration 5770 removed the JVM semantic function result fallback to Single when the typed-IR result suffix is absent or unresolved.
+
+Iteration 5771 kept JVM procedure result metadata out of the semantic function result-type mapping.
+
+Iteration 5772 refreshed Graphify and validated the complete locked workspace suite after JVM callable result typing changes.

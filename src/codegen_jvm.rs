@@ -6636,7 +6636,13 @@ fn function_table(
                     has_receiver: receiver_suffix.is_some(),
                     result: semantic_callable
                         .map(|callable| {
-                            jvm_type_for_semantic_suffix(callable.result_type.as_deref())
+                            if returns_void {
+                                // FunctionSig's result slot is unused for procedures.
+                                JvmType::Numeric(NumericType::Int)
+                            } else {
+                                jvm_type_for_semantic_suffix(callable.result_type.as_deref())
+                                    .expect("typed function result type must be resolved")
+                            }
                         })
                         .unwrap_or_else(|| type_for_ident(&result_ident)),
                     returns_void,
@@ -9469,12 +9475,11 @@ fn jvm_type_for_semantic_value(
     }
 }
 
-fn jvm_type_for_semantic_suffix(suffix: Option<&str>) -> JvmType {
+fn jvm_type_for_semantic_suffix(suffix: Option<&str>) -> Option<JvmType> {
     let value_type = suffix
         .and_then(|suffix| suffix.chars().next())
-        .map(|character| crate::semantic_ir::SemanticValueType::from_suffix(Some(character)))
-        .unwrap_or(crate::semantic_ir::SemanticValueType::Single);
-    jvm_type_for_semantic_value(value_type).expect("JVM callable suffix has a resolved type")
+        .map(|character| crate::semantic_ir::SemanticValueType::from_suffix(Some(character)))?;
+    jvm_type_for_semantic_value(value_type)
 }
 
 fn type_for_const_expr(expr: &Expr, name: &BasicIdent) -> JvmType {
@@ -15851,6 +15856,11 @@ mod tests {
         let output = super::generate(&resolved).unwrap();
 
         assert!(output.contains(".method public static total : ()D"), "{output}");
+        assert_eq!(super::jvm_type_for_semantic_suffix(None), None);
+        assert_eq!(
+            super::jvm_type_for_semantic_suffix(Some("%")),
+            Some(super::JvmType::Numeric(super::NumericType::Int))
+        );
     }
 
     #[test]
