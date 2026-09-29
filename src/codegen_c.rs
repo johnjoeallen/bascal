@@ -1606,7 +1606,10 @@ fn collect_semantic_scalar_declarations(
                             let key = c_var_name(&ident, suffix);
                             numeric.contains_key(&key) || strings.contains(&key)
                         });
-                    if !has_resolved_storage {
+                    if !has_resolved_storage
+                        && (ident.suffix.is_some()
+                            || *variable_type != SemanticValueType::Unknown)
+                    {
                         register_var(&ident, numeric, strings);
                     }
                     visit(body, numeric, strings);
@@ -25021,6 +25024,31 @@ mod dialect_tests {
         collect_semantic_scalar_declarations(&suffixed.statements, &mut numeric, &mut strings);
         assert_eq!(numeric.get("bv_i_slot"), Some(&"int"), "{numeric:?}");
         assert!(!numeric.contains_key("bv_l_slot"), "{numeric:?}");
+    }
+
+    #[test]
+    fn c_semantic_for_storage_does_not_default_unknown_type() {
+        let mut module = crate::semantic_ir::parse_and_adapt(
+            "for index = 1 to 2\nprint index\nend for\n",
+        )
+        .unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
+        else {
+            panic!("expected statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::For { variable_type, .. } =
+            &mut body[0].kind
+        else {
+            panic!("expected FOR")
+        };
+        *variable_type = crate::semantic_ir::SemanticValueType::Unknown;
+
+        let mut numeric = BTreeMap::new();
+        let mut strings = BTreeSet::new();
+        collect_semantic_scalar_declarations(&module.statements, &mut numeric, &mut strings);
+
+        assert!(numeric.is_empty(), "{numeric:?}");
+        assert!(strings.is_empty(), "{strings:?}");
     }
 
     #[test]

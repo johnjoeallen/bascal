@@ -17293,3 +17293,11 @@ Iteration 5709 added regression coverage that Unknown catch-source types do not 
 Iteration 5710 refreshed Graphify after changing JVM declaration collection dependencies.
 
 Iteration 5711 validated the complete locked workspace suite after JVM catch storage changes.
+
+Iteration 5712 removed C FOR declaration fallback for unresolved suffixless typed-IR variables.
+
+Iteration 5713 added regression coverage that Unknown C FOR variables do not allocate default scalar storage.
+
+Iteration 5714 refreshed Graphify after changing C FOR declaration collection dependencies.
+
+Iteration 5715 validated the complete locked workspace suite after C FOR storage changes.
