@@ -17435,3 +17435,9 @@ Iteration 5780 verified that C callable parameter declarations use a typed-IR an
 Iteration 5781 verified that BASIC callable parameter identifiers use a typed-IR annotation that differs from the compatibility AST suffix.
 
 Iteration 5782 validated the cross-backend callable parameter regressions with the complete locked workspace suite.
+
+Iteration 5783 changed JVM callable signature construction to return errors for unresolved typed parameter and function result types instead of panicking or inferring defaults.
+
+Iteration 5784 added JVM regression coverage that an unresolved typed callable parameter produces a backend diagnostic.
+
+Iteration 5785 refreshed Graphify and validated the complete locked workspace suite after JVM callable signature error handling changes.

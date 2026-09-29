@@ -175,7 +175,8 @@ pub(crate) fn generate(
 ) -> Result<String, Vec<Diagnostic>> {
     let program = &resolved.program;
     let class_name = class_name_for(program, resolved.semantic_module.as_ref());
-    let functions = function_table(&program.functions, resolved.semantic_module.as_ref());
+    let functions = function_table(&program.functions, resolved.semantic_module.as_ref())
+        .map_err(|message| vec![unsupported(&message)])?;
     let context = JvmContext::build(
         program,
         functions.clone(),
@@ -6498,10 +6499,10 @@ fn callable_key_for_function(
 fn function_table(
     functions: &[FunctionDef],
     semantic_module: Option<&crate::semantic_ir::SemanticModule>,
-) -> HashMap<String, FunctionSig> {
+) -> Result<HashMap<String, FunctionSig>, String> {
     functions
         .iter()
-        .map(|function| {
+        .map(|function| -> Result<(String, FunctionSig), String> {
             let semantic_callable =
                 semantic_module.and_then(|module| semantic_callable_for_function(module, function));
             let semantic_param = |position: usize| {
@@ -6574,19 +6575,59 @@ fn function_table(
             } else {
                 receiver_ident.as_ref().map(type_for_ident)
             };
-            let semantic_parameter_type = |position: usize| {
+            let semantic_parameter_type = |position: usize| -> Result<JvmType, String> {
                 match (semantic_callable, semantic_param(position)) {
                     (Some(_), Some(parameter)) => {
                         jvm_type_for_semantic_value(parameter.value_type)
-                            .expect("typed callable parameter type must be resolved")
+                            .ok_or_else(|| {
+                                format!(
+                                    "parameter `{}` of `{}` has no resolved JVM value type",
+                                    parameter.name, result_ident
+                                )
+                            })
                     }
-                    (None, None) => type_for_ident(&semantic_param_ident(position)),
-                    _ => unreachable!(
-                        "parameter position comes from the selected callable signature"
-                    ),
+                    (None, None) => Ok(type_for_ident(&semantic_param_ident(position))),
+                    _ => Err(format!(
+                        "parameter position {position} is missing from the selected typed callable signature"
+                    )),
                 }
             };
-            (
+            let mut params = receiver_parameter_type.into_iter().collect::<Vec<_>>();
+            let mut array_params = Vec::new();
+            for position in 0..source_param_count {
+                if semantic_param_is_array(position) {
+                    if let Some(rank) = semantic_param(position)
+                        .map(|parameter| parameter.array_axes)
+                        .filter(|rank| *rank > 0)
+                        .or_else(|| {
+                            if semantic_callable.is_none() {
+                                function.params[position].axes.as_ref().map(Vec::len)
+                            } else {
+                                None
+                            }
+                        })
+                    {
+                        array_params.push(JvmArrayParam {
+                            position,
+                            element: semantic_parameter_type(position)?,
+                            rank,
+                            by_ref: semantic_param_by_ref(position),
+                        });
+                    }
+                } else {
+                    params.push(semantic_parameter_type(position)?);
+                }
+            }
+            let result = match semantic_callable {
+                Some(_) if returns_void => JvmType::Numeric(NumericType::Int),
+                Some(callable) => {
+                    jvm_type_for_semantic_suffix(callable.result_type.as_deref()).ok_or_else(
+                        || format!("function `{result_ident}` has no resolved JVM result type"),
+                    )?
+                }
+                None => type_for_ident(&result_ident),
+            };
+            Ok((
                 function_key(&result_ident),
                 FunctionSig {
                     source_name: result_ident.name.clone(),
@@ -6601,37 +6642,11 @@ fn function_table(
                                     }
                                     default
                                 })
-                        })
-                        .collect(),
+                    })
+                    .collect(),
                     receiver_ident: receiver_ident.clone(),
-                    params: receiver_parameter_type
-                        .into_iter()
-                        .chain((0..source_param_count).filter_map(|position| {
-                            let is_array = semantic_param_is_array(position);
-                            (!is_array).then(|| semantic_parameter_type(position))
-                        }))
-                        .collect(),
-                    array_params: (0..source_param_count)
-                        .filter_map(|position| {
-                            let rank = semantic_param(position)
-                                .map(|parameter| {
-                                    (parameter.array_axes > 0).then_some(parameter.array_axes)
-                                })
-                                .unwrap_or_else(|| {
-                                    if semantic_callable.is_some() {
-                                        None
-                                    } else {
-                                        function.params[position].axes.as_ref().map(Vec::len)
-                                    }
-                                });
-                            rank.map(|rank| JvmArrayParam {
-                                position,
-                                element: semantic_parameter_type(position),
-                                rank,
-                                by_ref: semantic_param_by_ref(position),
-                            })
-                        })
-                        .collect(),
+                    params,
+                    array_params,
                     byref_scalar_positions: (0..source_param_count)
                         .filter(|position| {
                             let is_array = semantic_param_is_array(*position);
@@ -6641,20 +6656,10 @@ fn function_table(
                         .collect(),
                     source_param_count,
                     has_receiver: receiver_suffix.is_some(),
-                    result: semantic_callable
-                        .map(|callable| {
-                            if returns_void {
-                                // FunctionSig's result slot is unused for procedures.
-                                JvmType::Numeric(NumericType::Int)
-                            } else {
-                                jvm_type_for_semantic_suffix(callable.result_type.as_deref())
-                                    .expect("typed function result type must be resolved")
-                            }
-                        })
-                        .unwrap_or_else(|| type_for_ident(&result_ident)),
+                    result,
                     returns_void,
                 },
-            )
+            ))
         })
         .collect()
 }
@@ -10752,7 +10757,8 @@ mod tests {
         let functions = super::function_table(
             &resolved.program.functions,
             resolved.semantic_module.as_ref(),
-        );
+        )
+        .expect("typed JVM function signatures build");
         let context = super::JvmContext::build(
             &resolved.program,
             functions,
@@ -11318,7 +11324,7 @@ mod tests {
         let module = resolved.semantic_module.as_ref().unwrap();
         let context = super::JvmContext::build(
             &resolved.program,
-            super::function_table(&resolved.program.functions, Some(module)),
+            super::function_table(&resolved.program.functions, Some(module)).unwrap(),
             "Program".to_string(),
             resolved.function_global_declarations.clone(),
             resolved.typed_array_declarations.clone(),
@@ -14413,7 +14419,7 @@ mod tests {
         let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
         let mut semantic = crate::semantic_ir::parse_and_adapt(source).unwrap();
         semantic.callables[0].result_type = Some("$".to_string());
-        let functions = super::function_table(&program.functions, Some(&semantic));
+        let functions = super::function_table(&program.functions, Some(&semantic)).unwrap();
         assert_eq!(
             functions["value%"].result,
             super::JvmType::String,
@@ -14434,7 +14440,7 @@ mod tests {
             "method echo$[integer]()\nreturn self$\nend method\nend\n",
         )
         .unwrap();
-        let functions = super::function_table(&program.functions, Some(&semantic_module));
+        let functions = super::function_table(&program.functions, Some(&semantic_module)).unwrap();
         let signature = functions.values().next().unwrap();
         assert_eq!(
             signature.params.first(),
@@ -15886,10 +15892,34 @@ mod tests {
             semantic.callables[0].parameters[0].value_type,
             crate::semantic_ir::SemanticValueType::Long
         );
-        let signatures = super::function_table(&program.functions, Some(&semantic));
+        let signatures = super::function_table(&program.functions, Some(&semantic)).unwrap();
         assert_eq!(
             signatures.values().next().unwrap().params,
             [super::JvmType::Numeric(super::NumericType::Long)]
+        );
+    }
+
+    #[test]
+    fn jvm_unresolved_semantic_parameter_type_returns_diagnostic() {
+        let source = "function read%(value%)\nreturn value%\nend function\nend\n";
+        let parsed = crate::parse_source("unknown_parameter_type.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_parameter_type.bcl",
+            source,
+        )
+        .unwrap();
+        semantic.callables[0].parameters[0].value_type =
+            crate::semantic_ir::SemanticValueType::Unknown;
+        resolved.semantic_module = Some(semantic);
+
+        let diagnostics = super::generate(&resolved).unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("no resolved JVM value type")),
+            "unresolved typed-IR parameter should produce a codegen diagnostic: {diagnostics:?}"
         );
     }
 
