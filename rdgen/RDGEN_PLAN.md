@@ -17335,3 +17335,11 @@ Iteration 5730 removed JVM global declaration fallback to AST identifier suffix 
 Iteration 5731 refreshed Graphify after changing JVM global storage dependencies.
 
 Iteration 5732 validated the complete locked workspace suite after JVM global declaration changes.
+
+Iteration 5733 made C scalar declaration collection skip Unknown semantic assignment targets.
+
+Iteration 5734 added regression coverage that Unknown C assignment targets do not allocate default storage.
+
+Iteration 5735 refreshed Graphify after updating C assignment target type dependencies.
+
+Iteration 5736 validated the complete locked workspace suite after C assignment storage changes.

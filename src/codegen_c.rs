@@ -1448,14 +1448,10 @@ fn collect_semantic_scalar_declarations(
         ) {
             match &expression.kind {
                 ExpressionKind::Name(name) => {
+                    let Some(suffix) = semantic_value_type_suffix(expression.value_type) else {
+                        return;
+                    };
                     if name.contains('.') {
-                        let Some(suffix) = expression
-                            .value_type
-                            .suffix()
-                            .and_then(TypeSuffix::from_char)
-                        else {
-                            return;
-                        };
                         register_var(
                             &BasicIdent {
                                 name: semantic_storage_name(name),
@@ -1466,13 +1462,7 @@ fn collect_semantic_scalar_declarations(
                         );
                     } else {
                         let mut ident = BasicIdent::parse(name);
-                        if let Some(suffix) = expression
-                            .value_type
-                            .suffix()
-                            .and_then(TypeSuffix::from_char)
-                        {
-                            ident.suffix = Some(suffix);
-                        }
+                        ident.suffix = Some(suffix);
                         register_var(&ident, numeric, strings);
                     }
                 }
@@ -25142,6 +25132,28 @@ mod dialect_tests {
             panic!("expected CONST")
         };
         *value_type = crate::semantic_ir::SemanticValueType::Unknown;
+
+        let mut numeric = BTreeMap::new();
+        let mut strings = BTreeSet::new();
+        collect_semantic_scalar_declarations(&module.statements, &mut numeric, &mut strings);
+
+        assert!(numeric.is_empty(), "{numeric:?}");
+        assert!(strings.is_empty(), "{strings:?}");
+    }
+
+    #[test]
+    fn c_semantic_assignment_storage_does_not_default_unknown_type() {
+        let mut module = crate::semantic_ir::parse_and_adapt("amount = 1\nend\n").unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
+        else {
+            panic!("expected statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Assignment { target, .. } =
+            &mut body[0].kind
+        else {
+            panic!("expected assignment")
+        };
+        target.value_type = crate::semantic_ir::SemanticValueType::Unknown;
 
         let mut numeric = BTreeMap::new();
         let mut strings = BTreeSet::new();
