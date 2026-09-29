@@ -259,15 +259,23 @@ pub(crate) fn generate(
             .chain(semantic_labels.iter().cloned())
             .collect();
         for (index, statement) in program.statements.iter().enumerate() {
+            let semantic_statement = semantic_statements
+                .as_ref()
+                .and_then(|statements| statements[index]);
+            let semantic_source_position = semantic_statement.and_then(|semantic| {
+                resolved
+                    .semantic_module
+                    .as_ref()
+                    .and_then(|module| jvm_semantic_top_level_source_position(module, semantic))
+            });
             let mut semantic_state = JvmSemanticState {
-                source_filename: statement.pos.filename.clone(),
+                source_filename: semantic_source_position
+                    .map(|position| position.filename)
+                    .unwrap_or_else(|| statement.pos.filename.clone()),
                 next_label: emitter.next_label,
                 exception_handlers: Vec::new(),
             };
-            let handled_semantically = semantic_statements
-                .as_ref()
-                .and_then(|statements| statements[index])
-                .is_some_and(|semantic| {
+            let handled_semantically = semantic_statement.is_some_and(|semantic| {
                     use crate::semantic_ir::SemanticStatementKind as Kind;
                     match &semantic.kind {
                         Kind::End => {
@@ -4211,6 +4219,67 @@ fn jvm_semantic_statements_by_source<'a>(
     Some(aligned)
 }
 
+fn jvm_semantic_source_position_in_roots(
+    module: &crate::semantic_ir::SemanticModule,
+    roots: &[crate::semantic_ir::SemanticStatement],
+    source_index: usize,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<crate::diagnostics::SourcePos> {
+    use crate::semantic_ir::SemanticStatementKind as Kind;
+    let belongs_to_roots = roots.iter().any(|root| {
+        std::ptr::eq(root, semantic)
+            || matches!(
+                &root.kind,
+                Kind::Line(children)
+                    if children.iter().any(|child| std::ptr::eq(child, semantic))
+            )
+    });
+    if !belongs_to_roots {
+        return None;
+    }
+    module
+        .sources
+        .get(source_index)?
+        .source_position_at(semantic.span.start)
+}
+
+fn jvm_semantic_top_level_source_position(
+    module: &crate::semantic_ir::SemanticModule,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<crate::diagnostics::SourcePos> {
+    for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
+        let belongs_to_root = std::ptr::eq(root, semantic)
+            || matches!(
+                &root.kind,
+                crate::semantic_ir::SemanticStatementKind::Line(children)
+                    if children.iter().any(|child| std::ptr::eq(child, semantic))
+            );
+        if belongs_to_root {
+            return jvm_semantic_source_position_in_roots(
+                module,
+                std::slice::from_ref(root),
+                *source_index,
+                semantic,
+            );
+        }
+    }
+    None
+}
+
+fn jvm_semantic_callable_source_position(
+    module: &crate::semantic_ir::SemanticModule,
+    function: &FunctionDef,
+    semantic: &crate::semantic_ir::SemanticStatement,
+) -> Option<crate::diagnostics::SourcePos> {
+    let callable = semantic_callable_for_function(module, function)?;
+    jvm_semantic_source_position_in_roots(
+        module,
+        &callable.body,
+        callable.source_index,
+        semantic,
+    )
+}
+
 fn jvm_semantic_callable_statements_by_source<'a>(
     module: &'a crate::semantic_ir::SemanticModule,
     function: &FunctionDef,
@@ -6710,15 +6779,22 @@ fn emit_function(function: &FunctionDef, parent: &JvmContext) -> Result<String, 
             .chain(semantic_labels.iter().cloned())
             .collect();
         for (index, statement) in function.body.iter().enumerate() {
+            let semantic_statement = semantic_statements
+                .as_ref()
+                .and_then(|statements| statements[index]);
+            let semantic_source_position = semantic_statement.and_then(|semantic| {
+                parent.semantic_module.as_ref().and_then(|module| {
+                    jvm_semantic_callable_source_position(module, function, semantic)
+                })
+            });
             let mut semantic_state = JvmSemanticState {
-                source_filename: statement.pos.filename.clone(),
+                source_filename: semantic_source_position
+                    .map(|position| position.filename)
+                    .unwrap_or_else(|| statement.pos.filename.clone()),
                 next_label: emitter.next_label,
                 exception_handlers: Vec::new(),
             };
-            let handled_semantically = semantic_statements
-                .as_ref()
-                .and_then(|statements| statements[index])
-                .is_some_and(|semantic| {
+            let handled_semantically = semantic_statement.is_some_and(|semantic| {
                     use crate::semantic_ir::SemanticStatementKind as Kind;
                     match &semantic.kind {
                         Kind::End => {
@@ -10845,6 +10921,52 @@ mod tests {
             !main.contains("AST finally"),
             "AST FINALLY replaced semantic IR: {main}"
         );
+    }
+
+    #[test]
+    fn jvm_semantic_source_positions_use_module_and_callable_sources() {
+        use crate::semantic_ir::{SemanticStatement, SemanticStatementKind as Kind};
+        fn find_statement(
+            statements: &[SemanticStatement],
+            matches_kind: fn(&Kind) -> bool,
+        ) -> Option<&SemanticStatement> {
+            for statement in statements {
+                if matches_kind(&statement.kind) {
+                    return Some(statement);
+                }
+                if let Kind::Line(children) = &statement.kind {
+                    if let Some(found) = find_statement(children, matches_kind) {
+                        return Some(found);
+                    }
+                }
+            }
+            None
+        }
+
+        let filename = "jvm_semantic_source_position.bcl";
+        let source = "print 1\nprocedure worker()\nthrow 7\nend procedure\nend\n";
+        let parsed = crate::parse_source(filename.to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let module = crate::semantic_ir::parse_and_adapt_named(filename, source).unwrap();
+        let top_level = find_statement(&module.statements, |kind| matches!(kind, Kind::Print { .. }))
+            .unwrap();
+        let callable_statement = find_statement(&module.callables[0].body, |kind| {
+            matches!(kind, Kind::Throw(_))
+        })
+        .unwrap();
+
+        let top_level_position =
+            super::jvm_semantic_top_level_source_position(&module, top_level).unwrap();
+        let callable_position = super::jvm_semantic_callable_source_position(
+            &module,
+            &program.functions[0],
+            callable_statement,
+        )
+        .unwrap();
+        assert_eq!(top_level_position.filename, filename);
+        assert_eq!(top_level_position.line, 1);
+        assert_eq!(callable_position.filename, filename);
+        assert_eq!(callable_position.line, 3);
     }
 
     #[test]

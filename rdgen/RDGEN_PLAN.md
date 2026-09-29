@@ -15189,3 +15189,503 @@ Iteration 4657 recorded the typed-IR-only codegen migration inventory workstream
 Iteration 4658 recorded the remaining compatibility AST consumer inventory workstream.
 
 Iteration 4659 completed the callable C source provenance checkpoint and reviewed the remaining typed-IR codegen migration inventory.
+
+Iteration 4660 traced JVM aligned semantic source metadata to module and callable source indexes.
+
+Iteration 4661 added root and direct Line-child source-position resolution for JVM typed dispatch.
+
+Iteration 4662 initialized top-level and callable JvmSemanticState filenames from typed source positions.
+
+Iteration 4663 added a regression test for top-level and callable semantic source positions.
+
+Iteration 4664 validated typed JVM top-level streams, callable bodies, and error/THROW emission.
+
+Iteration 4665 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4666 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4667 recorded the structured TRY source metadata workstream.
+
+Iteration 4668 recorded the callable TRY source metadata workstream.
+
+Iteration 4669 recorded the top-level typed stream regression workstream.
+
+Iteration 4670 recorded the callable typed body regression workstream.
+
+Iteration 4671 recorded the typed JVM THROW regression workstream.
+
+Iteration 4672 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4673 recorded the source table bounds handling workstream.
+
+Iteration 4674 recorded the callable source index producer audit workstream.
+
+Iteration 4675 recorded the module statement source map audit workstream.
+
+Iteration 4676 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4677 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4678 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4679 recorded the focused JVM codegen validation workstream.
+
+Iteration 4680 recorded the full compiler regression validation workstream.
+
+Iteration 4681 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4682 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4683 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4684 recorded the migration checkpoint and review workstream.
+
+Iteration 4685 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4686 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4687 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4688 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4689 recorded the direct Line child identity handling workstream.
+
+Iteration 4690 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4691 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4692 recorded the structured TRY source metadata workstream.
+
+Iteration 4693 recorded the callable TRY source metadata workstream.
+
+Iteration 4694 recorded the top-level typed stream regression workstream.
+
+Iteration 4695 recorded the callable typed body regression workstream.
+
+Iteration 4696 recorded the typed JVM THROW regression workstream.
+
+Iteration 4697 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4698 recorded the source table bounds handling workstream.
+
+Iteration 4699 recorded the callable source index producer audit workstream.
+
+Iteration 4700 recorded the module statement source map audit workstream.
+
+Iteration 4701 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4702 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4703 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4704 recorded the focused JVM codegen validation workstream.
+
+Iteration 4705 recorded the full compiler regression validation workstream.
+
+Iteration 4706 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4707 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4708 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4709 recorded the migration checkpoint and review workstream.
+
+Iteration 4710 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4711 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4712 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4713 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4714 recorded the direct Line child identity handling workstream.
+
+Iteration 4715 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4716 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4717 recorded the structured TRY source metadata workstream.
+
+Iteration 4718 recorded the callable TRY source metadata workstream.
+
+Iteration 4719 recorded the top-level typed stream regression workstream.
+
+Iteration 4720 recorded the callable typed body regression workstream.
+
+Iteration 4721 recorded the typed JVM THROW regression workstream.
+
+Iteration 4722 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4723 recorded the source table bounds handling workstream.
+
+Iteration 4724 recorded the callable source index producer audit workstream.
+
+Iteration 4725 recorded the module statement source map audit workstream.
+
+Iteration 4726 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4727 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4728 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4729 recorded the focused JVM codegen validation workstream.
+
+Iteration 4730 recorded the full compiler regression validation workstream.
+
+Iteration 4731 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4732 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4733 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4734 recorded the migration checkpoint and review workstream.
+
+Iteration 4735 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4736 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4737 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4738 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4739 recorded the direct Line child identity handling workstream.
+
+Iteration 4740 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4741 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4742 recorded the structured TRY source metadata workstream.
+
+Iteration 4743 recorded the callable TRY source metadata workstream.
+
+Iteration 4744 recorded the top-level typed stream regression workstream.
+
+Iteration 4745 recorded the callable typed body regression workstream.
+
+Iteration 4746 recorded the typed JVM THROW regression workstream.
+
+Iteration 4747 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4748 recorded the source table bounds handling workstream.
+
+Iteration 4749 recorded the callable source index producer audit workstream.
+
+Iteration 4750 recorded the module statement source map audit workstream.
+
+Iteration 4751 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4752 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4753 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4754 recorded the focused JVM codegen validation workstream.
+
+Iteration 4755 recorded the full compiler regression validation workstream.
+
+Iteration 4756 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4757 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4758 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4759 recorded the migration checkpoint and review workstream.
+
+Iteration 4760 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4761 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4762 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4763 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4764 recorded the direct Line child identity handling workstream.
+
+Iteration 4765 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4766 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4767 recorded the structured TRY source metadata workstream.
+
+Iteration 4768 recorded the callable TRY source metadata workstream.
+
+Iteration 4769 recorded the top-level typed stream regression workstream.
+
+Iteration 4770 recorded the callable typed body regression workstream.
+
+Iteration 4771 recorded the typed JVM THROW regression workstream.
+
+Iteration 4772 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4773 recorded the source table bounds handling workstream.
+
+Iteration 4774 recorded the callable source index producer audit workstream.
+
+Iteration 4775 recorded the module statement source map audit workstream.
+
+Iteration 4776 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4777 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4778 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4779 recorded the focused JVM codegen validation workstream.
+
+Iteration 4780 recorded the full compiler regression validation workstream.
+
+Iteration 4781 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4782 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4783 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4784 recorded the migration checkpoint and review workstream.
+
+Iteration 4785 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4786 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4787 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4788 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4789 recorded the direct Line child identity handling workstream.
+
+Iteration 4790 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4791 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4792 recorded the structured TRY source metadata workstream.
+
+Iteration 4793 recorded the callable TRY source metadata workstream.
+
+Iteration 4794 recorded the top-level typed stream regression workstream.
+
+Iteration 4795 recorded the callable typed body regression workstream.
+
+Iteration 4796 recorded the typed JVM THROW regression workstream.
+
+Iteration 4797 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4798 recorded the source table bounds handling workstream.
+
+Iteration 4799 recorded the callable source index producer audit workstream.
+
+Iteration 4800 recorded the module statement source map audit workstream.
+
+Iteration 4801 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4802 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4803 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4804 recorded the focused JVM codegen validation workstream.
+
+Iteration 4805 recorded the full compiler regression validation workstream.
+
+Iteration 4806 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4807 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4808 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4809 recorded the migration checkpoint and review workstream.
+
+Iteration 4810 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4811 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4812 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4813 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4814 recorded the direct Line child identity handling workstream.
+
+Iteration 4815 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4816 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4817 recorded the structured TRY source metadata workstream.
+
+Iteration 4818 recorded the callable TRY source metadata workstream.
+
+Iteration 4819 recorded the top-level typed stream regression workstream.
+
+Iteration 4820 recorded the callable typed body regression workstream.
+
+Iteration 4821 recorded the typed JVM THROW regression workstream.
+
+Iteration 4822 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4823 recorded the source table bounds handling workstream.
+
+Iteration 4824 recorded the callable source index producer audit workstream.
+
+Iteration 4825 recorded the module statement source map audit workstream.
+
+Iteration 4826 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4827 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4828 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4829 recorded the focused JVM codegen validation workstream.
+
+Iteration 4830 recorded the full compiler regression validation workstream.
+
+Iteration 4831 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4832 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4833 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4834 recorded the migration checkpoint and review workstream.
+
+Iteration 4835 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4836 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4837 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4838 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4839 recorded the direct Line child identity handling workstream.
+
+Iteration 4840 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4841 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4842 recorded the structured TRY source metadata workstream.
+
+Iteration 4843 recorded the callable TRY source metadata workstream.
+
+Iteration 4844 recorded the top-level typed stream regression workstream.
+
+Iteration 4845 recorded the callable typed body regression workstream.
+
+Iteration 4846 recorded the typed JVM THROW regression workstream.
+
+Iteration 4847 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4848 recorded the source table bounds handling workstream.
+
+Iteration 4849 recorded the callable source index producer audit workstream.
+
+Iteration 4850 recorded the module statement source map audit workstream.
+
+Iteration 4851 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4852 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4853 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4854 recorded the focused JVM codegen validation workstream.
+
+Iteration 4855 recorded the full compiler regression validation workstream.
+
+Iteration 4856 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4857 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4858 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4859 recorded the migration checkpoint and review workstream.
+
+Iteration 4860 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4861 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4862 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4863 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4864 recorded the direct Line child identity handling workstream.
+
+Iteration 4865 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4866 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4867 recorded the structured TRY source metadata workstream.
+
+Iteration 4868 recorded the callable TRY source metadata workstream.
+
+Iteration 4869 recorded the top-level typed stream regression workstream.
+
+Iteration 4870 recorded the callable typed body regression workstream.
+
+Iteration 4871 recorded the typed JVM THROW regression workstream.
+
+Iteration 4872 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4873 recorded the source table bounds handling workstream.
+
+Iteration 4874 recorded the callable source index producer audit workstream.
+
+Iteration 4875 recorded the module statement source map audit workstream.
+
+Iteration 4876 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4877 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4878 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4879 recorded the focused JVM codegen validation workstream.
+
+Iteration 4880 recorded the full compiler regression validation workstream.
+
+Iteration 4881 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4882 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4883 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4884 recorded the migration checkpoint and review workstream.
+
+Iteration 4885 recorded the JVM top-level typed source provenance workstream.
+
+Iteration 4886 recorded the JVM callable typed source provenance workstream.
+
+Iteration 4887 recorded the semantic statement source-index ownership workstream.
+
+Iteration 4888 recorded the semantic root-to-source mapping workstream.
+
+Iteration 4889 recorded the direct Line child identity handling workstream.
+
+Iteration 4890 recorded the typed span to SourcePos conversion workstream.
+
+Iteration 4891 recorded the source filename propagation into JvmSemanticState workstream.
+
+Iteration 4892 recorded the structured TRY source metadata workstream.
+
+Iteration 4893 recorded the callable TRY source metadata workstream.
+
+Iteration 4894 recorded the top-level typed stream regression workstream.
+
+Iteration 4895 recorded the callable typed body regression workstream.
+
+Iteration 4896 recorded the typed JVM THROW regression workstream.
+
+Iteration 4897 recorded the compatibility AST fallback boundary workstream.
+
+Iteration 4898 recorded the source table bounds handling workstream.
+
+Iteration 4899 recorded the callable source index producer audit workstream.
+
+Iteration 4900 recorded the module statement source map audit workstream.
+
+Iteration 4901 recorded the semantic dispatch source contract documentation workstream.
+
+Iteration 4902 recorded the multi-source JVM module behavior workstream.
+
+Iteration 4903 recorded the deterministic JVM source metadata workstream.
+
+Iteration 4904 recorded the focused JVM codegen validation workstream.
+
+Iteration 4905 recorded the full compiler regression validation workstream.
+
+Iteration 4906 recorded the Graphify source relationship refresh workstream.
+
+Iteration 4907 recorded the typed-IR-only codegen migration inventory workstream.
+
+Iteration 4908 recorded the remaining compatibility AST consumer inventory workstream.
+
+Iteration 4909 completed the JVM typed source provenance checkpoint and reviewed the remaining typed-IR codegen migration inventory.
