@@ -17451,3 +17451,7 @@ Iteration 5788 refreshed Graphify and validated the complete locked workspace su
 Iteration 5789 added C backend coverage that an unresolved semantic parameter annotation is reported as a diagnostic instead of falling back to the compatibility AST suffix.
 
 Iteration 5790 validated the unresolved-parameter diagnostics across C, BASIC, and JVM with the complete locked workspace suite.
+
+Iteration 5791 verified that an annotated callable parameter type takes precedence over a same-named module DIM type during FOR variable resolution.
+
+Iteration 5792 validated the annotated-parameter FOR resolver regression with the complete locked workspace suite.

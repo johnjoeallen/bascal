@@ -2875,7 +2875,7 @@ mod legacy_form_tests {
 
     #[test]
     fn resolver_populates_for_variable_types_from_typed_dim_declarations() {
-        let source = "dim globalIndex as long\nprocedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nprocedure shadow(globalIndex)\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend\n";
+        let source = "dim globalIndex as long\nprocedure work()\ndim localIndex as double\nfor localIndex = 1 to 2\nprint localIndex\nend for\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nprocedure shadow(globalIndex as double)\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend procedure\nfor globalIndex = 1 to 2\nprint globalIndex\nend for\nend\n";
         let program = parse(source);
         let semantic =
             crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
@@ -2926,7 +2926,7 @@ mod legacy_form_tests {
         );
         assert_eq!(
             find_for(&module.callables[1].body, "globalIndex"),
-            Some(crate::semantic_ir::SemanticValueType::Single)
+            Some(crate::semantic_ir::SemanticValueType::Double)
         );
     }
 
