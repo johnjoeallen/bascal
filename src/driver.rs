@@ -11,7 +11,7 @@ use crate::codegen::{self, CodeGenerator};
 use crate::diagnostics::{self, Diagnostic};
 use crate::lexer::{self, Lexer, TokenKind};
 use crate::parser::Parser;
-use crate::{ast, codegen_c, codegen_jvm, lower, resolver, semantic_ir};
+use crate::{ast, codegen_c, codegen_jvm, lower, record_transpile, resolver, semantic_ir};
 
 pub use crate::codegen::Target;
 
@@ -89,6 +89,8 @@ pub fn compile_source(
     let mut semantic_module = semantic_ir::parse_and_adapt_named(filename.clone(), source)
         .map_err(|error| vec![semantic_ir::parse_diagnostic(filename, &error)])?;
     semantic_module.lowered_record_files = lowered_record_files;
+    // `compile_source` always generates BASIC.
+    record_transpile::transpile(&mut semantic_module);
     let resolved = resolver::resolve_with_semantic(program, Some(semantic_module))?;
     let module = resolved
         .semantic_module
@@ -209,6 +211,9 @@ pub fn compile_file(input: &Path, options: &CompileOptions) -> Result<String, Ve
     let semantic_module = Some({
         let mut module = semantic_module;
         module.lowered_record_files = lowered_record_files;
+        if matches!(options.target, Target::Basic | Target::Fbc) {
+            record_transpile::transpile(&mut module);
+        }
         module
     });
     let resolved = resolver::resolve_with_semantic(program, semantic_module)?;
@@ -644,6 +649,7 @@ fn load_semantic_module_recursive(
             callables: Vec::new(),
             statements: Vec::new(),
             statement_sources: Vec::new(),
+            records_transpiled: false,
         });
     }
     let source = fs::read_to_string(&input).map_err(|error| {

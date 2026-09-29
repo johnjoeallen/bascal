@@ -7851,7 +7851,7 @@ fn basic_semantic_callable_statement_inner(
             generator.loop_continue_stack.pop();
             generator.loop_exit_stack.pop();
             body_result?;
-            let mut lines = vec![top_label.clone()];
+            let mut lines = vec![format!("{top_label}:")];
             if let Some((kind, condition)) = pre {
                 let invert = kind != crate::semantic_ir::LoopConditionKind::While;
                 lines.extend(condition.jump_lines(&end_label, invert));
@@ -8797,7 +8797,11 @@ impl CodeGenerator {
         // containing nodes the typed emitter has not migrated yet. Record DSL
         // expansions are one such bridge until their GET/PUT transformations
         // are represented in typed IR.
-        let record_stream_is_typed = !has_untyped_lowered_record_operations(
+        let record_stream_is_typed = resolved
+            .semantic_module
+            .as_ref()
+            .is_some_and(|module| module.records_transpiled)
+            || !has_untyped_lowered_record_operations(
             &program.statements,
             resolved
                 .semantic_module
@@ -8950,7 +8954,46 @@ impl CodeGenerator {
             .and_then(|module| semantic_basic_callable_for_function(module, function))
             .and_then(|callable| semantic_module?.sources.get(callable.source_index))
             .map(|source| source.filename.clone());
-        for (index, statement) in function.body.iter().enumerate() {
+        // A module whose record DSL was already expanded has no one-to-one
+        // AST alignment; emit the callable's whole typed body or, if any of
+        // it is unsupported, fall back to the AST body entirely.
+        let whole_body_lines = semantic_module
+            .filter(|module| module.records_transpiled)
+            .and_then(|module| semantic_basic_callable_for_function(module, function))
+            .and_then(|callable| {
+                let diagnostics = self.diagnostics.len();
+                let mut lines = Vec::new();
+                for statement in &callable.body {
+                    match basic_semantic_callable_statement(self, statement, &info) {
+                        Some(statement_lines) => lines.extend(statement_lines),
+                        None => {
+                            self.diagnostics.truncate(diagnostics);
+                            return None;
+                        }
+                    }
+                }
+                Some(lines)
+            });
+        let function_body: &[Stmt] = if whole_body_lines.is_some() {
+            &[]
+        } else {
+            &function.body
+        };
+        if let Some(lines) = whole_body_lines {
+            if let Some(filename) = semantic_source_filename.as_deref() {
+                if self.needs_source_lookup && self.current_marker_file.as_deref() != Some(filename)
+                {
+                    self.current_marker_file = Some(filename.to_string());
+                    self.line(&source_file_marker(
+                        &crate::diagnostics::display_source_filename(filename),
+                    ));
+                }
+            }
+            for line in lines {
+                self.line(&line);
+            }
+        }
+        for (index, statement) in function_body.iter().enumerate() {
             let semantic_statement = semantic_dispatch
                 .as_ref()
                 .and_then(|items| items.get(index).copied().flatten());

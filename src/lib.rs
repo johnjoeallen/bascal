@@ -19,6 +19,7 @@ pub mod semantic_ir;
 /// time.  It remains parallel to the legacy frontend until the pipeline can
 /// consume its typed IR directly.
 pub mod rdgen_frontend;
+pub mod record_transpile;
 
 mod driver;
 
@@ -1976,7 +1977,7 @@ end
         // suffix like MKI% or MKD# isn't a real MBASIC/BASCOM function.
         assert!(output.contains("LSET dbIdBuf$ = MKI$(1)"));
         assert!(output.contains(r#"LSET dbNameBuf$ = "Alice""#));
-        assert!(output.contains("LSET dbScoreBuf$ = MKD$(95)"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(95"), "{output}");
         assert!(output.contains("PUT #1, 1"));
     }
 
@@ -2220,9 +2221,22 @@ end
     }
 
     #[test]
+    fn do_loop_inside_a_function_resolves_its_top_label_to_a_line_number() {
+        let source = "function countUp%(limit%)\nn% = 0\ndo\nn% = n% + 1\nloop until n% >= limit%\nreturn n%\nend function\nprint countUp%(3)\nend\n";
+        let output = compile_source("callable_do.bcl", source).expect("should compile");
+        assert!(
+            !output.contains("DO_0"),
+            "a symbolic DO label survived numbering:\n{output}"
+        );
+    }
+
+    #[test]
     fn record_downto_lowers_to_step_negative_one() {
         let output = compile_source("rec.bcl", record_dsl_source()).expect("should compile");
-        assert!(output.contains("FOR i = 3 TO 1 STEP -1"));
+        assert!(
+            output.contains("FOR i = 3 TO 1 STEP -1") || output.contains("FOR i! = 3 TO 1 STEP -1"),
+            "{output}"
+        );
     }
 
     #[test]
@@ -2388,8 +2402,14 @@ end
 "#;
         let output =
             compile_source("partial_exists.bcl", source).expect("partial update should compile");
+        // Either the single-line AST form or the typed block form is fine, as
+        // long as the guard precedes the GET.
+        let guard = output
+            .find("LOF(#1) < (2) * 50")
+            .or_else(|| output.find("LOF(1) < ((2) * 50)"));
+        let get = output.find("GET #1, 2");
         assert!(
-            output.contains("IF LOF(#1) < (2) * 50 THEN ERROR 63"),
+            guard.is_some() && output.contains("ERROR 63") && guard < get,
             "a partial update must reject a missing fixed-length record before GET:\n{output}"
         );
     }
@@ -2414,7 +2434,7 @@ end
         );
         assert!(output.contains("LSET dbIdBuf$ = MKI$(3)"));
         assert!(output.contains("LSET dbNameBuf$ = \"Carol\""));
-        assert!(output.contains("LSET dbScoreBuf$ = MKD$(78)"));
+        assert!(output.contains("LSET dbScoreBuf$ = MKD$(78"), "{output}");
         assert!(output.contains("PUT #1, 3"));
     }
 

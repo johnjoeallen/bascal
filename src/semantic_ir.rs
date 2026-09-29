@@ -26,6 +26,10 @@ pub struct SemanticModule {
     /// statement came from an adapter that did not retain source identity.
     /// Nested statements inherit the top-level statement's source.
     pub statement_sources: Vec<usize>,
+    /// Set once `record_transpile` has expanded the record/file DSL into
+    /// primitive statements, so a backend may emit this module's statements
+    /// directly instead of reading the AST's expanded siblings.
+    pub records_transpiled: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -4325,6 +4329,7 @@ pub fn adapt_module(program: &rdgen_frontend::Program) -> SemanticModule {
         callables,
         statements,
         statement_sources,
+        records_transpiled: false,
     };
     module.annotate_types();
     let const_types = module.const_types();
@@ -8056,5 +8061,17 @@ mod tests {
         assert_eq!(catch.line, "line%");
         assert_eq!(catch.source.as_deref(), Some("source$"));
         assert_eq!(finally_body.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod tmp_dump {
+    #[test]
+    fn dump_record_program() {
+        let src = std::fs::read_to_string("tmp/rec1.bcl").unwrap();
+        let m = super::parse_and_adapt(&src).unwrap();
+        println!("RECORDS {:#?}", m.records);
+        for s in &m.statements { println!("STMT {:?}", s.kind); }
+        for c in &m.callables { println!("CALLABLE {} {:?}", c.name, c.kind); for s in &c.body { println!("  BODY {:?}", s.kind); } }
     }
 }
