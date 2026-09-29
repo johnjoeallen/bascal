@@ -4208,6 +4208,9 @@ fn jvm_semantic_statements_by_source<'a>(
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
             let [index] = candidates.as_slice() else {
+                if candidates.is_empty() && semantic.is_line_comment() {
+                    continue;
+                }
                 return None;
             };
             if previous.is_some_and(|previous| previous >= *index) || aligned[*index].is_some() {
@@ -4314,6 +4317,9 @@ fn jvm_semantic_callable_statements_by_source<'a>(
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
             let [index] = candidates.as_slice() else {
+                if candidates.is_empty() && semantic.is_line_comment() {
+                    continue;
+                }
                 return None;
             };
             if previous.is_some_and(|previous| previous >= *index) || aligned[*index].is_some() {
@@ -11099,6 +11105,19 @@ mod tests {
         let module =
             crate::semantic_ir::parse_and_adapt_named("jvm_sem_origin.bcl", "end\n").unwrap();
         assert!(super::jvm_semantic_statements_by_source(&module, &program.statements).is_none());
+    }
+
+    #[test]
+    fn jvm_top_level_alignment_ignores_a_trailing_comment_the_ast_discards() {
+        let source = "program p\nx% = 1 // trailing note\nend\n";
+        let parsed = crate::parse_source("jvm_trailing_comment.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("jvm_trailing_comment.bcl", source).unwrap();
+        assert!(
+            super::jvm_semantic_statements_by_source(&semantic, &program.statements).is_some(),
+            "trailing comment declined semantic alignment"
+        );
     }
 
     #[test]

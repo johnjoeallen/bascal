@@ -17519,3 +17519,11 @@ Iteration 5822 let semantic top-level alignment skip a trailing comment the lega
 Iteration 5823 rendered ordinary-call syntax on a scalar method (`ucase$(s$)`) as a method call in the BASIC semantic expression path, matching the decision `records::lower` makes for the AST. On the adventure3000 stages this cut AST-emitted statements from about 1,600-2,000 to 40-80 (stages 2-5) and from 1,252 to 39 (stage 6).
 
 Iteration 5824 added regression tests for label-plus-comment alignment, trailing-comment alignment, and ordinary-syntax scalar method calls.
+
+Iteration 5825 let C and JVM top-level and callable semantic alignment skip a trailing line comment that has no AST counterpart, instead of declining the whole stream (a shared helper, `SemanticStatement::is_line_comment`, backs all four sites). This moved most tutorial programs onto typed-IR emission for C and JVM.
+
+Iteration 5826 added a top-level `Kind::Const` arm to the C semantic dispatcher; the stdlib `error` library alone had ~200 constants on the AST path.
+
+Iteration 5827 made the C semantic block-comment emitter normalize the `*` gutter and edge blank lines the way the legacy parser does, keeping emitted comments identical to the AST path.
+
+Iteration 5828 added regression tests for C/JVM trailing-comment alignment, C top-level const, and C block-comment normalization.

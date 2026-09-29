@@ -10312,9 +10312,14 @@ fn c_semantic_statements_by_source<'a>(
                 })
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
-            let index = candidates.into_iter().find(|index| {
+            let Some(index) = candidates.iter().copied().find(|index| {
                 previous.is_none_or(|previous| previous < *index) && aligned[*index].is_none()
-            })?;
+            }) else {
+                if candidates.is_empty() && semantic.is_line_comment() {
+                    continue;
+                }
+                return None;
+            };
             aligned[index] = Some(semantic);
             previous = Some(index);
         }
@@ -10375,15 +10380,34 @@ fn c_semantic_callable_source_position(
 }
 
 fn emit_c_semantic_comment(block: bool, text: &str, out: &mut String) {
-    let body = if block {
-        text.strip_prefix("/*")
+    if block {
+        // Normalize a block comment as the legacy parser does: trim each
+        // line, drop a leading `*` gutter, and trim blank lines at both ends.
+        let body = text
+            .strip_prefix("/*")
             .and_then(|body| body.strip_suffix("*/"))
-            .unwrap_or(text)
-    } else {
-        text.strip_prefix('\'')
-            .or_else(|| text.strip_prefix("//"))
-            .unwrap_or(text)
-    };
+            .unwrap_or(text);
+        let lines = body
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                trimmed.strip_prefix('*').map(str::trim).unwrap_or(trimmed)
+            })
+            .collect::<Vec<_>>();
+        let start = lines.iter().position(|line| !line.is_empty()).unwrap_or(0);
+        let end = lines
+            .iter()
+            .rposition(|line| !line.is_empty())
+            .map_or(start, |index| index + 1);
+        for line in &lines[start..end] {
+            out.push_str(&format!("    // {line}\n"));
+        }
+        return;
+    }
+    let body = text
+        .strip_prefix('\'')
+        .or_else(|| text.strip_prefix("//"))
+        .unwrap_or(text);
     for line in body.lines() {
         out.push_str(&format!("    // {}\n", line.trim()));
     }
@@ -10422,9 +10446,14 @@ fn c_semantic_callable_statements_by_source<'a>(
                 })
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
-            let index = candidates.into_iter().find(|index| {
+            let Some(index) = candidates.iter().copied().find(|index| {
                 previous.is_none_or(|previous| previous < *index) && aligned[*index].is_none()
-            })?;
+            }) else {
+                if candidates.is_empty() && semantic.is_line_comment() {
+                    continue;
+                }
+                return None;
+            };
             aligned[index] = Some(semantic);
             previous = Some(index);
         }
@@ -11216,6 +11245,33 @@ pub(crate) fn generate(
                             semantic_declarations,
                             None,
                             &mut gosub,
+                        );
+                    }
+                    Kind::Const {
+                        name,
+                        value,
+                        value_type,
+                    } => {
+                        // A `const` is an ordinary assignment to its name;
+                        // its declared C storage comes from the semantic
+                        // scalar collector.
+                        let target = crate::semantic_ir::Expression {
+                            kind: crate::semantic_ir::ExpressionKind::Name(name.name.clone()),
+                            span: name.span,
+                            value_type: *value_type,
+                            record_type: None,
+                        };
+                        return emit_c_semantic_assignment(
+                            &target,
+                            crate::semantic_ir::AssignmentOperator::Assign,
+                            value,
+                            &mut body,
+                            &mut needs_math,
+                            &mut temp_counter,
+                            &functions.arrays,
+                            &functions.funcs,
+                            Some(&functions.methods),
+                            functions.dialect.supports_float,
                         );
                     }
                     Kind::Assignment {
@@ -29246,6 +29302,43 @@ mod dialect_tests {
             .app;
         assert!(output.contains("bv_i_value = 1;"), "{output}");
         assert!(!output.contains("bv_f_value"), "{output}");
+    }
+
+    #[test]
+    fn c_top_level_alignment_ignores_a_trailing_comment_the_ast_discards() {
+        let source = "program p\nx% = 1 // trailing note\nend\n";
+        let parsed = parse_source("c_trailing_comment.bcl".to_string(), source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("c_trailing_comment.bcl", source).unwrap();
+        assert!(
+            c_semantic_statements_by_source(&semantic, &program.statements).is_some(),
+            "trailing comment declined semantic alignment"
+        );
+    }
+
+    #[test]
+    fn c_top_level_const_is_emitted_from_typed_ir() {
+        let parsed = parse_source("c_const_ast.bcl".to_string(), "program p\nprint 1\nend\n")
+            .expect("legacy source parses");
+        let lower::Lowered { program, .. } = lower::lower(parsed).expect("legacy source lowers");
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "c_const_ast.bcl",
+            "program p\nconst limit% = 5\nend\n",
+        )
+        .expect("typed source parses");
+        let resolved = resolver::resolve_with_semantic(program, Some(semantic))
+            .expect("semantic replacement resolves");
+        let output = generate(&resolved, Target::C).expect("C generation").app;
+        assert!(output.contains("= 5;"), "{output}");
+        assert!(!output.contains("printf"), "AST print leaked: {output}");
+    }
+
+    #[test]
+    fn c_semantic_block_comment_drops_the_star_gutter() {
+        let mut out = String::new();
+        emit_c_semantic_comment(true, "/*\n * first\n * second\n */", &mut out);
+        assert_eq!(out, "    // first\n    // second\n");
     }
 
     #[test]

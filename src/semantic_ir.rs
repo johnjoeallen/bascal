@@ -3671,6 +3671,14 @@ pub struct SemanticStatement {
     pub kind: SemanticStatementKind,
     pub span: SourceSpan,
 }
+
+impl SemanticStatement {
+    /// A `'` or `//` comment. When one trails a statement on its line, the
+    /// legacy parser discards it, so it has no AST counterpart to align to.
+    pub fn is_line_comment(&self) -> bool {
+        matches!(self.kind, SemanticStatementKind::Comment { block: false, .. })
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SemanticStatementKind {
     Line(Vec<SemanticStatement>),
