@@ -2010,6 +2010,57 @@ mod tests {
         );
     }
 
+    fn generate_with_diverging_semantic_source(ast_source: &str, semantic_source: &str) -> String {
+        let parsed = crate::parse_source("basic_diverging.bcl".to_string(), ast_source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        resolved.semantic_module = Some(
+            crate::semantic_ir::parse_and_adapt_named("basic_diverging.bcl", semantic_source)
+                .unwrap(),
+        );
+        super::CodeGenerator::new().generate(&resolved).unwrap()
+    }
+
+    #[test]
+    fn basic_top_level_aligns_a_label_followed_by_a_comment() {
+        // The label and its trailing comment are two legacy statements on one
+        // line but a single semantic line node; that must not decline the
+        // whole stream.
+        let output = generate_with_diverging_semantic_source(
+            "skip: ' note\nprint \"ast marker\"\nend\n",
+            "skip: ' note\nprint \"semantic marker\"\nend\n",
+        );
+        assert!(
+            output.contains("semantic marker") && !output.contains("ast marker"),
+            "label plus comment line declined semantic dispatch: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_top_level_ignores_a_trailing_comment_the_ast_discards() {
+        let output = generate_with_diverging_semantic_source(
+            "x% = 1\nprint \"ast marker\"\nend\n",
+            "x% = 1 ' trailing note\nprint \"semantic marker\"\nend\n",
+        );
+        assert!(
+            output.contains("semantic marker") && !output.contains("ast marker"),
+            "trailing comment declined semantic dispatch: {output}"
+        );
+    }
+
+    #[test]
+    fn basic_semantic_ordinary_call_on_a_scalar_method_becomes_a_method_call() {
+        let method = "method shout[string]()\nreturn self$\nend method\n";
+        let output = generate_with_diverging_semantic_source(
+            &format!("{method}x$ = \"a\"\nwhile 1\nprint \"ast marker\"\nend while\nend\n"),
+            &format!("{method}x$ = \"a\"\nwhile 1\nx$ = shout$(x$)\nend while\nend\n"),
+        );
+        assert!(
+            output.contains("GOSUB") && !output.contains("ast marker"),
+            "ordinary-syntax scalar method call declined semantic emission: {output}"
+        );
+    }
+
     #[test]
     fn basic_callable_generation_dispatches_semantic_terminal_and_error_statements() {
         let ast_source = "function value%()\nprint 1\nprint 2\nprint 3\nprint 4\nprint 5\nprint 6\nprint 7\nreturn 0\nend function\nprint value%()\nend\n";
@@ -4951,6 +5002,7 @@ fn basic_semantic_try_stream_is_typed(
         })
 }
 
+
 fn basic_semantic_intrinsics(
     generator: &mut CodeGenerator,
     module: &crate::semantic_ir::SemanticModule,
@@ -6377,24 +6429,17 @@ fn basic_semantic_statements_by_source(
     let mut used_ast = HashSet::new();
     for (root, source_index) in module.statements.iter().zip(&module.statement_sources) {
         let source = module.sources.get(*source_index)?;
-        let pairs = if let crate::semantic_ir::SemanticStatementKind::Line(nodes) = &root.kind {
-            let line = source_position(source, root.span)?.line;
-            let ast_line = ast_statements
-                .iter()
-                .enumerate()
-                .filter(|(_, stmt)| {
-                    stmt.pos.filename == source.filename
-                        && stmt.pos.line == line
-                        && !matches!(stmt.kind, Statement::BlankLine)
-                })
-                .map(|(index, _)| index)
-                .collect::<Vec<_>>();
-            if ast_line.len() != nodes.len() {
-                return None;
-            }
-            nodes.iter().zip(ast_line).collect::<Vec<_>>()
-        } else {
-            let position = source_position(source, root.span)?;
+        let children: Vec<&crate::semantic_ir::SemanticStatement> =
+            if let crate::semantic_ir::SemanticStatementKind::Line(nodes) = &root.kind {
+                nodes.iter().collect()
+            } else {
+                vec![root]
+            };
+        // Each semantic node maps to the one AST statement at its exact
+        // source position, so a line whose AST form has extra siblings (for
+        // example a label followed by a comment) still aligns.
+        for node in children {
+            let position = source_position(source, node.span)?;
             let matches = ast_statements
                 .iter()
                 .enumerate()
@@ -6406,20 +6451,50 @@ fn basic_semantic_statements_by_source(
                 })
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>();
+            // The legacy parser positions a trailing comment's `Raw` node at
+            // its statement rather than at the apostrophe, so a semantic
+            // comment falls back to the line's next unclaimed `Raw` comment.
+            let matches = if matches.is_empty()
+                && matches!(
+                    node.kind,
+                    crate::semantic_ir::SemanticStatementKind::Comment { block: false, .. }
+                ) {
+                ast_statements
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, stmt)| {
+                        !used_ast.contains(index)
+                            && stmt.pos.filename == source.filename
+                            && stmt.pos.line == position.line
+                            && matches!(&stmt.kind, Statement::Raw(text) if text.starts_with('\''))
+                    })
+                    .map(|(index, _)| index)
+                    .take(1)
+                    .collect::<Vec<_>>()
+            } else {
+                matches
+            };
+            // A trailing comment on a statement line has no legacy AST
+            // counterpart (the legacy parser discards it), so it emits nothing.
+            if matches.is_empty()
+                && matches!(
+                    node.kind,
+                    crate::semantic_ir::SemanticStatementKind::Comment { block: false, .. }
+                )
+            {
+                continue;
+            }
             let [ast_index] = matches.as_slice() else {
                 return None;
             };
-            vec![(root, *ast_index)]
-        };
-        for (node, ast_index) in pairs {
-            if !used_ast.insert(ast_index)
+            if !used_ast.insert(*ast_index)
                 || aligned
                     .last()
-                    .is_some_and(|(previous, _, _)| previous >= &ast_index)
+                    .is_some_and(|(previous, _, _)| previous >= ast_index)
             {
                 return None;
             }
-            aligned.push((ast_index, node, *source_index));
+            aligned.push((*ast_index, node, *source_index));
         }
     }
     if !ast_statements.is_empty() {
@@ -10329,6 +10404,28 @@ impl CodeGenerator {
             ExpressionKind::Call { name, arguments } => {
                 let ident = BasicIdent::parse(name);
                 let Some(info) = self.ordinary_function_info(&ident).cloned() else {
+                    // Ordinary-call syntax on a scalar method (`ucase$(s$)`)
+                    // is a method call on the first argument when its type is
+                    // the method's receiver, as `records::lower` decides for
+                    // the AST.
+                    if let Some(first) = arguments.first() {
+                        let receiver = semantic_receiver_suffix(first.value_type);
+                        if receiver.is_some_and(|receiver| {
+                            self.method_info(receiver, &ident.name)
+                                .is_some_and(|method| method.source_name.suffix == ident.suffix)
+                        }) {
+                            let method_call = crate::semantic_ir::Expression {
+                                kind: ExpressionKind::Member {
+                                    base: Some(Box::new(first.clone())),
+                                    member: ident.name.clone(),
+                                    arguments: Some(arguments[1..].to_vec()),
+                                },
+                                ..expression.clone()
+                            };
+                            return self
+                                .semantic_expression_with_prelude(&method_call, current_function);
+                        }
+                    }
                     if self.function_info(&ident).is_some() {
                         return None;
                     }
@@ -13303,6 +13400,19 @@ fn resolve_semantic_call_arg_bound(
 
 /// A scalar method's semantic name is its bare spelling (`ucase`); the AST
 /// function carries the synthesized result suffix (`ucase$`).
+/// The scalar type a value of this semantic type has as a method receiver.
+fn semantic_receiver_suffix(value_type: crate::semantic_ir::SemanticValueType) -> Option<TypeSuffix> {
+    use crate::semantic_ir::SemanticValueType as Value;
+    match value_type {
+        Value::String => Some(TypeSuffix::String),
+        Value::Integer => Some(TypeSuffix::Integer),
+        Value::Long => Some(TypeSuffix::Long),
+        Value::Single => Some(TypeSuffix::Single),
+        Value::Double => Some(TypeSuffix::Double),
+        Value::Unknown | Value::Boolean => None,
+    }
+}
+
 fn semantic_callable_name_matches(name: &str, function: &FunctionDef) -> bool {
     name.eq_ignore_ascii_case(&function.name.as_basic())
         || (function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name))

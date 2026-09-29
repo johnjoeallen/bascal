@@ -17511,3 +17511,11 @@ Iteration 5818 strengthened the C64 typed-read regression so a semantic Double r
 Iteration 5819 took over from Codex: inventoried BASIC AST-fallback statements across the corpus and found scalar methods never aligned with their typed-IR callables (bare `ucase` versus AST `ucase$`), so every method body stayed on the AST emitter.
 
 Iteration 5820 made scalar-method callable matching suffix-tolerant and gave scalar methods without an explicit result their receiver type in the typed IR, matching the legacy parser; method bodies now emit from typed IR, with regression tests in codegen_basic and semantic_ir.
+
+Iteration 5821 aligned BASIC top-level semantic nodes to AST statements by exact source position instead of per-line counts, so a label followed by a comment no longer declines the whole stream.
+
+Iteration 5822 let semantic top-level alignment skip a trailing comment the legacy parser discards.
+
+Iteration 5823 rendered ordinary-call syntax on a scalar method (`ucase$(s$)`) as a method call in the BASIC semantic expression path, matching the decision `records::lower` makes for the AST. On the adventure3000 stages this cut AST-emitted statements from about 1,600-2,000 to 40-80 (stages 2-5) and from 1,252 to 39 (stage 6).
+
+Iteration 5824 added regression tests for label-plus-comment alignment, trailing-comment alignment, and ordinary-syntax scalar method calls.
