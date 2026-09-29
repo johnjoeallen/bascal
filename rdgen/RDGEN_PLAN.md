@@ -17365,3 +17365,7 @@ Iteration 5745 made C try-result temporary storage require a resolved callable r
 Iteration 5746 refreshed Graphify after tightening C callable result storage dependencies.
 
 Iteration 5747 validated the complete locked workspace suite after C try-result type changes.
+
+Iteration 5748 extended unsuffixed function typing coverage through call-expression annotation.
+
+Iteration 5749 validated the complete locked workspace suite after typed callable expression coverage.

@@ -6212,6 +6212,17 @@ mod tests {
             module.callable_value_type("total"),
             SemanticValueType::Single
         );
+        let mut call = Expression {
+            kind: ExpressionKind::Call {
+                name: "total".into(),
+                arguments: Vec::new(),
+            },
+            span: module.callables[0].span,
+            value_type: SemanticValueType::Unknown,
+            record_type: None,
+        };
+        module.annotate_expression_types(&mut call);
+        assert_eq!(call.value_type, SemanticValueType::Single);
     }
 
     #[test]
