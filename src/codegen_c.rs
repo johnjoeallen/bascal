@@ -13302,6 +13302,19 @@ fn c_var_name(ident: &BasicIdent, suffix: TypeSuffix) -> String {
     format!("bv_{tag}_{}", ident.name.to_ascii_lowercase())
 }
 
+fn semantic_assignment_target_suffix(
+    target: &crate::semantic_ir::Expression,
+) -> Option<(String, TypeSuffix)> {
+    let crate::semantic_ir::ExpressionKind::Name(name) = &target.kind else {
+        return None;
+    };
+    let suffix = target
+        .value_type
+        .suffix()
+        .and_then(TypeSuffix::from_char)?;
+    Some((BasicIdent::parse(name).name.to_ascii_lowercase(), suffix))
+}
+
 fn resolved_ident_suffix(ident: &BasicIdent, functions: &FunctionTable) -> Option<TypeSuffix> {
     ident.suffix.or_else(|| {
         functions
@@ -19424,23 +19437,15 @@ fn reject_float(
             statements: &[crate::semantic_ir::SemanticStatement],
             suffixes: &mut BTreeMap<String, TypeSuffix>,
         ) {
-            use crate::semantic_ir::{ExpressionKind, SemanticStatementKind as Kind};
+            use crate::semantic_ir::SemanticStatementKind as Kind;
             fn add_target(
                 target: &crate::semantic_ir::Expression,
                 suffixes: &mut BTreeMap<String, TypeSuffix>,
             ) {
-                let ExpressionKind::Name(name) = &target.kind else {
+                let Some((name, suffix)) = semantic_assignment_target_suffix(target) else {
                     return;
                 };
-                let ident = BasicIdent::parse(name);
-                let suffix = target
-                    .value_type
-                    .suffix()
-                    .and_then(TypeSuffix::from_char)
-                    .or(ident.suffix);
-                if let Some(suffix) = suffix {
-                    suffixes.insert(ident.name.to_ascii_lowercase(), suffix);
-                }
+                suffixes.insert(name, suffix);
             }
             for statement in statements {
                 match &statement.kind {
@@ -25157,7 +25162,12 @@ mod dialect_tests {
 
     #[test]
     fn c_semantic_assignment_storage_does_not_default_unknown_type() {
-        let mut module = crate::semantic_ir::parse_and_adapt("amount = 1\nend\n").unwrap();
+        let source = "amount% = 1\nend\n";
+        let mut module = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_assignment_type.bcl",
+            source,
+        )
+        .unwrap();
         let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
         else {
             panic!("expected statement line")
@@ -25167,6 +25177,13 @@ mod dialect_tests {
         else {
             panic!("expected assignment")
         };
+        target.value_type = crate::semantic_ir::SemanticValueType::Unknown;
+        assert_eq!(semantic_assignment_target_suffix(target), None);
+        target.value_type = crate::semantic_ir::SemanticValueType::Long;
+        assert_eq!(
+            semantic_assignment_target_suffix(target),
+            Some(("amount".to_string(), TypeSuffix::Long))
+        );
         target.value_type = crate::semantic_ir::SemanticValueType::Unknown;
 
         let mut numeric = BTreeMap::new();

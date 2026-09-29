@@ -17477,3 +17477,9 @@ Iteration 5801 refreshed Graphify and validated the complete locked workspace su
 Iteration 5802 expanded typed-IR adapter coverage for callable parameter annotation retention, suffix precedence, and implicit Single defaults.
 
 Iteration 5803 validated callable parameter type adaptation with the complete locked workspace suite.
+
+Iteration 5804 made the C semantic assignment suffix collector require the resolved typed-IR target type instead of falling back to the target identifier suffix.
+
+Iteration 5805 added focused C coverage proving an Unknown assignment target does not yield a semantic storage suffix.
+
+Iteration 5806 refreshed Graphify and validated the complete locked workspace suite after C assignment target typing changes.
