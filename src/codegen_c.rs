@@ -29278,7 +29278,7 @@ mod dialect_tests {
 
         let parsed = parse_source(
             "semantic_c64_float_read.bcl".to_string(),
-            "program p\nprint value%\nend\n",
+            "program p\nprint value&\nend\n",
         )
         .expect("legacy source parses");
         let lower::Lowered { program, .. } = lower::lower(parsed).expect("legacy source lowers");

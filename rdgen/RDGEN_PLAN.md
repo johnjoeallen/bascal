@@ -17505,3 +17505,5 @@ Iteration 5815 validated callable-global suffix selection with the C64 stale-suf
 Iteration 5816 sourced C FOR-variable storage suffixes from the typed-IR `variable_type` field instead of reparsing the loop-variable spelling.
 
 Iteration 5817 expanded C64 FOR-variable coverage with a stale AST Double suffix and a typed-IR Long DIM annotation.
+
+Iteration 5818 strengthened the C64 typed-read regression so a semantic Double read is rejected when the compatibility AST carries a Long suffix.
