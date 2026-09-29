@@ -17547,3 +17547,11 @@ Iteration 5836 added `SemanticCondition` to the BASIC semantic emitters: a `&&`/
 Iteration 5837 made the JVM semantic dispatchers decline any compound statement containing a record `file` declaration. Its `open` exists only as a lowered AST sibling, so a `try` around `file x = open(...)` compiled to a program that never opened the file (found by `jvm_inventory_list_all...` once alignment started succeeding for `inventory.bcl`).
 
 Iteration 5838 added regression tests for chain lowering, chained and ordinary scalar-method prints, dependency re-annotation, and the JVM nested file declaration.
+
+Iteration 5839 rewrote ordinary-syntax scalar-method calls (`ucase$(s$)`) to member calls during typed-IR annotation with the same conditions as `records::Lowerer::try_ordinary_call_as_method` (no claiming function or builtin, receiver type match, result-suffix match), so every backend receives the resolved method call.
+
+Iteration 5840 registered scalar methods in the C function map under a collision-free key and rendered string-returning method calls through the shared user-string-call path, moving `print "x".ucase()` and friends onto typed IR in C.
+
+Iteration 5841 added string comparison (`strcmp`) to both C semantic numeric renderers, which had declined every `if`/`while`/`do` condition and assignment comparing strings.
+
+Iteration 5842 added regression tests for the member-call rewrite, C string comparison, and C string-method prints. C AST-emitted statements outside the record-DSL programs fell from 887 to 491 over this stretch (`while` conditions and `print` of method calls were the main sources).

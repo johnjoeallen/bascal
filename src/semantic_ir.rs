@@ -1608,6 +1608,44 @@ impl SemanticModule {
         }
     }
 
+    /// The `Member` form of an ordinary-syntax call `name(first, ...)` that
+    /// resolves to a scalar method, if it does.
+    fn ordinary_call_as_method(
+        &self,
+        name: &str,
+        arguments: &[Expression],
+    ) -> Option<ExpressionKind> {
+        let ident = crate::ast::BasicIdent::parse(name);
+        let claimed_by_function = self.callables.iter().any(|callable| {
+            matches!(callable.kind, CallableKind::Function | CallableKind::Procedure)
+                && crate::ast::BasicIdent::parse(&callable.name) == ident
+        });
+        if claimed_by_function
+            || crate::codegen_basic::BASIC_BUILTINS.contains(&ident.name.to_ascii_lowercase().as_str())
+        {
+            return None;
+        }
+        let first = arguments.first()?;
+        let receiver = scalar_builtin_receiver(first.value_type)?;
+        let method = self.callables.iter().find(|callable| {
+            matches!(callable.kind, CallableKind::Method | CallableKind::FluentMethod)
+                && semantic_callable_name_matches_member(&callable.name, &ident.name)
+                && callable.receiver.as_deref().and_then(scalar_receiver_suffix)
+                    == receiver_suffix_string(receiver)
+                && callable
+                    .result_type
+                    .as_deref()
+                    .and_then(|suffix| suffix.chars().next())
+                    .and_then(crate::ast::TypeSuffix::from_char)
+                    == ident.suffix
+        })?;
+        Some(ExpressionKind::Member {
+            base: Some(Box::new(first.clone())),
+            member: semantic_method_bare_name(&method.name),
+            arguments: Some(arguments[1..].to_vec()),
+        })
+    }
+
     /// Merge a dependency module ahead of this module's executable content.
     /// This mirrors the driver's legacy dependency order while preserving the
     /// root module header and source span.
@@ -1868,6 +1906,20 @@ impl SemanticModule {
         };
         if let Some((name, arguments)) = builtin_call {
             expression.kind = ExpressionKind::Call { name, arguments };
+        }
+        // `ltrim$(s$)` is the method call `s$.ltrim()` when no ordinary
+        // function or builtin claims the name and the first argument's type
+        // is a method's receiver (`records::Lowerer::try_ordinary_call_as_method`
+        // for the AST).
+        let method_call = match &mut expression.kind {
+            ExpressionKind::Call { name, arguments } if !arguments.is_empty() => {
+                self.annotate_expression_types(&mut arguments[0]);
+                self.ordinary_call_as_method(name, arguments)
+            }
+            _ => None,
+        };
+        if let Some(method_call) = method_call {
+            expression.kind = method_call;
         }
         match &mut expression.kind {
             ExpressionKind::Call { name, arguments } => {
@@ -5741,6 +5793,14 @@ fn suffix_from_name(name: &str) -> Option<String> {
         .filter(|value| matches!(value, '%' | '&' | '!' | '#' | '$' | '@'))
         .map(|value| value.to_string())
 }
+fn receiver_suffix_string(receiver: crate::ast::TypeSuffix) -> Option<String> {
+    Some(receiver.to_string())
+}
+
+fn semantic_method_bare_name(name: &str) -> String {
+    name.trim_end_matches(['$', '%', '!', '#', '&']).to_string()
+}
+
 fn scalar_builtin_receiver(value_type: SemanticValueType) -> Option<crate::ast::TypeSuffix> {
     use crate::ast::TypeSuffix;
     match value_type {
@@ -6482,6 +6542,43 @@ mod tests {
         assert_eq!(chained_base_type(&root), SemanticValueType::Unknown);
         root.prepend_dependency(dependency);
         assert_eq!(chained_base_type(&root), SemanticValueType::String);
+    }
+
+    #[test]
+    fn ordinary_call_on_a_scalar_method_becomes_a_member_call() {
+        let value_of = |source: &str| {
+            let module = parse_and_adapt(source).unwrap();
+            module
+                .statements
+                .iter()
+                .flat_map(|root| match &root.kind {
+                    SemanticStatementKind::Line(children) => children.iter().collect::<Vec<_>>(),
+                    _ => vec![root],
+                })
+                .find_map(|statement| match &statement.kind {
+                    SemanticStatementKind::Assignment { value, .. } => Some(value.clone()),
+                    _ => None,
+                })
+                .expect("an assignment")
+        };
+        let method = "method shout[string]()\nreturn self$ + \"!\"\nend method\n";
+        let rewritten = value_of(&format!("{method}x$ = shout$(\"a\")\nend\n"));
+        let ExpressionKind::Member {
+            base: Some(_),
+            member,
+            arguments: Some(arguments),
+        } = &rewritten.kind
+        else {
+            panic!("expected a member call: {:?}", rewritten.kind);
+        };
+        assert_eq!(member, "shout");
+        assert!(arguments.is_empty());
+        assert_eq!(rewritten.value_type, SemanticValueType::String);
+
+        // An ordinary function of the same name and suffix claims the call.
+        let function = "function shout$(a$)\nreturn a$\nend function\n";
+        let claimed = value_of(&format!("{method}{function}x$ = shout$(\"a\")\nend\n"));
+        assert!(matches!(claimed.kind, ExpressionKind::Call { .. }), "{:?}", claimed.kind);
     }
 
     #[test]

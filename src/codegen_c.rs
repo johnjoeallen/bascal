@@ -468,6 +468,16 @@ fn render_call_args(
 /// case-insensitive name plus suffix, matching `codegen_basic::same_ident`
 /// (a bare `PartialEq`/`Hash` derive on `BasicIdent` would be
 /// case-*sensitive*, which is wrong for BASIC identifiers).
+/// The `FunctionMap` key a scalar method is also registered under, so the
+/// semantic string-call renderer can find it. The dot cannot appear in a user
+/// function name, so it never collides with one.
+fn scalar_method_key(receiver: TypeSuffix, member: &str) -> (String, Option<TypeSuffix>) {
+    (
+        format!("{}.{}", type_tag(receiver), member.to_ascii_lowercase()),
+        None,
+    )
+}
+
 fn fn_key(ident: &BasicIdent) -> (String, Option<TypeSuffix>) {
     (ident.name.to_ascii_lowercase(), ident.suffix)
 }
@@ -4594,6 +4604,7 @@ fn build_function_table(
             result_suffix,
         };
         if let Some(receiver) = receiver_type {
+            table.insert(scalar_method_key(receiver, &callable_name.name), sig.clone());
             methods.insert((receiver, callable_name.name.to_ascii_lowercase()), sig);
         } else {
             table.insert(fn_key(&callable_name), sig);
@@ -5859,6 +5870,14 @@ fn render_c_semantic_numeric_expression_context(
             let operand = c_semantic_integer_operand(text, needs_math);
             Some((format!("((int)(~{operand}))"), false))
         }
+        // A string comparison is `strcmp` against zero, exactly as for the AST.
+        ExprKind::Binary {
+            left,
+            operator,
+            right,
+        } if is_c_semantic_string_comparison(left, operator, right) => {
+            render_c_semantic_string_comparison(left, operator, right, needs_math, arrays, functions)
+        }
         ExprKind::Binary {
             left,
             operator,
@@ -6462,6 +6481,27 @@ fn render_c_semantic_string_expression_context(
                 ),
             }
         }
+        ExprKind::Member {
+            base: Some(base),
+            member,
+            arguments: Some(arguments),
+        } if expression.value_type == SemanticValueType::String => {
+            let receiver = base.value_type.suffix().and_then(TypeSuffix::from_char)?;
+            let functions = functions?;
+            let signature = functions.get(&scalar_method_key(receiver, member))?;
+            let mut all_arguments = Vec::with_capacity(arguments.len() + 1);
+            all_arguments.push(base.as_ref().clone());
+            all_arguments.extend(arguments.iter().cloned());
+            render_c_semantic_string_call_with_signature(
+                expression,
+                signature,
+                &all_arguments,
+                needs_math,
+                temp_counter,
+                arrays,
+                functions,
+            )
+        }
         ExprKind::Parenthesized(inner) if expression.value_type == SemanticValueType::String => {
             render_c_semantic_string_expression_context(
                 inner,
@@ -6512,9 +6552,31 @@ fn render_c_semantic_user_string_call(
     arrays: Option<&ArrayTable>,
     functions: &FunctionMap,
 ) -> Option<(Vec<String>, String)> {
-    use crate::semantic_ir::{ExpressionKind, SemanticValueType};
     let ident = crate::ast::BasicIdent::parse(name);
     let signature = functions.get(&fn_key(&ident))?;
+    render_c_semantic_string_call_with_signature(
+        expression,
+        signature,
+        arguments,
+        needs_math,
+        temp_counter,
+        arrays,
+        functions,
+    )
+}
+
+/// A string-returning user callable, whose receiver (for a scalar method) is
+/// already the first of `arguments`.
+fn render_c_semantic_string_call_with_signature(
+    expression: &crate::semantic_ir::Expression,
+    signature: &FnSig,
+    arguments: &[crate::semantic_ir::Expression],
+    needs_math: &mut bool,
+    temp_counter: &mut usize,
+    arrays: Option<&ArrayTable>,
+    functions: &FunctionMap,
+) -> Option<(Vec<String>, String)> {
+    use crate::semantic_ir::{ExpressionKind, SemanticValueType};
     if signature.is_void
         || !signature.is_string
         || signature.try_result
@@ -8721,6 +8783,50 @@ fn render_c_semantic_numeric_scalar_method_call(
     ))
 }
 
+fn is_c_semantic_string_comparison(
+    left: &crate::semantic_ir::Expression,
+    operator: &str,
+    right: &crate::semantic_ir::Expression,
+) -> bool {
+    matches!(operator, "=" | "<>" | "<" | "<=" | ">" | ">=")
+        && left.value_type == crate::semantic_ir::SemanticValueType::String
+        && right.value_type == crate::semantic_ir::SemanticValueType::String
+}
+
+/// `strcmp(left, right) OP 0` as a -1/0 value, for operands that render
+/// without a prelude.
+fn render_c_semantic_string_comparison(
+    left: &crate::semantic_ir::Expression,
+    operator: &str,
+    right: &crate::semantic_ir::Expression,
+    needs_math: &mut bool,
+    arrays: Option<&ArrayTable>,
+    functions: Option<&FunctionMap>,
+) -> Option<(String, bool)> {
+    let mut operand = |expression: &crate::semantic_ir::Expression| {
+        let mut temp_counter = 0;
+        let (prelude, text) = render_c_semantic_string_expression_context(
+            expression,
+            needs_math,
+            &mut temp_counter,
+            arrays,
+            functions,
+        )?;
+        prelude.is_empty().then_some(text)
+    };
+    let left_text = operand(left)?;
+    let right_text = operand(right)?;
+    let c_operator = match operator {
+        "=" => "==",
+        "<>" => "!=",
+        other => other,
+    };
+    Some((
+        format!("(-(strcmp({left_text}, {right_text}) {c_operator} 0))"),
+        false,
+    ))
+}
+
 fn render_c_semantic_numeric_expression_with_methods(
     expression: &crate::semantic_ir::Expression,
     needs_math: &mut bool,
@@ -8771,6 +8877,20 @@ fn render_c_semantic_numeric_expression_with_methods(
             )?;
             let operand = c_semantic_integer_operand(text, needs_math);
             Some((format!("((int)(~{operand}))"), false))
+        }
+        ExpressionKind::Binary {
+            left,
+            operator,
+            right,
+        } if is_c_semantic_string_comparison(left, operator, right) => {
+            render_c_semantic_string_comparison(
+                left,
+                operator,
+                right,
+                needs_math,
+                Some(arrays),
+                Some(functions),
+            )
         }
         ExpressionKind::Binary {
             left,
@@ -29313,6 +29433,37 @@ mod dialect_tests {
             c_semantic_statements_by_source(&semantic, &program.statements).is_some(),
             "trailing comment declined semantic alignment"
         );
+    }
+
+    fn generate_c_with_diverging_semantic_source(ast_source: &str, semantic_source: &str) -> String {
+        let parsed = parse_source("c_diverging.bcl".to_string(), ast_source).unwrap();
+        let lower::Lowered { program, .. } = lower::lower(parsed).unwrap();
+        let semantic =
+            crate::semantic_ir::parse_and_adapt_named("c_diverging.bcl", semantic_source).unwrap();
+        let resolved = resolver::resolve_with_semantic(program, Some(semantic)).unwrap();
+        generate(&resolved, Target::C).expect("C generation").app
+    }
+
+    #[test]
+    fn c_semantic_string_comparison_uses_strcmp() {
+        let output = generate_c_with_diverging_semantic_source(
+            "program p\nprint 1\nprint 2\nend\n",
+            "program p\ns$ = \"a\"\nx% = (s$ <> \"b\")\nend\n",
+        );
+        assert!(output.contains("strcmp("), "{output}");
+        assert!(output.contains("#include <string.h>"), "{output}");
+        assert!(!output.contains("printf(\"%d"), "AST print leaked: {output}");
+    }
+
+    #[test]
+    fn c_semantic_print_of_a_scalar_method_call_uses_the_method() {
+        let method = "method shout[string]()\nreturn self$ + \"!\"\nend method\n";
+        let output = generate_c_with_diverging_semantic_source(
+            &format!("program p\n{method}print \"ast marker\"\nend\n"),
+            &format!("program p\n{method}print \"a\".shout()\nend\n"),
+        );
+        assert!(!output.contains("ast marker"), "AST print leaked: {output}");
+        assert!(output.contains("bf_s_shout_s(\"a\""), "{output}");
     }
 
     #[test]
