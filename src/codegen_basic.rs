@@ -3643,6 +3643,31 @@ mod tests {
     }
 
     #[test]
+    fn basic_unresolved_semantic_function_result_returns_diagnostic() {
+        let source = "function read%()\nreturn 1\nend function\nend\n";
+        let parsed = crate::parse_source("unknown_function_result.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_function_result.bcl",
+            source,
+        )
+        .unwrap();
+        semantic.callables[0].result_type = None;
+        resolved.semantic_module = Some(semantic);
+
+        let diagnostics = super::CodeGenerator::new()
+            .generate(&resolved)
+            .unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("no resolved BASIC result type")),
+            "unresolved typed-IR result should produce a codegen diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn semantic_parameter_rank_seeds_capacity_when_ast_parameter_is_scalar() {
         let ast_source = "dim actual%(5)\nfunction consume%(values%)\nreturn 0\nend function\nconsume%(actual%)\nend\n";
         let semantic_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
@@ -11923,6 +11948,15 @@ impl FunctionInfo {
                     .then_some(source_name.suffix)
                     .flatten()
             });
+        let is_procedure = semantic_signature
+            .map(|callable| callable.kind == crate::semantic_ir::CallableKind::Procedure)
+            .unwrap_or(function.is_procedure);
+        if semantic_signature.is_some() && !is_procedure && result_suffix.is_none() {
+            diagnostics.push(Diagnostic::error(
+                SourcePos::new("<validation>", 1, 1),
+                format!("function `{source_name}` has no resolved BASIC result type"),
+            ));
+        }
         let result = allocate_unique(&camel_join(&[&stem, "result"]), result_suffix, taken);
         taken.insert(result.as_basic().to_ascii_lowercase());
         let globals = match (semantic_signature, semantic_globals) {
@@ -11945,9 +11979,7 @@ impl FunctionInfo {
             semantic_parameters,
             semantic_dim_declarations: HashMap::new(),
             local_array_bounds: RefCell::new(HashMap::new()),
-            is_procedure: semantic_signature
-                .map(|callable| callable.kind == crate::semantic_ir::CallableKind::Procedure)
-                .unwrap_or(function.is_procedure),
+            is_procedure,
             receiver,
             globals,
             local_var_map: RefCell::new(HashMap::new()),

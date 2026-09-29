@@ -17455,3 +17455,9 @@ Iteration 5790 validated the unresolved-parameter diagnostics across C, BASIC, a
 Iteration 5791 verified that an annotated callable parameter type takes precedence over a same-named module DIM type during FOR variable resolution.
 
 Iteration 5792 validated the annotated-parameter FOR resolver regression with the complete locked workspace suite.
+
+Iteration 5793 made BASIC codegen reject semantic functions without a resolved typed-IR result suffix.
+
+Iteration 5794 added BASIC regression coverage that an unresolved semantic function result produces a codegen diagnostic.
+
+Iteration 5795 refreshed Graphify and validated the complete locked workspace suite after BASIC callable result validation changes.
