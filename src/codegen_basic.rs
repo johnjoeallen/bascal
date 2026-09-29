@@ -3617,6 +3617,32 @@ mod tests {
     }
 
     #[test]
+    fn basic_unresolved_semantic_parameter_type_returns_diagnostic() {
+        let source = "function read%(value%)\nreturn value%\nend function\nend\n";
+        let parsed = crate::parse_source("unknown_parameter_type.bcl".to_string(), source).unwrap();
+        let crate::lower::Lowered { program, .. } = crate::lower::lower(parsed).unwrap();
+        let mut resolved = crate::resolver::resolve(program).unwrap();
+        let mut semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_parameter_type.bcl",
+            source,
+        )
+        .unwrap();
+        semantic.callables[0].parameters[0].value_type =
+            crate::semantic_ir::SemanticValueType::Unknown;
+        resolved.semantic_module = Some(semantic);
+
+        let diagnostics = super::CodeGenerator::new()
+            .generate(&resolved)
+            .unwrap_err();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("no resolved BASIC scalar type")),
+            "unresolved typed-IR parameter should produce a codegen diagnostic: {diagnostics:?}"
+        );
+    }
+
+    #[test]
     fn semantic_parameter_rank_seeds_capacity_when_ast_parameter_is_scalar() {
         let ast_source = "dim actual%(5)\nfunction consume%(values%)\nreturn 0\nend function\nconsume%(actual%)\nend\n";
         let semantic_source = "dim actual%(5)\nfunction consume%(values%(?))\nreturn 0\nend function\nconsume%(actual%)\nend\n";
@@ -11776,13 +11802,20 @@ impl FunctionInfo {
                     .iter()
                     .map(|parameter| {
                         let mut name = BasicIdent::parse(&parameter.name);
-                        if let Some(suffix) = parameter
+                        let suffix = parameter
                             .value_type
                             .suffix()
-                            .and_then(TypeSuffix::from_char)
-                        {
-                            name.suffix = Some(suffix);
+                            .and_then(TypeSuffix::from_char);
+                        if suffix.is_none() {
+                            diagnostics.push(Diagnostic::error(
+                                SourcePos::new("<validation>", 1, 1),
+                                format!(
+                                    "parameter `{}` of `{}` has no resolved BASIC scalar type",
+                                    parameter.name, source_name
+                                ),
+                            ));
                         }
+                        name.suffix = suffix;
                         let mode = match parameter.passing {
                             Some(crate::semantic_ir::Passing::ByRef) => ParamMode::ByRef,
                             Some(crate::semantic_ir::Passing::ByVal) | None => ParamMode::ByVal,

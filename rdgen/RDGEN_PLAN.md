@@ -17441,3 +17441,9 @@ Iteration 5783 changed JVM callable signature construction to return errors for 
 Iteration 5784 added JVM regression coverage that an unresolved typed callable parameter produces a backend diagnostic.
 
 Iteration 5785 refreshed Graphify and validated the complete locked workspace suite after JVM callable signature error handling changes.
+
+Iteration 5786 rejected unresolved typed callable parameter types in BASIC codegen instead of retaining the compatibility AST suffix.
+
+Iteration 5787 added BASIC regression coverage that an unresolved typed callable parameter produces a codegen diagnostic.
+
+Iteration 5788 refreshed Graphify and validated the complete locked workspace suite after callable parameter error handling changes.
