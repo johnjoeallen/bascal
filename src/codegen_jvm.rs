@@ -6461,9 +6461,7 @@ fn semantic_callable_for_function<'a>(
         .callables
         .iter()
         .filter(|callable| {
-            callable
-                .name
-                .eq_ignore_ascii_case(&function.name.as_basic())
+            crate::semantic_ir::callable_name_matches_function(&callable.name, function)
                 && callable.receiver.is_some() == function.receiver.is_some()
                 && match (function.receiver.is_some(), callable.kind) {
                     (
@@ -6499,7 +6497,10 @@ fn callable_key_for_function(
     else {
         return function_key(&function.name);
     };
-    function_key(&BasicIdent::parse(&callable.name))
+    function_key(&crate::semantic_ir::callable_ident_for_function(
+        &callable.name,
+        function,
+    ))
 }
 
 fn function_table(
@@ -6556,7 +6557,9 @@ fn function_table(
                 ident
             };
             let result_ident = semantic_callable
-                .map(|callable| BasicIdent::parse(&callable.name))
+                .map(|callable| {
+                    crate::semantic_ir::callable_ident_for_function(&callable.name, function)
+                })
                 .unwrap_or_else(|| function.name.clone());
             let returns_void = semantic_callable
                 .map(|callable| callable.kind == crate::semantic_ir::CallableKind::Procedure)

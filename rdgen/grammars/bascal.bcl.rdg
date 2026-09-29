@@ -319,7 +319,10 @@ end_stmt         = "end" => End() ;
 
 if_stmt          = "if" , condition: expr , "then" , tail: if_tail
                    => If(condition: condition, tail: tail) ;
-if_tail          = newline , tail: block_if_tail => Block(tail: tail)
+(* A comment after `then` still ends the physical line, so it selects the
+ * block form; it is trivia here and has no semantic node of its own. *)
+if_tail          = comment: [ same_line line_comment ] , newline , tail: block_if_tail
+                   => Block(comment: comment, tail: tail)
                  | tail: ( same_line single_line_if_tail ) => SingleLine(tail: tail) ;
 block_if_tail    = then_body: { statement } until { "elseif", "else", "end if" } ,
                     continuation: if_block_continuation

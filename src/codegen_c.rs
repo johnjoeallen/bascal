@@ -2133,9 +2133,7 @@ fn semantic_callable_signature<'a>(
         .callables
         .iter()
         .filter(|callable| {
-            callable
-                .name
-                .eq_ignore_ascii_case(&function.name.as_basic())
+            crate::semantic_ir::callable_name_matches_function(&callable.name, function)
                 && callable.receiver.is_some() == function.receiver.is_some()
                 && match (function.receiver.is_some(), callable.kind) {
                     (
@@ -4402,7 +4400,7 @@ fn build_function_table(
             .map(semantic_receiver_suffix)
             .unwrap_or(func.receiver);
         let callable_name = semantic_callable
-            .map(|callable| BasicIdent::parse(&callable.name))
+            .map(|callable| crate::semantic_ir::callable_ident_for_function(&callable.name, func))
             .unwrap_or_else(|| func.name.clone());
         // A `procedure` never carries a type suffix (enforced by the
         // parser) and has no return type at all -- a real `void` C

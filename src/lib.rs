@@ -825,8 +825,12 @@ print s$.left(1).shout()
 end
 "#;
         let output = compile_source("builtin_chain.bcl", source).expect("should compile");
-        assert!(output.contains("PRINT LEFT$(shoutResult0$, 2)"), "{output}");
-        assert!(output.contains("shoutSelf0$ = LEFT$(s$, 1)"), "{output}");
+        // User method first: `.left()` consumes the method's result.
+        assert!(output.contains("BCCT1$ = shoutResult0$"), "{output}");
+        assert!(output.contains("PRINT LEFT$(BCCT2$, BCCT3%)"), "{output}");
+        // Built-in first: the user method receives `.left()`'s result.
+        assert!(output.contains("BCCT6$ = LEFT$(BCCT4$, BCCT5%)"), "{output}");
+        assert!(output.contains("shoutSelf0$ = BCCT6$"), "{output}");
     }
 
     #[test]

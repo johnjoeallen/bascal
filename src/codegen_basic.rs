@@ -6603,7 +6603,7 @@ fn basic_semantic_callable_statements_by_source<'a>(
 ) -> Option<Vec<Option<&'a crate::semantic_ir::SemanticStatement>>> {
     use crate::semantic_ir::{CallableKind, SemanticStatementKind as Kind};
     let callable = module.callables.iter().find(|callable| {
-        semantic_callable_name_matches(&callable.name, function)
+        crate::semantic_ir::callable_name_matches_function(&callable.name, function)
             && callable.receiver.is_some() == function.receiver.is_some()
             && callable
                 .receiver
@@ -11918,8 +11918,9 @@ impl FunctionInfo {
         // A scalar method's semantic name is bare; keep the result suffix the
         // callable table and call sites are keyed by.
         let source_name = semantic_signature
-            .filter(|callable| !semantic_callable_name_matches_bare_method(&callable.name, function))
-            .map(|callable| BasicIdent::parse(&callable.name))
+            .map(|callable| {
+                crate::semantic_ir::callable_ident_for_function(&callable.name, function)
+            })
             .unwrap_or_else(|| function.name.clone());
         let receiver = semantic_signature
             .map(|callable| {
@@ -13398,8 +13399,6 @@ fn resolve_semantic_call_arg_bound(
         .unwrap_or(ArgBound::NotAnArray)
 }
 
-/// A scalar method's semantic name is its bare spelling (`ucase`); the AST
-/// function carries the synthesized result suffix (`ucase$`).
 /// The scalar type a value of this semantic type has as a method receiver.
 fn semantic_receiver_suffix(value_type: crate::semantic_ir::SemanticValueType) -> Option<TypeSuffix> {
     use crate::semantic_ir::SemanticValueType as Value;
@@ -13413,15 +13412,6 @@ fn semantic_receiver_suffix(value_type: crate::semantic_ir::SemanticValueType) -
     }
 }
 
-fn semantic_callable_name_matches(name: &str, function: &FunctionDef) -> bool {
-    name.eq_ignore_ascii_case(&function.name.as_basic())
-        || (function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name))
-}
-
-fn semantic_callable_name_matches_bare_method(name: &str, function: &FunctionDef) -> bool {
-    function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name)
-}
-
 fn semantic_basic_callable_for_function<'a>(
     module: &'a crate::semantic_ir::SemanticModule,
     function: &FunctionDef,
@@ -13430,7 +13420,7 @@ fn semantic_basic_callable_for_function<'a>(
         .callables
         .iter()
         .filter(|callable| {
-            semantic_callable_name_matches(&callable.name, function)
+            crate::semantic_ir::callable_name_matches_function(&callable.name, function)
                 && callable.receiver.is_some() == function.receiver.is_some()
                 && matches!(
                     (function.receiver.is_some(), callable.kind),

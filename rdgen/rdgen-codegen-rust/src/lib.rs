@@ -623,7 +623,7 @@ pub fn emit_parser(grammar: &Grammar) -> Result<String, String> {
             + "    fn remember_error(&mut self, error: &ParseError) { if self.best_error.as_ref().map_or(true, |best| error.position >= best.position) { self.best_error = Some(error.clone()); } }\n"
             + "    fn skip_trivia(&mut self) { if self.lexical_mode { return; } let next = (self.skip_trivia)(self.source, self.position); let next = self.same_line_limit.map_or(next, |limit| next.min(limit)); if next >= self.position && next <= self.source.len() && self.source.is_char_boundary(next) { self.position = next; } }\n"
             + "    fn expect_line_end(&mut self) -> Result<(), ParseError> { while self.position < self.source.len() && matches!(self.source.as_bytes()[self.position], b' ' | b'\\t' | b'\\r') && self.same_line_limit.map_or(true, |limit| self.position < limit) { self.position += 1; } if self.same_line_limit.is_some_and(|limit| limit < self.source.len() && self.position >= limit) { let error = ParseError { message: \"expected same-line statement terminator\".into(), position: self.position }; self.remember_error(&error); return Err(error); } if self.position == self.source.len() { return Ok(()); } if self.source[self.position..].starts_with(':') { self.position += 1; return Ok(()); } if self.source[self.position..].starts_with('\\n') { self.position += 1; while self.position < self.source.len() && self.source[self.position..].starts_with('\\n') { self.position += 1; } return Ok(()); } let error = ParseError { message: \"expected statement terminator\".into(), position: self.position }; self.remember_error(&error); Err(error) }\n"
-            + "    fn expect_newline(&mut self) -> Result<(), ParseError> { if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { let error = ParseError { message: \"expected newline\".into(), position: self.position }; self.remember_error(&error); return Err(error); } while self.position < self.source.len() { if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { break; } } Ok(()) }\n"
+            + "    fn expect_newline(&mut self) -> Result<(), ParseError> { while self.source[self.position..].starts_with([' ', '\\t']) { self.position += 1; } if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { let error = ParseError { message: \"expected newline\".into(), position: self.position }; self.remember_error(&error); return Err(error); } while self.position < self.source.len() { if self.source[self.position..].starts_with(\"\\r\\n\") { self.position += 2; } else if self.source[self.position..].starts_with('\\n') { self.position += 1; } else { break; } } Ok(()) }\n"
             + "    fn has_terminator_boundary(&self, literal: &str, end: usize) -> bool { !literal.bytes().all(|byte| byte.is_ascii_alphabetic()) || self.source.get(end..).and_then(|rest| rest.chars().next()).map_or(true, |character| !(character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '$' | '%' | '!' | '#' | '&'))) }\n"
             + "    fn has_literal_boundary(&self, literal: &str, end: usize) -> bool { literal.len() <= 1 || !literal.bytes().all(|byte| byte.is_ascii_alphabetic()) || self.has_terminator_boundary(literal, end) }\n"
             + "    fn matches_terminator(&mut self, literal: &str) -> bool { let start = self.position; let mut first = true; for part in literal.split_whitespace() { if !first { self.skip_trivia(); } let Some(end) = (self.match_literal)(self.source, self.position, part) else { self.position = start; return false; }; if !self.has_terminator_boundary(part, end) { self.position = start; return false; } self.position = end; first = false; } self.position = start; true }\n"
@@ -1914,7 +1914,7 @@ mod tests {
     #[test]
     fn generated_constant_integer_field_round_trips_through_the_parser() {
         let grammar = compile(
-            "grammar Bounds; start = \"downto\" , limit: \"x\" => Downto(limit: limit, step: -1);",
+            "grammar Bounds; start = \"downto\" => Downto(step: -1);",
         )
         .unwrap();
         let directory = tempfile::tempdir().unwrap();
@@ -1925,7 +1925,7 @@ mod tests {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"downtox\"); let Start::Downto {{ step, .. }} = parser.parse().unwrap(); assert_eq!(step, -1); }}\n",
+                "include!({:?});\nfn main() {{ let mut parser = Parser::new(\"downto\"); let Start::Downto {{ step, .. }} = parser.parse().unwrap(); assert_eq!(step, -1); }}\n",
                 generated.to_str().unwrap()
             ),
         )
@@ -2846,7 +2846,7 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
         files.sort();
         assert_eq!(
             files.len(),
-            83,
+            87,
             "update the corpus expectation deliberately"
         );
         let output = std::process::Command::new(&binary)
@@ -2908,7 +2908,7 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
         assert!(generated.contains("pub enum IfStmt {\n    If {\n        condition: Box<Expr>,\n        tail: Box<IfTail>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum ForStmt {\n    For {\n        variable: Box<TypedIdent>,\n        start: Box<Expr>,\n        bounds: Box<ForBounds>,\n        body: Vec<Box<Statement>>,\n        qualifier: Option<Token>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum DoCondition {\n    Condition {\n        kind: Box<DoConditionKind>,\n        value: Box<Expr>,\n        span: SourceSpan,\n    },\n}"));
-        assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        else_body: Option<(Token, Token, Vec<Box<Statement>>)>,\n        span: SourceSpan,\n    },\n}"));
+        assert!(generated.contains("pub enum SelectCaseStmt {\n    SelectCase {\n        selector: Box<Expr>,\n        cases: Vec<Box<CaseClause>>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum TryStmt {\n    Try {\n        body: Vec<Box<Statement>>,\n        catch_clause: Option<Box<CatchClause>>,\n        finally_clause: Option<(Token, Vec<Box<Statement>>)>,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum Identifier {\n    Token {\n        text: Token,\n        span: SourceSpan,\n    },\n}"));
         assert!(generated.contains("pub enum PrintStmt {\n    Print {\n        destination: Box<PrintDestination>,\n        tokens: Vec<Box<PrintToken>>,\n        span: SourceSpan,\n    },\n}"));
@@ -2992,7 +2992,7 @@ fn nth_core(program: &Program, index: usize) -> StatementCore {
         std::fs::write(
             &wrapper,
             format!(
-                "include!({:?});\nfn main() {{ for source in [\"then\\nbody\", \"then\\r\\nbody\"] {{ let mut parser = Parser::new(source); assert!(parser.parse().is_ok()); }} let mut colon = Parser::new(\"then:body\"); assert!(colon.parse().is_err()); }}\n",
+                "include!({:?});\nfn main() {{ for source in [\"then\\nbody\", \"then\\r\\nbody\", \"then  \\t\\nbody\"] {{ let mut parser = Parser::new(source); assert!(parser.parse().is_ok()); }} let mut colon = Parser::new(\"then:body\"); assert!(colon.parse().is_err()); }}\n",
                 generated.to_str().unwrap()
             ),
         )

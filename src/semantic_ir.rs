@@ -1800,6 +1800,40 @@ impl SemanticModule {
                 };
             }
         }
+        // `base.left(3)` on a scalar receiver is the ordinary builtin call
+        // `LEFT$(base, 3)`, as `records::Lowerer` decides for the AST; doing
+        // it here gives every backend the resolved call.
+        let builtin_call = match &mut expression.kind {
+            ExpressionKind::Member {
+                base: Some(base),
+                member,
+                arguments: Some(arguments),
+            } => {
+                self.annotate_expression_types(base);
+                for argument in arguments.iter_mut() {
+                    self.annotate_expression_types(argument);
+                }
+                scalar_builtin_receiver(base.value_type)
+                    .and_then(|receiver| crate::scalar_builtins::find(receiver, member))
+                    .filter(|builtin| {
+                        (builtin.min_args..=builtin.max_args).contains(&arguments.len())
+                    })
+                    .map(|builtin| {
+                        let name = format!(
+                            "{}{}",
+                            builtin.method,
+                            builtin.call_suffix.map(|s| s.to_string()).unwrap_or_default()
+                        );
+                        let mut call_arguments = vec![(**base).clone()];
+                        call_arguments.extend(arguments.iter().cloned());
+                        (name, call_arguments)
+                    })
+            }
+            _ => None,
+        };
+        if let Some((name, arguments)) = builtin_call {
+            expression.kind = ExpressionKind::Call { name, arguments };
+        }
         match &mut expression.kind {
             ExpressionKind::Call { name, arguments } => {
                 for argument in arguments.iter_mut() {
@@ -3672,6 +3706,30 @@ pub struct SemanticStatement {
     pub span: SourceSpan,
 }
 
+/// Whether a typed-IR callable name denotes an AST function. A scalar method
+/// is named by its bare spelling (`ucase`) in the typed IR, while the AST
+/// function carries the synthesized result suffix (`ucase$`).
+pub(crate) fn callable_name_matches_function(
+    name: &str,
+    function: &crate::ast::FunctionDef,
+) -> bool {
+    name.eq_ignore_ascii_case(&function.name.as_basic())
+        || (function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name))
+}
+
+/// The identifier an AST function is keyed by. A scalar method keeps the
+/// result suffix the AST function carries, since the typed IR names it bare.
+pub(crate) fn callable_ident_for_function(
+    name: &str,
+    function: &crate::ast::FunctionDef,
+) -> crate::ast::BasicIdent {
+    if function.receiver.is_some() && name.eq_ignore_ascii_case(&function.name.name) {
+        function.name.clone()
+    } else {
+        crate::ast::BasicIdent::parse(name)
+    }
+}
+
 impl SemanticStatement {
     /// A `'` or `//` comment. When one trails a statement on its line, the
     /// legacy parser discards it, so it has no AST counterpart to align to.
@@ -5531,6 +5589,34 @@ fn adapt_method(method: &rdgen_frontend::MethodDecl, kind: CallableKind) -> Call
         .map(|(_, value)| adapt_return_type(value))
         .or_else(|| suffix_from_name(&name))
         .or_else(|| scalar_receiver_suffix(&receiver));
+    let mut body: Vec<SemanticStatement> = body.iter().map(|value| adapt_statement(value)).collect();
+    // A scalar method with neither an explicit result nor a suffixed name
+    // returns its receiver when it falls off the end, as the legacy parser
+    // makes explicit with a trailing `return self`.
+    let implicit_self_result = result.is_none() && suffix_from_name(&name).is_none();
+    if let (true, Some(suffix)) = (implicit_self_result, scalar_receiver_suffix(&receiver)) {
+        let ends_with_return = body.last().is_some_and(|last| match &last.kind {
+            SemanticStatementKind::Line(children) => children
+                .last()
+                .is_some_and(|child| matches!(child.kind, SemanticStatementKind::Return(_))),
+            kind => matches!(kind, SemanticStatementKind::Return(_)),
+        });
+        if !ends_with_return {
+            let position = SourceSpan {
+                start: span.start,
+                end: span.start,
+            };
+            body.push(SemanticStatement {
+                kind: SemanticStatementKind::Return(ReturnValue::Value(Expression {
+                    kind: ExpressionKind::Name(format!("self{suffix}")),
+                    span: position,
+                    value_type: SemanticValueType::from_suffix(suffix.chars().next()),
+                    record_type: None,
+                })),
+                span: position,
+            });
+        }
+    }
     CallableSignature {
         kind,
         name,
@@ -5539,7 +5625,7 @@ fn adapt_method(method: &rdgen_frontend::MethodDecl, kind: CallableKind) -> Call
         receiver: Some(receiver),
         receiver_span: Some(receiver_span),
         parameters: adapt_parameters(parameters),
-        body: body.iter().map(|value| adapt_statement(value)).collect(),
+        body,
         span: *span,
         source_index: usize::MAX,
     }
@@ -5647,6 +5733,18 @@ fn suffix_from_name(name: &str) -> Option<String> {
         .filter(|value| matches!(value, '%' | '&' | '!' | '#' | '$' | '@'))
         .map(|value| value.to_string())
 }
+fn scalar_builtin_receiver(value_type: SemanticValueType) -> Option<crate::ast::TypeSuffix> {
+    use crate::ast::TypeSuffix;
+    match value_type {
+        SemanticValueType::String => Some(TypeSuffix::String),
+        SemanticValueType::Integer => Some(TypeSuffix::Integer),
+        SemanticValueType::Long => Some(TypeSuffix::Long),
+        SemanticValueType::Single => Some(TypeSuffix::Single),
+        SemanticValueType::Double => Some(TypeSuffix::Double),
+        SemanticValueType::Unknown | SemanticValueType::Boolean => None,
+    }
+}
+
 fn scalar_receiver_suffix(receiver: &str) -> Option<String> {
     match receiver.to_ascii_lowercase().as_str() {
         "integer" => Some("%".to_string()),
@@ -6284,6 +6382,64 @@ mod tests {
         };
         module.annotate_expression_types(&mut call);
         assert_eq!(call.value_type, SemanticValueType::Single);
+    }
+
+    #[test]
+    fn builtin_scalar_method_on_a_typed_receiver_becomes_an_ordinary_call() {
+        let module = parse_and_adapt("s$ = \"hello\"\nprint s$.left(2)\nprint s$.len()\nn% = -3\nprint n%.abs()\n")
+            .unwrap();
+        let mut left = Expression {
+            kind: ExpressionKind::Member {
+                base: Some(Box::new(Expression {
+                    kind: ExpressionKind::Name("s$".into()),
+                    span: module.span,
+                    value_type: SemanticValueType::Unknown,
+                    record_type: None,
+                })),
+                member: "left".into(),
+                arguments: Some(vec![Expression {
+                    kind: ExpressionKind::Literal("2".into()),
+                    span: module.span,
+                    value_type: SemanticValueType::Integer,
+                    record_type: None,
+                }]),
+            },
+            span: module.span,
+            value_type: SemanticValueType::Unknown,
+            record_type: None,
+        };
+        module.annotate_expression_types(&mut left);
+        let ExpressionKind::Call { name, arguments } = &left.kind else {
+            panic!("builtin scalar method was not rewritten: {:?}", left.kind);
+        };
+        assert_eq!(name, "left$");
+        assert_eq!(arguments.len(), 2);
+        assert_eq!(left.value_type, SemanticValueType::String);
+    }
+
+    #[test]
+    fn comment_after_then_still_selects_the_block_if_form() {
+        for comment in ["// note", "' note", ""] {
+            let source = format!(
+                "x% = 1\nif x% = 1 then {comment}\n    x% = 2\nelse\n    x% = 3\nend if\nend\n"
+            );
+            let module = parse_and_adapt(&source).unwrap();
+            let kinds = module
+                .statements
+                .iter()
+                .flat_map(|root| match &root.kind {
+                    SemanticStatementKind::Line(children) => children.iter().collect::<Vec<_>>(),
+                    _ => vec![root],
+                })
+                .map(|statement| match &statement.kind {
+                    SemanticStatementKind::Assignment { .. } => "assign",
+                    SemanticStatementKind::If { block: true, .. } => "block-if",
+                    SemanticStatementKind::End => "end",
+                    _ => "other",
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(kinds, ["assign", "block-if", "end"], "comment {comment:?}");
+        }
     }
 
     #[test]

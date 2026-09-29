@@ -17527,3 +17527,13 @@ Iteration 5826 added a top-level `Kind::Const` arm to the C semantic dispatcher;
 Iteration 5827 made the C semantic block-comment emitter normalize the `*` gutter and edge blank lines the way the legacy parser does, keeping emitted comments identical to the AST path.
 
 Iteration 5828 added regression tests for C/JVM trailing-comment alignment, C top-level const, and C block-comment normalization.
+
+Iteration 5829 made C and JVM callable lookup tolerate the bare typed-IR name of a scalar method (shared `callable_name_matches_function` and `callable_ident_for_function` helpers), moving every stdlib method body onto typed-IR emission in all three backends.
+
+Iteration 5830 gave scalar methods with no explicit result the implicit `return self` the legacy parser appends, in the typed IR, so C's every-path-returns check accepts them.
+
+Iteration 5831 rewrote built-in scalar methods (`s$.left(2)`) to their ordinary builtin calls in typed-IR expression annotation, as `records::Lowerer` does for the AST, so all backends receive the resolved call.
+
+Iteration 5832 fixed the generated frontend so `if ... then // comment` still selects the block-if form: the grammar accepts a same-line comment before the newline, and the generated `expect_newline` skips trailing blanks. This had been declining whole streams to the AST for any block `if` with a trailing comment or stray blank.
+
+Iteration 5833 refreshed three stale rdgen-codegen-rust tests (corpus size 83 to 87, SelectCase shape, downto round trip) that already failed on the branch before this work, and added trailing-blank coverage for `newline`.
