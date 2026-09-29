@@ -397,11 +397,47 @@ fn validate_with_semantic(
     reject_option_base(program, &mut diagnostics);
     reject_cross_scope_branch_targets(program, &mut diagnostics);
     reject_duplicate_consts(program, &mut diagnostics);
+    if let Some(module) = semantic_module {
+        reject_unknown_callable_parameter_annotations(module, &mut diagnostics);
+    }
 
     if diagnostics.is_empty() {
         Ok(())
     } else {
         Err(diagnostics)
+    }
+}
+
+fn reject_unknown_callable_parameter_annotations(
+    module: &crate::semantic_ir::SemanticModule,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    for callable in &module.callables {
+        for parameter in &callable.parameters {
+            let Some(annotation) = parameter.type_annotation.as_deref() else {
+                continue;
+            };
+            if parameter.value_type != crate::semantic_ir::SemanticValueType::Unknown
+                || module
+                    .records
+                    .iter()
+                    .any(|record| record.name.eq_ignore_ascii_case(annotation))
+            {
+                continue;
+            }
+            let pos = module
+                .sources
+                .get(callable.source_index)
+                .map(|source| source.source_position(parameter.span))
+                .unwrap_or_else(|| SourcePos::new("<semantic>", 1, 1));
+            diagnostics.push(Diagnostic::error(
+                pos,
+                format!(
+                    "unknown type annotation `{annotation}` for parameter `{}` of `{}`",
+                    parameter.name, callable.name
+                ),
+            ));
+        }
     }
 }
 
@@ -2927,6 +2963,29 @@ mod legacy_form_tests {
         assert_eq!(
             find_for(&module.callables[1].body, "globalIndex"),
             Some(crate::semantic_ir::SemanticValueType::Double)
+        );
+    }
+
+    #[test]
+    fn resolver_rejects_unknown_callable_parameter_annotations() {
+        let source = "function read%(value)\nreturn 1\nend function\nend\n";
+        let program = parse(source);
+        let semantic = crate::semantic_ir::parse_and_adapt_named(
+            "unknown_parameter_annotation.bcl",
+            "function read%(value as customtype)\nreturn 1\nend function\nend\n",
+        )
+        .expect("typed source should parse");
+
+        let diagnostics = match resolve_with_semantic(program, Some(semantic)) {
+            Ok(_) => panic!("unknown callable parameter annotation unexpectedly resolved"),
+            Err(diagnostics) => diagnostics,
+        };
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.message.contains("unknown type annotation `customtype`")
+                    && diagnostic.pos.filename == "unknown_parameter_annotation.bcl"
+            }),
+            "unknown parameter annotation should retain its source diagnostic: {diagnostics:?}"
         );
     }
 

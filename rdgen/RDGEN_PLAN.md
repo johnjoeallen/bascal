@@ -17467,3 +17467,9 @@ Iteration 5796 added C regression coverage that unresolved semantic function res
 Iteration 5797 added JVM regression coverage for unresolved semantic function result diagnostics.
 
 Iteration 5798 validated unresolved callable result diagnostics across all three codegen backends with the complete locked workspace suite.
+
+Iteration 5799 rejected unsupported callable parameter type annotations during resolver validation while retaining annotations for declared record types.
+
+Iteration 5800 added resolver coverage for an unknown parameter annotation diagnostic with semantic source location.
+
+Iteration 5801 refreshed Graphify and validated the complete locked workspace suite after parameter annotation validation changes.
