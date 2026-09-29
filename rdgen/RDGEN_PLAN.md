@@ -17329,3 +17329,9 @@ Iteration 5727 removed C callable-global storage classification fallback to Sing
 Iteration 5728 refreshed Graphify after updating C callable-global type dependencies.
 
 Iteration 5729 validated the complete locked workspace suite after C callable-global classification changes.
+
+Iteration 5730 removed JVM global declaration fallback to AST identifier suffix and Single when typed global type is absent.
+
+Iteration 5731 refreshed Graphify after changing JVM global storage dependencies.
+
+Iteration 5732 validated the complete locked workspace suite after JVM global declaration changes.

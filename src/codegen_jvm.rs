@@ -8670,12 +8670,14 @@ impl JvmContext {
                 {
                     continue;
                 }
-                let ty = semantic_name_scopes
+                let Some(ty) = semantic_name_scopes
                     .global_types
                     .get(&name.to_ascii_lowercase())
                     .copied()
                     .and_then(jvm_type_for_semantic_value)
-                    .unwrap_or_else(|| type_for_ident(&ident));
+                else {
+                    continue;
+                };
                 declarations.insert(variable_key(&ident), ty);
             }
             collect_semantic_scalar_declarations(module, &mut declarations);
