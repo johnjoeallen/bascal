@@ -15815,7 +15815,7 @@ mod tests {
 
     #[test]
     fn jvm_semantic_unannotated_dim_uses_resolver_default_type() {
-        let source = "dim value\nvalue = 1\nend\n";
+        let source = "dim value\ndim values(4)\nvalue = 1\nend\n";
         let parsed = crate::parse_source("semantic_default_dim_type.bcl".to_string(), source)
             .expect("legacy fixture parses");
         let crate::lower::Lowered { program, .. } =
@@ -15836,6 +15836,13 @@ mod tests {
         assert_eq!(
             declarations.get("value"),
             Some(&super::JvmType::Numeric(super::NumericType::Double))
+        );
+
+        let mut arrays = std::collections::BTreeMap::new();
+        super::collect_semantic_array_declarations(module, &mut arrays);
+        assert_eq!(
+            arrays.get("values").map(|array| array.element),
+            Some(super::JvmType::Numeric(super::NumericType::Double))
         );
     }
 

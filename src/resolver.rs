@@ -2916,7 +2916,7 @@ mod legacy_form_tests {
 
     #[test]
     fn resolver_materializes_the_default_type_of_unannotated_dim() {
-        let source = "dim value\nfor loopIndex = 1 to 2\nend for\nprocedure work()\ndim localValue\nend procedure\nend\n";
+        let source = "dim value\ndim values(4)\nfor loopIndex = 1 to 2\nend for\nprocedure work()\ndim localValue\nend procedure\nend\n";
         let program = parse(source);
         let semantic =
             crate::semantic_ir::parse_and_adapt(source).expect("typed source should parse");
@@ -2928,8 +2928,12 @@ mod legacy_form_tests {
             module.top_level_dim_declarations()["value"].element_type,
             crate::semantic_ir::SemanticValueType::Single
         );
+        assert_eq!(
+            module.top_level_dim_declarations()["values"].element_type,
+            crate::semantic_ir::SemanticValueType::Single
+        );
         let crate::semantic_ir::SemanticStatementKind::Line(statements) =
-            &module.statements[1].kind
+            &module.statements[2].kind
         else {
             panic!("expected top-level statement line")
         };

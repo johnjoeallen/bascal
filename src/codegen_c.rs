@@ -24922,7 +24922,7 @@ mod dialect_tests {
 
     #[test]
     fn c_semantic_unannotated_dim_consumes_resolver_default_type() {
-        let source = "dim value\nvalue = 1\nfor loopIndex = 1 to 2\nvalue = loopIndex\nend for\nend\n";
+        let source = "dim value\ndim values(4)\nvalue = 1\nvalues(1) = value\nfor loopIndex = 1 to 2\nvalue = loopIndex\nend for\nend\n";
         let parsed = parse_source("semantic_default_dim_type.bcl".to_string(), source)
             .expect("legacy fixture parses");
         let lower::Lowered { program, .. } = lower::lower(parsed).expect("fixture lowers");
@@ -24943,6 +24943,10 @@ mod dialect_tests {
         assert!(
             output.contains("static float bv_f_loopindex = 0"),
             "suffixless FOR type was not resolved into typed IR: {output}"
+        );
+        assert!(
+            output.contains("static float bv_f_values[5]"),
+            "suffixless array DIM type was not resolved into typed IR: {output}"
         );
     }
 
