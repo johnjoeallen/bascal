@@ -8998,11 +8998,11 @@ impl CodeGenerator {
             .and_then(|module| semantic_basic_callable_for_function(module, function))
             .and_then(|callable| semantic_module?.sources.get(callable.source_index))
             .map(|source| source.filename.clone());
-        // A module whose record DSL was already expanded has no one-to-one
-        // AST alignment; emit the callable's whole typed body or, if any of
-        // it is unsupported, fall back to the AST body entirely.
+        // Prefer the callable's whole typed body: it needs no one-to-one AST
+        // alignment (a `dim a, b` is one typed statement but several AST
+        // ones, and an expanded record statement is many). If any statement is
+        // unsupported, fall back to per-statement dispatch, then the AST body.
         let whole_body_lines = semantic_module
-            .filter(|module| module.records_transpiled)
             .and_then(|module| semantic_basic_callable_for_function(module, function))
             .and_then(|callable| {
                 let diagnostics = self.diagnostics.len();

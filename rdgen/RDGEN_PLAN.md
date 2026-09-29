@@ -17577,3 +17577,5 @@ Iteration 5851 extended `record_transpile` to sequential `file` handles (channel
 Iteration 5852 relaxed the BASIC semantic method-call check to accept a numeric argument for a differently typed numeric parameter (BASIC converts on assignment), which was declining `price!.percent(15)`.
 
 Iteration 5853 restricted the pass to the BASIC targets: C and JVM lower the record DSL through their own typed record helpers and would change output under primitive `LSET`/`PUT`. All BASIC top-level statements now come from the typed IR; a test clears the AST's top-level statements and checks the record operations are still emitted.
+
+Iteration 5854 made the BASIC callable emitter prefer a callable's whole typed body for every function, not only in transpiled modules, so a multi-variable `dim a, b` (one typed statement, several AST ones) no longer forces the AST body. The AST body remains the fallback if any statement is unsupported. Besides removing the last function-level AST dependency in the tutorial corpus, this fixes a duplicated `DIM` the AST path emitted for such declarations.
