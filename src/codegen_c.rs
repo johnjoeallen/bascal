@@ -19287,8 +19287,19 @@ fn reject_float(
                         let suffix = semantic_dim_suffixes
                             .get(&ident.name.to_ascii_lowercase())
                             .copied()
-                            .or(ident.suffix);
-                        suffix.map(|suffix| c_var_name(&ident, suffix))
+                            .or_else(|| {
+                                crate::semantic_ir::SemanticModule::typed_names_in_statements(
+                                    &callable.body,
+                                )
+                                .into_iter()
+                                .find(|(typed_name, _)| {
+                                    typed_name.eq_ignore_ascii_case(&ident.name)
+                                })
+                                .and_then(|(_, value_type)| {
+                                    semantic_value_type_suffix(value_type)
+                                })
+                            })?;
+                        Some(c_var_name(&ident, suffix))
                     })
                     .collect();
             for (name, declaration) in callable.dim_declarations() {
