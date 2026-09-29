@@ -17323,3 +17323,9 @@ Iteration 5724 refreshed Graphify and validated the complete locked workspace su
 Iteration 5725 removed C typed-name filter fallback to suffixless Single when semantic and identifier types are absent.
 
 Iteration 5726 verified the complete locked workspace suite after removing the C typed-name default.
+
+Iteration 5727 removed C callable-global storage classification fallback to Single when typed suffixes are absent.
+
+Iteration 5728 refreshed Graphify after updating C callable-global type dependencies.
+
+Iteration 5729 validated the complete locked workspace suite after C callable-global classification changes.

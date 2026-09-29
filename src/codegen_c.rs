@@ -19200,13 +19200,13 @@ fn reject_float(
             let global_names: HashSet<_> = if let Some(callable) = typed_callable {
                 crate::semantic_ir::SemanticModule::global_declarations_in(&callable.body)
                     .into_iter()
-                    .map(|name| {
+                    .filter_map(|name| {
                         let ident = BasicIdent::parse(&name);
                         let suffix = semantic_dim_suffixes
                             .get(&ident.name.to_ascii_lowercase())
                             .copied()
                             .or(ident.suffix);
-                        c_var_name(&ident, effective_suffix(suffix))
+                        suffix.map(|suffix| c_var_name(&ident, suffix))
                     })
                     .collect()
             } else {
@@ -19254,9 +19254,13 @@ fn reject_float(
             let callable_global_names: HashSet<_> =
                 crate::semantic_ir::SemanticModule::global_declarations_in(&callable.body)
                     .into_iter()
-                    .map(|name| {
+                    .filter_map(|name| {
                         let ident = BasicIdent::parse(&name);
-                        c_var_name(&ident, effective_suffix(ident.suffix))
+                        let suffix = semantic_dim_suffixes
+                            .get(&ident.name.to_ascii_lowercase())
+                            .copied()
+                            .or(ident.suffix);
+                        suffix.map(|suffix| c_var_name(&ident, suffix))
                     })
                     .collect();
             for (name, declaration) in callable.dim_declarations() {
