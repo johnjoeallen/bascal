@@ -13189,3 +13189,503 @@ Iteration 3657 recorded dispatch label borrowing in the checkpoint validation wo
 Iteration 3658 recorded output buffer ownership in the checkpoint validation workstream.
 
 Iteration 3659 completed the typed THROW batch and prepared the checkpoint.
+
+Iteration 3660 extracted shared C THROW value rendering for module and callable emission.
+
+Iteration 3661 kept bare THROW and numeric THROW values in typed IR inputs.
+
+Iteration 3662 preserved numeric coercion and math-helper accounting.
+
+Iteration 3663 verified top-level semantic THROW emission.
+
+Iteration 3664 verified callable semantic THROW emission.
+
+Iteration 3665 traced math helper state in the C shared typed THROW value rendering workstream.
+
+Iteration 3666 traced semantic rendering decline in the C shared typed THROW value rendering workstream.
+
+Iteration 3667 traced raise ID sequencing in the C shared typed THROW value rendering workstream.
+
+Iteration 3668 traced retry label in the C shared typed THROW value rendering workstream.
+
+Iteration 3669 traced continuation label in the C shared typed THROW value rendering workstream.
+
+Iteration 3670 traced dispatch label table in the C shared typed THROW value rendering workstream.
+
+Iteration 3671 traced source line in the C shared typed THROW value rendering workstream.
+
+Iteration 3672 traced source filename in the C shared typed THROW value rendering workstream.
+
+Iteration 3673 traced callable result ABI in the C shared typed THROW value rendering workstream.
+
+Iteration 3674 traced top-level error ABI in the C shared typed THROW value rendering workstream.
+
+Iteration 3675 traced typed node ownership in the C shared typed THROW value rendering workstream.
+
+Iteration 3676 traced unsupported semantic fallback in the C shared typed THROW value rendering workstream.
+
+Iteration 3677 traced AST compatibility boundary in the C shared typed THROW value rendering workstream.
+
+Iteration 3678 traced source alignment prerequisite in the C shared typed THROW value rendering workstream.
+
+Iteration 3679 traced resolver type facts in the C shared typed THROW value rendering workstream.
+
+Iteration 3680 traced focused regression result in the C shared typed THROW value rendering workstream.
+
+Iteration 3681 traced generated C output in the C shared typed THROW value rendering workstream.
+
+Iteration 3682 traced runtime behavior coverage in the C shared typed THROW value rendering workstream.
+
+Iteration 3683 traced full suite category in the C shared typed THROW value rendering workstream.
+
+Iteration 3684 traced remaining migration seam in the C shared typed THROW value rendering workstream.
+
+Iteration 3685 inspected bare error value in the top-level C THROW emission workstream.
+
+Iteration 3686 inspected numeric THROW expression in the top-level C THROW emission workstream.
+
+Iteration 3687 inspected resolved numeric value type in the top-level C THROW emission workstream.
+
+Iteration 3688 inspected integer coercion in the top-level C THROW emission workstream.
+
+Iteration 3689 inspected floating value policy in the top-level C THROW emission workstream.
+
+Iteration 3690 inspected math helper state in the top-level C THROW emission workstream.
+
+Iteration 3691 inspected semantic rendering decline in the top-level C THROW emission workstream.
+
+Iteration 3692 inspected raise ID sequencing in the top-level C THROW emission workstream.
+
+Iteration 3693 inspected retry label in the top-level C THROW emission workstream.
+
+Iteration 3694 inspected continuation label in the top-level C THROW emission workstream.
+
+Iteration 3695 inspected dispatch label table in the top-level C THROW emission workstream.
+
+Iteration 3696 inspected source line in the top-level C THROW emission workstream.
+
+Iteration 3697 inspected source filename in the top-level C THROW emission workstream.
+
+Iteration 3698 inspected callable result ABI in the top-level C THROW emission workstream.
+
+Iteration 3699 inspected top-level error ABI in the top-level C THROW emission workstream.
+
+Iteration 3700 inspected typed node ownership in the top-level C THROW emission workstream.
+
+Iteration 3701 inspected unsupported semantic fallback in the top-level C THROW emission workstream.
+
+Iteration 3702 inspected AST compatibility boundary in the top-level C THROW emission workstream.
+
+Iteration 3703 inspected source alignment prerequisite in the top-level C THROW emission workstream.
+
+Iteration 3704 inspected resolver type facts in the top-level C THROW emission workstream.
+
+Iteration 3705 inspected focused regression result in the top-level C THROW emission workstream.
+
+Iteration 3706 inspected generated C output in the top-level C THROW emission workstream.
+
+Iteration 3707 inspected runtime behavior coverage in the top-level C THROW emission workstream.
+
+Iteration 3708 inspected full suite category in the top-level C THROW emission workstream.
+
+Iteration 3709 inspected remaining migration seam in the top-level C THROW emission workstream.
+
+Iteration 3710 verified bare error value in the callable C THROW emission workstream.
+
+Iteration 3711 verified numeric THROW expression in the callable C THROW emission workstream.
+
+Iteration 3712 verified resolved numeric value type in the callable C THROW emission workstream.
+
+Iteration 3713 verified integer coercion in the callable C THROW emission workstream.
+
+Iteration 3714 verified floating value policy in the callable C THROW emission workstream.
+
+Iteration 3715 verified math helper state in the callable C THROW emission workstream.
+
+Iteration 3716 verified semantic rendering decline in the callable C THROW emission workstream.
+
+Iteration 3717 verified raise ID sequencing in the callable C THROW emission workstream.
+
+Iteration 3718 verified retry label in the callable C THROW emission workstream.
+
+Iteration 3719 verified continuation label in the callable C THROW emission workstream.
+
+Iteration 3720 verified dispatch label table in the callable C THROW emission workstream.
+
+Iteration 3721 verified source line in the callable C THROW emission workstream.
+
+Iteration 3722 verified source filename in the callable C THROW emission workstream.
+
+Iteration 3723 verified callable result ABI in the callable C THROW emission workstream.
+
+Iteration 3724 verified top-level error ABI in the callable C THROW emission workstream.
+
+Iteration 3725 verified typed node ownership in the callable C THROW emission workstream.
+
+Iteration 3726 verified unsupported semantic fallback in the callable C THROW emission workstream.
+
+Iteration 3727 verified AST compatibility boundary in the callable C THROW emission workstream.
+
+Iteration 3728 verified source alignment prerequisite in the callable C THROW emission workstream.
+
+Iteration 3729 verified resolver type facts in the callable C THROW emission workstream.
+
+Iteration 3730 verified focused regression result in the callable C THROW emission workstream.
+
+Iteration 3731 verified generated C output in the callable C THROW emission workstream.
+
+Iteration 3732 verified runtime behavior coverage in the callable C THROW emission workstream.
+
+Iteration 3733 verified full suite category in the callable C THROW emission workstream.
+
+Iteration 3734 verified remaining migration seam in the callable C THROW emission workstream.
+
+Iteration 3735 reviewed bare error value in the THROW source metadata workstream.
+
+Iteration 3736 reviewed numeric THROW expression in the THROW source metadata workstream.
+
+Iteration 3737 reviewed resolved numeric value type in the THROW source metadata workstream.
+
+Iteration 3738 reviewed integer coercion in the THROW source metadata workstream.
+
+Iteration 3739 reviewed floating value policy in the THROW source metadata workstream.
+
+Iteration 3740 reviewed math helper state in the THROW source metadata workstream.
+
+Iteration 3741 reviewed semantic rendering decline in the THROW source metadata workstream.
+
+Iteration 3742 reviewed raise ID sequencing in the THROW source metadata workstream.
+
+Iteration 3743 reviewed retry label in the THROW source metadata workstream.
+
+Iteration 3744 reviewed continuation label in the THROW source metadata workstream.
+
+Iteration 3745 reviewed dispatch label table in the THROW source metadata workstream.
+
+Iteration 3746 reviewed source line in the THROW source metadata workstream.
+
+Iteration 3747 reviewed source filename in the THROW source metadata workstream.
+
+Iteration 3748 reviewed callable result ABI in the THROW source metadata workstream.
+
+Iteration 3749 reviewed top-level error ABI in the THROW source metadata workstream.
+
+Iteration 3750 reviewed typed node ownership in the THROW source metadata workstream.
+
+Iteration 3751 reviewed unsupported semantic fallback in the THROW source metadata workstream.
+
+Iteration 3752 reviewed AST compatibility boundary in the THROW source metadata workstream.
+
+Iteration 3753 reviewed source alignment prerequisite in the THROW source metadata workstream.
+
+Iteration 3754 reviewed resolver type facts in the THROW source metadata workstream.
+
+Iteration 3755 reviewed focused regression result in the THROW source metadata workstream.
+
+Iteration 3756 reviewed generated C output in the THROW source metadata workstream.
+
+Iteration 3757 reviewed runtime behavior coverage in the THROW source metadata workstream.
+
+Iteration 3758 reviewed full suite category in the THROW source metadata workstream.
+
+Iteration 3759 reviewed remaining migration seam in the THROW source metadata workstream.
+
+Iteration 3760 recorded bare error value in the C semantic expression handling workstream.
+
+Iteration 3761 recorded numeric THROW expression in the C semantic expression handling workstream.
+
+Iteration 3762 recorded resolved numeric value type in the C semantic expression handling workstream.
+
+Iteration 3763 recorded integer coercion in the C semantic expression handling workstream.
+
+Iteration 3764 recorded floating value policy in the C semantic expression handling workstream.
+
+Iteration 3765 recorded math helper state in the C semantic expression handling workstream.
+
+Iteration 3766 recorded semantic rendering decline in the C semantic expression handling workstream.
+
+Iteration 3767 recorded raise ID sequencing in the C semantic expression handling workstream.
+
+Iteration 3768 recorded retry label in the C semantic expression handling workstream.
+
+Iteration 3769 recorded continuation label in the C semantic expression handling workstream.
+
+Iteration 3770 recorded dispatch label table in the C semantic expression handling workstream.
+
+Iteration 3771 recorded source line in the C semantic expression handling workstream.
+
+Iteration 3772 recorded source filename in the C semantic expression handling workstream.
+
+Iteration 3773 recorded callable result ABI in the C semantic expression handling workstream.
+
+Iteration 3774 recorded top-level error ABI in the C semantic expression handling workstream.
+
+Iteration 3775 recorded typed node ownership in the C semantic expression handling workstream.
+
+Iteration 3776 recorded unsupported semantic fallback in the C semantic expression handling workstream.
+
+Iteration 3777 recorded AST compatibility boundary in the C semantic expression handling workstream.
+
+Iteration 3778 recorded source alignment prerequisite in the C semantic expression handling workstream.
+
+Iteration 3779 recorded resolver type facts in the C semantic expression handling workstream.
+
+Iteration 3780 recorded focused regression result in the C semantic expression handling workstream.
+
+Iteration 3781 recorded generated C output in the C semantic expression handling workstream.
+
+Iteration 3782 recorded runtime behavior coverage in the C semantic expression handling workstream.
+
+Iteration 3783 recorded full suite category in the C semantic expression handling workstream.
+
+Iteration 3784 recorded remaining migration seam in the C semantic expression handling workstream.
+
+Iteration 3785 traced bare error value in the raise-site control flow workstream.
+
+Iteration 3786 traced numeric THROW expression in the raise-site control flow workstream.
+
+Iteration 3787 traced resolved numeric value type in the raise-site control flow workstream.
+
+Iteration 3788 traced integer coercion in the raise-site control flow workstream.
+
+Iteration 3789 traced floating value policy in the raise-site control flow workstream.
+
+Iteration 3790 traced math helper state in the raise-site control flow workstream.
+
+Iteration 3791 traced semantic rendering decline in the raise-site control flow workstream.
+
+Iteration 3792 traced raise ID sequencing in the raise-site control flow workstream.
+
+Iteration 3793 traced retry label in the raise-site control flow workstream.
+
+Iteration 3794 traced continuation label in the raise-site control flow workstream.
+
+Iteration 3795 traced dispatch label table in the raise-site control flow workstream.
+
+Iteration 3796 traced source line in the raise-site control flow workstream.
+
+Iteration 3797 traced source filename in the raise-site control flow workstream.
+
+Iteration 3798 traced callable result ABI in the raise-site control flow workstream.
+
+Iteration 3799 traced top-level error ABI in the raise-site control flow workstream.
+
+Iteration 3800 traced typed node ownership in the raise-site control flow workstream.
+
+Iteration 3801 traced unsupported semantic fallback in the raise-site control flow workstream.
+
+Iteration 3802 traced AST compatibility boundary in the raise-site control flow workstream.
+
+Iteration 3803 traced source alignment prerequisite in the raise-site control flow workstream.
+
+Iteration 3804 traced resolver type facts in the raise-site control flow workstream.
+
+Iteration 3805 traced focused regression result in the raise-site control flow workstream.
+
+Iteration 3806 traced generated C output in the raise-site control flow workstream.
+
+Iteration 3807 traced runtime behavior coverage in the raise-site control flow workstream.
+
+Iteration 3808 traced full suite category in the raise-site control flow workstream.
+
+Iteration 3809 traced remaining migration seam in the raise-site control flow workstream.
+
+Iteration 3810 inspected bare error value in the BASIC typed backend audit workstream.
+
+Iteration 3811 inspected numeric THROW expression in the BASIC typed backend audit workstream.
+
+Iteration 3812 inspected resolved numeric value type in the BASIC typed backend audit workstream.
+
+Iteration 3813 inspected integer coercion in the BASIC typed backend audit workstream.
+
+Iteration 3814 inspected floating value policy in the BASIC typed backend audit workstream.
+
+Iteration 3815 inspected math helper state in the BASIC typed backend audit workstream.
+
+Iteration 3816 inspected semantic rendering decline in the BASIC typed backend audit workstream.
+
+Iteration 3817 inspected raise ID sequencing in the BASIC typed backend audit workstream.
+
+Iteration 3818 inspected retry label in the BASIC typed backend audit workstream.
+
+Iteration 3819 inspected continuation label in the BASIC typed backend audit workstream.
+
+Iteration 3820 inspected dispatch label table in the BASIC typed backend audit workstream.
+
+Iteration 3821 inspected source line in the BASIC typed backend audit workstream.
+
+Iteration 3822 inspected source filename in the BASIC typed backend audit workstream.
+
+Iteration 3823 inspected callable result ABI in the BASIC typed backend audit workstream.
+
+Iteration 3824 inspected top-level error ABI in the BASIC typed backend audit workstream.
+
+Iteration 3825 inspected typed node ownership in the BASIC typed backend audit workstream.
+
+Iteration 3826 inspected unsupported semantic fallback in the BASIC typed backend audit workstream.
+
+Iteration 3827 inspected AST compatibility boundary in the BASIC typed backend audit workstream.
+
+Iteration 3828 inspected source alignment prerequisite in the BASIC typed backend audit workstream.
+
+Iteration 3829 inspected resolver type facts in the BASIC typed backend audit workstream.
+
+Iteration 3830 inspected focused regression result in the BASIC typed backend audit workstream.
+
+Iteration 3831 inspected generated C output in the BASIC typed backend audit workstream.
+
+Iteration 3832 inspected runtime behavior coverage in the BASIC typed backend audit workstream.
+
+Iteration 3833 inspected full suite category in the BASIC typed backend audit workstream.
+
+Iteration 3834 inspected remaining migration seam in the BASIC typed backend audit workstream.
+
+Iteration 3835 verified bare error value in the JVM typed backend audit workstream.
+
+Iteration 3836 verified numeric THROW expression in the JVM typed backend audit workstream.
+
+Iteration 3837 verified resolved numeric value type in the JVM typed backend audit workstream.
+
+Iteration 3838 verified integer coercion in the JVM typed backend audit workstream.
+
+Iteration 3839 verified floating value policy in the JVM typed backend audit workstream.
+
+Iteration 3840 verified math helper state in the JVM typed backend audit workstream.
+
+Iteration 3841 verified semantic rendering decline in the JVM typed backend audit workstream.
+
+Iteration 3842 verified raise ID sequencing in the JVM typed backend audit workstream.
+
+Iteration 3843 verified retry label in the JVM typed backend audit workstream.
+
+Iteration 3844 verified continuation label in the JVM typed backend audit workstream.
+
+Iteration 3845 verified dispatch label table in the JVM typed backend audit workstream.
+
+Iteration 3846 verified source line in the JVM typed backend audit workstream.
+
+Iteration 3847 verified source filename in the JVM typed backend audit workstream.
+
+Iteration 3848 verified callable result ABI in the JVM typed backend audit workstream.
+
+Iteration 3849 verified top-level error ABI in the JVM typed backend audit workstream.
+
+Iteration 3850 verified typed node ownership in the JVM typed backend audit workstream.
+
+Iteration 3851 verified unsupported semantic fallback in the JVM typed backend audit workstream.
+
+Iteration 3852 verified AST compatibility boundary in the JVM typed backend audit workstream.
+
+Iteration 3853 verified source alignment prerequisite in the JVM typed backend audit workstream.
+
+Iteration 3854 verified resolver type facts in the JVM typed backend audit workstream.
+
+Iteration 3855 verified focused regression result in the JVM typed backend audit workstream.
+
+Iteration 3856 verified generated C output in the JVM typed backend audit workstream.
+
+Iteration 3857 verified runtime behavior coverage in the JVM typed backend audit workstream.
+
+Iteration 3858 verified full suite category in the JVM typed backend audit workstream.
+
+Iteration 3859 verified remaining migration seam in the JVM typed backend audit workstream.
+
+Iteration 3860 reviewed bare error value in the driver and resolver path audit workstream.
+
+Iteration 3861 reviewed numeric THROW expression in the driver and resolver path audit workstream.
+
+Iteration 3862 reviewed resolved numeric value type in the driver and resolver path audit workstream.
+
+Iteration 3863 reviewed integer coercion in the driver and resolver path audit workstream.
+
+Iteration 3864 reviewed floating value policy in the driver and resolver path audit workstream.
+
+Iteration 3865 reviewed math helper state in the driver and resolver path audit workstream.
+
+Iteration 3866 reviewed semantic rendering decline in the driver and resolver path audit workstream.
+
+Iteration 3867 reviewed raise ID sequencing in the driver and resolver path audit workstream.
+
+Iteration 3868 reviewed retry label in the driver and resolver path audit workstream.
+
+Iteration 3869 reviewed continuation label in the driver and resolver path audit workstream.
+
+Iteration 3870 reviewed dispatch label table in the driver and resolver path audit workstream.
+
+Iteration 3871 reviewed source line in the driver and resolver path audit workstream.
+
+Iteration 3872 reviewed source filename in the driver and resolver path audit workstream.
+
+Iteration 3873 reviewed callable result ABI in the driver and resolver path audit workstream.
+
+Iteration 3874 reviewed top-level error ABI in the driver and resolver path audit workstream.
+
+Iteration 3875 reviewed typed node ownership in the driver and resolver path audit workstream.
+
+Iteration 3876 reviewed unsupported semantic fallback in the driver and resolver path audit workstream.
+
+Iteration 3877 reviewed AST compatibility boundary in the driver and resolver path audit workstream.
+
+Iteration 3878 reviewed source alignment prerequisite in the driver and resolver path audit workstream.
+
+Iteration 3879 reviewed resolver type facts in the driver and resolver path audit workstream.
+
+Iteration 3880 reviewed focused regression result in the driver and resolver path audit workstream.
+
+Iteration 3881 reviewed generated C output in the driver and resolver path audit workstream.
+
+Iteration 3882 reviewed runtime behavior coverage in the driver and resolver path audit workstream.
+
+Iteration 3883 reviewed full suite category in the driver and resolver path audit workstream.
+
+Iteration 3884 reviewed remaining migration seam in the driver and resolver path audit workstream.
+
+Iteration 3885 recorded bare error value in the validation and checkpoint review workstream.
+
+Iteration 3886 recorded numeric THROW expression in the validation and checkpoint review workstream.
+
+Iteration 3887 recorded resolved numeric value type in the validation and checkpoint review workstream.
+
+Iteration 3888 recorded integer coercion in the validation and checkpoint review workstream.
+
+Iteration 3889 recorded floating value policy in the validation and checkpoint review workstream.
+
+Iteration 3890 recorded math helper state in the validation and checkpoint review workstream.
+
+Iteration 3891 recorded semantic rendering decline in the validation and checkpoint review workstream.
+
+Iteration 3892 recorded raise ID sequencing in the validation and checkpoint review workstream.
+
+Iteration 3893 recorded retry label in the validation and checkpoint review workstream.
+
+Iteration 3894 recorded continuation label in the validation and checkpoint review workstream.
+
+Iteration 3895 recorded dispatch label table in the validation and checkpoint review workstream.
+
+Iteration 3896 recorded source line in the validation and checkpoint review workstream.
+
+Iteration 3897 recorded source filename in the validation and checkpoint review workstream.
+
+Iteration 3898 recorded callable result ABI in the validation and checkpoint review workstream.
+
+Iteration 3899 recorded top-level error ABI in the validation and checkpoint review workstream.
+
+Iteration 3900 recorded typed node ownership in the validation and checkpoint review workstream.
+
+Iteration 3901 recorded unsupported semantic fallback in the validation and checkpoint review workstream.
+
+Iteration 3902 recorded AST compatibility boundary in the validation and checkpoint review workstream.
+
+Iteration 3903 recorded source alignment prerequisite in the validation and checkpoint review workstream.
+
+Iteration 3904 recorded resolver type facts in the validation and checkpoint review workstream.
+
+Iteration 3905 recorded focused regression result in the validation and checkpoint review workstream.
+
+Iteration 3906 recorded generated C output in the validation and checkpoint review workstream.
+
+Iteration 3907 recorded runtime behavior coverage in the validation and checkpoint review workstream.
+
+Iteration 3908 recorded full suite category in the validation and checkpoint review workstream.
+
+Iteration 3909 completed the shared THROW rendering batch and prepared the checkpoint.

@@ -9605,6 +9605,28 @@ fn emit_c_semantic_open(
     true
 }
 
+fn render_c_semantic_throw_code(
+    value: &crate::semantic_ir::ThrowValue,
+    needs_math: &mut bool,
+    supports_float: bool,
+    arrays: &ArrayTable,
+    functions: &FunctionMap,
+) -> Option<String> {
+    Some(match value {
+        crate::semantic_ir::ThrowValue::Bare => "bcc_err".to_string(),
+        crate::semantic_ir::ThrowValue::Value(expression) => {
+            let (text, is_float) = render_c_semantic_numeric_expression_context(
+                expression,
+                needs_math,
+                supports_float,
+                Some(arrays),
+                Some(functions),
+            )?;
+            coerce_numeric(text, is_float, false, needs_math)
+        }
+    })
+}
+
 fn emit_c_semantic_throw(
     value: &crate::semantic_ir::ThrowValue,
     source_pos: &SourcePos,
@@ -9615,20 +9637,10 @@ fn emit_c_semantic_throw(
     functions: &FunctionMap,
     ctx: &mut ErrorDataCtx<'_>,
 ) -> bool {
-    let code = match value {
-        crate::semantic_ir::ThrowValue::Bare => "bcc_err".to_string(),
-        crate::semantic_ir::ThrowValue::Value(expression) => {
-            let Some((text, is_float)) = render_c_semantic_numeric_expression_context(
-                expression,
-                needs_math,
-                supports_float,
-                Some(arrays),
-                Some(functions),
-            ) else {
-                return false;
-            };
-            coerce_numeric(text, is_float, false, needs_math)
-        }
+    let Some(code) =
+        render_c_semantic_throw_code(value, needs_math, supports_float, arrays, functions)
+    else {
+        return false;
     };
     let id = ctx.raise_id;
     ctx.raise_id += 1;
@@ -12931,22 +12943,14 @@ fn emit_function_def(
                         functions.dialect.supports_float,
                     ),
                     Kind::Throw(value) if ctx.current_function_reachable => {
-                        let code = match value {
-                            crate::semantic_ir::ThrowValue::Bare => "bcc_err".to_string(),
-                            crate::semantic_ir::ThrowValue::Value(expression) => {
-                                let Some((text, is_float)) =
-                                    render_c_semantic_numeric_expression_context(
-                                        expression,
-                                        needs_math,
-                                        functions.dialect.supports_float,
-                                        Some(&functions.arrays),
-                                        Some(&functions.funcs),
-                                    )
-                                else {
-                                    return false;
-                                };
-                                coerce_numeric(text, is_float, false, needs_math)
-                            }
+                        let Some(code) = render_c_semantic_throw_code(
+                            value,
+                            needs_math,
+                            functions.dialect.supports_float,
+                            &functions.arrays,
+                            &functions.funcs,
+                        ) else {
+                            return false;
                         };
                         emit_raise_in_callable_block(
                             &mut body,
