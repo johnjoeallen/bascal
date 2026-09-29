@@ -5289,19 +5289,23 @@ fn collect_semantic_scalar_declarations(
     module: &crate::semantic_ir::SemanticModule,
     declarations: &mut BTreeMap<String, JvmType>,
 ) {
-    fn declaration_type(value_type: crate::semantic_ir::SemanticValueType) -> JvmType {
+    fn declaration_type(value_type: crate::semantic_ir::SemanticValueType) -> Option<JvmType> {
         match value_type {
-            crate::semantic_ir::SemanticValueType::String => JvmType::String,
-            crate::semantic_ir::SemanticValueType::Integer => JvmType::Numeric(NumericType::Int),
-            crate::semantic_ir::SemanticValueType::Long => JvmType::Numeric(NumericType::Long),
+            crate::semantic_ir::SemanticValueType::String => Some(JvmType::String),
+            crate::semantic_ir::SemanticValueType::Integer => {
+                Some(JvmType::Numeric(NumericType::Int))
+            }
+            crate::semantic_ir::SemanticValueType::Long => {
+                Some(JvmType::Numeric(NumericType::Long))
+            }
             crate::semantic_ir::SemanticValueType::Single
             | crate::semantic_ir::SemanticValueType::Double => {
-                JvmType::Numeric(NumericType::Double)
+                Some(JvmType::Numeric(NumericType::Double))
             }
-            crate::semantic_ir::SemanticValueType::Unknown
-            | crate::semantic_ir::SemanticValueType::Boolean => {
-                JvmType::Numeric(NumericType::Double)
+            crate::semantic_ir::SemanticValueType::Boolean => {
+                Some(JvmType::Numeric(NumericType::Double))
             }
+            crate::semantic_ir::SemanticValueType::Unknown => None,
         }
     }
     fn visit(
@@ -5428,10 +5432,9 @@ fn collect_semantic_scalar_declarations(
                 Kind::Dim(items) => {
                     for item in items {
                         if item.array_axes == 0 {
-                            declarations.insert(
-                                item.name.to_ascii_lowercase(),
-                                declaration_type(item.element_type),
-                            );
+                            if let Some(ty) = declaration_type(item.element_type) {
+                                declarations.insert(item.name.to_ascii_lowercase(), ty);
+                            }
                         }
                     }
                 }
@@ -6191,19 +6194,21 @@ fn collect_semantic_array_declarations(
     module: &crate::semantic_ir::SemanticModule,
     arrays: &mut BTreeMap<String, ArrayShape>,
 ) {
-    fn element_type(value_type: crate::semantic_ir::SemanticValueType) -> JvmType {
+    fn element_type(value_type: crate::semantic_ir::SemanticValueType) -> Option<JvmType> {
         match value_type {
-            crate::semantic_ir::SemanticValueType::String => JvmType::String,
+            crate::semantic_ir::SemanticValueType::String => Some(JvmType::String),
             crate::semantic_ir::SemanticValueType::Integer => {
-                JvmType::Numeric(NumericType::Int)
+                Some(JvmType::Numeric(NumericType::Int))
             }
-            crate::semantic_ir::SemanticValueType::Long => JvmType::Numeric(NumericType::Long),
+            crate::semantic_ir::SemanticValueType::Long => {
+                Some(JvmType::Numeric(NumericType::Long))
+            }
             crate::semantic_ir::SemanticValueType::Single
             | crate::semantic_ir::SemanticValueType::Double
-            | crate::semantic_ir::SemanticValueType::Unknown
             | crate::semantic_ir::SemanticValueType::Boolean => {
-                JvmType::Numeric(NumericType::Double)
+                Some(JvmType::Numeric(NumericType::Double))
             }
+            crate::semantic_ir::SemanticValueType::Unknown => None,
         }
     }
     fn visit(
@@ -6216,6 +6221,9 @@ fn collect_semantic_array_declarations(
             match &statement.kind {
                 Kind::Dim(items) => {
                     for item in items.iter().filter(|item| item.array_axes > 0) {
+                        let Some(element) = element_type(item.element_type) else {
+                            continue;
+                        };
                         if item
                             .dimensions
                             .iter()
@@ -6248,7 +6256,7 @@ fn collect_semantic_array_declarations(
                         arrays.insert(
                             variable_key(&ident),
                             ArrayShape {
-                                element: element_type(item.element_type),
+                                element,
                                 dimensions,
                             },
                         );
@@ -15824,6 +15832,37 @@ mod tests {
             declarations.get("value"),
             Some(&super::JvmType::Numeric(super::NumericType::Double))
         );
+    }
+
+    #[test]
+    fn jvm_semantic_dim_collectors_do_not_default_unknown_storage_types() {
+        let mut module = crate::semantic_ir::parse_and_adapt(
+            "dim scalar&\ndim values&(4)\nend\n",
+        )
+        .expect("typed source parses");
+        for statement in &mut module.statements {
+            let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut statement.kind else {
+                continue;
+            };
+            for item_statement in body {
+                let crate::semantic_ir::SemanticStatementKind::Dim(items) =
+                    &mut item_statement.kind
+                else {
+                    continue;
+                };
+                for item in items {
+                    item.element_type = crate::semantic_ir::SemanticValueType::Unknown;
+                }
+            }
+        }
+
+        let mut scalars = std::collections::BTreeMap::new();
+        super::collect_semantic_scalar_declarations(&module, &mut scalars);
+        assert!(scalars.is_empty(), "{scalars:?}");
+
+        let mut arrays = std::collections::BTreeMap::new();
+        super::collect_semantic_array_declarations(&module, &mut arrays);
+        assert!(arrays.is_empty(), "unexpected array declarations: {}", arrays.len());
     }
 
     #[test]

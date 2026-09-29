@@ -17221,3 +17221,13 @@ Iteration 5673 validated the complete locked workspace test suite.
 Iteration 5674 refreshed Graphify for the typed-IR type propagation changes.
 
 Iteration 5675 reviewed the diff and checked whitespace before checkpointing.
+
+Iteration 5676 audited JVM scalar and array storage defaults for Unknown typed-IR values.
+
+Iteration 5677 removed JVM scalar declaration fallback for unresolved types.
+
+Iteration 5678 removed JVM array declaration fallback for unresolved element types.
+
+Iteration 5679 added JVM regression coverage for unresolved DIM storage types.
+
+Iteration 5680 validated the complete locked workspace test suite after JVM collector changes.
