@@ -17301,3 +17301,13 @@ Iteration 5713 added regression coverage that Unknown C FOR variables do not all
 Iteration 5714 refreshed Graphify after changing C FOR declaration collection dependencies.
 
 Iteration 5715 validated the complete locked workspace suite after C FOR storage changes.
+
+Iteration 5716 removed C catch error and line binding storage defaults for unresolved typed-IR types.
+
+Iteration 5717 removed C catch source binding storage fallback when no resolved semantic type exists.
+
+Iteration 5718 added regression coverage that Unknown C catch binding types do not allocate scalar storage.
+
+Iteration 5719 refreshed Graphify after changing C catch storage dependencies.
+
+Iteration 5720 validated the complete locked workspace suite after C catch storage changes.

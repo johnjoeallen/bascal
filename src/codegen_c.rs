@@ -1667,17 +1667,24 @@ fn collect_semantic_scalar_declarations(
                     if let Some(catch) = catch {
                         let mut error = BasicIdent::parse(&catch.error);
                         let mut line = BasicIdent::parse(&catch.line);
-                        error.suffix = semantic_value_type_suffix(catch.error_type);
-                        line.suffix = semantic_value_type_suffix(catch.line_type);
-                        register_var(&error, numeric, strings);
-                        register_var(&line, numeric, strings);
+                        if let Some(suffix) = semantic_value_type_suffix(catch.error_type) {
+                            error.suffix = Some(suffix);
+                            register_var(&error, numeric, strings);
+                        }
+                        if let Some(suffix) = semantic_value_type_suffix(catch.line_type) {
+                            line.suffix = Some(suffix);
+                            register_var(&line, numeric, strings);
+                        }
                         if let Some(source) = &catch.source {
-                            let mut source = BasicIdent::parse(source);
-                            source.suffix = catch
+                            if let Some(suffix) = catch
                                 .source_type
                                 .and_then(crate::semantic_ir::SemanticValueType::suffix)
-                                .and_then(TypeSuffix::from_char);
-                            register_var(&source, numeric, strings);
+                                .and_then(TypeSuffix::from_char)
+                            {
+                                let mut source = BasicIdent::parse(source);
+                                source.suffix = Some(suffix);
+                                register_var(&source, numeric, strings);
+                            }
                         }
                         visit(&catch.body, numeric, strings);
                     }
@@ -25088,6 +25095,34 @@ mod dialect_tests {
         collect_semantic_scalar_declarations(&suffixless.statements, &mut numeric, &mut strings);
         assert_eq!(numeric.get("bv_f_error"), Some(&"float"), "{numeric:?}");
         assert_eq!(numeric.get("bv_f_line"), Some(&"float"), "{numeric:?}");
+    }
+
+    #[test]
+    fn c_semantic_catch_storage_does_not_default_unknown_types() {
+        let mut module = crate::semantic_ir::parse_and_adapt(
+            "try\nbeep\ncatch error, line, source\nbeep\nend try\n",
+        )
+        .unwrap();
+        let crate::semantic_ir::SemanticStatementKind::Line(body) = &mut module.statements[0].kind
+        else {
+            panic!("expected statement line")
+        };
+        let crate::semantic_ir::SemanticStatementKind::Try {
+            catch: Some(catch), ..
+        } = &mut body[0].kind
+        else {
+            panic!("expected TRY")
+        };
+        catch.error_type = crate::semantic_ir::SemanticValueType::Unknown;
+        catch.line_type = crate::semantic_ir::SemanticValueType::Unknown;
+        catch.source_type = Some(crate::semantic_ir::SemanticValueType::Unknown);
+
+        let mut numeric = BTreeMap::new();
+        let mut strings = BTreeSet::new();
+        collect_semantic_scalar_declarations(&module.statements, &mut numeric, &mut strings);
+
+        assert!(numeric.is_empty(), "{numeric:?}");
+        assert!(strings.is_empty(), "{strings:?}");
     }
 
     #[test]
