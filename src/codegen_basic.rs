@@ -3264,6 +3264,18 @@ mod tests {
     }
 
     #[test]
+    fn basic_semantic_const_suffix_rejects_unresolved_types() {
+        assert_eq!(
+            super::semantic_const_suffix(crate::semantic_ir::SemanticValueType::Unknown),
+            None
+        );
+        assert_eq!(
+            super::semantic_const_suffix(crate::semantic_ir::SemanticValueType::Long),
+            Some(crate::ast::TypeSuffix::Long)
+        );
+    }
+
+    #[test]
     fn basic_generation_retains_callable_local_array_type_annotations() {
         for type_name in ["long", "single", "double", "string"] {
             let source = format!(
@@ -8170,6 +8182,20 @@ fn semantic_dim_type_name(
     }
 }
 
+fn semantic_const_suffix(
+    value_type: crate::semantic_ir::SemanticValueType,
+) -> Option<TypeSuffix> {
+    match value_type {
+        crate::semantic_ir::SemanticValueType::Double => Some(TypeSuffix::Single),
+        crate::semantic_ir::SemanticValueType::String => Some(TypeSuffix::String),
+        crate::semantic_ir::SemanticValueType::Integer => Some(TypeSuffix::Integer),
+        crate::semantic_ir::SemanticValueType::Long => Some(TypeSuffix::Long),
+        crate::semantic_ir::SemanticValueType::Single => Some(TypeSuffix::Single),
+        crate::semantic_ir::SemanticValueType::Unknown
+        | crate::semantic_ir::SemanticValueType::Boolean => None,
+    }
+}
+
 fn source_position(
     source: &crate::semantic_ir::SemanticSource,
     span: crate::rdgen_frontend::SourceSpan,
@@ -8397,16 +8423,9 @@ impl CodeGenerator {
         if let Some(module) = resolved.semantic_module.as_ref() {
             for (name, value_type) in module.const_types() {
                 let ident = BasicIdent::parse(&name);
-                let value_type = match value_type {
-                    crate::semantic_ir::SemanticValueType::Double => {
-                        crate::semantic_ir::SemanticValueType::Single
-                    }
-                    value_type => value_type,
+                let Some(suffix) = semantic_const_suffix(value_type) else {
+                    continue;
                 };
-                let suffix = value_type
-                    .suffix()
-                    .and_then(TypeSuffix::from_char)
-                    .unwrap_or(TypeSuffix::Integer);
                 let generated = BasicIdent {
                     name: const_var_name(&ident.name),
                     suffix: Some(suffix),

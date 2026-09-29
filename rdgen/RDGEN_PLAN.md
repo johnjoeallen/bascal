@@ -17311,3 +17311,11 @@ Iteration 5718 added regression coverage that Unknown C catch binding types do n
 Iteration 5719 refreshed Graphify after changing C catch storage dependencies.
 
 Iteration 5720 validated the complete locked workspace suite after C catch storage changes.
+
+Iteration 5721 removed BASIC semantic CONST suffix fallback to Integer for Unknown typed-IR values.
+
+Iteration 5722 centralized BASIC semantic CONST suffix mapping with unresolved-type rejection.
+
+Iteration 5723 added regression coverage for BASIC CONST suffix mapping of Unknown and resolved types.
+
+Iteration 5724 refreshed Graphify and validated the complete locked workspace suite after BASIC CONST changes.
