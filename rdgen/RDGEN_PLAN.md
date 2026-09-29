@@ -17351,3 +17351,11 @@ Iteration 5738 added semantic IR coverage for unsuffixed function result type ma
 Iteration 5739 refreshed Graphify after changing callable result type production and consumers.
 
 Iteration 5740 validated the complete locked workspace suite after callable result typing changes.
+
+Iteration 5741 replaced BASIC compatibility DIM type-clause emission from AST-derived annotation strings with typed DIM declarations.
+
+Iteration 5742 removed obsolete BASIC codegen storage of string-valued top-level and callable DIM type annotations.
+
+Iteration 5743 refreshed Graphify after changing BASIC DIM type consumers.
+
+Iteration 5744 validated the complete locked workspace suite after BASIC DIM fallback changes.

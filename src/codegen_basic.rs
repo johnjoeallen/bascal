@@ -4508,7 +4508,6 @@ pub struct CodeGenerator {
     // auto-injects its bounds at the call site so the callee's own
     // `sizeof()` on that parameter has something to read.
     top_level_array_bounds: HashMap<String, Vec<String>>,
-    top_level_dim_types: HashMap<String, String>,
     // Lowercase names of every procedure named as an `on error goto` target
     // somewhere in the program. resolver::validate has already proven each
     // one contains no `return` and never falls off the end (every path
@@ -4571,7 +4570,6 @@ struct FunctionInfo {
     /// Declared rank of every array this function DIMs locally, lowercase
     /// name -> rank.
     local_array_ranks: HashMap<String, usize>,
-    local_dim_types: HashMap<String, String>,
     semantic_const_initializers: HashMap<String, crate::semantic_ir::Expression>,
     semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
     semantic_dim_declarations: HashMap<String, crate::semantic_ir::DimDeclaration>,
@@ -8224,7 +8222,6 @@ impl CodeGenerator {
             diagnostics: Vec::new(),
             top_level_array_ranks: HashMap::new(),
             top_level_array_bounds: HashMap::new(),
-            top_level_dim_types: HashMap::new(),
             error_handler_procedures: HashSet::new(),
             try_handler_stack: Vec::new(),
             needs_source_lookup: false,
@@ -8308,11 +8305,6 @@ impl CodeGenerator {
             .as_ref()
             .map(crate::semantic_ir::SemanticModule::top_level_array_ranks)
             .unwrap_or_else(|| resolved.top_level_array_ranks.clone());
-        self.top_level_dim_types = resolved
-            .semantic_module
-            .as_ref()
-            .map(crate::semantic_ir::SemanticModule::top_level_dim_types)
-            .unwrap_or_default();
         self.semantic_const_initializers = resolved
             .semantic_module
             .as_ref()
@@ -8345,8 +8337,6 @@ impl CodeGenerator {
                 .and_then(|module| semantic_basic_callable_for_function(module, f));
             let semantic_array_ranks =
                 semantic_callable.map(crate::semantic_ir::CallableSignature::array_ranks);
-            let semantic_dim_types =
-                semantic_callable.map(crate::semantic_ir::CallableSignature::dim_types);
             let semantic_param_ranks = semantic_callable.map(|callable| {
                 let (ranks, observed) = callable.parameter_array_ranks();
                 for (index, uses) in observed.iter().enumerate() {
@@ -8397,7 +8387,6 @@ impl CodeGenerator {
                 capacities,
                 semantic_param_ranks,
                 semantic_array_ranks,
-                semantic_dim_types,
                 semantic_globals,
                 semantic_callable.map(|callable| callable.parameters.clone()),
                 semantic_callable,
@@ -8841,24 +8830,20 @@ impl CodeGenerator {
                     }
                     return;
                 }
-                let type_clause = name
-                    .suffix
-                    .is_none()
-                    .then(|| {
-                        current_function
-                            .map(|function| {
-                                function
-                                    .local_dim_types
-                                    .get(&name.as_basic().to_ascii_lowercase())
-                            })
-                            .unwrap_or_else(|| {
-                                self.top_level_dim_types
-                                    .get(&name.as_basic().to_ascii_lowercase())
-                            })
-                    })
-                    .flatten()
-                    .map(|value| format!(" AS {}", value.to_ascii_uppercase()))
-                    .unwrap_or_default();
+                let key = name.as_basic().to_ascii_lowercase();
+                let declaration = current_function
+                    .and_then(|function| function.semantic_dim_declarations.get(&key))
+                    .or_else(|| self.semantic_top_level_dims.get(&key));
+                let type_clause = if name.suffix.is_none() {
+                    declaration
+                        .and_then(|declaration| {
+                            semantic_dim_type_name(declaration.element_type)
+                        })
+                        .map(|value| format!(" AS {value}"))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
                 if sizes.is_empty() {
                     if *is_array {
                         self.line(&format!("DIM {base}(){type_clause}"));
@@ -11637,7 +11622,6 @@ impl FunctionInfo {
         mut param_capacities: Vec<Vec<i64>>,
         semantic_param_ranks: Option<Vec<Option<usize>>>,
         semantic_array_ranks: Option<HashMap<String, usize>>,
-        semantic_dim_types: Option<HashMap<String, String>>,
         semantic_globals: Option<HashSet<String>>,
         semantic_parameters: Option<Vec<crate::semantic_ir::Parameter>>,
         semantic_signature: Option<&crate::semantic_ir::CallableSignature>,
@@ -11770,7 +11754,6 @@ impl FunctionInfo {
             (None, Some(ranks)) => ranks,
             (None, None) => dim_ranks_in_body(&function.body),
         };
-        let local_dim_types = semantic_dim_types.unwrap_or_default();
         let result_suffix = semantic_signature
             .map(|callable| {
                 callable
@@ -11803,7 +11786,6 @@ impl FunctionInfo {
             param_bound_vars,
             param_capacities,
             local_array_ranks,
-            local_dim_types,
             semantic_const_initializers: HashMap::new(),
             semantic_parameters,
             semantic_dim_declarations: HashMap::new(),
